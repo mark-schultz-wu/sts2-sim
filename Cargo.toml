@@ -1,0 +1,6 @@
+[workspace]
+resolver = "3"
+members = ["utils", "sts-schema"]
+
+[profile.release]
+debug = true
