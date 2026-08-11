@@ -22,8 +22,8 @@ Three capabilities carry it:
 
 - **construct** a scenario (R7) — mechanisms identified, only a fresh run built,
 - **advance** by exactly one decision (R4) — **working**, ~250 decisions/sec,
-- **observe** completely (R5, R3, R6) — **the current gap**; the driver reports
-  an ad-hoc summary, not an observation.
+- **observe** completely (R5, R3, R6) — **working in combat**, byte-reproducible;
+  out-of-combat legality is the remaining gap.
 
 ---
 
@@ -179,6 +179,33 @@ Shops, Transformations). Fifteen counters per observation.
 *Check.* For a state reached two ways — replayed from floor 1, and constructed
 directly (R7) — the observations must be equal.
 
+### Built, in `Observation.cs`
+
+Emitted as one JSON line per decision. Carries act, floor, hp, gold, relics,
+potions, deck; and in combat: turn, phase, energy, round, all four piles in
+order, every creature with hp/block/powers, and the legal command set. Card
+identity includes upgrade level and affliction, since the id alone cannot
+distinguish two decks. All fifteen RNG counters are reported, run-level and
+per-player.
+
+Two fields exist here that the game itself never ships. **Monster intent** —
+absent from `NetFullCombatState` because peers re-derive it, and serialised
+nowhere — is reported (`HEADBUTT_MOVE`, `THRASH_MOVE`), because a simulator
+choosing the wrong monster move is exactly what this catches. And **the reason a
+card is illegal**, from the `UnplayableReason` flags, so a disagreement names
+the rule rather than needing a bisect; `EnergyCostTooHigh` is confirmed firing.
+
+Absence is distinguished from emptiness: the `combat` object is omitted out of
+combat rather than serialised with empty piles, so "not in combat" and "in
+combat holding nothing" cannot compare equal.
+
+*Result.* Two cold-profile processes on one seed produced **byte-identical**
+36KB observation streams, 22 observations each.
+
+*Not yet in it:* the pending decision's identity, map coordinates (only act and
+floor), orbs (no Defect run driven yet), and out-of-combat legality, which is
+R3's remaining gap.
+
 ## R6 — Divergence is detectable out of combat too
 
 `RunManager.SendPostActionChecksum` is gated on
@@ -244,6 +271,21 @@ no intent, and `MonsterModel.NextMove` is `private set` and serialized nowhere.
 Anything two peers can re-derive independently need not ship.)
 
 **The dev console**, below, covers the rest — including mid-combat.
+
+*A trap waiting for scenario construction.* Content availability is decided by
+the `UnlockState` handed to the run, and every pool gates on it
+(`GetUnlockedRelics(UnlockState)` and friends drop epoch-locked entries). A
+fresh run gets `UnlockState.all` — all epochs, all encounters, 999999999 runs —
+so everything is available. But `RunState.FromSerializable` rebuilds it from
+`SerializableUnlockState` instead, so **a constructed scenario can silently have
+less content available than a fresh run**, and would differ from the simulator
+without anything in the scenario saying so. Constructed scenarios must set the
+unlock state explicitly rather than inheriting whatever the save carried.
+
+Note also that the game's `unlock` console command is *not* the tool for this:
+`UnlockCards` calls `Progress.MarkCardAsSeen`, which is compendium "seen it"
+state with no effect on availability — and it writes to `progress.save`, the
+persistent profile residue R1 and R13 work to avoid.
 
 ### Construction must go through the game's own paths
 

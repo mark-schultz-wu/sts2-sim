@@ -261,7 +261,9 @@ internal static class OracleDriver
 
             RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
             decisions++;
-            if (!await Quiesce(action))
+            bool resolved = await Quiesce(action);
+            Log.Info($"[obs] {Observation.Capture(state)}");
+            if (!resolved)
             {
                 break;
             }
