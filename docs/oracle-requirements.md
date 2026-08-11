@@ -18,11 +18,12 @@ observation; thereafter the simulator sends one decision and the oracle replies
 with the next observation. Whether that process is spoken to over a pipe or
 hosted in-process is **not decided** — see R9.
 
-Three capabilities carry it, and R4 and R5 are the bulk of the work:
+Three capabilities carry it:
 
-- **construct** a scenario (R7) — mechanisms identified, nothing built,
-- **advance** by exactly one decision (R4) — not built,
-- **observe** completely (R5, R3, R6) — not built.
+- **construct** a scenario (R7) — mechanisms identified, only a fresh run built,
+- **advance** by exactly one decision (R4) — **working**, ~250 decisions/sec,
+- **observe** completely (R5, R3, R6) — **the current gap**; the driver reports
+  an ad-hoc summary, not an observation.
 
 ---
 
@@ -47,6 +48,20 @@ test runs often agree, so it reads as flakiness rather than as a broken oracle.
 *Check.* Replay one fixed script three times in three fresh processes and
 diff the full observation logs. Then do it again on another machine. Any
 difference is a defect in the oracle, not in the simulator.
+
+*First result: passes, single-machine.* Three fresh processes on seed `ORACLE1`
+produced identical state, RNG counters, checksum sequence and decision count.
+A cold profile (modded profile directory deleted first) matched a warm one.
+
+*Not yet checked:* another machine, and anything beyond one combat.
+
+*A hazard this check nearly missed.* Profile progress persists across runs, so
+the second run of anything is not the first. `Player has seen ftue shuffle_ftue!`
+appeared on an early run and never again, which made a later comparison of two
+warm runs look clean while saying nothing about a fresh profile. The driver now
+calls `SaveManager.SetFtuesEnabled(false)`, and the check deletes the profile
+between runs. **Determinism comparisons between two already-warmed runs prove
+less than they appear to.**
 
 ## R2 — A run cannot start without an explicit seed
 
@@ -466,6 +481,37 @@ The oracle writes to no real profile and no real save. `SetUpTest` defaults
 
 *Check.* Checksum the profile directory before and after a full run.
 
+*Result: satisfied for the player's data, not for ours.* A driven run leaves the
+unmodded profile untouched — this install has none, and everything lands under
+`default/1/modded/profile1/`. What does change there is `saves/progress.save`
+(and its `.backup`), because run-level actions record profile progress:
+`RelicCmd.Obtain` calls `SaveManager.MarkRelicAsSeen`, and fighting an enemy
+records a discovery. Godot's own logs rotate and Sentry writes a per-run
+breadcrumb directory; neither is ours to control.
+
+So R13 holds in the sense that matters, but the residue is a **determinism**
+concern rather than a tidiness one (R1): profile state that persists across runs
+is state the oracle did not declare. The modded profile should be treated as
+disposable, and the R1 check deletes it between runs rather than trusting it to
+be inert.
+
+## R14 — The oracle ends its own process
+
+When the driver is done the process exits, rather than returning to the game's
+main loop.
+
+*Why this earns a requirement.* Without it a two-second run occupied a process
+until an external timeout, and SIGTERM is not reliably fatal here — instances
+survived `pkill` for thirteen hours and needed SIGKILL, while `timeout` reported
+`dumped core` and made a hang look like a crash. Any batch of scenarios (R9)
+would leak a process per scenario.
+
+Quitting goes through the scene tree, which is how the game exits itself
+(`NGame` calls `GetTree().Quit(0)`), so shutdown takes its normal course.
+
+*Check.* A full run costs ~2.9s wall clock end to end, exits 0, and leaves no
+process behind. `STS_ORACLE_QUIT=0` keeps it up for inspection.
+
 ---
 
 ## Not requirements
@@ -494,10 +540,7 @@ The oracle writes to no real profile and no real save. `SetUpTest` defaults
 2. Does `CleanUp` leave cross-scenario state behind? (R9)
 3. Does each dev console command we depend on work headless, and does it report
    failure rather than no-op silently? (R7, R12)
-4. The game wrote `saves/progress.save` to the modded profile during a driven
-   run, despite `SetUpTest(shouldSave: false)`. What wrote it, and is R13 still
-   satisfied?
-5. Do the caught `Missing screenShake target!` errors have model-visible side
+4. Do the caught `Missing screenShake target!` errors have model-visible side
    effects? They are presentation-only by inspection, but the oracle should not
    rest on an unverified "probably harmless". (R12)
 

@@ -21,6 +21,7 @@ using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Unlocks;
 
 namespace StsOracle;
@@ -67,6 +68,35 @@ internal static class OracleDriver
             // silent degradation turns a simulator bug into a passing test.
             Log.Error($"[oracle] driver failed at {Stage}: {e}");
         }
+        finally
+        {
+            Quit();
+        }
+    }
+
+    /// <summary>
+    /// Ends the process once the driver is done.
+    /// </summary>
+    /// <remarks>
+    /// Without this the game returns to its main loop and runs forever: the
+    /// driver's work took two seconds while the process stayed up until an
+    /// external timeout, and SIGTERM is not reliably fatal — instances survived
+    /// <c>pkill</c> for thirteen hours and needed SIGKILL. Quitting through the
+    /// scene tree is how the game itself exits (<c>NGame</c> calls
+    /// <c>GetTree().Quit(0)</c>), so shutdown runs its normal course.
+    ///
+    /// Set <c>STS_ORACLE_QUIT=0</c> to keep the process up for inspection.
+    /// </remarks>
+    private static void Quit()
+    {
+        if (Environment.GetEnvironmentVariable("STS_ORACLE_QUIT") == "0")
+        {
+            Log.Info("[oracle] STS_ORACLE_QUIT=0, staying up");
+            return;
+        }
+
+        Log.Info($"[oracle] quitting after {Clock.Elapsed.TotalSeconds:F1}s");
+        NGame.Instance.GetTree().Quit(0);
     }
 
     private static string Stage = "start";
@@ -136,6 +166,14 @@ internal static class OracleDriver
     /// </summary>
     private static async Task StartRun(RunState state)
     {
+        // First-time-user prompts both gate progress and write to disk: a driven
+        // fight logged "Player has seen ftue shuffle_ftue!" and then wrote
+        // progress.save. R13 wants the oracle to leave no trace, and an oracle
+        // whose behaviour depends on which tutorials a profile has already seen
+        // is not reproducible either.
+        Stage = "disabling FTUEs";
+        SaveManager.Instance.SetFtuesEnabled(enabled: false);
+
         Stage = "SetUpTest";
         RunManager run = RunManager.Instance;
         run.SetUpTest(state, new NetSingleplayerGameService());
