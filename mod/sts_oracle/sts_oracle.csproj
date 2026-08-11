@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <!-- The loader looks for <manifest id>.dll, so this must equal the id. -->
+    <AssemblyName>sts_oracle</AssemblyName>
+    <RootNamespace>StsOracle</RootNamespace>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <!--
+    Compiled against the pinned v0.107.1 assemblies, which are byte-identical to
+    the live install's. GodotSharp exists only in the game directory, so that one
+    path is unavoidable; override Sts2GameDir if the install moves.
+  -->
+  <PropertyGroup>
+    <Sts2PinDir Condition="'$(Sts2PinDir)' == ''">$(HOME)/sts-artifacts/sts2-cli-lib</Sts2PinDir>
+    <Sts2GameDir Condition="'$(Sts2GameDir)' == ''">/etc/wolf/profile-data/user/WolfSteam/.steam/steam/steamapps/common/Slay the Spire 2/data_sts2_linuxbsd_x86_64</Sts2GameDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Private=false: the game supplies these at runtime, we must not ship copies. -->
+    <Reference Include="sts2">
+      <HintPath>$(Sts2PinDir)/sts2.dll.original</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(Sts2PinDir)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$(Sts2GameDir)/GodotSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
