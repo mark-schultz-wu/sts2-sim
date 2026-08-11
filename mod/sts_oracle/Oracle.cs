@@ -1,3 +1,4 @@
+using System;
 using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
@@ -36,10 +37,28 @@ public static class Oracle
 
         // Skips every Cmd.Wait and the animation paths that check it. This is
         // the game's own test seam, so it beats patching the waits ourselves.
+        // Verified to gate presentation only: MapCmd applies its model change
+        // unconditionally and skips just the icon refresh, and nothing calls
+        // TestMode.AssertOff.
         TestMode.IsOn = true;
 
         Active = true;
         Log.Info($"[oracle] active on {PinnedVersion}; TestMode on");
+
+        // Configured by environment rather than command line: Godot owns argv,
+        // and unrecognised flags there are its business, not ours.
+        string? mode = Environment.GetEnvironmentVariable("STS_ORACLE_MODE");
+        if (mode == "drive")
+        {
+            string seed = Environment.GetEnvironmentVariable("STS_ORACLE_SEED") ?? "ORACLE1";
+            // Not awaited: Init must return so startup can finish populating the
+            // model database, which the driver's first stage waits for.
+            _ = OracleDriver.Start(seed);
+        }
+        else if (mode != null)
+        {
+            Log.Warn($"[oracle] unknown STS_ORACLE_MODE '{mode}', doing nothing");
+        }
     }
 
     private static bool VerifyPin()
