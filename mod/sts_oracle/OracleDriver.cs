@@ -245,6 +245,41 @@ internal static class OracleDriver
         await RunManager.Instance.EnterRoomDebug(RoomType.Monster, MapPointType.Unassigned, encounter);
     }
 
+    /// <summary>
+    /// Plays one card through the real action queue, for tests that need a
+    /// card to have been played this turn.
+    /// </summary>
+    /// <remarks>
+    /// Several of the game's <c>ShouldPlay</c> hooks — `Chains of Binding`,
+    /// `Ringing`, `Sloth`, `Normality`, `Velvet Choker` — only forbid a card
+    /// *after* one has already been played this turn, so a scenario that merely
+    /// applies the power proves nothing about them.
+    /// </remarks>
+    public static async Task<bool> PlayOneCard(RunState state, Func<CardModel, bool>? pick = null)
+    {
+        Player me = state.Players[0];
+        PlayerCombatState? pcs = me.PlayerCombatState;
+        CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+        if (pcs == null || combat == null)
+        {
+            return false;
+        }
+
+        Creature? target = combat.Creatures.FirstOrDefault(c => !c.IsPlayer && c.IsAlive);
+        CardModel? card = pcs.Hand.Cards.FirstOrDefault(c =>
+            (pick == null || pick(c)) && (c.CanPlayTargeting(target) || c.CanPlayTargeting(null)));
+
+        if (card == null)
+        {
+            return false;
+        }
+
+        var action = new PlayCardAction(card, card.TargetType == TargetType.AnyEnemy ? target : null);
+        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        await Quiesce(action);
+        return true;
+    }
+
     private static async Task PlayOneFight(RunState state)
     {
         await EnterFight(state);

@@ -120,12 +120,42 @@ ShouldPlay:            VelvetChoker, ChainsOfBindingPower, RingingPower,
 
 matching a hand grep exactly. A hook added in a future build appears as
 UNCOVERED rather than silently going untested — *noticing* a case exists is
-automatic, *constructing* one is manual. Two are covered, seven report as gaps:
+automatic, *constructing* one is manual. Five of nine are covered:
 
-| case | check |
-|---|---|
-| `WingedBoots` | travelable set widens, 1 → 3 nodes |
-| `Enthralled` | playable cards 5 → 1, reason `BlockedByHook` |
+| case | trigger | check |
+|---|---|---|
+| `WingedBoots` | hold the relic | travelable set widens, 1 → 3 nodes |
+| `Enthralled` | card in hand | playable 5 → 1, reason `BlockedByHook` |
+| `SmoggyPower` | power + `Smog` on a card | that card blocked |
+| `ChainsOfBindingPower` | power + `Bound` on two, play one | the other blocked |
+| `RingingPower` | power, then any play | afflicted cards blocked |
+
+`Flight`, `VelvetChoker`, `SlothPower` and `Normality` remain gaps. The last
+three need "N cards played this turn"; `Flight` is a run-level modifier fixed at
+construction.
+
+### Three things the suite got wrong before the oracle did
+
+Worth recording, because each is a way a green suite can be worthless.
+
+**Order dependence.** All in-combat cases first shared one fight, and
+`Enthralled` left its card in hand — which forbids playing anything else — so
+later cases failed for reasons unrelated to the rule under test. Each case now
+enters its own fight. Order-dependent tests are worse than missing ones: they
+fail as though the product were broken.
+
+**Assuming a shared shape.** `Smoggy`, `Ringing` and `Chains of Binding` look
+alike but bite at different times — on presence, after any play, and after a
+*bound* play respectively. Asserting Smoggy's behaviour of all three produced
+two false failures.
+
+**An unsatisfiable scenario.** The Ringing case tried to play a card without the
+affliction; a diagnostic showed the power afflicts the entire hand on
+application, so no such card existed. The scenario, not the rule, was impossible.
+
+In all three the suite was wrong and the oracle right — which is the expected
+ratio early on, and the reason each failure was diagnosed rather than assumed to
+be a product bug.
 
 `IsAllowed` is deliberately excluded despite having 55 overrides: it decides
 whether a relic may appear in a run at all, not what the legal command set is,

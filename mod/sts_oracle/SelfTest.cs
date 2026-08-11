@@ -13,7 +13,9 @@ using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -75,10 +77,27 @@ internal static class SelfTest
         // Out of combat first: map legality needs a map position, not a fight.
         covered.Add("WingedBoots");
         await FreeTravelWidensTheMap(state);
-
-        await enterCombat();
+        // Each in-combat case gets its own fight. The first version shared one,
+        // and the cases interfered: `Enthralled` left its card in hand, which
+        // forbids playing anything else, so the later cases found no playable
+        // card to afflict and failed for a reason that had nothing to do with
+        // the rule under test. Order-dependent tests are worse than missing
+        // ones, because they fail in ways that read as product bugs.
         covered.Add("Enthralled");
+        await enterCombat();
         await BlockedByHookIsReported(state);
+
+        covered.Add("SmoggyPower");
+        await enterCombat();
+        await AfflictedCardIsBlocked<SmoggyPower, Smog>(state, "SmoggyPower");
+
+        covered.Add("ChainsOfBindingPower");
+        await enterCombat();
+        await AfflictedCardIsBlocked<ChainsOfBindingPower, Bound>(state, "ChainsOfBindingPower", afflict: 2, playAfflictedFirst: true);
+
+        covered.Add("RingingPower");
+        await enterCombat();
+        await AfflictedCardIsBlocked<RingingPower, Ringing>(state, "RingingPower", playAnyFirst: true);
 
         foreach ((string hook, List<string> types) in matrix)
         {
@@ -224,6 +243,102 @@ internal static class SelfTest
 
         return Check("the reported reason is BlockedByHook",
             reasons.Contains(nameof(UnplayableReason.BlockedByHook)));
+    }
+
+    /// <summary>
+    /// Powers that forbid playing a card carrying a particular affliction.
+    /// </summary>
+    /// <remarks>
+    /// `Smoggy`, `Ringing` and `Chains of Binding` share a shape: the power sits
+    /// on the creature, the prohibition is keyed to an affliction on the card,
+    /// and neither half alone does anything. They differ in *when* they bite,
+    /// which the first version of this case got wrong by assuming all three
+    /// behaved like Smoggy:
+    ///
+    /// - `Smoggy` blocks on presence alone.
+    /// - `Ringing` blocks only once some card has been played this turn.
+    /// - `Chains of Binding` blocks only once a *bound* card has been played.
+    ///
+    /// So the case takes how many cards to afflict and what must be played
+    /// first. Applying the power and asserting immediately would have reported
+    /// two false failures — which it did, before the source said otherwise.
+    /// </remarks>
+    private static async Task<bool> AfflictedCardIsBlocked<TPower, TAffliction>(
+        RunState state, string label, int afflict = 1, bool playAfflictedFirst = false, bool playAnyFirst = false)
+        where TPower : PowerModel
+        where TAffliction : AfflictionModel
+    {
+        Player me = state.Players[0];
+        PlayerCombatState? pcs = me.PlayerCombatState;
+        if (pcs == null)
+        {
+            return Check($"{label}: in combat", false);
+        }
+
+        List<CardModel> victims = pcs.Hand.Cards.Where(c => c.CanPlay()).Take(afflict).ToList();
+        if (victims.Count < afflict)
+        {
+            return Check($"{label}: {afflict} playable card(s) exist to afflict", false);
+        }
+
+        await PowerCmd.Apply<TPower>(
+            new BlockingPlayerChoiceContext(), me.Creature, amount: 1m, applier: null, cardSource: null, silent: true);
+
+        foreach (CardModel v in victims)
+        {
+            await CardCmd.Afflict<TAffliction>(v, 1m);
+        }
+
+        string afflictionId = ModelDb.Affliction<TAffliction>().Id.Entry;
+
+        // Only meaningful for the hooks that need a prior play. Smoggy blocks
+        // on presence alone, so asserting this of it was simply wrong.
+        if (playAfflictedFirst || playAnyFirst)
+        {
+            Check($"{label}: not blocked before the triggering play", victims.Last().CanPlay());
+        }
+
+        if (playAfflictedFirst)
+        {
+            Check($"{label}: an afflicted card was played",
+                await OracleDriver.PlayOneCard(state, c => c.Affliction?.Id.Entry == afflictionId));
+        }
+        else if (playAnyFirst)
+        {
+            // Any card, including an afflicted one. RingingPower afflicts the
+            // whole hand when applied, so "play something not afflicted" was
+            // unsatisfiable — the diagnostic showed all five cards as /RINGING.
+            // The first play is permitted regardless; it is the next one the
+            // hook forbids.
+            bool played = await OracleDriver.PlayOneCard(state);
+            if (!played)
+            {
+                Log.Error($"[selftest]   hand: {string.Join(" | ", pcs.Hand.Cards.Select(c => $"{c.Id.Entry}"
+                    + $"{(c.Affliction != null ? "/" + c.Affliction.Id.Entry : "")}"
+                    + $" playable={c.CanPlay(out UnplayableReason r, out AbstractModel? _)} reason={r}"))}");
+                Log.Error($"[selftest]   energy={pcs.Energy}");
+            }
+            Check($"{label}: a card was played", played);
+        }
+
+        CardModel? survivor = pcs.Hand.Cards.FirstOrDefault(c => c.Affliction?.Id.Entry == afflictionId);
+        if (survivor == null)
+        {
+            return Check($"{label}: an afflicted card remains in hand to check", false);
+        }
+
+        bool blocked = !survivor.CanPlay(out UnplayableReason reason, out AbstractModel? _)
+            && reason.HasFlag(UnplayableReason.BlockedByHook);
+
+        // And it must be visible in what the oracle reports, not merely true of
+        // the model — the observation is the thing under test.
+        bool reported = Legal(state).Any(e =>
+            (e.GetProperty("card").GetString() ?? "").Contains(afflictionId)
+            && !e.GetProperty("playable").GetBoolean()
+            && (e.GetProperty("reason").GetString() ?? "").Contains(nameof(UnplayableReason.BlockedByHook)));
+
+        Check($"{label}: afflicted card is blocked by hook", blocked);
+        return Check($"{label}: the observation reports it blocked", reported);
     }
 
     private static int PlayableCount(RunState state) =>
