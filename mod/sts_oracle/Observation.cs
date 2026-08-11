@@ -1,11 +1,15 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Rngs;
+using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
@@ -30,6 +34,31 @@ internal static class Observation
 {
     private static readonly JsonSerializerOptions Json = new JsonSerializerOptions { WriteIndented = false };
 
+    /// <summary>
+    /// A digest of the full observation, for step-by-step comparison (R6).
+    /// </summary>
+    /// <remarks>
+    /// The full observation runs ~1.6KB per decision — 27% creatures, 27% legal
+    /// moves, 19% RNG counters, 11% deck, most of it repeated key names for
+    /// values that rarely change. At 250 decisions/sec that is 400KB/s, which is
+    /// wasteful when almost every step agrees.
+    ///
+    /// So the steady state compares digests, and the full observation is only
+    /// needed for the step that disagrees. **This is affordable precisely
+    /// because R1 holds**: a diverging run can be replayed with
+    /// <c>STS_ORACLE_OBS=full</c> and will reproduce exactly, so nothing is lost
+    /// by not having shipped the bytes the first time.
+    ///
+    /// Compacting the JSON was the other option and is the worse one: it would
+    /// save perhaps 40% while making the failure path harder to read, and the
+    /// failure path is the one that matters.
+    /// </remarks>
+    public static string Digest(RunState state)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(Capture(state)));
+        return Convert.ToHexString(hash, 0, 8);
+    }
+
     public static string Capture(RunState state)
     {
         Player me = state.Players[0];
@@ -47,6 +76,7 @@ internal static class Observation
             ["potions"] = me.Potions.Select(p => p.Id.Entry).ToList(),
             ["deck"] = me.Deck.Cards.Select(Ident).ToList(),
             ["inCombat"] = CombatManager.Instance.IsInProgress,
+            ["map"] = MapPosition(state),
             ["rng"] = Counters(state, me),
         };
 
@@ -142,6 +172,51 @@ internal static class Observation
             };
         }
     }
+
+    /// <summary>
+    /// Where we are on the map, and which nodes may be travelled to next.
+    /// </summary>
+    /// <remarks>
+    /// Legality comes from <c>MapTravel.GetTravelablePointsFrom</c>, not from
+    /// reading <c>MapPoint.Children</c> ourselves. The difference is a rule we
+    /// would otherwise have missed:
+    ///
+    /// <code>
+    /// if (Hook.ShouldAllowFreeTravel(runState))
+    ///     return runState.Map.GetPointsInRow(currentPoint.coord.row + 1);
+    /// return currentPoint.Children;
+    /// </code>
+    ///
+    /// `Winged Boots` and the `Flight` modifier override
+    /// <c>ShouldAllowFreeTravel</c>, so holding either widens the legal set from
+    /// the current node's children to the entire next row. Deriving map legality
+    /// from the graph alone would have been correct until the first run that
+    /// picked up that relic, and then silently wrong.
+    /// </remarks>
+    private static Dictionary<string, object?> MapPosition(RunState state)
+    {
+        MapPoint? current = state.CurrentMapPoint;
+        return new Dictionary<string, object?>
+        {
+            ["at"] = current == null ? null : Coord(current),
+            ["visited"] = state.VisitedMapCoords.Select(c => $"{c.col},{c.row}").ToList(),
+
+            // At the start of an act there is no current point yet, and the
+            // legal openings are the map's start points rather than anyone's
+            // children.
+            ["travelable"] = (current == null
+                    ? state.Map.startMapPoints
+                    : MapTravel.GetTravelablePointsFrom(state, current))
+                .OrderBy(p => p.coord.row).ThenBy(p => p.coord.col)
+                .Select(p => new Dictionary<string, object?>
+                {
+                    ["at"] = Coord(p),
+                    ["type"] = p.PointType.ToString(),
+                }).ToList(),
+        };
+    }
+
+    private static string Coord(MapPoint p) => $"{p.coord.col},{p.coord.row}";
 
     /// <summary>All fifteen RNG streams: twelve run-level, three per-player.</summary>
     /// <remarks>

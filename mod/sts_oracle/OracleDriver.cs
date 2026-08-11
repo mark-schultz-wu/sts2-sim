@@ -101,6 +101,9 @@ internal static class OracleDriver
 
     private static string Stage = "start";
 
+    private static readonly bool FullObservations =
+        Environment.GetEnvironmentVariable("STS_ORACLE_OBS") == "full";
+
     /// <summary>
     /// Waits for the model database, which loads asynchronously during startup.
     /// </summary>
@@ -262,7 +265,12 @@ internal static class OracleDriver
             RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
             decisions++;
             bool resolved = await Quiesce(action);
-            Log.Info($"[obs] {Observation.Capture(state)}");
+            // Digest by default; the full observation is ~1.6KB a step and is
+            // only needed for the step that disagrees, which R1 lets us
+            // reproduce on demand.
+            Log.Info(FullObservations
+                ? $"[obs] {Observation.Capture(state)}"
+                : $"[obs] {Observation.Digest(state)}");
             if (!resolved)
             {
                 break;

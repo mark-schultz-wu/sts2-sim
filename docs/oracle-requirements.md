@@ -114,8 +114,25 @@ can report **why** a card is illegal, not just that it is. Comparing reasons
 rather than booleans localises a simulator bug to the specific rule it got
 wrong, instead of leaving us to bisect.
 
-*Still open.* Out-of-combat legality — map nodes, reward and shop and campfire
-choices. No equivalent model-layer predicate found yet.
+*Map legality is also on the model, and reading the graph would have been wrong.*
+
+```csharp
+public static IEnumerable<MapPoint> GetTravelablePointsFrom(IRunState runState, MapPoint currentPoint)
+{
+    if (Hook.ShouldAllowFreeTravel(runState))
+        return runState.Map.GetPointsInRow(currentPoint.coord.row + 1);
+    return currentPoint.Children;
+}
+```
+
+The obvious derivation — "the current node's children" — is correct until the
+first run holding `Winged Boots` or the `Flight` modifier, both of which
+override `ShouldAllowFreeTravel` and widen the legal set to the whole next row.
+It would then have been silently wrong, in a way no state comparison catches,
+which is the exact failure mode this requirement exists to prevent. The oracle
+calls `MapTravel.GetTravelablePointsFrom`.
+
+*Still open.* Reward, shop and campfire choices.
 
 ## R4 — One command advances the state exactly one decision
 
@@ -215,6 +232,19 @@ card removal and upgrade — there is only the coarse room-exit checksum.
 
 The oracle supplies its own digest over the full observation so that every step
 is comparable, not just combat steps.
+
+*Built.* A SHA-256 over the full observation, truncated to 8 bytes. This is also
+what makes the stream affordable: the full observation is ~1.6KB per decision
+(27% creatures, 27% legal moves, 19% RNG counters, 11% deck — mostly repeated
+key names for values that rarely change), and at 250 decisions/sec that is
+400KB/s to say "still agreeing".
+
+Digests cut a 22-decision fight from **36,410 bytes to 374** — 99%, 17 bytes a
+step. The full observation is available on demand via `STS_ORACLE_OBS=full`,
+and that fallback costs nothing precisely **because R1 holds**: the diverging
+run replays exactly. Compacting the JSON was the alternative and is worse — it
+saves perhaps 40% and makes the failure path harder to read, which is the path
+that matters.
 
 *Constraint found in `InitializeShared`.* `ChecksumTracker.IsEnabled` is set to
 `!TestMode.IsOn && NetService.Type is one of {2,3,4}`. `NetGameType` is
