@@ -59,8 +59,16 @@ internal static class OracleDriver
             RunState state = BuildRunState(seed);
             await StartRun(state);
             Report(state);
-            await PlayOneFight(state);
-            Report(state);
+
+            if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "selftest")
+            {
+                await SelfTest.Run(state);
+            }
+            else
+            {
+                await PlayOneFight(state);
+                Report(state);
+            }
         }
         catch (Exception e)
         {

@@ -90,9 +90,33 @@ of every move that was tried, while disagreeing on which moves exist. Comparing
 state after a command only catches the first kind of bug; comparing the legal
 set catches the second.
 
-*Check.* For a sampled decision point, every command the oracle enumerates must
-execute without error, and commands outside the set must be rejected rather than
-executed. Fuzz the complement.
+*Check, and a correction to it.* Every command the oracle enumerates must
+execute without error. But the stated converse — commands outside the set are
+rejected — **does not work for out-of-combat legality**:
+`MapTravel.GetTravelablePointsFrom` has exactly one caller, `NMapScreen`, so the
+model layer never rejects an illegal map move and the complement fuzz passes
+vacuously. Legality there lives in the UI; there is nothing underneath to say no.
+
+What does work is metamorphic, and it generalises: **the game's own `override`
+sites enumerate every place a rule varies.** For each, construct a state where
+the override is active and require the oracle's output to *change*. An oracle
+that ignores the hook reports the baseline twice and fails. The matrix is
+mechanically derivable — 2 overrides of `ShouldAllowFreeTravel`, 7 of
+`ShouldPlay`, 55 of `IsAllowed`.
+
+*Built:* `SelfTest.cs`, `STS_ORACLE_MODE=selftest`, covering the first of those.
+It reads the travelable set back out of the emitted observation rather than
+calling `MapTravel` again, since a test that re-derives the answer the same way
+the reporter did would agree with a broken reporter.
+
+*Two things it taught immediately.* Run at floor 1 it failed — not because the
+oracle was wrong but because the next row held exactly that node's two children,
+so free travel and normal travel coincide and the scenario could not tell them
+apart. **A scenario that cannot discriminate is not evidence**, so the test now
+searches for a position where the two rules differ and fails loudly if none
+exists. And, mutation-tested: reverting the oracle to `current.Children` makes
+it fail (`1 -> 1 nodes`) and restoring `MapTravel` makes it pass (`1 -> 3`), so
+the test is known to catch the bug it was written for.
 
 *Resolved for combat: the game exposes it on the model, not the UI.*
 
