@@ -62,7 +62,7 @@ internal static class OracleDriver
 
             if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "selftest")
             {
-                await SelfTest.Run(state);
+                await SelfTest.Run(state, () => EnterFight(state));
             }
             else
             {
@@ -238,11 +238,16 @@ internal static class OracleDriver
     /// meant to play well — the oracle never chooses. It exists to drive enough
     /// decisions to time one.
     /// </remarks>
-    private static async Task PlayOneFight(RunState state)
+    private static async Task EnterFight(RunState state)
     {
         Stage = "entering fight";
         EncounterModel encounter = ModelDb.Encounter<BowlbugsWeak>().ToMutable();
         await RunManager.Instance.EnterRoomDebug(RoomType.Monster, MapPointType.Unassigned, encounter);
+    }
+
+    private static async Task PlayOneFight(RunState state)
+    {
+        await EnterFight(state);
 
         Player me = state.Players[0];
         Log.Info($"[oracle] in fight: combat={CombatManager.Instance.IsInProgress} "

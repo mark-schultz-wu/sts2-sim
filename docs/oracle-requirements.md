@@ -104,7 +104,40 @@ that ignores the hook reports the baseline twice and fails. The matrix is
 mechanically derivable — 2 overrides of `ShouldAllowFreeTravel`, 7 of
 `ShouldPlay`, 55 of `IsAllowed`.
 
-*Built:* `SelfTest.cs`, `STS_ORACLE_MODE=selftest`, covering the first of those.
+*Built:* `SelfTest.cs`, `STS_ORACLE_MODE=selftest`.
+
+**The matrix is discovered, not written down.** Reflection over the game
+assembly finds every non-abstract `AbstractModel` subclass declaring an override
+of a legality hook (an override being a method whose `GetBaseDefinition` is
+declared elsewhere). It currently reports:
+
+```
+ShouldAllowFreeTravel: WingedBoots, Flight
+ShouldPlay:            VelvetChoker, ChainsOfBindingPower, RingingPower,
+                       SlothPower, SmoggyPower, Enthralled, Normality
+9 legality-hook overrides across 2 hooks
+```
+
+matching a hand grep exactly. A hook added in a future build appears as
+UNCOVERED rather than silently going untested — *noticing* a case exists is
+automatic, *constructing* one is manual. Two are covered, seven report as gaps:
+
+| case | check |
+|---|---|
+| `WingedBoots` | travelable set widens, 1 → 3 nodes |
+| `Enthralled` | playable cards 5 → 1, reason `BlockedByHook` |
+
+`IsAllowed` is deliberately excluded despite having 55 overrides: it decides
+whether a relic may appear in a run at all, not what the legal command set is,
+so there is no observation field for it to move.
+
+Both cases are mutation-tested — the suite is known to fail when the oracle is
+wrong, not merely to pass when it is right:
+
+| mutation | result |
+|---|---|
+| `MapTravel` → `current.Children` | FAIL, 1 → 1 nodes |
+| `CanPlay` → energy affordability only | FAIL, 5 → 6 playable |
 It reads the travelable set back out of the emitted observation rather than
 calling `MapTravel` again, since a test that re-derives the answer the same way
 the reporter did would agree with a broken reporter.
