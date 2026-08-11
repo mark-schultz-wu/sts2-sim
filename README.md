@@ -1,21 +1,26 @@
 # sts
 
-Agents that play **Slay the Spire 1 and 2**, and the simulator they train in.
+Agents that play **Slay the Spire 2**, and the simulator they train in.
 
-Both games can already be driven programmatically, but only at 6–870 steps/s. Training
-wants on the order of 10⁹ steps, which at that rate is weeks. So the real games are not
-the environment — they are the **oracle**: the reference that a fast reimplementation is
-checked against, step by step, on the same seed.
+The game can already be driven programmatically, but only at a few hundred steps/s.
+Training wants on the order of 10⁹ steps, which at that rate is weeks. So the real game
+is not the environment — it is the **oracle**: the reference that a fast reimplementation
+is checked against, step by step, on the same seed.
 
-That makes correctness the hard part rather than speed. Every backend — simulator and real
-game alike — implements one trait and emits one state type, so a differential test is a
-struct comparison and a divergence names the step and field where it started.
+That makes correctness the hard part rather than speed.
 
-Both games are in scope because they share a skeleton but differ in every detail, which
-keeps the engine parameterised instead of quietly specialised to STS1.
+## Where this is
 
-## Layout
+Nothing is built yet. An earlier `sts-schema` crate tried to define a shared vocabulary
+for both games before anything could produce or consume it, and was removed. It is
+preserved in commit `604ef72` if any of it turns out to be worth recovering.
 
-| | |
-|---|---|
-| `sts-schema` | the shared vocabulary: `Obs`, `Action`, the `SpireEnv` trait, and the diff |
+The current goal is a working oracle: ergonomic bindings against the real STS2, modded if
+that is what it takes, that a simulator can be diffed against. Types get defined when
+something on both ends of them exists.
+
+## Scope
+
+STS1 is out of scope. The pinned STS2 assemblies in `~/sts-artifacts/sts2-cli-lib/` are
+v0.107.1, build 23811903, and must not be re-copied from Steam — that would silently
+re-pin the project to whatever is current.
