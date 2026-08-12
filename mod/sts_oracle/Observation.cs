@@ -9,6 +9,9 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Rngs;
+using MegaCrit.Sts2.Core.Entities.Merchant;
+using MegaCrit.Sts2.Core.Entities.RestSite;
+using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Rooms;
@@ -88,6 +91,12 @@ internal static class Observation
             ["floor"] = state.TotalFloor,
             ["hp"] = me.Creature.CurrentHp,
             ["maxHp"] = me.Creature.MaxHp,
+
+            // Reported because the oracle does not yet act on it: a driven run
+            // that loses a fight keeps taking commands, and a dead player was
+            // observed healing at a rest site — a state the real game cannot
+            // reach. Until run-end is handled, the client must check this.
+            ["alive"] = me.Creature.IsAlive,
             ["gold"] = me.Gold,
             ["relics"] = me.Relics.Select(Ident).ToList(),
             ["potions"] = me.Potions.Select(p => p.Id.Entry).ToList(),
@@ -96,6 +105,12 @@ internal static class Observation
             ["map"] = MapPosition(state),
             ["rng"] = Counters(state, me),
         };
+
+        Dictionary<string, object?>? room = Room(state, me);
+        if (room != null)
+        {
+            obs["room"] = room;
+        }
 
         // Absent rather than empty: "not in combat" and "in combat with nothing
         // in hand" must not serialise the same way.
@@ -189,6 +204,96 @@ internal static class Observation
             };
         }
     }
+
+    /// <summary>
+    /// The choices the current room offers, if it is one that offers any.
+    /// </summary>
+    /// <remarks>
+    /// Rest sites, events and shops are **not** pending decisions: their
+    /// triggers are model-owned (`EnterInternal` calls `BeginRestSite`,
+    /// `BeginEvent`, or populates `Inventories`), so after travelling the game
+    /// is quiescent and idle exactly as at the start of a combat turn. They are
+    /// state to be observed and answered with an ordinary command, which is why
+    /// they need none of `Pending`'s machinery.
+    ///
+    /// Legality is taken from the model in every case — `RestSiteOption.IsEnabled`,
+    /// `EventOption.IsLocked`, `MerchantEntry.EnoughGold`/`IsStocked` — rather
+    /// than recomputed here. Unlike map travel, these rules do not live in a
+    /// screen.
+    ///
+    /// Absent rather than empty when the room offers nothing, so "a shop with no
+    /// stock" and "not in a shop" cannot serialise the same way (R12).
+    /// </remarks>
+    private static Dictionary<string, object?>? Room(RunState state, Player me)
+    {
+        switch (state.CurrentRoom)
+        {
+            case RestSiteRoom:
+            {
+                IReadOnlyList<RestSiteOption> options =
+                    RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
+                return new Dictionary<string, object?>
+                {
+                    ["type"] = "RestSite",
+                    ["options"] = options.Select((o, i) => new Dictionary<string, object?>
+                    {
+                        ["index"] = i,
+                        ["id"] = o.OptionId,
+                        ["enabled"] = o.IsEnabled,
+                    }).ToList(),
+                };
+            }
+
+            case EventRoom eventRoom:
+            {
+                EventModel ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
+                return new Dictionary<string, object?>
+                {
+                    ["type"] = "Event",
+                    ["id"] = ev.Id.Entry,
+                    ["finished"] = ev.IsFinished,
+                    ["options"] = ev.CurrentOptions.Select((o, i) => new Dictionary<string, object?>
+                    {
+                        ["index"] = i,
+                        ["key"] = o.TextKey,
+                        ["locked"] = o.IsLocked,
+                        ["proceed"] = o.IsProceed,
+                        ["chosen"] = o.WasChosen,
+                        ["relic"] = o.Relic?.Id.Entry,
+                    }).ToList(),
+                };
+            }
+
+            case MerchantRoom shop:
+            {
+                MerchantInventory inventory = shop.GetLocalInventory();
+                return new Dictionary<string, object?>
+                {
+                    ["type"] = "Shop",
+                    ["entries"] = inventory.AllEntries.Select((e, i) => new Dictionary<string, object?>
+                    {
+                        ["index"] = i,
+                        ["kind"] = e.GetType().Name,
+                        ["id"] = EntryId(e),
+                        ["cost"] = e.Cost,
+                        ["stocked"] = e.IsStocked,
+                        ["affordable"] = e.EnoughGold,
+                    }).ToList(),
+                };
+            }
+
+            default:
+                return null;
+        }
+    }
+
+    private static string? EntryId(MerchantEntry entry) => entry switch
+    {
+        MerchantCardEntry card => card.CreationResult?.Card is { } c ? Ident(c) : null,
+        MerchantRelicEntry relic => relic.Model?.Id.Entry,
+        MerchantPotionEntry potion => potion.Model?.Id.Entry,
+        _ => null,
+    };
 
     /// <summary>
     /// Where we are on the map, and which nodes may be travelled to next.

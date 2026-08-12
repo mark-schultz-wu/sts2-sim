@@ -573,9 +573,10 @@ internal static class OracleDriver
     /// </remarks>
     private static bool ReadyForInput(int? turnMustAdvancePast)
     {
-        // Taking rewards runs after combat ends, so every other test here would
-        // call the run quiescent while it is still in progress.
-        if (RewardPlan.Applying)
+        // Work started outside the action queue — taking rewards, resolving an
+        // event option — is invisible to every other test here, and out of
+        // combat they are all trivially true.
+        if (BackgroundWork.InFlight)
         {
             return false;
         }

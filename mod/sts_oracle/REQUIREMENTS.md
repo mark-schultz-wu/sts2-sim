@@ -31,9 +31,9 @@ Three capabilities carry it:
   modifiers built,
 - **advance** by exactly one decision (R4) — **working**, 132/sec in-process and
   63/sec over the protocol,
-- **observe** completely (R5, R3, R6) — **working in combat, on the map, and
-  through combat rewards**, byte-reproducible across processes through the
-  protocol; shops and campfires are the remaining gap.
+- **observe** completely (R5, R3, R6) — **working in combat, on the map, and in
+  every room type**, byte-reproducible across processes through the protocol;
+  run-end and orbs are the remaining gaps.
 
 ---
 
@@ -351,10 +351,44 @@ Together with R4's turn-transition bug and the map's boss row, all three of this
 project's hardest bugs have the same shape: **a state that is legitimately
 reachable, briefly, and indistinguishable from the state we were waiting for.**
 
-*Still open.* Shops and campfires. Both are ordinary observable room states
-rather than pending decisions, so neither needs new protocol machinery — what
-is untested is whether shop purchase touches anything presentational on its
-success path.
+### Rest sites, events and shops
+
+*Built,* and they needed no new protocol machinery, as designed. Each is an
+observable room state: the observation grows a `room` block, and the client
+answers with an ordinary command — `choose_option {index}` for rest sites and
+events (both are `ChooseLocalOption(int)` on their synchronizer, disambiguated
+by room type), `buy {index}` for shops.
+
+| exercised | result |
+|---|---|
+| rest site `HEAL` at 0/80 hp | 0 → 24, and the remaining options clear |
+| event `AROMA_OF_CHAOS` / `LET_GO` | parks a nested `select_cards`, answered, resolved |
+| shop buy `STAMPEDE` @36 | gold 99 → 63, deck 10 → 11 |
+| bad index, disabled option, locked option | refused, room unchanged |
+| unaffordable purchase | refused, naming cost and gold |
+| `choose_option` in a shop | refused |
+
+`enter_room {type}` reaches any of them directly (R7) — travelling to a shop
+would otherwise mean hunting a seed that puts one on floor 2, which is the
+seed-hunting this project exists to avoid.
+
+**The event case is the one that validates the design.** `LET_GO` leads to a
+card selection, so an event option parks a `select_cards` *inside* itself. The
+first attempt awaited `EventSynchronizer.AwaitPendingOptionTasks()` directly and
+**deadlocked**: the handler was blocked inside the very work that was trying to
+ask the client a question it could no longer send. Registering the work with
+`BackgroundWork` instead — tracked, never awaited — lets the wait loop exit on
+the pending while still refusing to call the run quiescent.
+
+That was the fourth instance of one bug, so the flags are now a single counter
+rather than one more each time. The shape, stated once: **out of combat, every
+readiness test the driver has is trivially true, so work started outside the
+action queue is invisible to it.**
+
+*Not a legality gap but found here.* A driven run that loses a fight keeps
+accepting commands — a dead player was observed healing at a rest site, a state
+the real game cannot reach. The observation now reports `alive`, but the oracle
+does not yet act on run-end.
 
 ## R4 — One command advances the state exactly one decision
 

@@ -83,15 +83,17 @@ strictly true. All of it is deliberate; none of it is hidden:
   digest sequences.
 
 **Verified once, by hand, not automated:** headless startup, map travel,
-protocol error paths, throughput numbers.
+combat rewards, rest sites, events, shops, protocol error paths, throughput
+numbers.
 
-**Not verified at all:** anything on another machine; anything past one combat;
-rewards, shops and campfires (not implemented).
+**Not verified at all:** anything on another machine; a full run rather than a
+few rooms; anything to do with a run *ending* — a driven run that dies keeps
+taking commands, and a dead player was seen healing at a campfire.
 
 ### Bugs this found — in the oracle, not the game
 
-Recorded because they calibrate how much to trust the rest. All three were
-invisible until something specifically looked for them:
+Recorded because they calibrate how much to trust the rest. Each was invisible
+until something specifically looked for it:
 
 1. **The boss disappeared from the legal move set.** On the last map row with
    free travel active, the oracle reported *no legal move at all*. Two correct
@@ -101,10 +103,21 @@ invisible until something specifically looked for them:
 3. **A failed action was reported as success.** The game caught its own
    exception and logged it; the oracle saw the action "complete" and answered
    `"resolved": true`. Nothing in the oracle's own view was wrong.
+4. **The same "answered before the work finished" bug, four times** — an empty
+   action queue before the action was picked up, a turn that had not yet
+   changed, rewards not yet applied, and an event option not yet resolved. Out
+   of combat every readiness test the driver has is trivially true, so work
+   started outside the action queue is invisible to it and the client is handed
+   a state its own decision has not reached yet. Item 2 is one of these; they
+   are listed together because the shape matters more than the instances.
 
-The third is why every response now carries a `gameErrors` field when the game
+Number 3 is why every response now carries a `gameErrors` field when the game
 logged anything at error level during that command. **If you see `gameErrors` in
 a response, do not trust the observation attached to it.**
+
+Number 4 is the standing hazard of this codebase rather than four accidents, so
+new code that starts work outside the action queue must register it with
+`BackgroundWork` — otherwise it will reproduce the bug a fifth time.
 
 ## Running it
 

@@ -13,6 +13,9 @@ using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
+using MegaCrit.Sts2.Core.Entities.Merchant;
+using MegaCrit.Sts2.Core.Entities.RestSite;
+using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
@@ -74,7 +77,7 @@ internal static class Protocol
             ["protocol"] = Version,
             ["game"] = "v0.107.1",
             ["assemblyHash"] = 1692500715,
-            ["commands"] = new[] { "start", "enter_fight", "travel", "play_card", "end_turn", "answer", "grant", "observe", "quit" },
+            ["commands"] = new[] { "start", "enter_fight", "travel", "play_card", "end_turn", "answer", "grant", "enter_room", "choose_option", "buy", "observe", "quit" },
         });
 
         while (true)
@@ -148,6 +151,18 @@ internal static class Protocol
                 case "enter_fight":
                     await OracleDriver.EnterFight(_state);
                     await Observe(req, "enter_fight");
+                    return false;
+
+                case "enter_room":
+                    await EnterRoom(req);
+                    return false;
+
+                case "choose_option":
+                    await ChooseOption(req);
+                    return false;
+
+                case "buy":
+                    await Buy(req);
                     return false;
 
                 case "grant":
@@ -241,7 +256,7 @@ internal static class Protocol
         }
         finally
         {
-            RewardPlan.Applying = false;
+            BackgroundWork.Release();
         }
     }
 
@@ -399,6 +414,160 @@ internal static class Protocol
         // fight; the same wait decides which, so nesting needs no special case.
         bool resolved = await OracleDriver.WaitForDecisionPoint();
         await Observe(req, "answer", resolved);
+    }
+
+    /// <summary>
+    /// Enters a room of a given type directly, without walking the map to one.
+    /// </summary>
+    /// <remarks>
+    /// Scenario construction (R7): reaching a shop by travelling means finding a
+    /// seed that puts one on floor 2, which is the seed-hunting this project
+    /// exists to avoid.
+    ///
+    /// <c>EnterRoomDebug</c> rather than the `room` console command, for the
+    /// same reason `enter_fight` avoids `fight`: the console path calls
+    /// <c>DebugRandomizeRng</c>, which reseeds from the wall clock.
+    /// </remarks>
+    private static async Task EnterRoom(JsonElement req)
+    {
+        string? want = Str(req, "type");
+        if (want == null || !Enum.TryParse(want, ignoreCase: true, out RoomType type))
+        {
+            await Error("enter_room",
+                $"enter_room requires a 'type' from: {string.Join(" ", Enum.GetNames(typeof(RoomType)))}");
+            return;
+        }
+
+        await RunManager.Instance.EnterRoomDebug(type);
+        bool resolved = await OracleDriver.WaitForDecisionPoint();
+        await Observe(req, "enter_room", resolved);
+    }
+
+    /// <summary>
+    /// Picks an option in a rest site or an event.
+    /// </summary>
+    /// <remarks>
+    /// One command for both because both are `ChooseLocalOption(int)` on their
+    /// respective synchronizer, and the room type disambiguates. Options are
+    /// addressed by index into what the observation reported — and that list
+    /// *shrinks*: choosing a rest site option removes it, and clears the rest
+    /// entirely when `ShouldDisableRemainingRestSiteOptions` fires. So an index
+    /// is only meaningful against the observation it came from.
+    /// </remarks>
+    private static async Task ChooseOption(JsonElement req)
+    {
+        if (!req.TryGetProperty("index", out JsonElement el) || !el.TryGetInt32(out int index))
+        {
+            await Error("choose_option", "choose_option requires an integer 'index'");
+            return;
+        }
+
+        switch (_state.CurrentRoom)
+        {
+            case RestSiteRoom:
+            {
+                RestSiteSynchronizer sync = RunManager.Instance.RestSiteSynchronizer;
+                IReadOnlyList<RestSiteOption> options = sync.GetLocalOptions();
+                if (index < 0 || index >= options.Count)
+                {
+                    await Error("choose_option",
+                        $"option {index} out of range; {options.Count} offered");
+                    return;
+                }
+
+                // Checked here because the synchronizer does not: ChooseOption
+                // validates the index but never consults IsEnabled, so a
+                // disabled option would be taken rather than refused.
+                if (!options[index].IsEnabled)
+                {
+                    await Error("choose_option", $"rest site option '{options[index].OptionId}' is disabled");
+                    return;
+                }
+
+                await sync.ChooseLocalOption(index);
+                break;
+            }
+
+            case EventRoom:
+            {
+                EventSynchronizer sync = RunManager.Instance.EventSynchronizer;
+                IReadOnlyList<EventOption> options = sync.GetLocalEvent().CurrentOptions;
+                if (index < 0 || index >= options.Count)
+                {
+                    await Error("choose_option", $"option {index} out of range; {options.Count} offered");
+                    return;
+                }
+
+                if (options[index].IsLocked)
+                {
+                    await Error("choose_option", $"event option '{options[index].TextKey}' is locked");
+                    return;
+                }
+
+                sync.ChooseLocalOption(index);
+
+                // Tracked, never awaited here. ChooseLocalOption returns void
+                // and starts its work in the background, so without this the
+                // option reads as never chosen. But awaiting the tasks directly
+                // deadlocks: an event option may park a question for the client,
+                // and a handler blocked here could never send it.
+                BackgroundWork.Track(sync.AwaitPendingOptionTasks());
+                break;
+            }
+
+            default:
+                await Error("choose_option",
+                    $"the current room ({_state.CurrentRoom?.GetType().Name ?? "none"}) has no options");
+                return;
+        }
+
+        bool resolved = await OracleDriver.WaitForDecisionPoint();
+        await Observe(req, "choose_option", resolved);
+    }
+
+    /// <summary>
+    /// Buys one shop entry, addressed by index into the reported inventory.
+    /// </summary>
+    /// <remarks>
+    /// <c>OnTryPurchaseWrapper</c> already refuses when out of stock or short of
+    /// gold, and reports it through <c>PurchaseFailed</c> — an event the oracle
+    /// does not subscribe to. Its return value is the whole signal available
+    /// here, so a false is turned into a protocol error rather than an
+    /// observation that silently shows nothing bought.
+    /// </remarks>
+    private static async Task Buy(JsonElement req)
+    {
+        if (_state.CurrentRoom is not MerchantRoom shop)
+        {
+            await Error("buy", "not in a shop");
+            return;
+        }
+
+        if (!req.TryGetProperty("index", out JsonElement el) || !el.TryGetInt32(out int index))
+        {
+            await Error("buy", "buy requires an integer 'index'");
+            return;
+        }
+
+        MerchantInventory inventory = shop.GetLocalInventory();
+        List<MerchantEntry> entries = inventory.AllEntries.ToList();
+        if (index < 0 || index >= entries.Count)
+        {
+            await Error("buy", $"entry {index} out of range; {entries.Count} on offer");
+            return;
+        }
+
+        MerchantEntry entry = entries[index];
+        if (!await entry.OnTryPurchaseWrapper(inventory))
+        {
+            await Error("buy",
+                $"purchase refused: cost {entry.Cost}, gold {_state.Players[0].Gold}, "
+                + $"stocked {entry.IsStocked}");
+            return;
+        }
+
+        bool resolved = await OracleDriver.WaitForDecisionPoint();
+        await Observe(req, "buy", resolved);
     }
 
     /// <summary>

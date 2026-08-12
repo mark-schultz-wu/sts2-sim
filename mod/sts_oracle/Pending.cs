@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -91,6 +92,52 @@ internal abstract class Pending
         Current = null;
         pending.Fail(new OperationCanceledException(why));
     }
+}
+
+/// <summary>
+/// Work the game has started that no queue or combat flag accounts for.
+/// </summary>
+/// <remarks>
+/// The driver's readiness test asks whether the action queue has drained and
+/// whether the player's turn is ready for input. Out of combat both are
+/// trivially true, so any work started outside the queue is invisible to it and
+/// the run is called quiescent while the work is still running. The client then
+/// sees the state *before* its own decision took effect.
+///
+/// This has now happened four times — taking rewards, choosing an event option,
+/// and twice in the shapes recorded under R4. They are all the same bug: a
+/// state that is legitimately reachable, briefly, and indistinguishable from
+/// the state being waited for. Rather than add a fifth ad-hoc flag, anything
+/// that starts such work registers it here.
+///
+/// **Registering is not the same as awaiting it.** The handler must not block
+/// on the work, because the work may itself park a question for the client —
+/// and a handler blocked inside <c>AwaitPendingOptionTasks</c> can never send
+/// that question, which deadlocks the protocol. So the wait loop checks a
+/// counter and still exits early on a pending.
+/// </remarks>
+internal static class BackgroundWork
+{
+    private static int _inFlight;
+
+    public static bool InFlight => Volatile.Read(ref _inFlight) > 0;
+
+    /// <summary>Follows a task that was started but must not be awaited here.</summary>
+    public static void Track(Task work)
+    {
+        Hold();
+        work.ContinueWith(_ => Release(), TaskScheduler.Default);
+    }
+
+    /// <summary>
+    /// For work with no task to follow — where the gap begins before the task
+    /// exists. Taking rewards is the case: the applier resumes asynchronously,
+    /// so between accepting the answer and the applier starting there is a
+    /// window in which nothing at all looks busy.
+    /// </summary>
+    public static void Hold() => Interlocked.Increment(ref _inFlight);
+
+    public static void Release() => Interlocked.Decrement(ref _inFlight);
 }
 
 /// <summary>Which cards to pick from a prompt — discard, exhaust, upgrade, and the rest.</summary>
@@ -266,7 +313,7 @@ internal sealed class RewardChoice : Pending
             }
 
             Release();
-            RewardPlan.Applying = true;
+            BackgroundWork.Hold();
             _answer.SetResult(new RewardPlan { Skip = true });
             return null;
         }
@@ -313,11 +360,11 @@ internal sealed class RewardChoice : Pending
 
         Release();
 
-        // Set here rather than in the applier: the continuation runs
+        // Held here rather than in the applier: the continuation runs
         // asynchronously, so between accepting the answer and the applier
         // actually starting there is a window in which the run looks idle —
         // and the driver would report the state before the rewards land.
-        RewardPlan.Applying = true;
+        BackgroundWork.Hold();
         _answer.SetResult(plan);
         return null;
     }
