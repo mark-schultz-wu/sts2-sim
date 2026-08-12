@@ -1,5 +1,11 @@
 # What the oracle has to do
 
+> **This document and the code it describes were written by Claude, not by a
+> human, and have not been reviewed line by line.** It is a working record, not
+> a specification anyone signed off. Claims marked *measured*, *built* or
+> *mutation-tested* were checked by running something; claims marked *resolved*
+> or argued from the decompiled source were not. See [README.md](README.md).
+
 The simulator is a Rust reimplementation of Slay the Spire 2. It is checked by
 putting the real game and the simulator in the same state, feeding both the same
 decisions, and comparing after every one. This document is the standard the
@@ -15,15 +21,19 @@ measured or not yet known, it says so rather than assuming.
 One process runs the real game, headless, with our mod loaded. It speaks a
 line-oriented protocol: given a scenario it constructs the state and reports an
 observation; thereafter the simulator sends one decision and the oracle replies
-with the next observation. Whether that process is spoken to over a pipe or
-hosted in-process is **not decided** — see R9.
+with the next observation. It is spoken to over a loopback TCP connection, from
+behind an interface that keeps the choice reversible — see R10; whether the
+simulator would rather host it in-process is still open (R9).
 
 Three capabilities carry it:
 
-- **construct** a scenario (R7) — mechanisms identified, only a fresh run built,
-- **advance** by exactly one decision (R4) — **working**, ~250 decisions/sec,
-- **observe** completely (R5, R3, R6) — **working in combat**, byte-reproducible;
-  out-of-combat legality is the remaining gap.
+- **construct** a scenario (R7) — mechanisms identified, fresh runs and run
+  modifiers built,
+- **advance** by exactly one decision (R4) — **working**, 132/sec in-process and
+  63/sec over the protocol,
+- **observe** completely (R5, R3, R6) — **working in combat**, byte-reproducible
+  across processes through the protocol; out-of-combat legality is the remaining
+  gap.
 
 ---
 
@@ -92,10 +102,15 @@ set catches the second.
 
 *Check, and a correction to it.* Every command the oracle enumerates must
 execute without error. But the stated converse — commands outside the set are
-rejected — **does not work for out-of-combat legality**:
-`MapTravel.GetTravelablePointsFrom` has exactly one caller, `NMapScreen`, so the
+rejected — **does not work for map travel**:
+`MapTravel.GetTravelablePointsFrom` has exactly one caller, `NMapScreen`, and
+`RunManager.EnterMapCoord` enters any unvisited coordinate handed to it, so the
 model layer never rejects an illegal map move and the complement fuzz passes
-vacuously. Legality there lives in the UI; there is nothing underneath to say no.
+vacuously. Map legality lives in the UI; there is nothing underneath to say no.
+
+Map travel is the exception, not the rule — rest sites, events and shops all
+carry their legality on the model (`IsEnabled`, `IsLocked`, `EnoughGold`), so
+the converse check does work for them.
 
 What does work is metamorphic, and it generalises: **the game's own `override`
 sites enumerate every place a rule varies.** For each, construct a state where
@@ -120,21 +135,38 @@ ShouldPlay:            VelvetChoker, ChainsOfBindingPower, RingingPower,
 
 matching a hand grep exactly. A hook added in a future build appears as
 UNCOVERED rather than silently going untested — *noticing* a case exists is
-automatic, *constructing* one is manual. Five of nine are covered:
+automatic, *constructing* one is manual. **All nine are covered**, 28 assertions
+in 3.9s (25 hook assertions plus the boss-row map case):
 
 | case | trigger | check |
 |---|---|---|
 | `WingedBoots` | hold the relic | travelable set widens, 1 → 3 nodes |
+| *(boss row)* | stand on the last row, then hold the relic | the boss stays the one legal move |
+| `Flight` | restart the run holding the modifier | travelable set widens, 1 → 3 nodes |
 | `Enthralled` | card in hand | playable 5 → 1, reason `BlockedByHook` |
 | `SmoggyPower` | power + `Smog` on a card | that card blocked |
 | `ChainsOfBindingPower` | power + `Bound` on two, play one | the other blocked |
 | `RingingPower` | power, then any play | afflicted cards blocked |
+| `SlothPower` | power, then 1 play | next card blocked |
+| `Normality` | card in hand, then 3 plays | next card blocked |
+| `VelvetChoker` | hold the relic, then 6 plays | next card blocked |
 
-`Flight`, `VelvetChoker`, `SlothPower` and `Normality` remain gaps. The last
-three need "N cards played this turn"; `Flight` is a run-level modifier fixed at
-construction.
+The last three share one mechanism — a count of cards played this turn — so they
+share one case, parameterised by the threshold and by where the rule lives (a
+power, a card, a relic). Reaching six plays needs granted energy *and* a
+re-drawn hand; the first attempt stalled at five with 27 energy spare, because
+the binding limit was cards, not cost.
 
-### Three things the suite got wrong before the oracle did
+`Flight` is the one case that cannot be switched on mid-run: modifiers are
+installed only by `RunManager.InitializeNewRun`. So its metamorphic pair is two
+runs at one seed rather than two moments in one run — which makes it also the
+only exercise R9's multi-scenario claim gets. `RunState.AddModifierDebug` would
+have avoided the restart and was rejected: it appends to the list without
+calling `OnRunCreated`, leaving the modifier's `RunState` unset and its
+`ClearsPlayerDeck` pass skipped. `Flight` happens to survive that; relying on
+the happenstance would make the case a bad template for modifiers that do not.
+
+### Four things the suite got wrong before the oracle did
 
 Worth recording, because each is a way a green suite can be worthless.
 
@@ -153,7 +185,13 @@ two false failures.
 affliction; a diagnostic showed the power afflicts the entire hand on
 application, so no such card existed. The scenario, not the rule, was impossible.
 
-In all three the suite was wrong and the oracle right — which is the expected
+**An uncontrolled comparison.** The `Flight` case compares two runs rather than
+two moments, so a difference in the *map* would read as a difference in the
+*rule* — the case would have "proved" free travel widens the map when all the
+restart did was generate a different one. It now fingerprints the whole map,
+edges included, and refuses to compare unless the two agree.
+
+In all four the suite was wrong and the oracle right — which is the expected
 ratio early on, and the reason each failure was diagnosed rather than assumed to
 be a product bug.
 
@@ -161,16 +199,23 @@ be a product bug.
 whether a relic may appear in a run at all, not what the legal command set is,
 so there is no observation field for it to move.
 
-Both cases are mutation-tested — the suite is known to fail when the oracle is
-wrong, not merely to pass when it is right:
+The suite is mutation-tested — known to fail when the oracle is wrong, not
+merely to pass when it is right:
 
 | mutation | result |
 |---|---|
-| `MapTravel` → `current.Children` | FAIL, 1 → 1 nodes |
+| `MapTravel` → `current.Children` | FAIL ×2, `WingedBoots` and `Flight`, both 1 → 1 nodes |
+| `MapLegality` → `MapTravel` alone, no boss row | FAIL, boss case, 1 → 0 nodes |
 | `CanPlay` → energy affordability only | FAIL, 5 → 6 playable |
-It reads the travelable set back out of the emitted observation rather than
-calling `MapTravel` again, since a test that re-derives the answer the same way
-the reporter did would agree with a broken reporter.
+| `Restart` uses a different seed per scenario | FAIL, same-map guard, before the widening is compared |
+
+The last one is a mutation of the *test*, not the oracle: it confirms the
+`Flight` case's control is load-bearing rather than decorative.
+
+The suite reads the travelable set and the legal set back out of the emitted
+observation rather than calling `MapTravel` or `CanPlay` again, since a test
+that re-derives the answer the same way the reporter did would agree with a
+broken reporter.
 
 *Two things it taught immediately.* Run at floor 1 it failed — not because the
 oracle was wrong but because the next row held exactly that node's two children,
@@ -219,7 +264,73 @@ It would then have been silently wrong, in a way no state comparison catches,
 which is the exact failure mode this requirement exists to prevent. The oracle
 calls `MapTravel.GetTravelablePointsFrom`.
 
-*Still open.* Reward, shop and campfire choices.
+*This is not a hypothetical, and the evidence is external.* `sts2-cli`, the most
+developed headless STS2 harness in existence, has exactly this bug:
+`MapSelectDecision` builds its choices from `currentPoint.Children`
+(`RunSimulator.cs:2022`), and the repository contains zero references to
+`MapTravel`, `ShouldAllowFreeTravel`, `WingedBoots` or `Flight`. Its combat
+legality is right — it uses `CardModel.CanPlay` — so the defect is specifically
+the rule that lives one call deeper than the obvious graph walk.
+
+*And `MapTravel` is not the whole rule either.* The oracle now delegates to
+`MapLegality`, a mirror of `NMapScreen.RecalculateTravelability`, because the
+boss lives **outside the grid**: `BossMapPoint` is at row `GetRowCount()`, and
+`StartingMapPoint` and `SecondBossMapPoint` are likewise absent from `Grid`, so
+`GetAllMapPoints` and `GetPointsInRow` never yield them. The order of the
+screen's checks is load-bearing — the boss row is tested *before* free travel is
+consulted.
+
+The two rules compose into a bug neither has alone. Standing on the last grid
+row with free travel active, `MapTravel` returns `GetPointsInRow(rowCount)` —
+off the end of the grid, so empty — and the fallback to `Children`, which does
+contain the boss, is skipped precisely because free travel applies. The oracle
+reported **no legal move at all** on the floor before the boss, for any run
+holding `Winged Boots` or `Flight`. Mutation-tested: reverting `MapLegality` to
+`MapTravel` alone gives `before: [3,16] after: []`.
+
+*Travel is a command.* `RunManager.EnterMapCoord(MapCoord)` is public and does
+the whole step. The oracle checks legality first, and that check is **not**
+redundant: `EnterMapCoord` refuses only coords already visited and otherwise
+enters any coordinate handed to it, silently. It is the one command where the
+model layer would let an illegal move through — which is the concrete reason R3
+requires the legal set to be published rather than a rejection to be relied on.
+
+### Rewards, and what the UI owns
+
+*Blocked on a design decision, and the reason is structural.* After a won
+fight the oracle grants nothing: gold stays 99, the deck stays at 10. Rewards
+are not silently auto-taken either — the step simply never happens.
+
+`CombatRoom.OfferRoomEndRewards()` is public and does the work, but on the live
+path its only caller is `NCombatUi.OnCombatWon`. The trigger is in the UI, not
+the model. This is worse than the map case: there the *rule* lived in a screen
+while the model still owned the step; here the **step itself** is UI-owned, so
+the oracle has to supply it.
+
+Two consequences before any of this can be built:
+
+1. **`TestMode` changes the semantics.** `RewardsSet.Offer` branches on
+   `TestMode.IsOn`, which the oracle sets. With `testSelector` null it selects
+   *every* reward and throws if the set is left incomplete. So the moment the
+   oracle starts offering rewards it will start taking them all unless it
+   installs `RewardsSet.testSelector` — a static `Func<RewardsSet, Task>?` that
+   is exactly the seam needed to hand the choice back to the client.
+2. **The protocol needs pending decisions.** A reward offer arrives *inside* the
+   action cascade, during quiescence, not in response to a command. So R10's
+   "one request, one response" needs a notion of the game asking a question.
+
+*Designed — see R10, "Pending decisions".* The investigation that produced it
+also corrected the assumption above: rewards are the **only** UI-owned trigger.
+Rest sites, events and shops all begin from `EnterInternal` on the model side,
+so they are ordinary observable states reached by `travel`, not pending
+decisions. What needs the new machinery is the three blocking callbacks —
+and the first of them, `GetSelectedCards`, fires inside a single `play_card` for
+any card that discards or exhausts, so it is a combat concern too.
+
+*Still open.* Implementation. Every seam is identified and the shape is settled;
+what is untested is whether `OfferRoomEndRewards` behaves when driven by us
+rather than by `NCombatUi`, and whether shop purchase touches anything
+presentational on its success path.
 
 ## R4 — One command advances the state exactly one decision
 
@@ -232,7 +343,7 @@ past a decision point.
 the **player decision**, not the `GameAction`. The action stream underneath is
 reported (R5) but is not the command boundary.
 
-*Resolved: quiescence is two phases, and an empty queue alone is wrong.*
+*Resolved: quiescence is three phases, and an empty queue alone is wrong.*
 `ActionExecutor.IsRunning` is false and `FinishedExecutingActions()` returns
 `Task.CompletedTask` **both** when the queue has drained and when it has not yet
 picked our action up. Waiting on those alone returns immediately and lets the
@@ -245,6 +356,30 @@ So:
    source, which cannot be satisfied early.
 2. Then drain the cascade it triggered, until `ActionQueueSet.IsEmpty` and
    `!ActionExecutor.IsRunning`.
+3. Then wait until the game wants input again: `!PlayerActionsDisabled` and
+   `PlayerTurnPhase.Play`, and for a turn-ending decision, a turn number
+   strictly greater than the one being left.
+
+*Phase three was missed for a while, and the protocol is what exposed it.*
+`EndPlayerTurnAction.ExecuteAction` calls `PlayerCmd.EndTurn` and returns
+`Task.CompletedTask` immediately, so the action reports itself finished while
+the turn transition — enemy turn, next draw — has not started. The queue is
+genuinely empty in that gap, so phases 1 and 2 both pass and the oracle reports
+a state the game is about to leave.
+
+The in-process driver never noticed, because it re-read the live model on the
+next iteration and simply picked up wherever the game had got to. Over the
+protocol the observation is authoritative, and the failure became loud
+immediately: a client acting on the returned observation was found a full turn
+behind the oracle — believing turn 2 while the game was on turn 3 — with no
+command in between. It then addressed a card by an index that no longer meant
+what it had meant, and the oracle rejected it.
+
+**A stale observation is worse than a missing one**, and this is the sharpest
+illustration of R12 so far: nothing errored, nothing was defaulted, and the
+oracle's answer was simply out of date. Waiting on a settling delay would have
+papered over it; the fix uses the game's own readiness signals, and for turn
+ends a monotonic turn counter, which no transient can imitate.
 
 *And a cancelled action never completes at all.* When combat ends mid-cascade
 the executor stops with actions still queued and the decision we issued is
@@ -323,11 +458,19 @@ is comparable, not just combat steps.
 *Built.* A SHA-256 over the full observation, truncated to 8 bytes. This is also
 what makes the stream affordable: the full observation is ~1.6KB per decision
 (27% creatures, 27% legal moves, 19% RNG counters, 11% deck — mostly repeated
-key names for values that rarely change), and at 250 decisions/sec that is
-400KB/s to say "still agreeing".
+key names for values that rarely change), and at 132 decisions/sec that is
+200KB/s to say "still agreeing".
 
-Digests cut a 22-decision fight from **36,410 bytes to 374** — 99%, 17 bytes a
-step. The full observation is available on demand via `STS_ORACLE_OBS=full`,
+*What the digest does not buy is time.* Over the protocol, digest-only and full
+observations measure within 5% of each other (R8) — the cost of a decision is
+frame-boundary latency, not serialisation. The saving is bandwidth and log size,
+which is worth having and is not what this section originally implied.
+
+Digests cut a fight's stream by **99%** — 17 bytes a step against ~1.6KB. (The
+original measurement, 36,410 bytes to 374, was taken over a 22-decision fight;
+the same fight is 17 decisions now that R4's quiescence is correct, so the
+totals moved while the per-step ratio did not.) The full observation is
+available on demand via `STS_ORACLE_OBS=full` or per request,
 and that fallback costs nothing precisely **because R1 holds**: the diverging
 run replays exactly. Compacting the JSON was the alternative and is worse — it
 saves perhaps 40% and makes the failure path harder to read, which is the path
@@ -486,6 +629,28 @@ each one, not wholesale.
 touch UI singletons — and that `CmdResult.success` is false rather than a
 silent no-op when one does not.
 
+**TODO: the driver hardcodes Ironclad.** `BuildRunState` always builds
+`Player.CreateForNewRun<Ironclad>(...)`, so `start` cannot ask for a character
+and four of the five playable characters are unreachable. This is a scenario
+parameter like the seed and the modifier list, and it belongs on the same
+command:
+
+```json
+{"cmd":"start","seed":"ORACLE1","character":"Silent","ascension":0}
+```
+
+It blocks more than variety. `Defect` is the only way to exercise orbs, which
+R5 lists as an observation gap for exactly this reason — no Defect run has ever
+been driven, so the orb fields have never been written or checked. Several of
+the clearest card-selection cases are Silent cards (`Acrobatics`, `Prepared`,
+`Survivor`), so the pending-decision work in R10 wants this too.
+
+`CreateForNewRun<T>` is generic over the character type, so the lookup is the
+same reflection-over-`ModelDb` shape already used for modifiers, and
+`PreloadManager.LoadRunAssets` already takes the character list. `ascension` is
+likewise passed straight to `RunState.CreateForNewRun` and is currently pinned
+to 0.
+
 *Check.* Earn a relic legitimately in one run and grant it by scenario in
 another; from the same anchor the two observations must be identical. Run this
 over every relic with an `AfterObtained` override — those are exactly the ones
@@ -571,25 +736,48 @@ identical produce identical observations (the same check as R5).
 The tool reports its own commands/sec so the number is a fact rather than an
 estimate.
 
-**First measurement, single combat, greedy policy:**
+**Measured, single combat, greedy policy:**
 
 | | |
 |---|---|
 | game load | 0.7s, once per process |
 | run start to standing on the map | 1.6s from process launch |
-| one full fight (22 decisions) | 0.09s |
-| sustained | **~250 decisions/sec** |
+| one full fight (17 decisions), in-process | 0.13s — **132/sec** |
+| the same fight over the protocol, digests only | 0.27s — **63/sec** |
+| the same fight over the protocol, full observations | 0.28s — **60/sec** |
+| scenario turnaround, `CleanUp` → standing on the map again | 0.3s |
+
+**An earlier "~250 decisions/sec" here was wrong and is withdrawn.** It was
+measured against the quiescence bug R4 now records: the driver returned before
+turn transitions had happened, so it both counted decisions that were issued
+against stale state (22 rather than 17 for the same fight) and skipped the wait
+it should have been timing. Correcting quiescence roughly halved the number. The
+honest figure is 132/sec in-process.
 
 For comparison the game's own `AutoSlayer` caps near ten interactions/sec, but
 that is `AutoSlayConfig.pollingInterval` and `buttonClickDelay` both being 100ms
 — a property of driving the UI, not a floor on the engine.
 
-At 250/s a hundred-decision combat prefix replays in well under half a second,
-which is why R7 can lean on replay and why the O(1)-resume argument for a save
-format stays weak.
+*Where the protocol's 2× goes, and where it does not.* Digests and full
+observations run within 5% of each other, so serialisation is not the cost —
+which also means R6's digest saves bandwidth rather than time. The remaining
+~8ms per decision is latency, not work: a loopback roundtrip is ~30µs, but our
+continuations resume on `GodotSynchronizationContext`, which pumps on the frame
+callback, so each externally-driven decision waits for a frame boundary that an
+in-process loop does not. Raising the headless frame rate is the obvious lead
+and is untried.
 
-*Still to measure.* A full run rather than one fight, and scenario turnaround
-including `CleanUp` → `SetUpTest`.
+At 63/s a hundred-decision combat prefix replays in about 1.6s, which still
+supports R7 leaning on replay, though less comfortably than the withdrawn number
+suggested.
+
+Scenario turnaround is measured from the two restarts the `Flight` case performs
+(R3): 0.3s each, against 0.7s of one-time game load. So a batch of scenarios in
+one process costs roughly two fights' worth of time per scenario boundary, which
+is the number R9 was waiting on and it favours in-process.
+
+*Still to measure.* A full run rather than one fight, and whether the frame-rate
+lead above recovers the protocol's 2×.
 
 ## R9 — The process boundary follows the measurement
 
@@ -610,10 +798,224 @@ same two scenarios in two fresh processes. That is the real test of whether
 `CleanUp` leaves anything behind — this is where cross-scenario state leaks
 would show up, and they would look like simulator bugs.
 
+*Partly demonstrated,* as a side effect of the `Flight` case (R3), which needs a
+second run because modifiers are fixed at run creation. `OracleDriver.Restart`
+does `CleanUp` → `BuildRunState` → `StartRun`, and the suite now runs a third
+and fourth run after seven fights, eight relic/power grants and roughly forty
+card plays in the first. Both restarts reproduce the first run's start state
+exactly:
+
+```
+run 2 (no modifiers): floor=1 hp=80/80 gold=99 relics=[BURNING_BLOOD] deck=10
+run 3 (FLIGHT):       floor=1 hp=80/80 gold=99 relics=[BURNING_BLOOD] deck=10
+both: UpFront=411, all fourteen other counters 0
+```
+
+and their maps are byte-identical under a fingerprint covering every node's
+coordinate, type and edges — which the suite asserts rather than assumes, since
+the `Flight` comparison is invalid without it.
+
+That is real evidence against a leak, and it is not yet the stated check: it
+compares runs *within* one process against each other, not against fresh
+processes, and it compares the state at run start rather than after driving. A
+leak that only manifests deeper into a run would still be invisible. The full
+check stays open.
+
 ## R10 — The protocol is machine-readable and versioned
 
 The consumer is Rust, not a human. Line-delimited JSON, with a version field
 that the simulator checks on connect and refuses to proceed on mismatch.
+
+*Built:* `Protocol.cs` and `Channel.cs`, `STS_ORACLE_MODE=serve`.
+
+One request per line, one response per request, strictly in order. There is no
+server-initiated traffic after the greeting, so the client never demultiplexes —
+a decision and its observation are a matched pair, which is what makes R4's "one
+command, one decision" checkable from outside the process. The greeting states
+the version, the build it answers for, and the command list:
+
+```json
+{"type":"hello","protocol":1,"game":"v0.107.1","assemblyHash":1692500715,
+ "commands":["start","enter_fight","play_card","end_turn","observe","quit"]}
+{"cmd":"play_card","index":2,"target":1,"full":true}
+{"type":"observation","seq":3,"cmd":"play_card","resolved":true,"digest":"…","state":{…}}
+```
+
+Cards are addressed by hand index, because that is how the observation reports
+the hand and the only way to disambiguate two identical cards. Targets are
+addressed by `CombatId`, a stable identity that does not shift when a creature
+dies — an index into the living-creature list would.
+
+**Every failure answers.** Unknown command, bad index, unplayable card,
+malformed JSON and any exception from the game all produce an `error` naming the
+cause; an unplayable card's error carries its `UnplayableReason` and the model
+that blocked it. Nothing no-ops, because a no-op that returns the previous
+observation is indistinguishable from a decision that legitimately changed
+nothing (R12).
+
+### Pending decisions
+
+*Built for card selection:* `Pending.cs`, `OracleCardSelector`. Rewards and the
+room states are designed below but not implemented. R3's out-of-combat work all
+routes through this, so it is settled once rather than six times.
+
+**There are two kinds of decision point, and conflating them is the mistake to
+avoid.**
+
+*Observable room states.* Rest sites, events and shops are entered by a command
+we already have — `travel`. Their triggers are model-owned
+(`RestSiteRoom.EnterInternal` calls `BeginRestSite`, `EventRoom.EnterInternal`
+calls `BeginEvent`, `MerchantRoom.EnterInternal` populates `Inventories`), so
+after travelling the game is *quiescent and idle*, exactly as it is at the start
+of a combat turn. These need no new machinery at all: the observation grows a
+`room` block and the client answers with an ordinary command.
+
+```json
+"room": {"type":"RestSite","options":[{"index":0,"id":"HEAL","enabled":true}]}
+"room": {"type":"Event","id":"EVENT.NEOW","options":[{"index":0,"locked":false}]}
+"room": {"type":"Shop","entries":[{"index":0,"kind":"card","id":"CLEAVE",
+                                   "cost":75,"affordable":true,"stocked":true}]}
+```
+
+`choose_option {index}` serves rest sites and events — both are
+`ChooseLocalOption(int)` on their respective synchronizer, and the room type
+disambiguates. Shops take `buy {index}` and `leave`, because a shop is not a
+single choice.
+
+*Blocking callbacks.* The other three arrive **inside** the action cascade, with
+the game stopped mid-action waiting on us:
+
+| callback | signature | when |
+|---|---|---|
+| `ICardSelector.GetSelectedCards` | async | any card-selection prompt |
+| `ICardSelector.GetSelectedCardReward` | **sync** | choosing among a card reward |
+| `RewardsSet.testSelector` | async | a reward set is offered |
+
+The first is not an out-of-combat concern at all: a card that discards or
+exhausts on play blocks *inside a single `play_card`*. So this mechanism is
+needed regardless of rooms, and combat is where it will first be exercised.
+
+**The shape.** Our selector implementations do not choose; they park:
+
+```csharp
+Task<IEnumerable<CardModel>> GetSelectedCards(options, min, max)
+{
+    _pending = new Pending(kind: "select_cards", options, min, max);
+    return await _pending.Answer.Task;      // a TaskCompletionSource
+}
+```
+
+and quiescence gains one early exit — `_pending != null` — which is checked
+**before** the drained-queue test, because a blocked action means the queue is
+by definition not drained. The response becomes a third message type:
+
+```json
+{"type":"pending","seq":7,"kind":"select_cards","min":1,"max":1,
+ "digest":"…","options":[{"index":0,"card":"STRIKE_IRONCLAD"}]}
+```
+
+answered by `{"cmd":"answer","cards":[0]}`. Working end to end — granting
+`BURNING_PACT` ("exhaust a card, draw 2") and playing it parks the action, offers
+the five remaining hand cards, and `{"cmd":"answer","cards":[2]}` exhausts
+exactly that card and then draws. Every invalid answer is refused with the
+pending intact: an out-of-range index, a repeated index, and a count outside
+`min..max`.
+
+Note the `digest`: a pending point is a legitimate comparison point — both
+implementations are at "the game is asking which card to discard" — so R1 and R6
+apply to it unchanged. It is *mid-cascade*, which means a simulator must model
+the same interleaving; that is a real constraint on the simulator and is the
+point of reporting it rather than hiding it.
+
+**One shape is forced on us.** `GetSelectedCardReward` is synchronous, so the
+client cannot be consulted from inside it. But `testSelector` is async and runs
+first, so the reward pending must ask for the whole choice at once — which
+rewards to take *and*, for a card reward, which card — and the sync callback
+then returns what was already decided:
+
+```json
+{"type":"pending","seq":9,"kind":"rewards","skippable":true,"rewards":[
+  {"index":0,"type":"gold","amount":23},
+  {"index":1,"type":"card","cards":["STRIKE_IRONCLAD","CLEAVE","BODY_SLAM"]}]}
+```
+```json
+{"cmd":"answer","take":[{"index":0},{"index":1,"card":1}]}
+```
+
+This is the only place the protocol's shape is dictated by a method signature
+rather than chosen, which is worth knowing before writing the code rather than
+discovering halfway through.
+
+*Rewards go through `testSelector` rather than around it.* `RewardsSet.Offer`
+also calls `_synchronizer.BeginRewardsSet` and asserts the set is complete
+afterwards, and `SelectLocalReward` throws if no set is registered. Generating
+rewards with `GenerateWithoutOffering` and driving selection ourselves would
+mean reimplementing that bookkeeping — the exact class of mistake this document
+keeps catching. The combat-end trigger still has to be ours
+(`CombatRoom.OfferRoomEndRewards`, whose only live caller is `NCombatUi`), but
+the *offer* is the game's.
+
+**Invariants.**
+
+1. Every response is exactly one of `hello`, `observation`, `pending`, `error`,
+   `bye`. An `observation` always carries the legal set; a `pending` always
+   carries its options.
+2. While a `pending` is outstanding the only valid commands are `answer`,
+   `observe` and `quit`. Anything else is an `error` and the pending survives —
+   the client must not wander off while the game is stopped mid-action.
+3. `answer` validates against the options the pending stated, then resumes and
+   waits for the next decision point, which may be another `pending`. Nesting is
+   handled by the loop, not by special cases.
+4. `seq` increments on every response, `pending` included.
+
+**Waiting for the client is not waiting for the game.** Quiescence's timeout
+bounds exist to catch a wedged engine; they must not fire while a human or a
+simulator is thinking. The design keeps these separate for free: the wait loop
+*returns* as soon as a pending appears, so the unbounded wait is the client's
+own `ReadLine`, never a bounded loop.
+
+**Cancellation.** An outstanding pending whose run is torn down would leave the
+game awaiting a `TaskCompletionSource` nobody will complete. `Restart` must fail
+any outstanding pending explicitly — `CleanUp` already calls
+`CardSelectCmd.Reset()`, but our own `TaskCompletionSource` is not its business.
+
+### The transport is behind an interface, and why it is TCP
+
+`IChannel` is three methods. Nothing above it knows which implementation it has,
+because the transport was the least settled part of this requirement and the
+most expensive to get permanently wrong.
+
+**stdout is not available**, which is the constraint that drives everything
+else. The engine writes 141 lines there before we emit anything — a Godot
+banner, FMOD, the Sentry extension, and an unprefixed multi-line system dump
+containing `PATH` and every mount point. Only 49 of those come from the game's
+`ConsoleLogPrinter`; the rest are native and unreachable from a Harmony patch.
+Prefix-filtering a stream carrying arbitrary paths is exactly the fragility R12
+exists to prevent.
+
+*How sts2-cli solves this, and why we cannot.* It replaces `GodotSharp.dll`
+with its own `GodotStubs`, in which `GD.Print` is literally
+`Console.Error.WriteLine` — so all game logging goes to stderr and stdout is
+pure protocol. That is only available to a harness that does not run Godot.
+Stubbing the engine to free up a file descriptor would trade this oracle's
+entire premise for a transport convenience.
+
+So the choice was an inherited fd 3, or a socket. Both were prototyped; fd 3
+works. TCP on loopback won because the client binds `127.0.0.1:0` and passes the
+ephemeral port in the environment, so there is no port-allocation race and no
+connect-retry loop, and it needs no `unsafe`, no `dup2` and no platform-specific
+spawn code on the Rust side. It is full duplex on one descriptor, so the peer
+disappearing is a single detectable event rather than two half-failures. A
+loopback listener accepts from any local process, so the client passes a token
+the oracle presents as its first line.
+
+`StdioChannel` remains for driving the oracle by hand from a shell pipeline,
+which is how every command above was first exercised. It is not usable by the
+simulator, for the reason stated.
+
+*Check, satisfied.* Two fresh processes replaying one 17-decision script over
+TCP produced identical digest sequences — R1 verified end to end through the
+protocol rather than only in-process.
 
 ## R11 — The oracle refuses to answer for the wrong build
 
@@ -632,6 +1034,34 @@ turns a simulator bug into a passing test. That is the one failure mode that
 makes the whole exercise worthless, because it is unfalsifiable from the outside.
 
 *Check.* Inject an exception into a game action; the run must fail visibly.
+
+**Satisfied, and it took a real bug to get there.** The game catches most of its
+own exceptions and logs them rather than letting them escape, so an action can
+fail completely while the driver watches it complete normally. Granting a card
+to hand without registering it with the `CombatState` made
+`CardModel.OnPlayWrapper` throw `"BURNING_PACT must be added to a CombatState
+before playing it"`; the game swallowed it, the energy was still spent, and the
+protocol answered `"resolved": true` with a clean observation. **Nothing in the
+driver's own view was wrong**, so no amount of care in the driver would have
+caught it.
+
+`GameErrors` now subscribes to `Log.LogCallback`, drains at the start of every
+command so errors are attributed to the command that caused them, and attaches
+them to whatever response that command produces:
+
+```json
+{"type":"observation","seq":3,"cmd":"play_card","resolved":true,"digest":"…",
+ "gameErrors":["System.InvalidOperationException: BURNING_PACT must be added to
+ a CombatState before playing it"]}
+```
+
+The oracle does not judge which errors matter — it refuses to hide any of them.
+Mutation-tested by restoring the missing registration: the field appears on
+exactly the `play_card` that caused it, and disappears when the bug is fixed.
+
+This also gives open question 4 a mechanism: the `Missing screenShake target!`
+errors will now show up in `gameErrors` on whichever commands produce them,
+rather than having to be argued about from inspection.
 
 ## R13 — The player's own saves are never touched
 
@@ -694,12 +1124,12 @@ process behind. `STS_ORACLE_QUIT=0` keeps it up for inspection.
 
 ## Open questions
 
-1. Is there a model-layer legality predicate for out-of-combat choices — map
-   nodes, rewards, shops, campfires — as there is for cards? (R3)
-2. Does `CleanUp` leave cross-scenario state behind? (R9)
-3. Does each dev console command we depend on work headless, and does it report
+1. Does `CleanUp` leave cross-scenario state behind? Narrowed, not closed: two
+   restarts after a heavily-driven first run reproduce its start state and map
+   exactly, but that is one process compared against itself, at run start. (R9)
+2. Does each dev console command we depend on work headless, and does it report
    failure rather than no-op silently? (R7, R12)
-4. Do the caught `Missing screenShake target!` errors have model-visible side
+3. Do the caught `Missing screenShake target!` errors have model-visible side
    effects? They are presentation-only by inspection, but the oracle should not
    rest on an unverified "probably harmless". (R12)
 
@@ -711,6 +1141,13 @@ process behind. `STS_ORACLE_QUIT=0` keeps it up for inspection.
   `NetSingleplayerGameService` every method is an empty body and `IsConnected`
   is hardcoded true, so there is no connection to re-establish. (R9)
 - In-combat card legality is exposed on the model. (R3)
+- **Out-of-combat legality is on the model too, for all four.** Map travel via
+  `NMapScreen`'s rule (mirrored in `MapLegality`); rest sites via
+  `RestSiteOption.IsEnabled`; events via `EventOption.IsLocked`; shops via
+  `MerchantEntry.EnoughGold` and `IsStocked`. Selection is model-layer
+  throughout, and `TestMode.IsOn` makes the screens return null at creation
+  rather than needing to be bypassed. Only the combat-reward *trigger* is
+  UI-owned. (R3)
 - **Godot's main loop drives our continuations.** No hand-pumped
   `SynchronizationContext` is needed; the stack shows
   `GodotSynchronizationContext.ExecutePendingContinuations` ←

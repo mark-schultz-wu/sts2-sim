@@ -12,12 +12,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}"
 export PATH="$DOTNET_ROOT:$PATH"
 
-dotnet build -c Release -v q --nologo "$HERE/sts_oracle/sts_oracle.csproj"
+dotnet build -c Release -v q --nologo "$HERE/sts_oracle.csproj"
 
 DEST="$GAME_DIR/mods/sts_oracle"
 mkdir -p "$DEST"
-cp "$HERE/sts_oracle/bin/Release/net9.0/sts_oracle.dll" "$DEST/"
-cp "$HERE/sts_oracle/manifest.json" "$DEST/"
+cp "$HERE/bin/Release/net9.0/sts_oracle.dll" "$DEST/"
+cp "$HERE/manifest.json" "$DEST/"
 echo "installed -> $DEST"
 
 # Mods stay Disabled until the player has accepted the mod warning. Headless

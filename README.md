@@ -19,7 +19,7 @@ The current goal is a working oracle: ergonomic bindings against the real STS2, 
 that is what it takes, that a simulator can be diffed against. Types get defined when
 something on both ends of them exists.
 
-[What the oracle has to do](docs/oracle-requirements.md) is the standard it is held to —
+[What the oracle has to do](mod/sts_oracle/REQUIREMENTS.md) is the standard it is held to —
 written to be failed, so the tool can be checked against it rather than argued about.
 
 ## Scope

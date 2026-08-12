@@ -1,0 +1,173 @@
+# sts_oracle
+
+A Slay the Spire 2 mod that turns the real game into a differential-testing
+oracle: it runs the game headless and answers questions about what the game
+does, so a reimplementation can be checked against it step by step.
+
+---
+
+## ⚠️ This code is LLM-generated
+
+**Every C# file in this directory was written by Claude, not by a human.** It has
+not been reviewed line by line. Treat it as you would an unfamiliar dependency
+from a stranger: useful, plausibly correct in the ways it has been tested, and
+not to be trusted beyond that.
+
+This README exists because the usual defence — reading the diff — is not
+available here. So instead of asking you to trust the code, it states as plainly
+as possible **what the mod touches, what it deliberately does not, and what has
+actually been verified rather than merely intended.**
+
+Where a claim below is checked by something automatic, it says so. Where it is
+only an argument from reading the decompiled game, it says that too. Those are
+very different levels of confidence and the difference is not smoothed over.
+
+---
+
+## What it does
+
+Runs a real STS2 run at the model layer — no main menu, no run scene — and
+exposes it over a line-delimited JSON protocol on a loopback TCP socket:
+
+```json
+{"cmd":"play_card","index":2,"target":1}
+{"type":"observation","seq":3,"cmd":"play_card","resolved":true,"digest":"A21E…"}
+```
+
+One request, one response. The response is either an observation of the whole
+state, a question the game is waiting on, or an error.
+
+## What it deliberately does **not** do
+
+- **It adds no content and changes no rules.** No new cards, relics, enemies or
+  balance changes. It only reads the game and drives it.
+- **It never chooses a move.** Every decision comes from the client. Where the
+  game asks the mod to pick a card, the mod refuses and forwards the question.
+  Where a path is not implemented yet, it throws rather than picking for you.
+- **It does not touch your saves.** `SetUpTest(shouldSave: false)`, and modded
+  runs get their own profile directory (`user://default/1/modded/profile1`).
+  Verified by checksumming the profile directory across a driven run.
+  *Exception:* `deploy.sh` edits one field in `settings.save` to enable mods,
+  backing the file up to `settings.save.pre-oracle` first.
+- **It does not patch `sts2.dll`.** `ModManager` is a supported extension point,
+  so there is no patched binary to re-derive when the game updates.
+- **It is not a gameplay mod and should not be loaded while you play.** It takes
+  over the run as soon as it starts, and quits the process when it finishes.
+
+## What it changes about how the game behaves
+
+This is the part worth knowing, since it is where "reads the game" stops being
+strictly true. All of it is deliberate; none of it is hidden:
+
+| change | why | risk |
+|---|---|---|
+| `TestMode.IsOn = true` | skips animation waits; makes screens return null instead of instantiating | this is the game's own test seam, but it *does* change control flow — reward selection in particular behaves differently under it |
+| installs an `ICardSelector` | routes card prompts to the client | without it the game would block on a UI that does not exist headless |
+| `ChecksumTracker.IsEnabled = true` | re-enables the game's own divergence detector, which `TestMode` and singleplayer each silently disable | none known |
+| `SetFtuesEnabled(false)` | tutorial prompts gate progress and write to disk | none known |
+| calls `GetTree().Quit(0)` when done | otherwise the process runs forever; SIGTERM proved unreliable | the process exits under the mod's control, not yours |
+| no run scene is instantiated | `res://scenes/run.tscn` segfaults headless | the model layer calls presentation inline in places; those errors are caught and now reported (see `gameErrors`) |
+
+## How much of it is actually verified
+
+**Verified by an automatic check, re-run every build:**
+
+- 28 assertions in `SelfTest.cs` (`STS_ORACLE_MODE=selftest`), covering all nine
+  of the game's legality-hook overrides. The list of hooks is discovered by
+  reflection over the game assembly, so a hook added by a future patch shows up
+  as `UNCOVERED` rather than silently going untested.
+- Several of those tests are **mutation-tested**: the oracle was deliberately
+  broken to confirm the test fails, then fixed to confirm it passes. A test that
+  has never been seen to fail is not evidence.
+- Determinism: two fresh processes replaying one script produce byte-identical
+  digest sequences.
+
+**Verified once, by hand, not automated:** headless startup, map travel,
+protocol error paths, throughput numbers.
+
+**Not verified at all:** anything on another machine; anything past one combat;
+rewards, shops and campfires (not implemented).
+
+### Bugs this found — in the oracle, not the game
+
+Recorded because they calibrate how much to trust the rest. All three were
+invisible until something specifically looked for them:
+
+1. **The boss disappeared from the legal move set.** On the last map row with
+   free travel active, the oracle reported *no legal move at all*. Two correct
+   rules composing into a wrong answer.
+2. **Observations were a full turn stale.** `end_turn` returned before the turn
+   actually changed, so the client acted on a state the game had already left.
+3. **A failed action was reported as success.** The game caught its own
+   exception and logged it; the oracle saw the action "complete" and answered
+   `"resolved": true`. Nothing in the oracle's own view was wrong.
+
+The third is why every response now carries a `gameErrors` field when the game
+logged anything at error level during that command. **If you see `gameErrors` in
+a response, do not trust the observation attached to it.**
+
+## Running it
+
+```bash
+./deploy.sh          # build, install into <gamedir>/mods/, enable mods
+cd "$STS2_GAME_DIR" && STS_ORACLE_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
+```
+
+Modes, via `STS_ORACLE_MODE`:
+
+| mode | what it does |
+|---|---|
+| *(unset)* | mod loads and does nothing |
+| `selftest` | runs the legality suite and exits non-zero on failure |
+| `serve` | speaks the protocol; TCP if `STS_ORACLE_PORT` is set, else stdin/stdout |
+| `drive` | plays one fight with a greedy policy, for timing |
+
+Other variables: `STS_ORACLE_SEED`, `STS_ORACLE_PORT` + `STS_ORACLE_TOKEN`,
+`STS_ORACLE_OBS=full`, `STS_ORACLE_QUIT=0` (stay up for inspection).
+
+Two game flags matter: `--headless` (no renderer) and `--force-steam=off`
+(without it Steam init fails three times and startup aborts before mods load).
+`--nomods` gives a clean baseline. Startup to main menu is ~10s, per process.
+
+**stdout is not the protocol.** The engine writes ~140 lines of its own there —
+Godot banner, FMOD, Sentry, a system dump containing paths and environment
+variables. Use the TCP channel for anything machine-read; stdio mode exists for
+poking at it by hand.
+
+## The version pin
+
+`Oracle.Init` refuses to run unless `release_info.json` reports
+`main_assembly_hash: 1692500715` (v0.107.1). Steam can update the install
+underneath us, and an oracle answering for a different build than the one we
+reason about is worse than no oracle, so a mismatch is a hard stop.
+
+## Why a mod rather than a standalone harness
+
+The game's logic is inseparable from Godot — 1102 of its 3424 source files use
+Godot types — so anything loading `sts2.dll` outside the engine has to fake
+`GodotSharp`. A fake that returns `default` where the engine returns something
+real gives an oracle that is quietly wrong, which is worse than one that
+crashes.
+
+`sts2-cli` takes that route and it is instructive: its map legality reads
+`currentPoint.Children`, with no reference anywhere to `MapTravel`,
+`ShouldAllowFreeTravel`, `WingedBoots` or `Flight` — so a run holding either
+gets a legal move set narrower than the real game's, silently. That is the
+specific class of bug running the real engine is meant to remove.
+
+## Mod loading, as the game implements it
+
+- Mods live in `<gamedir>/mods/<dir>/`, holding a `*.json` manifest and an
+  assembly named exactly `<manifest id>.dll`.
+- A class carrying `[ModInitializer("Method")]` has that method called during
+  startup. With no such attribute the loader instead runs `Harmony.PatchAll`.
+- Mods stay `Disabled` until `mod_settings.mods_enabled` is true in
+  `settings.save` — normally set by an in-game popup that headless never shows,
+  so `deploy.sh` sets it.
+
+## Further reading
+
+[REQUIREMENTS.md](REQUIREMENTS.md) is the standard this is held to: fourteen
+requirements each written so it can be failed, with what has been measured,
+what has not, and what is still an open question. It is long, and it is the
+honest record — including the parts that are not done.
