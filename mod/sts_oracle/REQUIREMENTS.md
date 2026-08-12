@@ -31,9 +31,9 @@ Three capabilities carry it:
   modifiers built,
 - **advance** by exactly one decision (R4) — **working**, 132/sec in-process and
   63/sec over the protocol,
-- **observe** completely (R5, R3, R6) — **working in combat**, byte-reproducible
-  across processes through the protocol; out-of-combat legality is the remaining
-  gap.
+- **observe** completely (R5, R3, R6) — **working in combat, on the map, and
+  through combat rewards**, byte-reproducible across processes through the
+  protocol; shops and campfires are the remaining gap.
 
 ---
 
@@ -297,9 +297,15 @@ requires the legal set to be published rather than a rejection to be relied on.
 
 ### Rewards, and what the UI owns
 
-*Blocked on a design decision, and the reason is structural.* After a won
-fight the oracle grants nothing: gold stays 99, the deck stays at 10. Rewards
-are not silently auto-taken either — the step simply never happens.
+*Built.* A won fight now offers its rewards as a pending decision, and taking
+them lands: `gold 99 → 117, deck 10 → 11`. Skipping takes nothing; taking the
+gold and leaving the card moves gold only. A card reward answered without a
+`card` index is refused rather than defaulted — choosing is the one thing the
+oracle must not do.
+
+*The problem it had to solve was structural.* Before this, a won fight granted
+nothing: gold stayed 99, the deck stayed at 10. Rewards were not silently
+auto-taken either — the step simply never happened.
 
 `CombatRoom.OfferRoomEndRewards()` is public and does the work, but on the live
 path its only caller is `NCombatUi.OnCombatWon`. The trigger is in the UI, not
@@ -311,10 +317,11 @@ Two consequences before any of this can be built:
 
 1. **`TestMode` changes the semantics.** `RewardsSet.Offer` branches on
    `TestMode.IsOn`, which the oracle sets. With `testSelector` null it selects
-   *every* reward and throws if the set is left incomplete. So the moment the
-   oracle starts offering rewards it will start taking them all unless it
-   installs `RewardsSet.testSelector` — a static `Func<RewardsSet, Task>?` that
-   is exactly the seam needed to hand the choice back to the client.
+   *every* reward and throws if the set is left incomplete. So installing
+   `RewardsSet.testSelector` does not add a decision point — it takes one away
+   from the game and gives it to the client. `ThrowInTestIfRewardsNotTaken` is
+   also turned off, because a real player may leave a rewards screen having
+   taken some and not others.
 2. **The protocol needs pending decisions.** A reward offer arrives *inside* the
    action cascade, during quiescence, not in response to a command. So R10's
    "one request, one response" needs a notion of the game asking a question.
@@ -327,10 +334,27 @@ decisions. What needs the new machinery is the three blocking callbacks —
 and the first of them, `GetSelectedCards`, fires inside a single `play_card` for
 any card that discards or exhausts, so it is a combat concern too.
 
-*Still open.* Implementation. Every seam is identified and the shape is settled;
-what is untested is whether `OfferRoomEndRewards` behaves when driven by us
-rather than by `NCombatUi`, and whether shop purchase touches anything
-presentational on its success path.
+*`OfferRoomEndRewards` does behave when driven by us*, which was the open risk.
+It is fired from a `CombatManager.CombatWon` subscription — once per process,
+since `CombatManager` outlives `CleanUp` and re-subscribing per run would offer
+every set as many times as the process had started runs.
+
+**A race worth recording, because it is the third of its kind.** Rewards are
+applied *after* combat ends, and the readiness test treats "not in combat" as
+ready — so the wait returned the moment the answer was accepted and the client
+saw its own rewards not applied. The first fix put the busy flag inside the
+applier, which was still wrong: the continuation resumes asynchronously, so
+there is a window between accepting the answer and the applier starting in which
+the run looks idle. The flag has to be set where the answer is *accepted*.
+
+Together with R4's turn-transition bug and the map's boss row, all three of this
+project's hardest bugs have the same shape: **a state that is legitimately
+reachable, briefly, and indistinguishable from the state we were waiting for.**
+
+*Still open.* Shops and campfires. Both are ordinary observable room states
+rather than pending decisions, so neither needs new protocol machinery — what
+is untested is whether shop purchase touches anything presentational on its
+success path.
 
 ## R4 — One command advances the state exactly one decision
 
@@ -855,8 +879,9 @@ nothing (R12).
 
 ### Pending decisions
 
-*Built for card selection:* `Pending.cs`, `OracleCardSelector`. Rewards and the
-room states are designed below but not implemented. R3's out-of-combat work all
+*Built for card selection and combat rewards:* `Pending.cs`,
+`OracleCardSelector`, `Protocol.TakeRewards`. The room states are designed below
+but not implemented. R3's out-of-combat work all
 routes through this, so it is settled once rather than six times.
 
 **There are two kinds of decision point, and conflating them is the mistake to
@@ -1130,8 +1155,9 @@ process behind. `STS_ORACLE_QUIT=0` keeps it up for inspection.
 2. Does each dev console command we depend on work headless, and does it report
    failure rather than no-op silently? (R7, R12)
 3. Do the caught `Missing screenShake target!` errors have model-visible side
-   effects? They are presentation-only by inspection, but the oracle should not
-   rest on an unverified "probably harmless". (R12)
+   effects? **Now observable rather than argued about:** they surface in
+   `gameErrors`, and appear on the combat-reward step while the rewards
+   themselves apply correctly — evidence for presentation-only, not proof. (R12)
 
 *Answered so far:*
 

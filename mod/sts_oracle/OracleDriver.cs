@@ -473,7 +473,61 @@ internal static class OracleDriver
     /// wait on, only the same cascade continuing. Both paths end here, which is
     /// what lets a question that leads to another question need no special case.
     /// </remarks>
+    /// <summary>The room whose rewards have not been offered yet, if any.</summary>
+    private static CombatRoom? _owedRewards;
+
+    /// <summary>
+    /// Starts offering combat rewards, which nothing else will.
+    /// </summary>
+    /// <remarks>
+    /// <c>CombatRoom.OfferRoomEndRewards</c> is public and does the whole job,
+    /// but on the live path its only caller is <c>NCombatUi.OnCombatWon</c> —
+    /// the *trigger* is in the UI, not the model, which is why a driven run
+    /// finished fights with gold and deck untouched. Rest sites, events and
+    /// shops are not like this; they begin from their room's
+    /// <c>EnterInternal</c>. Rewards are the exception.
+    ///
+    /// Subscribed once per process rather than per run: <c>CombatManager</c> is
+    /// a singleton that outlives <c>CleanUp</c>, so re-subscribing on each
+    /// restart would offer every reward set as many times as the process had
+    /// started runs.
+    /// </remarks>
+    public static void WatchForWins()
+    {
+        CombatManager.Instance.CombatWon += room => _owedRewards = room;
+    }
+
     public static async Task<bool> WaitForDecisionPoint(
+        int? turnMustAdvancePast = null, GameAction? issued = null)
+    {
+        while (true)
+        {
+            bool resolved = await WaitOnce(turnMustAdvancePast, issued);
+
+            // A question outranks owed rewards: the game is mid-action and the
+            // reward offer, when it comes, will park in its turn.
+            if (Pending.Current != null)
+            {
+                return resolved;
+            }
+
+            CombatRoom? owed = _owedRewards;
+            if (owed == null)
+            {
+                return resolved;
+            }
+
+            _owedRewards = null;
+            Stage = "offering rewards";
+
+            // Returns as soon as the offer is *started* — the game fires
+            // RewardsSet.Offer without awaiting it — so the loop goes round and
+            // waits again, which is where the reward question shows up.
+            await owed.OfferRoomEndRewards();
+        }
+    }
+
+    private static async Task<bool> WaitOnce(
         int? turnMustAdvancePast = null, GameAction? issued = null)
     {
         ActionQueueSet queue = RunManager.Instance.ActionQueueSet;
@@ -519,6 +573,13 @@ internal static class OracleDriver
     /// </remarks>
     private static bool ReadyForInput(int? turnMustAdvancePast)
     {
+        // Taking rewards runs after combat ends, so every other test here would
+        // call the run quiescent while it is still in progress.
+        if (RewardPlan.Applying)
+        {
+            return false;
+        }
+
         if (!CombatManager.Instance.IsInProgress)
         {
             return true;

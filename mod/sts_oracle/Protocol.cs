@@ -12,6 +12,8 @@ using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
+using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -57,6 +59,12 @@ internal static class Protocol
         // is on, so this survives every Restart.
         CardSelectCmd.UseSelector(new OracleCardSelector());
         GameErrors.Watch();
+        OracleDriver.WatchForWins();
+
+        // With TestMode on and no testSelector, RewardsSet.Offer takes *every*
+        // reward itself. So installing this does not add a decision point; it
+        // takes one away from the game and gives it to the client.
+        RewardsSet.testSelector = TakeRewards;
 
         Log.Info($"[oracle] serving protocol v{Version} over {_channel.Describe}");
 
@@ -184,6 +192,56 @@ internal static class Protocol
             Log.Error($"[oracle] {cmd} failed: {e}");
             await Error(cmd, $"{e.GetType().Name}: {e.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Asks the client what to take from a reward set, then takes it.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the game's stack, inside <c>RewardsSet.Offer</c>, which is the
+    /// point: <c>Offer</c> has already registered the set with the synchronizer,
+    /// and <c>SelectLocalReward</c> throws without that registration. Generating
+    /// rewards and driving selection ourselves would mean reimplementing that
+    /// bookkeeping, which is the class of mistake this project keeps finding.
+    /// </remarks>
+    private static async Task TakeRewards(RewardsSet set)
+    {
+        // A real player may leave a rewards screen having taken some and not
+        // others, so an incomplete set is not an error here. Left at its default
+        // of true, Offer would throw the moment the client skipped anything.
+        set.ThrowInTestIfRewardsNotTaken = false;
+
+        RewardPlan plan = await RewardChoice.Ask(set);
+        RewardsSetSynchronizer sync = RunManager.Instance.RewardsSetSynchronizer;
+
+        try
+        {
+            if (plan.Skip)
+            {
+                sync.SkipLocalRewardsSet();
+                return;
+            }
+
+            foreach ((Reward reward, int? cardIndex) in plan.Take)
+            {
+                // Read back by the synchronous GetSelectedCardReward, which
+                // cannot ask anyone anything. Cleared straight after so a later
+                // reward cannot silently inherit this one's answer.
+                RewardPlan.CardInFlight = cardIndex;
+                try
+                {
+                    await sync.SelectLocalReward(reward);
+                }
+                finally
+                {
+                    RewardPlan.CardInFlight = null;
+                }
+            }
+        }
+        finally
+        {
+            RewardPlan.Applying = false;
         }
     }
 
@@ -326,41 +384,16 @@ internal static class Protocol
     {
         Pending pending = Pending.Current!;
 
-        if (!req.TryGetProperty("cards", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
+        // Validation belongs to the pending, not here: the selector contract is
+        // that whatever it returns is taken as the player's choice, so an
+        // out-of-range or over-long answer would not be rejected downstream —
+        // it would silently become a different move.
+        string? rejected = pending.Accept(req);
+        if (rejected != null)
         {
-            await Error("answer", $"'{pending.Kind}' expects a 'cards' array of option indices");
+            await Error("answer", rejected);
             return;
         }
-
-        var chosen = new List<CardModel>();
-        var seen = new HashSet<int>();
-        foreach (JsonElement e in el.EnumerateArray())
-        {
-            if (!e.TryGetInt32(out int i) || i < 0 || i >= pending.Options.Count)
-            {
-                await Error("answer", $"option index {e} out of range; {pending.Options.Count} option(s) offered");
-                return;
-            }
-
-            // The same card twice would be one selection to the game and two to
-            // the client, which is a divergence waiting to happen.
-            if (!seen.Add(i))
-            {
-                await Error("answer", $"option index {i} given twice");
-                return;
-            }
-
-            chosen.Add(pending.Options[i]);
-        }
-
-        if (chosen.Count < pending.Min || chosen.Count > pending.Max)
-        {
-            await Error("answer",
-                $"selected {chosen.Count}, but this decision takes {pending.Min}..{pending.Max}");
-            return;
-        }
-
-        pending.Answer(chosen);
 
         // The action resumes and may park again, end the turn, or finish the
         // fight; the same wait decides which, so nesting needs no special case.
@@ -530,21 +563,7 @@ internal static class Protocol
         // replaces the reply to whatever command was issued: one request still
         // yields exactly one response, just not always the same kind.
         var msg = Pending.Current is { } pending
-            ? new Dictionary<string, object?>
-            {
-                ["type"] = "pending",
-                ["seq"] = ++_seq,
-                ["cmd"] = cmd,
-                ["kind"] = pending.Kind,
-                ["min"] = pending.Min,
-                ["max"] = pending.Max,
-                ["asker"] = pending.Asker,
-                ["options"] = pending.Options.Select((c, i) => new Dictionary<string, object?>
-                {
-                    ["index"] = i,
-                    ["card"] = Observation.Ident(c),
-                }).ToList(),
-            }
+            ? Described(pending, cmd)
             : new Dictionary<string, object?>
             {
                 ["type"] = "observation",
@@ -578,6 +597,24 @@ internal static class Protocol
         }
 
         await Send(msg);
+    }
+
+    /// <summary>A pending's own wire form, plus the protocol's envelope.</summary>
+    private static Dictionary<string, object?> Described(Pending pending, string cmd)
+    {
+        var msg = new Dictionary<string, object?>
+        {
+            ["type"] = "pending",
+            ["seq"] = ++_seq,
+            ["cmd"] = cmd,
+        };
+
+        foreach (KeyValuePair<string, object?> field in pending.Describe())
+        {
+            msg[field.Key] = field.Value;
+        }
+
+        return msg;
     }
 
     private static async Task Error(string cmd, string message)

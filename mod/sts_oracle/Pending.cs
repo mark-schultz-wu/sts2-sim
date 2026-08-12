@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.TestSupport;
 
@@ -27,8 +29,11 @@ namespace StsOracle;
 /// unfinished task, and the driver's wait loop treats "a pending exists" as a
 /// decision point exactly like "the player may act". Answering completes the
 /// task and the action resumes where it left off.
+///
+/// Each subclass owns its own wire shape and its own validation, so adding a
+/// kind does not mean editing the protocol's dispatch.
 /// </remarks>
-internal sealed class Pending
+internal abstract class Pending
 {
     /// <summary>The outstanding question, or null when the game is not waiting.</summary>
     /// <remarks>
@@ -37,60 +42,33 @@ internal sealed class Pending
     /// </remarks>
     public static Pending? Current { get; private set; }
 
-    public string Kind { get; }
-    public int Min { get; }
-    public int Max { get; }
-    public IReadOnlyList<CardModel> Options { get; }
+    public abstract string Kind { get; }
 
-    /// <summary>The action that asked, for diagnostics.</summary>
-    /// <remarks>
-    /// <c>ICardSelector.GetSelectedCards</c> receives only options and bounds —
-    /// not the prompt, the source card or the pile. <c>CardSelectorPrefs.Prompt</c>
-    /// exists but is consumed by the UI path and never reaches a selector, so
-    /// the running action is the best available attribution and is reported as
-    /// such rather than dressed up as the game's own prompt text.
-    /// </remarks>
-    public string? Asker { get; }
+    /// <summary>The wire form of the question.</summary>
+    public abstract Dictionary<string, object?> Describe();
 
-    // RunContinuationsAsynchronously matters: without it the game's continuation
-    // would resume synchronously inside our SetResult, i.e. re-entrantly inside
-    // the protocol handler that is still writing its response. With it, the
-    // continuation is posted to Godot's loop and the handler returns first.
-    private readonly TaskCompletionSource<IEnumerable<CardModel>> _answer =
-        new TaskCompletionSource<IEnumerable<CardModel>>(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>
+    /// Validates and applies an answer. Returns an error message, or null on
+    /// success — in which case the parked action has been resumed.
+    /// </summary>
+    public abstract string? Accept(JsonElement req);
 
-    private Pending(string kind, IReadOnlyList<CardModel> options, int min, int max, string? asker)
-    {
-        Kind = kind;
-        Options = options;
-        Min = min;
-        Max = max;
-        Asker = asker;
-    }
+    protected abstract void Fail(Exception e);
 
-    public static Task<IEnumerable<CardModel>> Park(
-        string kind, IReadOnlyList<CardModel> options, int min, int max, string? asker)
+    protected static void Park(Pending pending)
     {
         if (Current != null)
         {
             throw new InvalidOperationException(
-                $"the game asked '{kind}' while '{Current.Kind}' is still unanswered");
+                $"the game asked '{pending.Kind}' while '{Current.Kind}' is still unanswered");
         }
 
-        var pending = new Pending(kind, options, min, max, asker);
         Current = pending;
-        Log.Info($"[oracle] pending {kind}: {options.Count} option(s), select {min}..{max}");
-        return pending._answer.Task;
+        Log.Info($"[oracle] pending {pending.Kind}");
     }
 
-    /// <summary>Completes the question, letting the parked action resume.</summary>
-    public void Answer(IEnumerable<CardModel> chosen)
-    {
-        // Cleared before completing, so the resumed action may immediately park
-        // a new question without tripping the one-at-a-time check.
-        Current = null;
-        _answer.SetResult(chosen);
-    }
+    /// <summary>Cleared before completing, so a resumed action may park again.</summary>
+    protected static void Release() => Current = null;
 
     /// <summary>
     /// Fails the question, for when the run is torn down beneath it.
@@ -111,8 +89,268 @@ internal sealed class Pending
 
         Log.Warn($"[oracle] cancelling pending {pending.Kind}: {why}");
         Current = null;
-        pending._answer.SetException(new OperationCanceledException(why));
+        pending.Fail(new OperationCanceledException(why));
     }
+}
+
+/// <summary>Which cards to pick from a prompt — discard, exhaust, upgrade, and the rest.</summary>
+internal sealed class CardSelection : Pending
+{
+    private readonly TaskCompletionSource<IEnumerable<CardModel>> _answer =
+        // Without RunContinuationsAsynchronously the game's continuation would
+        // resume synchronously inside SetResult — re-entrantly, inside the
+        // protocol handler still writing its response. With it, the continuation
+        // is posted to Godot's loop and the handler returns first.
+        new TaskCompletionSource<IEnumerable<CardModel>>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly IReadOnlyList<CardModel> _options;
+    private readonly int _min;
+    private readonly int _max;
+    private readonly string? _asker;
+
+    private CardSelection(IReadOnlyList<CardModel> options, int min, int max, string? asker)
+    {
+        _options = options;
+        _min = min;
+        _max = max;
+        _asker = asker;
+    }
+
+    public override string Kind => "select_cards";
+
+    public static Task<IEnumerable<CardModel>> Ask(
+        IReadOnlyList<CardModel> options, int min, int max, string? asker)
+    {
+        var pending = new CardSelection(options, min, max, asker);
+        Park(pending);
+        return pending._answer.Task;
+    }
+
+    public override Dictionary<string, object?> Describe() => new Dictionary<string, object?>
+    {
+        ["kind"] = Kind,
+        ["min"] = _min,
+        ["max"] = _max,
+
+        // ICardSelector receives only options and bounds — not the prompt, the
+        // source card or the pile. CardSelectorPrefs.Prompt exists but is
+        // consumed by the UI path and never reaches a selector, so the running
+        // action is the best attribution available and is labelled as such
+        // rather than dressed up as the game's own prompt text.
+        ["asker"] = _asker,
+        ["options"] = _options.Select((c, i) => new Dictionary<string, object?>
+        {
+            ["index"] = i,
+            ["card"] = Observation.Ident(c),
+        }).ToList(),
+    };
+
+    public override string? Accept(JsonElement req)
+    {
+        if (!req.TryGetProperty("cards", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
+        {
+            return $"'{Kind}' expects a 'cards' array of option indices";
+        }
+
+        var chosen = new List<CardModel>();
+        var seen = new HashSet<int>();
+        foreach (JsonElement e in el.EnumerateArray())
+        {
+            if (!e.TryGetInt32(out int i) || i < 0 || i >= _options.Count)
+            {
+                return $"option index {e} out of range; {_options.Count} option(s) offered";
+            }
+
+            // The same card twice would be one selection to the game and two to
+            // the client, which is a divergence waiting to happen.
+            if (!seen.Add(i))
+            {
+                return $"option index {i} given twice";
+            }
+
+            chosen.Add(_options[i]);
+        }
+
+        if (chosen.Count < _min || chosen.Count > _max)
+        {
+            return $"selected {chosen.Count}, but this decision takes {_min}..{_max}";
+        }
+
+        Release();
+        _answer.SetResult(chosen);
+        return null;
+    }
+
+    protected override void Fail(Exception e) => _answer.SetException(e);
+}
+
+/// <summary>What to take from a set of rewards, and which card within a card reward.</summary>
+/// <remarks>
+/// The whole choice is asked at once because <c>GetSelectedCardReward</c> is
+/// **synchronous** — by the time the game asks which card, there is no await to
+/// park on. The async <c>RewardsSet.testSelector</c> runs first, so the card
+/// index is gathered here and handed back later by
+/// <see cref="OracleCardSelector"/>. This is the one place the protocol's shape
+/// is dictated by a method signature rather than chosen.
+/// </remarks>
+internal sealed class RewardChoice : Pending
+{
+    private readonly TaskCompletionSource<RewardPlan> _answer =
+        new TaskCompletionSource<RewardPlan>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly RewardsSet _set;
+
+    private RewardChoice(RewardsSet set) => _set = set;
+
+    public override string Kind => "rewards";
+
+    public static Task<RewardPlan> Ask(RewardsSet set)
+    {
+        var pending = new RewardChoice(set);
+        Park(pending);
+        return pending._answer.Task;
+    }
+
+    public override Dictionary<string, object?> Describe() => new Dictionary<string, object?>
+    {
+        ["kind"] = Kind,
+        ["skippable"] = !_set.DisallowSkipping,
+        ["rewards"] = _set.Rewards.Select((r, i) => Detail(r, i)).ToList(),
+    };
+
+    /// <summary>
+    /// One reward, described by what it actually offers.
+    /// </summary>
+    /// <remarks>
+    /// <c>IsPopulated</c> is reported rather than assumed: a reward can exist in
+    /// the set without content — `RelicReward.Populate` can fail to find a relic
+    /// — and an unpopulated reward is not the same as an absent one.
+    /// </remarks>
+    private static Dictionary<string, object?> Detail(Reward reward, int index)
+    {
+        var d = new Dictionary<string, object?>
+        {
+            ["index"] = index,
+            ["type"] = reward.GetType().Name,
+            ["populated"] = reward.IsPopulated,
+        };
+
+        switch (reward)
+        {
+            case GoldReward gold:
+                d["amount"] = gold.Amount;
+                break;
+            case CardReward card:
+                d["cards"] = card.Cards.Select(Observation.Ident).ToList();
+                break;
+            case RelicReward relic:
+                d["relic"] = relic.Relic?.Id.Entry;
+                d["rarity"] = relic.Rarity.ToString();
+                break;
+            case PotionReward potion:
+                d["potion"] = potion.Potion?.Id.Entry;
+                break;
+        }
+
+        return d;
+    }
+
+    public override string? Accept(JsonElement req)
+    {
+        bool skip = req.TryGetProperty("skip", out JsonElement s) && s.ValueKind == JsonValueKind.True;
+        if (skip)
+        {
+            if (_set.DisallowSkipping)
+            {
+                return "this reward set cannot be skipped";
+            }
+
+            Release();
+            RewardPlan.Applying = true;
+            _answer.SetResult(new RewardPlan { Skip = true });
+            return null;
+        }
+
+        if (!req.TryGetProperty("take", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
+        {
+            return "'rewards' expects a 'take' array, or \"skip\": true";
+        }
+
+        var plan = new RewardPlan();
+        var seen = new HashSet<int>();
+        foreach (JsonElement e in el.EnumerateArray())
+        {
+            if (!e.TryGetProperty("index", out JsonElement iEl) || !iEl.TryGetInt32(out int i)
+                || i < 0 || i >= _set.Rewards.Count)
+            {
+                return $"reward index out of range; {_set.Rewards.Count} reward(s) offered";
+            }
+
+            if (!seen.Add(i))
+            {
+                return $"reward index {i} given twice";
+            }
+
+            Reward reward = _set.Rewards[i];
+            int? cardIndex = null;
+
+            if (reward is CardReward card)
+            {
+                int count = card.Cards.Count();
+                if (!e.TryGetProperty("card", out JsonElement cEl) || !cEl.TryGetInt32(out int c)
+                    || c < 0 || c >= count)
+                {
+                    // Refused rather than defaulted to the first card: choosing
+                    // for the client is the one thing the oracle must not do.
+                    return $"reward {i} is a card reward and needs a 'card' index in 0..{count - 1}";
+                }
+
+                cardIndex = c;
+            }
+
+            plan.Take.Add((reward, cardIndex));
+        }
+
+        Release();
+
+        // Set here rather than in the applier: the continuation runs
+        // asynchronously, so between accepting the answer and the applier
+        // actually starting there is a window in which the run looks idle —
+        // and the driver would report the state before the rewards land.
+        RewardPlan.Applying = true;
+        _answer.SetResult(plan);
+        return null;
+    }
+
+    protected override void Fail(Exception e) => _answer.SetException(e);
+}
+
+/// <summary>What the client decided to do with a reward set.</summary>
+internal sealed class RewardPlan
+{
+    public bool Skip { get; set; }
+
+    public List<(Reward Reward, int? CardIndex)> Take { get; } = new List<(Reward, int?)>();
+
+    /// <summary>
+    /// The card index for the reward currently being taken, read by the
+    /// synchronous <c>GetSelectedCardReward</c> callback.
+    /// </summary>
+    public static int? CardInFlight { get; set; }
+
+    /// <summary>
+    /// True while a plan is being applied, so the driver does not call the run
+    /// quiescent halfway through it.
+    /// </summary>
+    /// <remarks>
+    /// Rewards are taken after combat has ended, and the readiness test treats
+    /// "not in combat" as ready — so without this the wait returns the instant
+    /// the answer is accepted, and the client sees the state *before* its own
+    /// rewards are applied: gold and deck unchanged, exactly as if nothing had
+    /// been taken. Nothing else marks the work in progress, because the game
+    /// fires `RewardsSet.Offer` without awaiting it.
+    /// </remarks>
+    public static bool Applying { get; set; }
 }
 
 /// <summary>
@@ -135,26 +373,30 @@ internal sealed class OracleCardSelector : ICardSelector
 {
     public Task<IEnumerable<CardModel>> GetSelectedCards(IEnumerable<CardModel> options, int minSelect, int maxSelect)
     {
-        List<CardModel> list = options.ToList();
-        return Pending.Park("select_cards", list, minSelect, maxSelect,
+        return CardSelection.Ask(options.ToList(), minSelect, maxSelect,
             RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString());
     }
 
     /// <summary>
-    /// Not implemented, and loud about it.
+    /// Hands back the card the client already chose, in <see cref="RewardChoice"/>.
     /// </summary>
     /// <remarks>
-    /// This one is synchronous, so the client cannot be consulted from inside
-    /// it; the answer has to be gathered earlier, in the async
-    /// <c>RewardsSet.testSelector</c>, and handed back here. Until that path
-    /// exists there is no correct value to return — returning the first card
-    /// would be the oracle choosing, and returning null would be a silent
-    /// skip — so it throws and the failure reaches the client (R12).
+    /// Synchronous, so it cannot consult anyone. If no choice was gathered the
+    /// oracle has been asked something it never offered, and it throws rather
+    /// than picking: returning the first card would be the oracle choosing, and
+    /// returning null would be a silent skip (R12).
     /// </remarks>
     public CardRewardSelection GetSelectedCardReward(
         IReadOnlyList<CardCreationResult> options, IReadOnlyList<CardRewardAlternative> alternatives)
     {
-        throw new NotSupportedException(
-            "card rewards are not implemented yet; the oracle will not choose one for you");
+        int? index = RewardPlan.CardInFlight;
+        if (index == null || index >= options.Count)
+        {
+            throw new NotSupportedException(
+                $"a card reward was offered with no choice supplied (index {index?.ToString() ?? "none"}, "
+                + $"{options.Count} option(s)); the oracle will not choose one for you");
+        }
+
+        return new CardRewardSelection { card = options[index.Value].Card };
     }
 }
