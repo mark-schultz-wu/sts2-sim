@@ -53,9 +53,26 @@ internal static class Observation
     /// save perhaps 40% while making the failure path harder to read, and the
     /// failure path is the one that matters.
     /// </remarks>
-    public static string Digest(RunState state)
+    public static string Digest(RunState state) => DigestOf(Capture(state));
+
+    /// <summary>
+    /// The observation and its digest, built from a single capture.
+    /// </summary>
+    /// <remarks>
+    /// Callers that want both must use this rather than calling
+    /// <see cref="Capture"/> and <see cref="Digest"/> in turn: the latter
+    /// captures again internally, so a full observation cost two serialisations
+    /// of the same state and measurably halved protocol throughput.
+    /// </remarks>
+    public static (string Json, string Digest) Snapshot(RunState state)
     {
-        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(Capture(state)));
+        string json = Capture(state);
+        return (json, DigestOf(json));
+    }
+
+    private static string DigestOf(string capture)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(capture));
         return Convert.ToHexString(hash, 0, 8);
     }
 
@@ -103,7 +120,7 @@ internal static class Observation
     }
 
     /// <summary>Card identity: the id alone is not enough to compare two decks.</summary>
-    private static string Ident(CardModel card)
+    public static string Ident(CardModel card)
     {
         string s = card.Id.Entry;
         if (card.CurrentUpgradeLevel > 0)
@@ -177,21 +194,10 @@ internal static class Observation
     /// Where we are on the map, and which nodes may be travelled to next.
     /// </summary>
     /// <remarks>
-    /// Legality comes from <c>MapTravel.GetTravelablePointsFrom</c>, not from
-    /// reading <c>MapPoint.Children</c> ourselves. The difference is a rule we
-    /// would otherwise have missed:
-    ///
-    /// <code>
-    /// if (Hook.ShouldAllowFreeTravel(runState))
-    ///     return runState.Map.GetPointsInRow(currentPoint.coord.row + 1);
-    /// return currentPoint.Children;
-    /// </code>
-    ///
-    /// `Winged Boots` and the `Flight` modifier override
-    /// <c>ShouldAllowFreeTravel</c>, so holding either widens the legal set from
-    /// the current node's children to the entire next row. Deriving map legality
-    /// from the graph alone would have been correct until the first run that
-    /// picked up that relic, and then silently wrong.
+    /// Legality is delegated to <see cref="MapLegality"/> rather than derived
+    /// here. Two rules hide in it that a graph walk misses — free travel, and
+    /// the boss sitting outside the grid — and both are invisible until the run
+    /// reaches the state that triggers them. See that file for the details.
     /// </remarks>
     private static Dictionary<string, object?> MapPosition(RunState state)
     {
@@ -200,14 +206,7 @@ internal static class Observation
         {
             ["at"] = current == null ? null : Coord(current),
             ["visited"] = state.VisitedMapCoords.Select(c => $"{c.col},{c.row}").ToList(),
-
-            // At the start of an act there is no current point yet, and the
-            // legal openings are the map's start points rather than anyone's
-            // children.
-            ["travelable"] = (current == null
-                    ? state.Map.startMapPoints
-                    : MapTravel.GetTravelablePointsFrom(state, current))
-                .OrderBy(p => p.coord.row).ThenBy(p => p.coord.col)
+            ["travelable"] = MapLegality.TravelableFrom(state)
                 .Select(p => new Dictionary<string, object?>
                 {
                     ["at"] = Coord(p),

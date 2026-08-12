@@ -15,6 +15,7 @@ using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Modifiers;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Runs;
@@ -66,7 +67,7 @@ internal static class SelfTest
         ("ShouldPlay", new[] { typeof(CardModel), typeof(AutoPlayType) }),
     };
 
-    public static async Task Run(RunState state, Func<Task> enterCombat)
+    public static async Task Run(RunState state)
     {
         Dictionary<string, List<string>> matrix = Discover();
         int total = matrix.Values.Sum(v => v.Count);
@@ -74,9 +75,16 @@ internal static class SelfTest
 
         var covered = new HashSet<string>();
 
+        // Before anything grants free travel, since this case needs both halves.
+        // It leaves the relic behind and stands on the last row, so the rest of
+        // the suite gets a clean run rather than inheriting either.
+        await BossSurvivesFreeTravel(state);
+        state = await OracleDriver.Restart();
+
         // Out of combat first: map legality needs a map position, not a fight.
         covered.Add("WingedBoots");
-        await FreeTravelWidensTheMap(state);
+        await FreeTravelWidensTheMap(state, "WingedBoots", async () =>
+            await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]));
         // Each in-combat case gets its own fight. The first version shared one,
         // and the cases interfered: `Enthralled` left its card in hand, which
         // forbids playing anything else, so the later cases found no playable
@@ -84,20 +92,44 @@ internal static class SelfTest
         // the rule under test. Order-dependent tests are worse than missing
         // ones, because they fail in ways that read as product bugs.
         covered.Add("Enthralled");
-        await enterCombat();
+        await OracleDriver.EnterFight(state);
         await BlockedByHookIsReported(state);
 
         covered.Add("SmoggyPower");
-        await enterCombat();
+        await OracleDriver.EnterFight(state);
         await AfflictedCardIsBlocked<SmoggyPower, Smog>(state, "SmoggyPower");
 
         covered.Add("ChainsOfBindingPower");
-        await enterCombat();
+        await OracleDriver.EnterFight(state);
         await AfflictedCardIsBlocked<ChainsOfBindingPower, Bound>(state, "ChainsOfBindingPower", afflict: 2, playAfflictedFirst: true);
 
         covered.Add("RingingPower");
-        await enterCombat();
+        await OracleDriver.EnterFight(state);
         await AfflictedCardIsBlocked<RingingPower, Ringing>(state, "RingingPower", playAnyFirst: true);
+
+        covered.Add("SlothPower");
+        await OracleDriver.EnterFight(state);
+        await BlocksAfterNPlays(state, "SlothPower", plays: 1, arrange: async me =>
+            await PowerCmd.Apply<SlothPower>(new BlockingPlayerChoiceContext(), me.Creature,
+                amount: 1m, applier: null, cardSource: null, silent: true));
+
+        covered.Add("Normality");
+        await OracleDriver.EnterFight(state);
+        await BlocksAfterNPlays(state, "Normality", plays: 3, arrange: async me =>
+        {
+            CardModel normality = ModelDb.Card<Normality>().ToMutable();
+            normality.Owner = me;
+            await CardPileCmd.Add(normality, PileType.Hand.GetPile(me));
+        });
+
+        covered.Add("VelvetChoker");
+        await OracleDriver.EnterFight(state);
+        await BlocksAfterNPlays(state, "VelvetChoker", plays: 6, arrange: async me =>
+            await RelicCmd.Obtain(ModelDb.Relic<VelvetChoker>().ToMutable(), me));
+
+        // Last, because it discards the run every case above is standing in.
+        covered.Add("Flight");
+        await FlightWidensTheMap();
 
         foreach ((string hook, List<string> types) in matrix)
         {
@@ -154,45 +186,156 @@ internal static class SelfTest
         return found;
     }
 
-    /// <summary>Granting Winged Boots must widen the reported travelable set.</summary>
+    /// <summary>
+    /// The boss must stay reachable from the last row, free travel or not.
+    /// </summary>
     /// <remarks>
-    /// Granted through <c>RelicCmd.Obtain</c> rather than by adding to
-    /// <c>Player.Relics</c>, because the load path skips <c>AfterObtained</c>
-    /// and would produce a state the game never produces.
+    /// The two map rules compose badly, which is why this is its own case rather
+    /// than a variant of the one below. <c>BossMapPoint</c> sits at row
+    /// <c>GetRowCount()</c> — outside the grid — so from the last row, free
+    /// travel's <c>GetPointsInRow(row + 1)</c> returns *nothing*, while the
+    /// ordinary path finds the boss among <c>Children</c>. An oracle built on
+    /// <c>MapTravel</c> alone therefore reports no legal move at all on the floor
+    /// before the boss, but only for runs holding `Winged Boots` or `Flight`.
+    ///
+    /// Two conditions, each individually handled, that are wrong only together:
+    /// exactly the shape that survives ordinary testing.
     /// </remarks>
-    private static async Task<bool> FreeTravelWidensTheMap(RunState state)
+    private static async Task<bool> BossSurvivesFreeTravel(RunState state)
     {
-        // At floor 1 the next row held exactly this node's two children, so free
-        // travel and normal travel coincide and the test proved nothing while
-        // appearing to run. A scenario that cannot distinguish the two rules is
-        // not evidence about them, so find one that can — or fail saying so.
-        MapPoint? spot = state.Map.GetAllMapPoints()
-            .OrderBy(p => p.coord.row).ThenBy(p => p.coord.col)
-            .FirstOrDefault(p => state.Map.GetPointsInRow(p.coord.row + 1).Count() > p.Children.Count);
-
+        ActMap map = state.Map;
+        MapPoint? spot = map.GetPointsInRow(map.GetRowCount() - 1).OrderBy(p => p.coord.col).FirstOrDefault();
         if (spot == null)
         {
-            return Check("a map position exists where free travel is observable", false);
+            return Check("boss: the last grid row has a point", false);
+        }
+
+        string boss = $"{map.BossMapPoint.coord.col},{map.BossMapPoint.coord.row}";
+        state.AddVisitedMapCoord(spot.coord);
+
+        List<string> before = Travelable(state);
+        Check($"boss: from the last row the only move is the boss (got {string.Join(" ", before)})",
+            before.Count == 1 && before[0] == boss);
+
+        await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]);
+        Check("boss: free travel is live", Hook.ShouldAllowFreeTravel(state));
+
+        List<string> after = Travelable(state);
+        if (!after.SequenceEqual(before))
+        {
+            Log.Error($"[selftest]   before: [{string.Join(" ", before)}] after: [{string.Join(" ", after)}]");
+        }
+
+        return Check($"boss: free travel does not erase it ({after.Count} node(s))", after.SequenceEqual(before));
+    }
+
+    /// <summary>Turning free travel on must widen the reported travelable set.</summary>
+    /// <remarks>
+    /// Winged Boots is granted through <c>RelicCmd.Obtain</c> rather than by
+    /// adding to <c>Player.Relics</c>, because the load path skips
+    /// <c>AfterObtained</c> and would produce a state the game never produces.
+    /// </remarks>
+    private static async Task<bool> FreeTravelWidensTheMap(RunState state, string label, Func<Task> grant)
+    {
+        MapPoint? spot = Discriminating(state);
+        if (spot == null)
+        {
+            return Check($"{label}: a map position exists where free travel is observable", false);
         }
 
         state.AddVisitedMapCoord(spot.coord);
+        Check($"{label}: free travel is off to begin with", !Hook.ShouldAllowFreeTravel(state));
         List<string> before = Travelable(state);
 
-        await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]);
+        await grant();
 
         List<string> after = Travelable(state);
-        Check("free travel hook is live", Hook.ShouldAllowFreeTravel(state));
+        Check($"{label}: free travel hook is live", Hook.ShouldAllowFreeTravel(state));
 
-        // The specific claim, not merely "something changed": free travel opens
-        // the entire next row, so the new set must be a strict superset.
+        return Widened(label, before, after);
+    }
+
+    /// <summary>
+    /// The `Flight` run modifier must widen the travelable set the same way.
+    /// </summary>
+    /// <remarks>
+    /// Unlike every other case here, this rule cannot be switched on mid-run:
+    /// modifiers are fixed when the run is created (see
+    /// <c>OracleDriver.Restart</c>). So the metamorphic pair is two runs at the
+    /// same seed rather than two moments in one, and the comparison is only
+    /// meaningful if the runs are otherwise identical — which is exactly R1's
+    /// determinism claim, asserted here on the map before it is relied on.
+    ///
+    /// That makes this case do double duty. It is also the only exercise the
+    /// oracle's multi-scenario claim gets: if the second run's map matched the
+    /// first's after a <c>CleanUp</c>, no map or RNG state leaked across the
+    /// boundary.
+    /// </remarks>
+    private static async Task<bool> FlightWidensTheMap()
+    {
+        RunState plain = await OracleDriver.Restart();
+        MapPoint? spot = Discriminating(plain);
+        if (spot == null)
+        {
+            return Check("Flight: a map position exists where free travel is observable", false);
+        }
+
+        string map = Fingerprint(plain);
+        plain.AddVisitedMapCoord(spot.coord);
+        Check("Flight: free travel is off without the modifier", !Hook.ShouldAllowFreeTravel(plain));
+        List<string> before = Travelable(plain);
+
+        RunState flying = await OracleDriver.Restart(ModelDb.Modifier<Flight>().ToMutable());
+
+        // Without this the case could "prove" that Flight widens the map when
+        // all it did was generate a different one.
+        if (!Check("Flight: the restarted run generates the same map", Fingerprint(flying) == map))
+        {
+            return false;
+        }
+
+        flying.AddVisitedMapCoord(spot.coord);
+        List<string> after = Travelable(flying);
+        Check("Flight: free travel hook is live", Hook.ShouldAllowFreeTravel(flying));
+
+        return Widened("Flight", before, after);
+    }
+
+    /// <summary>
+    /// A map position where free travel and normal travel differ.
+    /// </summary>
+    /// <remarks>
+    /// At floor 1 the next row held exactly the current node's two children, so
+    /// the two rules coincide and the test proved nothing while appearing to
+    /// run. A scenario that cannot distinguish the rules is not evidence about
+    /// them, so the position is searched for and its absence is a failure.
+    /// </remarks>
+    private static MapPoint? Discriminating(RunState state) =>
+        state.Map.GetAllMapPoints()
+            .OrderBy(p => p.coord.row).ThenBy(p => p.coord.col)
+            .FirstOrDefault(p => state.Map.GetPointsInRow(p.coord.row + 1).Count() > p.Children.Count);
+
+    /// <summary>
+    /// The specific claim, not merely "something changed": free travel opens the
+    /// entire next row, so the new set must be a strict superset.
+    /// </summary>
+    private static bool Widened(string label, List<string> before, List<string> after)
+    {
         bool widened = after.Count > before.Count && before.All(after.Contains);
         if (!widened)
         {
             Log.Error($"[selftest]   before: {string.Join(" ", before)} after: {string.Join(" ", after)}");
         }
 
-        return Check($"WingedBoots widens the travelable set ({before.Count} -> {after.Count})", widened);
+        return Check($"{label} widens the travelable set ({before.Count} -> {after.Count})", widened);
     }
+
+    /// <summary>The whole map, edges included, as a comparable string.</summary>
+    private static string Fingerprint(RunState state) =>
+        string.Join("|", state.Map.GetAllMapPoints()
+            .OrderBy(p => p.coord.row).ThenBy(p => p.coord.col)
+            .Select(p => $"{p.coord.col},{p.coord.row}:{p.PointType}>"
+                + string.Join(",", p.Children.Select(c => $"{c.coord.col},{c.coord.row}").OrderBy(s => s))));
 
     /// <summary>
     /// A hook that forbids card play must show up as BlockedByHook in `legal`.
@@ -338,6 +481,80 @@ internal static class SelfTest
             && (e.GetProperty("reason").GetString() ?? "").Contains(nameof(UnplayableReason.BlockedByHook)));
 
         Check($"{label}: afflicted card is blocked by hook", blocked);
+        return Check($"{label}: the observation reports it blocked", reported);
+    }
+
+    /// <summary>
+    /// Hooks that forbid play only after N cards have been played this turn.
+    /// </summary>
+    /// <remarks>
+    /// `Sloth`, `Normality` and `Velvet Choker` all gate on a count of cards
+    /// played this turn — 1, 3 and 6 respectively — differing only in where the
+    /// rule lives (a power, a card in hand, a relic). The count is the whole
+    /// mechanism, so they are one case.
+    ///
+    /// Energy is granted through <c>PlayerCmd.GainEnergy</c> first: Velvet
+    /// Choker's threshold of 6 is unreachable on a starting hand's worth of
+    /// energy, so without it the scenario could not reach the state it means to
+    /// test — the same unsatisfiable-scenario trap the Ringing case fell into.
+    /// </remarks>
+    private static async Task<bool> BlocksAfterNPlays(
+        RunState state, string label, int plays, Func<Player, Task> arrange)
+    {
+        Player me = state.Players[0];
+        PlayerCombatState? pcs = me.PlayerCombatState;
+        if (pcs == null)
+        {
+            return Check($"{label}: in combat", false);
+        }
+
+        await arrange(me);
+        await PlayerCmd.GainEnergy(30m, me);
+
+        int played = 0;
+        for (int i = 0; i < plays; i++)
+        {
+            // Top the hand up as well as the energy. Velvet Choker needs six
+            // plays and a starting hand holds five, so the first attempt ran the
+            // hand dry at five with 27 energy to spare — the limit was cards,
+            // not cost, which the diagnostic said outright.
+            if (pcs.Hand.Cards.Count == 0)
+            {
+                await CardPileCmd.Draw(new BlockingPlayerChoiceContext(), 5m, me);
+            }
+
+            if (!await OracleDriver.PlayOneCard(state))
+            {
+                break;
+            }
+            played++;
+        }
+
+        if (played < plays)
+        {
+            Log.Error($"[selftest]   only played {played} of {plays}; energy={pcs.Energy} hand={pcs.Hand.Cards.Count}");
+            return Check($"{label}: {plays} cards could be played", false);
+        }
+
+        // Something must remain in hand to be forbidden, or the check is vacuous.
+        if (pcs.Hand.Cards.Count == 0)
+        {
+            return Check($"{label}: a card remains in hand to be blocked", false);
+        }
+
+        bool blocked = pcs.Hand.Cards.Any(c =>
+            !c.CanPlay(out UnplayableReason r, out AbstractModel? _) && r.HasFlag(UnplayableReason.BlockedByHook));
+
+        bool reported = Legal(state).Any(e =>
+            !e.GetProperty("playable").GetBoolean()
+            && (e.GetProperty("reason").GetString() ?? "").Contains(nameof(UnplayableReason.BlockedByHook)));
+
+        if (!blocked)
+        {
+            Log.Error($"[selftest]   hand after {played} plays: {string.Join(" | ", pcs.Hand.Cards.Select(c => { c.CanPlay(out UnplayableReason r, out AbstractModel? _); return $"{c.Id.Entry} {r}"; }))}");
+        }
+
+        Check($"{label}: blocked after {plays} play(s)", blocked);
         return Check($"{label}: the observation reports it blocked", reported);
     }
 

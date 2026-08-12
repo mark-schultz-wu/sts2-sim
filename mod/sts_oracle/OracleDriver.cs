@@ -53,16 +53,21 @@ internal static class OracleDriver
     public static async Task Start(string seed)
     {
         Clock.Start();
+        _seed = seed;
         try
         {
             await WaitUntilLoaded();
-            RunState state = BuildRunState(seed);
+            RunState state = BuildRunState(seed, Array.Empty<ModifierModel>());
             await StartRun(state);
             Report(state);
 
-            if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "selftest")
+            if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "serve")
             {
-                await SelfTest.Run(state, () => EnterFight(state));
+                await Protocol.Serve(state);
+            }
+            else if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "selftest")
+            {
+                await SelfTest.Run(state);
             }
             else
             {
@@ -109,7 +114,10 @@ internal static class OracleDriver
 
     private static string Stage = "start";
 
-    private static readonly bool FullObservations =
+    /// <summary>The seed the current process was started at, for restarts.</summary>
+    private static string _seed = "ORACLE1";
+
+    public static readonly bool FullObservations =
         Environment.GetEnvironmentVariable("STS_ORACLE_OBS") == "full";
 
     /// <summary>
@@ -158,17 +166,64 @@ internal static class OracleDriver
     /// Acts are cloned to mutable because the RunState constructor asserts it;
     /// only <c>CreateForTest</c> does that mapping for you.
     /// </remarks>
-    private static RunState BuildRunState(string seed)
+    private static RunState BuildRunState(string seed, IReadOnlyList<ModifierModel> modifiers)
     {
         Stage = "building run state";
         var players = new List<Player> { Player.CreateForNewRun<Ironclad>(UnlockState.all, 1uL) };
         List<ActModel> acts = ActModel.GetDefaultList().Select(a => a.ToMutable()).ToList();
 
         RunState state = RunState.CreateForNewRun(
-            players, acts, Array.Empty<ModifierModel>(), GameMode.Standard, ascensionLevel: 0, seed);
+            players, acts, modifiers, GameMode.Standard, ascensionLevel: 0, seed);
 
         Log.Info($"[oracle] run state built: seed={seed} character=Ironclad "
-            + $"deck={players[0].Deck.Cards.Count} acts={acts.Count}");
+            + $"deck={players[0].Deck.Cards.Count} acts={acts.Count} "
+            + $"modifiers=[{string.Join(",", modifiers.Select(m => m.Id.Entry))}]");
+        return state;
+    }
+
+    /// <summary>
+    /// Tears the current run down and starts another in the same process.
+    /// </summary>
+    /// <remarks>
+    /// Needed because some rules are fixed when the run is created and cannot be
+    /// granted to a run in progress. Run modifiers are the case in hand: the
+    /// `Flight` modifier is only ever installed by
+    /// <c>RunManager.InitializeNewRun</c> iterating <c>State.Modifiers</c>, so a
+    /// scenario that tests it has to construct the run differently rather than
+    /// mutate the one already running.
+    ///
+    /// <c>RunState.AddModifierDebug</c> looks like a shortcut and was rejected:
+    /// it appends to the list without calling <c>OnRunCreated</c>, leaving the
+    /// modifier's <c>RunState</c> unset and its <c>ClearsPlayerDeck</c> pass
+    /// skipped. `Flight` happens to survive that, and relying on the happenstance
+    /// would make the case a poor template for the modifiers that do not.
+    ///
+    /// <c>SetUpTest</c> refuses to run twice — it throws on a non-null
+    /// <c>State</c> — so <c>CleanUp</c> must come first; that is what nulls it.
+    /// This is also the only exercise the oracle's multi-scenario claim gets: if
+    /// the second run reproduces the first's floor, deck and RNG counters, no
+    /// state leaked across the boundary.
+    /// </remarks>
+    public static Task<RunState> Restart(params ModifierModel[] modifiers) => Restart(null, modifiers);
+
+    /// <param name="seed">
+    /// The seed for the new run, or null to keep the one this process started
+    /// at. Never defaulted to a fresh random value: R2 exists because
+    /// <c>CreateForTest</c> silently falls back to the wall clock.
+    /// </param>
+    public static async Task<RunState> Restart(string? seed, params ModifierModel[] modifiers)
+    {
+        Stage = "restarting";
+        Log.Info("[oracle] restarting run");
+
+        // Before CleanUp, or the game is left awaiting a task nobody completes.
+        Pending.CancelOutstanding("the run was restarted");
+        RunManager.Instance.CleanUp();
+
+        _seed = seed ?? _seed;
+        RunState state = BuildRunState(_seed, modifiers);
+        await StartRun(state);
+        Report(state);
         return state;
     }
 
@@ -238,7 +293,7 @@ internal static class OracleDriver
     /// meant to play well — the oracle never chooses. It exists to drive enough
     /// decisions to time one.
     /// </remarks>
-    private static async Task EnterFight(RunState state)
+    public static async Task EnterFight(RunState state)
     {
         Stage = "entering fight";
         EncounterModel encounter = ModelDb.Encounter<BowlbugsWeak>().ToMutable();
@@ -306,13 +361,14 @@ internal static class OracleDriver
             CardModel? card = pcs.Hand.Cards.FirstOrDefault(c => c.CanPlayTargeting(target))
                 ?? pcs.Hand.Cards.FirstOrDefault(c => c.CanPlayTargeting(null));
 
-            GameAction action = card != null
-                ? new PlayCardAction(card, card.TargetType == TargetType.AnyEnemy ? target : null)
-                : new EndPlayerTurnAction(me, pcs.TurnNumber);
+            bool ending = card == null;
+            GameAction action = ending
+                ? new EndPlayerTurnAction(me, pcs.TurnNumber)
+                : new PlayCardAction(card!, card!.TargetType == TargetType.AnyEnemy ? target : null);
 
             RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
             decisions++;
-            bool resolved = await Quiesce(action);
+            bool resolved = await Quiesce(action, ending ? pcs.TurnNumber : null);
             // Digest by default; the full observation is ~1.6KB a step and is
             // only needed for the step that disagrees, which R1 lets us
             // reproduce on demand.
@@ -345,14 +401,45 @@ internal static class OracleDriver
     /// So phase one waits on the action we issued, via its own completion
     /// source, which cannot be satisfied early. Phase two then drains the
     /// cascade it triggered — enemy turns, triggers, draws.
+    ///
+    /// **Draining is still not enough, and the protocol is what proved it.**
+    /// <c>EndPlayerTurnAction.ExecuteAction</c> calls <c>PlayerCmd.EndTurn</c>
+    /// and returns <c>Task.CompletedTask</c> immediately, so the action reports
+    /// itself finished while the turn transition — enemy turn, next draw — has
+    /// not begun. The queue is genuinely empty in that gap. The in-process
+    /// driver never noticed because it re-read the live model on the next
+    /// iteration; over the protocol the observation is authoritative, and a
+    /// client acting on it was found a whole turn behind the oracle (it believed
+    /// turn 2 while the game was on turn 3) with no command in between.
+    ///
+    /// So phase three waits for the game to say it wants input again, using its
+    /// own notion rather than a settling delay: actions re-enabled and the turn
+    /// phase back to <c>Play</c>. For a turn-ending decision that is still
+    /// ambiguous — those hold at the moment of issue too — so the caller passes
+    /// the turn number it is leaving and the wait requires the counter to have
+    /// advanced past it. A monotonic counter cannot be faked by a transient.
     /// </remarks>
-    private static async Task<bool> Quiesce(GameAction issued)
+    /// <param name="turnMustAdvancePast">
+    /// For decisions that end the turn: the turn number being left. Quiescence
+    /// then requires a strictly greater turn number, not merely a drained queue.
+    /// </param>
+    public static async Task<bool> Quiesce(GameAction issued, int? turnMustAdvancePast = null)
     {
         ActionQueueSet queue = RunManager.Instance.ActionQueueSet;
         ActionExecutor executor = RunManager.Instance.ActionExecutor;
 
         for (int i = 0; !issued.CompletionTask.IsCompleted; i++)
         {
+            // Checked before anything else, and in both loops: a parked action
+            // holds the queue open, so every drained-based test below is false
+            // by construction while the game is waiting on us. This is also what
+            // keeps the bounded waits honest — they exist to catch a wedged
+            // engine, and must never be counting down while a client thinks.
+            if (Pending.Current != null)
+            {
+                return true;
+            }
+
             // A cancelled action never completes. When combat ends mid-cascade
             // the executor stops with actions still queued, and the decision we
             // issued is abandoned rather than finished — observed as
@@ -374,9 +461,32 @@ internal static class OracleDriver
             await Task.Delay(1);
         }
 
+        return await WaitForDecisionPoint(turnMustAdvancePast, issued);
+    }
+
+    /// <summary>
+    /// Waits until the game either wants a decision or is asking a question.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Quiesce"/> because answering a pending resumes
+    /// an action that is *already running* — there is no newly issued action to
+    /// wait on, only the same cascade continuing. Both paths end here, which is
+    /// what lets a question that leads to another question need no special case.
+    /// </remarks>
+    public static async Task<bool> WaitForDecisionPoint(
+        int? turnMustAdvancePast = null, GameAction? issued = null)
+    {
+        ActionQueueSet queue = RunManager.Instance.ActionQueueSet;
+        ActionExecutor executor = RunManager.Instance.ActionExecutor;
+
         for (int i = 0; i < 20000; i++)
         {
-            if (queue.IsEmpty && !executor.IsRunning)
+            if (Pending.Current != null)
+            {
+                return true;
+            }
+
+            if (queue.IsEmpty && !executor.IsRunning && ReadyForInput(turnMustAdvancePast))
             {
                 return true;
             }
@@ -388,13 +498,44 @@ internal static class OracleDriver
                 Log.Info($"[oracle] still waiting after {i}ms: empty={queue.IsEmpty} "
                     + $"running={executor.IsRunning} current={executor.CurrentlyRunningAction} "
                     + $"paused={executor.IsPaused} combat={CombatManager.Instance.IsInProgress} "
-                    + $"actionsDisabled={CombatManager.Instance.PlayerActionsDisabled}");
+                    + $"actionsDisabled={CombatManager.Instance.PlayerActionsDisabled} "
+                    + $"phase={RunManager.Instance.DebugOnlyGetState()?.Players[0].PlayerCombatState?.Phase}");
             }
 
             await Task.Delay(1);
         }
 
-        throw new TimeoutException($"action queue never drained after {issued}");
+        throw new TimeoutException(
+            $"action queue never drained{(issued == null ? "" : $" after {issued}")}");
+    }
+
+    /// <summary>
+    /// Whether the game is back to wanting a decision from the player.
+    /// </summary>
+    /// <remarks>
+    /// A fight that has ended counts as ready: the decision resolved, there is
+    /// simply no next one in this room, and the caller reads combat state as
+    /// absent rather than waiting for a turn that will never start.
+    /// </remarks>
+    private static bool ReadyForInput(int? turnMustAdvancePast)
+    {
+        if (!CombatManager.Instance.IsInProgress)
+        {
+            return true;
+        }
+
+        PlayerCombatState? pcs = RunManager.Instance.DebugOnlyGetState()?.Players[0].PlayerCombatState;
+        if (pcs == null)
+        {
+            return true;
+        }
+
+        if (CombatManager.Instance.PlayerActionsDisabled || pcs.Phase != PlayerTurnPhase.Play)
+        {
+            return false;
+        }
+
+        return turnMustAdvancePast == null || pcs.TurnNumber > turnMustAdvancePast;
     }
 
     private static void Subscribe(RunManager run)
