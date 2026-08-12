@@ -385,10 +385,17 @@ rather than one more each time. The shape, stated once: **out of combat, every
 readiness test the driver has is trivially true, so work started outside the
 action queue is invisible to it.**
 
-*Not a legality gap but found here.* A driven run that loses a fight keeps
-accepting commands — a dead player was observed healing at a rest site, a state
-the real game cannot reach. The observation now reports `alive`, but the oracle
-does not yet act on run-end.
+*Run-end, found here and now handled.* A driven run that lost kept accepting
+commands, and a dead player was observed healing at a rest site — a state the
+real game cannot reach, which made every observation after that point describe
+something no simulator should be asked to reproduce. A finished run now refuses
+anything that would advance it, naming victory or defeat; `observe`, `start` and
+`quit` still work.
+
+The two are not the same question: `RunManager.WinRun` calls
+`GuaranteeKillAllPlayers`, so `IsGameOver` is true for a win as well as a loss,
+and `CurrentRoom.IsVictoryRoom` is what separates them. The observation reports
+`alive`, `runOver` and `victory` (the last only once the run has ended).
 
 ## R4 — One command advances the state exactly one decision
 
@@ -687,27 +694,26 @@ each one, not wholesale.
 touch UI singletons — and that `CmdResult.success` is false rather than a
 silent no-op when one does not.
 
-**TODO: the driver hardcodes Ironclad.** `BuildRunState` always builds
-`Player.CreateForNewRun<Ironclad>(...)`, so `start` cannot ask for a character
-and four of the five playable characters are unreachable. This is a scenario
-parameter like the seed and the modifier list, and it belongs on the same
-command:
+**Done: `start` takes a character and an ascension level.** `Player.CreateForNewRun`
+has a non-generic overload taking a `CharacterModel`, so the lookup is the same
+reflection-over-`ModelDb` shape used for modifiers, over `ModelDb.AllCharacters`.
+Naming one that does not exist is refused, listing the five that do.
 
 ```json
-{"cmd":"start","seed":"ORACLE1","character":"Silent","ascension":0}
+{"cmd":"start","seed":"ORACLE1","character":"DEFECT","ascension":5}
 ```
 
-It blocks more than variety. `Defect` is the only way to exercise orbs, which
-R5 lists as an observation gap for exactly this reason — no Defect run has ever
-been driven, so the orb fields have never been written or checked. Several of
-the clearest card-selection cases are Silent cards (`Acrobatics`, `Prepared`,
-`Survivor`), so the pending-decision work in R10 wants this too.
+Verified: `DEFECT` starts 75/75 with a `STRIKE_DEFECT` deck, `SILENT` at
+ascension 5 starts 56/70 — ascension is passed straight through to
+`RunState.CreateForNewRun` rather than pinned.
 
-`CreateForNewRun<T>` is generic over the character type, so the lookup is the
-same reflection-over-`ModelDb` shape already used for modifiers, and
-`PreloadManager.LoadRunAssets` already takes the character list. `ascension` is
-likewise passed straight to `RunState.CreateForNewRun` and is currently pinned
-to 0.
+**This closed R5's orb gap as a side effect.** Orbs were unreported because no
+Defect run had ever been driven, so the fields had never been written or
+checked. The observation now carries the orb queue *in order* — the same orbs in
+a different order evoke differently — with capacity separate from count, since
+empty slots are part of the state. A Defect opening reports
+`{"capacity": 3, "queue": [{"id": "LIGHTNING_ORB", "passive": 3, "evoke": 8}]}`,
+which is Cracked Core channelling at combat start.
 
 *Check.* Earn a relic legitimately in one run and grant it by scenario in
 another; from the same anchor the two observations must be identical. Run this

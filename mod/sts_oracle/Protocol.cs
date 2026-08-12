@@ -138,6 +138,19 @@ internal static class Protocol
                 return false;
             }
 
+            // A finished run accepts nothing that would advance it. Without
+            // this the oracle keeps taking commands after a defeat — a dead
+            // player was observed healing at a rest site, which the real game
+            // cannot reach, so every observation after that point described a
+            // state no simulator should be asked to reproduce.
+            if (_state.IsGameOver && cmd is not ("observe" or "start" or "quit"))
+            {
+                bool won = _state.CurrentRoom?.IsVictoryRoom ?? false;
+                await Error(cmd,
+                    $"the run is over ({(won ? "victory" : "defeat")}); start a new run or quit");
+                return false;
+            }
+
             switch (cmd)
             {
                 case "answer":
@@ -264,7 +277,12 @@ internal static class Protocol
     private static async Task Start(JsonElement req)
     {
         string? seed = Str(req, "seed");
-        _state = await OracleDriver.Restart(seed, Modifiers(req));
+        string? character = Str(req, "character");
+        int ascension = req.TryGetProperty("ascension", out JsonElement a) && a.TryGetInt32(out int lvl)
+            ? lvl
+            : 0;
+
+        _state = await OracleDriver.Restart(seed, character, ascension, Modifiers(req));
         await Observe(req, "start");
     }
 

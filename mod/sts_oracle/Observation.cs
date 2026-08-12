@@ -92,11 +92,14 @@ internal static class Observation
             ["hp"] = me.Creature.CurrentHp,
             ["maxHp"] = me.Creature.MaxHp,
 
-            // Reported because the oracle does not yet act on it: a driven run
-            // that loses a fight keeps taking commands, and a dead player was
-            // observed healing at a rest site — a state the real game cannot
-            // reach. Until run-end is handled, the client must check this.
             ["alive"] = me.Creature.IsAlive,
+
+            // A win kills every player too — RunManager.WinRun calls
+            // GuaranteeKillAllPlayers — so "the run is over" and "you lost" are
+            // not the same question. IsVictoryRoom is what separates them, and
+            // it is only meaningful once the run has ended.
+            ["runOver"] = state.IsGameOver,
+            ["victory"] = state.IsGameOver ? state.CurrentRoom?.IsVictoryRoom ?? false : null,
             ["gold"] = me.Gold,
             ["relics"] = me.Relics.Select(Ident).ToList(),
             ["potions"] = me.Potions.Select(p => p.Id.Entry).ToList(),
@@ -128,6 +131,22 @@ internal static class Observation
                 ["exhaust"] = pcs.ExhaustPile.Cards.Select(Ident).ToList(),
                 ["creatures"] = combat.Creatures.Select(Describe).ToList(),
                 ["legal"] = Legal(combat, pcs).ToList(),
+
+                // Ordered, because an orb queue is a queue: the same orbs in a
+                // different order evoke differently. Capacity is separate from
+                // count, since empty slots are part of the state. Only Defect
+                // uses these, which is why they went unwritten until `start`
+                // could ask for a character.
+                ["orbs"] = new Dictionary<string, object?>
+                {
+                    ["capacity"] = pcs.OrbQueue.Capacity,
+                    ["queue"] = pcs.OrbQueue.Orbs.Select(o => new Dictionary<string, object?>
+                    {
+                        ["id"] = o.Id.Entry,
+                        ["passive"] = o.PassiveVal,
+                        ["evoke"] = o.EvokeVal,
+                    }).ToList(),
+                },
             };
         }
 

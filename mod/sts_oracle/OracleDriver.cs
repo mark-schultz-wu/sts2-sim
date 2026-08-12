@@ -57,7 +57,7 @@ internal static class OracleDriver
         try
         {
             await WaitUntilLoaded();
-            RunState state = BuildRunState(seed, Array.Empty<ModifierModel>());
+            RunState state = BuildRunState(seed, Array.Empty<ModifierModel>(), Character(null), ascension: 0);
             await StartRun(state);
             Report(state);
 
@@ -166,19 +166,50 @@ internal static class OracleDriver
     /// Acts are cloned to mutable because the RunState constructor asserts it;
     /// only <c>CreateForTest</c> does that mapping for you.
     /// </remarks>
-    private static RunState BuildRunState(string seed, IReadOnlyList<ModifierModel> modifiers)
+    private static RunState BuildRunState(
+        string seed, IReadOnlyList<ModifierModel> modifiers, CharacterModel character, int ascension)
     {
         Stage = "building run state";
-        var players = new List<Player> { Player.CreateForNewRun<Ironclad>(UnlockState.all, 1uL) };
+
+        // UnlockState.all so no scenario is unreachable because a profile has
+        // not earned the content yet — R1 wants a run that does not depend on
+        // which machine's save file it started from.
+        var players = new List<Player> { Player.CreateForNewRun(character, UnlockState.all, 1uL) };
         List<ActModel> acts = ActModel.GetDefaultList().Select(a => a.ToMutable()).ToList();
 
         RunState state = RunState.CreateForNewRun(
-            players, acts, modifiers, GameMode.Standard, ascensionLevel: 0, seed);
+            players, acts, modifiers, GameMode.Standard, ascension, seed);
 
-        Log.Info($"[oracle] run state built: seed={seed} character=Ironclad "
-            + $"deck={players[0].Deck.Cards.Count} acts={acts.Count} "
+        Log.Info($"[oracle] run state built: seed={seed} character={character.Id.Entry} "
+            + $"ascension={ascension} deck={players[0].Deck.Cards.Count} acts={acts.Count} "
             + $"modifiers=[{string.Join(",", modifiers.Select(m => m.Id.Entry))}]");
         return state;
+    }
+
+    /// <summary>The character a run starts with, by id, or the default.</summary>
+    /// <remarks>
+    /// Named rather than hardcoded because four of the five playable characters
+    /// were unreachable, and `Defect` is the only way orbs are ever exercised —
+    /// an observation gap R5 could not close without this.
+    /// </remarks>
+    public static CharacterModel Character(string? id)
+    {
+        if (id == null)
+        {
+            return ModelDb.Character<Ironclad>();
+        }
+
+        CharacterModel? found = ModelDb.AllCharacters.FirstOrDefault(
+            c => string.Equals(c.Id.Entry, id, StringComparison.OrdinalIgnoreCase));
+
+        if (found == null)
+        {
+            throw new ArgumentException(
+                $"no such character '{id}'; known: "
+                + string.Join(" ", ModelDb.AllCharacters.Select(c => c.Id.Entry)));
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -204,14 +235,16 @@ internal static class OracleDriver
     /// the second run reproduces the first's floor, deck and RNG counters, no
     /// state leaked across the boundary.
     /// </remarks>
-    public static Task<RunState> Restart(params ModifierModel[] modifiers) => Restart(null, modifiers);
+    public static Task<RunState> Restart(params ModifierModel[] modifiers) =>
+        Restart(null, null, 0, modifiers);
 
     /// <param name="seed">
     /// The seed for the new run, or null to keep the one this process started
     /// at. Never defaulted to a fresh random value: R2 exists because
     /// <c>CreateForTest</c> silently falls back to the wall clock.
     /// </param>
-    public static async Task<RunState> Restart(string? seed, params ModifierModel[] modifiers)
+    public static async Task<RunState> Restart(
+        string? seed, string? character, int ascension, params ModifierModel[] modifiers)
     {
         Stage = "restarting";
         Log.Info("[oracle] restarting run");
@@ -221,7 +254,7 @@ internal static class OracleDriver
         RunManager.Instance.CleanUp();
 
         _seed = seed ?? _seed;
-        RunState state = BuildRunState(_seed, modifiers);
+        RunState state = BuildRunState(_seed, modifiers, Character(character), ascension);
         await StartRun(state);
         Report(state);
         return state;

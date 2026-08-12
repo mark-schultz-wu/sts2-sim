@@ -87,8 +87,7 @@ combat rewards, rest sites, events, shops, protocol error paths, throughput
 numbers.
 
 **Not verified at all:** anything on another machine; a full run rather than a
-few rooms; anything to do with a run *ending* — a driven run that dies keeps
-taking commands, and a dead player was seen healing at a campfire.
+few rooms; four of the five characters beyond their opening state.
 
 ### Bugs this found — in the oracle, not the game
 
