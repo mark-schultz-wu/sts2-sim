@@ -14,6 +14,17 @@ dump_out := justfile_directory() / "model-ids.json"
 _default:
     @just --list
 
+# Everything that must pass before a commit.
+check: test lint
+
+# The Rust suite, minus the tests that need the game.
+test:
+    cargo test --workspace
+
+lint:
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo fmt --all --check
+
 # Build the mod and install it into the game's mods directory.
 deploy:
     ./mod/sts_oracle/deploy.sh
@@ -26,3 +37,7 @@ selftest: deploy
 dump: deploy
     cd "{{ game_dir }}" && STS_ORACLE_MODE=dump STS_ORACLE_DUMP="{{ dump_out }}" \
         ./SlayTheSpire2 --headless --force-steam=off
+
+# The tests that launch the game. Serial by necessity, ~10s of startup each.
+live: deploy
+    STS2_GAME_DIR="{{ game_dir }}" cargo test --workspace -- --ignored --test-threads=1
