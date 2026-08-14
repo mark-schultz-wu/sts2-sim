@@ -1,9 +1,24 @@
 //! Tests that launch the real game.
 //!
-//! Each one costs a process and ~10s of startup, and they need the mod deployed
+//! Each one costs a process and ~3s of startup, and they need the mod deployed
 //! into the game directory, so they are `#[ignore]`d and run by `just live`.
 //! Everything checkable without the game lives in unit tests beside the code.
+//!
+//! # Why these are serial
+//!
+//! Every game process shares one profile directory, and a driven run writes to
+//! `saves/progress.save` inside it — `RelicCmd.Obtain` calls
+//! `SaveManager.MarkRelicAsSeen`, and fighting an enemy records a discovery.
+//! Two runs at once would race on that file, and R1 treats profile residue as a
+//! determinism concern rather than a tidiness one, so it is not something to
+//! race on and hope.
+//!
+//! `#[serial(game)]` puts that constraint on the tests that have it instead of
+//! on whoever invokes cargo. Anything not in the `game` group — the unit tests,
+//! and the handshake tests that only bind loopback ports — still runs in
+//! parallel, so `cargo test --include-ignored` is safe with no extra flags.
 
+use serial_test::serial;
 use std::time::Duration;
 use sts2_oracle::{Command, Config, Error, Oracle, PROTOCOL_VERSION, Response};
 
@@ -42,6 +57,7 @@ fn start(oracle: &mut Oracle) -> sts2_oracle::Observation {
 
 #[test]
 #[ignore = "launches the real game"]
+#[serial(game)]
 fn the_greeting_matches_what_this_client_speaks() {
     let oracle = launch();
     let hello = oracle.hello();
@@ -76,6 +92,7 @@ fn the_greeting_matches_what_this_client_speaks() {
 
 #[test]
 #[ignore = "launches the real game"]
+#[serial(game)]
 fn a_full_observation_actually_carries_state() {
     let mut oracle = launch();
     let observed = start(&mut oracle);
@@ -94,6 +111,7 @@ fn a_full_observation_actually_carries_state() {
 /// over in memory can make them agree.
 #[test]
 #[ignore = "launches the real game"]
+#[serial(game)]
 fn the_same_seed_gives_the_same_digest() {
     let first = {
         let mut oracle = launch();
@@ -112,6 +130,7 @@ fn the_same_seed_gives_the_same_digest() {
 /// replying at all.
 #[test]
 #[ignore = "launches the real game"]
+#[serial(game)]
 fn a_refusal_leaves_the_session_usable() {
     let mut oracle = launch();
     start(&mut oracle);
@@ -135,6 +154,7 @@ fn a_refusal_leaves_the_session_usable() {
 /// headless games behind.
 #[test]
 #[ignore = "launches the real game"]
+#[serial(game)]
 fn dropping_the_client_stops_the_game() {
     let pid = {
         let oracle = launch();

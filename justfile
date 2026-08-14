@@ -38,6 +38,9 @@ dump: deploy
     cd "{{ game_dir }}" && STS_ORACLE_MODE=dump STS_ORACLE_DUMP="{{ dump_out }}" \
         ./SlayTheSpire2 --headless --force-steam=off
 
-# The tests that launch the game. Serial by necessity, ~10s of startup each.
+# The tests that launch the game, ~3s of startup each.
+#
+# No --test-threads=1: the tests that share the game's profile directory carry
+# `#[serial(game)]` themselves, so `cargo test --include-ignored` is safe too.
 live: deploy
-    STS2_GAME_DIR="{{ game_dir }}" cargo test --workspace -- --ignored --test-threads=1
+    STS2_GAME_DIR="{{ game_dir }}" cargo test --workspace -- --ignored
