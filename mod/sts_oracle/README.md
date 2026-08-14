@@ -136,13 +136,12 @@ Modes, via `STS_ORACLE_MODE`:
 |---|---|
 | *(unset)* | mod loads and does nothing |
 | `selftest` | runs the legality suite and exits non-zero on failure |
-| `serve` | speaks the protocol; TCP if `STS_ORACLE_PORT` is set, else stdin/stdout |
-| `drive` | plays one fight with a greedy policy, for timing |
+| `serve` | speaks the protocol over the TCP port the client passed in |
 | `dump` | writes every id, stat and closed domain the game knows, then quits |
 
-Other variables: `STS_ORACLE_SEED`, `STS_ORACLE_PORT` + `STS_ORACLE_TOKEN`,
-`STS_ORACLE_OBS=full`, `STS_ORACLE_QUIT=0` (stay up for inspection),
-`STS_ORACLE_DUMP=<path>` (where `dump` writes; defaults to `model-ids.json`).
+Other variables: `STS_ORACLE_PORT` (required by `serve`) + `STS_ORACLE_TOKEN`,
+`STS_ORACLE_OBS=full`, and `STS_ORACLE_DUMP=<path>` (where `dump` writes;
+defaults to `model-ids.json`).
 
 ### What `dump` is for
 
@@ -171,8 +170,8 @@ Two game flags matter: `--headless` (no renderer) and `--force-steam=off`
 
 **stdout is not the protocol.** The engine writes ~140 lines of its own there —
 Godot banner, FMOD, Sentry, a system dump containing paths and environment
-variables. Use the TCP channel for anything machine-read; stdio mode exists for
-poking at it by hand.
+variables. The protocol only ever speaks over the TCP channel; there was a stdio
+transport beside it and this is why it was removed.
 
 ## The version pin
 

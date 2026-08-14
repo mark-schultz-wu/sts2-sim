@@ -48,7 +48,7 @@ internal static class Protocol
 
     private static readonly JsonSerializerOptions Json = new JsonSerializerOptions { WriteIndented = false };
 
-    private static IChannel _channel = null!;
+    private static Channel _channel = null!;
     private static RunState _state = null!;
     private static int _seq;
 

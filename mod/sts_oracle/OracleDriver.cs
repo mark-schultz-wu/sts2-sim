@@ -50,10 +50,9 @@ internal static class OracleDriver
     /// init runs inside <c>NGame</c> startup, well before the model database is
     /// populated, which is what made the earlier AutoSlay attempt fault.
     /// </remarks>
-    public static async Task Start(string seed)
+    public static async Task Start()
     {
         Clock.Start();
-        _seed = seed;
         try
         {
             await WaitUntilLoaded();
@@ -67,22 +66,17 @@ internal static class OracleDriver
                 return;
             }
 
-            RunState state = BuildRunState(seed, Array.Empty<ModifierModel>(), Character(null), ascension: 0);
+            RunState state = BuildRunState(_seed, Array.Empty<ModifierModel>(), Character(null), ascension: 0);
             await StartRun(state);
             Report(state);
 
-            if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "serve")
-            {
-                await Protocol.Serve(state);
-            }
-            else if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "selftest")
+            if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "selftest")
             {
                 await SelfTest.Run(state);
             }
             else
             {
-                await PlayOneFight(state);
-                Report(state);
+                await Protocol.Serve(state);
             }
         }
         catch (Exception e)
@@ -107,17 +101,9 @@ internal static class OracleDriver
     /// <c>pkill</c> for thirteen hours and needed SIGKILL. Quitting through the
     /// scene tree is how the game itself exits (<c>NGame</c> calls
     /// <c>GetTree().Quit(0)</c>), so shutdown runs its normal course.
-    ///
-    /// Set <c>STS_ORACLE_QUIT=0</c> to keep the process up for inspection.
     /// </remarks>
     private static void Quit()
     {
-        if (Environment.GetEnvironmentVariable("STS_ORACLE_QUIT") == "0")
-        {
-            Log.Info("[oracle] STS_ORACLE_QUIT=0, staying up");
-            return;
-        }
-
         Log.Info($"[oracle] quitting after {Clock.Elapsed.TotalSeconds:F1}s");
         NGame.Instance.GetTree().Quit(0);
     }
@@ -378,56 +364,6 @@ internal static class OracleDriver
         return true;
     }
 
-    private static async Task PlayOneFight(RunState state)
-    {
-        await EnterFight(state);
-
-        Player me = state.Players[0];
-        Log.Info($"[oracle] in fight: combat={CombatManager.Instance.IsInProgress} "
-            + $"enemies={(state.CurrentRoom as CombatRoom)?.CombatState.Creatures.Count(c => !c.IsPlayer) ?? -1}");
-
-        Stage = "playing fight";
-        var clock = Stopwatch.StartNew();
-        int decisions = 0;
-
-        while (CombatManager.Instance.IsInProgress && decisions < 300)
-        {
-            PlayerCombatState? pcs = me.PlayerCombatState;
-            CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
-            if (pcs == null || combat == null)
-            {
-                Log.Info("[oracle] no combat state; stopping");
-                break;
-            }
-
-            Creature? target = combat.Creatures.FirstOrDefault(c => !c.IsPlayer && c.IsAlive);
-            CardModel? card = pcs.Hand.Cards.FirstOrDefault(c => c.CanPlayTargeting(target))
-                ?? pcs.Hand.Cards.FirstOrDefault(c => c.CanPlayTargeting(null));
-
-            bool ending = card == null;
-            GameAction action = ending
-                ? new EndPlayerTurnAction(me, pcs.TurnNumber)
-                : new PlayCardAction(card!, card!.TargetType == TargetType.AnyEnemy ? target : null);
-
-            RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
-            decisions++;
-            bool resolved = await Quiesce(action, ending ? pcs.TurnNumber : null);
-            // Digest by default; the full observation is ~1.6KB a step and is
-            // only needed for the step that disagrees, which R1 lets us
-            // reproduce on demand.
-            Log.Info(FullObservations
-                ? $"[obs] {Observation.Capture(state)}"
-                : $"[obs] {Observation.Digest(state)}");
-            if (!resolved)
-            {
-                break;
-            }
-        }
-
-        double s = clock.Elapsed.TotalSeconds;
-        Log.Info($"[oracle] fight over: decisions={decisions} in {s:F2}s "
-            + $"({decisions / Math.Max(s, 0.001):F1}/s) combat={CombatManager.Instance.IsInProgress}");
-    }
 
     /// <summary>
     /// Waits until our decision has fully resolved and the game wants another.

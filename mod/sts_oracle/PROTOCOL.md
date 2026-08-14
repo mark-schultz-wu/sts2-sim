@@ -22,9 +22,9 @@ With `STS_ORACLE_TOKEN` set, the oracle sends the token as the first line before
 anything else. A loopback listener accepts from any local process, so **the client
 must check it** — the oracle only presents it.
 
-With `STS_ORACLE_PORT` unset the transport falls back to stdio. That is for driving
-by hand only: the engine writes ~140 unprefixed lines to stdout before the oracle
-emits anything, so responses interleave with content nobody controls.
+`STS_ORACLE_PORT` is required. There is no stdio fallback: the engine writes ~140
+unprefixed lines to stdout before the oracle emits anything, so responses would
+arrive interleaved with content nobody controls.
 
 Closing the connection is a clean shutdown, not an error. The oracle exits on EOF,
 so a client that dies does not leave a game process behind.

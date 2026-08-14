@@ -21,44 +21,6 @@ namespace StsOracle;
 /// on a line that is sitting in a 4KB buffer, and the timeout that eventually
 /// fires blames the wrong component.
 /// </remarks>
-internal interface IChannel
-{
-    /// <summary>The next line, or null once the peer has gone away.</summary>
-    Task<string?> ReadLine();
-
-    /// <summary>Writes one line and flushes it before returning.</summary>
-    Task WriteLine(string line);
-
-    /// <summary>A short description, for the log line that says how we are connected.</summary>
-    string Describe { get; }
-}
-
-internal static class Channel
-{
-    /// <summary>
-    /// Builds the channel the environment asks for.
-    /// </summary>
-    /// <remarks>
-    /// TCP when <c>STS_ORACLE_PORT</c> is set, stdio otherwise. Selection is by
-    /// environment rather than command line because Godot owns argv.
-    /// </remarks>
-    public static async Task<IChannel> Open()
-    {
-        string? port = Environment.GetEnvironmentVariable("STS_ORACLE_PORT");
-        if (string.IsNullOrEmpty(port))
-        {
-            return new StdioChannel();
-        }
-
-        if (!int.TryParse(port, out int p) || p is < 1 or > 65535)
-        {
-            throw new ArgumentException($"STS_ORACLE_PORT is not a port number: '{port}'");
-        }
-
-        return await TcpChannel.Connect(p, Environment.GetEnvironmentVariable("STS_ORACLE_TOKEN"));
-    }
-}
-
 /// <summary>
 /// A loopback TCP connection back to the process that launched us.
 /// </summary>
@@ -75,14 +37,26 @@ internal static class Channel
 /// disappearing is one detectable event rather than two half-failures. The cost
 /// is a loopback roundtrip of roughly 30µs against a ~4ms decision, which R8
 /// measures rather than assumes.
+///
+/// There was an <c>IChannel</c> interface here with a stdio implementation
+/// beside this one, kept because "the transport is the least settled part of
+/// R10". The transport settled: stdio was unusable by anything but a human with
+/// grep — the engine writes ~140 unprefixed lines to stdout before the oracle
+/// says anything — and no client ever ran without a port. One implementation
+/// behind an interface is a guess about a second one, so both are gone.
+///
+/// The one thing to get right is flushing on write. A buffered response is
+/// indistinguishable from a hung oracle: the client blocks on a line sitting in
+/// a 4KB buffer, and the timeout that eventually fires blames the wrong
+/// component.
 /// </remarks>
-internal sealed class TcpChannel : IChannel
+internal sealed class Channel
 {
     private readonly TcpClient _client;
     private readonly StreamReader _in;
     private readonly StreamWriter _out;
 
-    private TcpChannel(TcpClient client)
+    private Channel(TcpClient client)
     {
         _client = client;
         NetworkStream s = client.GetStream();
@@ -90,10 +64,25 @@ internal sealed class TcpChannel : IChannel
         _out = new StreamWriter(s) { AutoFlush = true };
     }
 
+    /// <summary>A short description, for the log line that says how we are connected.</summary>
     public string Describe => $"tcp {_client.Client.RemoteEndPoint}";
 
-    public static async Task<TcpChannel> Connect(int port, string? token)
+    /// <summary>
+    /// Dials the port the client passed in.
+    /// </summary>
+    /// <remarks>
+    /// Selection is by environment rather than command line because Godot owns
+    /// argv.
+    /// </remarks>
+    public static async Task<Channel> Open()
     {
+        string? port = Environment.GetEnvironmentVariable("STS_ORACLE_PORT");
+        if (string.IsNullOrEmpty(port) || !int.TryParse(port, out int p) || p is < 1 or > 65535)
+        {
+            throw new ArgumentException(
+                $"STS_ORACLE_PORT must be the port the client is listening on; got '{port}'");
+        }
+
         var client = new TcpClient();
 
         // Nagle batches small writes waiting for more; every message here is a
@@ -101,13 +90,14 @@ internal sealed class TcpChannel : IChannel
         // pattern it penalises.
         client.NoDelay = true;
 
-        await client.ConnectAsync("127.0.0.1", port);
-        var channel = new TcpChannel(client);
+        await client.ConnectAsync("127.0.0.1", p);
+        var channel = new Channel(client);
 
         // A loopback listener accepts from any local process. The token turns
         // "something else connected first" from a baffling protocol error into
         // a stated one — and it is the client, not us, that must reject a
         // mismatch, so we simply present it.
+        string? token = Environment.GetEnvironmentVariable("STS_ORACLE_TOKEN");
         if (!string.IsNullOrEmpty(token))
         {
             await channel.WriteLine(token);
@@ -116,37 +106,9 @@ internal sealed class TcpChannel : IChannel
         return channel;
     }
 
+    /// <summary>The next line, or null once the peer has gone away.</summary>
     public async Task<string?> ReadLine() => await _in.ReadLineAsync();
 
+    /// <summary>Writes one line and flushes it before returning.</summary>
     public async Task WriteLine(string line) => await _out.WriteLineAsync(line);
-}
-
-/// <summary>
-/// Standard input and output, for driving the oracle by hand.
-/// </summary>
-/// <remarks>
-/// Not usable by the simulator, and deliberately so: the engine writes 141
-/// lines of its own to stdout before we emit anything — a Godot banner, FMOD,
-/// the Sentry extension and an unprefixed system dump containing PATH and mount
-/// names — so responses arrive interleaved with content we do not control.
-/// A human with `grep` copes with that; a parser should not have to.
-///
-/// It earns its place because it makes the protocol testable from a shell
-/// pipeline with no client written yet, which is how every command below was
-/// first exercised.
-/// </remarks>
-internal sealed class StdioChannel : IChannel
-{
-    public StdioChannel() => Stdin.Start();
-
-    public string Describe => "stdio (responses interleave with engine logs)";
-
-    public Task<string?> ReadLine() => Stdin.ReadLine();
-
-    public Task WriteLine(string line)
-    {
-        Console.Out.WriteLine(line);
-        Console.Out.Flush();
-        return Task.CompletedTask;
-    }
 }
