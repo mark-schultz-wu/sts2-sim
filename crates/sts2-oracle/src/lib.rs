@@ -49,13 +49,6 @@ pub struct Config {
     /// The directory holding the `SlayTheSpire2` binary. Also the working
     /// directory, which the game expects.
     pub game_dir: PathBuf,
-    /// Ask for the whole state on every response rather than just a digest.
-    ///
-    /// Anything rendering the game wants this on; there is nothing to draw from a
-    /// hash. A differential loop wants it off, and pays ~1.6KB a step when it is
-    /// on. The protocol also allows this per request, which this crate does not
-    /// expose because nothing needs it yet.
-    pub full_observations: bool,
     /// Let the game's own output through to this process's stdout and stderr.
     ///
     /// Off by default, and that matters: the engine writes ~140 unprefixed lines
@@ -72,7 +65,6 @@ impl Config {
     pub fn new(game_dir: impl Into<PathBuf>) -> Self {
         Self {
             game_dir: game_dir.into(),
-            full_observations: false,
             inherit_game_output: false,
             // Measured at ~3s from spawn to a connected oracle — the ~10s the
             // mod README quotes is startup to the main menu, which serve mode
@@ -81,12 +73,6 @@ impl Config {
             startup_timeout: Duration::from_secs(60),
             command_timeout: Duration::from_secs(30),
         }
-    }
-
-    /// Ask for the whole state on every response. See [`Config::full_observations`].
-    pub fn full_observations(mut self, yes: bool) -> Self {
-        self.full_observations = yes;
-        self
     }
 
     /// Let the game's output through. See [`Config::inherit_game_output`].
@@ -142,13 +128,16 @@ impl Oracle {
             .env("STS_ORACLE_MODE", "serve")
             .env("STS_ORACLE_PORT", port.to_string())
             .env("STS_ORACLE_TOKEN", &token)
+            // Always. The digest-only mode saves bandwidth and log size, not
+            // time -- R8 measures the two within 5% of each other, because a
+            // decision costs frame-boundary latency rather than serialisation.
+            // Paying ~200KB/s to make `state` unconditional is the better trade,
+            // and it is what lets Observation and Pending carry a Value rather
+            // than an Option nobody can reason about.
+            .env("STS_ORACLE_OBS", "full")
             .stdin(Stdio::null())
             .stdout(stdio())
             .stderr(stdio());
-
-        if config.full_observations {
-            proc.env("STS_ORACLE_OBS", "full");
-        }
 
         let mut child = proc
             .spawn()

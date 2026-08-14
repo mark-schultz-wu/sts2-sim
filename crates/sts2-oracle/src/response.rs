@@ -7,9 +7,11 @@
 //! Nothing is lost by waiting: the raw value carries every field the oracle
 //! reported, so no state can go missing while it is still untyped.
 //!
-//! For the same reason there is no `deny_unknown_fields` here. The drift that
-//! would matter is a field appearing inside the observation, and that one cannot
-//! be dropped silently while `state` is raw. Envelope drift is what the protocol
+//! For the same reason there is no `deny_unknown_fields` here: a field appearing
+//! inside the observation cannot be dropped while `state` is raw. That reasoning
+//! does not extend to the envelope, and once did not hold — [`Pending`] carried
+//! `digest` and `state` on the wire without fields to receive them, so both were
+//! silently discarded on every pending. Envelope drift is what the protocol
 //! version in the handshake is for, and [`crate::Oracle`] checks it.
 
 use serde::Deserialize;
@@ -49,10 +51,9 @@ pub struct Observation {
     /// diverged, even if the resulting state looks agreeable.
     pub resolved: bool,
     pub digest: String,
-    /// Present only when full observations are on. Untyped by design; see the
+    /// The whole state the digest was taken over. Untyped by design; see the
     /// module docs.
-    #[serde(default)]
-    pub state: Option<Value>,
+    pub state: Value,
     /// Errors the game logged while running the command. Never suppressed: the
     /// command may have half-happened, and only the caller can decide whether to
     /// trust the state.
@@ -69,6 +70,10 @@ pub struct Observation {
 pub struct Pending {
     pub seq: u64,
     pub cmd: String,
+    /// A parked game still reports where it is: the oracle adds `digest` and
+    /// `state` to a pending exactly as it does to an observation.
+    pub digest: String,
+    pub state: Value,
     #[serde(flatten)]
     pub question: Question,
 }
@@ -230,19 +235,20 @@ mod tests {
         assert_eq!(h.commands.len(), 2);
     }
 
+    /// The client always asks for full observations, so one arriving without
+    /// state means the oracle disagreed about that. Refusing it is the point of
+    /// `state` not being an `Option`.
     #[test]
-    fn a_digest_only_observation_has_no_state() {
-        let r = parse(
+    fn an_observation_without_state_is_refused() {
+        let err = serde_json::from_str::<Response>(
             r#"{"type":"observation","seq":3,"cmd":"play_card",
                 "resolved":true,"digest":"A21E"}"#,
+        )
+        .expect_err("should refuse");
+        assert!(
+            err.to_string().contains("state"),
+            "unhelpful message: {err}"
         );
-        let Response::Observation(o) = r else {
-            panic!("expected observation");
-        };
-        assert_eq!(o.seq, 3);
-        assert!(o.resolved);
-        assert!(o.state.is_none());
-        assert!(o.game_errors.is_none());
     }
 
     #[test]
@@ -254,16 +260,18 @@ mod tests {
         let Response::Observation(o) = r else {
             panic!("expected observation");
         };
-        let state = o.state.expect("state should be present");
-        assert_eq!(state["gold"], 99);
-        assert_eq!(state["nested"]["hp"][1], 2);
+        assert_eq!(o.seq, 4);
+        assert!(o.resolved);
+        assert!(o.game_errors.is_none());
+        assert_eq!(o.state["gold"], 99);
+        assert_eq!(o.state["nested"]["hp"][1], 2);
     }
 
     #[test]
     fn game_errors_survive() {
         let r = parse(
             r#"{"type":"observation","seq":5,"cmd":"end_turn","resolved":false,
-                "digest":"C1","gameErrors":["boom"]}"#,
+                "digest":"C1","state":{},"gameErrors":["boom"]}"#,
         );
         let Response::Observation(o) = r else {
             panic!("expected observation");
@@ -278,6 +286,7 @@ mod tests {
     fn select_cards_flattens_into_the_envelope() {
         let r = parse(
             r#"{"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
+                "digest":"D1","state":{"gold":1},
                 "min":1,"max":2,"asker":"DiscardAction",
                 "options":[{"index":0,"card":"STRIKE"},{"index":1,"card":"BASH+1"}]}"#,
         );
@@ -296,11 +305,28 @@ mod tests {
         assert_eq!(options[1].card, "BASH+1");
     }
 
+    /// Regression. `Pending` had no fields for `digest` or `state`, and serde
+    /// drops what it has nowhere to put — so every pending silently threw away
+    /// the state of a parked game, which is exactly when you most want it.
+    #[test]
+    fn a_pending_reports_where_the_game_is() {
+        let r = parse(
+            r#"{"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
+                "digest":"DEADBEEF","state":{"gold":99},
+                "min":1,"max":1,"asker":null,"options":[]}"#,
+        );
+        let Response::Pending(p) = r else {
+            panic!("expected pending");
+        };
+        assert_eq!(p.digest, "DEADBEEF");
+        assert_eq!(p.state["gold"], 99);
+    }
+
     #[test]
     fn a_selector_with_no_attribution_is_allowed() {
         let r = parse(
             r#"{"type":"pending","seq":8,"cmd":"answer","kind":"select_cards",
-                "min":0,"max":1,"asker":null,"options":[]}"#,
+                "digest":"D2","state":{},"min":0,"max":1,"asker":null,"options":[]}"#,
         );
         let Response::Pending(p) = r else {
             panic!("expected pending");
@@ -314,7 +340,7 @@ mod tests {
     #[test]
     fn rewards_describe_each_type_differently() {
         let r = parse(
-            r#"{"type":"pending","seq":9,"cmd":"end_turn","kind":"rewards","skippable":true,
+            r#"{"type":"pending","seq":9,"cmd":"end_turn","kind":"rewards","digest":"D3","state":{},"skippable":true,
                 "rewards":[
                   {"index":0,"type":"GoldReward","populated":true,"amount":25},
                   {"index":1,"type":"CardReward","populated":true,"cards":["STRIKE","BASH+1"]},

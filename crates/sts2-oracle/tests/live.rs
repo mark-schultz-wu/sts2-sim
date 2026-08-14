@@ -29,7 +29,7 @@ const SEED: &str = "ORACLE1";
 fn config() -> Config {
     let dir = sts2_oracle::game_dir_from_env()
         .expect("set STS2_GAME_DIR to the game directory (`just live` does this)");
-    Config::new(dir).full_observations(true)
+    Config::new(dir)
 }
 
 fn launch() -> Oracle {
@@ -93,15 +93,16 @@ fn the_greeting_matches_what_this_client_speaks() {
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
-fn a_full_observation_actually_carries_state() {
+fn every_observation_carries_state() {
     let mut oracle = launch();
     let observed = start(&mut oracle);
 
     assert!(observed.resolved);
     assert!(!observed.digest.is_empty());
     assert!(
-        observed.state.is_some(),
-        "Config::full_observations should have put state on the wire"
+        observed.state.is_object(),
+        "expected a state object, got {}",
+        observed.state
     );
     assert_eq!(observed.game_errors, None);
 }
@@ -147,7 +148,7 @@ fn a_refusal_leaves_the_session_usable() {
 
     // The session survived it.
     let after = observation(oracle.send(&Command::Observe).expect("observe should work"));
-    assert!(after.state.is_some());
+    assert!(after.state.is_object());
 }
 
 /// Dropping the client has to take the game with it, or a test run leaves
