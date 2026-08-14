@@ -207,6 +207,10 @@ specific class of bug running the real engine is meant to remove.
 
 ## Further reading
 
+[PROTOCOL.md](PROTOCOL.md) is the wire contract on one page: how to connect, the
+four response types, every command and its arguments, the pendings, and the rules
+about what is accepted when. Read it before writing a client.
+
 [REQUIREMENTS.md](REQUIREMENTS.md) is the standard this is held to: fourteen
 requirements each written so it can be failed, with what has been measured,
 what has not, and what is still an open question. It is long, and it is the
