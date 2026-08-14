@@ -23,6 +23,7 @@
 //! ```
 
 mod command;
+mod display;
 mod response;
 
 pub use command::{Answer, Command, TakeReward};
