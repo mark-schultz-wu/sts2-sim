@@ -313,7 +313,11 @@ fn accept_before(
         }
 
         if let Ok(Some(status)) = child.try_wait() {
-            return Err(Error::GameExited(status.code()));
+            return Err(match status.code() {
+                Some(code) => Error::GameExited(code),
+                // No exit code means a signal killed it.
+                None => Error::GameKilled,
+            });
         }
 
         if Instant::now() >= deadline {
@@ -376,63 +380,50 @@ fn fresh_token() -> String {
     format!("{:x}-{:x}", std::process::id(), nanos)
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// No `SlayTheSpire2` where the config said it would be.
+    #[error("no game binary at {0}")]
     GameNotFound(PathBuf),
+
     /// The game exited before connecting back. Set
     /// [`Config::inherit_game_output`] to see why.
-    GameExited(Option<i32>),
+    #[error("the game exited with status {0} before connecting")]
+    GameExited(i32),
+
+    /// The game was killed before connecting back.
+    #[error("the game was killed before connecting")]
+    GameKilled,
+
     /// Something connected to our port, but it was not our oracle.
+    #[error("something other than the oracle connected to our port")]
     WrongPeer,
+
     /// The oracle's first message was not a greeting.
+    #[error("expected a greeting, got {0:?}")]
     NoGreeting(Box<Response>),
+
     /// The oracle speaks a protocol this crate does not.
-    ProtocolMismatch {
-        expected: u32,
-        found: u32,
-    },
+    #[error("the oracle speaks protocol v{found}, this client speaks v{expected}")]
+    ProtocolMismatch { expected: u32, found: u32 },
+
     /// The connection closed mid-conversation.
+    #[error("the oracle closed the connection")]
     OracleGone,
+
     /// A deadline passed. The session is not usable afterwards.
+    #[error("timed out {0}")]
     Timeout(&'static str),
-    Io(&'static str, std::io::Error),
-    Encode(Command, serde_json::Error),
+
+    #[error("{0}: {1}")]
+    Io(&'static str, #[source] std::io::Error),
+
+    #[error("could not encode {0:?}: {1}")]
+    Encode(Command, #[source] serde_json::Error),
+
     /// A line arrived that this crate could not read as a response.
-    Decode(String, serde_json::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::GameNotFound(path) => write!(f, "no game binary at {}", path.display()),
-            Self::GameExited(Some(code)) => {
-                write!(f, "the game exited with status {code} before connecting")
-            }
-            Self::GameExited(None) => write!(f, "the game was killed before connecting"),
-            Self::WrongPeer => write!(f, "something other than the oracle connected to our port"),
-            Self::NoGreeting(got) => write!(f, "expected a greeting, got {got:?}"),
-            Self::ProtocolMismatch { expected, found } => write!(
-                f,
-                "the oracle speaks protocol v{found}, this client speaks v{expected}"
-            ),
-            Self::OracleGone => write!(f, "the oracle closed the connection"),
-            Self::Timeout(what) => write!(f, "timed out {what}"),
-            Self::Io(what, e) => write!(f, "{what}: {e}"),
-            Self::Encode(cmd, e) => write!(f, "could not encode {cmd:?}: {e}"),
-            Self::Decode(line, e) => write!(f, "could not read a response: {e}; line was: {line}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Io(_, e) => Some(e),
-            Self::Encode(_, e) | Self::Decode(_, e) => Some(e),
-            _ => None,
-        }
-    }
+    #[error("could not read a response: {1}; line was: {0}")]
+    Decode(String, #[source] serde_json::Error),
 }
 
 /// Where the game is, if the environment says.
@@ -594,6 +585,33 @@ mod handshake {
         let config = Config::new("/nonexistent/game/dir");
         let err = Oracle::launch(config).map(|_| ()).expect_err("should fail");
         assert!(matches!(err, Error::GameNotFound(_)), "got {err:?}");
+    }
+
+    /// These strings are what a caller sees when something goes wrong, and
+    /// `thiserror` generates them from attributes rather than a match, so it is
+    /// worth pinning that they still read as sentences and still chain.
+    #[test]
+    fn errors_say_something_useful() {
+        use std::error::Error as _;
+
+        let missing = Error::GameNotFound("/nope/SlayTheSpire2".into());
+        assert_eq!(missing.to_string(), "no game binary at /nope/SlayTheSpire2");
+        assert!(missing.source().is_none());
+
+        let mismatch = Error::ProtocolMismatch {
+            expected: 1,
+            found: 2,
+        };
+        assert_eq!(
+            mismatch.to_string(),
+            "the oracle speaks protocol v2, this client speaks v1"
+        );
+
+        // The cause has to survive, or `{:#}` and anyhow's chain lose the
+        // reason the io failed at all.
+        let io = Error::Io("launching the game", std::io::Error::other("boom"));
+        assert_eq!(io.to_string(), "launching the game: boom");
+        assert_eq!(io.source().expect("should chain").to_string(), "boom");
     }
 
     #[test]
