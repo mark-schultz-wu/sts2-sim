@@ -1,8 +1,15 @@
-# sts_oracle
+# sts2_headless
 
-A Slay the Spire 2 mod that turns the real game into a differential-testing
-oracle: it runs the game headless and answers questions about what the game
-does, so a reimplementation can be checked against it step by step.
+A Slay the Spire 2 mod that drives the real game with no renderer and no human,
+and reports what it did — over a line-delimited JSON protocol.
+
+Nothing here knows what it is being used *for*. Driving a game and observing the
+result is the whole job; checking a reimplementation against it is what the
+client on the other end does.
+
+Reproducibility is not this mod's job either — [`sts2_determinism`](../sts2_determinism/README.md)
+owns that, and the manifest declares a dependency so the loader runs it first
+and refuses to load this without it.
 
 ---
 
@@ -72,7 +79,7 @@ strictly true. All of it is deliberate; none of it is hidden:
 
 **Verified by an automatic check, re-run every build:**
 
-- 31 assertions in `SelfTest.cs` (`STS_ORACLE_MODE=selftest`), covering all nine
+- 31 assertions in `SelfTest.cs` (`STS2_HEADLESS_MODE=selftest`), covering all nine
   of the game's legality-hook overrides. The list of hooks is discovered by
   reflection over the game assembly, so a hook added by a future patch shows up
   as `UNCOVERED` rather than silently going untested.
@@ -127,10 +134,10 @@ new code that starts work outside the action queue must register it with
 
 ```bash
 ./deploy.sh          # build, install into <gamedir>/mods/, enable mods
-cd "$STS2_GAME_DIR" && STS_ORACLE_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
+cd "$STS2_GAME_DIR" && STS2_HEADLESS_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
 ```
 
-Modes, via `STS_ORACLE_MODE`:
+Modes, via `STS2_HEADLESS_MODE`:
 
 | mode | what it does |
 |---|---|
@@ -138,8 +145,8 @@ Modes, via `STS_ORACLE_MODE`:
 | `selftest` | runs the legality suite and exits non-zero on failure |
 | `serve` | speaks the protocol over the TCP port the client passed in |
 
-Other variables: `STS_ORACLE_PORT` (required by `serve`) + `STS_ORACLE_TOKEN`,
-and `STS_ORACLE_OBS=full`.
+Other variables: `STS2_HEADLESS_PORT` (required by `serve`) + `STS2_HEADLESS_TOKEN`,
+and `STS2_HEADLESS_OBS=full`.
 
 ## The version pin
 

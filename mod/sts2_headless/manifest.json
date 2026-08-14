@@ -1,0 +1,16 @@
+{
+  "id": "sts2_headless",
+  "name": "STS2 Headless",
+  "author": "sts",
+  "description": "Drives the game headlessly and reports what it does, over a line protocol. Not a gameplay mod.",
+  "version": "0.1.0",
+  "has_dll": true,
+  "has_pck": false,
+  "affects_gameplay": false,
+  "min_game_version": "0.107.1",
+  "dependencies": [
+    {
+      "id": "sts2_determinism"
+    }
+  ]
+}

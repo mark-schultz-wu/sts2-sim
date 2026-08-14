@@ -20,7 +20,7 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace StsOracle;
+namespace Sts2Headless;
 
 /// <summary>
 /// Checks that the oracle's reported state actually reflects the game's rules.
@@ -79,7 +79,7 @@ internal static class SelfTest
         // It leaves the relic behind and stands on the last row, so the rest of
         // the suite gets a clean run rather than inheriting either.
         await BossSurvivesFreeTravel(state);
-        state = await OracleDriver.Restart();
+        state = await Driver.Restart();
 
         // Out of combat first: map legality needs a map position, not a fight.
         covered.Add("WingedBoots");
@@ -92,29 +92,29 @@ internal static class SelfTest
         // the rule under test. Order-dependent tests are worse than missing
         // ones, because they fail in ways that read as product bugs.
         covered.Add("Enthralled");
-        await OracleDriver.EnterFight(state);
+        await Driver.EnterFight(state);
         await BlockedByHookIsReported(state);
 
         covered.Add("SmoggyPower");
-        await OracleDriver.EnterFight(state);
+        await Driver.EnterFight(state);
         await AfflictedCardIsBlocked<SmoggyPower, Smog>(state, "SmoggyPower");
 
         covered.Add("ChainsOfBindingPower");
-        await OracleDriver.EnterFight(state);
+        await Driver.EnterFight(state);
         await AfflictedCardIsBlocked<ChainsOfBindingPower, Bound>(state, "ChainsOfBindingPower", afflict: 2, playAfflictedFirst: true);
 
         covered.Add("RingingPower");
-        await OracleDriver.EnterFight(state);
+        await Driver.EnterFight(state);
         await AfflictedCardIsBlocked<RingingPower, Ringing>(state, "RingingPower", playAnyFirst: true);
 
         covered.Add("SlothPower");
-        await OracleDriver.EnterFight(state);
+        await Driver.EnterFight(state);
         await BlocksAfterNPlays(state, "SlothPower", plays: 1, arrange: async me =>
             await PowerCmd.Apply<SlothPower>(new BlockingPlayerChoiceContext(), me.Creature,
                 amount: 1m, applier: null, cardSource: null, silent: true));
 
         covered.Add("Normality");
-        await OracleDriver.EnterFight(state);
+        await Driver.EnterFight(state);
         await BlocksAfterNPlays(state, "Normality", plays: 3, arrange: async me =>
         {
             CardModel normality = ModelDb.Card<Normality>().ToMutable();
@@ -123,7 +123,7 @@ internal static class SelfTest
         });
 
         covered.Add("VelvetChoker");
-        await OracleDriver.EnterFight(state);
+        await Driver.EnterFight(state);
         await BlocksAfterNPlays(state, "VelvetChoker", plays: 6, arrange: async me =>
             await RelicCmd.Obtain(ModelDb.Relic<VelvetChoker>().ToMutable(), me));
 
@@ -261,7 +261,7 @@ internal static class SelfTest
     /// <remarks>
     /// Unlike every other case here, this rule cannot be switched on mid-run:
     /// modifiers are fixed when the run is created (see
-    /// <c>OracleDriver.Restart</c>). So the metamorphic pair is two runs at the
+    /// <c>Driver.Restart</c>). So the metamorphic pair is two runs at the
     /// same seed rather than two moments in one, and the comparison is only
     /// meaningful if the runs are otherwise identical — which is exactly R1's
     /// determinism claim, asserted here on the map before it is relied on.
@@ -273,7 +273,7 @@ internal static class SelfTest
     /// </remarks>
     private static async Task<bool> FlightWidensTheMap()
     {
-        RunState plain = await OracleDriver.Restart();
+        RunState plain = await Driver.Restart();
         MapPoint? spot = Discriminating(plain);
         if (spot == null)
         {
@@ -285,7 +285,7 @@ internal static class SelfTest
         Check("Flight: free travel is off without the modifier", !Hook.ShouldAllowFreeTravel(plain));
         List<string> before = Travelable(plain);
 
-        RunState flying = await OracleDriver.Restart(ModelDb.Modifier<Flight>().ToMutable());
+        RunState flying = await Driver.Restart(ModelDb.Modifier<Flight>().ToMutable());
 
         // Without this the case could "prove" that Flight widens the map when
         // all it did was generate a different one.
@@ -444,7 +444,7 @@ internal static class SelfTest
         if (playAfflictedFirst)
         {
             Check($"{label}: an afflicted card was played",
-                await OracleDriver.PlayOneCard(state, c => c.Affliction?.Id.Entry == afflictionId));
+                await Driver.PlayOneCard(state, c => c.Affliction?.Id.Entry == afflictionId));
         }
         else if (playAnyFirst)
         {
@@ -453,7 +453,7 @@ internal static class SelfTest
             // unsatisfiable — the diagnostic showed all five cards as /RINGING.
             // The first play is permitted regardless; it is the next one the
             // hook forbids.
-            bool played = await OracleDriver.PlayOneCard(state);
+            bool played = await Driver.PlayOneCard(state);
             if (!played)
             {
                 Log.Error($"[selftest]   hand: {string.Join(" | ", pcs.Hand.Cards.Select(c => $"{c.Id.Entry}"
@@ -551,7 +551,7 @@ internal static class SelfTest
                 await CardPileCmd.Draw(new BlockingPlayerChoiceContext(), 5m, me);
             }
 
-            if (!await OracleDriver.PlayOneCard(state))
+            if (!await Driver.PlayOneCard(state))
             {
                 break;
             }

@@ -20,7 +20,7 @@ using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace StsOracle;
+namespace Sts2Headless;
 
 /// <summary>
 /// The line-delimited JSON protocol the simulator drives the oracle with (R10).
@@ -60,16 +60,16 @@ internal static class Protocol
         // Once per process, not per run: UseSelector throws if one is already
         // active, and CardSelectCmd.Reset leaves the stack alone while TestMode
         // is on, so this survives every Restart.
-        CardSelectCmd.UseSelector(new OracleCardSelector());
+        CardSelectCmd.UseSelector(new HeadlessCardSelector());
         GameErrors.Watch();
-        OracleDriver.WatchForWins();
+        Driver.WatchForWins();
 
         // With TestMode on and no testSelector, RewardsSet.Offer takes *every*
         // reward itself. So installing this does not add a decision point; it
         // takes one away from the game and gives it to the client.
         RewardsSet.testSelector = TakeRewards;
 
-        Log.Info($"[oracle] serving protocol v{Version} over {_channel.Describe}");
+        Log.Info($"[headless] serving protocol v{Version} over {_channel.Describe}");
 
         await Send(new Dictionary<string, object?>
         {
@@ -88,7 +88,7 @@ internal static class Protocol
                 // The peer going away is a normal shutdown, not an error: a
                 // client that crashes should not leave a game process behind
                 // (R14), which is what a blocking read with no EOF handling does.
-                Log.Info("[oracle] channel closed; shutting down");
+                Log.Info("[headless] channel closed; shutting down");
                 return;
             }
 
@@ -162,7 +162,7 @@ internal static class Protocol
                     return false;
 
                 case "enter_fight":
-                    await OracleDriver.EnterFight(_state);
+                    await Driver.EnterFight(_state);
                     await Observe(req, "enter_fight");
                     return false;
 
@@ -217,7 +217,7 @@ internal static class Protocol
             // The game throwing must reach the client. Swallowing it here would
             // leave the simulator comparing against a state the oracle no longer
             // understands.
-            Log.Error($"[oracle] {cmd} failed: {e}");
+            Log.Error($"[headless] {cmd} failed: {e}");
             await Error(cmd, $"{e.GetType().Name}: {e.Message}");
             return false;
         }
@@ -282,7 +282,7 @@ internal static class Protocol
             ? lvl
             : 0;
 
-        _state = await OracleDriver.Restart(seed, character, ascension, Modifiers(req));
+        _state = await Driver.Restart(seed, character, ascension, Modifiers(req));
         await Observe(req, "start");
     }
 
@@ -430,7 +430,7 @@ internal static class Protocol
 
         // The action resumes and may park again, end the turn, or finish the
         // fight; the same wait decides which, so nesting needs no special case.
-        bool resolved = await OracleDriver.WaitForDecisionPoint();
+        bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "answer", resolved);
     }
 
@@ -457,7 +457,7 @@ internal static class Protocol
         }
 
         await RunManager.Instance.EnterRoomDebug(type);
-        bool resolved = await OracleDriver.WaitForDecisionPoint();
+        bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "enter_room", resolved);
     }
 
@@ -539,7 +539,7 @@ internal static class Protocol
                 return;
         }
 
-        bool resolved = await OracleDriver.WaitForDecisionPoint();
+        bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "choose_option", resolved);
     }
 
@@ -584,7 +584,7 @@ internal static class Protocol
             return;
         }
 
-        bool resolved = await OracleDriver.WaitForDecisionPoint();
+        bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "buy", resolved);
     }
 
@@ -706,7 +706,7 @@ internal static class Protocol
 
         var action = new PlayCardAction(card, target);
         RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
-        bool resolved = await OracleDriver.Quiesce(action);
+        bool resolved = await Driver.Quiesce(action);
         await Observe(req, "play_card", resolved);
     }
 
@@ -723,7 +723,7 @@ internal static class Protocol
         int leaving = pcs.TurnNumber;
         var action = new EndPlayerTurnAction(me, leaving);
         RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
-        bool resolved = await OracleDriver.Quiesce(action, turnMustAdvancePast: leaving);
+        bool resolved = await Driver.Quiesce(action, turnMustAdvancePast: leaving);
         await Observe(req, "end_turn", resolved);
     }
 
@@ -732,7 +732,7 @@ internal static class Protocol
     /// </summary>
     /// <remarks>
     /// The digest always ships; the full observation only when asked, per
-    /// request or for the whole session via <c>STS_ORACLE_OBS=full</c>. That is
+    /// request or for the whole session via <c>STS2_HEADLESS_OBS=full</c>. That is
     /// R6's bargain: ~1.6KB a step is wasteful when almost every step agrees,
     /// and R1 means the one step that disagrees can be replayed in full.
     ///
@@ -743,7 +743,7 @@ internal static class Protocol
     /// </remarks>
     private static async Task Observe(JsonElement req, string cmd, bool resolved = true)
     {
-        bool full = OracleDriver.FullObservations
+        bool full = Driver.FullObservations
             || (req.TryGetProperty("full", out JsonElement f) && f.ValueKind == JsonValueKind.True);
 
         // A parked game gets a question rather than an observation. Note this
@@ -779,7 +779,7 @@ internal static class Protocol
         {
             // Reported, never suppressed: the command may have half-happened,
             // and only the client can decide whether to trust the state.
-            Log.Warn($"[oracle] {errors.Count} game error(s) during {cmd}");
+            Log.Warn($"[headless] {errors.Count} game error(s) during {cmd}");
             msg["gameErrors"] = errors;
         }
 
@@ -806,7 +806,7 @@ internal static class Protocol
 
     private static async Task Error(string cmd, string message)
     {
-        Log.Warn($"[oracle] rejecting {cmd}: {message}");
+        Log.Warn($"[headless] rejecting {cmd}: {message}");
         await Send(new Dictionary<string, object?>
         {
             ["type"] = "error",

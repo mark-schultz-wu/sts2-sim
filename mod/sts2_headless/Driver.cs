@@ -24,7 +24,9 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Unlocks;
 
-namespace StsOracle;
+using Sts2Determinism;
+
+namespace Sts2Headless;
 
 /// <summary>
 /// Starts a run at the model layer and reports what the game does, bypassing
@@ -36,7 +38,7 @@ namespace StsOracle;
 /// drives our continuations without a hand-pumped SynchronizationContext, and
 /// what a step costs. It does not yet accept commands or emit observations.
 /// </summary>
-internal static class OracleDriver
+internal static class Driver
 {
     private static readonly Stopwatch Clock = new Stopwatch();
     private static int _actions;
@@ -46,7 +48,7 @@ internal static class OracleDriver
     /// Runs the whole slice, logging each stage so a failure names its own step.
     /// </summary>
     /// <remarks>
-    /// Deliberately not started from <see cref="Oracle.Init"/> directly: mod
+    /// Deliberately not started from <see cref="Headless.Init"/> directly: mod
     /// init runs inside <c>NGame</c> startup, well before the model database is
     /// populated, which is what made the earlier AutoSlay attempt fault.
     /// </remarks>
@@ -61,7 +63,7 @@ internal static class OracleDriver
             await StartRun(state);
             Report(state);
 
-            if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "selftest")
+            if (Environment.GetEnvironmentVariable("STS2_HEADLESS_MODE") == "selftest")
             {
                 await SelfTest.Run(state);
             }
@@ -74,7 +76,7 @@ internal static class OracleDriver
         {
             // A driver that half-works is worse than one that stops: every
             // silent degradation turns a simulator bug into a passing test.
-            Log.Error($"[oracle] driver failed at {Stage}: {e}");
+            Log.Error($"[headless] driver failed at {Stage}: {e}");
         }
         finally
         {
@@ -95,7 +97,7 @@ internal static class OracleDriver
     /// </remarks>
     private static void Quit()
     {
-        Log.Info($"[oracle] quitting after {Clock.Elapsed.TotalSeconds:F1}s");
+        Log.Info($"[headless] quitting after {Clock.Elapsed.TotalSeconds:F1}s");
         NGame.Instance.GetTree().Quit(0);
     }
 
@@ -105,7 +107,7 @@ internal static class OracleDriver
     private static string _seed = "ORACLE1";
 
     public static readonly bool FullObservations =
-        Environment.GetEnvironmentVariable("STS_ORACLE_OBS") == "full";
+        Environment.GetEnvironmentVariable("STS2_HEADLESS_OBS") == "full";
 
     /// <summary>
     /// Waits for the model database, which loads asynchronously during startup.
@@ -133,7 +135,7 @@ internal static class OracleDriver
 
             if (NGame.Instance != null && ModelDb.Contains(typeof(Ironclad)))
             {
-                Log.Info($"[oracle] game loaded after {Clock.Elapsed.TotalSeconds:F1}s");
+                Log.Info($"[headless] game loaded after {Clock.Elapsed.TotalSeconds:F1}s");
                 return;
             }
         }
@@ -167,7 +169,7 @@ internal static class OracleDriver
         RunState state = RunState.CreateForNewRun(
             players, acts, modifiers, GameMode.Standard, ascension, seed);
 
-        Log.Info($"[oracle] run state built: seed={seed} character={character.Id.Entry} "
+        Log.Info($"[headless] run state built: seed={seed} character={character.Id.Entry} "
             + $"ascension={ascension} deck={players[0].Deck.Cards.Count} acts={acts.Count} "
             + $"modifiers=[{string.Join(",", modifiers.Select(m => m.Id.Entry))}]");
         return state;
@@ -234,7 +236,7 @@ internal static class OracleDriver
         string? seed, string? character, int ascension, params ModifierModel[] modifiers)
     {
         Stage = "restarting";
-        Log.Info("[oracle] restarting run");
+        Log.Info("[headless] restarting run");
 
         // Before CleanUp, or the game is left awaiting a task nobody completes.
         Pending.CancelOutstanding("the run was restarted");
@@ -252,13 +254,10 @@ internal static class OracleDriver
     /// </summary>
     private static async Task StartRun(RunState state)
     {
-        // First-time-user prompts both gate progress and write to disk: a driven
-        // fight logged "Player has seen ftue shuffle_ftue!" and then wrote
-        // progress.save. R13 wants the oracle to leave no trace, and an oracle
-        // whose behaviour depends on which tutorials a profile has already seen
-        // is not reproducible either.
-        Stage = "disabling FTUEs";
-        SaveManager.Instance.SetFtuesEnabled(enabled: false);
+        // Per-run reproducibility settings belong to sts2_determinism; this is
+        // the one place that asks for them, so there is one place to check.
+        Stage = "determinism";
+        Determinism.PrepareRun();
 
         Stage = "SetUpTest";
         RunManager run = RunManager.Instance;
@@ -297,7 +296,7 @@ internal static class OracleDriver
         await run.EnterAct(0, doTransition: false);
 
         Stage = "running";
-        Log.Info($"[oracle] run started after {Clock.Elapsed.TotalSeconds:F1}s");
+        Log.Info($"[headless] run started after {Clock.Elapsed.TotalSeconds:F1}s");
     }
 
     /// <summary>
@@ -419,7 +418,7 @@ internal static class OracleDriver
             // a legitimate reason for our decision never to resolve.
             if (!CombatManager.Instance.IsInProgress)
             {
-                Log.Info($"[oracle] {issued} abandoned: combat ended");
+                Log.Info($"[headless] {issued} abandoned: combat ended");
                 return false;
             }
 
@@ -519,7 +518,7 @@ internal static class OracleDriver
             // driver and a slow one look identical from outside the process.
             if (i > 0 && i % 2000 == 0)
             {
-                Log.Info($"[oracle] still waiting after {i}ms: empty={queue.IsEmpty} "
+                Log.Info($"[headless] still waiting after {i}ms: empty={queue.IsEmpty} "
                     + $"running={executor.IsRunning} current={executor.CurrentlyRunningAction} "
                     + $"paused={executor.IsPaused} combat={CombatManager.Instance.IsInProgress} "
                     + $"actionsDisabled={CombatManager.Instance.PlayerActionsDisabled} "
@@ -578,12 +577,12 @@ internal static class OracleDriver
             _checksums++;
             if (_checksums <= 5)
             {
-                Log.Info($"[oracle] checksum: {context}");
+                Log.Info($"[headless] checksum: {context}");
             }
         };
-        run.RoomEntered += () => Log.Info("[oracle] room entered");
-        run.RoomExited += () => Log.Info("[oracle] room exited");
-        run.ActEntered += () => Log.Info("[oracle] act entered");
+        run.RoomEntered += () => Log.Info("[headless] room entered");
+        run.RoomExited += () => Log.Info("[headless] room exited");
+        run.ActEntered += () => Log.Info("[headless] act entered");
     }
 
     /// <summary>
@@ -592,14 +591,14 @@ internal static class OracleDriver
     private static void Report(RunState state)
     {
         Player me = state.Players[0];
-        Log.Info($"[oracle] REACHED act={state.CurrentActIndex} floor={state.TotalFloor} "
+        Log.Info($"[headless] REACHED act={state.CurrentActIndex} floor={state.TotalFloor} "
             + $"hp={me.Creature.CurrentHp}/{me.Creature.MaxHp} gold={me.Gold} "
             + $"relics=[{string.Join(",", me.Relics.Select(r => r.Id.Entry))}] "
             + $"deck={me.Deck.Cards.Count} combat={CombatManager.Instance.IsInProgress}");
         // ToSerializable is the only public way to read every stream at once;
         // RunRngSet exposes the individual streams but no indexer.
         var counters = state.Rng.ToSerializable().Counters;
-        Log.Info($"[oracle] counters: {string.Join(" ", counters.OrderBy(c => c.Key).Select(c => $"{c.Key}={c.Value}"))}");
-        Log.Info($"[oracle] actions={_actions} checksums={_checksums} elapsed={Clock.Elapsed.TotalSeconds:F1}s");
+        Log.Info($"[headless] counters: {string.Join(" ", counters.OrderBy(c => c.Key).Select(c => $"{c.Key}={c.Value}"))}");
+        Log.Info($"[headless] actions={_actions} checksums={_checksums} elapsed={Clock.Elapsed.TotalSeconds:F1}s");
     }
 }

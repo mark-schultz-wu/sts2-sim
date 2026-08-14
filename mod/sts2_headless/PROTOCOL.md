@@ -14,15 +14,15 @@ then launches the game — so the client is already listening and there is no
 port-allocation race and no connect-retry loop.
 
 ```
-STS_ORACLE_MODE=serve STS_ORACLE_PORT=<port> [STS_ORACLE_TOKEN=<token>] \
+STS2_HEADLESS_MODE=serve STS2_HEADLESS_PORT=<port> [STS2_HEADLESS_TOKEN=<token>] \
   ./SlayTheSpire2 --headless --force-steam=off
 ```
 
-With `STS_ORACLE_TOKEN` set, the oracle sends the token as the first line before
+With `STS2_HEADLESS_TOKEN` set, the oracle sends the token as the first line before
 anything else. A loopback listener accepts from any local process, so **the client
 must check it** — the oracle only presents it.
 
-`STS_ORACLE_PORT` is required. There is no stdio fallback: the engine writes ~140
+`STS2_HEADLESS_PORT` is required. There is no stdio fallback: the engine writes ~140
 unprefixed lines to stdout before the oracle emits anything, so responses would
 arrive interleaved with content nobody controls.
 
@@ -67,7 +67,7 @@ Sent unprompted on connect, before any request:
   fully has diverged even if the resulting state looks agreeable.
 - `digest` — always present.
 - `state` — the full observation, only when asked: `"full": true` on the request,
-  or `STS_ORACLE_OBS=full` for the whole session. Roughly 1.6KB. It arrives as a
+  or `STS2_HEADLESS_OBS=full` for the whole session. Roughly 1.6KB. It arrives as a
   nested object, not a string of JSON.
 - `gameErrors` — an array, present only when the game logged errors during the
   command. Never suppressed: the command may have half-happened, and only the

@@ -28,11 +28,11 @@ lint:
 # Every recipe below depends on this, so its check for STS2_GAME_DIR is the one
 # that catches an unloaded .envrc for all of them.
 deploy:
-    ./mod/sts_oracle/deploy.sh
+    ./mod/deploy.sh
 
 # The mod's own legality suite, inside the real game.
 selftest: deploy
-    cd "$STS2_GAME_DIR" && STS_ORACLE_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
+    cd "$STS2_GAME_DIR" && STS2_HEADLESS_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
 
 # The tests that launch the game, ~3s of startup each.
 #

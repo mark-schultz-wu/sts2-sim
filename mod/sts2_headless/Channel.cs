@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Logging;
 
-namespace StsOracle;
+namespace Sts2Headless;
 
 /// <summary>
 /// A line-oriented duplex channel to whoever is driving the oracle.
@@ -76,11 +76,11 @@ internal sealed class Channel
     /// </remarks>
     public static async Task<Channel> Open()
     {
-        string? port = Environment.GetEnvironmentVariable("STS_ORACLE_PORT");
+        string? port = Environment.GetEnvironmentVariable("STS2_HEADLESS_PORT");
         if (string.IsNullOrEmpty(port) || !int.TryParse(port, out int p) || p is < 1 or > 65535)
         {
             throw new ArgumentException(
-                $"STS_ORACLE_PORT must be the port the client is listening on; got '{port}'");
+                $"STS2_HEADLESS_PORT must be the port the client is listening on; got '{port}'");
         }
 
         var client = new TcpClient();
@@ -97,7 +97,7 @@ internal sealed class Channel
         // "something else connected first" from a baffling protocol error into
         // a stated one — and it is the client, not us, that must reject a
         // mismatch, so we simply present it.
-        string? token = Environment.GetEnvironmentVariable("STS_ORACLE_TOKEN");
+        string? token = Environment.GetEnvironmentVariable("STS2_HEADLESS_TOKEN");
         if (!string.IsNullOrEmpty(token))
         {
             await channel.WriteLine(token);

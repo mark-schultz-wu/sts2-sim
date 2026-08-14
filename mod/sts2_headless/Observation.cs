@@ -18,7 +18,7 @@ using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace StsOracle;
+namespace Sts2Headless;
 
 /// <summary>
 /// Everything the simulator is compared against after a decision (R5).
@@ -50,7 +50,7 @@ internal static class Observation
     /// So the steady state compares digests, and the full observation is only
     /// needed for the step that disagrees. **This is affordable precisely
     /// because R1 holds**: a diverging run can be replayed with
-    /// <c>STS_ORACLE_OBS=full</c> and will reproduce exactly, so nothing is lost
+    /// <c>STS2_HEADLESS_OBS=full</c> and will reproduce exactly, so nothing is lost
     /// by not having shipped the bytes the first time.
     ///
     /// Compacting the JSON was the other option and is the worse one: it would

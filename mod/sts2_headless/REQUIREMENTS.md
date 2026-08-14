@@ -119,7 +119,7 @@ that ignores the hook reports the baseline twice and fails. The matrix is
 mechanically derivable — 2 overrides of `ShouldAllowFreeTravel`, 7 of
 `ShouldPlay`, 55 of `IsAllowed`.
 
-*Built:* `SelfTest.cs`, `STS_ORACLE_MODE=selftest`.
+*Built:* `SelfTest.cs`, `STS2_HEADLESS_MODE=selftest`.
 
 **The matrix is discovered, not written down.** Reflection over the game
 assembly finds every non-abstract `AbstractModel` subclass declaring an override
@@ -535,7 +535,7 @@ Digests cut a fight's stream by **99%** — 17 bytes a step against ~1.6KB. (The
 original measurement, 36,410 bytes to 374, was taken over a 22-decision fight;
 the same fight is 17 decisions now that R4's quiescence is correct, so the
 totals moved while the per-step ratio did not.) The full observation is
-available on demand via `STS_ORACLE_OBS=full` or per request,
+available on demand via `STS2_HEADLESS_OBS=full` or per request,
 and that fallback costs nothing precisely **because R1 holds**: the diverging
 run replays exactly. Compacting the JSON was the alternative and is worse — it
 saves perhaps 40% and makes the failure path harder to read, which is the path
@@ -890,7 +890,7 @@ check stays open.
 The consumer is Rust, not a human. Line-delimited JSON, with a version field
 that the simulator checks on connect and refuses to proceed on mismatch.
 
-*Built:* `Protocol.cs` and `Channel.cs`, `STS_ORACLE_MODE=serve`.
+*Built:* `Protocol.cs` and `Channel.cs`, `STS2_HEADLESS_MODE=serve`.
 
 One request per line, one response per request, strictly in order. There is no
 server-initiated traffic after the greeting, so the client never demultiplexes —
@@ -1164,7 +1164,7 @@ Quitting goes through the scene tree, which is how the game exits itself
 (`NGame` calls `GetTree().Quit(0)`), so shutdown takes its normal course.
 
 *Check.* A full run costs ~2.9s wall clock end to end, exits 0, and leaves no
-process behind. `STS_ORACLE_QUIT=0` keeps it up for inspection.
+process behind.
 
 ---
 

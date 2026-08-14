@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Build sts_oracle and install it into the game's mods directory.
+# Build every mod here and install them into the game's mods directory.
 #
 # The game loads mods from <gamedir>/mods/<dir>/, expecting a *.json manifest
-# and an assembly named exactly <manifest id>.dll.
+# and an assembly named exactly <manifest id>.dll. Load order comes from the
+# `dependencies` field in each manifest — the loader topologically sorts on it,
+# and refuses to load a mod whose dependencies are absent, naming them. So the
+# order here does not matter; only that all of them arrive.
 set -euo pipefail
+
+# Dependencies first, so a build failure in one stops before anything installs
+# a half-updated set.
+MODS=(sts2_determinism sts2_headless)
 
 GAME_DIR="${STS2_GAME_DIR:?is not set. The repo .envrc exports it: run 'direnv allow' in the repo root, or set it by hand}"
 PROFILE_DIR="${STS2_PROFILE_DIR:-$HOME/.local/share/SlayTheSpire2/default/1}"
@@ -12,13 +19,17 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}"
 export PATH="$DOTNET_ROOT:$PATH"
 
-dotnet build -c Release -v q --nologo "$HERE/sts_oracle.csproj"
+for mod in "${MODS[@]}"; do
+  dotnet build -c Release -v q --nologo "$HERE/$mod/$mod.csproj"
+done
 
-DEST="$GAME_DIR/mods/sts_oracle"
-mkdir -p "$DEST"
-cp "$HERE/bin/Release/net9.0/sts_oracle.dll" "$DEST/"
-cp "$HERE/manifest.json" "$DEST/"
-echo "installed -> $DEST"
+for mod in "${MODS[@]}"; do
+  DEST="$GAME_DIR/mods/$mod"
+  mkdir -p "$DEST"
+  cp "$HERE/$mod/bin/Release/net9.0/$mod.dll" "$DEST/"
+  cp "$HERE/$mod/manifest.json" "$DEST/"
+  echo "installed -> $DEST"
+done
 
 # Mods stay Disabled until the player has accepted the mod warning. Headless
 # never shows that popup, so set the flag the popup would have set.

@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>12.0</LangVersion>
     <!-- The loader looks for <manifest id>.dll, so this must equal the id. -->
-    <AssemblyName>sts_oracle</AssemblyName>
-    <RootNamespace>StsOracle</RootNamespace>
+    <AssemblyName>sts2_headless</AssemblyName>
+    <RootNamespace>Sts2Headless</RootNamespace>
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
   </PropertyGroup>
 
@@ -28,6 +28,12 @@
     </Reference>
     <Reference Include="0Harmony">
       <HintPath>$(Sts2PinDir)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Supplied at runtime by the sts2_determinism mod, which the manifest
+         declares a dependency on; the loader guarantees it is loaded first. -->
+    <Reference Include="sts2_determinism">
+      <HintPath>../sts2_determinism/bin/Release/net9.0/sts2_determinism.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="GodotSharp">

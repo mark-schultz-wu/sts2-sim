@@ -12,7 +12,7 @@ using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.TestSupport;
 
-namespace StsOracle;
+namespace Sts2Headless;
 
 /// <summary>
 /// A question the game is stopped mid-action waiting for us to answer.
@@ -65,7 +65,7 @@ internal abstract class Pending
         }
 
         Current = pending;
-        Log.Info($"[oracle] pending {pending.Kind}");
+        Log.Info($"[headless] pending {pending.Kind}");
     }
 
     /// <summary>Cleared before completing, so a resumed action may park again.</summary>
@@ -88,7 +88,7 @@ internal abstract class Pending
             return;
         }
 
-        Log.Warn($"[oracle] cancelling pending {pending.Kind}: {why}");
+        Log.Warn($"[headless] cancelling pending {pending.Kind}: {why}");
         Current = null;
         pending.Fail(new OperationCanceledException(why));
     }
@@ -237,7 +237,7 @@ internal sealed class CardSelection : Pending
 /// **synchronous** — by the time the game asks which card, there is no await to
 /// park on. The async <c>RewardsSet.testSelector</c> runs first, so the card
 /// index is gathered here and handed back later by
-/// <see cref="OracleCardSelector"/>. This is the one place the protocol's shape
+/// <see cref="HeadlessCardSelector"/>. This is the one place the protocol's shape
 /// is dictated by a method signature rather than chosen.
 /// </remarks>
 internal sealed class RewardChoice : Pending
@@ -416,7 +416,7 @@ internal sealed class RewardPlan
 /// which would mean the oracle choosing. Neither is acceptable, and this is the
 /// seam the game provides for exactly that reason.
 /// </remarks>
-internal sealed class OracleCardSelector : ICardSelector
+internal sealed class HeadlessCardSelector : ICardSelector
 {
     public Task<IEnumerable<CardModel>> GetSelectedCards(IEnumerable<CardModel> options, int minSelect, int maxSelect)
     {

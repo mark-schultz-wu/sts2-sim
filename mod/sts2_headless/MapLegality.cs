@@ -3,7 +3,7 @@ using System.Linq;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace StsOracle;
+namespace Sts2Headless;
 
 /// <summary>
 /// Which map points may be travelled to next.

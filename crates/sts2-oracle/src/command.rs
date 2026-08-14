@@ -1,6 +1,6 @@
 //! The commands the oracle accepts.
 //!
-//! See [PROTOCOL.md](../../../mod/sts_oracle/PROTOCOL.md) for what each argument
+//! See [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) for what each argument
 //! means.
 
 use serde::{Serialize, Serializer, ser::SerializeMap};

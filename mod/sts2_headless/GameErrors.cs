@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using MegaCrit.Sts2.Core.Logging;
 
-namespace StsOracle;
+namespace Sts2Headless;
 
 /// <summary>
 /// Errors the game logged while handling a command.

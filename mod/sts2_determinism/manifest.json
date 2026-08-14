@@ -1,0 +1,11 @@
+{
+  "id": "sts2_determinism",
+  "name": "STS2 Determinism",
+  "author": "sts",
+  "description": "Makes the game reproducible: same seed, same run. Changes no rules and adds no content.",
+  "version": "0.1.0",
+  "has_dll": true,
+  "has_pck": false,
+  "affects_gameplay": false,
+  "min_game_version": "0.107.1"
+}

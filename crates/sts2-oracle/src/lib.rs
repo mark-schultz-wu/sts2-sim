@@ -1,11 +1,11 @@
-//! A client for the `sts_oracle` mod.
+//! A client for the `sts2_headless` mod.
 //!
 //! The oracle is the real game, run headless, driven one decision at a time. This
 //! crate owns the transport and nothing above it: launching the game, the
 //! handshake, and one typed request/response pair per call. What the state
 //! *means* is deliberately left alone — see [`response`].
 //!
-//! [PROTOCOL.md](../../../mod/sts_oracle/PROTOCOL.md) is the contract this
+//! [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) is the contract this
 //! implements.
 //!
 //! ```no_run
@@ -156,16 +156,16 @@ impl Oracle {
         let mut proc = Proc::new(&binary);
         proc.current_dir(&config.game_dir)
             .args(["--headless", "--force-steam=off"])
-            .env("STS_ORACLE_MODE", "serve")
-            .env("STS_ORACLE_PORT", port.to_string())
-            .env("STS_ORACLE_TOKEN", &token)
+            .env("STS2_HEADLESS_MODE", "serve")
+            .env("STS2_HEADLESS_PORT", port.to_string())
+            .env("STS2_HEADLESS_TOKEN", &token)
             // Always. The digest-only mode saves bandwidth and log size, not
             // time -- R8 measures the two within 5% of each other, because a
             // decision costs frame-boundary latency rather than serialisation.
             // Paying ~200KB/s to make `state` unconditional is the better trade,
             // and it is what lets Observation and Pending carry a Value rather
             // than an Option nobody can reason about.
-            .env("STS_ORACLE_OBS", "full")
+            .env("STS2_HEADLESS_OBS", "full")
             .stdin(Stdio::null())
             .stdout(stdio())
             .stderr(stdio());
