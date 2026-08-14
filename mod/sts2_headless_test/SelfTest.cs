@@ -20,7 +20,10 @@ using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Runs;
 
-namespace Sts2Headless;
+using MegaCrit.Sts2.Core.Modding;
+using Sts2Headless;
+
+namespace Sts2HeadlessTest;
 
 /// <summary>
 /// Checks that the oracle's reported state actually reflects the game's rules.
@@ -49,7 +52,8 @@ namespace Sts2Headless;
 /// untested. Teaching the suite to construct a case is manual; noticing that a
 /// case exists is not.
 /// </remarks>
-internal static class SelfTest
+[ModInitializer(nameof(Init))]
+public static class SelfTest
 {
     private static int _passed;
     private static int _failed;
@@ -66,6 +70,27 @@ internal static class SelfTest
         ("ShouldAllowFreeTravel", Array.Empty<Type>()),
         ("ShouldPlay", new[] { typeof(CardModel), typeof(AutoPlayType) }),
     };
+
+    /// <summary>
+    /// Entry point. Claims <c>STS2_HEADLESS_MODE=selftest</c>; the driver mod
+    /// claims <c>serve</c> and ignores this one.
+    /// </summary>
+    /// <remarks>
+    /// Its own mod so the shipped driver carries no tests. The suite has to run
+    /// inside the game — it reflects over the assembly to discover every
+    /// legality hook, which is what makes an unlisted hook show up as
+    /// <c>UNCOVERED</c> rather than silently untested — so it cannot become an
+    /// ordinary out-of-process test.
+    /// </remarks>
+    public static void Init()
+    {
+        if (Environment.GetEnvironmentVariable("STS2_HEADLESS_MODE") == "selftest")
+        {
+            // Not awaited: Init must return so startup can finish populating the
+            // model database, which the driver's first stage waits for.
+            _ = Driver.Run(Run);
+        }
+    }
 
     public static async Task Run(RunState state)
     {

@@ -38,7 +38,7 @@ namespace Sts2Headless;
 /// drives our continuations without a hand-pumped SynchronizationContext, and
 /// what a step costs. It does not yet accept commands or emit observations.
 /// </summary>
-internal static class Driver
+public static class Driver
 {
     private static readonly Stopwatch Clock = new Stopwatch();
     private static int _actions;
@@ -52,8 +52,39 @@ internal static class Driver
     /// init runs inside <c>NGame</c> startup, well before the model database is
     /// populated, which is what made the earlier AutoSlay attempt fault.
     /// </remarks>
-    public static async Task Start()
+    /// <summary>
+    /// Brings a run up, hands it to <paramref name="body"/>, and ends the
+    /// process when that returns.
+    /// </summary>
+    /// <remarks>
+    /// Every consumer goes through here rather than assembling the lifecycle
+    /// itself, which is what makes it possible for one to live in another mod:
+    /// the selftest suite and the protocol server differ only in the body.
+    ///
+    /// It also means the reproducibility check happens once, in the one place
+    /// every driver passes through, rather than in each entry point that might
+    /// forget it.
+    /// </remarks>
+    public static async Task Run(Func<RunState, Task> body)
     {
+        // Loading first is not the same as having succeeded: a build mismatch
+        // leaves the determinism mod loaded, inert, and the game untouched.
+        // Driving a game nobody made reproducible is worse than not driving it.
+        //
+        // Exit rather than return. Nothing else is going to drive this process,
+        // and nothing else is going to stop it either -- a headless game with no
+        // driver runs until something external kills it, which is how this
+        // refusal first presented: as a hang, with the reason sitting in a log
+        // nobody was reading.
+        if (!Determinism.Active)
+        {
+            Log.Error(
+                "[headless] refusing to start: sts2_determinism loaded but did not activate, "
+                + "so the game has not been made reproducible. Exiting.");
+            Environment.Exit(1);
+            return;
+        }
+
         Clock.Start();
         try
         {
@@ -63,14 +94,7 @@ internal static class Driver
             await StartRun(state);
             Report(state);
 
-            if (Environment.GetEnvironmentVariable("STS2_HEADLESS_MODE") == "selftest")
-            {
-                await SelfTest.Run(state);
-            }
-            else
-            {
-                await Protocol.Serve(state);
-            }
+            await body(state);
         }
         catch (Exception e)
         {

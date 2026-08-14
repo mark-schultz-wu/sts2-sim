@@ -1,7 +1,6 @@
 using System;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
-using Sts2Determinism;
 
 namespace Sts2Headless;
 
@@ -13,52 +12,38 @@ namespace Sts2Headless;
 /// Reproducibility is not this mod's job — <c>sts2_determinism</c> owns it, and
 /// the manifest declares a dependency so the loader runs that one first. The
 /// loader refuses to load this mod at all if that one is absent, naming it.
+///
+/// Testing is not this mod's job either. <c>sts2_headless_test</c> carries the
+/// legality suite and claims <c>selftest</c> for itself, so the shipped driver
+/// contains no tests and installing it does not install them.
 /// </remarks>
 [ModInitializer(nameof(Init))]
 public static class Headless
 {
-    public static bool Active { get; private set; }
-
     public static void Init()
     {
         // Configured by environment rather than command line: Godot owns argv,
         // and unrecognised flags there are its business, not ours.
         string? mode = Environment.GetEnvironmentVariable("STS2_HEADLESS_MODE");
-        if (mode is not ("serve" or "selftest"))
+        switch (mode)
         {
-            if (mode != null)
-            {
+            case "serve":
+                // Not awaited: Init must return so startup can finish populating
+                // the model database, which the driver's first stage waits for.
+                // Driver.Run owns the rest of the lifecycle, including the
+                // reproducibility check.
+                _ = Driver.Run(Protocol.Serve);
+                break;
+
+            // Claimed by sts2_headless_test, which may or may not be installed.
+            // Named here so a typo still gets a warning rather than silence.
+            case "selftest":
+            case null:
+                break;
+
+            default:
                 Log.Warn($"[headless] unknown STS2_HEADLESS_MODE '{mode}', doing nothing");
-            }
-
-            // Installed but not asked to do anything. Say nothing and touch
-            // nothing — including when the determinism mod is inert, since
-            // nobody is relying on it either.
-            return;
+                break;
         }
-
-        // Loading first is not the same as having succeeded: a build mismatch
-        // leaves the determinism mod loaded, inert, and the game untouched.
-        // Driving a game nobody made reproducible is worse than not driving it.
-        if (!Determinism.Active)
-        {
-            // Exit rather than return. Nothing else is going to drive this
-            // process, and nothing else is going to stop it either — a headless
-            // game with no driver runs until something external kills it, which
-            // is how this refusal first presented: as a hang, with the reason
-            // sitting in a log nobody was reading.
-            Log.Error(
-                "[headless] refusing to start: sts2_determinism loaded but did not activate, "
-                + "so the game has not been made reproducible. Exiting.");
-            Environment.Exit(1);
-            return;
-        }
-
-        Active = true;
-        Log.Info("[headless] active");
-
-        // Not awaited: Init must return so startup can finish populating the
-        // model database, which the driver's first stage waits for.
-        _ = Driver.Start();
     }
 }

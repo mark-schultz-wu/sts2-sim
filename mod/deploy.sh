@@ -10,7 +10,7 @@ set -euo pipefail
 
 # Dependencies first, so a build failure in one stops before anything installs
 # a half-updated set.
-MODS=(sts2_determinism sts2_headless)
+MODS=(sts2_determinism sts2_headless sts2_headless_test)
 
 GAME_DIR="${STS2_GAME_DIR:?is not set. The repo .envrc exports it: run 'direnv allow' in the repo root, or set it by hand}"
 PROFILE_DIR="${STS2_PROFILE_DIR:-$HOME/.local/share/SlayTheSpire2/default/1}"

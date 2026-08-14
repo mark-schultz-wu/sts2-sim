@@ -79,7 +79,8 @@ strictly true. All of it is deliberate; none of it is hidden:
 
 **Verified by an automatic check, re-run every build:**
 
-- 31 assertions in `SelfTest.cs` (`STS2_HEADLESS_MODE=selftest`), covering all nine
+- 31 assertions in [`sts2_headless_test`](../sts2_headless_test/README.md)
+  (`STS2_HEADLESS_MODE=selftest`), covering all nine
   of the game's legality-hook overrides. The list of hooks is discovered by
   reflection over the game assembly, so a hook added by a future patch shows up
   as `UNCOVERED` rather than silently going untested.
@@ -142,7 +143,7 @@ Modes, via `STS2_HEADLESS_MODE`:
 | mode | what it does |
 |---|---|
 | *(unset)* | mod loads and does nothing |
-| `selftest` | runs the legality suite and exits non-zero on failure |
+| `selftest` | claimed by `sts2_headless_test`; does nothing if that mod is not installed |
 | `serve` | speaks the protocol over the TCP port the client passed in |
 
 Other variables: `STS2_HEADLESS_PORT` (required by `serve`) + `STS2_HEADLESS_TOKEN`,

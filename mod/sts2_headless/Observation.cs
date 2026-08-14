@@ -34,7 +34,7 @@ namespace Sts2Headless;
 /// fill is reported absent, so a simulator disagreement surfaces rather than
 /// being papered over by a shared zero (R12).
 /// </remarks>
-internal static class Observation
+public static class Observation
 {
     private static readonly JsonSerializerOptions Json = new JsonSerializerOptions { WriteIndented = false };
 
@@ -197,7 +197,7 @@ internal static class Observation
     /// Where a field's category *is* fixed — a power, a relic, an orb — the bare
     /// entry stays, because there is nothing to disambiguate.
     /// </remarks>
-    internal static string Id(ModelId id) => id.Category + "/" + id.Entry;
+    public static string Id(ModelId id) => id.Category + "/" + id.Entry;
 
     private static Dictionary<string, object?> Describe(Creature c)
     {

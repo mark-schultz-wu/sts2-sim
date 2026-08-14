@@ -1,0 +1,16 @@
+{
+  "id": "sts2_headless_test",
+  "name": "STS2 Headless Test",
+  "author": "sts",
+  "description": "The legality suite for sts2_headless, run inside the real game. Install only to run it.",
+  "version": "0.1.0",
+  "has_dll": true,
+  "has_pck": false,
+  "affects_gameplay": false,
+  "min_game_version": "0.107.1",
+  "dependencies": [
+    {
+      "id": "sts2_headless"
+    }
+  ]
+}
