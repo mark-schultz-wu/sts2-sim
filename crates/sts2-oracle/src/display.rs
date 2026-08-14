@@ -212,6 +212,24 @@ fn combat_of(f: &mut fmt::Formatter<'_>, combat: &Value) -> fmt::Result {
         }
         if let Some(intent) = c.str_at("intent") {
             line.push_str(&format!(" → {intent}"));
+            // A move carries a list of intents, so an attack that also blocks
+            // reports both. Only attacks have numbers; the rest name themselves,
+            // because the game has no amount to report for them either.
+            let detail: Vec<String> = c
+                .list_at("intents")
+                .iter()
+                .map(|i| {
+                    let kind = i.str_at("type").unwrap_or("?").to_lowercase();
+                    match (i.int_at("damage"), i.int_at("repeats")) {
+                        (Some(d), Some(r)) if r > 1 => format!("{kind} {d}×{r}"),
+                        (Some(d), _) => format!("{kind} {d}"),
+                        _ => kind,
+                    }
+                })
+                .collect();
+            if !detail.is_empty() {
+                line.push_str(&format!(" ({})", detail.join(", ")));
+            }
         }
         let powers: Vec<String> = c
             .list_at("powers")
@@ -477,6 +495,7 @@ mod tests {
                     {"id": 1, "side": "Enemy", "model": "MONSTER/BOWLBUG_ROCK",
                      "hp": 48, "maxHp": 48, "block": 0, "alive": true,
                      "intent": "HEADBUTT_MOVE",
+                     "intents": [{"type": "Attack", "damage": 12, "repeats": 1}],
                      "powers": [{"id": "IMBALANCED_POWER", "amount": 1}]}
                 ],
                 "hand": ["STRIKE_IRONCLAD"],
@@ -491,12 +510,35 @@ mod tests {
         assert!(out.contains("turn 1 · round 1 · Play · 3 energy"), "{out}");
         assert!(out.contains("+5 block"), "{out}");
         assert!(out.contains("→ HEADBUTT_MOVE"), "{out}");
+        assert!(out.contains("(attack 12)"), "{out}");
         assert!(out.contains("IMBALANCED_POWER"), "{out}");
         // The category prefix is dropped; the side already says as much.
         assert!(out.contains("BOWLBUG_ROCK"), "{out}");
         assert!(!out.contains("MONSTER/"), "{out}");
         // The hand carries its playable target ids.
         assert!(out.contains("→ 1"), "{out}");
+    }
+
+    /// A move can carry several intents, and only attacks have a number.
+    #[test]
+    fn a_multi_intent_move_reports_each_part() {
+        let out = observation(json!({
+            "combat": {
+                "turn": 1, "round": 1, "phase": "Play", "energy": 3,
+                "creatures": [
+                    {"id": 1, "side": "Enemy", "model": "MONSTER/NIBBIT",
+                     "hp": 45, "maxHp": 45, "block": 0, "alive": true,
+                     "intent": "FLURRY_MOVE", "powers": [],
+                     "intents": [
+                        {"type": "Attack", "damage": 5, "repeats": 3},
+                        {"type": "Defend"}
+                     ]}
+                ],
+                "hand": [], "legal": [], "draw": [], "discard": [], "exhaust": []
+            }
+        }))
+        .to_string();
+        assert!(out.contains("(attack 5×3, defend)"), "{out}");
     }
 
     /// An empty target list is not "no legal targets" when the card targets the

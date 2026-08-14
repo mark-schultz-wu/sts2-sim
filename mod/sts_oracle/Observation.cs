@@ -14,6 +14,7 @@ using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -225,7 +226,61 @@ internal static class Observation
             // nowhere. A simulator that picks the wrong monster move is exactly
             // the bug this catches, so it is reported here.
             ["intent"] = c.Monster?.NextMove.Id,
+            ["intents"] = Intents(c),
         };
+    }
+
+    /// <summary>
+    /// What the move is actually going to do, the way the game displays it.
+    /// </summary>
+    /// <remarks>
+    /// A move carries a <em>list</em> of intents — <c>MoveState.Intents</c> —
+    /// so an attack that also blocks reports two, in the order the game draws
+    /// them. The move id alone says which move was chosen; this says what it
+    /// amounts to, which is the part a simulator gets wrong quietly.
+    ///
+    /// Only attacks carry numbers, and that is the game's own shape rather than
+    /// a gap here: <c>DefendIntent</c> has no block field at all, and neither do
+    /// the other twelve <c>IntentType</c> values. The base game draws a shield
+    /// with no number for the same reason.
+    /// </remarks>
+    private static List<Dictionary<string, object?>>? Intents(Creature c)
+    {
+        if (c.Monster == null)
+        {
+            return null;
+        }
+
+        var described = new List<Dictionary<string, object?>>();
+        foreach (AbstractIntent intent in c.Monster.NextMove.Intents)
+        {
+            var d = new Dictionary<string, object?>
+            {
+                ["type"] = intent.IntentType.ToString(),
+            };
+
+            if (intent is AttackIntent attack)
+            {
+                // Targets are the monster's targets, which Creature.HoverTips
+                // resolves the same way: CombatState.Allies, owner being the
+                // monster itself.
+                //
+                // GetSingleDamage runs Hook.ModifyDamage, so this is the number
+                // that will actually land rather than the move's base value.
+                // That path goes through LocalContext.GetMe, which returns null
+                // when NetId is unset — and a null there would silently skip the
+                // hook and report damage ignoring Strength and Vulnerable.
+                // Checked: NetId *is* set in a headless serve run, so the hook
+                // does apply. If that ever changes this reports plausible wrong
+                // numbers rather than failing, which is why it is written down.
+                d["damage"] = attack.GetSingleDamage(c.CombatState.Allies, c);
+                d["repeats"] = attack.Repeats;
+            }
+
+            described.Add(d);
+        }
+
+        return described;
     }
 
     /// <summary>

@@ -20,10 +20,11 @@ fn main() -> anyhow::Result<()> {
         index: 0,
         target: None,
     })??;
-    let resp = o.send(&Command::PlayCard {
+    let _ = o.send(&Command::PlayCard {
         index: 0,
         target: None,
     })??;
+    let resp = o.send(&Command::EndTurn)??;
     println!("{resp}");
 
     Ok(())
