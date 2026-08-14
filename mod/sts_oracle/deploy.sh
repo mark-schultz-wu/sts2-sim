@@ -5,7 +5,7 @@
 # and an assembly named exactly <manifest id>.dll.
 set -euo pipefail
 
-GAME_DIR="${STS2_GAME_DIR:-/etc/wolf/profile-data/user/WolfSteam/.steam/steam/steamapps/common/Slay the Spire 2}"
+GAME_DIR="${STS2_GAME_DIR:?is not set. The repo .envrc exports it: run 'direnv allow' in the repo root, or set it by hand}"
 PROFILE_DIR="${STS2_PROFILE_DIR:-$HOME/.local/share/SlayTheSpire2/default/1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
