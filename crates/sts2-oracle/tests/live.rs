@@ -86,7 +86,10 @@ fn the_greeting_matches_what_this_client_speaks() {
     assert_eq!(greeting.assembly_hash, 1_692_500_715);
 
     // Every command this crate can build must be one the oracle accepts, or the
-    // enum has drifted from the protocol it claims to implement.
+    // enum has drifted from the protocol it claims to implement. The oracle also
+    // offers `observe`, which this client deliberately does not build: it only
+    // reports state without advancing, and every response that reports state
+    // already carries it.
     for cmd in [
         "start",
         "enter_fight",
@@ -98,7 +101,6 @@ fn the_greeting_matches_what_this_client_speaks() {
         "enter_room",
         "choose_option",
         "buy",
-        "observe",
         "quit",
     ] {
         assert!(
@@ -165,8 +167,12 @@ fn a_refusal_leaves_the_session_usable() {
     assert_eq!(cmd, "answer");
     assert!(!message.is_empty());
 
-    // The session survived it.
-    let after = observation(oracle.send(&Command::Observe).expect("observe should work"));
+    // The session survived it: a real command still works, and advances.
+    let after = observation(
+        oracle
+            .send(&Command::EnterFight)
+            .expect("the session should still work"),
+    );
     assert!(after.state.is_object());
 }
 

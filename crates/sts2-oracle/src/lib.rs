@@ -29,6 +29,8 @@ mod response;
 pub use command::{Answer, Command, TakeReward};
 pub use response::{CardOption, Question, Response, RewardDetail, RewardKind};
 
+use serde::Deserialize;
+use serde_json::Value;
 use std::fmt;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
@@ -96,13 +98,14 @@ pub struct Oracle {
 
 /// What the oracle said about itself when it connected.
 ///
-/// A client-side value rather than the wire message: [`Response::Hello`] is a
-/// variant like any other, and this is what survives being destructured out of
-/// it and kept.
-#[derive(Debug, Clone)]
+/// Deserialized directly rather than through [`Response`], because the greeting
+/// arrives once before any request and is never a reply to one — putting it in
+/// the response enum would oblige every caller to match a case none can reach.
+#[derive(Debug, Clone, Deserialize)]
 pub struct Greeting {
     pub protocol: u32,
     pub game: String,
+    #[serde(rename = "assemblyHash")]
     pub assembly_hash: i64,
     /// Every command this oracle accepts.
     pub commands: Vec<String>,
@@ -199,20 +202,7 @@ impl Oracle {
         }
 
         let line = read_line(&mut reader)?;
-        let greeting = match parse(&line)? {
-            Response::Hello {
-                protocol,
-                game,
-                assembly_hash,
-                commands,
-            } => Greeting {
-                protocol,
-                game,
-                assembly_hash,
-                commands,
-            },
-            other => return Err(Error::NoGreeting(Box::new(other))),
-        };
+        let greeting = parse_greeting(&line)?;
 
         if greeting.protocol != PROTOCOL_VERSION {
             return Err(Error::ProtocolMismatch {
@@ -352,6 +342,23 @@ fn parse(line: &str) -> Result<Response, Error> {
     serde_json::from_str(line).map_err(|e| Error::Decode(line.to_string(), e))
 }
 
+/// Reads the one message that is not a [`Response`].
+///
+/// Checked in two steps so a wrong message names itself. Deserializing straight
+/// into [`Greeting`] would report a missing `protocol` field when what actually
+/// happened is that the oracle said `bye`.
+fn parse_greeting(line: &str) -> Result<Greeting, Error> {
+    let value: Value =
+        serde_json::from_str(line).map_err(|e| Error::Decode(line.to_string(), e))?;
+    match value.get("type").and_then(Value::as_str) {
+        Some("hello") => {
+            serde_json::from_value(value).map_err(|e| Error::Decode(line.to_string(), e))
+        }
+        Some(other) => Err(Error::NoGreeting(other.to_string())),
+        None => Err(Error::NoGreeting("untyped".to_string())),
+    }
+}
+
 /// Ends the game process, politely if it will go on its own.
 fn reap(child: &mut Child) {
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -401,8 +408,8 @@ pub enum Error {
     WrongPeer,
 
     /// The oracle's first message was not a greeting.
-    #[error("expected a greeting, got {0:?}")]
-    NoGreeting(Box<Response>),
+    #[error("expected a greeting, got a '{0}' message")]
+    NoGreeting(String),
 
     /// The oracle speaks a protocol this crate does not.
     #[error("the oracle speaks protocol v{found}, this client speaks v{expected}")]

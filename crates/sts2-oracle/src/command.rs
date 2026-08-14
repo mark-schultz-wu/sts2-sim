@@ -58,7 +58,6 @@ pub enum Command {
     },
     /// Responds to a [`crate::Response::Pending`].
     Answer(Answer),
-    Observe,
     Quit,
 }
 
@@ -149,10 +148,6 @@ mod tests {
         assert_eq!(
             to_value(Command::EndTurn).unwrap(),
             json!({"cmd": "end_turn"})
-        );
-        assert_eq!(
-            to_value(Command::Observe).unwrap(),
-            json!({"cmd": "observe"})
         );
         assert_eq!(to_value(Command::Quit).unwrap(), json!({"cmd": "quit"}));
     }

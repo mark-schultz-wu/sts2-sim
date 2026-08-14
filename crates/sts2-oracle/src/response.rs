@@ -16,20 +16,17 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-/// One response. Exactly one arrives per request, though not always the kind the
-/// command implies — any command can be answered with [`Response::Pending`].
+/// One response to a request.
+///
+/// Exactly one arrives per request, though not always the kind the command
+/// implies — anything can be answered with [`Response::Pending`].
+///
+/// The greeting is not here. It arrives once, before any request, and
+/// [`crate::Oracle`] consumes it during the handshake — so a variant for it
+/// would be one every caller must match and none can ever receive.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
-    /// Sent unprompted on connect, before any request.
-    Hello {
-        protocol: u32,
-        game: String,
-        #[serde(rename = "assemblyHash")]
-        assembly_hash: i64,
-        commands: Vec<String>,
-    },
-
     /// The command advanced the game, and it is now idle.
     Observation {
         /// Increments per observation or pending, not per request.
@@ -212,26 +209,6 @@ mod tests {
 
     fn parse(line: &str) -> Response {
         serde_json::from_str(line).expect("sample should parse")
-    }
-
-    #[test]
-    fn hello_keeps_its_camel_case_hash() {
-        let r = parse(
-            r#"{"type":"hello","protocol":1,"game":"v0.107.1",
-                "assemblyHash":1692500715,"commands":["start","quit"]}"#,
-        );
-        let Response::Hello {
-            protocol,
-            assembly_hash,
-            commands,
-            ..
-        } = r
-        else {
-            panic!("expected hello");
-        };
-        assert_eq!(protocol, 1);
-        assert_eq!(assembly_hash, 1_692_500_715);
-        assert_eq!(commands.len(), 2);
     }
 
     /// The client always asks for full observations, so one arriving without

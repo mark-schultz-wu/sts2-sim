@@ -9,13 +9,11 @@ fn main() -> anyhow::Result<()> {
         ascension: 0,
         modifiers: vec![],
     };
-    println!("Starting the game");
     let resp: Response = o.send(&start)?;
-    println!("Response Recieved");
-    println!("{:?}", resp);
-    let observe = Command::Observe;
-    let resp = o.send(&observe)?;
-    println!("Current state");
-    println!("{:?}", resp);
+    println!("{resp}");
+
+    let resp = o.send(&Command::EnterFight)?;
+    println!("{resp}");
+
     Ok(())
 }

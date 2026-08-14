@@ -42,17 +42,6 @@ impl Field for Value {
 impl fmt::Display for Response {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Hello {
-                protocol,
-                game,
-                commands,
-                ..
-            } => write!(
-                f,
-                "oracle {game}, protocol v{protocol}, {} commands",
-                commands.len()
-            ),
-
             Self::Observation {
                 seq,
                 cmd,
