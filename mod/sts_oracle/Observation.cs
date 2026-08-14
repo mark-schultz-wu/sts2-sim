@@ -137,16 +137,26 @@ internal static class Observation
                 // count, since empty slots are part of the state. Only Defect
                 // uses these, which is why they went unwritten until `start`
                 // could ask for a character.
-                ["orbs"] = new Dictionary<string, object?>
-                {
-                    ["capacity"] = pcs.OrbQueue.Capacity,
-                    ["queue"] = pcs.OrbQueue.Orbs.Select(o => new Dictionary<string, object?>
+                //
+                // Absent when the subsystem is inert -- no capacity and nothing
+                // channelled -- rather than reported as an empty queue. Exactly
+                // one character overrides BaseOrbSlotCount, so for four runs in
+                // five this field carries no information, and "absent" is the
+                // observation's existing way of saying so. Keyed on capacity
+                // rather than on the character, because a relic can grant slots
+                // to someone who started with none.
+                ["orbs"] = (pcs.OrbQueue.Capacity == 0 && pcs.OrbQueue.Orbs.Count == 0)
+                    ? null
+                    : new Dictionary<string, object?>
                     {
-                        ["id"] = o.Id.Entry,
-                        ["passive"] = o.PassiveVal,
-                        ["evoke"] = o.EvokeVal,
-                    }).ToList(),
-                },
+                        ["capacity"] = pcs.OrbQueue.Capacity,
+                        ["queue"] = pcs.OrbQueue.Orbs.Select(o => new Dictionary<string, object?>
+                        {
+                            ["id"] = o.Id.Entry,
+                            ["passive"] = o.PassiveVal,
+                            ["evoke"] = o.EvokeVal,
+                        }).ToList(),
+                    },
             };
         }
 
@@ -170,12 +180,35 @@ internal static class Observation
 
     private static string Ident(RelicModel relic) => relic.Id.Entry;
 
+    /// <summary>A model id whose category is not fixed by the field it sits in.</summary>
+    /// <remarks>
+    /// Both halves, because <c>Entry</c> alone is ambiguous: three entries exist
+    /// in two categories at once — <c>LOST_WISP</c> (EVENT and RELIC),
+    /// <c>BYRDPIP</c> and <c>PAELS_LEGION</c> (MONSTER and RELIC) — and the last
+    /// two are reachable here, since monsters and relics are both combat hook
+    /// listeners and either can be a card's preventer.
+    ///
+    /// Written as <c>CATEGORY/ENTRY</c> rather than a nested object: one string
+    /// and one field, the way <see cref="Ident(CardModel)"/> already packs a
+    /// card's identity, and cheap on a field that appears once per creature and
+    /// once per playable card in every observation.
+    ///
+    /// Where a field's category *is* fixed — a power, a relic, an orb — the bare
+    /// entry stays, because there is nothing to disambiguate.
+    /// </remarks>
+    internal static string Id(ModelId id) => id.Category + "/" + id.Entry;
+
     private static Dictionary<string, object?> Describe(Creature c)
     {
         return new Dictionary<string, object?>
         {
             ["id"] = c.CombatId,
-            ["model"] = c.Monster?.Id.Entry ?? c.Player?.Character.Id.Entry,
+            // `Creature.ModelId` is the game's own rule for which of the two this
+            // is, and it keys on `IsPlayer` rather than on `Side` — a pet fights
+            // on the player's side while still being a monster, so the sibling
+            // `side` field below does not determine the category. Guarded because
+            // that property dereferences whichever of the two it picks.
+            ["model"] = (c.Monster != null || c.Player != null) ? Id(c.ModelId) : null,
             ["side"] = c.Side.ToString(),
             ["hp"] = c.CurrentHp,
             ["maxHp"] = c.MaxHp,
@@ -218,7 +251,11 @@ internal static class Observation
                 ["target"] = card.TargetType.ToString(),
                 ["playable"] = canPlay,
                 ["reason"] = reason == UnplayableReason.None ? null : reason.ToString(),
-                ["preventer"] = preventer?.Id.Entry,
+                // Any combat hook listener can be the one that said no: a power,
+                // the monster itself, a relic, a potion, an orb, a card, an
+                // affliction, an enchantment, a run modifier, a badge. So the
+                // category travels with it.
+                ["preventer"] = preventer is null ? null : Id(preventer.Id),
                 ["targets"] = alive.Where(card.CanPlayTargeting).Select(c => c.CombatId).ToList(),
             };
         }

@@ -72,10 +72,15 @@ strictly true. All of it is deliberate; none of it is hidden:
 
 **Verified by an automatic check, re-run every build:**
 
-- 28 assertions in `SelfTest.cs` (`STS_ORACLE_MODE=selftest`), covering all nine
+- 31 assertions in `SelfTest.cs` (`STS_ORACLE_MODE=selftest`), covering all nine
   of the game's legality-hook overrides. The list of hooks is discovered by
   reflection over the game assembly, so a hook added by a future patch shows up
   as `UNCOVERED` rather than silently going untested.
+  - Three of those check the *preventer* a blocked card reports, against the
+    model `CanPlay` itself picked rather than against an expected name. Written
+    the other way round first, they failed: an afflicted card is blocked by the
+    power its affliction applied, not by the affliction, because powers come
+    first in the hook listener order and `ShouldPlay` returns the first refusal.
 - Several of those tests are **mutation-tested**: the oracle was deliberately
   broken to confirm the test fails, then fixed to confirm it passes. A test that
   has never been seen to fail is not evidence.
@@ -133,9 +138,32 @@ Modes, via `STS_ORACLE_MODE`:
 | `selftest` | runs the legality suite and exits non-zero on failure |
 | `serve` | speaks the protocol; TCP if `STS_ORACLE_PORT` is set, else stdin/stdout |
 | `drive` | plays one fight with a greedy policy, for timing |
+| `dump` | writes every id, stat and closed domain the game knows, then quits |
 
 Other variables: `STS_ORACLE_SEED`, `STS_ORACLE_PORT` + `STS_ORACLE_TOKEN`,
-`STS_ORACLE_OBS=full`, `STS_ORACLE_QUIT=0` (stay up for inspection).
+`STS_ORACLE_OBS=full`, `STS_ORACLE_QUIT=0` (stay up for inspection),
+`STS_ORACLE_DUMP=<path>` (where `dump` writes; defaults to `model-ids.json`).
+
+### What `dump` is for
+
+The Rust client's identifiers are **generated from this file**, not written by
+hand, so anything it gets wrong becomes a client that is wrong in the same way.
+It starts no run — it waits for the model database, writes the file, and quits.
+
+It asks the game five separate questions, because no single registry answers
+them all:
+
+| section | source | why not somewhere easier |
+|---|---|---|
+| `categories` | `ModelDb.AllAbstractModelSubtypes` | ids are derived from C# type names and written down nowhere |
+| `enums` | reflection over `CardType`, `CardRarity`, `TargetType`, `CardKeyword` | a domain inferred from observed values omits members no content uses — no card has `CardRarity.None` |
+| `cards` | each card's registered instance | `Type`, `Rarity`, `TargetType` and `EnergyCost` are constants wearing the shape of overrides |
+| `intents` | every monster's `GenerateMoveStateMachine()` | `MoveState.StateId` is a literal inside each monster; ten monsters need `ToMutable()` copies or they throw `CanonicalModelException` |
+| `restSiteOptions`, `eventOptions` | subclass walk; loc tables **and** `AllPossibleOptions` | neither event registry is complete alone — the loc table misses the options Neow and Darv synthesise per relic, and `AllPossibleOptions` exists on only nine of sixty-nine events |
+
+Every one of those collects its failures and throws them together rather than
+skipping: a dump missing what it could not read would generate a client silently
+missing the same things.
 
 Two game flags matter: `--headless` (no renderer) and `--force-steam=off`
 (without it Steam init fails three times and startup aborts before mods load).

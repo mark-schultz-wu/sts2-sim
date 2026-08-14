@@ -480,8 +480,36 @@ internal static class SelfTest
             && !e.GetProperty("playable").GetBoolean()
             && (e.GetProperty("reason").GetString() ?? "").Contains(nameof(UnplayableReason.BlockedByHook)));
 
+        // The blocker names itself, with its category, and it is whichever model
+        // the game itself picked — compared against `CanPlay`'s own answer
+        // rather than against a guess.
+        //
+        // Worth knowing: it is *not* the affliction. `IterateHookListeners`
+        // yields `creature.Powers` before cards and their afflictions, and
+        // `ShouldPlay` returns the first listener that refuses, so an afflicted
+        // card is blocked by the power the affliction applied —
+        // BOUND reports POWER/CHAINS_OF_BINDING_POWER, not AFFLICTION/BOUND.
+        // Which makes `preventer` order-sensitive: a simulator has to walk the
+        // listeners in the game's order to name the same one.
+        //
+        // The category has to travel with it because entries are not unique
+        // across categories: BYRDPIP and PAELS_LEGION are each both a MONSTER
+        // and a RELIC, and both are hook listeners.
+        survivor.CanPlay(out UnplayableReason _, out AbstractModel? blocker);
+        string expected = blocker is null ? "null" : Observation.Id(blocker.Id);
+        bool named = Legal(state).Any(e =>
+            (e.GetProperty("card").GetString() ?? "").Contains(afflictionId)
+            && e.GetProperty("preventer").GetString() == expected);
+        if (!named)
+        {
+            Log.Error($"[selftest]   expected {expected}; reported: {string.Join(" | ", Legal(state)
+                .Where(e => !e.GetProperty("playable").GetBoolean())
+                .Select(e => $"{e.GetProperty("card").GetString()} <- {e.GetProperty("preventer").GetString() ?? "null"}"))}");
+        }
+
         Check($"{label}: afflicted card is blocked by hook", blocked);
-        return Check($"{label}: the observation reports it blocked", reported);
+        Check($"{label}: the observation reports it blocked", reported);
+        return Check($"{label}: the observation names {expected} as the preventer", named);
     }
 
     /// <summary>

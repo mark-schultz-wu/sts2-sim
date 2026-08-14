@@ -11,16 +11,43 @@ That makes correctness the hard part rather than speed.
 
 ## Where this is
 
-Nothing is built yet. An earlier `sts-schema` crate tried to define a shared vocabulary
-for both games before anything could produce or consume it, and was removed. It is
-preserved in commit `604ef72` if any of it turns out to be worth recovering.
+**The oracle works.** `mod/sts_oracle/` runs the real game headless and answers questions
+about it: start a seeded run, advance by exactly one decision, report the legal command
+set, observe the whole state in combat, on the map, and in rest sites, events and shops.
+It carries its own legality suite that runs inside the game, and a mode that dumps the
+game's model database. [What the oracle has to do](mod/sts_oracle/REQUIREMENTS.md) is the
+standard it is held to — written to be failed, so the tool can be checked against it
+rather than argued about.
 
-The current goal is a working oracle: ergonomic bindings against the real STS2, modded if
-that is what it takes, that a simulator can be diffed against. Types get defined when
-something on both ends of them exists.
+**The simulator is not started.** That is the next thing, and it is the actual product.
 
-[What the oracle has to do](mod/sts_oracle/REQUIREMENTS.md) is the standard it is held to —
-written to be failed, so the tool can be checked against it rather than argued about.
+## How this is built
+
+A first pass at the Rust side is preserved on the `slop-v2` branch: a protocol layer, a
+generated id crate, and an oracle client. It was abandoned rather than continued, for two
+reasons worth stating so they don't recur.
+
+It was **speculative**. The state was shrunk from 2752 to 400 bytes for a branching search
+that did not exist; 281 event options were given types nothing consumed; a TUI and a trace
+format were planned ahead of the engine they were meant to serve. Every step was locally
+defensible, which is why it kept happening.
+
+And it was **written by the wrong party**. The hard part of this project is not Rust, it
+is knowing what STS2 actually does — knowledge that lives in the decompiled C#. Handing
+over conclusions instead of source leaves the simulator's author without the one thing
+they need.
+
+So:
+
+- **The simulator is written by hand, by Mark**, along with the debugging that comes with
+  it. It is the environment the ML work happens in; knowing how it works is the point.
+- **The mod, and the Rust that interfaces with it, are Claude's**, as are documentation
+  and tests for code that already exists. C# is deliberately out of Mark's way.
+- **Nothing gets built until something demands it.** The oracle is right there — let a
+  failing differential test say what is missing next, rather than designing the build
+  order in advance. No optimisation without a benchmark that justifies it.
+
+Anything on `slop-v2` worth having can be cherry-picked when a caller for it exists.
 
 ## Scope
 
