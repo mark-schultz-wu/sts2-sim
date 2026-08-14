@@ -16,14 +16,16 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-/// One response to a request.
+/// A request that the oracle accepted.
 ///
-/// Exactly one arrives per request, though not always the kind the command
+/// Exactly one reply arrives per request, though not always the kind the command
 /// implies — anything can be answered with [`Response::Pending`].
 ///
-/// The greeting is not here. It arrives once, before any request, and
-/// [`crate::Oracle`] consumes it during the handshake — so a variant for it
-/// would be one every caller must match and none can ever receive.
+/// Two messages are deliberately absent. A [`Refusal`] is the inner `Err` of a
+/// [`crate::Reply`] rather than a variant here, since it is the one reply that
+/// means nothing happened. And the greeting arrives once, before any request,
+/// and [`crate::Oracle`] consumes it during the handshake — so a variant for it
+/// would be one every caller must match and none could ever receive.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
@@ -61,18 +63,26 @@ pub enum Response {
         question: Question,
     },
 
-    /// A refusal. The game did not advance, so there is no state to report —
-    /// which is what [`crate::Command::Observe`] is for. Any outstanding pending
-    /// survives.
-    Error {
-        cmd: String,
-        /// Written to be read: an illegal `travel` lists the legal coords, an
-        /// unplayable card names the reason and what blocked it.
-        message: String,
-    },
-
     /// The reply to [`crate::Command::Quit`], and the last line the oracle sends.
     Bye,
+}
+
+/// A refused command.
+///
+/// Its own type rather than a [`Response`] variant, because it is the one reply
+/// that means the game did not move. [`crate::Oracle::send`] returns it in the
+/// inner `Err` of a [`crate::Reply`]: a refusal fails the command while leaving
+/// the session healthy, which is a different thing from the transport failing.
+///
+/// There is no state on one, for the same reason — nothing advanced, so whatever
+/// the caller already had is still current.
+#[derive(Debug, Clone, Deserialize, thiserror::Error)]
+#[error("refused {cmd}: {message}")]
+pub struct Refusal {
+    pub cmd: String,
+    /// Written to be read: an illegal `travel` lists the legal coords, an
+    /// unplayable card names the reason and what blocked it.
+    pub message: String,
 }
 
 /// What a parked game is asking.
@@ -419,12 +429,12 @@ mod tests {
 
     #[test]
     fn a_refusal_carries_the_command_it_refused() {
-        let r = parse(r#"{"type":"error","cmd":"travel","message":"not travelable"}"#);
-        let Response::Error { cmd, message } = r else {
-            panic!("expected error");
-        };
-        assert_eq!(cmd, "travel");
-        assert_eq!(message, "not travelable");
+        let r: Refusal =
+            serde_json::from_str(r#"{"type":"error","cmd":"travel","message":"not travelable"}"#)
+                .expect("should parse");
+        assert_eq!(r.cmd, "travel");
+        assert_eq!(r.message, "not travelable");
+        assert_eq!(r.to_string(), "refused travel: not travelable");
     }
 
     #[test]

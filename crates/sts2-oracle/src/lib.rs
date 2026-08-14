@@ -18,7 +18,13 @@
 //!     ascension: 0,
 //!     modifiers: vec![],
 //! })?;
-//! assert!(matches!(reply, Response::Observation { .. }));
+//!
+//! // The outer `?` above covered the transport. This is the oracle's answer.
+//! match reply {
+//!     Ok(Response::Observation { digest, .. }) => println!("agreed at {digest}"),
+//!     Ok(other) => println!("{other}"),
+//!     Err(refusal) => println!("{refusal}"),
+//! }
 //! # Ok::<(), sts2_oracle::Error>(())
 //! ```
 
@@ -27,7 +33,16 @@ mod display;
 mod response;
 
 pub use command::{Answer, Command, TakeReward};
-pub use response::{CardOption, Question, Response, RewardDetail, RewardKind};
+pub use response::{CardOption, Question, Refusal, Response, RewardDetail, RewardKind};
+
+/// What one command produced.
+///
+/// The inner `Err` is the oracle declining the command; the session is fine and
+/// the next command will work. Contrast [`Error`], the outer failure, which
+/// means the transport or the game process is in trouble and nothing further
+/// will work. Two layers because they are genuinely two questions: *did this
+/// command happen*, and *can I send another one*.
+pub type Reply = Result<Response, Refusal>;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -227,12 +242,11 @@ impl Oracle {
         &self.greeting
     }
 
-    /// Sends one command and returns the one response to it.
+    /// Sends one command and returns what it produced.
     ///
-    /// A refusal comes back as [`Response::Error`] rather than an `Err`: the
-    /// oracle declining a command is a normal outcome that leaves the session
-    /// healthy. `Err` means the transport or the process is in trouble.
-    pub fn send(&mut self, command: &Command) -> Result<Response, Error> {
+    /// The outer `Result` is whether the exchange happened at all; the inner one
+    /// is whether the oracle accepted the command. See [`Reply`].
+    pub fn send(&mut self, command: &Command) -> Result<Reply, Error> {
         let line = serde_json::to_string(command).map_err(|e| Error::Encode(command.clone(), e))?;
 
         self.writer
@@ -241,8 +255,8 @@ impl Oracle {
             .and_then(|()| self.writer.flush())
             .map_err(|e| Error::Io("sending a command", e))?;
 
-        let reply = read_line(&mut self.reader)?;
-        parse(&reply)
+        let line = read_line(&mut self.reader)?;
+        parse_reply(&line)
     }
 
     /// How long a single command may take before [`Error::Timeout`].
@@ -338,8 +352,18 @@ fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, Error> {
     }
 }
 
-fn parse(line: &str) -> Result<Response, Error> {
-    serde_json::from_str(line).map_err(|e| Error::Decode(line.to_string(), e))
+/// Splits a reply into "the oracle refused" and "the oracle answered".
+///
+/// The discriminator is read before deserializing, so a refusal is routed by
+/// what it says it is rather than by which struct happens to accept it.
+fn parse_reply(line: &str) -> Result<Reply, Error> {
+    let decode = |e| Error::Decode(line.to_string(), e);
+    let value: Value = serde_json::from_str(line).map_err(decode)?;
+
+    if value.get("type").and_then(Value::as_str) == Some("error") {
+        return Ok(Err(serde_json::from_value(value).map_err(decode)?));
+    }
+    Ok(Ok(serde_json::from_value(value).map_err(decode)?))
 }
 
 /// Reads the one message that is not a [`Response`].

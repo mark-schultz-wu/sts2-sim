@@ -21,7 +21,7 @@
 use serde_json::Value;
 use serial_test::serial;
 use std::time::Duration;
-use sts2_oracle::{Answer, Command, Config, Error, Oracle, PROTOCOL_VERSION, Response};
+use sts2_oracle::{Answer, Command, Config, Error, Oracle, PROTOCOL_VERSION, Reply, Response};
 
 /// The seed the mod itself defaults to. Named here so the determinism test is
 /// obviously asking both runs the same question.
@@ -44,8 +44,8 @@ struct Seen {
     game_errors: Option<Vec<String>>,
 }
 
-fn observation(reply: Response) -> Seen {
-    match reply {
+fn observation(reply: Reply) -> Seen {
+    match reply.expect("expected the command to be accepted") {
         Response::Observation {
             resolved,
             digest,
@@ -159,14 +159,12 @@ fn a_refusal_leaves_the_session_usable() {
     start(&mut oracle);
 
     // Nothing is pending, so this is refused — and the refusal names the command.
-    let reply = oracle
+    let refusal = oracle
         .send(&Command::Answer(Answer::Cards(vec![0])))
-        .expect("a refusal is still a reply");
-    let Response::Error { cmd, message } = reply else {
-        panic!("expected a refusal, got {reply:?}");
-    };
-    assert_eq!(cmd, "answer");
-    assert!(!message.is_empty());
+        .expect("a refusal is still a reply, not a transport failure")
+        .expect_err("nothing is pending, so this must be refused");
+    assert_eq!(refusal.cmd, "answer");
+    assert!(!refusal.message.is_empty());
 
     // The session survived it: a real command still works, and advances.
     let after = start(&mut oracle);

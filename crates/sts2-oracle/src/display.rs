@@ -74,8 +74,6 @@ impl fmt::Display for Response {
                 state_of(f, state)
             }
 
-            Self::Error { cmd, message } => write!(f, "refused {cmd}: {message}"),
-
             Self::Bye => write!(f, "bye"),
         }
     }
@@ -408,18 +406,6 @@ mod tests {
             state,
             game_errors: None,
         }
-    }
-
-    #[test]
-    fn a_refusal_reads_as_a_sentence() {
-        let r = Response::Error {
-            cmd: "travel".into(),
-            message: "(2,1) is not travelable from here".into(),
-        };
-        assert_eq!(
-            r.to_string(),
-            "refused travel: (2,1) is not travelable from here"
-        );
     }
 
     #[test]
