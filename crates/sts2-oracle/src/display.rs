@@ -250,7 +250,14 @@ fn combat_of(f: &mut fmt::Formatter<'_>, combat: &Value) -> fmt::Result {
                         .filter_map(Value::as_i64)
                         .map(|t| t.to_string())
                         .collect();
-                    if !targets.is_empty() {
+                    // Both halves are needed. Ids alone leave an empty list
+                    // ambiguous between "targets itself, nothing to pick" and
+                    // "targets enemies, none are alive" — which are not at all
+                    // the same thing to a caller deciding what to play.
+                    let kind = l.str_at("target").unwrap_or("?");
+                    if targets.is_empty() {
+                        line.push_str(&format!("  ({kind})"));
+                    } else {
                         line.push_str(&format!("  → {}", targets.join(",")));
                     }
                 } else {
@@ -504,6 +511,29 @@ mod tests {
         assert!(!out.contains("MONSTER/"), "{out}");
         // The hand carries its playable target ids.
         assert!(out.contains("→ 1"), "{out}");
+    }
+
+    /// An empty target list is not "no legal targets" when the card targets the
+    /// player, and a caller has to be able to tell those apart.
+    #[test]
+    fn a_card_with_nothing_to_pick_says_what_it_targets() {
+        let out = observation(json!({
+            "combat": {
+                "turn": 1, "round": 1, "phase": "Play", "energy": 3,
+                "creatures": [],
+                "hand": ["DEFEND_IRONCLAD", "STRIKE_IRONCLAD"],
+                "legal": [
+                    {"card": "DEFEND_IRONCLAD", "cost": 1, "playable": true,
+                     "target": "Self", "targets": [], "reason": null, "preventer": null},
+                    {"card": "STRIKE_IRONCLAD", "cost": 1, "playable": true,
+                     "target": "AnyEnemy", "targets": [], "reason": null, "preventer": null}
+                ],
+                "draw": [], "discard": [], "exhaust": []
+            }
+        }))
+        .to_string();
+        assert!(out.contains("(Self)"), "{out}");
+        assert!(out.contains("(AnyEnemy)"), "{out}");
     }
 
     #[test]

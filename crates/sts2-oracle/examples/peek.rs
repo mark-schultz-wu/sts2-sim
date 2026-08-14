@@ -16,5 +16,8 @@ fn main() -> anyhow::Result<()> {
     let resp = o.send(&Command::ChooseOption { index: 0 })?;
     println!("{resp}");
 
+    let resp = o.send(&Command::Travel { col: 1, row: 1 })?;
+    println!("{resp}");
+
     Ok(())
 }
