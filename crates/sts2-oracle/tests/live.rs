@@ -18,32 +18,51 @@
 //! and the handshake tests that only bind loopback ports — still runs in
 //! parallel, so `cargo test --include-ignored` is safe with no extra flags.
 
+use serde_json::Value;
 use serial_test::serial;
 use std::time::Duration;
-use sts2_oracle::{Command, Config, Error, Oracle, PROTOCOL_VERSION, Response};
+use sts2_oracle::{Answer, Command, Config, Error, Oracle, PROTOCOL_VERSION, Response};
 
 /// The seed the mod itself defaults to. Named here so the determinism test is
 /// obviously asking both runs the same question.
 const SEED: &str = "ORACLE1";
 
-fn config() -> Config {
+fn launch() -> Oracle {
     let dir = sts2_oracle::game_dir_from_env()
         .expect("set STS2_GAME_DIR to the game directory (`just live` does this)");
-    Config::new(dir)
+    Oracle::launch(Config::new(dir)).expect("the game should launch and connect back")
 }
 
-fn launch() -> Oracle {
-    Oracle::launch(config()).expect("the game should launch and connect back")
+/// The parts of an observation these tests look at.
+///
+/// `Response::Observation` is a struct variant, so there is no payload type to
+/// hand between helpers; this carries the few fields they share.
+struct Seen {
+    resolved: bool,
+    digest: String,
+    state: Value,
+    game_errors: Option<Vec<String>>,
 }
 
-fn observation(reply: Response) -> sts2_oracle::Observation {
+fn observation(reply: Response) -> Seen {
     match reply {
-        Response::Observation(o) => o,
+        Response::Observation {
+            resolved,
+            digest,
+            state,
+            game_errors,
+            ..
+        } => Seen {
+            resolved,
+            digest,
+            state,
+            game_errors,
+        },
         other => panic!("expected an observation, got {other:?}"),
     }
 }
 
-fn start(oracle: &mut Oracle) -> sts2_oracle::Observation {
+fn start(oracle: &mut Oracle) -> Seen {
     let reply = oracle
         .send(&Command::Start {
             seed: Some(SEED.into()),
@@ -60,11 +79,11 @@ fn start(oracle: &mut Oracle) -> sts2_oracle::Observation {
 #[serial(game)]
 fn the_greeting_matches_what_this_client_speaks() {
     let oracle = launch();
-    let hello = oracle.hello();
+    let greeting = oracle.greeting();
 
-    assert_eq!(hello.protocol, PROTOCOL_VERSION);
-    assert_eq!(hello.game, "v0.107.1");
-    assert_eq!(hello.assembly_hash, 1_692_500_715);
+    assert_eq!(greeting.protocol, PROTOCOL_VERSION);
+    assert_eq!(greeting.game, "v0.107.1");
+    assert_eq!(greeting.assembly_hash, 1_692_500_715);
 
     // Every command this crate can build must be one the oracle accepts, or the
     // enum has drifted from the protocol it claims to implement.
@@ -83,9 +102,9 @@ fn the_greeting_matches_what_this_client_speaks() {
         "quit",
     ] {
         assert!(
-            hello.commands.iter().any(|c| c == cmd),
+            greeting.commands.iter().any(|c| c == cmd),
             "oracle does not offer '{cmd}'; it offers {:?}",
-            hello.commands
+            greeting.commands
         );
     }
 }
@@ -138,13 +157,13 @@ fn a_refusal_leaves_the_session_usable() {
 
     // Nothing is pending, so this is refused — and the refusal names the command.
     let reply = oracle
-        .send(&Command::AnswerCards { cards: vec![0] })
+        .send(&Command::Answer(Answer::Cards(vec![0])))
         .expect("a refusal is still a reply");
-    let Response::Error(refusal) = reply else {
+    let Response::Error { cmd, message } = reply else {
         panic!("expected a refusal, got {reply:?}");
     };
-    assert_eq!(refusal.cmd, "answer");
-    assert!(!refusal.message.is_empty());
+    assert_eq!(cmd, "answer");
+    assert!(!message.is_empty());
 
     // The session survived it.
     let after = observation(oracle.send(&Command::Observe).expect("observe should work"));

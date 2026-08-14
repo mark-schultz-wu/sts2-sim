@@ -1,139 +1,113 @@
 //! The commands the oracle accepts.
 //!
-//! Built as JSON by hand rather than derived. The protocol has three different
-//! `answer` shapes sharing one `cmd` value, and an `enter_room` argument called
-//! `type`; expressing that through serde attributes costs more attention to read
-//! than the `json!` calls do, and this way each variant sits next to the line of
-//! [PROTOCOL.md](../../../mod/sts_oracle/PROTOCOL.md) it implements.
+//! See [PROTOCOL.md](../../../mod/sts_oracle/PROTOCOL.md) for what each argument
+//! means.
 
-use serde_json::{Value, json};
+use serde::{Serialize, Serializer, ser::SerializeMap};
 
-/// One request. See `PROTOCOL.md` for what each argument means.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One request.
+///
+/// Serializes to exactly the wire form: the variant name becomes `cmd`, and the
+/// fields sit beside it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum Command {
-    /// Starts a fresh run. `ascension` defaults to 0 and `modifiers` may be empty.
+    /// Starts a fresh run. Omitted fields fall back to the oracle's defaults:
+    /// seed `ORACLE1`, and the Ironclad.
     Start {
+        #[serde(skip_serializing_if = "Option::is_none")]
         seed: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         character: Option<String>,
         ascension: u32,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
         modifiers: Vec<String>,
     },
     EnterFight,
     /// `room` is a `RoomType` name, matched case-insensitively.
     EnterRoom {
+        #[serde(rename = "type")]
         room: String,
     },
     Travel {
         col: i32,
         row: i32,
     },
-    /// `index` is into the hand; `target` is a creature's `CombatId`, not an index.
+    /// `index` is into the hand; `target` is a creature's `CombatId`, not an
+    /// index into the living creatures, which would shift when one dies.
     PlayCard {
         index: usize,
         target: Option<u32>,
     },
     EndTurn,
-    /// Indexes into the options the *most recent* observation reported.
+    /// Indexes into the options the *most recent* observation reported. The rest
+    /// site list shrinks as it is chosen from, so an older index means nothing.
     ChooseOption {
         index: usize,
     },
-    /// Indexes into the shop entries the *most recent* observation reported.
+    /// Indexes into the shop entries the most recent observation reported.
     Buy {
         index: usize,
     },
     /// At least one of `card` or `relic` must be set, or the oracle refuses it.
     Grant {
+        #[serde(skip_serializing_if = "Option::is_none")]
         card: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         relic: Option<String>,
     },
-    /// Answers a `select_cards` pending with option indices.
-    AnswerCards {
-        cards: Vec<usize>,
-    },
-    /// Answers a `rewards` pending by declining. Refused if it is not skippable.
-    AnswerSkip,
-    /// Answers a `rewards` pending by taking rewards.
-    AnswerTake {
-        take: Vec<TakeReward>,
-    },
+    /// Responds to a [`crate::Response::Pending`].
+    Answer(Answer),
     Observe,
     Quit,
 }
 
-/// One entry in an `answer`'s `take` array.
+/// How to answer a parked game.
 ///
-/// `card` is required when the reward is a `CardReward` and meaningless
+/// All three forms share the `answer` command and are told apart by which field
+/// they carry, so this is a sum type rather than three optional fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Answer {
+    /// Option indices, for a [`crate::Question::SelectCards`]. Repeating one is
+    /// refused: the same card twice is one selection to the game and two to the
+    /// client.
+    Cards(Vec<usize>),
+    /// Decline a [`crate::Question::Rewards`]. Refused if it is not skippable.
+    Skip,
+    /// Take rewards from a [`crate::Question::Rewards`].
+    Take(Vec<TakeReward>),
+}
+
+impl Serialize for Answer {
+    /// Written by hand because `skip` is the literal `true` rather than a value
+    /// the caller supplies — deriving it would need a `bool` field that could be
+    /// set to `false`, which is not an answer the oracle accepts.
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(1))?;
+        match self {
+            Self::Cards(cards) => map.serialize_entry("cards", cards)?,
+            Self::Skip => map.serialize_entry("skip", &true)?,
+            Self::Take(take) => map.serialize_entry("take", take)?,
+        }
+        map.end()
+    }
+}
+
+/// One entry in an [`Answer::Take`].
+///
+/// `card` is required when the reward is a card reward and meaningless
 /// otherwise; the oracle refuses a card reward without one rather than choosing
 /// the first card for you.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TakeReward {
     pub index: usize,
     pub card: Option<usize>,
 }
 
-impl Command {
-    /// The wire form, one JSON object.
-    pub fn to_json(&self) -> Value {
-        match self {
-            Self::Start {
-                seed,
-                character,
-                ascension,
-                modifiers,
-            } => {
-                let mut v = json!({ "cmd": "start", "ascension": ascension });
-                let map = v.as_object_mut().expect("just built an object");
-                if let Some(seed) = seed {
-                    map.insert("seed".into(), json!(seed));
-                }
-                if let Some(character) = character {
-                    map.insert("character".into(), json!(character));
-                }
-                if !modifiers.is_empty() {
-                    map.insert("modifiers".into(), json!(modifiers));
-                }
-                v
-            }
-            Self::EnterFight => json!({ "cmd": "enter_fight" }),
-            Self::EnterRoom { room } => json!({ "cmd": "enter_room", "type": room }),
-            Self::Travel { col, row } => json!({ "cmd": "travel", "col": col, "row": row }),
-            Self::PlayCard { index, target } => {
-                // A null target is the same as an absent one to the oracle, so
-                // this can stay unconditional.
-                json!({ "cmd": "play_card", "index": index, "target": target })
-            }
-            Self::EndTurn => json!({ "cmd": "end_turn" }),
-            Self::ChooseOption { index } => json!({ "cmd": "choose_option", "index": index }),
-            Self::Buy { index } => json!({ "cmd": "buy", "index": index }),
-            Self::Grant { card, relic } => {
-                let mut v = json!({ "cmd": "grant" });
-                let map = v.as_object_mut().expect("just built an object");
-                if let Some(card) = card {
-                    map.insert("card".into(), json!(card));
-                }
-                if let Some(relic) = relic {
-                    map.insert("relic".into(), json!(relic));
-                }
-                v
-            }
-            Self::AnswerCards { cards } => json!({ "cmd": "answer", "cards": cards }),
-            Self::AnswerSkip => json!({ "cmd": "answer", "skip": true }),
-            Self::AnswerTake { take } => {
-                let take: Vec<Value> = take
-                    .iter()
-                    .map(|t| json!({ "index": t.index, "card": t.card }))
-                    .collect();
-                json!({ "cmd": "answer", "take": take })
-            }
-            Self::Observe => json!({ "cmd": "observe" }),
-            Self::Quit => json!({ "cmd": "quit" }),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::{json, to_value};
 
     #[test]
     fn start_omits_what_was_not_asked_for() {
@@ -143,7 +117,10 @@ mod tests {
             ascension: 0,
             modifiers: vec![],
         };
-        assert_eq!(bare.to_json(), json!({ "cmd": "start", "ascension": 0 }));
+        assert_eq!(
+            to_value(&bare).unwrap(),
+            json!({"cmd": "start", "ascension": 0})
+        );
     }
 
     #[test]
@@ -155,7 +132,7 @@ mod tests {
             modifiers: vec!["HEIRLOOM".into()],
         };
         assert_eq!(
-            full.to_json(),
+            to_value(&full).unwrap(),
             json!({
                 "cmd": "start", "ascension": 5, "seed": "ABC",
                 "character": "SILENT", "modifiers": ["HEIRLOOM"],
@@ -163,51 +140,32 @@ mod tests {
         );
     }
 
-    /// `type` is a Rust keyword, so this is the one field name a derive would
-    /// have had to rename. Worth pinning.
+    #[test]
+    fn a_command_with_no_arguments_is_just_its_name() {
+        assert_eq!(
+            to_value(Command::EnterFight).unwrap(),
+            json!({"cmd": "enter_fight"})
+        );
+        assert_eq!(
+            to_value(Command::EndTurn).unwrap(),
+            json!({"cmd": "end_turn"})
+        );
+        assert_eq!(
+            to_value(Command::Observe).unwrap(),
+            json!({"cmd": "observe"})
+        );
+        assert_eq!(to_value(Command::Quit).unwrap(), json!({"cmd": "quit"}));
+    }
+
+    /// `type` is a Rust keyword, so this is the one field a derive has to rename.
     #[test]
     fn enter_room_calls_it_type() {
         let cmd = Command::EnterRoom {
             room: "SHOP".into(),
         };
         assert_eq!(
-            cmd.to_json(),
-            json!({ "cmd": "enter_room", "type": "SHOP" })
-        );
-    }
-
-    /// All three answer forms share one `cmd`, which is the reason this module
-    /// builds JSON by hand.
-    #[test]
-    fn every_answer_form_is_the_same_command() {
-        for cmd in [
-            Command::AnswerCards { cards: vec![0, 2] },
-            Command::AnswerSkip,
-            Command::AnswerTake { take: vec![] },
-        ] {
-            assert_eq!(cmd.to_json()["cmd"], json!("answer"));
-        }
-    }
-
-    #[test]
-    fn skip_is_the_flag_the_oracle_looks_for() {
-        assert_eq!(
-            Command::AnswerSkip.to_json(),
-            json!({ "cmd": "answer", "skip": true })
-        );
-    }
-
-    #[test]
-    fn a_taken_card_reward_carries_its_card_index() {
-        let cmd = Command::AnswerTake {
-            take: vec![TakeReward {
-                index: 1,
-                card: Some(0),
-            }],
-        };
-        assert_eq!(
-            cmd.to_json(),
-            json!({ "cmd": "answer", "take": [{ "index": 1, "card": 0 }] })
+            to_value(&cmd).unwrap(),
+            json!({"cmd": "enter_room", "type": "SHOP"})
         );
     }
 
@@ -218,8 +176,41 @@ mod tests {
             target: None,
         };
         assert_eq!(
-            cmd.to_json(),
-            json!({ "cmd": "play_card", "index": 2, "target": null })
+            to_value(&cmd).unwrap(),
+            json!({"cmd": "play_card", "index": 2, "target": null})
+        );
+    }
+
+    /// All three answers are one command, distinguished by the field they carry.
+    #[test]
+    fn every_answer_is_the_same_command() {
+        for answer in [
+            Answer::Cards(vec![0, 2]),
+            Answer::Skip,
+            Answer::Take(vec![]),
+        ] {
+            let v = to_value(Command::Answer(answer)).unwrap();
+            assert_eq!(v["cmd"], json!("answer"));
+        }
+    }
+
+    #[test]
+    fn each_answer_carries_only_its_own_field() {
+        assert_eq!(
+            to_value(Command::Answer(Answer::Cards(vec![0, 2]))).unwrap(),
+            json!({"cmd": "answer", "cards": [0, 2]})
+        );
+        assert_eq!(
+            to_value(Command::Answer(Answer::Skip)).unwrap(),
+            json!({"cmd": "answer", "skip": true})
+        );
+        assert_eq!(
+            to_value(Command::Answer(Answer::Take(vec![TakeReward {
+                index: 1,
+                card: Some(0),
+            }])))
+            .unwrap(),
+            json!({"cmd": "answer", "take": [{"index": 1, "card": 0}]})
         );
     }
 }

@@ -18,17 +18,15 @@
 //!     ascension: 0,
 //!     modifiers: vec![],
 //! })?;
-//! assert!(matches!(reply, Response::Observation(_)));
+//! assert!(matches!(reply, Response::Observation { .. }));
 //! # Ok::<(), sts2_oracle::Error>(())
 //! ```
 
 mod command;
 mod response;
 
-pub use command::{Command, TakeReward};
-pub use response::{
-    CardOption, Hello, Observation, Pending, Question, Refusal, Response, RewardDetail, RewardKind,
-};
+pub use command::{Answer, Command, TakeReward};
+pub use response::{CardOption, Question, Response, RewardDetail, RewardKind};
 
 use std::fmt;
 use std::io::{BufRead, BufReader, Write};
@@ -91,8 +89,22 @@ pub struct Oracle {
     child: Child,
     writer: TcpStream,
     reader: BufReader<TcpStream>,
-    hello: Hello,
+    greeting: Greeting,
     command_timeout: Duration,
+}
+
+/// What the oracle said about itself when it connected.
+///
+/// A client-side value rather than the wire message: [`Response::Hello`] is a
+/// variant like any other, and this is what survives being destructured out of
+/// it and kept.
+#[derive(Debug, Clone)]
+pub struct Greeting {
+    pub protocol: u32,
+    pub game: String,
+    pub assembly_hash: i64,
+    /// Every command this oracle accepts.
+    pub commands: Vec<String>,
 }
 
 impl Oracle {
@@ -146,11 +158,11 @@ impl Oracle {
         // From here on the child is ours: every failure path has to reap it, or
         // a failed launch leaves a headless game running forever.
         match Self::connect(&listener, &mut child, &token, &config) {
-            Ok((writer, reader, hello)) => Ok(Self {
+            Ok((writer, reader, greeting)) => Ok(Self {
                 child,
                 writer,
                 reader,
-                hello,
+                greeting,
                 command_timeout: config.command_timeout,
             }),
             Err(e) => {
@@ -166,7 +178,7 @@ impl Oracle {
         child: &mut Child,
         token: &str,
         config: &Config,
-    ) -> Result<(TcpStream, BufReader<TcpStream>, Hello), Error> {
+    ) -> Result<(TcpStream, BufReader<TcpStream>, Greeting), Error> {
         let stream = accept_before(listener, child, config.startup_timeout)?;
         stream
             .set_read_timeout(Some(config.startup_timeout))
@@ -185,16 +197,26 @@ impl Oracle {
             return Err(Error::WrongPeer);
         }
 
-        let greeting = read_line(&mut reader)?;
-        let hello = match parse(&greeting)? {
-            Response::Hello(hello) => hello,
+        let line = read_line(&mut reader)?;
+        let greeting = match parse(&line)? {
+            Response::Hello {
+                protocol,
+                game,
+                assembly_hash,
+                commands,
+            } => Greeting {
+                protocol,
+                game,
+                assembly_hash,
+                commands,
+            },
             other => return Err(Error::NoGreeting(Box::new(other))),
         };
 
-        if hello.protocol != PROTOCOL_VERSION {
+        if greeting.protocol != PROTOCOL_VERSION {
             return Err(Error::ProtocolMismatch {
                 expected: PROTOCOL_VERSION,
-                found: hello.protocol,
+                found: greeting.protocol,
             });
         }
 
@@ -205,13 +227,13 @@ impl Oracle {
             .set_read_timeout(Some(config.command_timeout))
             .map_err(|e| Error::Io("setting the command deadline", e))?;
 
-        Ok((writer, reader, hello))
+        Ok((writer, reader, greeting))
     }
 
-    /// The greeting, naming the protocol version, the game build, and every
-    /// command this oracle accepts.
-    pub fn hello(&self) -> &Hello {
-        &self.hello
+    /// What the oracle said about itself: protocol version, game build, and
+    /// every command it accepts.
+    pub fn greeting(&self) -> &Greeting {
+        &self.greeting
     }
 
     /// Sends one command and returns the one response to it.
@@ -220,8 +242,7 @@ impl Oracle {
     /// oracle declining a command is a normal outcome that leaves the session
     /// healthy. `Err` means the transport or the process is in trouble.
     pub fn send(&mut self, command: &Command) -> Result<Response, Error> {
-        let line = serde_json::to_string(&command.to_json())
-            .map_err(|e| Error::Encode(command.clone(), e))?;
+        let line = serde_json::to_string(command).map_err(|e| Error::Encode(command.clone(), e))?;
 
         self.writer
             .write_all(line.as_bytes())
@@ -258,8 +279,8 @@ impl fmt::Debug for Oracle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Oracle")
             .field("pid", &self.child.id())
-            .field("game", &self.hello.game)
-            .field("protocol", &self.hello.protocol)
+            .field("game", &self.greeting.game)
+            .field("protocol", &self.greeting.protocol)
             .finish_non_exhaustive()
     }
 }
@@ -452,7 +473,7 @@ mod handshake {
     /// The peer connects *before* the accept, sitting in the listener's backlog,
     /// which keeps this single-threaded — and keeps its stream alive for the
     /// whole handshake without a sleep to hold it open.
-    fn against(token: &str, lines: &[&str]) -> Result<Hello, Error> {
+    fn against(token: &str, lines: &[&str]) -> Result<Greeting, Error> {
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
 
@@ -471,10 +492,11 @@ mod handshake {
 
     #[test]
     fn a_matching_token_and_greeting_get_through() {
-        let hello = against("tok", &["tok", HELLO]).expect("handshake should succeed");
-        assert_eq!(hello.protocol, PROTOCOL_VERSION);
-        assert_eq!(hello.game, "v0.107.1");
-        assert_eq!(hello.commands, ["start", "quit"]);
+        let greeting = against("tok", &["tok", HELLO]).expect("handshake should succeed");
+        assert_eq!(greeting.protocol, PROTOCOL_VERSION);
+        assert_eq!(greeting.game, "v0.107.1");
+        assert_eq!(greeting.assembly_hash, 1_692_500_715);
+        assert_eq!(greeting.commands, ["start", "quit"]);
     }
 
     #[test]

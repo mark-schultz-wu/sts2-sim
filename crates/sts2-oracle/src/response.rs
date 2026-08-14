@@ -7,12 +7,11 @@
 //! Nothing is lost by waiting: the raw value carries every field the oracle
 //! reported, so no state can go missing while it is still untyped.
 //!
-//! For the same reason there is no `deny_unknown_fields` here: a field appearing
-//! inside the observation cannot be dropped while `state` is raw. That reasoning
-//! does not extend to the envelope, and once did not hold — [`Pending`] carried
-//! `digest` and `state` on the wire without fields to receive them, so both were
-//! silently discarded on every pending. Envelope drift is what the protocol
-//! version in the handshake is for, and [`crate::Oracle`] checks it.
+//! That argument covers the payload and not the envelope, and the difference
+//! once mattered: [`Response::Pending`] carried `digest` and `state` on the wire
+//! with no fields to receive them, so serde discarded both on every pending.
+//! Envelope drift is what the protocol version in the handshake is for, and
+//! [`crate::Oracle`] checks it.
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -22,66 +21,68 @@ use serde_json::Value;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
-    Hello(Hello),
-    Observation(Observation),
-    Pending(Pending),
-    /// A refusal. The game did not advance, and any outstanding pending survives.
-    Error(Refusal),
+    /// Sent unprompted on connect, before any request.
+    Hello {
+        protocol: u32,
+        game: String,
+        #[serde(rename = "assemblyHash")]
+        assembly_hash: i64,
+        commands: Vec<String>,
+    },
+
+    /// The command advanced the game, and it is now idle.
+    Observation {
+        /// Increments per observation or pending, not per request.
+        seq: u64,
+        cmd: String,
+        /// False when combat ended mid-cascade and the decision was abandoned
+        /// rather than completed. Not an error — but a simulator that resolved
+        /// it fully has diverged, even if the resulting state looks agreeable.
+        resolved: bool,
+        digest: String,
+        /// The whole state the digest was taken over.
+        state: Value,
+        /// Errors the game logged while running the command. Never suppressed:
+        /// the command may have half-happened, and only the caller can decide
+        /// whether to trust the state.
+        #[serde(rename = "gameErrors", default)]
+        game_errors: Option<Vec<String>>,
+    },
+
+    /// The game stopped mid-action to ask something.
+    ///
+    /// Until it is answered the oracle accepts only [`crate::Command::Answer`],
+    /// [`crate::Command::Observe`] and [`crate::Command::Quit`].
+    Pending {
+        seq: u64,
+        cmd: String,
+        /// A parked game still reports where it is: the oracle adds `digest` and
+        /// `state` to a pending exactly as it does to an observation.
+        digest: String,
+        state: Value,
+        #[serde(flatten)]
+        question: Question,
+    },
+
+    /// A refusal. The game did not advance, so there is no state to report —
+    /// which is what [`crate::Command::Observe`] is for. Any outstanding pending
+    /// survives.
+    Error {
+        cmd: String,
+        /// Written to be read: an illegal `travel` lists the legal coords, an
+        /// unplayable card names the reason and what blocked it.
+        message: String,
+    },
+
     /// The reply to [`crate::Command::Quit`], and the last line the oracle sends.
     Bye,
 }
 
-/// Sent unprompted on connect, before any request.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Hello {
-    pub protocol: u32,
-    pub game: String,
-    #[serde(rename = "assemblyHash")]
-    pub assembly_hash: i64,
-    pub commands: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Observation {
-    /// Increments per observation or pending, not per request.
-    pub seq: u64,
-    pub cmd: String,
-    /// False when combat ended mid-cascade and the decision was abandoned rather
-    /// than completed. Not an error — but a simulator that resolved it fully has
-    /// diverged, even if the resulting state looks agreeable.
-    pub resolved: bool,
-    pub digest: String,
-    /// The whole state the digest was taken over. Untyped by design; see the
-    /// module docs.
-    pub state: Value,
-    /// Errors the game logged while running the command. Never suppressed: the
-    /// command may have half-happened, and only the caller can decide whether to
-    /// trust the state.
-    #[serde(rename = "gameErrors", default)]
-    pub game_errors: Option<Vec<String>>,
-}
-
-/// The game has stopped mid-action to ask something.
-///
-/// Until it is answered the oracle accepts only [`crate::Command::AnswerCards`],
-/// [`crate::Command::AnswerSkip`], [`crate::Command::AnswerTake`],
-/// [`crate::Command::Observe`] and [`crate::Command::Quit`].
-#[derive(Debug, Clone, Deserialize)]
-pub struct Pending {
-    pub seq: u64,
-    pub cmd: String,
-    /// A parked game still reports where it is: the oracle adds `digest` and
-    /// `state` to a pending exactly as it does to an observation.
-    pub digest: String,
-    pub state: Value,
-    #[serde(flatten)]
-    pub question: Question,
-}
-
+/// What a parked game is asking.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Question {
-    /// Answer with [`crate::Command::AnswerCards`].
+    /// Answer with [`crate::Answer::Cards`].
     SelectCards {
         min: u32,
         max: u32,
@@ -90,7 +91,7 @@ pub enum Question {
         asker: Option<String>,
         options: Vec<CardOption>,
     },
-    /// Answer with [`crate::Command::AnswerSkip`] or [`crate::Command::AnswerTake`].
+    /// Answer with [`crate::Answer::Skip`] or [`crate::Answer::Take`].
     Rewards {
         skippable: bool,
         rewards: Vec<RewardDetail>,
@@ -205,14 +206,6 @@ impl TryFrom<WireReward> for RewardDetail {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct Refusal {
-    pub cmd: String,
-    /// Written to be read: an illegal `travel` lists the legal coords, an
-    /// unplayable card names the reason and what blocked it.
-    pub message: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,12 +220,18 @@ mod tests {
             r#"{"type":"hello","protocol":1,"game":"v0.107.1",
                 "assemblyHash":1692500715,"commands":["start","quit"]}"#,
         );
-        let Response::Hello(h) = r else {
+        let Response::Hello {
+            protocol,
+            assembly_hash,
+            commands,
+            ..
+        } = r
+        else {
             panic!("expected hello");
         };
-        assert_eq!(h.protocol, 1);
-        assert_eq!(h.assembly_hash, 1_692_500_715);
-        assert_eq!(h.commands.len(), 2);
+        assert_eq!(protocol, 1);
+        assert_eq!(assembly_hash, 1_692_500_715);
+        assert_eq!(commands.len(), 2);
     }
 
     /// The client always asks for full observations, so one arriving without
@@ -252,19 +251,26 @@ mod tests {
     }
 
     #[test]
-    fn a_full_observation_carries_its_state_untouched() {
+    fn an_observation_carries_its_state_untouched() {
         let r = parse(
             r#"{"type":"observation","seq":4,"cmd":"observe","resolved":true,
                 "digest":"B0","state":{"gold":99,"nested":{"hp":[1,2]}}}"#,
         );
-        let Response::Observation(o) = r else {
+        let Response::Observation {
+            seq,
+            resolved,
+            state,
+            game_errors,
+            ..
+        } = r
+        else {
             panic!("expected observation");
         };
-        assert_eq!(o.seq, 4);
-        assert!(o.resolved);
-        assert!(o.game_errors.is_none());
-        assert_eq!(o.state["gold"], 99);
-        assert_eq!(o.state["nested"]["hp"][1], 2);
+        assert_eq!(seq, 4);
+        assert!(resolved);
+        assert!(game_errors.is_none());
+        assert_eq!(state["gold"], 99);
+        assert_eq!(state["nested"]["hp"][1], 2);
     }
 
     #[test]
@@ -273,41 +279,21 @@ mod tests {
             r#"{"type":"observation","seq":5,"cmd":"end_turn","resolved":false,
                 "digest":"C1","state":{},"gameErrors":["boom"]}"#,
         );
-        let Response::Observation(o) = r else {
+        let Response::Observation {
+            resolved,
+            game_errors,
+            ..
+        } = r
+        else {
             panic!("expected observation");
         };
-        assert!(!o.resolved);
-        assert_eq!(o.game_errors.as_deref(), Some(&["boom".to_string()][..]));
-    }
-
-    /// The pending envelope and the question body arrive flat in one object, so
-    /// this pins that `flatten` plus an internally tagged enum actually works.
-    #[test]
-    fn select_cards_flattens_into_the_envelope() {
-        let r = parse(
-            r#"{"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
-                "digest":"D1","state":{"gold":1},
-                "min":1,"max":2,"asker":"DiscardAction",
-                "options":[{"index":0,"card":"STRIKE"},{"index":1,"card":"BASH+1"}]}"#,
-        );
-        let Response::Pending(p) = r else {
-            panic!("expected pending");
-        };
-        assert_eq!(p.seq, 7);
-        assert_eq!(p.cmd, "play_card");
-        let Question::SelectCards {
-            min, max, options, ..
-        } = p.question
-        else {
-            panic!("expected select_cards");
-        };
-        assert_eq!((min, max), (1, 2));
-        assert_eq!(options[1].card, "BASH+1");
+        assert!(!resolved);
+        assert_eq!(game_errors.as_deref(), Some(&["boom".to_string()][..]));
     }
 
     /// Regression. `Pending` had no fields for `digest` or `state`, and serde
     /// drops what it has nowhere to put — so every pending silently threw away
-    /// the state of a parked game, which is exactly when you most want it.
+    /// the state of a parked game, which is when you most want it.
     #[test]
     fn a_pending_reports_where_the_game_is() {
         let r = parse(
@@ -315,11 +301,38 @@ mod tests {
                 "digest":"DEADBEEF","state":{"gold":99},
                 "min":1,"max":1,"asker":null,"options":[]}"#,
         );
-        let Response::Pending(p) = r else {
+        let Response::Pending { digest, state, .. } = r else {
             panic!("expected pending");
         };
-        assert_eq!(p.digest, "DEADBEEF");
-        assert_eq!(p.state["gold"], 99);
+        assert_eq!(digest, "DEADBEEF");
+        assert_eq!(state["gold"], 99);
+    }
+
+    /// The envelope and the question arrive flat in one object, so this pins
+    /// that `flatten` plus an internally tagged enum works inside a variant.
+    #[test]
+    fn select_cards_flattens_into_the_envelope() {
+        let r = parse(
+            r#"{"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
+                "digest":"D1","state":{},"min":1,"max":2,"asker":"DiscardAction",
+                "options":[{"index":0,"card":"STRIKE"},{"index":1,"card":"BASH+1"}]}"#,
+        );
+        let Response::Pending {
+            seq, cmd, question, ..
+        } = r
+        else {
+            panic!("expected pending");
+        };
+        assert_eq!(seq, 7);
+        assert_eq!(cmd, "play_card");
+        let Question::SelectCards {
+            min, max, options, ..
+        } = question
+        else {
+            panic!("expected select_cards");
+        };
+        assert_eq!((min, max), (1, 2));
+        assert_eq!(options[1].card, "BASH+1");
     }
 
     #[test]
@@ -328,10 +341,10 @@ mod tests {
             r#"{"type":"pending","seq":8,"cmd":"answer","kind":"select_cards",
                 "digest":"D2","state":{},"min":0,"max":1,"asker":null,"options":[]}"#,
         );
-        let Response::Pending(p) = r else {
+        let Response::Pending { question, .. } = r else {
             panic!("expected pending");
         };
-        let Question::SelectCards { asker, .. } = p.question else {
+        let Question::SelectCards { asker, .. } = question else {
             panic!("expected select_cards");
         };
         assert!(asker.is_none());
@@ -340,16 +353,17 @@ mod tests {
     #[test]
     fn rewards_describe_each_type_differently() {
         let r = parse(
-            r#"{"type":"pending","seq":9,"cmd":"end_turn","kind":"rewards","digest":"D3","state":{},"skippable":true,
+            r#"{"type":"pending","seq":9,"cmd":"end_turn","kind":"rewards",
+                "digest":"D3","state":{},"skippable":true,
                 "rewards":[
                   {"index":0,"type":"GoldReward","populated":true,"amount":25},
                   {"index":1,"type":"CardReward","populated":true,"cards":["STRIKE","BASH+1"]},
                   {"index":2,"type":"RelicReward","populated":false,"relic":null,"rarity":"COMMON"}]}"#,
         );
-        let Response::Pending(p) = r else {
+        let Response::Pending { question, .. } = r else {
             panic!("expected pending");
         };
-        let Question::Rewards { skippable, rewards } = p.question else {
+        let Question::Rewards { skippable, rewards } = question else {
             panic!("expected rewards");
         };
         assert!(skippable);
@@ -429,10 +443,11 @@ mod tests {
     #[test]
     fn a_refusal_carries_the_command_it_refused() {
         let r = parse(r#"{"type":"error","cmd":"travel","message":"not travelable"}"#);
-        let Response::Error(e) = r else {
+        let Response::Error { cmd, message } = r else {
             panic!("expected error");
         };
-        assert_eq!(e.cmd, "travel");
+        assert_eq!(cmd, "travel");
+        assert_eq!(message, "not travelable");
     }
 
     #[test]
