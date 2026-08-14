@@ -23,7 +23,6 @@ pub enum Command {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         modifiers: Vec<String>,
     },
-    EnterFight,
     /// `room` is a `RoomType` name, matched case-insensitively.
     EnterRoom {
         #[serde(rename = "type")]
@@ -141,10 +140,6 @@ mod tests {
 
     #[test]
     fn a_command_with_no_arguments_is_just_its_name() {
-        assert_eq!(
-            to_value(Command::EnterFight).unwrap(),
-            json!({"cmd": "enter_fight"})
-        );
         assert_eq!(
             to_value(Command::EndTurn).unwrap(),
             json!({"cmd": "end_turn"})

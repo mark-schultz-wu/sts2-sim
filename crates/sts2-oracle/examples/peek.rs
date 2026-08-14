@@ -12,7 +12,8 @@ fn main() -> anyhow::Result<()> {
     let resp: Response = o.send(&start)?;
     println!("{resp}");
 
-    let resp = o.send(&Command::EnterFight)?;
+    // The real path into the game: answer Neow, rather than teleporting.
+    let resp = o.send(&Command::ChooseOption { index: 0 })?;
     println!("{resp}");
 
     Ok(())

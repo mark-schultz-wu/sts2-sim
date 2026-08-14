@@ -88,7 +88,7 @@ unplayable `play_card` names the reason and the blocking model, and a bad
 | cmd | arguments |
 |---|---|
 | `start` | `seed`, `character`, `ascension` (default `0`), `modifiers` — an array of modifier entry names, matched case-insensitively |
-| `enter_fight` | — |
+| `enter_fight` | — (see the warning below) |
 | `enter_room` | `type` — a `RoomType` name, case-insensitive |
 | `travel` | `col`, `row` — integers |
 | `play_card` | `index` — into the hand; `target` — a creature's `CombatId`, or absent |
@@ -102,6 +102,24 @@ unplayable `play_card` names the reason and the blocking model, and a bad
 
 `"full": true` is honoured on any command, since every one of them answers with an
 observation.
+
+### `enter_fight` is not a move
+
+It teleports into one **hardcoded** encounter — `BowlbugsWeak` — at
+`MapPointType.Unassigned`, abandoning whatever room the run was in. The floor
+advances while `map.at` and `map.visited` do not, so map and room disagree by
+construction, and a run reaches combat without ever having taken its Neow bonus.
+That is a state the real game cannot produce.
+
+It exists because the game's own `fight` console command calls
+`encounterModel.DebugRandomizeRng()`, which seeds from `DateTime.UtcNow` at
+one-second granularity — so a scenario built with it reproduces only for runs
+landing in the same second. Avoiding that command rather than patching it is
+what left this one hardcoded.
+
+**Use `travel` to a `Monster` point instead.** It reaches a real fight, chosen by
+the seed, on the map. `enter_fight` should be treated as a placeholder for the
+parameterised scenario command R7 actually needs.
 
 Naming a modifier, card or relic that does not exist is refused rather than
 ignored — silently starting an unmodified run would hide the client bug behind a
