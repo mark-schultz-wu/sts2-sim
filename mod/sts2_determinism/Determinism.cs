@@ -1,7 +1,8 @@
+using System.Reflection;
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
-using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.TestSupport;
 
 namespace Sts2Determinism;
@@ -16,18 +17,12 @@ namespace Sts2Determinism;
 /// driving the game — which is where they used to live, with the consequence
 /// that two different drivers configured the game two different ways.
 ///
-/// It was going to do this by patching, so that it held however the game was
-/// driven. It cannot: Harmony throws
-/// <c>DllNotFoundException: /tmp/mm-exhelper.so: undefined symbol
-/// _Unwind_RaiseException</c> on the first patch, because MonoMod's native
-/// exception helper will not load against this Godot .NET runtime. That is
-/// almost certainly why this repository has referenced <c>0Harmony</c> since the
-/// beginning and never once used it.
+/// Everything here is a patch rather than a call, deliberately: a driver that
+/// has to remember to configure the game is a driver that can forget, and the
+/// second one always does.
 ///
-/// So the per-run settings are a call, and <see cref="PrepareRun"/> is the one
-/// place to make it from. A driver that has to remember to call something can
-/// forget — but one call to one named thing is a great deal harder to forget
-/// than four assignments scattered through whatever happens to be driving.
+/// That requires <c>LD_PRELOAD=libgcc_s.so.1</c> when launching the game. See
+/// the README — without it every patch throws and this mod stays inert.
 /// </remarks>
 [ModInitializer(nameof(Init))]
 public static class Determinism
@@ -72,24 +67,12 @@ public static class Determinism
         // calls TestMode.AssertOff.
         TestMode.IsOn = true;
 
-        Active = true;
-        Log.Info($"[determinism] active on {PinnedVersion}; TestMode on");
-    }
+        // The loader only runs PatchAll by itself for assemblies with no
+        // ModInitializer, and this one has one.
+        new Harmony("sts2_determinism").PatchAll(Assembly.GetExecutingAssembly());
 
-    /// <summary>
-    /// Everything that has to be reapplied per run, rather than once per process.
-    /// </summary>
-    /// <remarks>
-    /// Call this before starting a run and after any restart.
-    ///
-    /// First-time-user prompts both gate progress — a driver waits forever on a
-    /// prompt nothing will answer — and write to disk, so whether a profile has
-    /// seen one becomes state that persists across runs and that no seed
-    /// accounts for.
-    /// </remarks>
-    public static void PrepareRun()
-    {
-        SaveManager.Instance.SetFtuesEnabled(enabled: false);
+        Active = true;
+        Log.Info($"[determinism] active on {PinnedVersion}; TestMode on, patches applied");
     }
 
     private static bool VerifyPin()

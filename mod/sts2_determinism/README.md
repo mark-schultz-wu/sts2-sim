@@ -31,10 +31,11 @@ configuration than the thing it was testing.
 
 ## What it does
 
-| when | what |
+| what | how |
 |---|---|
-| once, at load | verifies the build pin, then `TestMode.IsOn = true` |
-| per run, via `PrepareRun()` | `SetFtuesEnabled(false)` |
+| verifies the build pin, then `TestMode.IsOn = true` | at load |
+| encounter RNG stays seeded from the run, not the clock | patches `EncounterModel.DebugRandomizeRng` to do nothing |
+| first-time-user tutorials never appear | patches `ProgressSaveManager.SeenFtue` to return `true` |
 
 `TestMode` is the game's own test seam. It skips every `Cmd.Wait` and the
 animation paths that check it — a determinism matter as much as a speed one,
@@ -44,13 +45,20 @@ unconditionally and skips just the icon refresh, and nothing calls
 `TestMode.AssertOff`.
 
 First-time-user prompts both gate progress — a driver waits forever on a prompt
-nothing will answer — and write to disk, so whether a profile has seen one
-becomes state that persists across runs and that no seed accounts for.
+nothing will answer — and, once dismissed, write to the profile, so whether one
+has been seen becomes state that persists across runs and that no seed accounts
+for.
 
-## Why it calls instead of patching
+`SeenFtue` is patched rather than the `EnableFtues` property behind it, and
+rather than calling `SetFtuesEnabled(false)` as the driver used to. Both
+alternatives write: the setter calls `SaveProgress()`, and the property is read
+by `ProgressState`'s own serialisation, so forcing it would persist
+`EnableFtues = false` into the player's save. Patching the one question the game
+actually asks changes no stored state at all.
 
-This was designed to patch, so that it held however the game was driven. **It
-cannot.** Harmony throws on the first patch attempt:
+## Launching requires `LD_PRELOAD=libgcc_s.so.1`
+
+**Without it every patch throws and this mod stays inert.** Harmony fails with:
 
 ```
 HarmonyLib.HarmonyException: Patching exception in method
@@ -59,37 +67,18 @@ HarmonyLib.HarmonyException: Patching exception in method
      undefined symbol: _Unwind_RaiseException
 ```
 
-MonoMod's native exception helper will not load against this Godot .NET runtime.
-That is almost certainly why this repository has referenced `0Harmony` since the
-beginning and never once used it, and the reference has now been dropped.
+MonoMod writes a native helper to `/tmp` and `dlopen`s it. That helper has **no
+`DT_NEEDED` entries at all** — `readelf -d` shows none — while importing
+`_Unwind_RaiseException`, `_Unwind_SetGR`, `_Unwind_SetIP` and friends from
+libgcc. It relies entirely on the host process having libgcc loaded already, and
+`SlayTheSpire2` does not link it. Preloading puts those symbols in the global
+namespace before the helper is opened.
 
-So the per-run settings are a call, and `PrepareRun()` is the one place to make
-it from. A driver that has to remember to call something can forget — but one
-call to one named thing is a great deal harder to forget than four assignments
-scattered through whatever happens to be driving.
-
-## The patch that is still owed
-
-`EncounterModel.DebugRandomizeRng` is:
-
-```csharp
-_rng = new Rng((uint)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds);
-```
-
-Wall clock, at one-second granularity. The damage is subtler than "adds
-randomness". `GenerateMonstersWithSlots` seeds the encounter itself, but only
-`if (_rng == null)`, from
-`runState.Rng.Seed + runState.TotalFloor + hash(Id.Entry)`. Assigning `_rng`
-early **pre-empts** that, so the wall-clock value is used *instead of* the
-seed-derived one.
-
-`FightConsoleCmd` calls it unconditionally, which is why console-driven fights
-are nondeterministic — reproducing for runs landing in the same second and
-diverging for runs a second apart, which presents as flakiness rather than as an
-obvious break. Neutralising it would need only a no-op patch, since the fix is to
-leave `_rng` null and let the game seed it. **That is blocked on Harmony
-working.** Until then, the driver avoids `FightConsoleCmd` rather than fixing it,
-and the console's command vocabulary stays unavailable for building scenarios.
+`sts2_headless`'s Rust client sets it when launching, and `just selftest` sets it
+too. Anything else that starts the game must do the same. The failure is
+particularly unkind if you forget: patches throw, `Active` stays false, the
+driver refuses, and — before this was noticed — the process hung rather than
+exiting, with the reason in a log nobody was reading.
 
 ## What it deliberately does **not** do
 
@@ -128,8 +117,15 @@ determinism itself.
 
 **Verified once, by hand:** that both mods load in dependency order
 (`0: sts2_determinism`, `1: sts2_headless`), that the cross-mod reference
-resolves, and that `sts2_headless` refuses and exits when this one has not
-activated — the last of which was found the hard way, as a hang.
+resolves, that `sts2_headless` refuses and exits when this one has not activated
+— found the hard way, as a hang — and that the patches apply under `LD_PRELOAD`
+and throw without it.
+
+**Applied but not yet measured:** that the `DebugRandomizeRng` patch produces
+identical fights across seconds. The reasoning is above and rests on reading
+`GenerateMonstersWithSlots`; what would settle it is two console-built fights on
+one seed a second apart, compared by digest — and that needs the scenario command
+`sts2_headless` does not have yet.
 
 **Not verified at all:** that this list is complete. Determinism is a claim about
 everything the game does, and this mod covers two things somebody noticed.

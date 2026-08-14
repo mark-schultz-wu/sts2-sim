@@ -278,11 +278,6 @@ public static class Driver
     /// </summary>
     private static async Task StartRun(RunState state)
     {
-        // Per-run reproducibility settings belong to sts2_determinism; this is
-        // the one place that asks for them, so there is one place to check.
-        Stage = "determinism";
-        Determinism.PrepareRun();
-
         Stage = "SetUpTest";
         RunManager run = RunManager.Instance;
         run.SetUpTest(state, new NetSingleplayerGameService());

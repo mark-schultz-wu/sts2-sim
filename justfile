@@ -30,9 +30,14 @@ lint:
 deploy:
     ./mod/deploy.sh
 
-# The mod's own legality suite, inside the real game.
+# The legality suite, inside the real game. Lives in mod/sts2_headless_test.
+#
+# LD_PRELOAD is not optional: MonoMod's native helper imports _Unwind_* from
+# libgcc and declares no dependencies, and the game does not link libgcc, so
+# without this every Harmony patch throws and sts2_determinism stays inert.
 selftest: deploy
-    cd "$STS2_GAME_DIR" && STS2_HEADLESS_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
+    cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=selftest \
+        ./SlayTheSpire2 --headless --force-steam=off
 
 # The tests that launch the game, ~3s of startup each.
 #

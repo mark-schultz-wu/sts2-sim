@@ -166,6 +166,14 @@ impl Oracle {
             // and it is what lets Observation and Pending carry a Value rather
             // than an Option nobody can reason about.
             .env("STS2_HEADLESS_OBS", "full")
+            // Harmony patching does not work without this, and fails in a way
+            // that looks like something else. MonoMod writes a native helper to
+            // /tmp with no DT_NEEDED entries at all, yet importing _Unwind_*
+            // from libgcc; SlayTheSpire2 does not link libgcc, so the dlopen
+            // fails with "undefined symbol: _Unwind_RaiseException" and every
+            // patch throws. Preloading puts those symbols in the global
+            // namespace before the helper is opened.
+            .env("LD_PRELOAD", preload())
             .stdin(Stdio::null())
             .stdout(stdio())
             .stderr(stdio());
@@ -397,6 +405,17 @@ fn reap(child: &mut Child) {
 
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// `libgcc_s.so.1`, ahead of anything the caller already asked for.
+///
+/// Prepended rather than assigned, so a caller preloading something of their own
+/// keeps it. Linux-only, which this project is.
+fn preload() -> String {
+    match std::env::var("LD_PRELOAD") {
+        Ok(existing) if !existing.trim().is_empty() => format!("libgcc_s.so.1:{existing}"),
+        _ => "libgcc_s.so.1".to_string(),
+    }
 }
 
 /// A per-session token, to notice a stray local connection.
