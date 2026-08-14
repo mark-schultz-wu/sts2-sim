@@ -57,15 +57,6 @@ internal static class OracleDriver
         {
             await WaitUntilLoaded();
 
-            // Before any run exists, because the id set does not depend on one
-            // and starting a run would only add ways for this to fail.
-            if (Environment.GetEnvironmentVariable("STS_ORACLE_MODE") == "dump")
-            {
-                ModelDump.Write(
-                    Environment.GetEnvironmentVariable("STS_ORACLE_DUMP") ?? "model-ids.json");
-                return;
-            }
-
             RunState state = BuildRunState(_seed, Array.Empty<ModifierModel>(), Character(null), ascension: 0);
             await StartRun(state);
             Report(state);

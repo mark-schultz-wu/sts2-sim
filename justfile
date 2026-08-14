@@ -9,10 +9,6 @@
 # it here would make `just check` -- which never touches the game -- fail when
 # direnv has not been allowed.
 
-# Where `just dump` writes the game's model database. It has no consumer yet;
-# when one exists, this moves next to it.
-dump_out := justfile_directory() / "model-ids.json"
-
 _default:
     @just --list
 
@@ -37,11 +33,6 @@ deploy:
 # The mod's own legality suite, inside the real game.
 selftest: deploy
     cd "$STS2_GAME_DIR" && STS_ORACLE_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
-
-# Ask the game for a fresh dump of its model database.
-dump: deploy
-    cd "$STS2_GAME_DIR" && STS_ORACLE_MODE=dump STS_ORACLE_DUMP="{{ dump_out }}" \
-        ./SlayTheSpire2 --headless --force-steam=off
 
 # The tests that launch the game, ~3s of startup each.
 #

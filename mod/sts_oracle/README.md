@@ -137,41 +137,9 @@ Modes, via `STS_ORACLE_MODE`:
 | *(unset)* | mod loads and does nothing |
 | `selftest` | runs the legality suite and exits non-zero on failure |
 | `serve` | speaks the protocol over the TCP port the client passed in |
-| `dump` | writes every id, stat and closed domain the game knows, then quits |
 
 Other variables: `STS_ORACLE_PORT` (required by `serve`) + `STS_ORACLE_TOKEN`,
-`STS_ORACLE_OBS=full`, and `STS_ORACLE_DUMP=<path>` (where `dump` writes;
-defaults to `model-ids.json`).
-
-### What `dump` is for
-
-The Rust client's identifiers are **generated from this file**, not written by
-hand, so anything it gets wrong becomes a client that is wrong in the same way.
-It starts no run — it waits for the model database, writes the file, and quits.
-
-It asks the game five separate questions, because no single registry answers
-them all:
-
-| section | source | why not somewhere easier |
-|---|---|---|
-| `categories` | `ModelDb.AllAbstractModelSubtypes` | ids are derived from C# type names and written down nowhere |
-| `enums` | reflection over `CardType`, `CardRarity`, `TargetType`, `CardKeyword` | a domain inferred from observed values omits members no content uses — no card has `CardRarity.None` |
-| `cards` | each card's registered instance | `Type`, `Rarity`, `TargetType` and `EnergyCost` are constants wearing the shape of overrides |
-| `intents` | every monster's `GenerateMoveStateMachine()` | `MoveState.StateId` is a literal inside each monster; ten monsters need `ToMutable()` copies or they throw `CanonicalModelException` |
-| `restSiteOptions`, `eventOptions` | subclass walk; loc tables **and** `AllPossibleOptions` | neither event registry is complete alone — the loc table misses the options Neow and Darv synthesise per relic, and `AllPossibleOptions` exists on only nine of sixty-nine events |
-
-Every one of those collects its failures and throws them together rather than
-skipping: a dump missing what it could not read would generate a client silently
-missing the same things.
-
-Two game flags matter: `--headless` (no renderer) and `--force-steam=off`
-(without it Steam init fails three times and startup aborts before mods load).
-`--nomods` gives a clean baseline. Startup to main menu is ~10s, per process.
-
-**stdout is not the protocol.** The engine writes ~140 lines of its own there —
-Godot banner, FMOD, Sentry, a system dump containing paths and environment
-variables. The protocol only ever speaks over the TCP channel; there was a stdio
-transport beside it and this is why it was removed.
+and `STS_ORACLE_OBS=full`.
 
 ## The version pin
 

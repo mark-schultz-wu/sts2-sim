@@ -48,7 +48,7 @@ public static class Oracle
         // Configured by environment rather than command line: Godot owns argv,
         // and unrecognised flags there are its business, not ours.
         string? mode = Environment.GetEnvironmentVariable("STS_ORACLE_MODE");
-        if (mode is "serve" or "selftest" or "dump")
+        if (mode is "serve" or "selftest")
         {
             // Not awaited: Init must return so startup can finish populating the
             // model database, which the driver's first stage waits for.
