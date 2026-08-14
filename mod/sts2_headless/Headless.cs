@@ -35,9 +35,10 @@ public static class Headless
                 _ = Driver.Run(Protocol.Serve);
                 break;
 
-            // Claimed by sts2_headless_test, which may or may not be installed.
+            // Claimed by the test mods, which may or may not be installed.
             // Named here so a typo still gets a warning rather than silence.
             case "selftest":
+            case "determinism":
             case null:
                 break;
 

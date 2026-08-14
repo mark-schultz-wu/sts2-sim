@@ -110,10 +110,15 @@ claim about one build's behaviour, so a mismatch is a hard stop.
 
 ## How much of it is actually verified
 
-**Verified automatically:** nothing specific to this mod. The 31 assertions in
-`sts2_headless`'s `SelfTest` exercise a game configured by it, and they pass —
-so a configuration that broke the driver would show up. They do not test
-determinism itself.
+**Verified automatically:** the encounter RNG patch, by
+[`sts2_determinism_test`](../sts2_determinism_test/README.md) — four assertions
+including that the seed actually used is exactly
+`runState.Rng.Seed + TotalFloor + hash(Id.Entry)`. Mutation-tested: reverting the
+patch fails three of the four, with the seed coming back as the current Unix
+timestamp.
+
+The 31 assertions in `sts2_headless_test` also exercise a game configured by this
+mod, so a configuration that broke the driver would show up there.
 
 **Verified once, by hand:** that both mods load in dependency order
 (`0: sts2_determinism`, `1: sts2_headless`), that the cross-mod reference
@@ -121,11 +126,9 @@ resolves, that `sts2_headless` refuses and exits when this one has not activated
 — found the hard way, as a hang — and that the patches apply under `LD_PRELOAD`
 and throw without it.
 
-**Applied but not yet measured:** that the `DebugRandomizeRng` patch produces
-identical fights across seconds. The reasoning is above and rests on reading
-`GenerateMonstersWithSlots`; what would settle it is two console-built fights on
-one seed a second apart, compared by digest — and that needs the scenario command
-`sts2_headless` does not have yet.
+**Not verified:** the `SeenFtue` patch, beyond the driver no longer hanging on
+prompts. Nothing asserts that the profile is left unwritten, which is the claim
+that matters for R13.
 
 **Not verified at all:** that this list is complete. Determinism is a claim about
 everything the game does, and this mod covers two things somebody noticed.

@@ -119,10 +119,22 @@ public static class Driver
     /// scene tree is how the game itself exits (<c>NGame</c> calls
     /// <c>GetTree().Quit(0)</c>), so shutdown runs its normal course.
     /// </remarks>
+    /// <summary>
+    /// What the process should exit with. Set it before returning from a body
+    /// passed to <see cref="Run"/>.
+    /// </summary>
+    /// <remarks>
+    /// A body that wants to fail the process sets this rather than calling
+    /// <c>Environment.Exit</c>. Exiting from inside the body hangs: the driver
+    /// runs on Godot's main thread, and tearing the runtime down from under it
+    /// does not complete.
+    /// </remarks>
+    public static int ExitCode { get; set; }
+
     private static void Quit()
     {
-        Log.Info($"[headless] quitting after {Clock.Elapsed.TotalSeconds:F1}s");
-        NGame.Instance.GetTree().Quit(0);
+        Log.Info($"[headless] quitting after {Clock.Elapsed.TotalSeconds:F1}s with {ExitCode}");
+        NGame.Instance.GetTree().Quit(ExitCode);
     }
 
     private static string Stage = "start";

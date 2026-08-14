@@ -1,0 +1,19 @@
+{
+  "id": "sts2_determinism_test",
+  "name": "STS2 Determinism Test",
+  "author": "sts",
+  "description": "Measures the claims sts2_determinism makes. Install only to run it.",
+  "version": "0.1.0",
+  "has_dll": true,
+  "has_pck": false,
+  "affects_gameplay": false,
+  "min_game_version": "0.107.1",
+  "dependencies": [
+    {
+      "id": "sts2_determinism"
+    },
+    {
+      "id": "sts2_headless"
+    }
+  ]
+}

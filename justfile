@@ -39,6 +39,11 @@ selftest: deploy
     cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=selftest \
         ./SlayTheSpire2 --headless --force-steam=off
 
+# What sts2_determinism claims, measured. Lives in mod/sts2_determinism_test.
+determinism-test: deploy
+    cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=determinism \
+        ./SlayTheSpire2 --headless --force-steam=off
+
 # The tests that launch the game, ~3s of startup each.
 #
 # No --test-threads=1: the tests that share the game's profile directory carry
