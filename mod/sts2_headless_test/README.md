@@ -44,7 +44,7 @@ Exits non-zero on failure, so it is usable as a gate.
 
 ## What it covers
 
-122 assertions, in two groups.
+144 assertions, in two groups.
 
 **That the observation is complete (H4)** — every field the observation promises
 is in it, out of combat and in, down to each creature reporting its intent. The
@@ -109,6 +109,33 @@ That is scenario construction earning its keep: not reaching a state the game
 would produce, but reaching one where the thing under test is the only variable.
 Incidentally established — `RelicCmd.Obtain` accepts duplicates, which the real
 game never offers.
+
+**That the run ends when the player dies** — and says which way. A rule with a
+recorded failure behind it: a dead player was once observed healing at a rest
+site. `victory` is asserted null while the run is live, because before the end it
+is not a meaningful question and a simulator reading `false` would be reading a
+claim nobody made.
+
+**That replaying a script gives the same sequence** — D1 was checked one step
+deep, so a run agreeing at step one and diverging at step five passed. This
+compares twelve steps, and checks they are *distinct* first, since two lists of
+identical digests would agree while proving nothing. It is also the shape the
+diff harness will use.
+
+**That all five characters can be driven** — everything else here is the
+Ironclad. The Defect matters most: its orbs were reported as empty for as long as
+nobody had driven a Defect run, because the fields existed and had never been
+written or read. The gap was reachability, not difficulty.
+
+It asserts survival rather than victory. Four of the five win with the policy;
+the Necrobinder plays out the cap without finishing, which says something about
+playing the first card in hand and nothing about whether the game can be driven.
+
+Writing it turned up a real limit: the first version hung on the Silent. The
+Ironclad's opening deck asks nothing, so "play the first card" never parks a
+decision — the moment a character's cards *do* ask, the game waits for an answer
+that a policy of playing cards cannot give. Any policy driving more than one
+character has to be able to say something.
 
 **That winning a fight offers rewards** — reachable now that the console's
 `kill all` works. The point is not that a reward can be taken but that the game

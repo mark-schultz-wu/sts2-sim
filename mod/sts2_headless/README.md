@@ -84,7 +84,7 @@ not activate.
 
 **Verified by an automatic check, re-run every build:**
 
-- 122 assertions in [`sts2_headless_test`](../sts2_headless_test/README.md)
+- 144 assertions in [`sts2_headless_test`](../sts2_headless_test/README.md)
   (`STS2_HEADLESS_MODE=selftest`), covering all nine
   of the game's legality-hook overrides. The list of hooks is discovered by
   reflection over the game assembly, so a hook added by a future patch shows up
@@ -105,7 +105,8 @@ combat rewards, rest sites, events, shops, protocol error paths, throughput
 numbers.
 
 **Not verified at all:** anything on another machine; a full run rather than a
-few rooms; four of the five characters beyond their opening state.
+few rooms. All five characters are now driven through a fight, including the
+Defect, whose orbs the observation reports.
 
 ### Bugs this found — in the oracle, not the game
 

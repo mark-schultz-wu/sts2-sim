@@ -132,6 +132,15 @@ public static class SelfTest
         await AFightCanBePlayedToTheEnd(state);
         state = await Driver.Restart();
 
+        await ADeadPlayerEndsTheRun(state);
+        state = await Driver.Restart();
+
+        await ReplayingAScriptGivesTheSameSequence(state);
+        state = await Driver.Restart();
+
+        await EveryCharacterCanBeDriven();
+        state = await Driver.Restart();
+
         await TravellingMovesAndRecordsWhereYouWent(state);
         state = await Driver.Restart();
 
@@ -438,6 +447,264 @@ public static class SelfTest
         Check($"travel: the legal set moved with us ({string.Join(" ", before)} -> {string.Join(" ", next)})",
             next.Count > 0 && !next.SequenceEqual(before));
         Check("travel: you cannot go back where you came from", !next.Contains(from));
+    }
+
+    /// <summary>
+    /// All five characters can be started, fought with, and observed.
+    /// </summary>
+    /// <remarks>
+    /// Everything else in this file is the Ironclad, and the mod's README lists
+    /// four of the five characters beyond their opening state as unverified.
+    /// That is not a small gap: each has its own card pool, and the Defect has
+    /// orbs — a whole region of the observation that was reported as empty for
+    /// as long as nobody had driven a Defect run, because the fields existed and
+    /// had never been written or read. The gap was reachability, not difficulty.
+    ///
+    /// The Gorget scenario is what makes five playthroughs affordable: the same
+    /// dumb policy survives on any character, so this is about whether the
+    /// game's other four halves can be driven at all, not about playing them
+    /// well.
+    /// </remarks>
+    private static async Task EveryCharacterCanBeDriven()
+    {
+        foreach (string who in new[] { "IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT" })
+        {
+            RunState state = await Driver.Restart(seed: null, character: who, ascension: 0);
+            Player me = state.Players[0];
+
+            Check($"{who}: the run started", me.Creature.IsAlive && me.Deck.Cards.Count > 0);
+
+            // Thirty is 120 Plating, still far more than a weak fight can spend,
+            // and five characters' worth of grants is the slowest part of this.
+            for (int i = 0; i < 30; i++)
+            {
+                await RelicCmd.Obtain(ModelDb.Relic<Gorget>().ToMutable(), me);
+            }
+
+            await EnterFight(state);
+
+            int turns = 0;
+            while (CombatManager.Instance.IsInProgress && turns < 40)
+            {
+                await AnswerAnythingParked();
+
+                while (await Driver.PlayOneCard(state))
+                {
+                    await AnswerAnythingParked();
+                    if (!CombatManager.Instance.IsInProgress)
+                    {
+                        break;
+                    }
+                }
+
+                if (!CombatManager.Instance.IsInProgress)
+                {
+                    break;
+                }
+
+                await Driver.EndTurn(state);
+                await AnswerAnythingParked();
+                turns++;
+            }
+
+            // Survival, not victory. Four of the five win with this policy; the
+            // Necrobinder plays out the cap without finishing, which says
+            // something about playing the first card in hand and nothing about
+            // whether the game can be driven. Asserting a win here would be
+            // asserting that a deliberately stupid policy is good enough, and
+            // would fail on the next character whose deck rewards thinking.
+            //
+            // That a fight *can* be finished is covered by the single-character
+            // playthrough above; this one is about breadth.
+            string outcome = CombatManager.Instance.IsInProgress
+                ? $"still fighting after {turns} turn(s)"
+                : $"won in {turns} turn(s)";
+            Check($"{who}: driven through a fight, {outcome}, at {me.Creature.CurrentHp} hp",
+                me.Creature.IsAlive);
+        }
+
+        // The Defect last, so its orbs can be inspected without another restart.
+        RunState defect = await Driver.Restart(seed: null, character: "DEFECT", ascension: 0);
+        await EnterFight(defect);
+
+        JsonElement combat = Capture(defect).GetProperty("combat");
+        Check("DEFECT: orbs are reported rather than omitted",
+            combat.TryGetProperty("orbs", out JsonElement orbs) && orbs.ValueKind != JsonValueKind.Null);
+        Check("DEFECT: the orb slots are described",
+            orbs.TryGetProperty("capacity", out _) && orbs.TryGetProperty("queue", out _));
+    }
+
+    /// <summary>
+    /// The same decisions produce the same states, step for step.
+    /// </summary>
+    /// <remarks>
+    /// D1 is the claim everything else rests on, and until now it was checked
+    /// one step deep: two runs agreeing on the state at run start, and two
+    /// fights agreeing on the state at combat start. A run that agrees at step
+    /// one and diverges at step five passes both.
+    ///
+    /// So this compares the whole sequence. It is also the shape the diff
+    /// harness will use — feed both sides the same decisions and compare after
+    /// every one — which makes it a rehearsal for the thing the project exists
+    /// to do, not only a test of it.
+    ///
+    /// The distinctness check is what stops it being vacuous. Comparing two
+    /// lists of identical digests would pass while proving nothing, and that is
+    /// exactly what this would degrade into if the digest ever stopped covering
+    /// the parts of the state a decision changes.
+    /// </remarks>
+    private static async Task ReplayingAScriptGivesTheSameSequence(RunState state)
+    {
+        List<string> first = await ScriptedFight(state);
+        RunState replayed = await Driver.Restart();
+        List<string> second = await ScriptedFight(replayed);
+
+        Check($"replay: the script ran the same number of steps ({first.Count} vs {second.Count})",
+            first.Count == second.Count && first.Count > 3);
+
+        Check($"replay: the states are distinct step to step ({first.Distinct().Count()} of {first.Count})",
+            first.Distinct().Count() > 3);
+
+        int diverged = -1;
+        for (int i = 0; i < System.Math.Min(first.Count, second.Count); i++)
+        {
+            if (first[i] != second[i])
+            {
+                diverged = i;
+                break;
+            }
+        }
+
+        Check(
+            diverged < 0
+                ? $"replay: {first.Count} steps agree exactly"
+                : $"replay: diverged at step {diverged} ({first[diverged]} vs {second[diverged]})",
+            diverged < 0);
+    }
+
+    /// <summary>
+    /// Answers whatever the game is waiting on, as blandly as possible.
+    /// </summary>
+    /// <remarks>
+    /// The first version of the multi-character playthrough hung on the Silent.
+    /// The Ironclad's opening deck asks nothing, so playing the first card every
+    /// turn never parks a decision — the moment a character's cards do ask, the
+    /// game waits for an answer that a policy of "play cards" cannot give, and
+    /// nothing moves again.
+    ///
+    /// Which is the same lesson the driver already carries: a decision point is
+    /// not a failure, it is the game doing its job. Any policy that drives more
+    /// than one character has to be able to say something.
+    ///
+    /// Deliberately the least interesting answer available — the minimum cards,
+    /// and decline rewards — so that what is under test stays "can this
+    /// character be driven" rather than "is this a good choice".
+    /// </remarks>
+    private static async Task AnswerAnythingParked()
+    {
+        while (Pending.Current is { } parked)
+        {
+            string answer;
+            if (parked.Kind == "rewards")
+            {
+                answer = "{\"skip\":true}";
+            }
+            else if (parked.Kind == "select_cards")
+            {
+                Dictionary<string, object?> described = parked.Describe();
+                int min = described.TryGetValue("min", out object? m) ? (int)m! : 0;
+                int offered = described.TryGetValue("options", out object? o)
+                    && o is System.Collections.ICollection c ? c.Count : 0;
+                int take = System.Math.Min(min, offered);
+                answer = $"{{\"cards\":[{string.Join(",", Enumerable.Range(0, take))}]}}";
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"selftest has no answer for a '{parked.Kind}' decision");
+            }
+
+            using JsonDocument doc = JsonDocument.Parse(answer);
+            string? refused = parked.Accept(doc.RootElement);
+            if (refused != null)
+            {
+                throw new InvalidOperationException($"selftest answer refused: {refused}");
+            }
+
+            await Driver.WaitForDecisionPoint();
+        }
+    }
+
+    /// <summary>
+    /// A short fight, played by a fixed policy, reporting the state after every
+    /// decision.
+    /// </summary>
+    private static async Task<List<string>> ScriptedFight(RunState state)
+    {
+        var digests = new List<string>();
+        await EnterFight(state);
+        digests.Add(Observation.Digest(state));
+
+        for (int turn = 0; turn < 3 && CombatManager.Instance.IsInProgress; turn++)
+        {
+            while (await Driver.PlayOneCard(state))
+            {
+                digests.Add(Observation.Digest(state));
+                if (!CombatManager.Instance.IsInProgress)
+                {
+                    return digests;
+                }
+            }
+
+            await Driver.EndTurn(state);
+            digests.Add(Observation.Digest(state));
+        }
+
+        return digests;
+    }
+
+    /// <summary>
+    /// Dying ends the run, and the observation says so and says how.
+    /// </summary>
+    /// <remarks>
+    /// This rule has failed before: a dead player was observed healing at a rest
+    /// site, because the driver kept accepting commands after a defeat and every
+    /// observation afterwards described a state the real game cannot reach.
+    ///
+    /// Win and loss are not distinguishable by <c>IsGameOver</c> alone —
+    /// <c>RunManager.WinRun</c> calls <c>GuaranteeKillAllPlayers</c>, so both end
+    /// with every player dead, and <c>CurrentRoom.IsVictoryRoom</c> is what
+    /// separates them. So `victory` is asserted as well as `runOver`: reporting
+    /// the run over without saying which is half an answer.
+    ///
+    /// `victory` is null before the run ends rather than false, because before
+    /// that it is not a meaningful question, and a simulator reading `false`
+    /// would be reading a claim nobody made.
+    /// </remarks>
+    private static async Task ADeadPlayerEndsTheRun(RunState state)
+    {
+        JsonElement before = Capture(state);
+        Check("run over: a live run does not claim to be over",
+            before.GetProperty("runOver").GetBoolean() == false);
+        Check("run over: victory is unanswered while the run is live",
+            before.GetProperty("victory").ValueKind == JsonValueKind.Null);
+        Check("run over: the player starts alive", before.GetProperty("alive").GetBoolean());
+
+        await EnterFight(state);
+        CmdResult died = new DieConsoleCmd().Process(state.Players[0], System.Array.Empty<string>());
+        Check($"run over: the player could be killed ({died.msg})", died.success);
+        if (died.task != null)
+        {
+            await died.task;
+        }
+
+        await Driver.WaitForDecisionPoint();
+
+        JsonElement after = Capture(state);
+        Check("run over: the run reports itself over", after.GetProperty("runOver").GetBoolean());
+        Check("run over: it reports a defeat rather than a victory",
+            after.GetProperty("victory").ValueKind == JsonValueKind.False);
+        Check("run over: the player reports as dead", !after.GetProperty("alive").GetBoolean());
     }
 
     /// <summary>
