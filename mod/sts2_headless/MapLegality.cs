@@ -31,7 +31,7 @@ namespace Sts2Headless;
 /// The order of the checks below is the game's and is load-bearing: the boss-row
 /// case is tested *before* free travel is consulted, so it wins.
 /// </remarks>
-internal static class MapLegality
+public static class MapLegality
 {
     public static IReadOnlyList<MapPoint> TravelableFrom(RunState state)
     {

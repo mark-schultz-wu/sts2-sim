@@ -44,7 +44,7 @@ Exits non-zero on failure, so it is usable as a gate.
 
 ## What it covers
 
-102 assertions, in two groups.
+117 assertions, in two groups.
 
 **That the observation is complete (H4)** — every field the observation promises
 is in it, out of combat and in, down to each creature reporting its intent. The
@@ -81,6 +81,29 @@ different move.
 **That an error-level log reaches the client once** — captured, drained, not
 drained twice. Plumbing only: see its comment for why a real swallowed failure
 could not be provoked.
+
+**That a restart inherits nothing** — every case here restarts between
+scenarios and assumes the next begins clean, and nothing checked it. The
+assertion is the whole-state digest rather than a hand-picked list of fields,
+since a list only catches leaks somebody already thought of.
+
+Not mutation-tested, and the reason is recorded rather than papered over: the
+obvious mutation, skipping `RunManager.CleanUp`, is caught by the game itself
+with *"State is already set"*, so a leaky restart cannot easily be synthesised.
+What is established is that the assertion is not vacuous — the paired check that
+the run *did* change before restarting passes, so the digest is sensitive to
+exactly the things a leak would carry over.
+
+**That winning a fight offers rewards** — reachable now that the console's
+`kill all` works. The point is not that a reward can be taken but that the game
+*asks*: with `TestMode` on and no `testSelector`, `RewardsSet.Offer` takes every
+reward itself, and an oracle that quietly pockets them produces observations no
+simulator can reproduce.
+
+**That travelling moves the run and changes what is next** — the map cases are
+otherwise all about which points are *legal*, and none of them travel. The
+interesting assertion is the third: a simulator tracking position but not the
+map's shape would pass a check on `at` alone and diverge on the floor after.
 
 **That the legal command set is right (H2)** — all nine of the game's
 legality-hook overrides. Notable

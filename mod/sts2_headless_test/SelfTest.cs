@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.DevConsole;
+using MegaCrit.Sts2.Core.DevConsole.ConsoleCommands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
@@ -119,6 +121,15 @@ public static class SelfTest
         state = await Driver.Restart();
 
         ErrorsAreCapturedAndHandedOverOnce();
+
+        await ARestartInheritsNothing(state);
+        state = await Driver.Restart();
+
+        await WinningAFightOffersRewards(state);
+        state = await Driver.Restart();
+
+        await TravellingMovesAndRecordsWhereYouWent(state);
+        state = await Driver.Restart();
 
         // Before anything grants free travel, since this case needs both halves.
         // It leaves the relic behind and stands on the last row, so the rest of
@@ -379,6 +390,142 @@ public static class SelfTest
 
         Check("selector: answering resolves it", await Driver.WaitForDecisionPoint());
         Check("selector: nothing is pending afterwards", Pending.Current == null);
+    }
+
+    /// <summary>
+    /// Travelling moves the run, records the move, and changes what is next.
+    /// </summary>
+    /// <remarks>
+    /// The map cases in this file are all about <em>travelability</em> — which
+    /// points the rules allow — and none of them travel. So the three fields a
+    /// simulator has to reproduce after a move (`at`, `visited`, and the next
+    /// legal set) were never observed changing.
+    ///
+    /// The last of those is the interesting one: a simulator that tracked
+    /// position but not the map's shape would pass a test that only checked
+    /// `at`, and diverge on the floor after.
+    /// </remarks>
+    private static async Task TravellingMovesAndRecordsWhereYouWent(RunState state)
+    {
+        List<string> before = Travelable(state);
+        Check($"travel: somewhere to go from the start ({before.Count} point(s))", before.Count > 0);
+
+        JsonElement start = Capture(state);
+        string from = start.GetProperty("map").GetProperty("at").GetString() ?? "?";
+        int visitedBefore = start.GetProperty("map").GetProperty("visited").GetArrayLength();
+
+        MapPoint target = MapLegality.TravelableFrom(state).First();
+        string to = $"{target.coord.col},{target.coord.row}";
+        await RunManager.Instance.EnterMapCoord(target.coord);
+        await Driver.WaitForDecisionPoint();
+
+        JsonElement after = Capture(state);
+        Check($"travel: the run moved ({from} -> {to})",
+            after.GetProperty("map").GetProperty("at").GetString() == to);
+
+        List<string> visited = after.GetProperty("map").GetProperty("visited")
+            .EnumerateArray().Select(e => e.GetString() ?? "?").ToList();
+        Check($"travel: the move was recorded ({visitedBefore} -> {visited.Count} visited)",
+            visited.Count == visitedBefore + 1 && visited.Contains(to));
+        Check("travel: where we came from is still recorded", visited.Contains(from));
+
+        // The point of a map is that arriving somewhere changes where you can go.
+        List<string> next = Travelable(state);
+        Check($"travel: the legal set moved with us ({string.Join(" ", before)} -> {string.Join(" ", next)})",
+            next.Count > 0 && !next.SequenceEqual(before));
+        Check("travel: you cannot go back where you came from", !next.Contains(from));
+    }
+
+    /// <summary>
+    /// Winning a fight parks a rewards decision, and it can be declined.
+    /// </summary>
+    /// <remarks>
+    /// <c>RewardChoice</c> and <c>TakeRewards</c> were asserted to be installed
+    /// and never exercised, because reaching them means winning a fight and
+    /// nothing here could. The console's <c>kill all</c> can, now that
+    /// <c>sts2_determinism</c> has made the console usable.
+    ///
+    /// Worth having beyond the coverage: with <c>TestMode</c> on and no
+    /// <c>testSelector</c>, <c>RewardsSet.Offer</c> takes every reward itself.
+    /// So the thing under test is not that a reward can be taken, it is that the
+    /// game asks instead of helping itself — an oracle that quietly pockets the
+    /// rewards is one whose observations a simulator cannot reproduce.
+    /// </remarks>
+    private static async Task WinningAFightOffersRewards(RunState state)
+    {
+        await EnterFight(state);
+
+        CmdResult killed = new KillConsoleCmd().Process(state.Players[0], new[] { "all" });
+        Check($"rewards: the fight could be won ({killed.msg})", killed.success);
+        if (killed.task != null)
+        {
+            await killed.task;
+        }
+
+        await Driver.WaitForDecisionPoint();
+
+        Pending? parked = Pending.Current;
+        if (parked == null)
+        {
+            Check("rewards: winning parked a decision", false);
+            return;
+        }
+
+        Check("rewards: the parked decision is a reward choice", parked.Kind == "rewards");
+
+        Dictionary<string, object?> described = parked.Describe();
+        Check("rewards: it says whether it can be skipped", described.ContainsKey("skippable"));
+        Check("rewards: it lists what is on offer",
+            described.TryGetValue("rewards", out object? offered)
+            && offered is System.Collections.ICollection { Count: > 0 });
+
+        using (JsonDocument nonsense = JsonDocument.Parse("{}"))
+        {
+            Check("rewards: an answer naming neither take nor skip is refused",
+                parked.Accept(nonsense.RootElement) != null);
+        }
+
+        using (JsonDocument skip = JsonDocument.Parse("{\"skip\":true}"))
+        {
+            Check("rewards: declining is accepted", parked.Accept(skip.RootElement) == null);
+        }
+
+        await Driver.WaitForDecisionPoint();
+        Check("rewards: answering resolves it", Pending.Current == null);
+    }
+
+    /// <summary>
+    /// A restarted run is the run that was started, not the one that was left.
+    /// </summary>
+    /// <remarks>
+    /// Every case in this file restarts between scenarios and assumes the next
+    /// one begins clean. Nothing checked that. It is also the shape of a bug the
+    /// suite already had: cases sharing one fight interfered, and the failures
+    /// read as product bugs rather than as test bugs. If a restart leaked, every
+    /// assertion after the first would be measuring a state nobody described.
+    ///
+    /// The whole-state digest is the assertion rather than a hand-picked list of
+    /// fields, because a hand-picked list only catches leaks somebody already
+    /// thought of. Relics, deck, hp, gold, floor, the RNG counters and the map
+    /// are all in it.
+    /// </remarks>
+    private static async Task ARestartInheritsNothing(RunState state)
+    {
+        string fresh = Observation.Digest(state);
+
+        // Change as many kinds of thing as cheaply as possible: an inventory, a
+        // pile, a position, and a fight in progress.
+        await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]);
+        await EnterFight(state);
+        await Driver.GrantCard(state, ModelDb.Card<BurningPact>().ToMutable());
+        await Driver.PlayOneCard(state);
+
+        string dirtied = Observation.Digest(state);
+        Check("restart: the run was actually changed before restarting", fresh != dirtied);
+
+        RunState restarted = await Driver.Restart();
+        Check("restart: a restarted run matches a fresh one",
+            Observation.Digest(restarted) == fresh);
     }
 
     /// <summary>
