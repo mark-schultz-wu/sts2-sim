@@ -273,8 +273,15 @@ public static class Observation
                 // Checked: NetId *is* set in a headless serve run, so the hook
                 // does apply. If that ever changes this reports plausible wrong
                 // numbers rather than failing, which is why it is written down.
-                d["damage"] = attack.GetSingleDamage(c.CombatState.Allies, c);
-                d["repeats"] = attack.Repeats;
+                // A monster taking a turn always has a CombatState, so this is
+                // guarded rather than assumed: an NRE here would lose the whole
+                // observation, and the absence of `damage` on an Attack is a
+                // louder signal than a crash mid-serialisation would be.
+                if (c.CombatState != null)
+                {
+                    d["damage"] = attack.GetSingleDamage(c.CombatState.Allies, c);
+                    d["repeats"] = attack.Repeats;
+                }
             }
 
             described.Add(d);

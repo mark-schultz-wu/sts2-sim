@@ -73,49 +73,54 @@ public static class Driver
     /// </remarks>
     public static async Task Run(Func<RunState, Task> body)
     {
-        // Loading first is not the same as having succeeded: a build mismatch
-        // leaves the determinism mod loaded, inert, and the game untouched.
-        // Driving a game nobody made reproducible is worse than not driving it.
-        //
-        // Exit rather than return. Nothing else is going to drive this process,
-        // and nothing else is going to stop it either -- a headless game with no
-        // driver runs until something external kills it, which is how this
-        // refusal first presented: as a hang, with the reason sitting in a log
-        // nobody was reading.
-        if (!Determinism.Active)
-        {
-            Log.Error(
-                "[headless] refusing to start: sts2_determinism loaded but did not activate, "
-                + "so the game has not been made reproducible. Exiting.");
-            Environment.Exit(1);
-            return;
-        }
-
-        // After the Determinism.Active check above, deliberately: patching only
-        // works under LD_PRELOAD=libgcc_s.so.1, and if that is missing the
-        // determinism mod has already failed and we have already exited. So this
-        // never throws for a reason the caller has not been told about.
-        new Harmony("sts2_headless").PatchAll(Assembly.GetExecutingAssembly());
-
-        // Once per process, and here rather than in whichever body happens to
-        // run. These used to sit inside Protocol.Serve, so selftest -- which
-        // runs instead of it -- drove a differently configured game than the one
-        // it was testing.
-        //
-        // UseSelector throws if one is already active, and CardSelectCmd.Reset
-        // leaves the stack alone while TestMode is on, so this survives every
-        // Restart. With TestMode on and no testSelector, RewardsSet.Offer takes
-        // *every* reward itself -- so installing one does not add a decision
-        // point, it takes one away from the game and gives it to the client.
-        CardSelectCmd.UseSelector(new HeadlessCardSelector());
-        RewardsSet.testSelector = RewardChoice.TakeRewards;
-        GameErrors.Watch();
-        WatchForWins();
-
         Clock.Start();
         try
         {
+            // Before waiting, so anything the game logs while loading lands in
+            // the first observation rather than nowhere.
+            GameErrors.Watch();
             await WaitUntilLoaded();
+
+            // Loading first is not the same as having succeeded: a build
+            // mismatch leaves the determinism mod loaded, inert, and the game
+            // untouched. Driving a game nobody made reproducible is worse than
+            // not driving it.
+            //
+            // This is checked here rather than before the wait because refusing
+            // has to end the process, and the only thing that can end it is
+            // Quit -- which needs a scene tree, which is what the wait is for.
+            // Environment.Exit does not work: it is called on Godot's main loop
+            // and never completes, so an earlier version of this logged
+            // "Exiting." and then hung until something external killed it.
+            if (!Determinism.Active)
+            {
+                Log.Error(
+                    "[headless] refusing to start: sts2_determinism loaded but did not activate, "
+                    + "so the game has not been made reproducible");
+                ExitCode = 1;
+                return;
+            }
+
+            // Everything below can throw, and all of it belongs inside this try.
+            // UseSelector throws outright if a selector is already installed, and
+            // PatchAll throws when Harmony cannot patch -- and Run is started
+            // with `_ = Driver.Run(...)`, so an escaping exception becomes an
+            // unobserved faulted task and the process hangs with no message.
+            new Harmony("sts2_headless").PatchAll(Assembly.GetExecutingAssembly());
+
+            // Once per process, and here rather than in whichever body happens
+            // to run. These used to sit inside Protocol.Serve, so selftest --
+            // which runs instead of it -- drove a differently configured game
+            // than the one it was testing.
+            //
+            // CardSelectCmd.Reset leaves the stack alone while TestMode is on,
+            // so this survives every Restart. With TestMode on and no
+            // testSelector, RewardsSet.Offer takes *every* reward itself -- so
+            // installing one does not add a decision point, it takes one away
+            // from the game and gives it to the client.
+            CardSelectCmd.UseSelector(new HeadlessCardSelector());
+            RewardsSet.testSelector = RewardChoice.TakeRewards;
+            WatchForWins();
 
             RunState state = BuildRunState(_seed, Array.Empty<ModifierModel>(), Character(null), ascension: 0);
             await StartRun(state);
@@ -126,8 +131,11 @@ public static class Driver
         catch (Exception e)
         {
             // A driver that half-works is worse than one that stops: every
-            // silent degradation turns a simulator bug into a passing test.
+            // silent degradation turns a simulator bug into a passing test. And
+            // it must exit non-zero, or `just selftest` reports success for a
+            // run that crashed before asserting anything.
             Log.Error($"[headless] driver failed at {Stage}: {e}");
+            ExitCode = 1;
         }
         finally
         {
@@ -161,6 +169,16 @@ public static class Driver
     private static void Quit()
     {
         Log.Info($"[headless] quitting after {Clock.Elapsed.TotalSeconds:F1}s with {ExitCode}");
+
+        // Nothing else can stop this process. Environment.Exit does not work
+        // from Godot's main loop, so if there is no tree to quit there is no
+        // way out and the only useful thing left is to say so loudly.
+        if (NGame.Instance == null)
+        {
+            Log.Error("[headless] no scene tree to quit through; this process will not exit on its own");
+            return;
+        }
+
         NGame.Instance.GetTree().Quit(ExitCode);
     }
 
