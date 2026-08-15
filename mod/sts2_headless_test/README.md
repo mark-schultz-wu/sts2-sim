@@ -127,15 +127,23 @@ Ironclad. The Defect matters most: its orbs were reported as empty for as long a
 nobody had driven a Defect run, because the fields existed and had never been
 written or read. The gap was reachability, not difficulty.
 
-It asserts survival rather than victory. Four of the five win with the policy;
-the Necrobinder plays out the cap without finishing, which says something about
-playing the first card in hand and nothing about whether the game can be driven.
+**It found a driver bug**, which is the argument for driving all five rather
+than one. The Necrobinder played 137 turns and left the enemies on 83 hp — their
+full starting total — then died when its Plating ran out. `PlayOneCard` chose its
+target with `!c.IsPlayer`, and a summoned ally is not the player: once the
+Necrobinder had a Bodyguard out, every Strike went into its own minion. Nothing
+errored, because attacking your own minion is legal. `Side == CombatSide.Enemy`
+fixes it and all five now win in five or six turns.
 
-Writing it turned up a real limit: the first version hung on the Silent. The
-Ironclad's opening deck asks nothing, so "play the first card" never parks a
-decision — the moment a character's cards *do* ask, the game waits for an answer
-that a policy of playing cards cannot give. Any policy driving more than one
-character has to be able to say something.
+Only the Necrobinder summons, which is why four characters' worth of testing
+would have missed it — and why the victory is asserted rather than mere
+survival. "It survived" would have called 137 futile turns a pass.
+
+Writing it also turned up a limit that is not a bug: the first version hung on
+the Silent. The Ironclad's opening deck asks nothing, so "play the first card"
+never parks a decision — the moment a character's cards *do* ask, the game waits
+for an answer that a policy of playing cards cannot give. Any policy driving more
+than one character has to be able to say something.
 
 **That winning a fight offers rewards** — reachable now that the console's
 `kill all` works. The point is not that a reward can be taken but that the game

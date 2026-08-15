@@ -444,7 +444,14 @@ public static class Driver
             return false;
         }
 
-        Creature? target = combat.Creatures.FirstOrDefault(c => !c.IsPlayer && c.IsAlive);
+        // Side, not IsPlayer. A summoned ally is not the player and is a
+        // perfectly good target for an attack, so `!IsPlayer` picked the
+        // Necrobinder's own Bodyguard and every Strike after the first summon
+        // went into it: 137 turns, enemies untouched on their full 83 hp, and
+        // the player eventually dying to them. Nothing errored, because
+        // attacking your own minion is legal.
+        Creature? target = combat.Creatures.FirstOrDefault(
+            c => c.Side == CombatSide.Enemy && c.IsAlive);
         CardModel? card = pcs.Hand.Cards.FirstOrDefault(c =>
             (pick == null || pick(c)) && (c.CanPlayTargeting(target) || c.CanPlayTargeting(null)));
 

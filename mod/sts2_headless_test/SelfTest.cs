@@ -484,11 +484,11 @@ public static class SelfTest
             await EnterFight(state);
 
             int turns = 0;
-            while (CombatManager.Instance.IsInProgress && turns < 40)
+            while (CombatManager.Instance.IsInProgress && turns < 30)
             {
                 await AnswerAnythingParked();
 
-                while (await Driver.PlayOneCard(state))
+                while (await PlaySomething(state))
                 {
                     await AnswerAnythingParked();
                     if (!CombatManager.Instance.IsInProgress)
@@ -507,20 +507,22 @@ public static class SelfTest
                 turns++;
             }
 
-            // Survival, not victory. Four of the five win with this policy; the
-            // Necrobinder plays out the cap without finishing, which says
-            // something about playing the first card in hand and nothing about
-            // whether the game can be driven. Asserting a win here would be
-            // asserting that a deliberately stupid policy is good enough, and
-            // would fail on the next character whose deck rewards thinking.
-            //
-            // That a fight *can* be finished is covered by the single-character
-            // playthrough above; this one is about breadth.
+            // The win is asserted, not just survival, because requiring it is
+            // what found the bug this test exists around: the Necrobinder used
+            // to play out any cap without touching the enemies, and "it
+            // survived" would have called that a pass. All five now finish in
+            // five or six turns against a cap of thirty, so the margin is wide
+            // enough that this fails for a broken driver rather than a
+            // borderline policy.
+            int enemyHp = CombatManager.Instance.DebugOnlyGetState()?.Enemies
+                .Where(e => e.IsAlive).Sum(e => e.CurrentHp) ?? 0;
             string outcome = CombatManager.Instance.IsInProgress
-                ? $"still fighting after {turns} turn(s)"
-                : $"won in {turns} turn(s)";
-            Check($"{who}: driven through a fight, {outcome}, at {me.Creature.CurrentHp} hp",
-                me.Creature.IsAlive);
+                ? $"still fighting after {turns} turn(s), {enemyHp} enemy hp left"
+                : me.Creature.IsAlive
+                    ? $"won in {turns} turn(s)"
+                    : $"DIED on turn {turns}, {enemyHp} enemy hp left";
+            Check($"{who}: {outcome}, at {me.Creature.CurrentHp} hp",
+                !CombatManager.Instance.IsInProgress && me.Creature.IsAlive);
         }
 
         // The Defect last, so its orbs can be inspected without another restart.
@@ -580,6 +582,29 @@ public static class SelfTest
                 ? $"replay: {first.Count} steps agree exactly"
                 : $"replay: diverged at step {diverged} ({first[diverged]} vs {second[diverged]})",
             diverged < 0);
+    }
+
+    /// <summary>
+    /// Plays something that hurts if it can, and anything at all otherwise.
+    /// </summary>
+    /// <remarks>
+    /// "Play the first playable card" is not quite dumb enough to work. The
+    /// Necrobinder played 137 turns of it and left the enemies on 83 hp — their
+    /// full starting total — so it dealt no damage at all and then died when its
+    /// Plating ran out. No turn cap fixes that: something in its opening hand is
+    /// always playable and never an attack, so the first card is never the one
+    /// that matters.
+    ///
+    /// Preferring a card that targets an enemy is still a policy nobody could
+    /// call good, which is the point — it must not be good, or the test starts
+    /// measuring the policy. It only has to be capable of finishing a fight.
+    /// </remarks>
+    private static async Task<bool> PlaySomething(RunState state)
+    {
+        bool attacked = await Driver.PlayOneCard(state, c =>
+            c.TargetType is TargetType.AnyEnemy or TargetType.AllEnemies or TargetType.RandomEnemy);
+
+        return attacked || await Driver.PlayOneCard(state);
     }
 
     /// <summary>
