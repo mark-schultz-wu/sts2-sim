@@ -1,4 +1,6 @@
 using System;
+using MegaCrit.Sts2.Core.Rewards;
+using MegaCrit.Sts2.Core.Commands;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -84,6 +86,21 @@ public static class Driver
             Environment.Exit(1);
             return;
         }
+
+        // Once per process, and here rather than in whichever body happens to
+        // run. These used to sit inside Protocol.Serve, so selftest -- which
+        // runs instead of it -- drove a differently configured game than the one
+        // it was testing.
+        //
+        // UseSelector throws if one is already active, and CardSelectCmd.Reset
+        // leaves the stack alone while TestMode is on, so this survives every
+        // Restart. With TestMode on and no testSelector, RewardsSet.Offer takes
+        // *every* reward itself -- so installing one does not add a decision
+        // point, it takes one away from the game and gives it to the client.
+        CardSelectCmd.UseSelector(new HeadlessCardSelector());
+        RewardsSet.testSelector = RewardChoice.TakeRewards;
+        GameErrors.Watch();
+        WatchForWins();
 
         Clock.Start();
         try

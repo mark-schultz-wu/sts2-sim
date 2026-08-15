@@ -1,4 +1,5 @@
 using System;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -370,6 +371,56 @@ internal sealed class RewardChoice : Pending
     }
 
     protected override void Fail(Exception e) => _answer.SetException(e);
+
+    /// <summary>
+    /// Asks the client what to take from a reward set, then takes it.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the game's stack, inside <c>RewardsSet.Offer</c>, which is the
+    /// point: <c>Offer</c> has already registered the set with the synchronizer,
+    /// and <c>SelectLocalReward</c> throws without that registration. Generating
+    /// rewards and driving selection ourselves would mean reimplementing that
+    /// bookkeeping, which is the class of mistake this project keeps finding.
+    /// </remarks>
+    internal static async Task TakeRewards(RewardsSet set)
+    {
+        // A real player may leave a rewards screen having taken some and not
+        // others, so an incomplete set is not an error here. Left at its default
+        // of true, Offer would throw the moment the client skipped anything.
+        set.ThrowInTestIfRewardsNotTaken = false;
+
+        RewardPlan plan = await RewardChoice.Ask(set);
+        RewardsSetSynchronizer sync = RunManager.Instance.RewardsSetSynchronizer;
+
+        try
+        {
+            if (plan.Skip)
+            {
+                sync.SkipLocalRewardsSet();
+                return;
+            }
+
+            foreach ((Reward reward, int? cardIndex) in plan.Take)
+            {
+                // Read back by the synchronous GetSelectedCardReward, which
+                // cannot ask anyone anything. Cleared straight after so a later
+                // reward cannot silently inherit this one's answer.
+                RewardPlan.CardInFlight = cardIndex;
+                try
+                {
+                    await sync.SelectLocalReward(reward);
+                }
+                finally
+                {
+                    RewardPlan.CardInFlight = null;
+                }
+            }
+        }
+        finally
+        {
+            BackgroundWork.Release();
+        }
+    }
 }
 
 /// <summary>What the client decided to do with a reward set.</summary>

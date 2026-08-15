@@ -37,6 +37,7 @@ configuration than the thing it was testing.
 | encounter RNG stays seeded from the run, not the clock | patches `EncounterModel.DebugRandomizeRng` to do nothing |
 | first-time-user tutorials never appear | patches `ProgressSaveManager.SeenFtue` to return `true` |
 | a canonical monster's RNG being read is reported | patches `MonsterModel.Rng` to warn, once per monster id |
+| MonoMod's leftover native helpers are deleted | sweeps the temp directory at load |
 
 `TestMode` is the game's own test seam. It skips every `Cmd.Wait` and the
 animation paths that check it — a determinism matter as much as a speed one,
@@ -85,6 +86,14 @@ A warning rather than a throw, deliberately. The game reads this property from
 presentation paths a headless run does not exercise but might one day, and a
 determinism mod that crashes the game to report a determinism risk has made
 things worse.
+
+## It cleans up after itself
+
+Patching extracts a native helper to the temp directory, `dlopen`s it, and never
+unlinks it — one per process, forever. 398 of them totalling 7.5MB had
+accumulated here over eleven days before anyone looked. This mod is the reason
+they exist, so it sweeps them at load: everything older than a minute, which
+leaves alone any that another process has just written and not yet opened.
 
 ## Launching requires `LD_PRELOAD=libgcc_s.so.1`
 

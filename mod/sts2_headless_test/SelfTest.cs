@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Modifiers;
@@ -99,6 +100,13 @@ public static class SelfTest
         Log.Info($"[selftest] discovered {total} legality-hook overrides across {matrix.Count} hooks");
 
         var covered = new HashSet<string>();
+
+        // Regression guard. These used to be installed inside Protocol.Serve,
+        // so this suite -- which runs instead of it -- drove a game with no
+        // selector at all, and passed anyway because none of its cases happened
+        // to reach a card-selection prompt. The first one that did would have
+        // blocked on a UI that does not exist headless.
+        Check("a reward selector is installed", RewardsSet.testSelector != null);
 
         // Before anything grants free travel, since this case needs both halves.
         // It leaves the relic behind and stands on the last row, so the rest of

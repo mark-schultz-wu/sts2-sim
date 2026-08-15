@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Debug;
@@ -73,6 +76,63 @@ public static class Determinism
 
         Active = true;
         Log.Info($"[determinism] active on {PinnedVersion}; TestMode on, patches applied");
+
+        SweepPatchHelpers();
+    }
+
+    /// <summary>
+    /// Deletes the native helpers MonoMod leaves behind.
+    /// </summary>
+    /// <remarks>
+    /// Patching extracts a helper to the temp directory, <c>dlopen</c>s it, and
+    /// never unlinks it — one per process, forever. 384 of them totalling 7.5MB
+    /// had accumulated here before anyone looked, over eleven days. We are the
+    /// reason they exist, so we are the ones to clean them up.
+    ///
+    /// Only ones older than a minute, which leaves alone any that another
+    /// process has just written and not yet opened. Deleting one already mapped
+    /// is safe on Linux — the mapping outlives the directory entry — but there
+    /// is no reason to race for it.
+    /// </remarks>
+    private static void SweepPatchHelpers()
+    {
+        int swept = 0;
+        int failed = 0;
+        DateTime cutoff = DateTime.UtcNow.AddMinutes(-1);
+
+        try
+        {
+            foreach (string path in Directory.EnumerateFiles(Path.GetTempPath(), "mm-exhelper.so.*").ToList())
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(path) >= cutoff)
+                    {
+                        continue;
+                    }
+
+                    File.Delete(path);
+                    swept++;
+                }
+                catch (Exception)
+                {
+                    // Another user's, or gone between the listing and the
+                    // delete. Counted rather than logged per file: this is
+                    // housekeeping, and one failure is not worth a line.
+                    failed++;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"[determinism] could not sweep MonoMod helpers: {e.Message}");
+            return;
+        }
+
+        if (swept > 0 || failed > 0)
+        {
+            Log.Info($"[determinism] swept {swept} leftover MonoMod helper(s), {failed} skipped");
+        }
     }
 
     private static bool VerifyPin()

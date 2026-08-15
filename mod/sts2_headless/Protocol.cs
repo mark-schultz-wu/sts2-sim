@@ -57,18 +57,6 @@ internal static class Protocol
         _state = state;
         _channel = await Channel.Open();
 
-        // Once per process, not per run: UseSelector throws if one is already
-        // active, and CardSelectCmd.Reset leaves the stack alone while TestMode
-        // is on, so this survives every Restart.
-        CardSelectCmd.UseSelector(new HeadlessCardSelector());
-        GameErrors.Watch();
-        Driver.WatchForWins();
-
-        // With TestMode on and no testSelector, RewardsSet.Offer takes *every*
-        // reward itself. So installing this does not add a decision point; it
-        // takes one away from the game and gives it to the client.
-        RewardsSet.testSelector = TakeRewards;
-
         Log.Info($"[headless] serving protocol v{Version} over {_channel.Describe}");
 
         await Send(new Dictionary<string, object?>
@@ -220,56 +208,6 @@ internal static class Protocol
             Log.Error($"[headless] {cmd} failed: {e}");
             await Error(cmd, $"{e.GetType().Name}: {e.Message}");
             return false;
-        }
-    }
-
-    /// <summary>
-    /// Asks the client what to take from a reward set, then takes it.
-    /// </summary>
-    /// <remarks>
-    /// Runs on the game's stack, inside <c>RewardsSet.Offer</c>, which is the
-    /// point: <c>Offer</c> has already registered the set with the synchronizer,
-    /// and <c>SelectLocalReward</c> throws without that registration. Generating
-    /// rewards and driving selection ourselves would mean reimplementing that
-    /// bookkeeping, which is the class of mistake this project keeps finding.
-    /// </remarks>
-    private static async Task TakeRewards(RewardsSet set)
-    {
-        // A real player may leave a rewards screen having taken some and not
-        // others, so an incomplete set is not an error here. Left at its default
-        // of true, Offer would throw the moment the client skipped anything.
-        set.ThrowInTestIfRewardsNotTaken = false;
-
-        RewardPlan plan = await RewardChoice.Ask(set);
-        RewardsSetSynchronizer sync = RunManager.Instance.RewardsSetSynchronizer;
-
-        try
-        {
-            if (plan.Skip)
-            {
-                sync.SkipLocalRewardsSet();
-                return;
-            }
-
-            foreach ((Reward reward, int? cardIndex) in plan.Take)
-            {
-                // Read back by the synchronous GetSelectedCardReward, which
-                // cannot ask anyone anything. Cleared straight after so a later
-                // reward cannot silently inherit this one's answer.
-                RewardPlan.CardInFlight = cardIndex;
-                try
-                {
-                    await sync.SelectLocalReward(reward);
-                }
-                finally
-                {
-                    RewardPlan.CardInFlight = null;
-                }
-            }
-        }
-        finally
-        {
-            BackgroundWork.Release();
         }
     }
 
