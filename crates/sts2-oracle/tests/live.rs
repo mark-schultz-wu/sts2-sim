@@ -211,6 +211,105 @@ fn a_refusal_leaves_the_session_usable() {
     assert!(after.state.is_object());
 }
 
+/// Every way a command can be turned down, in one launch.
+///
+/// The code review that prompted this found three bugs in paths nothing ran:
+/// the refusal to start, the exceptions around `Driver.Run`'s setup, and two
+/// unguarded dereferences. Tests that only walk the happy path leave the
+/// failure handling to be discovered in production, and here "production" is a
+/// divergence report nobody can explain.
+///
+/// One launch for the lot, because a launch costs ~3s and an assertion costs
+/// nothing. Every one of these is refused from the same opening state, so no
+/// case can disturb another — which the selftest suite learned the hard way.
+#[test]
+#[ignore = "launches the real game"]
+#[serial(game)]
+fn illegal_commands_are_refused_and_leave_the_session_alive() {
+    /// Asserts a command is turned down, and turned down for the stated reason.
+    ///
+    /// The reason matters as much as the refusal: a command refused because the
+    /// oracle misunderstood it looks identical to one refused correctly, and
+    /// only the message tells them apart.
+    fn refused(oracle: &mut Oracle, command: Command, expect: &str) {
+        let refusal = oracle
+            .send(&command)
+            .expect("a refusal is still a reply, not a transport failure")
+            .expect_err(&format!("{command:?} should have been refused"));
+        assert!(
+            refusal
+                .message
+                .to_lowercase()
+                .contains(&expect.to_lowercase()),
+            "{command:?} was refused, but not for the stated reason:\n  \
+             wanted something mentioning {expect:?}\n  got {:?}",
+            refusal.message
+        );
+    }
+
+    let mut oracle = launch();
+    start(&mut oracle);
+
+    // Out of combat, so nothing that needs one may proceed.
+    refused(
+        &mut oracle,
+        Command::PlayCard {
+            index: 0,
+            target: None,
+        },
+        "not in combat",
+    );
+    refused(&mut oracle, Command::EndTurn, "not in combat");
+    refused(&mut oracle, Command::Buy { index: 0 }, "not in a shop");
+
+    // Malformed in themselves.
+    refused(
+        &mut oracle,
+        Command::Grant {
+            card: None,
+            relic: None,
+        },
+        "requires",
+    );
+    refused(
+        &mut oracle,
+        Command::Answer(Answer::Skip),
+        "nothing is pending",
+    );
+
+    // Names the game does not know. The message comes from the game rather than
+    // from us, which is the point of asking it instead of guessing.
+    refused(
+        &mut oracle,
+        Command::Grant {
+            relic: Some("NOT_A_REAL_RELIC".into()),
+            card: None,
+        },
+        "NOT_A_REAL_RELIC",
+    );
+    refused(
+        &mut oracle,
+        Command::Fight {
+            encounter: "NOT_A_REAL_ENCOUNTER".into(),
+        },
+        "not found",
+    );
+
+    // Legal shape, illegal move: the refusal lists what would have worked.
+    refused(
+        &mut oracle,
+        Command::Travel { col: 99, row: 99 },
+        "travelable",
+    );
+
+    // Eight refusals later the session still advances. `start` rather than
+    // `observe`, which this client does not build — a command that changes
+    // something is a better proof of life than one that only reports.
+    let after = start(&mut oracle);
+    assert!(after.state.is_object());
+    assert_eq!(after.game_errors, None, "a refusal should log nothing");
+}
+
 /// A healthy run reports no game errors at all.
 ///
 /// It used to report one on every card played: the model layer calls
@@ -299,6 +398,46 @@ fn dropping_the_client_stops_the_game() {
     assert!(
         !std::path::Path::new(&format!("/proc/{pid}")).exists(),
         "game process {pid} survived the client that launched it"
+    );
+}
+
+/// Refusing to start must end the process, not sit there.
+///
+/// This is the bug a code review found and nothing covered: `Driver.Run` called
+/// `Environment.Exit(1)`, which does not work from Godot's main loop, so the
+/// process logged "Exiting." and ran until something external killed it. The
+/// branch had never been taken, because the only way to reach it is to break
+/// determinism — and it stopped being broken the day the exit was added.
+///
+/// Launched directly rather than through [`Oracle`], because the client always
+/// supplies `LD_PRELOAD` and the point is to withhold it: without libgcc,
+/// Harmony cannot patch, `sts2_determinism` stays inert, and the driver refuses.
+#[test]
+#[ignore = "launches the real game"]
+#[serial(game)]
+fn refusing_to_start_exits_rather_than_hanging() {
+    let dir = sts2_oracle::game_dir_from_env().expect("STS2_GAME_DIR");
+    let began = Instant::now();
+
+    let status = std::process::Command::new(dir.join("SlayTheSpire2"))
+        .current_dir(&dir)
+        .args(["--headless", "--force-steam=off"])
+        .env("STS2_HEADLESS_MODE", "selftest")
+        .env_remove("LD_PRELOAD")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .expect("the game should launch");
+
+    let took = began.elapsed();
+    assert!(
+        took < Duration::from_secs(60),
+        "took {took:?} — the refusal is hanging again"
+    );
+    assert_eq!(
+        status.code(),
+        Some(1),
+        "a driver that refuses to start must exit non-zero"
     );
 }
 
