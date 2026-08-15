@@ -72,6 +72,7 @@ strictly true. All of it is deliberate; none of it is hidden:
 | `ChecksumTracker.IsEnabled = true` | re-enables the game's own divergence detector, which `TestMode` and a singleplayer service each silently disable | none known |
 | `SetUpTest(shouldSave: false)` | a driven run must not write a save | none known |
 | calls `GetTree().Quit(ExitCode)` when done | otherwise the process runs forever; SIGTERM proved unreliable | the process exits under the mod's control, not yours |
+| patches `NScreenShake.Shake`/`Rumble` to skip when there is no target | with no screen the method already did nothing but log; suppressing it is what makes `gameErrors` mean something | a benign message is hidden, so anything genuinely wrong with screen shake would be too — nothing headless can act on it either way |
 | no run scene is instantiated | `res://scenes/run.tscn` segfaults headless | the model layer calls presentation inline in places; those errors are caught and now reported (see `gameErrors`) |
 
 `TestMode.IsOn` and the FTUE suppression are **not** in this table any more:

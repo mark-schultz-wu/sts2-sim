@@ -1211,20 +1211,27 @@ process behind.
    comes back as `CmdResult(success: false, "Encounter 'X' not found")`, which
    the protocol surfaces as a refusal. Each further command still needs asking.
    (H6, H10)
-3. Do the caught `Missing screenShake target!` errors have model-visible side
-   effects? **Now observable rather than argued about:** they surface in
-   `gameErrors`, and appear on the combat-reward step and on `play_card` while
-   the rewards apply and the damage lands correctly — evidence for
-   presentation-only, not proof.
-
-   There is a cost to leaving this open. README.md says "if you see `gameErrors`
-   in a response, do not trust the observation attached to it", and this one
-   appears on an ordinary card play. A warning that fires every time is a
-   warning people learn to skip, which is exactly how the failure it exists to
-   catch would get through. Either it is classified as benign or the rule needs
-   softening; it should not stay both loud and routine. (H10)
+3. *(answered — see below.)*
 
 *Answered so far:*
+
+- **The `Missing screenShake target!` errors are presentation-only, and are now
+  suppressed.** `NScreenShake.Shake` and `Rumble` log and return when
+  `ShakeTarget` is null; the branch they skip only constructs a value whose
+  effect is `ShakeTarget.Position = ...`, so with no target the method already
+  did nothing. `sts2_headless` patches them to skip silently in that case.
+  Proof rather than argument: the digests of a four-command scenario are
+  byte-identical before and after the patch, and the damage still lands.
+
+  This was worth fixing because it made `gameErrors` unusable. The model layer
+  calls presentation inline — `CreatureCmd` asks for a shake when damage lands —
+  so an ordinary card play logged an error, and across this session's captured
+  runs that one message accounts for 352 of the game's error output while every
+  other line is our own test output or a real failure. README.md tells a reader
+  not to trust an observation carrying `gameErrors`; a warning that fires every
+  turn is one people learn to skip, which is how the half-completed action it
+  exists to catch would get through. A live test now asserts a card play reports
+  none.
 
 - One process can run many scenarios — `RunManager.CleanUp` is public and nulls
   `State`. (H8)

@@ -1,11 +1,13 @@
 using System;
 using MegaCrit.Sts2.Core.Rewards;
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.DevConsole.ConsoleCommands;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Assets;
 using MegaCrit.Sts2.Core.Combat;
@@ -88,6 +90,12 @@ public static class Driver
             Environment.Exit(1);
             return;
         }
+
+        // After the Determinism.Active check above, deliberately: patching only
+        // works under LD_PRELOAD=libgcc_s.so.1, and if that is missing the
+        // determinism mod has already failed and we have already exited. So this
+        // never throws for a reason the caller has not been told about.
+        new Harmony("sts2_headless").PatchAll(Assembly.GetExecutingAssembly());
 
         // Once per process, and here rather than in whichever body happens to
         // run. These used to sit inside Protocol.Serve, so selftest -- which

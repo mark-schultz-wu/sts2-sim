@@ -211,6 +211,44 @@ fn a_refusal_leaves_the_session_usable() {
     assert!(after.state.is_object());
 }
 
+/// A healthy run reports no game errors at all.
+///
+/// It used to report one on every card played: the model layer calls
+/// presentation inline, `CreatureCmd` asks for a screen shake when damage lands,
+/// and headless has no screen to shake. `sts2_headless` patches that out, which
+/// is what makes a non-empty `gameErrors` mean something again — the field is
+/// how a half-completed action is caught, and it cannot do that while it fires
+/// on every turn.
+#[test]
+#[ignore = "launches the real game"]
+#[serial(game)]
+fn an_ordinary_card_play_logs_no_game_errors() {
+    let mut oracle = launch();
+    start(&mut oracle);
+
+    let fought = observation(
+        oracle
+            .send(&Command::Fight {
+                encounter: ENCOUNTER.into(),
+            })
+            .expect("fight should not fail at the transport level"),
+    );
+    assert_eq!(fought.game_errors, None, "entering a fight logged errors");
+
+    // Index 2 is the Strike in this encounter's opening hand; creature 1 is the
+    // Bowlbug Rock. Both come from the observation above.
+    let played = observation(
+        oracle
+            .send(&Command::PlayCard {
+                index: 2,
+                target: Some(1),
+            })
+            .expect("play_card should not fail at the transport level"),
+    );
+    assert_eq!(played.game_errors, None, "playing a card logged errors");
+    assert!(played.resolved);
+}
+
 /// `Unassigned` is a `RoomType` the enum carries and nothing can be jumped to —
 /// it is the "no map point" placeholder `fight` lands on. It used to parse, be
 /// offered in the refusal message, and be handed to `EnterRoomDebug`.
