@@ -44,7 +44,7 @@ Exits non-zero on failure, so it is usable as a gate.
 
 ## What it covers
 
-31 assertions across all nine of the game's legality-hook overrides. Notable
+32 assertions across all nine of the game's legality-hook overrides. Notable
 ones, because they were written wrong first:
 
 - Three check the **preventer** a blocked card reports, against the model

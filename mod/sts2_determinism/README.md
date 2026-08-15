@@ -163,6 +163,13 @@ leaves this mod loaded, inert, and the game untouched. `sts2_headless` checks it
 and exits the process rather than returning, because a headless game with no
 driver runs until something external kills it.
 
+## Further reading
+
+[REQUIREMENTS.md](REQUIREMENTS.md) is the standard this mod is held to: R1, R11
+and R13, each written so it can be failed. The numbering is shared with
+[`sts2_headless`](../sts2_headless/REQUIREMENTS.md) and does not restart — R1–R14
+were written when this was one mod, and the split renumbered nothing.
+
 ## The version pin
 
 `Init` refuses to run unless `release_info.json` reports
@@ -182,7 +189,7 @@ all mutation-tested:
 - The FTUE patch — an unseen tutorial reports as seen *with the profile flag
   left on*, and asking does not turn it off.
 
-The 31 assertions in `sts2_headless_test` also exercise a game configured by this
+The 32 assertions in `sts2_headless_test` also exercise a game configured by this
 mod, so a configuration that broke the driver would show up there.
 
 **Verified once, by hand:** that both mods load in dependency order

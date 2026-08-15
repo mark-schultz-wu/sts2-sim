@@ -68,18 +68,22 @@ strictly true. All of it is deliberate; none of it is hidden:
 
 | change | why | risk |
 |---|---|---|
-| `TestMode.IsOn = true` | skips animation waits; makes screens return null instead of instantiating | this is the game's own test seam, but it *does* change control flow — reward selection in particular behaves differently under it |
-| installs an `ICardSelector` | routes card prompts to the client | without it the game would block on a UI that does not exist headless |
-| `ChecksumTracker.IsEnabled = true` | re-enables the game's own divergence detector, which `TestMode` and singleplayer each silently disable | none known |
-| `SetFtuesEnabled(false)` | tutorial prompts gate progress and write to disk | none known |
-| calls `GetTree().Quit(0)` when done | otherwise the process runs forever; SIGTERM proved unreliable | the process exits under the mod's control, not yours |
+| installs an `ICardSelector` and a reward selector | routes both prompts to the client | without them the game blocks on a UI that does not exist headless. Installed in `Driver.Run`, so every mode gets them — they used to be installed inside `Protocol.Serve`, and the selftest suite ran without them |
+| `ChecksumTracker.IsEnabled = true` | re-enables the game's own divergence detector, which `TestMode` and a singleplayer service each silently disable | none known |
+| `SetUpTest(shouldSave: false)` | a driven run must not write a save | none known |
+| calls `GetTree().Quit(ExitCode)` when done | otherwise the process runs forever; SIGTERM proved unreliable | the process exits under the mod's control, not yours |
 | no run scene is instantiated | `res://scenes/run.tscn` segfaults headless | the model layer calls presentation inline in places; those errors are caught and now reported (see `gameErrors`) |
+
+`TestMode.IsOn` and the FTUE suppression are **not** in this table any more:
+[`sts2_determinism`](../sts2_determinism/README.md) owns them, along with the
+build pin and the encounter-RNG patch. This mod refuses to start if that one did
+not activate.
 
 ## How much of it is actually verified
 
 **Verified by an automatic check, re-run every build:**
 
-- 31 assertions in [`sts2_headless_test`](../sts2_headless_test/README.md)
+- 32 assertions in [`sts2_headless_test`](../sts2_headless_test/README.md)
   (`STS2_HEADLESS_MODE=selftest`), covering all nine
   of the game's legality-hook overrides. The list of hooks is discovered by
   reflection over the game assembly, so a hook added by a future patch shows up

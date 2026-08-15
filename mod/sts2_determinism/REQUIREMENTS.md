@@ -1,0 +1,114 @@
+# What sts2_determinism has to do
+
+> **This document and the code it describes were written by Claude, not by a
+> human, and have not been reviewed line by line.** It is a working record, not
+> a specification anyone signed off. Claims marked *measured*, *built* or
+> *mutation-tested* were checked by running something; claims marked *resolved*
+> or argued from the decompiled source were not.
+
+Each requirement is written so it can be failed. Where something is not yet
+measured or not yet known, it says so rather than assuming.
+
+**The numbering is shared across both files and does not restart.** R1–R14 were
+written when this was one mod, and around a hundred and thirty references to
+them exist in the source of three mods and the Rust client. Splitting the
+document renumbered nothing.
+
+This mod makes the game reproducible. It drives nothing and observes nothing;
+[`sts2_headless`](../sts2_headless/REQUIREMENTS.md) does that, and everything it
+claims rests on this one holding. See [README.md](README.md) for what is
+actually implemented and how much of it is verified.
+
+## The requirements, and where they live
+
+| | requirement | owner |
+|---|---|---|
+| R1 | Identical inputs produce identical outputs | [determinism](../sts2_determinism/REQUIREMENTS.md) |
+| R2 | A run cannot start without an explicit seed | [headless](../sts2_headless/REQUIREMENTS.md) |
+| R3 | The legal command set is reported | headless |
+| R4 | One command advances exactly one decision | headless |
+| R5 | The observation is complete | headless |
+| R6 | Divergence is detectable out of combat too | headless |
+| R7 | Scenarios can be constructed, not only replayed | headless |
+| R8 | Throughput is measured and reported | headless |
+| R9 | The process boundary follows the measurement | headless |
+| R10 | The protocol is machine-readable and versioned | headless |
+| R11 | Refuses to answer for the wrong build | determinism |
+| R12 | Failure is loud | headless |
+| R13 | The player's own saves are never touched | determinism |
+| R14 | The driver ends its own process | headless |
+
+---
+
+## R1 — Identical inputs produce identical outputs
+
+The same seed and the same command sequence must yield byte-identical
+observations, in a fresh process, on a different machine, on a different day.
+
+*Why it is not free.* `Rng.Chaotic` is seeded from `DateTimeOffset.Now`, and
+there are 193 references to it. All the ones we checked are view-layer or gated,
+but three traps remain, none of which fails loudly:
+
+- `SeedHelper` invents a seed when none is supplied (R2).
+- `MonsterModel.Rng` returns `Chaotic` **silently** when queried on a
+  non-mutable canonical model.
+- `EncounterModel.DebugRandomizeRng()` reseeds from the wall clock at
+  one-second granularity, and `FightConsoleCmd` calls it unconditionally (R7).
+
+The last is the shape to watch for: nondeterminism coarse enough that short
+test runs often agree, so it reads as flakiness rather than as a broken oracle.
+
+*Check.* Replay one fixed script three times in three fresh processes and
+diff the full observation logs. Then do it again on another machine. Any
+difference is a defect in the oracle, not in the simulator.
+
+*First result: passes, single-machine.* Three fresh processes on seed `ORACLE1`
+produced identical state, RNG counters, checksum sequence and decision count.
+A cold profile (modded profile directory deleted first) matched a warm one.
+
+*Not yet checked:* another machine, and anything beyond one combat.
+
+*A hazard this check nearly missed.* Profile progress persists across runs, so
+the second run of anything is not the first. `Player has seen ftue shuffle_ftue!`
+appeared on an early run and never again, which made a later comparison of two
+warm runs look clean while saying nothing about a fresh profile. The driver now
+calls `SaveManager.SetFtuesEnabled(false)`, and the check deletes the profile
+between runs. **Determinism comparisons between two already-warmed runs prove
+less than they appear to.**
+
+---
+
+## R11 — The oracle refuses to answer for the wrong build
+
+*Built.* `Determinism.Init` hard-stops unless `release_info.json` reports
+`main_assembly_hash: 1692500715` (v0.107.1). Every claim in this file is a claim
+about one build's behaviour, so answering for a different one is worse than not
+answering.
+
+The check lives here rather than in the driver because the pin exists to protect
+these claims. `sts2_headless` inherits it: it checks `Determinism.Active` before
+starting, and a failed pin leaves that false. **Loading is not succeeding** —
+the loader guarantees this mod ran first, not that it worked.
+
+---
+
+## R13 — The player's own saves are never touched
+
+The oracle writes to no real profile and no real save. `SetUpTest` defaults
+`shouldSave: false`; keep it that way, and confirm nothing else writes.
+
+*Check.* Checksum the profile directory before and after a full run.
+
+*Result: satisfied for the player's data, not for ours.* A driven run leaves the
+unmodded profile untouched — this install has none, and everything lands under
+`default/1/modded/profile1/`. What does change there is `saves/progress.save`
+(and its `.backup`), because run-level actions record profile progress:
+`RelicCmd.Obtain` calls `SaveManager.MarkRelicAsSeen`, and fighting an enemy
+records a discovery. Godot's own logs rotate and Sentry writes a per-run
+breadcrumb directory; neither is ours to control.
+
+So R13 holds in the sense that matters, but the residue is a **determinism**
+concern rather than a tidiness one (R1): profile state that persists across runs
+is state the oracle did not declare. The modded profile should be treated as
+disposable, and the R1 check deletes it between runs rather than trusting it to
+be inert.

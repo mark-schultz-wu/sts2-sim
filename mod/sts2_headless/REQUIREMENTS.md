@@ -1,24 +1,55 @@
-# What the oracle has to do
+# What sts2_headless has to do
 
 > **This document and the code it describes were written by Claude, not by a
 > human, and have not been reviewed line by line.** It is a working record, not
 > a specification anyone signed off. Claims marked *measured*, *built* or
 > *mutation-tested* were checked by running something; claims marked *resolved*
-> or argued from the decompiled source were not. See [README.md](README.md).
-
-The simulator is a Rust reimplementation of Slay the Spire 2. It is checked by
-putting the real game and the simulator in the same state, feeding both the same
-decisions, and comparing after every one. This document is the standard the
-oracle is held to: if the tool satisfies everything here, a simulator that
-agrees with it is correct in the ways we can check, and one that disagrees has a
-real bug.
+> or argued from the decompiled source were not.
 
 Each requirement is written so it can be failed. Where something is not yet
 measured or not yet known, it says so rather than assuming.
 
+**The numbering is shared across both files and does not restart.** R1–R14 were
+written when this was one mod, and around a hundred and thirty references to
+them exist in the source of three mods and the Rust client. Splitting the
+document renumbered nothing.
+
+The simulator is a Rust reimplementation of Slay the Spire 2. It is checked by
+putting the real game and the simulator in the same state, feeding both the same
+decisions, and comparing after every one. This document is the standard the
+driver is held to: if it satisfies everything here, a simulator that agrees with
+it is correct in the ways we can check, and one that disagrees has a real bug.
+
+Reproducibility is not in this file. [`sts2_determinism`](../sts2_determinism/REQUIREMENTS.md)
+owns R1, R11 and R13, and this mod refuses to start without it.
+
+## The requirements, and where they live
+
+| | requirement | owner |
+|---|---|---|
+| R1 | Identical inputs produce identical outputs | [determinism](../sts2_determinism/REQUIREMENTS.md) |
+| R2 | A run cannot start without an explicit seed | [headless](../sts2_headless/REQUIREMENTS.md) |
+| R3 | The legal command set is reported | headless |
+| R4 | One command advances exactly one decision | headless |
+| R5 | The observation is complete | headless |
+| R6 | Divergence is detectable out of combat too | headless |
+| R7 | Scenarios can be constructed, not only replayed | headless |
+| R8 | Throughput is measured and reported | headless |
+| R9 | The process boundary follows the measurement | headless |
+| R10 | The protocol is machine-readable and versioned | headless |
+| R11 | Refuses to answer for the wrong build | determinism |
+| R12 | Failure is loud | headless |
+| R13 | The player's own saves are never touched | determinism |
+| R14 | The driver ends its own process | headless |
+
+---
+
 ## The shape of the thing
 
-One process runs the real game, headless, with our mod loaded. It speaks a
+One process runs the real game, headless, with three mods loaded:
+[`sts2_determinism`](../sts2_determinism/README.md) makes it reproducible, this
+one drives and observes it, and a test mod for each is installed only when its
+suite is being run. It speaks a
 line-oriented protocol: given a scenario it constructs the state and reports an
 observation; thereafter the simulator sends one decision and the oracle replies
 with the next observation. It is spoken to over a loopback TCP connection, from
@@ -36,42 +67,7 @@ Three capabilities carry it:
   run-end and orbs are the remaining gaps.
 
 ---
-
-## R1 — Identical inputs produce identical outputs
-
-The same seed and the same command sequence must yield byte-identical
-observations, in a fresh process, on a different machine, on a different day.
-
-*Why it is not free.* `Rng.Chaotic` is seeded from `DateTimeOffset.Now`, and
-there are 193 references to it. All the ones we checked are view-layer or gated,
-but three traps remain, none of which fails loudly:
-
-- `SeedHelper` invents a seed when none is supplied (R2).
-- `MonsterModel.Rng` returns `Chaotic` **silently** when queried on a
-  non-mutable canonical model.
-- `EncounterModel.DebugRandomizeRng()` reseeds from the wall clock at
-  one-second granularity, and `FightConsoleCmd` calls it unconditionally (R7).
-
-The last is the shape to watch for: nondeterminism coarse enough that short
-test runs often agree, so it reads as flakiness rather than as a broken oracle.
-
-*Check.* Replay one fixed script three times in three fresh processes and
-diff the full observation logs. Then do it again on another machine. Any
-difference is a defect in the oracle, not in the simulator.
-
-*First result: passes, single-machine.* Three fresh processes on seed `ORACLE1`
-produced identical state, RNG counters, checksum sequence and decision count.
-A cold profile (modded profile directory deleted first) matched a warm one.
-
-*Not yet checked:* another machine, and anything beyond one combat.
-
-*A hazard this check nearly missed.* Profile progress persists across runs, so
-the second run of anything is not the first. `Player has seen ftue shuffle_ftue!`
-appeared on an early run and never again, which made a later comparison of two
-warm runs look clean while saying nothing about a fresh profile. The driver now
-calls `SaveManager.SetFtuesEnabled(false)`, and the check deletes the profile
-between runs. **Determinism comparisons between two already-warmed runs prove
-less than they appear to.**
+---
 
 ## R2 — A run cannot start without an explicit seed
 
@@ -86,6 +82,8 @@ whose `IsPlayable` is false — a second reason not to lean on it.
 
 *Check.* Start a run with no seed; it must exit non-zero with a clear message,
 not begin playing.
+
+---
 
 ## R3 — The legal command set is reported, in and out of combat
 
@@ -397,6 +395,8 @@ The two are not the same question: `RunManager.WinRun` calls
 and `CurrentRoom.IsVictoryRoom` is what separates them. The observation reports
 `alive`, `runOver` and `victory` (the last only once the run has ended).
 
+---
+
 ## R4 — One command advances the state exactly one decision
 
 The oracle issues one command and returns when the game is quiescent and waiting
@@ -457,6 +457,8 @@ bound rather than trusting the task.
 *Check.* A decision count that runs ahead of `AfterActionExecuted` count is the
 signature of this bug; assert they stay consistent.
 
+---
+
 ## R5 — The observation is complete
 
 After each command: draw/hand/discard/exhaust piles in order, every creature
@@ -510,6 +512,8 @@ combat holding nothing" cannot compare equal.
 floor), orbs (no Defect run driven yet), and out-of-combat legality, which is
 R3's remaining gap.
 
+---
+
 ## R6 — Divergence is detectable out of combat too
 
 `RunManager.SendPostActionChecksum` is gated on
@@ -545,7 +549,7 @@ that matters.
 `!TestMode.IsOn && NetService.Type is one of {2,3,4}`. `NetGameType` is
 `{None, Singleplayer, Host, Client, Replay}`, so that set is Host/Client/Replay
 — meaning checksums are off for a singleplayer service **regardless** of
-`TestMode`, and `TestMode.IsOn = true` (which the mod sets, to skip animation
+`TestMode`, and `TestMode.IsOn = true` (which `sts2_determinism` sets, to skip animation
 waits) would disable them anyway. Two independent reasons, both silent.
 
 `IsEnabled` has a public setter, so the fix is to re-enable it after `SetUpTest`
@@ -559,6 +563,8 @@ handing us the full state alongside the hash, not merely the hash.
 Separately, assert `ChecksumTracker.IsEnabled` is true once a run is set up —
 it defaults to true at construction and is then turned off, so a regression here
 is silent.
+
+---
 
 ## R7 — Scenarios can be constructed, not only replayed
 
@@ -672,7 +678,7 @@ Mid-combat construction through these commands is not "paths the game never
 uses" — they are the game's paths, which is what makes a bespoke combat save
 format unnecessary.
 
-**But console commands are debug tools, not oracle primitives, and some inject
+**Console commands are debug tools, not oracle primitives, and some injected
 nondeterminism on purpose.** `FightConsoleCmd` calls
 `encounterModel.DebugRandomizeRng()`, which is
 
@@ -682,12 +688,26 @@ _rng = new Rng((uint)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds);
 
 — wall-clock, at one-second granularity. A scenario built with `fight` would
 reproduce for runs landing in the same second and diverge for runs a second
-apart, which presents as flakiness rather than as an obvious break. The oracle
-therefore calls `RunManager.EnterRoomDebug(roomType, pointType, encounterModel)`
-directly and leaves the encounter's RNG alone.
+apart, which presents as flakiness rather than as an obvious break.
 
-**Every command adopted must first be audited** for `Rng.Chaotic`,
-`DebugRandomizeRng`, and wall-clock reads. Adopt them one at a time, by reading
+**This paragraph used to end "so the oracle avoids that command", and that was
+the wrong conclusion.** Avoiding it is what produced an `enter_fight` that
+teleports into one hardcoded encounter at an unassigned map point — a state the
+real game cannot reach — while the console's whole vocabulary sat unused.
+Making the game deterministic is what the mod is *for*.
+
+`sts2_determinism` now patches `DebugRandomizeRng` to do nothing, which does not
+reimplement seeding but gets out of the way of the game's own: an unset `_rng`
+is the signal for `GenerateMonstersWithSlots` to seed from
+`runState.Rng.Seed + TotalFloor + hash(Id.Entry)`. That is measured, not argued.
+So the console is available, and `enter_fight` is now a placeholder waiting to be
+replaced by a command that takes an encounter.
+
+**Every command adopted must still be audited** for `Rng.Chaotic`,
+`DebugRandomizeRng`, and wall-clock reads. The `Rng.Chaotic` half of that audit
+is done: 193 uses, all presentation except `MonsterModel.Rng`, which silently
+returns the clock-seeded stream for a canonical model and now warns when read.
+Adopt them one at a time, by reading
 each one, not wholesale.
 
 *To verify at runtime.* That each command we depend on works headless — some may
@@ -747,7 +767,7 @@ Under independent interpretation both sides would default it, agree, and the gap
 would stay invisible.
 
 The scenario format itself stays language-neutral and small, and the
-scenario→game translation lives in the mod, so the game's save schema never
+scenario→game translation lives in this mod, so the game's save schema never
 enters Rust and a game update churns only C#.
 
 ### Reaching states no command can express
@@ -794,6 +814,8 @@ asked for. Then confirm a constructed state and a replayed state that should be
 identical produce identical observations (the same check as R5).
 
 *Unexplored seam:* `Core.TestSupport` also contains `TestRngInjector`.
+
+---
 
 ## R8 — Throughput is measured and reported
 
@@ -843,6 +865,8 @@ is the number R9 was waiting on and it favours in-process.
 *Still to measure.* A full run rather than one fight, and whether the frame-rate
 lead above recovers the protocol's 2×.
 
+---
+
 ## R9 — The process boundary follows the measurement
 
 Whether the simulator hosts the oracle in-process or talks to it over a pipe is
@@ -884,6 +908,8 @@ compares runs *within* one process against each other, not against fresh
 processes, and it compares the state at run start rather than after driving. A
 leak that only manifests deeper into a run would still be invisible. The full
 check stays open.
+
+---
 
 ## R10 — The protocol is machine-readable and versioned
 
@@ -1044,11 +1070,14 @@ game awaiting a `TaskCompletionSource` nobody will complete. `Restart` must fail
 any outstanding pending explicitly — `CleanUp` already calls
 `CardSelectCmd.Reset()`, but our own `TaskCompletionSource` is not its business.
 
-### The transport is behind an interface, and why it is TCP
+### Why it is TCP
 
-`IChannel` is three methods. Nothing above it knows which implementation it has,
-because the transport was the least settled part of this requirement and the
-most expensive to get permanently wrong.
+There was an `IChannel` interface here with a stdio implementation beside the TCP
+one, because the transport was the least settled part of this requirement and the
+most expensive to get permanently wrong. It settled. Stdio was unusable by
+anything but a human with `grep`, for the reason below, and no client ever ran
+without a port — so both the second implementation and the interface over them
+are gone. One implementation behind an interface is a guess about a second one.
 
 **stdout is not available**, which is the constraint that drives everything
 else. The engine writes 141 lines there before we emit anything — a Godot
@@ -1082,11 +1111,7 @@ simulator, for the reason stated.
 TCP produced identical digest sequences — R1 verified end to end through the
 protocol rather than only in-process.
 
-## R11 — The oracle refuses to answer for the wrong build
-
-Already implemented: `Oracle.Init` hard-stops unless `release_info.json` reports
-`main_assembly_hash: 1692500715` (v0.107.1). An oracle answering for a different
-build than the one we reason about is worse than no oracle.
+---
 
 ## R12 — Failure is loud
 
@@ -1128,26 +1153,7 @@ This also gives open question 4 a mechanism: the `Missing screenShake target!`
 errors will now show up in `gameErrors` on whichever commands produce them,
 rather than having to be argued about from inspection.
 
-## R13 — The player's own saves are never touched
-
-The oracle writes to no real profile and no real save. `SetUpTest` defaults
-`shouldSave: false`; keep it that way, and confirm nothing else writes.
-
-*Check.* Checksum the profile directory before and after a full run.
-
-*Result: satisfied for the player's data, not for ours.* A driven run leaves the
-unmodded profile untouched — this install has none, and everything lands under
-`default/1/modded/profile1/`. What does change there is `saves/progress.save`
-(and its `.backup`), because run-level actions record profile progress:
-`RelicCmd.Obtain` calls `SaveManager.MarkRelicAsSeen`, and fighting an enemy
-records a discovery. Godot's own logs rotate and Sentry writes a per-run
-breadcrumb directory; neither is ours to control.
-
-So R13 holds in the sense that matters, but the residue is a **determinism**
-concern rather than a tidiness one (R1): profile state that persists across runs
-is state the oracle did not declare. The modded profile should be treated as
-disposable, and the R1 check deletes it between runs rather than trusting it to
-be inert.
+---
 
 ## R14 — The oracle ends its own process
 
@@ -1165,6 +1171,8 @@ Quitting goes through the scene tree, which is how the game exits itself
 
 *Check.* A full run costs ~2.9s wall clock end to end, exits 0, and leaves no
 process behind.
+
+---
 
 ---
 
@@ -1186,6 +1194,8 @@ process behind.
 - **Rendering.** Headless only.
 - **Co-op.** Deferred. Single-player must work first; nothing here should make
   co-op impossible later.
+
+---
 
 ## Open questions
 
