@@ -155,6 +155,13 @@ Modes, via `STS2_HEADLESS_MODE`:
 Other variables: `STS2_HEADLESS_PORT` (required by `serve`) + `STS2_HEADLESS_TOKEN`,
 and `STS2_HEADLESS_OBS=full`.
 
+`STS2_HEADLESS_TIMEOUT` is the wall-clock budget in seconds, default 600, `0` to
+disable. Whenever a mode is set the process also makes SIGTERM and SIGINT
+immediately fatal. Both are H12, and neither applies to a player's game. Do not
+launch one of these unsupervised with the clock off: a hang holds everything the
+run allocated, ignores the SIGTERM your supervisor and your shutdown both rely
+on, and can take the machine with it.
+
 ## The version pin
 
 `Oracle.Init` refuses to run unless `release_info.json` reports
@@ -192,7 +199,7 @@ specific class of bug running the real engine is meant to remove.
 four response types, every command and its arguments, the pendings, and the rules
 about what is accepted when. Read it before writing a client.
 
-[REQUIREMENTS.md](REQUIREMENTS.md) is the standard this is held to: eleven
-requirements, H1–H11, each written so it can be failed, with what has been measured,
+[REQUIREMENTS.md](REQUIREMENTS.md) is the standard this is held to: twelve
+requirements, H1–H12, each written so it can be failed, with what has been measured,
 what has not, and what is still an open question. It is long, and it is the
 honest record — including the parts that are not done.

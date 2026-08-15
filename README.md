@@ -23,5 +23,5 @@ tests. `mod/deploy.sh` builds and installs all four; the game's own manifest
 [The protocol](mod/sts2_headless/PROTOCOL.md) is the wire contract on one page.
 The standard the mods are held to is split between
 [determinism](mod/sts2_determinism/REQUIREMENTS.md) (D1–D3) and
-[headless](mod/sts2_headless/REQUIREMENTS.md) (H1–H11), so a requirement's
+[headless](mod/sts2_headless/REQUIREMENTS.md) (H1–H12), so a requirement's
 prefix names the file it lives in.

@@ -25,6 +25,16 @@ public static class Headless
         // Configured by environment rather than command line: Godot owns argv,
         // and unrecognised flags there are its business, not ours.
         string? mode = Environment.GetEnvironmentVariable("STS2_HEADLESS_MODE");
+
+        // Before the switch, so it covers the modes this mod does not run
+        // itself: a selftest that hangs is still this process, and the test mods
+        // load after this one. Not armed for a null mode, which is a player's
+        // game and must keep Godot's own signal handling.
+        if (mode is "serve" or "selftest" or "determinism")
+        {
+            Deadline.Arm();
+        }
+
         switch (mode)
         {
             case "serve":

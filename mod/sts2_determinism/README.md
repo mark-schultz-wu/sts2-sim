@@ -167,7 +167,7 @@ driver runs until something external kills it.
 
 [REQUIREMENTS.md](REQUIREMENTS.md) is the standard this mod is held to: D1, D2
 and D3, each written so it can be failed. `D` is this mod and `H` is
-[`sts2_headless`](../sts2_headless/REQUIREMENTS.md), which owns H1–H11. They were
+[`sts2_headless`](../sts2_headless/REQUIREMENTS.md), which owns H1–H12. They were
 one sequence, R1–R14, when this was one mod; splitting it renumbered them and
 rewrote every reference in the source of four mods and the Rust client.
 

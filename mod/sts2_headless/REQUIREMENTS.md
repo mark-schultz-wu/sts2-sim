@@ -41,6 +41,7 @@ owns D1, D2 and D3, and this mod refuses to start without it.
 | **H9** | The protocol is machine-readable and versioned | **here** |
 | **H10** | Failure is loud | **here** |
 | **H11** | The driver ends its own process | **here** |
+| **H12** | A process that hangs still dies | **here** |
 
 ---
 
@@ -1173,6 +1174,46 @@ Quitting goes through the scene tree, which is how the game exits itself
 
 *Check.* A full run costs ~2.9s wall clock end to end, exits 0, and leaves no
 process behind.
+
+---
+
+## H12 — A process that hangs still dies
+
+A headless process ends on SIGTERM, and ends itself if it has not finished
+within a wall-clock budget.
+
+*Why this earns a requirement.* H11 covers the driver finishing. It says nothing
+about the driver never finishing, and that is the case that hurts: when a body
+awaits something that never completes, `Driver.Run`'s `finally` is unreachable
+and every exit path in this mod is behind it. The process then sits at full tilt
+holding whatever the run had allocated.
+
+This is not hypothetical. On 2026-08-14 a hung `EveryCharacterCanBeDriven` was
+sent SIGTERM by its supervisor's ten-minute timeout, ignored it, and stayed.
+Successive runs stacked more of them. Over about forty minutes the machine went
+from 22% memory to 96.8% with swap completely full, load average 154, and 113
+tasks blocked in uninterruptible sleep; ssh stopped answering and the power
+button could not complete a shutdown, because shutdown is SIGTERM to everything
+and these instances do not answer SIGTERM. It needed the power switch.
+
+Godot answers SIGTERM by asking its main loop to close, which is the one thread
+that is not answering — so the signal that is supposed to be the safety net is
+the one thing guaranteed not to work here. Hence a handler that does not go
+through the scene tree, and a clock that does not go through the driver.
+
+The implementation deliberately uses nothing that can block: `write(2)` to
+stderr and `_exit(2)`, off the main loop. `Log`, `Console` and
+`Environment.Exit` are all reachable only through locks the stuck thread may
+hold, and `Environment.Exit` has already been observed here never to complete
+(see H11).
+
+Not armed when `STS2_HEADLESS_MODE` is unset. That process is somebody's actual
+game, and it must keep Godot's signal handling so it saves on the way out.
+
+*Check.* With `STS2_HEADLESS_TIMEOUT=3` a selftest that needs ~9s exits 124 at
+3.7s, naming the budget. With the clock off, SIGTERM to a mid-run instance exits
+143 in 26ms and leaves no process behind. A default run is unaffected: 144
+assertions pass and it exits 0.
 
 ---
 

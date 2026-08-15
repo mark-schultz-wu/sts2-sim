@@ -35,13 +35,19 @@ deploy:
 # LD_PRELOAD is not optional: MonoMod's native helper imports _Unwind_* from
 # libgcc and declares no dependencies, and the game does not link libgcc, so
 # without this every Harmony patch throws and sts2_determinism stays inert.
+#
+# `timeout -k` and not a bare `timeout`: the mod's own deadline (H12) is the
+# first line of defence, and this is the second, for a build too broken to reach
+# it. Without `-k` this would send a SIGTERM that an un-armed instance ignores,
+# which is how a hung selftest once survived its supervisor and took the machine
+# down with it.
 selftest: deploy
-    cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=selftest \
+    cd "$STS2_GAME_DIR" && timeout -k 5 300 env LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=selftest \
         ./SlayTheSpire2 --headless --force-steam=off
 
 # What sts2_determinism claims, measured. Lives in mod/sts2_determinism_test.
 determinism-test: deploy
-    cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=determinism \
+    cd "$STS2_GAME_DIR" && timeout -k 5 300 env LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=determinism \
         ./SlayTheSpire2 --headless --force-steam=off
 
 # The tests that launch the game, ~3s of startup each.
