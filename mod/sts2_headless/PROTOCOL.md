@@ -42,7 +42,7 @@ Sent unprompted on connect, before any request:
 
 ```json
 {"type":"hello","protocol":1,"game":"v0.107.1","assemblyHash":1692500715,
- "commands":["start","enter_fight","travel","play_card","end_turn","answer",
+ "commands":["start","fight","travel","play_card","end_turn","answer",
              "grant","enter_room","choose_option","buy","observe","quit"]}
 ```
 
@@ -88,7 +88,7 @@ unplayable `play_card` names the reason and the blocking model, and a bad
 | cmd | arguments |
 |---|---|
 | `start` | `seed`, `character`, `ascension` (default `0`), `modifiers` — an array of modifier entry names, matched case-insensitively |
-| `enter_fight` | — (see the warning below) |
+| `fight` | `encounter` — a model entry name, e.g. `BOWLBUGS_WEAK` |
 | `enter_room` | `type` — a `RoomType` name, case-insensitive |
 | `travel` | `col`, `row` — integers |
 | `play_card` | `index` — into the hand; `target` — a creature's `CombatId`, or absent |
@@ -103,23 +103,22 @@ unplayable `play_card` names the reason and the blocking model, and a bad
 `"full": true` is honoured on any command, since every one of them answers with an
 observation.
 
-### `enter_fight` is not a move
+### `fight` is scenario construction, not a move
 
-It teleports into one **hardcoded** encounter — `BowlbugsWeak` — at
-`MapPointType.Unassigned`, abandoning whatever room the run was in. The floor
-advances while `map.at` and `map.visited` do not, so map and room disagree by
-construction, and a run reaches combat without ever having taken its Neow bonus.
-That is a state the real game cannot produce.
+It jumps straight into the named encounter at `MapPointType.Unassigned`,
+abandoning whatever room the run was in. The floor advances while `map.at` and
+`map.visited` do not, so map and room disagree by construction, and a run can
+reach combat without having taken its Neow bonus.
 
-It exists because the game's own `fight` console command calls
-`encounterModel.DebugRandomizeRng()`, which seeds from `DateTime.UtcNow` at
-one-second granularity — so a scenario built with it reproduces only for runs
-landing in the same second. Avoiding that command rather than patching it is
-what left this one hardcoded.
+That is the point rather than a defect: reaching a chosen fight by travelling
+means hunting for a seed that puts one where you want it, which is what H6 exists
+to avoid. Use `travel` to a `Monster` point when you want the run the seed
+actually produces.
 
-**Use `travel` to a `Monster` point instead.** It reaches a real fight, chosen by
-the seed, on the map. `enter_fight` should be treated as a placeholder for the
-parameterised scenario command H6 actually needs.
+It goes through the game's own `FightConsoleCmd`, so an unknown name comes back
+with the game's message — `Encounter 'X' not found` — rather than a guess of
+ours. That command reseeds the encounter from the wall clock; `sts2_determinism`
+patches that to nothing, which is what makes it usable here at all.
 
 Naming a modifier, card or relic that does not exist is refused rather than
 ignored — silently starting an unmodified run would hide the client bug behind a

@@ -1,6 +1,8 @@
 using System;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.DevConsole;
+using MegaCrit.Sts2.Core.DevConsole.ConsoleCommands;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -360,11 +362,40 @@ public static class Driver
     /// meant to play well — the oracle never chooses. It exists to drive enough
     /// decisions to time one.
     /// </remarks>
-    public static async Task EnterFight(RunState state)
+    /// <summary>
+    /// Jumps into a named encounter, through the game's own console command.
+    /// </summary>
+    /// <remarks>
+    /// This used to hardcode <c>BowlbugsWeak</c> and call
+    /// <c>EnterRoomDebug</c> directly, because <c>FightConsoleCmd</c> calls
+    /// <c>DebugRandomizeRng</c> and H6 concluded the command should therefore be
+    /// avoided. <c>sts2_determinism</c> patches that to nothing now, so the
+    /// command is deterministic and there is no reason to reimplement it.
+    ///
+    /// It still lands at <c>MapPointType.Unassigned</c> — the console command
+    /// does that itself — so the run reaches combat off the map. For scenario
+    /// construction that is the point: reaching a chosen fight by travelling
+    /// means seed-hunting for a seed that puts one where you want it, which is
+    /// what H6 exists to avoid.
+    ///
+    /// Returns the console's own refusal message when it declines, rather than a
+    /// message of ours: it knows why better than we do.
+    /// </remarks>
+    public static async Task<string?> EnterFight(RunState state, string encounter)
     {
         Stage = "entering fight";
-        EncounterModel encounter = ModelDb.Encounter<BowlbugsWeak>().ToMutable();
-        await RunManager.Instance.EnterRoomDebug(RoomType.Monster, MapPointType.Unassigned, encounter);
+        CmdResult result = new FightConsoleCmd().Process(state.Players[0], new[] { encounter });
+        if (!result.success)
+        {
+            return result.msg;
+        }
+
+        if (result.task != null)
+        {
+            await result.task;
+        }
+
+        return null;
     }
 
     /// <summary>

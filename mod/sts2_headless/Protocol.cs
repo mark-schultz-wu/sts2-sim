@@ -65,7 +65,7 @@ internal static class Protocol
             ["protocol"] = Version,
             ["game"] = "v0.107.1",
             ["assemblyHash"] = 1692500715,
-            ["commands"] = new[] { "start", "enter_fight", "travel", "play_card", "end_turn", "answer", "grant", "enter_room", "choose_option", "buy", "observe", "quit" },
+            ["commands"] = new[] { "start", "fight", "travel", "play_card", "end_turn", "answer", "grant", "enter_room", "choose_option", "buy", "observe", "quit" },
         });
 
         while (true)
@@ -149,9 +149,8 @@ internal static class Protocol
                     await Start(req);
                     return false;
 
-                case "enter_fight":
-                    await Driver.EnterFight(_state);
-                    await Observe(req, "enter_fight");
+                case "fight":
+                    await Fight(req);
                     return false;
 
                 case "enter_room":
@@ -234,6 +233,35 @@ internal static class Protocol
     /// game never produces, and the divergence surfaces later as a simulator
     /// bug that is not one.
     /// </remarks>
+    /// <summary>
+    /// Jumps into a named encounter (H6).
+    /// </summary>
+    /// <remarks>
+    /// The encounter is a model entry name, refused by the game rather than
+    /// validated here: this mod has no list to check against, and the console
+    /// command already answers "Encounter 'X' not found" better than a guess
+    /// would.
+    /// </remarks>
+    private static async Task Fight(JsonElement req)
+    {
+        string? encounter = Str(req, "encounter");
+        if (encounter == null)
+        {
+            await Error("fight", "fight requires an 'encounter' entry name");
+            return;
+        }
+
+        string? refused = await Driver.EnterFight(_state, encounter);
+        if (refused != null)
+        {
+            await Error("fight", refused);
+            return;
+        }
+
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "fight", resolved);
+    }
+
     private static async Task Grant(JsonElement req)
     {
         Player me = _state.Players[0];

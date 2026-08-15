@@ -20,12 +20,16 @@
 
 use serde_json::Value;
 use serial_test::serial;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sts2_oracle::{Answer, Command, Config, Error, Oracle, PROTOCOL_VERSION, Reply, Response};
 
 /// The seed the mod itself defaults to. Named here so the determinism test is
 /// obviously asking both runs the same question.
 const SEED: &str = "ORACLE1";
+
+/// The encounter the scenario tests jump into. Two monsters, one of which the
+/// encounter picks with its own RNG — which is what makes it worth checking.
+const ENCOUNTER: &str = "BOWLBUGS_WEAK";
 
 fn launch() -> Oracle {
     let dir = sts2_oracle::game_dir_from_env()
@@ -88,12 +92,12 @@ fn the_greeting_matches_what_this_client_speaks() {
     // Every command this crate can build must be one the oracle accepts, or the
     // enum has drifted from the protocol it claims to implement.
     //
-    // The oracle offers two this client deliberately does not build. `observe`
-    // reports state without advancing, and every response that reports state
-    // already carries it. `enter_fight` teleports into one hardcoded encounter
-    // at an unassigned map point, which is a state the real game cannot reach.
+    // The oracle also offers `observe`, which this client deliberately does not
+    // build: it reports state without advancing, and every response that reports
+    // state already carries it.
     for cmd in [
         "start",
+        "fight",
         "travel",
         "play_card",
         "end_turn",
@@ -146,6 +150,42 @@ fn the_same_seed_gives_the_same_digest() {
     };
 
     assert_eq!(first, second, "same seed, different state");
+}
+
+/// The encounter RNG patch, measured end to end.
+///
+/// `sts2_determinism` patches `DebugRandomizeRng` so an encounter is seeded from
+/// the run rather than the clock, and `sts2_determinism_test` asserts the seed
+/// directly. This asserts the consequence: the same seed and the same encounter
+/// produce the same fight, in two processes, more than a wall-clock second
+/// apart — which is the granularity the clock seeding used, and so the interval
+/// over which an unpatched build would disagree with itself.
+#[test]
+#[ignore = "launches the real game"]
+#[serial(game)]
+fn the_same_encounter_gives_the_same_fight_across_a_second() {
+    fn build() -> (String, Instant) {
+        let mut oracle = launch();
+        start(&mut oracle);
+        let reply = oracle
+            .send(&Command::Fight {
+                encounter: ENCOUNTER.into(),
+            })
+            .expect("fight should not fail at the transport level");
+        (observation(reply).digest, Instant::now())
+    }
+
+    let (first, at) = build();
+    let (second, then) = build();
+
+    // Without this the test could quietly become vacuous if launches ever got
+    // fast enough for both fights to land in the same clock second.
+    let gap = then.duration_since(at);
+    assert!(
+        gap > Duration::from_secs(1),
+        "both fights landed inside one clock second ({gap:?}), so this proves nothing"
+    );
+    assert_eq!(first, second, "same seed and encounter, different fight");
 }
 
 /// A refused command is data, not a broken session. If this ever starts failing

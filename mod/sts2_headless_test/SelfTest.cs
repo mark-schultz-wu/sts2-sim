@@ -125,29 +125,29 @@ public static class SelfTest
         // the rule under test. Order-dependent tests are worse than missing
         // ones, because they fail in ways that read as product bugs.
         covered.Add("Enthralled");
-        await Driver.EnterFight(state);
+        await EnterFight(state);
         await BlockedByHookIsReported(state);
 
         covered.Add("SmoggyPower");
-        await Driver.EnterFight(state);
+        await EnterFight(state);
         await AfflictedCardIsBlocked<SmoggyPower, Smog>(state, "SmoggyPower");
 
         covered.Add("ChainsOfBindingPower");
-        await Driver.EnterFight(state);
+        await EnterFight(state);
         await AfflictedCardIsBlocked<ChainsOfBindingPower, Bound>(state, "ChainsOfBindingPower", afflict: 2, playAfflictedFirst: true);
 
         covered.Add("RingingPower");
-        await Driver.EnterFight(state);
+        await EnterFight(state);
         await AfflictedCardIsBlocked<RingingPower, Ringing>(state, "RingingPower", playAnyFirst: true);
 
         covered.Add("SlothPower");
-        await Driver.EnterFight(state);
+        await EnterFight(state);
         await BlocksAfterNPlays(state, "SlothPower", plays: 1, arrange: async me =>
             await PowerCmd.Apply<SlothPower>(new BlockingPlayerChoiceContext(), me.Creature,
                 amount: 1m, applier: null, cardSource: null, silent: true));
 
         covered.Add("Normality");
-        await Driver.EnterFight(state);
+        await EnterFight(state);
         await BlocksAfterNPlays(state, "Normality", plays: 3, arrange: async me =>
         {
             CardModel normality = ModelDb.Card<Normality>().ToMutable();
@@ -156,7 +156,7 @@ public static class SelfTest
         });
 
         covered.Add("VelvetChoker");
-        await Driver.EnterFight(state);
+        await EnterFight(state);
         await BlocksAfterNPlays(state, "VelvetChoker", plays: 6, arrange: async me =>
             await RelicCmd.Obtain(ModelDb.Relic<VelvetChoker>().ToMutable(), me));
 
@@ -188,6 +188,26 @@ public static class SelfTest
     /// some other type — that is what separates `WingedBoots.ShouldAllowFreeTravel`
     /// from `AbstractModel`'s own virtual base.
     /// </remarks>
+    /// <summary>
+    /// The fight the in-combat cases run in.
+    /// </summary>
+    /// <remarks>
+    /// Named here rather than passed per case: every case wants "a fight", not a
+    /// particular one, and naming it once means the suite says which fight it
+    /// tested when that starts to matter.
+    ///
+    /// Throws rather than returning the refusal. A case that silently ran
+    /// outside combat would report on rules it never exercised.
+    /// </remarks>
+    private static async Task EnterFight(RunState state)
+    {
+        string? refused = await Driver.EnterFight(state, "BOWLBUGS_WEAK");
+        if (refused != null)
+        {
+            throw new InvalidOperationException($"selftest could not enter its fight: {refused}");
+        }
+    }
+
     private static Dictionary<string, List<string>> Discover()
     {
         var found = new Dictionary<string, List<string>>();

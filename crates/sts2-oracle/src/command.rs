@@ -23,6 +23,20 @@ pub enum Command {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         modifiers: Vec<String>,
     },
+    /// Jumps straight into a named encounter, off the map (H6).
+    ///
+    /// `encounter` is a model entry name such as `BOWLBUGS_WEAK`. Unknown names
+    /// are refused by the game with its own message rather than validated here:
+    /// there is no id set on this side to check against, and the game's answer
+    /// is better than a guess.
+    ///
+    /// The run lands at an unassigned map point, so map and room disagree by
+    /// construction. That is what scenario construction is for — reaching a
+    /// chosen fight by travelling means hunting for a seed that puts one where
+    /// you want it.
+    Fight {
+        encounter: String,
+    },
     /// `room` is a `RoomType` name, matched case-insensitively.
     EnterRoom {
         #[serde(rename = "type")]
