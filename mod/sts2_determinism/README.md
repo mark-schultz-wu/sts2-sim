@@ -58,6 +58,28 @@ by `ProgressState`'s own serialisation, so forcing it would persist
 `EnableFtues = false` into the player's save. Patching the one question the game
 actually asks changes no stored state at all.
 
+## What the `Rng.Chaotic` audit found
+
+`REQUIREMENTS.md` asks that every adopted command be audited for `Rng.Chaotic`,
+`DebugRandomizeRng` and wall-clock reads. That had never been done. There are
+**193** uses of `Rng.Chaotic` — a process-wide stream seeded once from the clock.
+
+Nearly all are presentation: monster skin variants (`TwoTailedRat`, `Toadpole`),
+merchant dialogue lines, screen shake, leaf positions in `DenseVegetation`,
+card-deal animation timing in `CardPileCmd`.
+
+Two were worth reading closely, and both are benign:
+
+- **`YummyCookie`** uses it only inside `IconBaseName`, and only when
+  `IsCanonical || Owner == null` — picking which character's sprite to draw for
+  an unowned relic. Cosmetic, and never consulted by the model.
+- **`Trial`** sets `DynamicVars["EntrantNumber"]` to a random 101–999 in
+  `CalculateVars`. That *is* model state rather than presentation, but it is
+  flavour text for the event's own string, and the observation does not report
+  `DynamicVars`. Worth remembering if it ever does.
+
+One was not benign, and has a patch: `MonsterModel.Rng`, below.
+
 ## The canonical-monster warning
 
 `MonsterModel.Rng` is:
@@ -149,12 +171,16 @@ claim about one build's behaviour, so a mismatch is a hard stop.
 
 ## How much of it is actually verified
 
-**Verified automatically:** the encounter RNG patch, by
-[`sts2_determinism_test`](../sts2_determinism_test/README.md) — four assertions
-including that the seed actually used is exactly
-`runState.Rng.Seed + TotalFloor + hash(Id.Entry)`. Mutation-tested: reverting the
-patch fails three of the four, with the seed coming back as the current Unix
-timestamp.
+**Verified automatically**, by
+[`sts2_determinism_test`](../sts2_determinism_test/README.md), six assertions,
+all mutation-tested:
+
+- The encounter RNG patch — the seed actually used is exactly
+  `runState.Rng.Seed + TotalFloor + hash(Id.Entry)`. Reverting the patch fails
+  three of the four RNG checks, with the seed coming back as the current Unix
+  timestamp.
+- The FTUE patch — an unseen tutorial reports as seen *with the profile flag
+  left on*, and asking does not turn it off.
 
 The 31 assertions in `sts2_headless_test` also exercise a game configured by this
 mod, so a configuration that broke the driver would show up there.
@@ -164,10 +190,6 @@ mod, so a configuration that broke the driver would show up there.
 resolves, that `sts2_headless` refuses and exits when this one has not activated
 — found the hard way, as a hang — and that the patches apply under `LD_PRELOAD`
 and throw without it.
-
-**Not verified:** the `SeenFtue` patch, beyond the driver no longer hanging on
-prompts. Nothing asserts that the profile is left unwritten, which is the claim
-that matters for R13.
 
 **Not verified at all:** that this list is complete. Determinism is a claim about
 everything the game does, and this mod covers two things somebody noticed.

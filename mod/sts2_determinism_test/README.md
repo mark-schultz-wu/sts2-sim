@@ -30,8 +30,9 @@ Exits non-zero on failure, via `Driver.ExitCode`.
 
 ## What it checks
 
-Four assertions, all about one claim: that patching `DebugRandomizeRng` to do
-nothing restores the game's own seed-derived encounter RNG.
+Six assertions across two claims.
+
+**That patching `DebugRandomizeRng` restores seed-derived encounter RNG:**
 
 1. A fresh encounter has no RNG yet.
 2. **`DebugRandomizeRng` leaves it unset** — the patch working.
@@ -39,6 +40,22 @@ nothing restores the game's own seed-derived encounter RNG.
    `runState.Rng.Seed + runState.TotalFloor + hash(Id.Entry)`, the formula in
    `GenerateMonstersWithSlots`.
 4. That seed is not a recent Unix timestamp.
+
+**That tutorials are suppressed without writing to the profile:**
+
+5. An unseen tutorial reports as already seen — *with the profile's own
+   `EnableFtues` flag left on*, so the patch is what answers, not the stored
+   state.
+6. Asking did not turn that flag off.
+
+Check 5 is set up carefully, because the first version was vacuous. It asked
+about `"shuffle_ftue"`, which this profile had already completed — so unpatched
+`SeenFtue` answered `true` from `FtueCompleted` and the mutation test survived.
+It now asks about a fresh GUID, which cannot be in the completed set.
+
+It also cannot assert `progress.save` is untouched: a run writes it for reasons
+unrelated to tutorials, since `RelicCmd.Obtain` calls `MarkRelicAsSeen` and
+fighting records a discovery.
 
 ## Why not "build the same fight twice and compare"
 
