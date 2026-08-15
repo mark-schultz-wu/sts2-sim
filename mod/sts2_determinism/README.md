@@ -36,6 +36,7 @@ configuration than the thing it was testing.
 | verifies the build pin, then `TestMode.IsOn = true` | at load |
 | encounter RNG stays seeded from the run, not the clock | patches `EncounterModel.DebugRandomizeRng` to do nothing |
 | first-time-user tutorials never appear | patches `ProgressSaveManager.SeenFtue` to return `true` |
+| a canonical monster's RNG being read is reported | patches `MonsterModel.Rng` to warn, once per monster id |
 
 `TestMode` is the game's own test seam. It skips every `Cmd.Wait` and the
 animation paths that check it — a determinism matter as much as a speed one,
@@ -55,6 +56,35 @@ alternatives write: the setter calls `SaveProgress()`, and the property is read
 by `ProgressState`'s own serialisation, so forcing it would persist
 `EnableFtues = false` into the player's save. Patching the one question the game
 actually asks changes no stored state at all.
+
+## The canonical-monster warning
+
+`MonsterModel.Rng` is:
+
+```csharp
+get
+{
+    if (!base.IsMutable) return Rng.Chaotic;
+    return _rng;
+}
+```
+
+Reading it on a **canonical** model — the shared template `ModelDb` holds, as
+opposed to the per-run copy `ToMutable()` makes — silently yields the
+process-wide clock-seeded stream. Same shape as the `DebugRandomizeRng` bug: a
+substitution rather than an error, producing plausible values nothing in the run
+accounts for.
+
+It does not currently bite. Monsters in a fight come from `GenerateMonsters()`
+via `ToMutable()`, so they are mutable and use their own seeded `_rng`. The
+warning exists because *"does not currently bite"* was a claim with no evidence
+behind it. It now has some: no warning fires across the selftest suite, the
+determinism suite, or the five live tests, which do fight real monsters.
+
+A warning rather than a throw, deliberately. The game reads this property from
+presentation paths a headless run does not exercise but might one day, and a
+determinism mod that crashes the game to report a determinism risk has made
+things worse.
 
 ## Launching requires `LD_PRELOAD=libgcc_s.so.1`
 

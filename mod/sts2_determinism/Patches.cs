@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Saves.Managers;
 
@@ -55,5 +57,65 @@ internal static class EveryTutorialAlreadySeen
     {
         __result = true;
         return false;
+    }
+}
+
+/// <summary>
+/// Says something when a canonical monster's RNG is read.
+/// </summary>
+/// <remarks>
+/// <c>MonsterModel.Rng</c> is:
+///
+/// <code>
+/// get
+/// {
+///     if (!base.IsMutable) return Rng.Chaotic;
+///     return _rng;
+/// }
+/// </code>
+///
+/// — so reading it on a canonical model silently yields the process-wide
+/// clock-seeded stream. That is the same shape as the <c>DebugRandomizeRng</c>
+/// bug: a substitution rather than an error, producing plausible values that
+/// nothing in the run accounts for.
+///
+/// It does not currently bite. Monsters in a fight come from
+/// <c>GenerateMonsters</c> via <c>ToMutable</c>, so they are mutable and use
+/// their own seeded <c>_rng</c>. This exists because "does not currently bite"
+/// is a claim with no evidence behind it, and a warning turns it into one.
+///
+/// A warning rather than a throw. Throwing would be the stronger signal and is
+/// the wrong trade here: the game reads this property from presentation paths a
+/// headless run does not exercise but may one day, and a determinism mod that
+/// crashes the game to report a determinism risk has made things worse.
+///
+/// Once per monster id, because a getter is not somewhere to put an unbounded
+/// log.
+/// </remarks>
+[HarmonyPatch(typeof(MonsterModel), nameof(MonsterModel.Rng), MethodType.Getter)]
+internal static class NoticeCanonicalMonsterRng
+{
+    private static readonly HashSet<string> Reported = new HashSet<string>();
+
+    private static void Postfix(MonsterModel __instance)
+    {
+        if (!__instance.IsCanonical)
+        {
+            return;
+        }
+
+        string id = __instance.Id.Entry;
+        lock (Reported)
+        {
+            if (!Reported.Add(id))
+            {
+                return;
+            }
+        }
+
+        Log.Warn(
+            $"[determinism] canonical monster {id} had its Rng read; that returns "
+            + "the process-wide clock-seeded Rng.Chaotic, so whatever used it is "
+            + "not reproducible");
     }
 }
