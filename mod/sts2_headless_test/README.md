@@ -44,7 +44,22 @@ Exits non-zero on failure, so it is usable as a gate.
 
 ## What it covers
 
-32 assertions across all nine of the game's legality-hook overrides. Notable
+84 assertions, in two groups.
+
+**That the observation is complete (H4)** — every field the observation promises
+is in it, out of combat and in, down to each creature reporting its intent. The
+other assertions here are about legality, and none of them would notice the
+observation quietly losing a field. That is the failure this project is least
+able to survive: a simulator defaults what it is not told, the oracle has the
+real value, and the two agree because neither knows the field exists. A
+divergence that never appears is worse than one that does.
+
+The key lists are written out rather than derived from the capture, which would
+only assert that the code does what the code does. Written down, removing a
+field fails and adding one is a deliberate edit.
+
+**That the legal command set is right (H2)** — all nine of the game's
+legality-hook overrides. Notable
 ones, because they were written wrong first:
 
 - Three check the **preventer** a blocked card reports, against the model

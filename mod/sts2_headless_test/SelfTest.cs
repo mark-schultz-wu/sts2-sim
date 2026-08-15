@@ -108,6 +108,10 @@ public static class SelfTest
         // blocked on a UI that does not exist headless.
         Check("a reward selector is installed", RewardsSet.testSelector != null);
 
+        // First, on an untouched run: this is about the shape of what we report,
+        // not about anything the other cases arrange.
+        await ObservationIsComplete(state);
+
         // Before anything grants free travel, since this case needs both halves.
         // It leaves the relic behind and stands on the last row, so the rest of
         // the suite gets a clean run rather than inheriting either.
@@ -188,6 +192,89 @@ public static class SelfTest
     /// some other type — that is what separates `WingedBoots.ShouldAllowFreeTravel`
     /// from `AbstractModel`'s own virtual base.
     /// </remarks>
+    /// <summary>
+    /// Every field the observation promises is actually in it (H4).
+    /// </summary>
+    /// <remarks>
+    /// The other thirty-odd assertions here are about legality — whether the
+    /// oracle says the right thing about a card. None of them would notice the
+    /// observation quietly losing a field, and that is the failure this project
+    /// is least able to survive: a simulator defaults what it is not told, the
+    /// oracle has the real value, and the two agree because neither knows the
+    /// field exists. A divergence that never appears is worse than one that does.
+    ///
+    /// The key lists are written out rather than derived. Deriving them from the
+    /// capture would assert that the code does what the code does. Written down,
+    /// removing a field fails here and adding one is a deliberate edit — which
+    /// is the only way this test can be evidence rather than decoration.
+    /// </remarks>
+    private static async Task ObservationIsComplete(RunState state)
+    {
+        string[] always =
+        {
+            "act", "alive", "deck", "floor", "gold", "hp", "inCombat",
+            "map", "maxHp", "potions", "relics", "rng", "runOver", "victory",
+        };
+        string[] inCombat =
+        {
+            "creatures", "discard", "draw", "energy", "exhaust",
+            "hand", "legal", "phase", "round", "turn",
+        };
+        string[] perCreature =
+        {
+            "alive", "block", "hp", "id", "intent", "intents",
+            "maxHp", "model", "powers", "side",
+        };
+
+        JsonElement before = Capture(state);
+        foreach (string key in always)
+        {
+            Check($"observation: '{key}' is reported out of combat", before.TryGetProperty(key, out _));
+        }
+        Check("observation: a room is reported out of combat", before.TryGetProperty("room", out _));
+        Check("observation: the map is reported out of combat",
+            before.TryGetProperty("map", out JsonElement map) && map.TryGetProperty("travelable", out _));
+
+        await EnterFight(state);
+        JsonElement during = Capture(state);
+        foreach (string key in always)
+        {
+            Check($"observation: '{key}' is reported in combat", during.TryGetProperty(key, out _));
+        }
+
+        if (!during.TryGetProperty("combat", out JsonElement combat))
+        {
+            Check("observation: combat is reported in combat", false);
+            return;
+        }
+
+        foreach (string key in inCombat)
+        {
+            Check($"observation: combat reports '{key}'", combat.TryGetProperty(key, out _));
+        }
+
+        JsonElement creatures = combat.GetProperty("creatures");
+        Check("observation: the fight has creatures in it", creatures.GetArrayLength() > 0);
+        foreach (string key in perCreature)
+        {
+            Check($"observation: each creature reports '{key}'",
+                creatures.EnumerateArray().All(c => c.TryGetProperty(key, out _)));
+        }
+
+        // A monster's intent is the one thing the game never ships itself, so a
+        // simulator picking the wrong move is invisible without it.
+        Check("observation: a monster reports what it intends",
+            creatures.EnumerateArray()
+                .Where(c => c.GetProperty("side").GetString() == "Enemy")
+                .All(c => c.GetProperty("intent").ValueKind != JsonValueKind.Null));
+    }
+
+    private static JsonElement Capture(RunState state)
+    {
+        using var doc = JsonDocument.Parse(Observation.Capture(state));
+        return doc.RootElement.Clone();
+    }
+
     /// <summary>
     /// The fight the in-combat cases run in.
     /// </summary>
