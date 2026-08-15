@@ -418,11 +418,30 @@ internal static class Protocol
     /// </remarks>
     private static async Task EnterRoom(JsonElement req)
     {
+        // Unassigned is a RoomType the enum carries and nothing can usefully be
+        // jumped to: it is the "no map point" placeholder `fight` lands on. The
+        // game's own `room` command filters it out of its completions for the
+        // same reason. Listing it as an option and then accepting it would be
+        // offering a state with no meaning.
+        string[] jumpable = Enum.GetNames(typeof(RoomType))
+            .Where(n => n != nameof(RoomType.Unassigned))
+            .ToArray();
+
         string? want = Str(req, "type");
-        if (want == null || !Enum.TryParse(want, ignoreCase: true, out RoomType type))
+        if (want == null
+            || !Enum.TryParse(want, ignoreCase: true, out RoomType type)
+            || !jumpable.Contains(type.ToString()))
         {
             await Error("enter_room",
-                $"enter_room requires a 'type' from: {string.Join(" ", Enum.GetNames(typeof(RoomType)))}");
+                $"enter_room requires a 'type' from: {string.Join(" ", jumpable)}");
+            return;
+        }
+
+        // The game's `room` command guards this and ours did not, so entering a
+        // room before `start` reached EnterRoomDebug with no run behind it.
+        if (!RunManager.Instance.IsInProgress)
+        {
+            await Error("enter_room", "a run is not in progress; start one first");
             return;
         }
 

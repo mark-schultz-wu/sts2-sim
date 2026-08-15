@@ -211,6 +211,36 @@ fn a_refusal_leaves_the_session_usable() {
     assert!(after.state.is_object());
 }
 
+/// `Unassigned` is a `RoomType` the enum carries and nothing can be jumped to —
+/// it is the "no map point" placeholder `fight` lands on. It used to parse, be
+/// offered in the refusal message, and be handed to `EnterRoomDebug`.
+#[test]
+#[ignore = "launches the real game"]
+#[serial(game)]
+fn a_room_type_that_is_not_a_room_is_refused() {
+    let mut oracle = launch();
+    start(&mut oracle);
+
+    let refusal = oracle
+        .send(&Command::EnterRoom {
+            room: "Unassigned".into(),
+        })
+        .expect("a refusal is still a reply")
+        .expect_err("Unassigned is not somewhere to jump to");
+
+    assert!(
+        !refusal.message.contains("Unassigned"),
+        "refused, but still offers it: {}",
+        refusal.message
+    );
+    // The message earns its keep by naming what would have worked.
+    assert!(
+        refusal.message.contains("Shop"),
+        "should list the types that do work: {}",
+        refusal.message
+    );
+}
+
 /// Dropping the client has to take the game with it, or a test run leaves
 /// headless games behind.
 #[test]
