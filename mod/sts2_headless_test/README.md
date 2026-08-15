@@ -44,7 +44,7 @@ Exits non-zero on failure, so it is usable as a gate.
 
 ## What it covers
 
-89 assertions, in two groups.
+102 assertions, in two groups.
 
 **That the observation is complete (H4)** — every field the observation promises
 is in it, out of combat and in, down to each creature reporting its intent. The
@@ -70,6 +70,17 @@ Ending a turn is the case that carries this. A card play survives a mutation
 that stops the driver waiting at all, because the action's own completion does
 most of the work — only a turn transition needs the turn counter to advance, and
 only that check fails when quiescence is broken.
+
+**That a card asking a question parks and can be answered** — `BurningPact`
+selects one card from hand, so playing it blocks the game on a choice. The
+selector the driver installs had no coverage beyond being asserted to exist. The
+answer goes through `Pending.Accept` with the JSON a client would send, including
+an out-of-range index, which must be refused rather than silently becoming a
+different move.
+
+**That an error-level log reaches the client once** — captured, drained, not
+drained twice. Plumbing only: see its comment for why a real swallowed failure
+could not be provoked.
 
 **That the legal command set is right (H2)** — all nine of the game's
 legality-hook overrides. Notable

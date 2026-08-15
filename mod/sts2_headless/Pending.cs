@@ -35,7 +35,7 @@ namespace Sts2Headless;
 /// Each subclass owns its own wire shape and its own validation, so adding a
 /// kind does not mean editing the protocol's dispatch.
 /// </remarks>
-internal abstract class Pending
+public abstract class Pending
 {
     /// <summary>The outstanding question, or null when the game is not waiting.</summary>
     /// <remarks>

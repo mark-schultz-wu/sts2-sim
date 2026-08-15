@@ -22,7 +22,7 @@ namespace Sts2Headless;
 /// the command produces. The oracle does not judge which errors matter; it
 /// refuses to hide any of them.
 /// </remarks>
-internal static class GameErrors
+public static class GameErrors
 {
     private static readonly List<string> Seen = new List<string>();
 

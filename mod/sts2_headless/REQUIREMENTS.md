@@ -1215,6 +1215,17 @@ process behind.
 
 *Answered so far:*
 
+- **Granting a card to hand without registering it now throws rather than being
+  swallowed.** H10's account says that case made `OnPlayWrapper` throw, the game
+  catch and log it, the energy be spent anyway, and the protocol answer
+  `"resolved": true` over a clean observation — which is the failure `GameErrors`
+  was built for. Reproducing it deliberately in the selftest produces
+  `InvalidOperationException: BURNING_PACT has no owner` straight out through
+  the driver instead: loud, and a different failure. Either the path changed or
+  the original account is imprecise. `GameErrors` is therefore tested for its
+  plumbing — captured, handed over once, not twice — and not against a real
+  swallowed failure, because we no longer have one to hand.
+
 - **The `Missing screenShake target!` errors are presentation-only, and are now
   suppressed.** `NScreenShake.Shake` and `Rumble` log and return when
   `ShakeTarget` is null; the branch they skip only constructs a value whose

@@ -498,6 +498,36 @@ public static class Driver
     /// then requires a strictly greater turn number, not merely a drained queue.
     /// </param>
     /// <summary>
+    /// Puts a card into the run, where the game would put it.
+    /// </summary>
+    /// <remarks>
+    /// Hand while a fight is on, deck otherwise: granting to hand out of combat
+    /// would put the card somewhere the game has no pile for.
+    ///
+    /// Registration first, and it is not optional. <c>CardPileCmd.Add</c> only
+    /// rejects an unregistered card when it already believes itself in combat,
+    /// so adding to the hand appears to succeed — and the card then throws
+    /// "must be added to a CombatState before playing it" when played, several
+    /// commands later.
+    /// </remarks>
+    public static async Task GrantCard(RunState state, CardModel card)
+    {
+        Player me = state.Players[0];
+        CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+
+        if (combat != null && CombatManager.Instance.IsInProgress)
+        {
+            combat.AddCard(card, me);
+            await CardPileCmd.Add(card, PileType.Hand.GetPile(me));
+        }
+        else
+        {
+            state.AddCard(card, me);
+            await CardPileCmd.Add(card, me.Deck);
+        }
+    }
+
+    /// <summary>
     /// Ends the player's turn, and waits for the next one to actually begin.
     /// </summary>
     /// <remarks>

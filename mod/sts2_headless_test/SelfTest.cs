@@ -115,6 +115,11 @@ public static class SelfTest
         await CommandsAnswerOnlyWhenSettled(state);
         state = await Driver.Restart();
 
+        await ACardThatAsksParksAndCanBeAnswered(state);
+        state = await Driver.Restart();
+
+        ErrorsAreCapturedAndHandedOverOnce();
+
         // Before anything grants free travel, since this case needs both halves.
         // It leaves the relic behind and stands on the last row, so the rest of
         // the suite gets a clean run rather than inheriting either.
@@ -311,6 +316,107 @@ public static class SelfTest
         // so only the turn counter advancing says the next turn has begun.
         Check("quiescence: the turn ended and resolved", await Driver.EndTurn(state));
         await SettledAfter(state, "ending a turn");
+    }
+
+    /// <summary>
+    /// A card that needs the player to choose parks, and the choice comes back.
+    /// </summary>
+    /// <remarks>
+    /// <c>HeadlessCardSelector</c> and the whole parking path had no coverage at
+    /// all. Nothing in this suite played a card that asks a question, so the
+    /// selector the driver installs was only ever asserted to exist.
+    ///
+    /// <c>BurningPact</c> asks: it calls
+    /// <c>CardSelectCmd.FromHand(prefs: new CardSelectorPrefs(..., 1))</c>, so
+    /// exactly one card, from hand. The game blocks on that selection, which is
+    /// what makes it a decision point rather than part of the play.
+    ///
+    /// Answering goes through <c>Pending.Accept</c> with the same JSON a client
+    /// would send, rather than reaching into the selector — the point is that
+    /// the protocol's own path works, not that a task can be completed.
+    /// </remarks>
+    private static async Task ACardThatAsksParksAndCanBeAnswered(RunState state)
+    {
+        await EnterFight(state);
+        await Driver.GrantCard(state, ModelDb.Card<BurningPact>().ToMutable());
+
+        Check("selector: nothing is pending before the card is played", Pending.Current == null);
+        Check("selector: the asking card was played",
+            await Driver.PlayOneCard(state, c => c is BurningPact));
+
+        Pending? parked = Pending.Current;
+        if (parked == null)
+        {
+            Check("selector: playing it parked a decision", false);
+            return;
+        }
+
+        Check("selector: the parked decision is a card selection", parked.Kind == "select_cards");
+
+        Dictionary<string, object?> described = parked.Describe();
+        Check("selector: it says how many cards it wants",
+            described.TryGetValue("min", out object? min) && (int)min! == 1
+            && described.TryGetValue("max", out object? max) && (int)max! == 1);
+        Check("selector: it offers the hand to choose from",
+            described.TryGetValue("options", out object? options)
+            && options is System.Collections.ICollection { Count: > 0 });
+
+        // Out of range first: the selector must validate, because whatever it
+        // returns is taken as the player's choice and a bad index would silently
+        // become a different move rather than an error.
+        using (JsonDocument bad = JsonDocument.Parse("{\"cards\":[999]}"))
+        {
+            Check("selector: an out-of-range choice is refused",
+                parked.Accept(bad.RootElement) != null);
+        }
+
+        Check("selector: refusing an answer leaves the decision parked", Pending.Current == parked);
+
+        using (JsonDocument good = JsonDocument.Parse("{\"cards\":[0]}"))
+        {
+            Check("selector: a valid choice is accepted", parked.Accept(good.RootElement) == null);
+        }
+
+        Check("selector: answering resolves it", await Driver.WaitForDecisionPoint());
+        Check("selector: nothing is pending afterwards", Pending.Current == null);
+    }
+
+    /// <summary>
+    /// An error logged at error level reaches the client, once.
+    /// </summary>
+    /// <remarks>
+    /// This tests the plumbing — capture, drain, drain-once — and not a real
+    /// swallowed failure, because provoking one turned out to be harder than
+    /// expected and the difference is worth writing down.
+    ///
+    /// The obvious provocation is the bug that motivated <c>GameErrors</c>: a
+    /// card added to hand without registering it with the <c>CombatState</c>,
+    /// which the README records as making <c>OnPlayWrapper</c> throw, the game
+    /// swallow it, and the protocol answer "resolved": true over a state that
+    /// had not changed. Tried here, it does not swallow: it throws
+    /// <c>InvalidOperationException: BURNING_PACT has no owner</c> straight out
+    /// through the driver, which is a loud failure and a different one. So
+    /// either that path changed or the original account is imprecise — recorded
+    /// as an open question rather than guessed at.
+    ///
+    /// What this does assert is that an error-level log is captured, is handed
+    /// over once, and does not come back a second time. A leak in either
+    /// direction is silent: errors that never surface leave a bad observation
+    /// looking clean, and errors that surface twice attach a stale failure to an
+    /// innocent command.
+    /// </remarks>
+    private static void ErrorsAreCapturedAndHandedOverOnce()
+    {
+        GameErrors.Drain();
+        Check("gameErrors: nothing is outstanding to begin with", GameErrors.Drain().Count == 0);
+
+        const string Marker = "selftest marker: this is a deliberate error";
+        Log.Error(Marker);
+
+        List<string> reported = GameErrors.Drain();
+        Check($"gameErrors: an error-level log is captured ({reported.Count} reported)",
+            reported.Any(e => e.Contains(Marker)));
+        Check("gameErrors: draining again does not report it twice", GameErrors.Drain().Count == 0);
     }
 
     private static async Task SettledAfter(RunState state, string what)

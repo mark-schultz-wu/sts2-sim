@@ -190,7 +190,7 @@ all mutation-tested:
 - The FTUE patch — an unseen tutorial reports as seen *with the profile flag
   left on*, and asking does not turn it off.
 
-The 89 assertions in `sts2_headless_test` also exercise a game configured by this
+The 102 assertions in `sts2_headless_test` also exercise a game configured by this
 mod, so a configuration that broke the driver would show up there.
 
 **Verified once, by hand:** that both mods load in dependency order

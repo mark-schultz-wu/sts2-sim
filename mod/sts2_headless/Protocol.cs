@@ -276,26 +276,7 @@ internal static class Protocol
 
         if (card != null)
         {
-            CardModel found = Lookup<CardModel>(card).ToMutable();
-            CombatState? combat = (_state.CurrentRoom as CombatRoom)?.CombatState;
-
-            // Hand while a fight is on, deck otherwise: granting to hand out of
-            // combat would put the card somewhere the game has no pile for.
-            if (combat != null && CombatManager.Instance.IsInProgress)
-            {
-                // Registration first, and it is not optional. `CardPileCmd.Add`
-                // only rejects an unregistered card when it already believes
-                // itself in combat, so adding to the hand appears to succeed —
-                // and the card then throws "must be added to a CombatState
-                // before playing it" when played, several commands later.
-                combat.AddCard(found, me);
-                await CardPileCmd.Add(found, PileType.Hand.GetPile(me));
-            }
-            else
-            {
-                _state.AddCard(found, me);
-                await CardPileCmd.Add(found, me.Deck);
-            }
+            await Driver.GrantCard(_state, Lookup<CardModel>(card).ToMutable());
         }
 
         if (relic != null)
