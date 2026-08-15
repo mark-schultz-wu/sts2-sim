@@ -165,10 +165,11 @@ driver runs until something external kills it.
 
 ## Further reading
 
-[REQUIREMENTS.md](REQUIREMENTS.md) is the standard this mod is held to: R1, R11
-and R13, each written so it can be failed. The numbering is shared with
-[`sts2_headless`](../sts2_headless/REQUIREMENTS.md) and does not restart — R1–R14
-were written when this was one mod, and the split renumbered nothing.
+[REQUIREMENTS.md](REQUIREMENTS.md) is the standard this mod is held to: D1, D2
+and D3, each written so it can be failed. `D` is this mod and `H` is
+[`sts2_headless`](../sts2_headless/REQUIREMENTS.md), which owns H1–H11. They were
+one sequence, R1–R14, when this was one mod; splitting it renumbered them and
+rewrote every reference in the source of four mods and the Rust client.
 
 ## The version pin
 

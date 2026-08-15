@@ -23,20 +23,20 @@ using MegaCrit.Sts2.Core.Runs;
 namespace Sts2Headless;
 
 /// <summary>
-/// The line-delimited JSON protocol the simulator drives the oracle with (R10).
+/// The line-delimited JSON protocol the simulator drives the oracle with (H9).
 /// </summary>
 /// <remarks>
 /// One request per line, one response per request, strictly in order. There is
 /// no server-initiated traffic after the greeting, so the client never needs to
 /// demultiplex — a decision and its observation are a matched pair, which is
-/// what makes R4's "one command, one decision" checkable from outside.
+/// what makes H3's "one command, one decision" checkable from outside.
 ///
 /// **Every failure answers.** An unknown command, a bad index, an unplayable
 /// card and an exception from the game all produce an <c>error</c> response
 /// naming the cause. Nothing no-ops silently, because a no-op that returns the
 /// previous observation is indistinguishable from a decision that legitimately
 /// changed nothing — and that is precisely how a simulator bug turns into a
-/// passing test (R12).
+/// passing test (H10).
 /// </remarks>
 internal static class Protocol
 {
@@ -75,7 +75,7 @@ internal static class Protocol
             {
                 // The peer going away is a normal shutdown, not an error: a
                 // client that crashes should not leave a game process behind
-                // (R14), which is what a blocking read with no EOF handling does.
+                // (H11), which is what a blocking read with no EOF handling does.
                 Log.Info("[headless] channel closed; shutting down");
                 return;
             }
@@ -211,7 +211,7 @@ internal static class Protocol
         }
     }
 
-    /// <summary>Discards the current run and starts another (R7's fresh-run case).</summary>
+    /// <summary>Discards the current run and starts another (H6's fresh-run case).</summary>
     private static async Task Start(JsonElement req)
     {
         string? seed = Str(req, "seed");
@@ -225,7 +225,7 @@ internal static class Protocol
     }
 
     /// <summary>
-    /// Puts a named card or relic into the run (R7).
+    /// Puts a named card or relic into the run (H6).
     /// </summary>
     /// <remarks>
     /// Through the game's own commands — <c>CardPileCmd.Add</c> and
@@ -376,7 +376,7 @@ internal static class Protocol
     /// Enters a room of a given type directly, without walking the map to one.
     /// </summary>
     /// <remarks>
-    /// Scenario construction (R7): reaching a shop by travelling means finding a
+    /// Scenario construction (H6): reaching a shop by travelling means finding a
     /// seed that puts one on floor 2, which is the seed-hunting this project
     /// exists to avoid.
     ///
@@ -540,7 +540,7 @@ internal static class Protocol
     /// returning false) and otherwise enters *any* coordinate handed to it,
     /// silently, including one no rule permits. It is the one command here where
     /// the model layer would let an illegal move through, which is exactly why
-    /// R3 requires the oracle to publish the legal set rather than trusting a
+    /// H2 requires the oracle to publish the legal set rather than trusting a
     /// rejection that never comes.
     /// </remarks>
     private static async Task Travel(JsonElement req)
@@ -624,7 +624,7 @@ internal static class Protocol
         }
 
         // Refuse rather than enqueue. The game would reject it too, but further
-        // in and less legibly, and R3 exists so the client can be held to the
+        // in and less legibly, and H2 exists so the client can be held to the
         // legal set the oracle publishes.
         if (!card.CanPlay(out UnplayableReason reason, out AbstractModel? preventer))
         {
@@ -671,8 +671,8 @@ internal static class Protocol
     /// <remarks>
     /// The digest always ships; the full observation only when asked, per
     /// request or for the whole session via <c>STS2_HEADLESS_OBS=full</c>. That is
-    /// R6's bargain: ~1.6KB a step is wasteful when almost every step agrees,
-    /// and R1 means the one step that disagrees can be replayed in full.
+    /// H5's bargain: ~1.6KB a step is wasteful when almost every step agrees,
+    /// and D1 means the one step that disagrees can be replayed in full.
     ///
     /// <paramref name="resolved"/> is false when combat ended mid-cascade and
     /// the decision was abandoned rather than completed. It is reported rather

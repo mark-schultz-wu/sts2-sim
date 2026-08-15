@@ -160,7 +160,7 @@ impl Oracle {
             .env("STS2_HEADLESS_PORT", port.to_string())
             .env("STS2_HEADLESS_TOKEN", &token)
             // Always. The digest-only mode saves bandwidth and log size, not
-            // time -- R8 measures the two within 5% of each other, because a
+            // time -- H7 measures the two within 5% of each other, because a
             // decision costs frame-boundary latency rather than serialisation.
             // Paying ~200KB/s to make `state` unconditional is the better trade,
             // and it is what lets Observation and Pending carry a Value rather

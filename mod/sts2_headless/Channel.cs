@@ -11,7 +11,7 @@ namespace Sts2Headless;
 /// </summary>
 /// <remarks>
 /// This exists as an interface because the transport is the least settled part
-/// of R10 and the easiest to get wrong permanently. Everything above it — the
+/// of H9 and the easiest to get wrong permanently. Everything above it — the
 /// command vocabulary, the observation, the version handshake — is unaffected
 /// by how bytes move, so the choice stays reversible as long as nothing above
 /// this line knows which implementation it has.
@@ -35,12 +35,12 @@ namespace Sts2Headless;
 /// <c>unsafe</c>, no <c>dup2</c> and no platform-specific spawn code on the
 /// client side, and it is full duplex on a single descriptor, so the peer
 /// disappearing is one detectable event rather than two half-failures. The cost
-/// is a loopback roundtrip of roughly 30µs against a ~4ms decision, which R8
+/// is a loopback roundtrip of roughly 30µs against a ~4ms decision, which H7
 /// measures rather than assumes.
 ///
 /// There was an <c>IChannel</c> interface here with a stdio implementation
 /// beside this one, kept because "the transport is the least settled part of
-/// R10". The transport settled: stdio was unusable by anything but a human with
+/// H9". The transport settled: stdio was unusable by anything but a human with
 /// grep — the engine writes ~140 unprefixed lines to stdout before the oracle
 /// says anything — and no client ever ran without a port. One implementation
 /// behind an interface is a guess about a second one, so both are gone.

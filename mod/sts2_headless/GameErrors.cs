@@ -16,7 +16,7 @@ namespace Sts2Headless;
 /// protocol answered <c>"resolved": true</c> with a clean observation. The
 /// client had no way to know the decision had not happened.
 ///
-/// That is the exact failure R12 exists to prevent, and no amount of care in the
+/// That is the exact failure H10 exists to prevent, and no amount of care in the
 /// driver would have caught it, because nothing in the driver's view was wrong.
 /// So the game's own error stream is captured and attached to whatever response
 /// the command produces. The oracle does not judge which errors matter; it

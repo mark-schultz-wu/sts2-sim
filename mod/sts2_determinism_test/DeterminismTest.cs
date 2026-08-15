@@ -124,7 +124,7 @@ public static class DeterminismTest
     /// <c>SetFtuesEnabled(false)</c> calls <c>SaveProgress()</c>, and the
     /// <c>EnableFtues</c> property behind it is read by <c>ProgressState</c>'s
     /// own serialisation, so forcing it would persist into the player's save.
-    /// R13 wants the driver to leave no trace, and "we disabled tutorials in
+    /// D3 wants the driver to leave no trace, and "we disabled tutorials in
     /// your profile" is a trace.
     ///
     /// So this sets the flag <em>on</em> and checks that tutorials stay

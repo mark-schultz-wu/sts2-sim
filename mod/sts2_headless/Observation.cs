@@ -21,7 +21,7 @@ using MegaCrit.Sts2.Core.Runs;
 namespace Sts2Headless;
 
 /// <summary>
-/// Everything the simulator is compared against after a decision (R5).
+/// Everything the simulator is compared against after a decision (H4).
 /// </summary>
 /// <remarks>
 /// Deliberately a superset of the game's own <c>NetFullCombatState</c>, which is
@@ -32,14 +32,14 @@ namespace Sts2Headless;
 ///
 /// Nothing here may be defaulted when unavailable. A field the oracle cannot
 /// fill is reported absent, so a simulator disagreement surfaces rather than
-/// being papered over by a shared zero (R12).
+/// being papered over by a shared zero (H10).
 /// </remarks>
 public static class Observation
 {
     private static readonly JsonSerializerOptions Json = new JsonSerializerOptions { WriteIndented = false };
 
     /// <summary>
-    /// A digest of the full observation, for step-by-step comparison (R6).
+    /// A digest of the full observation, for step-by-step comparison (H5).
     /// </summary>
     /// <remarks>
     /// The full observation runs ~1.6KB per decision — 27% creatures, 27% legal
@@ -49,7 +49,7 @@ public static class Observation
     ///
     /// So the steady state compares digests, and the full observation is only
     /// needed for the step that disagrees. **This is affordable precisely
-    /// because R1 holds**: a diverging run can be replayed with
+    /// because D1 holds**: a diverging run can be replayed with
     /// <c>STS2_HEADLESS_OBS=full</c> and will reproduce exactly, so nothing is lost
     /// by not having shipped the bytes the first time.
     ///
@@ -333,7 +333,7 @@ public static class Observation
     /// screen.
     ///
     /// Absent rather than empty when the room offers nothing, so "a shop with no
-    /// stock" and "not in a shop" cannot serialise the same way (R12).
+    /// stock" and "not in a shop" cannot serialise the same way (H10).
     /// </remarks>
     private static Dictionary<string, object?>? Room(RunState state, Player me)
     {

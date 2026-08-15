@@ -106,7 +106,7 @@ internal abstract class Pending
 /// sees the state *before* its own decision took effect.
 ///
 /// This has now happened four times — taking rewards, choosing an event option,
-/// and twice in the shapes recorded under R4. They are all the same bug: a
+/// and twice in the shapes recorded under H3. They are all the same bug: a
 /// state that is legitimately reachable, briefly, and indistinguishable from
 /// the state being waited for. Rather than add a fifth ad-hoc flag, anything
 /// that starts such work registers it here.
@@ -482,7 +482,7 @@ internal sealed class HeadlessCardSelector : ICardSelector
     /// Synchronous, so it cannot consult anyone. If no choice was gathered the
     /// oracle has been asked something it never offered, and it throws rather
     /// than picking: returning the first card would be the oracle choosing, and
-    /// returning null would be a silent skip (R12).
+    /// returning null would be a silent skip (H10).
     /// </remarks>
     public CardRewardSelection GetSelectedCardReward(
         IReadOnlyList<CardCreationResult> options, IReadOnlyList<CardRewardAlternative> alternatives)

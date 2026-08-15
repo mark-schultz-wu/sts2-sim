@@ -48,7 +48,7 @@ internal static class KeepEncounterRngSeeded
 /// is read by <c>ProgressState</c>'s own serialisation, so forcing it would
 /// persist <c>EnableFtues = false</c> into the player's save. Patching the one
 /// question the game actually asks changes no stored state at all, which is what
-/// R13 wants.
+/// D3 wants.
 /// </remarks>
 [HarmonyPatch(typeof(ProgressSaveManager), nameof(ProgressSaveManager.SeenFtue))]
 internal static class EveryTutorialAlreadySeen

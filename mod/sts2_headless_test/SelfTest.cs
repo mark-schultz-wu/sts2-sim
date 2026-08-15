@@ -37,7 +37,7 @@ namespace Sts2HeadlessTest;
 /// modifier — both override <c>ShouldAllowFreeTravel</c>, widening the legal set
 /// to the whole next row.
 ///
-/// R3's stated check — execute commands outside the reported legal set and
+/// H2's stated check — execute commands outside the reported legal set and
 /// require the game to reject them — **cannot catch that**.
 /// <c>MapTravel.GetTravelablePointsFrom</c> has exactly one caller,
 /// <c>NMapScreen</c>, so the model layer never rejects an illegal map move and
@@ -296,7 +296,7 @@ public static class SelfTest
     /// modifiers are fixed when the run is created (see
     /// <c>Driver.Restart</c>). So the metamorphic pair is two runs at the
     /// same seed rather than two moments in one, and the comparison is only
-    /// meaningful if the runs are otherwise identical — which is exactly R1's
+    /// meaningful if the runs are otherwise identical — which is exactly D1's
     /// determinism claim, asserted here on the map before it is relied on.
     ///
     /// That makes this case do double duty. It is also the only exercise the

@@ -9,7 +9,7 @@
 //! Every game process shares one profile directory, and a driven run writes to
 //! `saves/progress.save` inside it — `RelicCmd.Obtain` calls
 //! `SaveManager.MarkRelicAsSeen`, and fighting an enemy records a discovery.
-//! Two runs at once would race on that file, and R1 treats profile residue as a
+//! Two runs at once would race on that file, and D1 treats profile residue as a
 //! determinism concern rather than a tidiness one, so it is not something to
 //! race on and hope.
 //!
@@ -129,7 +129,7 @@ fn every_observation_carries_state() {
     assert_eq!(observed.game_errors, None);
 }
 
-/// R1, and the property the whole project rests on: the same seed has to produce
+/// D1, and the property the whole project rests on: the same seed has to produce
 /// the same state. Two processes rather than two runs in one, so nothing carried
 /// over in memory can make them agree.
 #[test]

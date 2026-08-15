@@ -9,10 +9,10 @@
 Each requirement is written so it can be failed. Where something is not yet
 measured or not yet known, it says so rather than assuming.
 
-**The numbering is shared across both files and does not restart.** R1–R14 were
-written when this was one mod, and around a hundred and thirty references to
-them exist in the source of three mods and the Rust client. Splitting the
-document renumbered nothing.
+**`D` is determinism, `H` is headless.** These were one sequence, R1–R14, when
+this was one mod; the split renumbered them and rewrote all 146 references in
+the source of four mods and the Rust client. The prefix means a reference names
+its own file, so `H6` never has to be looked up to find out where it lives.
 
 The simulator is a Rust reimplementation of Slay the Spire 2. It is checked by
 putting the real game and the simulator in the same state, feeding both the same
@@ -21,26 +21,26 @@ driver is held to: if it satisfies everything here, a simulator that agrees with
 it is correct in the ways we can check, and one that disagrees has a real bug.
 
 Reproducibility is not in this file. [`sts2_determinism`](../sts2_determinism/REQUIREMENTS.md)
-owns R1, R11 and R13, and this mod refuses to start without it.
+owns D1, D2 and D3, and this mod refuses to start without it.
 
 ## The requirements, and where they live
 
-| | requirement | owner |
+| | requirement | file |
 |---|---|---|
-| R1 | Identical inputs produce identical outputs | [determinism](../sts2_determinism/REQUIREMENTS.md) |
-| R2 | A run cannot start without an explicit seed | [headless](../sts2_headless/REQUIREMENTS.md) |
-| R3 | The legal command set is reported | headless |
-| R4 | One command advances exactly one decision | headless |
-| R5 | The observation is complete | headless |
-| R6 | Divergence is detectable out of combat too | headless |
-| R7 | Scenarios can be constructed, not only replayed | headless |
-| R8 | Throughput is measured and reported | headless |
-| R9 | The process boundary follows the measurement | headless |
-| R10 | The protocol is machine-readable and versioned | headless |
-| R11 | Refuses to answer for the wrong build | determinism |
-| R12 | Failure is loud | headless |
-| R13 | The player's own saves are never touched | determinism |
-| R14 | The driver ends its own process | headless |
+| **D1** | Identical inputs produce identical outputs | [determinism](../sts2_determinism/REQUIREMENTS.md) |
+| **D2** | Refuses to answer for the wrong build | [determinism](../sts2_determinism/REQUIREMENTS.md) |
+| **D3** | The player's own saves are never touched | [determinism](../sts2_determinism/REQUIREMENTS.md) |
+| **H1** | A run cannot start without an explicit seed | **here** |
+| **H2** | The legal command set is reported | **here** |
+| **H3** | One command advances exactly one decision | **here** |
+| **H4** | The observation is complete | **here** |
+| **H5** | Divergence is detectable out of combat too | **here** |
+| **H6** | Scenarios can be constructed, not only replayed | **here** |
+| **H7** | Throughput is measured and reported | **here** |
+| **H8** | The process boundary follows the measurement | **here** |
+| **H9** | The protocol is machine-readable and versioned | **here** |
+| **H10** | Failure is loud | **here** |
+| **H11** | The driver ends its own process | **here** |
 
 ---
 
@@ -53,23 +53,23 @@ suite is being run. It speaks a
 line-oriented protocol: given a scenario it constructs the state and reports an
 observation; thereafter the simulator sends one decision and the oracle replies
 with the next observation. It is spoken to over a loopback TCP connection, from
-behind an interface that keeps the choice reversible — see R10; whether the
-simulator would rather host it in-process is still open (R9).
+behind an interface that keeps the choice reversible — see H9; whether the
+simulator would rather host it in-process is still open (H8).
 
 Three capabilities carry it:
 
-- **construct** a scenario (R7) — mechanisms identified, fresh runs and run
+- **construct** a scenario (H6) — mechanisms identified, fresh runs and run
   modifiers built,
-- **advance** by exactly one decision (R4) — **working**, 132/sec in-process and
+- **advance** by exactly one decision (H3) — **working**, 132/sec in-process and
   63/sec over the protocol,
-- **observe** completely (R5, R3, R6) — **working in combat, on the map, and in
+- **observe** completely (H4, H2, H5) — **working in combat, on the map, and in
   every room type**, byte-reproducible across processes through the protocol;
   run-end and orbs are the remaining gaps.
 
 ---
 ---
 
-## R2 — A run cannot start without an explicit seed
+## H1 — A run cannot start without an explicit seed
 
 The tool refuses rather than inventing one.
 
@@ -85,7 +85,7 @@ not begin playing.
 
 ---
 
-## R3 — The legal command set is reported, in and out of combat
+## H2 — The legal command set is reported, in and out of combat
 
 At every decision point the oracle states exactly which commands the game would
 accept: which cards are playable and against which targets, which potions, which
@@ -158,7 +158,7 @@ the binding limit was cards, not cost.
 `Flight` is the one case that cannot be switched on mid-run: modifiers are
 installed only by `RunManager.InitializeNewRun`. So its metamorphic pair is two
 runs at one seed rather than two moments in one run — which makes it also the
-only exercise R9's multi-scenario claim gets. `RunState.AddModifierDebug` would
+only exercise H8's multi-scenario claim gets. `RunState.AddModifierDebug` would
 have avoided the restart and was rejected: it appends to the list without
 calling `OnRunCreated`, leaving the modifier's `RunState` unset and its
 `ClearsPlayerDeck` pass skipped. `Flight` happens to survive that; relying on
@@ -290,7 +290,7 @@ holding `Winged Boots` or `Flight`. Mutation-tested: reverting `MapLegality` to
 the whole step. The oracle checks legality first, and that check is **not**
 redundant: `EnterMapCoord` refuses only coords already visited and otherwise
 enters any coordinate handed to it, silently. It is the one command where the
-model layer would let an illegal move through — which is the concrete reason R3
+model layer would let an illegal move through — which is the concrete reason H2
 requires the legal set to be published rather than a rejection to be relied on.
 
 ### Rewards, and what the UI owns
@@ -321,10 +321,10 @@ Two consequences before any of this can be built:
    also turned off, because a real player may leave a rewards screen having
    taken some and not others.
 2. **The protocol needs pending decisions.** A reward offer arrives *inside* the
-   action cascade, during quiescence, not in response to a command. So R10's
+   action cascade, during quiescence, not in response to a command. So H9's
    "one request, one response" needs a notion of the game asking a question.
 
-*Designed — see R10, "Pending decisions".* The investigation that produced it
+*Designed — see H9, "Pending decisions".* The investigation that produced it
 also corrected the assumption above: rewards are the **only** UI-owned trigger.
 Rest sites, events and shops all begin from `EnterInternal` on the model side,
 so they are ordinary observable states reached by `travel`, not pending
@@ -345,7 +345,7 @@ applier, which was still wrong: the continuation resumes asynchronously, so
 there is a window between accepting the answer and the applier starting in which
 the run looks idle. The flag has to be set where the answer is *accepted*.
 
-Together with R4's turn-transition bug and the map's boss row, all three of this
+Together with H3's turn-transition bug and the map's boss row, all three of this
 project's hardest bugs have the same shape: **a state that is legitimately
 reachable, briefly, and indistinguishable from the state we were waiting for.**
 
@@ -366,7 +366,7 @@ by room type), `buy {index}` for shops.
 | unaffordable purchase | refused, naming cost and gold |
 | `choose_option` in a shop | refused |
 
-`enter_room {type}` reaches any of them directly (R7) — travelling to a shop
+`enter_room {type}` reaches any of them directly (H6) — travelling to a shop
 would otherwise mean hunting a seed that puts one on floor 2, which is the
 seed-hunting this project exists to avoid.
 
@@ -397,7 +397,7 @@ and `CurrentRoom.IsVictoryRoom` is what separates them. The observation reports
 
 ---
 
-## R4 — One command advances the state exactly one decision
+## H3 — One command advances the state exactly one decision
 
 The oracle issues one command and returns when the game is quiescent and waiting
 for the next player decision. It never chooses on our behalf and never advances
@@ -406,7 +406,7 @@ past a decision point.
 *Note on granularity.* A single player decision cascades into many `GameAction`s
 — playing a card enqueues damage, triggers, draws. The unit of the protocol is
 the **player decision**, not the `GameAction`. The action stream underneath is
-reported (R5) but is not the command boundary.
+reported (H4) but is not the command boundary.
 
 *Resolved: quiescence is three phases, and an empty queue alone is wrong.*
 `ActionExecutor.IsRunning` is false and `FinishedExecutingActions()` returns
@@ -441,7 +441,7 @@ command in between. It then addressed a card by an index that no longer meant
 what it had meant, and the oracle rejected it.
 
 **A stale observation is worse than a missing one**, and this is the sharpest
-illustration of R12 so far: nothing errored, nothing was defaulted, and the
+illustration of H10 so far: nothing errored, nothing was defaulted, and the
 oracle's answer was simply out of date. Waiting on a settling delay would have
 papered over it; the fix uses the game's own readiness signals, and for turn
 ends a monotonic turn counter, which no transient can imitate.
@@ -459,7 +459,7 @@ signature of this bug; assert they stay consistent.
 
 ---
 
-## R5 — The observation is complete
+## H4 — The observation is complete
 
 After each command: draw/hand/discard/exhaust piles in order, every creature
 with HP, block, statuses and intent, orbs, gold, potions, relics, floor and map
@@ -483,7 +483,7 @@ CombatOrbs, TreasureRoomRelics) and three per-player (`PlayerRngType`: Rewards,
 Shops, Transformations). Fifteen counters per observation.
 
 *Check.* For a state reached two ways — replayed from floor 1, and constructed
-directly (R7) — the observations must be equal.
+directly (H6) — the observations must be equal.
 
 ### Built, in `Observation.cs`
 
@@ -510,11 +510,11 @@ combat holding nothing" cannot compare equal.
 
 *Not yet in it:* the pending decision's identity, map coordinates (only act and
 floor), orbs (no Defect run driven yet), and out-of-combat legality, which is
-R3's remaining gap.
+H2's remaining gap.
 
 ---
 
-## R6 — Divergence is detectable out of combat too
+## H5 — Divergence is detectable out of combat too
 
 `RunManager.SendPostActionChecksum` is gated on
 `CombatManager.Instance.IsInProgress`, so the game's own per-action checksums
@@ -531,16 +531,16 @@ key names for values that rarely change), and at 132 decisions/sec that is
 200KB/s to say "still agreeing".
 
 *What the digest does not buy is time.* Over the protocol, digest-only and full
-observations measure within 5% of each other (R8) — the cost of a decision is
+observations measure within 5% of each other (H7) — the cost of a decision is
 frame-boundary latency, not serialisation. The saving is bandwidth and log size,
 which is worth having and is not what this section originally implied.
 
 Digests cut a fight's stream by **99%** — 17 bytes a step against ~1.6KB. (The
 original measurement, 36,410 bytes to 374, was taken over a 22-decision fight;
-the same fight is 17 decisions now that R4's quiescence is correct, so the
+the same fight is 17 decisions now that H3's quiescence is correct, so the
 totals moved while the per-step ratio did not.) The full observation is
 available on demand via `STS2_HEADLESS_OBS=full` or per request,
-and that fallback costs nothing precisely **because R1 holds**: the diverging
+and that fallback costs nothing precisely **because D1 holds**: the diverging
 run replays exactly. Compacting the JSON was the alternative and is worse — it
 saves perhaps 40% and makes the failure path harder to read, which is the path
 that matters.
@@ -566,11 +566,11 @@ is silent.
 
 ---
 
-## R7 — Scenarios can be constructed, not only replayed
+## H6 — Scenarios can be constructed, not only replayed
 
 Start from a specified state — this deck, these relics, this HP, this floor,
 this encounter — without playing to it. This is firm, not contingent on what it
-costs to build: R5's strongest check depends on it, and a suite that can only
+costs to build: H4's strongest check depends on it, and a suite that can only
 reach states by replaying to them is a suite nobody adds tests to.
 
 *Why.* Differential testing wants targeted coverage of rare interactions.
@@ -616,7 +616,7 @@ unlock state explicitly rather than inheriting whatever the save carried.
 Note also that the game's `unlock` console command is *not* the tool for this:
 `UnlockCards` calls `Progress.MarkCardAsSeen`, which is compendium "seen it"
 state with no effect on availability — and it writes to `progress.save`, the
-persistent profile residue R1 and R13 work to avoid.
+persistent profile residue D1 and D3 work to avoid.
 
 ### Construction must go through the game's own paths
 
@@ -664,7 +664,7 @@ mods.
 `MegaCrit.Sts2.Core.DevConsole.DevConsole` is a plain class with a public
 `DevConsole(bool shouldAllowDebugCommands)` and public
 `ProcessCommand(string)` / `ProcessNetCommand(Player?, string)`, both returning
-`CmdResult` (a success flag and message — which R12 can surface). `NDevConsole`
+`CmdResult` (a success flag and message — which H10 can surface). `NDevConsole`
 merely hosts one; its `_Ready` also builds fonts, text buffers and prompt
 styling we have no use for. Construct our own with `true` and the node is out of
 the picture.
@@ -727,7 +727,7 @@ Verified: `DEFECT` starts 75/75 with a `STRIKE_DEFECT` deck, `SILENT` at
 ascension 5 starts 56/70 — ascension is passed straight through to
 `RunState.CreateForNewRun` rather than pinned.
 
-**This closed R5's orb gap as a side effect.** Orbs were unreported because no
+**This closed H4's orb gap as a side effect.** Orbs were unreported because no
 Defect run had ever been driven, so the fields had never been written or
 checked. The observation now carries the orb queue *in order* — the same orbs in
 a different order evoke differently — with capacity separate from count, since
@@ -752,7 +752,7 @@ teaching the simulator a dev console it has no business having.
 So the split is:
 
 1. A scenario names construction operations **for the oracle**.
-2. The oracle executes them and emits a **full observation** (R5).
+2. The oracle executes them and emits a **full observation** (H4).
 3. The simulator starts from that observation.
 
 Loading happens on the simulator side. **The game needs no save-state loader**,
@@ -795,7 +795,7 @@ public interface ICardSelector    // Core.TestSupport
 installed via `CardSelectCmd.UseSelector(selector)`, which keeps a stack and
 returns an `IDisposable` scope. A prefix of queued actions alone would stall the
 first time a card asks the player to choose. The driver serves both push and
-pull decision points from one ordered script — the same boundary R4 defines.
+pull decision points from one ordered script — the same boundary H3 defines.
 
 *Priority: low.* Pile order is not expected to matter for the scenarios we care
 about. Build this only when a scenario actually needs it.
@@ -811,13 +811,13 @@ simulator.
 
 *Check.* Construct a state, snapshot it, and confirm the snapshot is the state
 asked for. Then confirm a constructed state and a replayed state that should be
-identical produce identical observations (the same check as R5).
+identical produce identical observations (the same check as H4).
 
 *Unexplored seam:* `Core.TestSupport` also contains `TestRngInjector`.
 
 ---
 
-## R8 — Throughput is measured and reported
+## H7 — Throughput is measured and reported
 
 The tool reports its own commands/sec so the number is a fact rather than an
 estimate.
@@ -834,7 +834,7 @@ estimate.
 | scenario turnaround, `CleanUp` → standing on the map again | 0.3s |
 
 **An earlier "~250 decisions/sec" here was wrong and is withdrawn.** It was
-measured against the quiescence bug R4 now records: the driver returned before
+measured against the quiescence bug H3 now records: the driver returned before
 turn transitions had happened, so it both counted decisions that were issued
 against stale state (22 rather than 17 for the same fight) and skipped the wait
 it should have been timing. Correcting quiescence roughly halved the number. The
@@ -846,7 +846,7 @@ that is `AutoSlayConfig.pollingInterval` and `buttonClickDelay` both being 100ms
 
 *Where the protocol's 2× goes, and where it does not.* Digests and full
 observations run within 5% of each other, so serialisation is not the cost —
-which also means R6's digest saves bandwidth rather than time. The remaining
+which also means H5's digest saves bandwidth rather than time. The remaining
 ~8ms per decision is latency, not work: a loopback roundtrip is ~30µs, but our
 continuations resume on `GodotSynchronizationContext`, which pumps on the frame
 callback, so each externally-driven decision waits for a frame boundary that an
@@ -854,23 +854,23 @@ in-process loop does not. Raising the headless frame rate is the obvious lead
 and is untried.
 
 At 63/s a hundred-decision combat prefix replays in about 1.6s, which still
-supports R7 leaning on replay, though less comfortably than the withdrawn number
+supports H6 leaning on replay, though less comfortably than the withdrawn number
 suggested.
 
 Scenario turnaround is measured from the two restarts the `Flight` case performs
-(R3): 0.3s each, against 0.7s of one-time game load. So a batch of scenarios in
+(H2): 0.3s each, against 0.7s of one-time game load. So a batch of scenarios in
 one process costs roughly two fights' worth of time per scenario boundary, which
-is the number R9 was waiting on and it favours in-process.
+is the number H8 was waiting on and it favours in-process.
 
 *Still to measure.* A full run rather than one fight, and whether the frame-rate
 lead above recovers the protocol's 2×.
 
 ---
 
-## R9 — The process boundary follows the measurement
+## H8 — The process boundary follows the measurement
 
 Whether the simulator hosts the oracle in-process or talks to it over a pipe is
-deferred until R8 has a number, because the driving code is the same either way
+deferred until H7 has a number, because the driving code is the same either way
 and the switch is cheap. What must not happen is picking now and discovering
 later that the choice cost an order of magnitude.
 
@@ -886,7 +886,7 @@ same two scenarios in two fresh processes. That is the real test of whether
 `CleanUp` leaves anything behind — this is where cross-scenario state leaks
 would show up, and they would look like simulator bugs.
 
-*Partly demonstrated,* as a side effect of the `Flight` case (R3), which needs a
+*Partly demonstrated,* as a side effect of the `Flight` case (H2), which needs a
 second run because modifiers are fixed at run creation. `OracleDriver.Restart`
 does `CleanUp` → `BuildRunState` → `StartRun`, and the suite now runs a third
 and fourth run after seven fights, eight relic/power grants and roughly forty
@@ -911,7 +911,7 @@ check stays open.
 
 ---
 
-## R10 — The protocol is machine-readable and versioned
+## H9 — The protocol is machine-readable and versioned
 
 The consumer is Rust, not a human. Line-delimited JSON, with a version field
 that the simulator checks on connect and refuses to proceed on mismatch.
@@ -920,7 +920,7 @@ that the simulator checks on connect and refuses to proceed on mismatch.
 
 One request per line, one response per request, strictly in order. There is no
 server-initiated traffic after the greeting, so the client never demultiplexes —
-a decision and its observation are a matched pair, which is what makes R4's "one
+a decision and its observation are a matched pair, which is what makes H3's "one
 command, one decision" checkable from outside the process. The greeting states
 the version, the build it answers for, and the command list:
 
@@ -941,13 +941,13 @@ malformed JSON and any exception from the game all produce an `error` naming the
 cause; an unplayable card's error carries its `UnplayableReason` and the model
 that blocked it. Nothing no-ops, because a no-op that returns the previous
 observation is indistinguishable from a decision that legitimately changed
-nothing (R12).
+nothing (H10).
 
 ### Pending decisions
 
 *Built for card selection and combat rewards:* `Pending.cs`,
 `OracleCardSelector`, `Protocol.TakeRewards`. The room states are designed below
-but not implemented. R3's out-of-combat work all
+but not implemented. H2's out-of-combat work all
 routes through this, so it is settled once rather than six times.
 
 **There are two kinds of decision point, and conflating them is the mistake to
@@ -1013,7 +1013,7 @@ pending intact: an out-of-range index, a repeated index, and a count outside
 `min..max`.
 
 Note the `digest`: a pending point is a legitimate comparison point — both
-implementations are at "the game is asking which card to discard" — so R1 and R6
+implementations are at "the game is asking which card to discard" — so D1 and H5
 apply to it unchanged. It is *mid-cascade*, which means a simulator must model
 the same interleaving; that is a real constraint on the simulator and is the
 point of reporting it rather than hiding it.
@@ -1084,7 +1084,7 @@ else. The engine writes 141 lines there before we emit anything — a Godot
 banner, FMOD, the Sentry extension, and an unprefixed multi-line system dump
 containing `PATH` and every mount point. Only 49 of those come from the game's
 `ConsoleLogPrinter`; the rest are native and unreachable from a Harmony patch.
-Prefix-filtering a stream carrying arbitrary paths is exactly the fragility R12
+Prefix-filtering a stream carrying arbitrary paths is exactly the fragility H10
 exists to prevent.
 
 *How sts2-cli solves this, and why we cannot.* It replaces `GodotSharp.dll`
@@ -1108,12 +1108,12 @@ which is how every command above was first exercised. It is not usable by the
 simulator, for the reason stated.
 
 *Check, satisfied.* Two fresh processes replaying one 17-decision script over
-TCP produced identical digest sequences — R1 verified end to end through the
+TCP produced identical digest sequences — D1 verified end to end through the
 protocol rather than only in-process.
 
 ---
 
-## R12 — Failure is loud
+## H10 — Failure is loud
 
 No default-valued observation, no swallowed exception, no partial state
 presented as complete. Any exception from the game surfaces as a protocol error
@@ -1155,7 +1155,7 @@ rather than having to be argued about from inspection.
 
 ---
 
-## R14 — The oracle ends its own process
+## H11 — The driver ends its own process
 
 When the driver is done the process exits, rather than returning to the game's
 main loop.
@@ -1163,7 +1163,7 @@ main loop.
 *Why this earns a requirement.* Without it a two-second run occupied a process
 until an external timeout, and SIGTERM is not reliably fatal here — instances
 survived `pkill` for thirteen hours and needed SIGKILL, while `timeout` reported
-`dumped core` and made a hang look like a crash. Any batch of scenarios (R9)
+`dumped core` and made a hang look like a crash. Any batch of scenarios (H8)
 would leak a process per scenario.
 
 Quitting goes through the scene tree, which is how the game exits itself
@@ -1201,36 +1201,36 @@ process behind.
 
 1. Does `CleanUp` leave cross-scenario state behind? Narrowed, not closed: two
    restarts after a heavily-driven first run reproduce its start state and map
-   exactly, but that is one process compared against itself, at run start. (R9)
+   exactly, but that is one process compared against itself, at run start. (H8)
 2. Does each dev console command we depend on work headless, and does it report
-   failure rather than no-op silently? (R7, R12)
+   failure rather than no-op silently? (H6, H10)
 3. Do the caught `Missing screenShake target!` errors have model-visible side
    effects? **Now observable rather than argued about:** they surface in
    `gameErrors`, and appear on the combat-reward step while the rewards
-   themselves apply correctly — evidence for presentation-only, not proof. (R12)
+   themselves apply correctly — evidence for presentation-only, not proof. (H10)
 
 *Answered so far:*
 
 - One process can run many scenarios — `RunManager.CleanUp` is public and nulls
-  `State`. (R9)
+  `State`. (H8)
 - `CleanUp`'s `NetService.Disconnect` is harmless: on
   `NetSingleplayerGameService` every method is an empty body and `IsConnected`
-  is hardcoded true, so there is no connection to re-establish. (R9)
-- In-combat card legality is exposed on the model. (R3)
+  is hardcoded true, so there is no connection to re-establish. (H8)
+- In-combat card legality is exposed on the model. (H2)
 - **Out-of-combat legality is on the model too, for all four.** Map travel via
   `NMapScreen`'s rule (mirrored in `MapLegality`); rest sites via
   `RestSiteOption.IsEnabled`; events via `EventOption.IsLocked`; shops via
   `MerchantEntry.EnoughGold` and `IsStocked`. Selection is model-layer
   throughout, and `TestMode.IsOn` makes the screens return null at creation
   rather than needing to be bypassed. Only the combat-reward *trigger* is
-  UI-owned. (R3)
+  UI-owned. (H2)
 - **Godot's main loop drives our continuations.** No hand-pumped
   `SynchronizationContext` is needed; the stack shows
   `GodotSynchronizationContext.ExecutePendingContinuations` ←
   `GodotTaskScheduler.Activate` ← `ScriptManagerBridge.FrameCallback`. This is
-  the thing sts2-cli pumps by hand up to 1000 times per action. (R4)
+  the thing sts2-cli pumps by hand up to 1000 times per action. (H3)
 - Quiescence is the issued action's `CompletionTask`, then queue drain — with a
-  bound, since cancelled actions never complete. (R4)
+  bound, since cancelled actions never complete. (H3)
 - **No run scene is needed.** Instantiating `res://scenes/run.tscn` segfaults
   under `--headless` (which forces the dummy rendering device regardless of
   `--rendering-driver`), but the run does not need it: the presentation calls
@@ -1239,8 +1239,8 @@ process behind.
   headless with no run UI at all.
 - A run starts at the model layer in **1.6s** from process launch (0.7s of that
   is game load, paid once per process), reaching floor 1 on the map with a
-  correct Ironclad state and `UpFront=411` consumed. (R8)
+  correct Ironclad state and `UpFront=411` consumed. (H7)
 - Scenario construction has two mechanisms — `RunState.FromSerializable` for
   boundary state, the dev console for everything else — and the debug gate
-  admits mods without patching. (R7)
-- A combat save format is not needed, so it is not a requirement. (R7)
+  admits mods without patching. (H6)
+- A combat save format is not needed, so it is not a requirement. (H6)

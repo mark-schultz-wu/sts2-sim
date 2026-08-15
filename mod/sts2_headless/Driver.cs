@@ -214,7 +214,7 @@ public static class Driver
         Stage = "building run state";
 
         // UnlockState.all so no scenario is unreachable because a profile has
-        // not earned the content yet — R1 wants a run that does not depend on
+        // not earned the content yet — D1 wants a run that does not depend on
         // which machine's save file it started from.
         var players = new List<Player> { Player.CreateForNewRun(character, UnlockState.all, 1uL) };
         List<ActModel> acts = ActModel.GetDefaultList().Select(a => a.ToMutable()).ToList();
@@ -232,7 +232,7 @@ public static class Driver
     /// <remarks>
     /// Named rather than hardcoded because four of the five playable characters
     /// were unreachable, and `Defect` is the only way orbs are ever exercised —
-    /// an observation gap R5 could not close without this.
+    /// an observation gap H4 could not close without this.
     /// </remarks>
     public static CharacterModel Character(string? id)
     {
@@ -282,7 +282,7 @@ public static class Driver
 
     /// <param name="seed">
     /// The seed for the new run, or null to keep the one this process started
-    /// at. Never defaulted to a fresh random value: R2 exists because
+    /// at. Never defaulted to a fresh random value: H1 exists because
     /// <c>CreateForTest</c> silently falls back to the wall clock.
     /// </param>
     public static async Task<RunState> Restart(

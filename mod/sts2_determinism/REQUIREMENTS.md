@@ -9,10 +9,10 @@
 Each requirement is written so it can be failed. Where something is not yet
 measured or not yet known, it says so rather than assuming.
 
-**The numbering is shared across both files and does not restart.** R1–R14 were
-written when this was one mod, and around a hundred and thirty references to
-them exist in the source of three mods and the Rust client. Splitting the
-document renumbered nothing.
+**`D` is determinism, `H` is headless.** These were one sequence, R1–R14, when
+this was one mod; the split renumbered them and rewrote all 146 references in
+the source of four mods and the Rust client. The prefix means a reference names
+its own file, so `H6` never has to be looked up to find out where it lives.
 
 This mod makes the game reproducible. It drives nothing and observes nothing;
 [`sts2_headless`](../sts2_headless/REQUIREMENTS.md) does that, and everything it
@@ -21,26 +21,26 @@ actually implemented and how much of it is verified.
 
 ## The requirements, and where they live
 
-| | requirement | owner |
+| | requirement | file |
 |---|---|---|
-| R1 | Identical inputs produce identical outputs | [determinism](../sts2_determinism/REQUIREMENTS.md) |
-| R2 | A run cannot start without an explicit seed | [headless](../sts2_headless/REQUIREMENTS.md) |
-| R3 | The legal command set is reported | headless |
-| R4 | One command advances exactly one decision | headless |
-| R5 | The observation is complete | headless |
-| R6 | Divergence is detectable out of combat too | headless |
-| R7 | Scenarios can be constructed, not only replayed | headless |
-| R8 | Throughput is measured and reported | headless |
-| R9 | The process boundary follows the measurement | headless |
-| R10 | The protocol is machine-readable and versioned | headless |
-| R11 | Refuses to answer for the wrong build | determinism |
-| R12 | Failure is loud | headless |
-| R13 | The player's own saves are never touched | determinism |
-| R14 | The driver ends its own process | headless |
+| **D1** | Identical inputs produce identical outputs | **here** |
+| **D2** | Refuses to answer for the wrong build | **here** |
+| **D3** | The player's own saves are never touched | **here** |
+| **H1** | A run cannot start without an explicit seed | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H2** | The legal command set is reported | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H3** | One command advances exactly one decision | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H4** | The observation is complete | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H5** | Divergence is detectable out of combat too | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H6** | Scenarios can be constructed, not only replayed | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H7** | Throughput is measured and reported | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H8** | The process boundary follows the measurement | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H9** | The protocol is machine-readable and versioned | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H10** | Failure is loud | [headless](../sts2_headless/REQUIREMENTS.md) |
+| **H11** | The driver ends its own process | [headless](../sts2_headless/REQUIREMENTS.md) |
 
 ---
 
-## R1 — Identical inputs produce identical outputs
+## D1 — Identical inputs produce identical outputs
 
 The same seed and the same command sequence must yield byte-identical
 observations, in a fresh process, on a different machine, on a different day.
@@ -49,11 +49,11 @@ observations, in a fresh process, on a different machine, on a different day.
 there are 193 references to it. All the ones we checked are view-layer or gated,
 but three traps remain, none of which fails loudly:
 
-- `SeedHelper` invents a seed when none is supplied (R2).
+- `SeedHelper` invents a seed when none is supplied (H1).
 - `MonsterModel.Rng` returns `Chaotic` **silently** when queried on a
   non-mutable canonical model.
 - `EncounterModel.DebugRandomizeRng()` reseeds from the wall clock at
-  one-second granularity, and `FightConsoleCmd` calls it unconditionally (R7).
+  one-second granularity, and `FightConsoleCmd` calls it unconditionally (H6, in headless).
 
 The last is the shape to watch for: nondeterminism coarse enough that short
 test runs often agree, so it reads as flakiness rather than as a broken oracle.
@@ -78,7 +78,7 @@ less than they appear to.**
 
 ---
 
-## R11 — The oracle refuses to answer for the wrong build
+## D2 — It refuses to answer for the wrong build
 
 *Built.* `Determinism.Init` hard-stops unless `release_info.json` reports
 `main_assembly_hash: 1692500715` (v0.107.1). Every claim in this file is a claim
@@ -92,7 +92,7 @@ the loader guarantees this mod ran first, not that it worked.
 
 ---
 
-## R13 — The player's own saves are never touched
+## D3 — The player's own saves are never touched
 
 The oracle writes to no real profile and no real save. `SetUpTest` defaults
 `shouldSave: false`; keep it that way, and confirm nothing else writes.
@@ -107,8 +107,8 @@ unmodded profile untouched — this install has none, and everything lands under
 records a discovery. Godot's own logs rotate and Sentry writes a per-run
 breadcrumb directory; neither is ours to control.
 
-So R13 holds in the sense that matters, but the residue is a **determinism**
-concern rather than a tidiness one (R1): profile state that persists across runs
+So D3 holds in the sense that matters, but the residue is a **determinism**
+concern rather than a tidiness one (D1): profile state that persists across runs
 is state the oracle did not declare. The modded profile should be treated as
-disposable, and the R1 check deletes it between runs rather than trusting it to
+disposable, and the D1 check deletes it between runs rather than trusting it to
 be inert.

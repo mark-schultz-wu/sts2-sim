@@ -119,7 +119,7 @@ what left this one hardcoded.
 
 **Use `travel` to a `Monster` point instead.** It reaches a real fight, chosen by
 the seed, on the map. `enter_fight` should be treated as a placeholder for the
-parameterised scenario command R7 actually needs.
+parameterised scenario command H6 actually needs.
 
 Naming a modifier, card or relic that does not exist is refused rather than
 ignored — silently starting an unmodified run would hide the client bug behind a
