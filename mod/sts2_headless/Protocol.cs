@@ -408,9 +408,13 @@ internal static class Protocol
     /// seed that puts one on floor 2, which is the seed-hunting this project
     /// exists to avoid.
     ///
-    /// <c>EnterRoomDebug</c> rather than the `room` console command, for the
-    /// same reason `enter_fight` avoids `fight`: the console path calls
-    /// <c>DebugRandomizeRng</c>, which reseeds from the wall clock.
+    /// <c>EnterRoomDebug</c> directly rather than through <c>RoomConsoleCmd</c>.
+    /// The stated reason used to be that the console path reseeds from the wall
+    /// clock, and that was never true of this one: <c>RoomConsoleCmd</c> calls
+    /// the same <c>EnterRoomDebug</c> and never touched
+    /// <c>DebugRandomizeRng</c> — that was <c>FightConsoleCmd</c>, which
+    /// <c>fight</c> now uses. Adopting it would buy the game's own argument
+    /// parsing and refusal message; it simply has not been done.
     /// </remarks>
     private static async Task EnterRoom(JsonElement req)
     {

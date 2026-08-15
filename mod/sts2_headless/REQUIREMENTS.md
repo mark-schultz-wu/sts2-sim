@@ -700,8 +700,10 @@ Making the game deterministic is what the mod is *for*.
 reimplement seeding but gets out of the way of the game's own: an unset `_rng`
 is the signal for `GenerateMonstersWithSlots` to seed from
 `runState.Rng.Seed + TotalFloor + hash(Id.Entry)`. That is measured, not argued.
-So the console is available, and `enter_fight` is now a placeholder waiting to be
-replaced by a command that takes an encounter.
+So the console is available, and the placeholder is gone: `fight` takes an
+encounter and goes through `FightConsoleCmd`, refusing unknown names with the
+game's own message. That is the first command adopted from the console, and the
+one this whole argument was about.
 
 **Every command adopted must still be audited** for `Rng.Chaotic`,
 `DebugRandomizeRng`, and wall-clock reads. The `Rng.Chaotic` half of that audit
@@ -926,7 +928,7 @@ the version, the build it answers for, and the command list:
 
 ```json
 {"type":"hello","protocol":1,"game":"v0.107.1","assemblyHash":1692500715,
- "commands":["start","enter_fight","play_card","end_turn","observe","quit"]}
+ "commands":["start","fight","play_card","end_turn","observe","quit"]}
 {"cmd":"play_card","index":2,"target":1,"full":true}
 {"type":"observation","seq":3,"cmd":"play_card","resolved":true,"digest":"…","state":{…}}
 ```
