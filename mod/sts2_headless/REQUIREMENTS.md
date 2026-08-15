@@ -1205,11 +1205,24 @@ process behind.
    restarts after a heavily-driven first run reproduce its start state and map
    exactly, but that is one process compared against itself, at run start. (H8)
 2. Does each dev console command we depend on work headless, and does it report
-   failure rather than no-op silently? (H6, H10)
+   failure rather than no-op silently? **Answered for `fight`, the only one
+   adopted so far:** `FightConsoleCmd.Process` runs headless — neither it nor
+   `AbstractConsoleCmd` touches Godot or a Node type — and an unknown encounter
+   comes back as `CmdResult(success: false, "Encounter 'X' not found")`, which
+   the protocol surfaces as a refusal. Each further command still needs asking.
+   (H6, H10)
 3. Do the caught `Missing screenShake target!` errors have model-visible side
    effects? **Now observable rather than argued about:** they surface in
-   `gameErrors`, and appear on the combat-reward step while the rewards
-   themselves apply correctly — evidence for presentation-only, not proof. (H10)
+   `gameErrors`, and appear on the combat-reward step and on `play_card` while
+   the rewards apply and the damage lands correctly — evidence for
+   presentation-only, not proof.
+
+   There is a cost to leaving this open. README.md says "if you see `gameErrors`
+   in a response, do not trust the observation attached to it", and this one
+   appears on an ordinary card play. A warning that fires every time is a
+   warning people learn to skip, which is exactly how the failure it exists to
+   catch would get through. Either it is classified as benign or the rule needs
+   softening; it should not stay both loud and routine. (H10)
 
 *Answered so far:*
 
