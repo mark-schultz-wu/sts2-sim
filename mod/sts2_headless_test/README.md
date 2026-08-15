@@ -44,7 +44,7 @@ Exits non-zero on failure, so it is usable as a gate.
 
 ## What it covers
 
-117 assertions, in two groups.
+122 assertions, in two groups.
 
 **That the observation is complete (H4)** — every field the observation promises
 is in it, out of combat and in, down to each creature reporting its intent. The
@@ -93,6 +93,22 @@ with *"State is already set"*, so a leaky restart cannot easily be synthesised.
 What is established is that the assertion is not vacuous — the paired check that
 the run *did* change before restarting passes, so the digest is sensitive to
 exactly the things a leak would carry over.
+
+**That a whole fight can be played** — every other case takes one or two
+decisions; this takes a fight's worth, which is the only way to exercise what
+happens *between* them: enemy turns, turn transitions, the piles cycling, and
+quiescence holding across dozens of decisions rather than two.
+
+The scenario is what makes it a test rather than a gamble. A hundred Gorgets is
+400 Plating at combat start, so the player cannot lose inside a few hundred
+turns and the policy can be the dumbest available — first playable card, then
+end the turn. A test whose policy has to be *good* fails when the policy is
+wrong rather than when the driver is. It wins in 7 turns at full health.
+
+That is scenario construction earning its keep: not reaching a state the game
+would produce, but reaching one where the thing under test is the only variable.
+Incidentally established — `RelicCmd.Obtain` accepts duplicates, which the real
+game never offers.
 
 **That winning a fight offers rewards** — reachable now that the console's
 `kill all` works. The point is not that a reward can be taken but that the game

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.DevConsole.ConsoleCommands;
@@ -126,6 +127,9 @@ public static class SelfTest
         state = await Driver.Restart();
 
         await WinningAFightOffersRewards(state);
+        state = await Driver.Restart();
+
+        await AFightCanBePlayedToTheEnd(state);
         state = await Driver.Restart();
 
         await TravellingMovesAndRecordsWhereYouWent(state);
@@ -434,6 +438,71 @@ public static class SelfTest
         Check($"travel: the legal set moved with us ({string.Join(" ", before)} -> {string.Join(" ", next)})",
             next.Count > 0 && !next.SequenceEqual(before));
         Check("travel: you cannot go back where you came from", !next.Contains(from));
+    }
+
+    /// <summary>
+    /// A whole fight, played rather than skipped.
+    /// </summary>
+    /// <remarks>
+    /// Every other case here takes one or two decisions. This one takes a
+    /// fight's worth, which is the only way to exercise what happens between
+    /// them: enemy turns, turn transitions, the draw and discard piles cycling,
+    /// and quiescence holding across dozens of decisions rather than two.
+    ///
+    /// The scenario is what makes it safe to write as a test rather than a
+    /// gamble. A hundred Gorgets is 400 Plating at combat start — Plating is a
+    /// counter that becomes Block each turn and decrements by one — so the
+    /// player cannot lose inside a few hundred turns, and the test can play the
+    /// simplest possible policy without the outcome depending on it. That is
+    /// scenario construction earning its keep: not reaching a state the game
+    /// would produce, but reaching one where the thing under test is the only
+    /// variable.
+    ///
+    /// The policy is deliberately the dumbest available — first playable card,
+    /// then end the turn. A test whose policy needs to be good is a test that
+    /// fails when the policy is wrong rather than when the driver is.
+    /// </remarks>
+    private static async Task AFightCanBePlayedToTheEnd(RunState state)
+    {
+        Player me = state.Players[0];
+
+        // Before entering: Gorget applies its Plating in AfterRoomEntered.
+        for (int i = 0; i < 100; i++)
+        {
+            await RelicCmd.Obtain(ModelDb.Relic<Gorget>().ToMutable(), me);
+        }
+
+        Check($"playthrough: the relics were granted ({me.Relics.Count} held)", me.Relics.Count > 50);
+
+        await EnterFight(state);
+        int startingHp = me.Creature.CurrentHp;
+
+        int turns = 0;
+        const int Cap = 100;
+        while (CombatManager.Instance.IsInProgress && turns < Cap)
+        {
+            while (await Driver.PlayOneCard(state))
+            {
+                if (!CombatManager.Instance.IsInProgress)
+                {
+                    break;
+                }
+            }
+
+            if (!CombatManager.Instance.IsInProgress)
+            {
+                break;
+            }
+
+            await Driver.EndTurn(state);
+            turns++;
+        }
+
+        Check($"playthrough: the fight ended in {turns} turn(s), inside the cap", turns < Cap);
+        Check("playthrough: the fight is over", !CombatManager.Instance.IsInProgress);
+        Check("playthrough: the player survived it", me.Creature.IsAlive);
+        Check($"playthrough: the scenario held ({me.Creature.CurrentHp}/{startingHp} hp)",
+            me.Creature.CurrentHp == startingHp);
     }
 
     /// <summary>
