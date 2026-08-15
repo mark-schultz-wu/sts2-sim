@@ -497,6 +497,32 @@ public static class Driver
     /// For decisions that end the turn: the turn number being left. Quiescence
     /// then requires a strictly greater turn number, not merely a drained queue.
     /// </param>
+    /// <summary>
+    /// Ends the player's turn, and waits for the next one to actually begin.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the protocol handler so the selftest can end a turn
+    /// the same way a client does. That matters more than it sounds: ending a
+    /// turn is the case <c>WaitForDecisionPoint</c> exists for. An action's own
+    /// completion is not enough, because the queue drains and the phase returns
+    /// to Play at the moment of issue too — so the turn number it is leaving is
+    /// passed down, and quiescence requires a strictly greater one.
+    ///
+    /// Returns false when combat ended mid-cascade and the decision was
+    /// abandoned rather than completed.
+    /// </remarks>
+    public static async Task<bool> EndTurn(RunState state)
+    {
+        Player me = state.Players[0];
+        PlayerCombatState pcs = me.PlayerCombatState
+            ?? throw new InvalidOperationException("not in combat");
+
+        int leaving = pcs.TurnNumber;
+        var action = new EndPlayerTurnAction(me, leaving);
+        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        return await Quiesce(action, turnMustAdvancePast: leaving);
+    }
+
     public static async Task<bool> Quiesce(GameAction issued, int? turnMustAdvancePast = null)
     {
         ActionQueueSet queue = RunManager.Instance.ActionQueueSet;

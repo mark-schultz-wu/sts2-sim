@@ -84,7 +84,7 @@ not activate.
 
 **Verified by an automatic check, re-run every build:**
 
-- 84 assertions in [`sts2_headless_test`](../sts2_headless_test/README.md)
+- 89 assertions in [`sts2_headless_test`](../sts2_headless_test/README.md)
   (`STS2_HEADLESS_MODE=selftest`), covering all nine
   of the game's legality-hook overrides. The list of hooks is discovered by
   reflection over the game assembly, so a hook added by a future patch shows up

@@ -709,10 +709,7 @@ internal static class Protocol
             return;
         }
 
-        int leaving = pcs.TurnNumber;
-        var action = new EndPlayerTurnAction(me, leaving);
-        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
-        bool resolved = await Driver.Quiesce(action, turnMustAdvancePast: leaving);
+        bool resolved = await Driver.EndTurn(_state);
         await Observe(req, "end_turn", resolved);
     }
 

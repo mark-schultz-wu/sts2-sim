@@ -44,7 +44,7 @@ Exits non-zero on failure, so it is usable as a gate.
 
 ## What it covers
 
-84 assertions, in two groups.
+89 assertions, in two groups.
 
 **That the observation is complete (H4)** — every field the observation promises
 is in it, out of combat and in, down to each creature reporting its intent. The
@@ -57,6 +57,19 @@ divergence that never appears is worse than one that does.
 The key lists are written out rather than derived from the capture, which would
 only assert that the code does what the code does. Written down, removing a
 field fails and adding one is a deliberate edit.
+
+**That a command answers only when the game has settled (H3)** — the standing
+hazard of this codebase, with four recorded bugs where the driver answered
+before the work finished. Asserting `ReadyForInput` would prove nothing, since
+that is the predicate `Quiesce` waits on and every one of those bugs *was* that
+predicate returning true too early. So it uses a signal the predicate does not
+consult: take the digest, let the engine run, take it again. A stable digest is
+evidence the state had settled; an unstable one is proof it had not.
+
+Ending a turn is the case that carries this. A card play survives a mutation
+that stops the driver waiting at all, because the action's own completion does
+most of the work — only a turn transition needs the turn counter to advance, and
+only that check fails when quiescence is broken.
 
 **That the legal command set is right (H2)** — all nine of the game's
 legality-hook overrides. Notable

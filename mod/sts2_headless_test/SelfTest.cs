@@ -112,6 +112,9 @@ public static class SelfTest
         // not about anything the other cases arrange.
         await ObservationIsComplete(state);
 
+        await CommandsAnswerOnlyWhenSettled(state);
+        state = await Driver.Restart();
+
         // Before anything grants free travel, since this case needs both halves.
         // It leaves the relic behind and stands on the last row, so the rest of
         // the suite gets a clean run rather than inheriting either.
@@ -267,6 +270,63 @@ public static class SelfTest
             creatures.EnumerateArray()
                 .Where(c => c.GetProperty("side").GetString() == "Enemy")
                 .All(c => c.GetProperty("intent").ValueKind != JsonValueKind.Null));
+    }
+
+    /// <summary>
+    /// A command answers only once the game has finished reacting (H3).
+    /// </summary>
+    /// <remarks>
+    /// The standing hazard of this codebase, and the one with the worst record:
+    /// the README lists four separate bugs where the driver answered before the
+    /// work finished — an action not yet picked up, a turn not yet changed,
+    /// rewards not yet applied, an event option not yet resolved. Each handed
+    /// the client a state its own decision had not reached.
+    ///
+    /// Asserting <c>ReadyForInput</c> would prove nothing: that is the predicate
+    /// <c>Quiesce</c> waits on, so checking it afterwards asks whether a loop
+    /// exited when its condition was true. Every one of those four bugs was
+    /// <em>that predicate returning true too early</em>, so it cannot be its own
+    /// witness.
+    ///
+    /// This uses a signal the predicate does not consult: take the digest, let
+    /// the engine run, take it again. If work was still outstanding the state
+    /// moves and the digests differ. A stable digest across a wait is real
+    /// evidence the state had settled; an unstable one is proof it had not.
+    ///
+    /// It can still miss something slower than the wait, which is the honest
+    /// limit of testing quiescence from outside.
+    /// </remarks>
+    private static async Task CommandsAnswerOnlyWhenSettled(RunState state)
+    {
+        await EnterFight(state);
+        await SettledAfter(state, "entering a fight");
+
+        Check("quiescence: a card was available to play", await Driver.PlayOneCard(state));
+        await SettledAfter(state, "playing a card");
+
+        // The case that matters. An action's own completion carries a card play
+        // most of the way, which is why the two checks above survived a mutation
+        // that made the driver stop waiting at all. Ending a turn is different:
+        // the queue drains and the phase returns to Play at the moment of issue,
+        // so only the turn counter advancing says the next turn has begun.
+        Check("quiescence: the turn ended and resolved", await Driver.EndTurn(state));
+        await SettledAfter(state, "ending a turn");
+    }
+
+    private static async Task SettledAfter(RunState state, string what)
+    {
+        string before = Observation.Digest(state);
+
+        // Long enough for a frame-driven continuation to run several times over;
+        // the protocol measures a decision at roughly 8ms.
+        await Task.Delay(500);
+
+        string after = Observation.Digest(state);
+        Check($"quiescence: the state is settled after {what}", before == after);
+        if (before != after)
+        {
+            Log.Error($"[selftest]   digest moved {before} -> {after} with nothing asked of it");
+        }
     }
 
     private static JsonElement Capture(RunState state)
