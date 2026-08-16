@@ -12,3 +12,6 @@ v0_107_1 = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"

@@ -36,6 +36,16 @@ const CARDS: &str = include_str!("cards.txt");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Field;
+
+    /// The game's own spelling of a value, which is the serde rename rather
+    /// than the Rust identifier.
+    fn wire<T: serde::Serialize>(value: &T) -> String {
+        serde_json::to_string(value)
+            .unwrap()
+            .trim_matches('"')
+            .to_string()
+    }
 
     /// The generated table has to agree with the dump it was generated from —
     /// otherwise `cargo xtask codegen` was not re-run and the table describes a
@@ -55,19 +65,22 @@ mod tests {
             assert_eq!(d.max_upgrade.to_string(), row[8], "{}: max_upgrade", row[1]);
             assert_eq!(format!("{:?}", d.rarity), row[4], "{}: rarity", row[1]);
 
-            // `dynamic` in the dump must be `None` in the table, not a value.
-            assert_eq!(
-                d.kind.is_none(),
-                row[3] == "dynamic",
-                "{}: computed-ness of kind",
-                row[1]
-            );
-            assert_eq!(
-                d.target.is_none(),
-                row[5] == "dynamic",
-                "{}: computed-ness of target",
-                row[1]
-            );
+            // Matched, not converted to an Option: `Constant(TargetType::None)`
+            // means "targets nothing" and `Computed` means "ask the card", and
+            // an Option would spell both with the word None again.
+            //
+            // Compared through serde rather than Debug, because
+            // `TargetType::Self` is a Rust keyword and generates as
+            // `SelfTarget` — only the rename carries the game's own spelling,
+            // and that is what the wire depends on.
+            match d.kind {
+                Field::Computed => assert_eq!(row[3], "dynamic", "{}: kind", row[1]),
+                Field::Constant(kind) => assert_eq!(wire(&kind), row[3], "{}: kind", row[1]),
+            }
+            match d.target {
+                Field::Computed => assert_eq!(row[5], "dynamic", "{}: target", row[1]),
+                Field::Constant(target) => assert_eq!(wire(&target), row[5], "{}: target", row[1]),
+            }
 
             let keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
             let expected = if row[9] == "-" {

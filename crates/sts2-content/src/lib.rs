@@ -15,6 +15,17 @@
 #[cfg(feature = "v0_107_1")]
 pub mod v0_107_1;
 
+/// A card field that is usually a constant, but which some cards work out from
+/// combat state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Field<T> {
+    /// Fixed for this card, whatever the run is doing.
+    Constant(T),
+    /// The card computes it — `Shiv` widens to all enemies under Fan of Knives,
+    /// `Mad Science` becomes whatever it stored. Ask; do not look up.
+    Computed,
+}
+
 /// Which build a content module came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Version {
