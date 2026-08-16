@@ -83,6 +83,23 @@ public static class CardDump
 
         output.Append($"# {cards.Count} cards\n");
 
+        // The enums the card fields draw from, in declaration order.
+        //
+        // Reflected rather than inferred from the values above: a member no
+        // card happens to use is still a member, and a generated enum missing
+        // one fails to decode the first time content grows into it. Order
+        // matters because it is the discriminant.
+        foreach (Type e in new[]
+        {
+            typeof(CardType), typeof(CardRarity), typeof(TargetType), typeof(CardKeyword),
+        })
+        {
+            foreach (string name in Enum.GetNames(e))
+            {
+                output.Append($"enum {e.Name} {Convert.ToInt64(Enum.Parse(e, name)).ToString(CultureInfo.InvariantCulture)} {name}\n");
+            }
+        }
+
         Log.Info("[carddump] begin\n" + output);
         Log.Info("[carddump] end");
     }

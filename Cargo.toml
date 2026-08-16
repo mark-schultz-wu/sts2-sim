@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sts2-content", "crates/sts2-headless", "crates/sts2-rng"]
+members = ["crates/sts2-content", "crates/sts2-headless", "crates/sts2-rng", "xtask"]
 
 [profile.release]
 debug = true

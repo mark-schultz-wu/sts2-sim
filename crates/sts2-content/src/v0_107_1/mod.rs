@@ -13,6 +13,10 @@
 //! marking a constant as dynamic costs one method and marking a dynamic as
 //! constant costs a divergence nobody can see.
 
+mod generated;
+
+pub use generated::*;
+
 use crate::Version;
 
 pub const VERSION: Version = Version {
@@ -28,11 +32,56 @@ pub const CARDS: &str = include_str!("cards.txt");
 mod tests {
     use super::*;
 
-    fn rows() -> impl Iterator<Item = Vec<&'static str>> {
+    /// The generated table has to agree with the dump it was generated from —
+    /// otherwise `cargo xtask codegen` was not re-run and the table describes a
+    /// build nobody is talking to.
+    #[test]
+    fn the_generated_table_matches_the_dump() {
+        let mut checked = 0;
+        for row in rows("card") {
+            let card = Cards::ALL
+                .iter()
+                .find(|c| c.id() == row[1])
+                .unwrap_or_else(|| panic!("{} is in the dump but not generated", row[1]));
+
+            let d = card.data();
+            assert_eq!(d.cost.to_string(), row[6], "{}: cost", row[1]);
+            assert_eq!(d.costs_x, row[7] == "1", "{}: costs_x", row[1]);
+            assert_eq!(d.max_upgrade.to_string(), row[8], "{}: max_upgrade", row[1]);
+            assert_eq!(format!("{:?}", d.rarity), row[4], "{}: rarity", row[1]);
+
+            // `dynamic` in the dump must be `None` in the table, not a value.
+            assert_eq!(
+                d.kind.is_none(),
+                row[3] == "dynamic",
+                "{}: computed-ness of kind",
+                row[1]
+            );
+            assert_eq!(
+                d.target.is_none(),
+                row[5] == "dynamic",
+                "{}: computed-ness of target",
+                row[1]
+            );
+
+            let keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
+            let expected = if row[9] == "-" {
+                Vec::new()
+            } else {
+                row[9].split(',').map(String::from).collect()
+            };
+            assert_eq!(keywords, expected, "{}: keywords", row[1]);
+
+            checked += 1;
+        }
+        assert_eq!(checked, 578);
+    }
+
+    fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
         CARDS
             .lines()
-            .filter(|l| !l.starts_with('#'))
-            .map(|l| l.split_whitespace().collect())
+            .map(|l| l.split_whitespace().collect::<Vec<_>>())
+            .filter(move |f| f.first() == Some(&kind))
     }
 
     /// The anchor. A dump from another build has another hash, and a table
@@ -56,7 +105,7 @@ mod tests {
 
     #[test]
     fn every_card_is_present_and_well_formed() {
-        let cards: Vec<_> = rows().collect();
+        let cards: Vec<_> = rows("card").collect();
         assert_eq!(cards.len(), 578, "the build has 578 cards");
 
         for row in &cards {
@@ -84,7 +133,7 @@ mod tests {
             "TOKEN_CARD_POOL",
         ];
 
-        for row in rows() {
+        for row in rows("card") {
             assert!(
                 POOLS.contains(&row[2]),
                 "unknown pool for {}: {}",
@@ -94,12 +143,35 @@ mod tests {
         }
     }
 
+    /// The enums the card fields draw from, reflected from the game rather
+    /// than inferred from the values in use — a member no card happens to use
+    /// is still a member, and an enum missing one fails to decode the first
+    /// time content grows into it.
+    #[test]
+    fn the_field_enums_are_complete() {
+        for (name, count) in [
+            ("CardType", 7),
+            ("CardRarity", 11),
+            ("TargetType", 10),
+            ("CardKeyword", 8),
+        ] {
+            let members: Vec<_> = rows("enum").filter(|r| r[1] == name).collect();
+            assert_eq!(members.len(), count, "{name} member count changed");
+
+            // Discriminants are the wire and table encoding, so a gap or a
+            // reorder is a silent remapping rather than an addition.
+            for (i, m) in members.iter().enumerate() {
+                assert_eq!(m[2], i.to_string(), "{name} is no longer densely numbered");
+            }
+        }
+    }
+
     /// Ids are the enum variants and the wire form, so a duplicate would make
     /// two different cards the same card.
     #[test]
     fn card_ids_are_unique() {
         let mut seen = std::collections::HashSet::new();
-        for row in rows() {
+        for row in rows("card") {
             assert!(seen.insert(row[1]), "duplicate card id {}", row[1]);
         }
     }
@@ -109,7 +181,7 @@ mod tests {
     /// constant that is not one.
     #[test]
     fn only_the_known_cards_are_dynamic() {
-        let dynamic: Vec<&str> = rows()
+        let dynamic: Vec<&str> = rows("card")
             .filter(|r| r[3] == "dynamic" || r[5] == "dynamic")
             .map(|r| r[1])
             .collect();

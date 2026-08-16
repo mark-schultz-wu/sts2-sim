@@ -11,3 +11,4 @@ default = ["v0_107_1"]
 v0_107_1 = []
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }

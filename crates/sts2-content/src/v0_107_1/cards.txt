@@ -579,3 +579,39 @@ card WRITHE CURSE_CARD_POOL Curse Curse None -1 0 0 Innate,Unplayable
 card WROUGHT_IN_WAR REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
 card ZAP DEFECT_CARD_POOL Skill Basic Self 1 0 1 -
 # 578 cards
+enum CardType 0 None
+enum CardType 1 Attack
+enum CardType 2 Skill
+enum CardType 3 Power
+enum CardType 4 Status
+enum CardType 5 Curse
+enum CardType 6 Quest
+enum CardRarity 0 None
+enum CardRarity 1 Basic
+enum CardRarity 2 Common
+enum CardRarity 3 Uncommon
+enum CardRarity 4 Rare
+enum CardRarity 5 Ancient
+enum CardRarity 6 Event
+enum CardRarity 7 Token
+enum CardRarity 8 Status
+enum CardRarity 9 Curse
+enum CardRarity 10 Quest
+enum TargetType 0 None
+enum TargetType 1 Self
+enum TargetType 2 AnyEnemy
+enum TargetType 3 AllEnemies
+enum TargetType 4 RandomEnemy
+enum TargetType 5 AnyPlayer
+enum TargetType 6 AnyAlly
+enum TargetType 7 AllAllies
+enum TargetType 8 TargetedNoCreature
+enum TargetType 9 Osty
+enum CardKeyword 0 None
+enum CardKeyword 1 Exhaust
+enum CardKeyword 2 Ethereal
+enum CardKeyword 3 Innate
+enum CardKeyword 4 Unplayable
+enum CardKeyword 5 Retain
+enum CardKeyword 6 Sly
+enum CardKeyword 7 Eternal
