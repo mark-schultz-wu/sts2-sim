@@ -7,3 +7,8 @@
 # cargo-mutants scratch output.
 mutants.out/
 mutants.out.old/
+
+# Mod build output. `mod/deploy.sh` rebuilds it and copies the dll into the
+# game directory; nothing here is an input to anything.
+mod/*/bin/
+mod/*/obj/
