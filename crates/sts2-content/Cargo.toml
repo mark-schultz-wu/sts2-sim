@@ -1,0 +1,13 @@
+[package]
+name = "sts2-content"
+version = "0.1.0"
+edition = "2024"
+
+# One module per game build, each behind a feature: distinct types so two
+# versions can be diffed against each other in one binary, without compiling
+# 578 cards per version when only one is wanted.
+[features]
+default = ["v0_107_1"]
+v0_107_1 = []
+
+[dependencies]
