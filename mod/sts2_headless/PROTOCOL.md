@@ -4,7 +4,7 @@ The wire contract, stated once. [README.md](README.md) covers building, running
 and the version pin; [REQUIREMENTS.md](REQUIREMENTS.md) covers why the contract is
 shaped this way and what has actually been verified. This file is just the shape.
 
-Protocol version `1`, game `v0.107.1`, assembly hash `1692500715`.
+Protocol version `1`, game `v0.107.1`, content hash `3954186980`.
 
 ## Connecting
 
@@ -41,10 +41,22 @@ Requests are `{"cmd": "<name>", ...}`. Every response carries `type`.
 Sent unprompted on connect, before any request:
 
 ```json
-{"type":"hello","protocol":1,"game":"v0.107.1","assemblyHash":1692500715,
+{"type":"hello","protocol":1,"game":"v0.107.1","commit":"59260271",
+ "assemblyHash":1692500715,"contentHash":3954186980,
  "commands":["start","fight","travel","play_card","end_turn","answer",
              "grant","enter_room","choose_option","buy","observe","quit"]}
 ```
+
+Every field but `protocol` is read from the running build rather than compiled
+in, so a client that checks them is checking something. `game`, `commit` and
+`assemblyHash` come from the game's own `ReleaseInfo`; a build without one
+reports `"UNRELEASED"`, `"UNKNOWN"` and `0`.
+
+**`contentHash` is the one to check before trusting generated content tables.**
+It is XxHash32 over the model-id namespace, and the game uses this exact value
+to refuse a replay recorded against different content. It moves when content
+moves — whereas an assembly change that adds no cards leaves a generated id
+table perfectly valid, and a `game` string can repeat across builds.
 
 ## Responses
 

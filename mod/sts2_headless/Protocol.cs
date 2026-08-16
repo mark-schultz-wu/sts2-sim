@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
@@ -13,6 +14,7 @@ using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
+using MegaCrit.Sts2.Core.Multiplayer.Serialization;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
@@ -59,12 +61,26 @@ internal static class Protocol
 
         Log.Info($"[headless] serving protocol v{Version} over {_channel.Describe}");
 
+        // Derived, not transcribed. These were literals -- `"v0.107.1"` and
+        // `1692500715` -- which made the handshake a constant validating
+        // itself: a client checking them would agree with any build at all,
+        // including one whose content had moved out from under its tables.
+        // ReleaseInfo is where the literals were read from in the first place.
+        ReleaseInfo? release = ReleaseInfoManager.Instance.ReleaseInfo;
+
         await Send(new Dictionary<string, object?>
         {
             ["type"] = "hello",
             ["protocol"] = Version,
-            ["game"] = "v0.107.1",
-            ["assemblyHash"] = 1692500715,
+            ["game"] = release?.Version ?? "UNRELEASED",
+            ["commit"] = release?.Commit ?? GitHelper.ShortCommitId ?? "UNKNOWN",
+            ["assemblyHash"] = release?.MainAssemblyHash ?? 0,
+            // The hash that actually matters to a simulator: XxHash32 over the
+            // model-id namespace, which moves when content moves. An assembly
+            // change that adds no content leaves generated id tables valid; a
+            // content change invalidates them. The game uses this exact value
+            // to refuse a replay recorded against different content.
+            ["contentHash"] = ModelIdSerializationCache.Hash,
             ["commands"] = new[] { "start", "fight", "travel", "play_card", "end_turn", "answer", "grant", "enter_room", "choose_option", "buy", "observe", "quit" },
         });
 

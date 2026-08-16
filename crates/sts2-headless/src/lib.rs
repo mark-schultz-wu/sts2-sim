@@ -120,9 +120,16 @@ pub struct Game {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Greeting {
     pub protocol: u32,
+    /// The build's own version string, not a constant the mod carries.
     pub game: String,
+    pub commit: String,
     #[serde(rename = "assemblyHash")]
     pub assembly_hash: i64,
+    /// XxHash32 over the model-id namespace. This is the one to check before
+    /// trusting generated content tables: it moves when content moves, whereas
+    /// an assembly change that adds no content leaves those tables valid.
+    #[serde(rename = "contentHash")]
+    pub content_hash: u32,
     /// Every command this game accepts.
     pub commands: Vec<String>,
 }
@@ -491,7 +498,8 @@ mod handshake {
     use super::*;
 
     const HELLO: &str = r#"{"type":"hello","protocol":1,"game":"v0.107.1",
-        "assemblyHash":1692500715,"commands":["start","quit"]}"#;
+        "commit":"abc1234","assemblyHash":1692500715,"contentHash":42,
+            "commands":["start","quit"]}"#;
 
     /// A stand-in for the game: a process that stays alive long enough to be
     /// reaped, so [`accept_before`] does not mistake it for a crashed launch.
@@ -556,7 +564,8 @@ mod handshake {
 
     #[test]
     fn a_protocol_we_do_not_speak_is_refused_up_front() {
-        let future = r#"{"type":"hello","protocol":2,"game":"v9","assemblyHash":1,"commands":[]}"#;
+        let future = r#"{"type":"hello","protocol":2,"game":"v9","commit":"c","assemblyHash":1,
+            "contentHash":1,"commands":[]}"#;
         let err = against("tok", &["tok", future]).expect_err("should refuse");
         assert!(
             matches!(
