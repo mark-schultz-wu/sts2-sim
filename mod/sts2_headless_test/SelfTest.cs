@@ -10,7 +10,10 @@ using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.DevConsole.ConsoleCommands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Entities.RestSite;
+using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Logging;
@@ -22,6 +25,8 @@ using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Modifiers;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
 using MegaCrit.Sts2.Core.Modding;
@@ -133,6 +138,19 @@ public static class SelfTest
         state = await Driver.Restart();
 
         await ADeadPlayerEndsTheRun(state);
+        state = await Driver.Restart();
+
+        await ARestSiteOffersAndResolvesItsOptions(state);
+        state = await Driver.Restart();
+
+        await AShopReportsItsStockAndSells(state);
+        state = await Driver.Restart();
+
+        await RoomsCanBeCrossedInSequence(state);
+        state = await Driver.Restart();
+
+        // Ends with a dead player, so it restarts like the case above it.
+        await AnAbandonedDecisionIsReportedUnresolved(state);
         state = await Driver.Restart();
 
         await ReplayingAScriptGivesTheSameSequence(state);
@@ -1430,6 +1448,384 @@ public static class SelfTest
             .Select(e => e.GetProperty("at").GetString() ?? "?")
             .OrderBy(s => s)
             .ToList();
+    }
+
+    /// <summary>
+    /// A rest site reports its options, and both of them can be taken.
+    /// </summary>
+    /// <remarks>
+    /// A whole room type with no coverage until now. It is worth more than the
+    /// line count suggests, because the two options are not alike: <c>HEAL</c>
+    /// resolves by itself, and <c>SMITH</c> stops and asks which card to
+    /// upgrade. A rest site is therefore the only room outside combat that can
+    /// park a decision, and everything that makes parking work — the pending
+    /// question, answering it, the run continuing afterwards — had been tested
+    /// only from inside a fight.
+    ///
+    /// <c>ChooseLocalOption</c> is started rather than awaited. It awaits
+    /// <c>OnSelect</c>, and <c>SmithRestSiteOption.OnSelect</c> awaits
+    /// <c>CardSelectCmd.FromDeckForUpgrade</c> — so for <c>SMITH</c> the task
+    /// does not complete until the selection is answered, and a caller that
+    /// waited for it first would be waiting for itself.
+    ///
+    /// Two visits rather than two options in one. Choosing removes the option
+    /// chosen, and <c>ShouldDisableRemainingRestSiteOptions</c> can clear the
+    /// rest outright, so the second choice would be reading indices from an
+    /// observation that no longer describes anything.
+    /// </remarks>
+    private static async Task ARestSiteOffersAndResolvesItsOptions(RunState state)
+    {
+        Player me = state.Players[0];
+
+        // Wounded first: a heal at full hp is indistinguishable from a no-op,
+        // and this case is about the heal landing rather than being offered.
+        await EnterFight(state);
+        int full = me.Creature.CurrentHp;
+        await Hurt(state, 20);
+        int wounded = me.Creature.CurrentHp;
+        Check($"rest site: the player arrives hurt ({wounded}/{full})", wounded < full);
+
+        await EnterRoom(state, RoomType.RestSite);
+
+        JsonElement room = Room(state);
+        Check("rest site: the room reports as a RestSite",
+            room.ValueKind == JsonValueKind.Object
+            && room.GetProperty("type").GetString() == "RestSite");
+
+        List<JsonElement> options = room.GetProperty("options").EnumerateArray().ToList();
+        List<string> ids = options
+            .Select(o => o.GetProperty("id").GetString() ?? "?")
+            .ToList();
+        Check($"rest site: options are offered ({string.Join(", ", ids)})", options.Count >= 2);
+        Check("rest site: HEAL is one of them", ids.Contains("HEAL"));
+        Check("rest site: SMITH is one of them", ids.Contains("SMITH"));
+        Check("rest site: every option reports whether it is enabled",
+            options.All(o => o.TryGetProperty("enabled", out _)));
+
+        // Asked of the model before choosing, so the assertion below is the
+        // game's own arithmetic rather than this test's guess at it.
+        decimal expected = HealRestSiteOption.GetHealAmount(me);
+
+        RestSiteSynchronizer sync = RunManager.Instance.RestSiteSynchronizer;
+        int heal = ids.IndexOf("HEAL");
+        Task<bool> healing = sync.ChooseLocalOption(heal);
+        await Driver.WaitForDecisionPoint();
+        await AnswerAnythingParked();
+        Check("rest site: HEAL resolved", await healing);
+
+        int healed = me.Creature.CurrentHp;
+        Check($"rest site: HEAL restored hp ({wounded} -> {healed}, offering {expected})",
+            healed > wounded);
+        Check($"rest site: HEAL did not overheal ({healed}/{me.Creature.MaxHp})",
+            healed <= me.Creature.MaxHp);
+
+        Check("rest site: the option taken is no longer offered",
+            !Room(state).GetProperty("options").EnumerateArray()
+                .Any(o => o.GetProperty("id").GetString() == "HEAL"));
+
+        await SettledAfter(state, "a rest site heal");
+
+        // A second site, because the first has been spent.
+        await EnterRoom(state, RoomType.RestSite);
+
+        List<string> again = Room(state).GetProperty("options").EnumerateArray()
+            .Select(o => o.GetProperty("id").GetString() ?? "?")
+            .ToList();
+        Check($"rest site: a fresh site offers a full set again ({string.Join(", ", again)})",
+            again.Contains("SMITH"));
+
+        // Summed levels rather than a count of upgraded cards: a card with a
+        // MaxUpgradeLevel above one can be smithed twice, and the count would
+        // not move the second time.
+        int upgradedBefore = me.Deck.Cards.Sum(c => c.CurrentUpgradeLevel);
+        Task<bool> smithing = sync.ChooseLocalOption(again.IndexOf("SMITH"));
+        await Driver.WaitForDecisionPoint();
+
+        Check($"rest site: SMITH parks a decision ({Pending.Current?.Kind ?? "none"})",
+            Pending.Current is { Kind: "select_cards" });
+
+        await AnswerAnythingParked();
+        Check("rest site: SMITH resolved once answered", await smithing);
+
+        int upgradedAfter = me.Deck.Cards.Sum(c => c.CurrentUpgradeLevel);
+        Check($"rest site: SMITH upgraded a card ({upgradedBefore} -> {upgradedAfter} "
+            + "total upgrade levels)",
+            upgradedAfter == upgradedBefore + 1);
+
+        await SettledAfter(state, "a rest site smith");
+    }
+
+    /// <summary>
+    /// A shop reports its stock, and gold actually buys something.
+    /// </summary>
+    /// <remarks>
+    /// The other room type with no coverage. What makes it worth a case is
+    /// <c>affordable</c>: it is the only legality flag in the observation that
+    /// depends on something the player carries rather than on the entry itself,
+    /// so it is the one that can be reported stale. Asserting it flips when the
+    /// gold arrives — without re-entering the room — is the whole point.
+    ///
+    /// Bought through <c>OnTryPurchaseWrapper</c>, which is what
+    /// <c>Protocol.Buy</c> calls. The protocol's own refusals (not in a shop,
+    /// index out of range) are checked from the client instead, in
+    /// <c>crates/sts2-headless/tests/live.rs</c>, because they are properties of
+    /// the wire and not of the game.
+    /// </remarks>
+    private static async Task AShopReportsItsStockAndSells(RunState state)
+    {
+        Player me = state.Players[0];
+        await EnterRoom(state, RoomType.Shop);
+
+        JsonElement room = Room(state);
+        Check("shop: the room reports as a Shop",
+            room.ValueKind == JsonValueKind.Object
+            && room.GetProperty("type").GetString() == "Shop");
+
+        List<JsonElement> entries = room.GetProperty("entries").EnumerateArray().ToList();
+        Check($"shop: stock is on offer ({entries.Count} entries)", entries.Count > 0);
+        Check("shop: every entry reports a cost, stock and affordability",
+            entries.All(e => e.TryGetProperty("cost", out _)
+                && e.TryGetProperty("stocked", out _)
+                && e.TryGetProperty("affordable", out _)));
+        Check("shop: every entry reports what kind of thing it is",
+            entries.All(e => !string.IsNullOrEmpty(e.GetProperty("kind").GetString())));
+
+        MerchantRoom shop = (MerchantRoom)state.CurrentRoom!;
+        MerchantInventory inventory = shop.GetLocalInventory();
+        List<MerchantEntry> stock = inventory.AllEntries.ToList();
+
+        // The most expensive thing here, so "cannot afford it" is not a claim
+        // about the starting purse being small by luck.
+        int dearest = stock
+            .Select((e, i) => (e, i))
+            .OrderByDescending(t => t.e.Cost)
+            .First()
+            .i;
+
+        Check($"shop: the dearest entry is unaffordable at {me.Gold} gold "
+            + $"(costs {stock[dearest].Cost})",
+            entries[dearest].GetProperty("affordable").GetBoolean() == false);
+
+        await PlayerCmd.GainGold(2000, me);
+        await Driver.WaitForDecisionPoint();
+
+        Check("shop: affordability is re-read after the gold arrives",
+            Room(state).GetProperty("entries").EnumerateArray().ToList()[dearest]
+                .GetProperty("affordable").GetBoolean());
+
+        int before = me.Gold;
+        int cost = stock[dearest].Cost;
+        Check($"shop: the purchase went through ({cost} gold)",
+            await stock[dearest].OnTryPurchaseWrapper(inventory));
+        await Driver.WaitForDecisionPoint();
+        await AnswerAnythingParked();
+
+        Check($"shop: the gold was spent ({before} -> {me.Gold}, cost {cost})",
+            me.Gold == before - cost);
+
+        await SettledAfter(state, "a purchase");
+    }
+
+    /// <summary>
+    /// Several rooms in a row, rather than one room from a fresh run.
+    /// </summary>
+    /// <remarks>
+    /// Every other case here starts from a restart and takes one room's worth of
+    /// decisions, so nothing tested what a room *leaves behind*: the reward
+    /// subscription that outlives a room, the rest site synchronizer holding
+    /// options from the last site, a merchant inventory belonging to a shop two
+    /// rooms ago. Those only show up on the second visit.
+    ///
+    /// It also covers winning twice. <c>WatchForWins</c> subscribes once per
+    /// process, and its remark explains why: a per-run subscription would offer
+    /// every reward set as many times as the process had started runs. That
+    /// argument is about repetition, and until now nothing repeated.
+    /// </remarks>
+    private static async Task RoomsCanBeCrossedInSequence(RunState state)
+    {
+        (RoomType type, string reported)[] crossing =
+        {
+            (RoomType.RestSite, "RestSite"),
+            (RoomType.Shop, "Shop"),
+            (RoomType.Treasure, ""),
+            (RoomType.RestSite, "RestSite"),
+        };
+
+        foreach ((RoomType type, string reported) in crossing)
+        {
+            await EnterRoom(state, type);
+            await AnswerAnythingParked();
+
+            JsonElement obs = Capture(state);
+            Check($"crossing: {type} reports a complete observation",
+                obs.TryGetProperty("hp", out _)
+                && obs.TryGetProperty("gold", out _)
+                && obs.TryGetProperty("map", out _)
+                && obs.GetProperty("runOver").GetBoolean() == false);
+
+            if (reported.Length > 0)
+            {
+                JsonElement room = Room(state);
+                Check($"crossing: {type} reports itself as {reported}",
+                    room.ValueKind == JsonValueKind.Object
+                    && room.GetProperty("type").GetString() == reported);
+            }
+
+            await SettledAfter(state, $"entering {type}");
+        }
+
+        // Twice, in one run, after four rooms: the case the once-per-process
+        // reward subscription exists to get right.
+        for (int fight = 1; fight <= 2; fight++)
+        {
+            await EnterFight(state);
+            CmdResult killed = new KillConsoleCmd().Process(state.Players[0], new[] { "all" });
+            Check($"crossing: fight {fight} could be won ({killed.msg})", killed.success);
+            if (killed.task != null)
+            {
+                await killed.task;
+            }
+
+            await Driver.WaitForDecisionPoint();
+            Check($"crossing: fight {fight} offered its rewards once "
+                + $"({Pending.Current?.Kind ?? "none"})",
+                Pending.Current is { Kind: "rewards" });
+
+            await AnswerAnythingParked();
+            Check($"crossing: nothing is left pending after fight {fight}", Pending.Current == null);
+        }
+    }
+
+    /// <summary>
+    /// A decision the game abandons is reported unresolved, not as resolved.
+    /// </summary>
+    /// <remarks>
+    /// <c>Quiesce</c> returns false in exactly one situation: combat ends while
+    /// the action we issued is still cascading, so it is never completed and
+    /// waiting on it would hang forever. That bool is what the protocol reports
+    /// as <c>"resolved": false</c>, and it was the last field of the observation
+    /// with no test behind it — every case here happened to end its fights in
+    /// ways that let the last action finish.
+    ///
+    /// It matters because <c>resolved</c> is the client's only signal that the
+    /// state it is looking at is not the settled consequence of what it asked
+    /// for. A simulator told <c>true</c> here would be asked to reproduce a
+    /// half-applied action as if it were a finished one.
+    ///
+    /// The situation is asserted against <c>Quiesce</c> directly, with an action
+    /// that was never enqueued and therefore can never complete, in a room whose
+    /// fight is already over. That is precisely the state the early return
+    /// describes, and it is reached without depending on a schedule.
+    ///
+    /// Driving it through ordinary play was tried first and abandoned, which is
+    /// worth recording because both attempts look like they should work. A
+    /// player killed on the enemy turn still lets <c>EndPlayerTurnAction</c>
+    /// complete, and so does a poisoned enemy side dying at
+    /// <c>AfterSideTurnStart</c> — measured, both report <c>true</c>. Whether
+    /// the action completes is a race between the cascade and a 1ms poll, so a
+    /// test built on either would assert a timing coincidence. The bug this
+    /// field exists for was found in the wild, not by construction; what is
+    /// testable is that the wait reacts to it correctly.
+    /// </remarks>
+    private static async Task AnAbandonedDecisionIsReportedUnresolved(RunState state)
+    {
+        Player me = state.Players[0];
+        await EnterFight(state);
+
+        PlayerCombatState pcs = me.PlayerCombatState!;
+        int turn = pcs.TurnNumber;
+
+        CmdResult killed = new KillConsoleCmd().Process(me, new[] { "all" });
+        Check($"unresolved: the fight could be ended ({killed.msg})", killed.success);
+        if (killed.task != null)
+        {
+            await killed.task;
+        }
+
+        Check("unresolved: the fight is over", !CombatManager.Instance.IsInProgress);
+
+        // Never enqueued, so its CompletionTask can never be signalled. Waiting
+        // on it is the hang the early return exists to prevent.
+        var orphan = new EndPlayerTurnAction(me, turn);
+        Check("unresolved: the orphaned action has indeed not completed",
+            !orphan.CompletionTask.IsCompleted);
+
+        bool resolved = await Driver.Quiesce(orphan, turnMustAdvancePast: turn);
+        Check("unresolved: an action abandoned by a finished fight reports unresolved", !resolved);
+
+        JsonElement after = Capture(state);
+        Check("unresolved: an unresolved decision still reports a complete observation",
+            after.TryGetProperty("hp", out _)
+            && after.TryGetProperty("gold", out _)
+            && after.TryGetProperty("map", out _));
+        Check("unresolved: the run is not over — only the decision was abandoned",
+            after.GetProperty("runOver").GetBoolean() == false);
+
+        // The rewards the win owes are offered by the next wait, not by the
+        // abandoned one: Quiesce returns the moment it sees the fight gone and
+        // never reaches the reward loop.
+        await Driver.WaitForDecisionPoint();
+        Check($"unresolved: the win still offers its rewards ({Pending.Current?.Kind ?? "none"})",
+            Pending.Current is { Kind: "rewards" });
+        await AnswerAnythingParked();
+    }
+
+    /// <summary>
+    /// Jumps to a room type, the way <c>enter_room</c> does.
+    /// </summary>
+    /// <remarks>
+    /// The same two lines as <c>Protocol.EnterRoom</c>, deliberately: a case
+    /// that arrived at a rest site by some other route would be testing a state
+    /// the protocol cannot actually produce.
+    /// </remarks>
+    private static async Task EnterRoom(RunState state, RoomType type)
+    {
+        await RunManager.Instance.EnterRoomDebug(type);
+        await Driver.WaitForDecisionPoint();
+
+        Check($"room: entering {type} arrives in one ({state.CurrentRoom?.GetType().Name})",
+            state.CurrentRoom != null);
+    }
+
+    private static JsonElement Room(RunState state)
+    {
+        JsonElement obs = Capture(state);
+        return obs.TryGetProperty("room", out JsonElement room) ? room : default;
+    }
+
+    /// <summary>
+    /// Hurts the player by a fixed amount, for cases that need to arrive
+    /// somewhere wounded.
+    /// </summary>
+    /// <remarks>
+    /// Through the console's damage command rather than <c>CreatureCmd</c>
+    /// directly, because it is the one path that also runs the win-condition
+    /// check — and because it refuses outside combat, which is the constraint
+    /// that shapes every caller: hp persists across rooms, so a case that wants
+    /// a wounded player at a rest site has to be hurt in a fight first.
+    /// </remarks>
+    private static async Task<bool> Hurt(RunState state, int amount)
+    {
+        CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+        if (combat == null)
+        {
+            return Check("hurt: the player is in a fight to be hurt in", false);
+        }
+
+        int index = combat.Creatures
+            .Select((c, i) => (c, i))
+            .First(t => t.c.IsPlayer)
+            .i;
+
+        CmdResult hurt = new DamageConsoleCmd().Process(
+            state.Players[0], new[] { amount.ToString(), index.ToString() });
+        if (hurt.task != null)
+        {
+            await hurt.task;
+        }
+
+        await Driver.WaitForDecisionPoint();
+        return Check($"hurt: the player took {amount} ({hurt.msg})", hurt.success);
     }
 
     private static bool Check(string what, bool ok)
