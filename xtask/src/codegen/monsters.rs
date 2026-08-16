@@ -15,6 +15,18 @@
 //! the observation reports them; branch nodes have `ShouldAppearInLogs => false`
 //! and nothing outside the graph ever names them.
 //!
+//! # One file per act
+//!
+//! `mod.rs` holds the shape and the `Monster` enum; each monster's graph is a
+//! named const in the file for the acts it can be met in. `data` is then one
+//! arm per monster naming that const, which reads as an index rather than as
+//! eight thousand lines of table.
+//!
+//! The buckets partition, which "the act it is in" does not: `summoned` takes
+//! the 24 monsters no encounter can roll, and `shared` the two that turn up in
+//! more than one act. Filing those under whichever act came first would put a
+//! monster somewhere its own `acts()` never mentions.
+//!
 //! # Why the branch order matters
 //!
 //! `RandomBranchState.GetNextState` sums the weights, draws exactly one
@@ -45,6 +57,44 @@ const INTENT_PAYLOAD: [(&str, Payload); 3] = [
     ("DeathBlow", Payload::Attack),
     ("StatusCard", Payload::Count),
 ];
+
+/// The `MoveRepeatType` members this knows how to translate, and how each reads
+/// the `maxTimes` beside it.
+///
+/// `CannotRepeat` and `CanRepeatXTimes` are the same rule with the number left
+/// implicit: `GetStateWeight` computes `num2 = CannotRepeat ? 1 : maxTimes` and
+/// then runs one loop for both.
+///
+/// A build that grows a fifth member fails generation here rather than
+/// generating a graph that quietly ignores it.
+const REPEAT_LIMIT: [(&str, Limit); 4] = [
+    ("CanRepeatForever", Limit::Forever),
+    ("CanRepeatXTimes", Limit::InARow),
+    ("CannotRepeat", Limit::InARowOnce),
+    ("UseOnlyOnce", Limit::Once),
+];
+
+/// How a `MoveRepeatType` reads `maxTimes`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Limit {
+    /// No limit; carries no number.
+    Forever,
+    /// `InARow(maxTimes)`.
+    InARow,
+    /// `InARow(1)` — the number is implied, so the dump writes 0.
+    InARowOnce,
+    /// `Once`; carries no number.
+    Once,
+}
+
+/// The largest window [`RepeatCount`] can spell, for either kind of rule.
+///
+/// The point of a capped type rather than a `u8` is that [`Repeat`] needs two
+/// fieldless discriminants beside it, and only a payload with fewer than 255
+/// inhabitants leaves room for them. Anything up to 254 would do, so this is
+/// headroom rather than a bit: the build's largest is 3, and generation fails
+/// rather than truncating if one ever exceeds it.
+const REPEAT_CAP: u8 = 8;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Payload {
@@ -141,15 +191,23 @@ impl Steps {
                 .map_err(|e| format!("{where_}: {v}: {e}"))
         };
 
-        let steps = self
-            .at
-            .iter()
-            .map(|(level, v)| Ok(format!("({level}, {})", number(v)?)))
-            .collect::<Result<Vec<_>, String>>()?
-            .join(", ");
+        // One threshold, because `AscensionHelper.GetValueIfAscension` takes
+        // one. A value that moved twice would need a monster nesting two calls,
+        // and `Scaled` has nowhere to put the second — so this fails rather
+        // than dropping it.
+        let step = match self.at.as_slice() {
+            [] => "None".to_string(),
+            [(level, v)] => format!("Some(({level}, {}))", number(v)?),
+            more => {
+                let levels: Vec<u8> = more.iter().map(|(l, _)| *l).collect();
+                return Err(format!(
+                    "{where_}: steps at more than one level: {levels:?}"
+                ));
+            }
+        };
 
         Ok(format!(
-            "Field::Constant(Scaled {{ base: {}, steps: &[{steps}] }})",
+            "Field::Constant(Scaled {{ base: {}, step: {step} }})",
             number(&self.base)?
         ))
     }
@@ -214,7 +272,11 @@ pub fn generate(root: &Path) -> Result<String, String> {
     writeln!(out, "}}\n").unwrap();
 
     for (name, members) in &enums {
-        if name == "IntentType" {
+        // `IntentType` becomes `Intent`, whose variants carry the numbers that
+        // intent has; `MoveRepeatType` becomes `RepeatLimit`, which carries
+        // `maxTimes`. Both are emitted below from the members, and re-emitting
+        // the bare enum as well would leave a second spelling nothing uses.
+        if name == "IntentType" || name == "MoveRepeatType" {
             continue;
         }
         writeln!(out, "{DERIVES}").unwrap();
@@ -227,11 +289,83 @@ pub fn generate(root: &Path) -> Result<String, String> {
     }
 
     emit_intent(&mut out, &enums)?;
-    emit_shape(&mut out);
+    emit_repeat(&mut out, &enums, &machines)?;
+    let largest = machines.values().map(|m| m.states.len()).max().unwrap_or(0);
+    if largest > u8::MAX as usize {
+        return Err(format!(
+            "a monster has {largest} states, past what a u8 StateIndex can hold"
+        ));
+    }
+    emit_shape(&mut out, largest);
     emit_monsters(&mut out, &machines, &act_of)?;
 
     let dir = root.join("monsters");
     fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+
+    // The graphs, one file per bucket. `mod.rs` keeps the shape and the enum;
+    // a monster's data is a named const it points at, so `data()` stays a
+    // readable index instead of eight thousand lines of table.
+    let mut buckets: BTreeMap<String, String> = BTreeMap::new();
+    for (id, machine) in &machines {
+        let body = buckets.entry(bucket(act_of.get(id))).or_default();
+        writeln!(
+            body,
+            "pub(super) const {id}: MonsterData = {};\n",
+            machine_literal(id, machine)?
+        )
+        .unwrap();
+    }
+
+    for (file, body) in &buckets {
+        writeln!(out, "mod {file};").unwrap();
+
+        // Imports from what the file actually names: a bucket of monsters that
+        // never branch randomly has no use for `Branch` or `Repeat`, and an
+        // unused import is a warning that `-D warnings` turns into a build
+        // failure.
+        //
+        // Whole identifiers, not substrings: `RepeatCount` contains the text
+        // `Repeat`, and importing a `Repeat` the file never names is the same
+        // build failure from the other direction.
+        let named: std::collections::BTreeSet<&str> = body
+            .split(|c: char| !c.is_alphanumeric() && c != '_')
+            .collect();
+        let used = |names: &[&str]| {
+            names
+                .iter()
+                .filter(|n| named.contains(*n))
+                .copied()
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        let mut file_body = banner(&describe(file), "monsters.txt", &hash);
+        writeln!(
+            file_body,
+            "\nuse super::{{{}}};\nuse crate::{{{}}};\n",
+            used(&[
+                "Branch",
+                "Attack",
+                "FollowUp",
+                "IntentKind",
+                "IntentSet",
+                "Intents",
+                "MonsterData",
+                "Move",
+                "Repeat",
+                "RepeatCount",
+                "State"
+            ]),
+            used(&["Field", "Scaled"])
+        )
+        .unwrap();
+        file_body.push_str(body);
+
+        let path = dir.join(format!("{file}.rs"));
+        fs::write(&path, &file_body).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    }
+    writeln!(out).unwrap();
+
     let path = dir.join("mod.rs");
     fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
 
@@ -470,37 +604,278 @@ fn emit_intent(
         .get("IntentType")
         .ok_or("the dump declares no IntentType")?;
 
+    let widest = members.iter().map(|(d, _)| *d).max().unwrap_or(0);
+    if widest >= 16 {
+        return Err(format!(
+            "IntentType's highest discriminant is {widest} and IntentSet is a u16"
+        ));
+    }
+
     writeln!(
         out,
-        "/// What the monster telegraphs before a move resolves."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "///\n\
+        "/// What a monster telegraphs before a move resolves.\n\
+         ///\n\
          /// Not what the move does — that is the move body, ported by hand. The\n\
-         /// game declares the two separately, so these are the displayed numbers."
+         /// game declares the two separately, so this is only what is displayed."
     )
     .unwrap();
-    writeln!(out, "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]").unwrap();
-    writeln!(out, "pub enum Intent {{").unwrap();
-    for (_, m) in members {
-        match payload(m) {
-            Payload::Attack => writeln!(
-                out,
-                "    {m} {{ damage: Field<Scaled<u16>>, repeats: Field<Scaled<u8>> }},"
-            )
-            .unwrap(),
-            Payload::Count => writeln!(out, "    {m} {{ count: Field<Scaled<u8>> }},").unwrap(),
-            Payload::None => writeln!(out, "    {m},").unwrap(),
-        }
+    writeln!(out, "{DERIVES}").unwrap();
+    writeln!(out, "#[repr(u8)]").unwrap();
+    writeln!(out, "pub enum IntentKind {{").unwrap();
+    for (discriminant, m) in members {
+        writeln!(out, "    {m} = {discriminant},").unwrap();
     }
     writeln!(out, "}}\n").unwrap();
+
+    // A set rather than a list, which is what the game's own use of it makes
+    // it. `MoveState.Intents` is an ordered array, but the only two things that
+    // read it are `NCreature.UpdateIntent`, which lays icons left to right into
+    // a Godot container, and `Creature.HoverTips`, which collects tooltips —
+    // both presentation. Nothing in the rules reads them, and no move telegraphs
+    // the same kind twice, so the order is the only thing a set loses and the
+    // order is not a fact about the game.
+    writeln!(
+        out,
+        "/// A set of [`IntentKind`]s: one bit per kind, at its discriminant.\n\
+         ///\n\
+         /// A set rather than a list because the order is presentation. The\n\
+         /// game stores an ordered `AbstractIntent[]`, but the only readers are\n\
+         /// the node that lays out intent icons and the one that gathers hover\n\
+         /// tips; nothing in the rules looks at it, and no move in the build\n\
+         /// telegraphs one kind twice, so nothing else is lost."
+    )
+    .unwrap();
+    writeln!(out, "#[derive(Clone, Copy, PartialEq, Eq, Hash)]").unwrap();
+    writeln!(out, "pub struct IntentSet(u16);\n").unwrap();
+    writeln!(out, "impl IntentSet {{").unwrap();
+    writeln!(out, "    /// Every kind, in the game's declaration order.").unwrap();
+    writeln!(
+        out,
+        "    const MEMBERS: [IntentKind; {}] = [",
+        members.len()
+    )
+    .unwrap();
+    for (_, m) in members {
+        writeln!(out, "        IntentKind::{m},").unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
+    writeln!(out, "    pub const fn new(kinds: &[IntentKind]) -> Self {{").unwrap();
+    writeln!(out, "        let mut bits = 0u16;").unwrap();
+    writeln!(out, "        let mut i = 0;").unwrap();
+    writeln!(out, "        while i < kinds.len() {{").unwrap();
+    writeln!(out, "            bits |= 1u16 << kinds[i] as u8;").unwrap();
+    writeln!(out, "            i += 1;").unwrap();
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "        Self(bits)").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+    writeln!(
+        out,
+        "    pub const fn contains(self, kind: IntentKind) -> bool {{"
+    )
+    .unwrap();
+    writeln!(out, "        self.0 & (1u16 << kind as u8) != 0").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+    writeln!(out, "    pub const fn is_empty(self) -> bool {{").unwrap();
+    writeln!(out, "        self.0 == 0").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+    writeln!(out, "    /// The members, in the game's declaration order.").unwrap();
+    writeln!(
+        out,
+        "    pub fn iter(self) -> impl Iterator<Item = IntentKind> {{"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        Self::MEMBERS.into_iter().filter(move |&k| self.contains(k))"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl std::fmt::Debug for IntentSet {{").unwrap();
+    writeln!(
+        out,
+        "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{"
+    )
+    .unwrap();
+    writeln!(out, "        f.debug_set().entries(self.iter()).finish()").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// The numbers an attacking intent displays.\n\
+         ///\n\
+         /// One type for `Attack` and `DeathBlow` alike, because\n\
+         /// `DeathBlowIntent` extends `SingleAttackIntent` and carries the same\n\
+         /// two numbers, and no move telegraphs both.\n\
+         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
+         pub struct Attack {{\n\
+         \x20   pub damage: Field<Scaled<u16>>,\n\
+         \x20   /// `SingleAttackIntent.Repeats` is 1; `MultiAttackIntent` computes\n\
+         \x20   /// or stores its own.\n\
+         \x20   pub repeats: Field<Scaled<u8>>,\n\
+         }}\n"
+    )
+    .unwrap();
+
+    writeln!(
+        out,
+        "/// Everything a move telegraphs.\n\
+         ///\n\
+         /// The kinds as a set, and beside it the numbers the three kinds that\n\
+         /// carry any actually carry. Held here rather than one payload per\n\
+         /// intent because it saves the slice: a move's telegraph is now inline,\n\
+         /// and the whole table lost a separate array of 433 intents.\n\
+         ///\n\
+         /// The two payloads and the set agree, which codegen checks: `attack`\n\
+         /// is present exactly when the set holds `Attack` or `DeathBlow`, and\n\
+         /// `cards` exactly when it holds `StatusCard`.\n\
+         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
+         pub struct Intents {{\n\
+         \x20   pub kinds: IntentSet,\n\
+         \x20   /// The numbers for whichever of `Attack` or `DeathBlow` is in\n\
+         \x20   /// `kinds`.\n\
+         \x20   pub attack: Option<Attack>,\n\
+         \x20   /// `StatusIntent.CardCount` — how many cards it will add.\n\
+         \x20   pub cards: Option<Field<Scaled<u8>>>,\n\
+         }}\n"
+    )
+    .unwrap();
 
     Ok(())
 }
 
-fn emit_shape(out: &mut String) {
+/// English for a small number, which is what a [`RepeatCount`] variant is
+/// called. Only ever asked for `1..=REPEAT_CAP`.
+fn word(n: u8) -> &'static str {
+    const WORDS: [&str; 9] = [
+        "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
+    ];
+    WORDS[n as usize]
+}
+
+/// The repeat rule: when a branch stops being eligible.
+///
+/// Three of the game's fields become one enum. `maxTimes` folds in because it
+/// is only meaningful for one `MoveRepeatType`, and `cooldown` folds in because
+/// it is redundant with whichever rule sits beside it — see
+/// [`repeat_literal`] for the argument and for the translation itself.
+fn emit_repeat(
+    out: &mut String,
+    enums: &BTreeMap<String, Vec<(u8, String)>>,
+    machines: &BTreeMap<String, Machine>,
+) -> Result<(), String> {
+    let members = enums
+        .get("MoveRepeatType")
+        .ok_or("the dump declares no MoveRepeatType")?;
+
+    for (_, m) in members {
+        if !REPEAT_LIMIT.iter().any(|(name, _)| name == m) {
+            return Err(format!(
+                "MoveRepeatType::{m} is new; teach REPEAT_LIMIT what it means"
+            ));
+        }
+    }
+
+    // Counted rather than written down, because a generated doc that states a
+    // number the dump no longer supports is worse than one that states none.
+    let all = || {
+        machines
+            .values()
+            .flat_map(|m| &m.states)
+            .filter_map(|s| match s {
+                State::Random { branches, .. } => Some(branches),
+                _ => None,
+            })
+            .flatten()
+    };
+    let branches = all().count();
+    let cooldowns = all().filter(|b| b.cooldown != "0").count();
+    let largest = all()
+        .filter_map(|b| {
+            let n = b.max_times.parse::<u8>().ok()?;
+            let c = b.cooldown.parse::<u8>().ok()?;
+            Some(n.max(c))
+        })
+        .max()
+        .unwrap_or(0);
+
+    writeln!(
+        out,
+        "/// How far back a [`Repeat`] rule looks.\n\
+         ///\n\
+         /// A capped count rather than a `u8` so that `Repeat` stays small: it\n\
+         /// needs two fieldless discriminants beside this one, and a `u8` payload\n\
+         /// uses every pattern there is. The cap is {REPEAT_CAP}, against a build\n\
+         /// whose largest window is {largest} — `cargo xtask codegen` fails rather\n\
+         /// than truncating if one ever exceeds it.\n\
+         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]\n\
+         #[repr(u8)]\n\
+         pub enum RepeatCount {{"
+    )
+    .unwrap();
+    for n in 1..=REPEAT_CAP {
+        writeln!(out, "    {} = {n},", word(n)).unwrap();
+    }
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "impl RepeatCount {{\n\
+         \x20   /// The count as a number.\n\
+         \x20   pub const fn get(self) -> u8 {{\n\
+         \x20       self as u8\n\
+         \x20   }}\n\
+         }}\n"
+    )
+    .unwrap();
+
+    writeln!(
+        out,
+        "/// What bars a branch the machine would otherwise be free to take.\n\
+         ///\n\
+         /// The game spends three fields on this — `MoveRepeatType`, `maxTimes`\n\
+         /// and `cooldown` — and `GetStateWeight` blocks the branch if *either*\n\
+         /// the repeat type or the cooldown says so. One of the two is always\n\
+         /// redundant, because each implies the other in one direction:\n\
+         ///\n\
+         /// - `InARow(n)` blocking means the last `n` log entries are all this\n\
+         ///   branch, and `n` is never zero, so the most recent entry is this\n\
+         ///   branch — which is exactly what a cooldown of 1 or more already\n\
+         ///   blocks on. A cooldown beside an in-a-row limit swallows it.\n\
+         /// - A cooldown blocking means the branch is somewhere in the log, which\n\
+         ///   is what [`Once`](Self::Once) blocks on. `Once` swallows a cooldown.\n\
+         ///\n\
+         /// So the pair collapses to whichever half is the stronger, and no\n\
+         /// behaviour is lost. Of this build's {branches} branches, {cooldowns}\n\
+         /// carry a cooldown at all.\n\
+         ///\n\
+         /// The two windowed variants are different questions, not the same one\n\
+         /// with different numbers: [`InARow`](Self::InARow) asks whether *every*\n\
+         /// entry of a recent window is this branch, [`Cooldown`](Self::Cooldown)\n\
+         /// whether *any* is. They coincide only at `n = 1`, which generates as\n\
+         /// `InARow(One)`.\n\
+         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
+         pub enum Repeat {{\n\
+         \x20   /// Never barred by its own history.\n\
+         \x20   Forever,\n\
+         \x20   /// Barred while the last `n` moves were all this branch — so it may\n\
+         \x20   /// be taken at most `n` times in a row.\n\
+         \x20   InARow(RepeatCount),\n\
+         \x20   /// Barred while this branch is anywhere in the last `n` moves — so\n\
+         \x20   /// `n` other moves must pass before it comes round again.\n\
+         \x20   Cooldown(RepeatCount),\n\
+         \x20   /// Barred once this branch has been taken at all, ever.\n\
+         \x20   Once,\n\
+         }}\n"
+    )
+    .unwrap();
+
+    Ok(())
+}
+
+fn emit_shape(out: &mut String, states: usize) {
     writeln!(
         out,
         "/// A state's position in its monster's own `states` slice.\n\
@@ -509,21 +884,56 @@ fn emit_shape(out: &mut String) {
          /// nothing outside a monster's own graph refers to one, so an index is\n\
          /// enough and costs no hashing. Every index a generated table contains\n\
          /// is in range for its monster, which the tests check.\n\
+         ///\n\
+         /// A `u8` and not a capped enum. Capping would buy nothing: the only\n\
+         /// thing that could use the spare discriminants is a niche, and\n\
+         /// [`FollowUp`] has two variants carrying one of these, so it is a tag\n\
+         /// plus a payload either way. The build's largest graph is {states}\n\
+         /// states; codegen refuses one that would not fit here.\n\
          pub type StateIndex = u8;\n"
     )
     .unwrap();
 
     writeln!(
         out,
+        "/// Where the machine goes when it leaves a move.\n\
+         ///\n\
+         /// The game spells this as a nullable `FollowUpStateId` beside a\n\
+         /// `MustPerformOnceBeforeTransitioning` bool, but both are about\n\
+         /// leaving: `CanTransitionAway` returns `_performedAtLeastOnce` when the\n\
+         /// bool is set, and `FindNextMoveState` returns early while it is false.\n\
+         /// So the bool gates the transition and belongs to it.\n\
+         ///\n\
+         /// A missing follow-up is not \"no next state\" either —\n\
+         /// `MoveState.GetNextState` throws on one. That is\n\
+         /// [`Never`](Self::Never), and it makes the combination the game can\n\
+         /// express but never uses — must perform once, then go nowhere —\n\
+         /// unrepresentable here.\n\
+         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
+         pub enum FollowUp {{\n\
+         \x20   /// Leaves for this state.\n\
+         \x20   Next(StateIndex),\n\
+         \x20   /// Leaves for this state, but not before the move has been\n\
+         \x20   /// performed at least once; the machine stays here until it has.\n\
+         \x20   OncePerformed(StateIndex),\n\
+         \x20   /// Never leaves. Asking is an error, not a stop.\n\
+         \x20   Never,\n\
+         }}\n"
+    )
+    .unwrap();
+
+    writeln!(
+        out,
         "/// One branch of a random choice.\n\
+         ///\n\
+         /// A single target, because the game's own `StateWeight` has one: a\n\
+         /// random node is a list of these and picking one picks its target.\n\
+         /// The branch is where the repeat rules live rather than the target,\n\
+         /// because two nodes can offer the same target on different terms.\n\
          #[derive(Debug, Clone, Copy, PartialEq)]\n\
          pub struct Branch {{\n\
          \x20   pub target: StateIndex,\n\
-         \x20   pub repeat: MoveRepeatType,\n\
-         \x20   /// Only meaningful for `CanRepeatXTimes`.\n\
-         \x20   pub max_times: u8,\n\
-         \x20   /// Turns this branch is barred after being taken. 0 is no cooldown.\n\
-         \x20   pub cooldown: u8,\n\
+         \x20   pub repeat: Repeat,\n\
          \x20   /// `Computed` when the game works it out from combat state.\n\
          \x20   pub weight: Field<f32>,\n\
          }}\n"
@@ -535,15 +945,8 @@ fn emit_shape(out: &mut String) {
         "/// A move the monster can make.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq)]\n\
          pub struct Move {{\n\
-         \x20   /// The game's own id. Moves carry one because `StateLog` records\n\
-         \x20   /// them and the observation reports them; branch nodes do not,\n\
-         \x20   /// because `ShouldAppearInLogs` is false for those.\n\
-         \x20   pub id: &'static str,\n\
-         \x20   /// Where the machine goes after this move. `None` only for a move\n\
-         \x20   /// that ends the monster.\n\
-         \x20   pub follow_up: Option<StateIndex>,\n\
-         \x20   pub must_perform_once: bool,\n\
-         \x20   pub intents: &'static [Intent],\n\
+         \x20   pub follow_up: FollowUp,\n\
+         \x20   pub intents: Intents,\n\
          }}\n"
     )
     .unwrap();
@@ -582,6 +985,33 @@ fn emit_shape(out: &mut String) {
     .unwrap();
 }
 
+/// What a bucket file holds, for its banner.
+fn describe(file: &str) -> String {
+    match file {
+        "summoned" => "Monsters no encounter can roll — only another monster summons them.".into(),
+        "shared" => "Monsters more than one act's encounters can roll.".into(),
+        act => format!(
+            "Monsters only `{}`'s encounters can roll.",
+            act.to_uppercase()
+        ),
+    }
+}
+
+/// The file a monster's data lands in, from the acts it can be met in.
+///
+/// A genuine partition, unlike "the act it is in": 24 monsters are in no act
+/// because only another monster ever summons them, and two — both
+/// `*_CONSTRUCT` — turn up in Glory as well as an earlier act. Those get their
+/// own buckets rather than being filed under whichever act came first, which
+/// would put a monster somewhere its own `acts()` does not mention.
+fn bucket(acts: Option<&Vec<String>>) -> String {
+    match acts {
+        None => "summoned".to_string(),
+        Some(acts) if acts.len() > 1 => "shared".to_string(),
+        Some(acts) => acts[0].to_lowercase(),
+    }
+}
+
 fn emit_monsters(
     out: &mut String,
     machines: &BTreeMap<String, Machine>,
@@ -591,9 +1021,14 @@ fn emit_monsters(
     writeln!(
         out,
         "///\n\
-         /// Flat rather than grouped by act, because acts are not a partition:\n\
-         /// a monster can appear in two, and 24 appear in none because they only\n\
-         /// ever arrive by being summoned."
+         /// Flat rather than nested by act. Card ids are pool-scoped — `Strike`\n\
+         /// exists in two pools — so nesting them solves a real collision;\n\
+         /// monster ids are unique across the build, so nesting would cost a\n\
+         /// wrapper at every call site and buy nothing. Acts would make a poor\n\
+         /// nesting anyway: 24 monsters are in none and two are in two.\n\
+         ///\n\
+         /// The generated files still group by act, because a monster's graph is\n\
+         /// long and a balance patch touches one act. See `data`."
     )
     .unwrap();
     writeln!(out, "{DERIVES}").unwrap();
@@ -651,11 +1086,25 @@ fn emit_monsters(
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}\n").unwrap();
 
-    writeln!(out, "    /// The HP range and the move graph.").unwrap();
+    writeln!(
+        out,
+        "    /// The HP range and the move graph.\n\
+         \x20   ///\n\
+         \x20   /// One arm per monster, naming the file its data lives in — the\n\
+         \x20   /// graphs themselves are far too long to read in the middle of\n\
+         \x20   /// this."
+    )
+    .unwrap();
     writeln!(out, "    pub const fn data(self) -> MonsterData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
-    for (id, machine) in machines {
-        emit_machine(out, id, machine)?;
+    for id in machines.keys() {
+        writeln!(
+            out,
+            "            Self::{} => {}::{id},",
+            camel(id),
+            bucket(act_of.get(id))
+        )
+        .unwrap();
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
@@ -664,7 +1113,9 @@ fn emit_monsters(
     Ok(())
 }
 
-fn emit_machine(out: &mut String, id: &str, machine: &Machine) -> Result<(), String> {
+fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
+    let mut out = String::new();
+    let out = &mut out;
     // The dump names states; the table indexes them. Built here so that a name
     // the graph cannot resolve is a generation failure rather than a panic in
     // the simulator.
@@ -686,7 +1137,7 @@ fn emit_machine(out: &mut String, id: &str, machine: &Machine) -> Result<(), Str
     let min_hp = scaled(id, "minHp", &machine.min_hp, "u16")?;
     let max_hp = scaled(id, "maxHp", &machine.max_hp, "u16")?;
 
-    writeln!(out, "            Self::{} => MonsterData {{", camel(id)).unwrap();
+    writeln!(out, "MonsterData {{").unwrap();
     writeln!(out, "                min_hp: {min_hp},").unwrap();
     writeln!(out, "                max_hp: {max_hp},").unwrap();
     writeln!(out, "                initial: {initial},").unwrap();
@@ -700,29 +1151,28 @@ fn emit_machine(out: &mut String, id: &str, machine: &Machine) -> Result<(), Str
                 must_perform_once,
                 intents,
             } => {
-                let next = if follow_up == "-" {
-                    "None".to_string()
-                } else {
-                    format!("Some({})", resolve(follow_up)?)
+                // The bool gates the transition, so it lands inside it. A move
+                // that must be performed once and then goes nowhere is a
+                // combination `FollowUp` cannot spell — and one the game never
+                // uses, since the only move without a follow-up does not set it.
+                let next = match (follow_up.as_str(), must_perform_once) {
+                    ("-", false) => "FollowUp::Never".to_string(),
+                    ("-", true) => {
+                        return Err(format!(
+                            "{id}.{move_id}: must perform once, but has no follow-up state"
+                        ));
+                    }
+                    (name, false) => format!("FollowUp::Next({})", resolve(name)?),
+                    (name, true) => format!("FollowUp::OncePerformed({})", resolve(name)?),
                 };
                 writeln!(out, "                    State::Move(Move {{").unwrap();
-                writeln!(out, "                        id: \"{move_id}\",").unwrap();
                 writeln!(out, "                        follow_up: {next},").unwrap();
                 writeln!(
                     out,
-                    "                        must_perform_once: {must_perform_once},"
+                    "                        intents: {},",
+                    intents_literal(id, move_id, intents)?
                 )
                 .unwrap();
-                writeln!(out, "                        intents: &[").unwrap();
-                for intent in intents {
-                    writeln!(
-                        out,
-                        "                            {},",
-                        intent_literal(id, move_id, intent)?
-                    )
-                    .unwrap();
-                }
-                writeln!(out, "                        ],").unwrap();
                 writeln!(out, "                    }}),").unwrap();
             }
             State::Random { branches, .. } => {
@@ -744,20 +1194,8 @@ fn emit_machine(out: &mut String, id: &str, machine: &Machine) -> Result<(), Str
                     .unwrap();
                     writeln!(
                         out,
-                        "                            repeat: MoveRepeatType::{},",
-                        b.repeat
-                    )
-                    .unwrap();
-                    writeln!(
-                        out,
-                        "                            max_times: {},",
-                        &b.max_times
-                    )
-                    .unwrap();
-                    writeln!(
-                        out,
-                        "                            cooldown: {},",
-                        &b.cooldown
+                        "                            repeat: {},",
+                        repeat_literal(id, b)?
                     )
                     .unwrap();
                     writeln!(out, "                            weight: {weight},").unwrap();
@@ -777,53 +1215,150 @@ fn emit_machine(out: &mut String, id: &str, machine: &Machine) -> Result<(), Str
     }
 
     writeln!(out, "                ],").unwrap();
-    writeln!(out, "            }},").unwrap();
+    write!(out, "            }}").unwrap();
 
-    Ok(())
+    Ok(out.clone())
 }
 
-/// One intent, checked against what its type is allowed to carry.
-fn intent_literal(monster: &str, state: &str, intent: &Intent) -> Result<String, String> {
-    let where_ = format!("{monster}.{state} {}", intent.kind);
+/// One branch's three repeat columns as the single `Repeat` they mean.
+///
+/// `GetStateWeight` blocks the branch if the repeat type says so *or* the
+/// cooldown does, and one of the two is always the weaker:
+///
+/// - a cooldown of `c >= 1` beside `CannotRepeat` or `CanRepeatXTimes(n)`
+///   swallows it, because the in-a-row test can only fire when the most recent
+///   log entry is this branch, and the cooldown already fires on that;
+/// - a cooldown beside `UseOnlyOnce` is swallowed by it, because "in the last
+///   `c`" implies "in the log";
+/// - a cooldown beside `CanRepeatForever` is the only rule there is.
+///
+/// So the pair collapses without losing behaviour. `Cooldown(One)` is not
+/// emitted: it is the same predicate as `InARow(One)`, and one spelling of a
+/// rule is worth more than a spelling that follows the dump's column.
+///
+/// Everything the columns could say that the type cannot is an error rather
+/// than a value: a `maxTimes` on a member that does not read one would be
+/// silently dropped, a missing one on `CanRepeatXTimes` would generate a limit
+/// of zero — which `GetStateWeight` treats as a branch nothing can ever take —
+/// and a window past [`REPEAT_CAP`] has no spelling at all.
+fn repeat_literal(monster: &str, branch: &Branch) -> Result<String, String> {
+    let where_ = format!("{monster}.{} -> {}", branch.repeat, branch.target);
 
-    match payload(&intent.kind) {
-        Payload::Attack => {
-            if intent.count.is_absent() || intent.damage.is_absent() {
-                return Err(format!("{where_}: an attack with no damage or repeats"));
-            }
-            Ok(format!(
-                "Intent::{} {{ damage: {}, repeats: {} }}",
-                intent.kind,
-                intent.damage.literal(&where_, "u16")?,
-                intent.count.literal(&where_, "u8")?
-            ))
+    let (_, kind) = REPEAT_LIMIT
+        .iter()
+        .find(|(name, _)| *name == branch.repeat)
+        .ok_or_else(|| format!("{where_}: unknown MoveRepeatType"))?;
+
+    let count = |what: &str, n: u8| {
+        if n == 0 || n > REPEAT_CAP {
+            return Err(format!("{where_}: {what} {n} is outside 1..={REPEAT_CAP}"));
         }
-        Payload::Count => {
-            if intent.count.is_absent() {
-                return Err(format!("{where_}: a status intent with no count"));
-            }
-            if !intent.damage.is_absent() {
-                return Err(format!("{where_}: a status intent with damage"));
-            }
-            Ok(format!(
-                "Intent::{} {{ count: {} }}",
-                intent.kind,
-                intent.count.literal(&where_, "u8")?
-            ))
+        Ok(format!("RepeatCount::{}", word(n)))
+    };
+
+    let max_times: u8 = branch
+        .max_times
+        .parse()
+        .map_err(|e| format!("{where_}: maxTimes {}: {e}", branch.max_times))?;
+    let cooldown: u8 = branch
+        .cooldown
+        .parse()
+        .map_err(|e| format!("{where_}: cooldown {}: {e}", branch.cooldown))?;
+
+    if *kind != Limit::InARow && max_times != 0 {
+        return Err(format!(
+            "{where_}: maxTimes {max_times} on a member that does not read one"
+        ));
+    }
+
+    Ok(match (kind, cooldown) {
+        (Limit::Once, _) => "Repeat::Once".to_string(),
+        (_, 0) => match kind {
+            Limit::Forever => "Repeat::Forever".to_string(),
+            Limit::InARowOnce => "Repeat::InARow(RepeatCount::One)".to_string(),
+            _ => format!("Repeat::InARow({})", count("maxTimes", max_times)?),
+        },
+        (_, 1) => "Repeat::InARow(RepeatCount::One)".to_string(),
+        (_, c) => format!("Repeat::Cooldown({})", count("cooldown", c)?),
+    })
+}
+
+/// A move's whole telegraph: the set of kinds, and the numbers beside it.
+///
+/// The dump's rows are an ordered list; this is a set plus two payloads, so
+/// every way the two could fail to line up is checked here. A kind that turns
+/// up twice would silently collapse into one bit, a second attacking intent
+/// would silently overwrite the first, and a number on a kind with nowhere to
+/// put it would simply vanish — so all three fail generation instead.
+fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<String, String> {
+    let mut kinds: Vec<&str> = Vec::new();
+    let mut attack: Option<String> = None;
+    let mut cards: Option<String> = None;
+
+    for intent in intents {
+        let where_ = format!("{monster}.{state} {}", intent.kind);
+        let kind = intent.kind.as_str();
+
+        // A set keeps one bit per kind, so a repeat would be invisible. No move
+        // in this build telegraphs one twice, and that is what makes the set
+        // lossless rather than lucky.
+        if kinds.contains(&kind) {
+            return Err(format!("{where_}: telegraphed twice"));
         }
-        Payload::None => {
-            // A number where the type has no field for it means the game grew
-            // one, and dropping it silently is how a table starts lying.
-            if !intent.count.is_absent() || !intent.damage.is_absent() {
-                return Err(format!(
-                    "{where_}: carries numbers ({} {}) but has no payload; \
-                     add it to INTENT_PAYLOAD",
-                    intent.count.base, intent.damage.base
-                ));
+        kinds.push(kind);
+
+        match payload(&intent.kind) {
+            Payload::Attack => {
+                if intent.count.is_absent() || intent.damage.is_absent() {
+                    return Err(format!("{where_}: an attack with no damage or repeats"));
+                }
+                let literal = format!(
+                    "Attack {{ damage: {}, repeats: {} }}",
+                    intent.damage.literal(&where_, "u16")?,
+                    intent.count.literal(&where_, "u8")?
+                );
+                if attack.replace(literal).is_some() {
+                    return Err(format!("{where_}: a second attacking intent on one move"));
+                }
             }
-            Ok(format!("Intent::{}", intent.kind))
+            Payload::Count => {
+                if intent.count.is_absent() {
+                    return Err(format!("{where_}: a status intent with no count"));
+                }
+                if !intent.damage.is_absent() {
+                    return Err(format!("{where_}: a status intent with damage"));
+                }
+                let literal = intent.count.literal(&where_, "u8")?;
+                if cards.replace(literal).is_some() {
+                    return Err(format!("{where_}: a second status intent on one move"));
+                }
+            }
+            Payload::None => {
+                // A number where the type has no field for it means the game
+                // grew one, and dropping it silently is how a table starts
+                // lying.
+                if !intent.count.is_absent() || !intent.damage.is_absent() {
+                    return Err(format!(
+                        "{where_}: carries numbers ({} {}) but has no payload; \
+                         add it to INTENT_PAYLOAD",
+                        intent.count.base, intent.damage.base
+                    ));
+                }
+            }
         }
     }
+
+    let set = kinds
+        .iter()
+        .map(|k| format!("IntentKind::{k}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Ok(format!(
+        "Intents {{ kinds: IntentSet::new(&[{set}]), attack: {}, cards: {} }}",
+        attack.map_or("None".to_string(), |a| format!("Some({a})")),
+        cards.map_or("None".to_string(), |c| format!("Some({c})")),
+    ))
 }
 
 /// A bare `Scaled<T>` — no `Field`, for values the game never computes.

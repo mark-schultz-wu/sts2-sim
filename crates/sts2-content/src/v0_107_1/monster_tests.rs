@@ -42,6 +42,48 @@ fn state_names(id: &str) -> Vec<&'static str> {
         .collect()
 }
 
+/// The dump's `repeatType`, `maxTimes` and `cooldown` columns as the [`Repeat`]
+/// they should have generated, spelled out here independently of the codegen
+/// that produced the table — otherwise this would only prove codegen agrees
+/// with itself.
+///
+/// Three columns become one enum and the mapping is not one to one, which is
+/// the whole reason to restate it rather than compare strings. `CannotRepeat`
+/// is `InARow(One)` because `GetStateWeight` computes
+/// `num2 = CannotRepeat ? 1 : maxTimes` and then runs the same loop for both;
+/// `maxTimes` is only read for `CanRepeatXTimes`, so a nonzero one anywhere
+/// else means the mapping has stopped being true; and a cooldown beside a
+/// repeat type absorbs it, or is absorbed by `UseOnlyOnce`, because
+/// `GetStateWeight` ORs the two tests and one of them always implies the
+/// other. The argument is in `Repeat`'s own documentation.
+fn repeat(kind: &str, max_times: &str, cooldown: &str) -> Repeat {
+    let max_times: u8 = max_times.parse().expect("a maxTimes");
+    let cooldown: u8 = cooldown.parse().expect("a cooldown");
+
+    let count = |n: u8| match n {
+        1 => RepeatCount::One,
+        2 => RepeatCount::Two,
+        3 => RepeatCount::Three,
+        n => panic!("no RepeatCount spelling for {n}"),
+    };
+
+    if kind != "CanRepeatXTimes" {
+        assert_eq!(max_times, 0, "{kind} carries a maxTimes");
+    }
+
+    match (kind, cooldown) {
+        ("UseOnlyOnce", _) => Repeat::Once,
+        ("CanRepeatForever", 0) => Repeat::Forever,
+        ("CannotRepeat", 0) => Repeat::InARow(RepeatCount::One),
+        ("CanRepeatXTimes", 0) => Repeat::InARow(count(max_times)),
+        ("CanRepeatForever" | "CannotRepeat" | "CanRepeatXTimes", 1) => {
+            Repeat::InARow(RepeatCount::One)
+        }
+        ("CanRepeatForever" | "CannotRepeat" | "CanRepeatXTimes", c) => Repeat::Cooldown(count(c)),
+        (other, _) => panic!("unknown MoveRepeatType {other}"),
+    }
+}
+
 /// The anchor, same as the card dump's: a dump from another build has another
 /// hash, and a table regenerated against one is the failure this prevents.
 #[test]
@@ -127,7 +169,7 @@ fn a_scaled_value_steps_at_its_threshold() {
 
     let flat: Scaled<u16> = Scaled {
         base: 3,
-        steps: &[],
+        step: None,
     };
     assert!(flat.is_flat());
     assert_eq!(flat.at(10), 3);
@@ -192,6 +234,36 @@ fn a_monsters_acts_are_the_ones_whose_encounters_name_it() {
     assert_eq!(summoned, 24, "monsters reachable only as summons");
 }
 
+/// One rule has one spelling.
+///
+/// `Cooldown(One)` and `InARow(One)` are the same predicate — "the last move
+/// was this branch" — so a table free to use either would compare two identical
+/// rules unequal. Codegen canonicalises to `InARow(One)`; this is what stops
+/// that from being a comment.
+///
+/// This build has no cooldown of 1 at all, so the assertion would hold even if
+/// codegen forgot. That is why the mutation matters more than the pass: flip
+/// the canonicalisation and this test still goes green, which is exactly what
+/// makes it worth pinning before a balance patch introduces one.
+#[test]
+fn a_window_of_one_is_always_spelled_in_a_row() {
+    for m in Monster::ALL {
+        for state in m.data().states {
+            let State::Random(branches) = state else {
+                continue;
+            };
+            for b in *branches {
+                assert_ne!(
+                    b.repeat,
+                    Repeat::Cooldown(RepeatCount::One),
+                    "{}: a cooldown of one that should be InARow(One)",
+                    m.id()
+                );
+            }
+        }
+    }
+}
+
 /// The graph closes.
 ///
 /// Every index the table holds — the initial state, a move's follow-up, a
@@ -214,11 +286,12 @@ fn every_state_index_is_in_range() {
         check(data.initial, "initial");
         for state in data.states {
             match state {
-                State::Move(mv) => {
-                    if let Some(next) = mv.follow_up {
-                        check(next, mv.id);
+                State::Move(mv) => match mv.follow_up {
+                    FollowUp::Next(next) | FollowUp::OncePerformed(next) => {
+                        check(next, "a follow-up");
                     }
-                }
+                    FollowUp::Never => {}
+                },
                 State::Random(branches) => {
                     for b in *branches {
                         check(b.target, "a random branch");
@@ -273,27 +346,22 @@ fn the_generated_table_matches_the_dump() {
             let name = names[i];
             match state {
                 State::Move(mv) => {
-                    assert_eq!(mv.id, name, "{id}: state {i} is not {name}");
+                    // Two dump columns, one field. Restated as a pair so that
+                    // both halves are pinned: `OncePerformed` differs from
+                    // `Next` only in the bool, and a codegen that dropped the
+                    // bool would still name the right state.
                     let d = one("move", id, name);
+                    let expected = match mv.follow_up {
+                        FollowUp::Never => ("-", false),
+                        FollowUp::Next(f) => (names[f as usize], false),
+                        FollowUp::OncePerformed(f) => (names[f as usize], true),
+                    };
                     assert_eq!(
-                        mv.follow_up.map_or("-", |f| names[f as usize]),
-                        d[3],
-                        "{id}.{name}: follow-up"
+                        expected,
+                        (d[3], d[4] == "1"),
+                        "{id}.{name}: follow-up and must-perform-once"
                     );
-                    assert_eq!(
-                        mv.must_perform_once,
-                        d[4] == "1",
-                        "{id}.{name}: must_perform_once"
-                    );
-                    assert_eq!(mv.intents.len().to_string(), d[5], "{id}.{name}: intents");
-
-                    for (j, intent) in mv.intents.iter().enumerate() {
-                        let row = rows("intent")
-                            .find(|r| r[1] == id && r[2] == name && r[3] == j.to_string())
-                            .unwrap_or_else(|| panic!("{id}.{name} has no intent {j}"));
-                        check_intent(id, name, j, intent, &row);
-                        intents += 1;
-                    }
+                    intents += check_intents(id, name, &mv.intents, d[5]);
                 }
                 State::Random(list) => {
                     let d = one("rand", id, name);
@@ -305,9 +373,11 @@ fn the_generated_table_matches_the_dump() {
                             .unwrap_or_else(|| panic!("{id}.{name} has no branch {j}"));
 
                         assert_eq!(names[b.target as usize], d[4], "{id}.{name}[{j}]: target");
-                        assert_eq!(format!("{:?}", b.repeat), d[5], "{id}.{name}[{j}]: repeat");
-                        assert_eq!(b.max_times.to_string(), d[6], "{id}.{name}[{j}]: max_times");
-                        assert_eq!(b.cooldown.to_string(), d[7], "{id}.{name}[{j}]: cooldown");
+                        assert_eq!(
+                            b.repeat,
+                            repeat(d[5], d[6], d[7]),
+                            "{id}.{name}[{j}]: repeat"
+                        );
                         match b.weight {
                             Field::Computed => {
                                 assert_eq!(d[8], "dynamic", "{id}.{name}[{j}]: weight");
@@ -351,39 +421,6 @@ fn one(kind: &'static str, monster: &str, state: &str) -> Vec<&'static str> {
     rows(kind)
         .find(|r| r[1] == monster && r[2] == state)
         .unwrap_or_else(|| panic!("no {kind} row for {monster}.{state}"))
-}
-
-fn check_intent(monster: &str, state: &str, index: usize, intent: &Intent, row: &[&str]) {
-    let where_ = format!("{monster}.{state}[{index}]");
-    let (kind, count, damage) = (row[4], row[5], row[6]);
-    let i = index.to_string();
-    let key = [monster, state, i.as_str()];
-
-    match intent {
-        Intent::Attack { damage: d, repeats } => {
-            assert_eq!(kind, "Attack", "{where_}: kind");
-            check_field(&where_, *d, damage, &updates("scaleintent", &key, 6));
-            check_field(&where_, *repeats, count, &updates("scaleintent", &key, 5));
-        }
-        Intent::DeathBlow { damage: d, repeats } => {
-            assert_eq!(kind, "DeathBlow", "{where_}: kind");
-            check_field(&where_, *d, damage, &updates("scaleintent", &key, 6));
-            check_field(&where_, *repeats, count, &updates("scaleintent", &key, 5));
-        }
-        Intent::StatusCard { count: c } => {
-            assert_eq!(kind, "StatusCard", "{where_}: kind");
-            assert_eq!(damage, "-", "{where_}: a status intent with damage");
-            check_field(&where_, *c, count, &updates("scaleintent", &key, 5));
-        }
-        // Everything else carries no numbers, and the dump has to agree. A
-        // number in a column the variant has no field for would otherwise be
-        // dropped without a word.
-        other => {
-            assert_eq!(format!("{other:?}"), kind, "{where_}: kind");
-            assert_eq!(count, "-", "{where_}: {kind} carries a count");
-            assert_eq!(damage, "-", "{where_}: {kind} carries damage");
-        }
-    }
 }
 
 /// Every `scale*` row matching a slot, as `(level, value)` in dump order.
@@ -436,6 +473,114 @@ fn check_scaled<T: Copy + std::fmt::Display>(
             "{where_} at ascension {ascension}"
         );
     }
+}
+
+/// The dump's intent-type name as the [`IntentKind`] it should be, spelled out
+/// here rather than derived from `Debug` — otherwise a renamed variant would
+/// rename both sides at once and prove nothing.
+fn intent_kind(name: &str) -> IntentKind {
+    match name {
+        "Attack" => IntentKind::Attack,
+        "Buff" => IntentKind::Buff,
+        "Debuff" => IntentKind::Debuff,
+        "DebuffStrong" => IntentKind::DebuffStrong,
+        "Defend" => IntentKind::Defend,
+        "Escape" => IntentKind::Escape,
+        "Heal" => IntentKind::Heal,
+        "Hidden" => IntentKind::Hidden,
+        "Summon" => IntentKind::Summon,
+        "Sleep" => IntentKind::Sleep,
+        "Stun" => IntentKind::Stun,
+        "StatusCard" => IntentKind::StatusCard,
+        "CardDebuff" => IntentKind::CardDebuff,
+        "DeathBlow" => IntentKind::DeathBlow,
+        "Unknown" => IntentKind::Unknown,
+        other => panic!("unknown intent kind {other}"),
+    }
+}
+
+/// A move's telegraph against the dump's intent rows.
+///
+/// The table holds a set and two payloads where the dump holds an ordered list,
+/// so this walks the rows and rebuilds what the set should be — the same
+/// posture as `repeat`, restating the mapping instead of comparing spellings.
+///
+/// Order is the one thing not checked, because it is the one thing the table
+/// deliberately drops: the game's array order reaches only the intent icons and
+/// the hover tips. Everything else is checked per row, including that the two
+/// payloads sit beside the right bits.
+fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> usize {
+    let rows: Vec<Vec<&str>> = rows("intent")
+        .filter(|r| r[1] == monster && r[2] == state)
+        .collect();
+    assert_eq!(
+        rows.len().to_string(),
+        count,
+        "{monster}.{state}: intent count"
+    );
+
+    let mut expected: Vec<IntentKind> = Vec::new();
+    for row in &rows {
+        let where_ = format!("{monster}.{state}[{}]", row[3]);
+        let key = [monster, state, row[3]];
+        let (kind, count, damage) = (row[4], row[5], row[6]);
+
+        let found = intent_kind(kind);
+        assert!(
+            intents.kinds.contains(found),
+            "{where_}: {kind} is not in the set"
+        );
+        assert!(
+            !expected.contains(&found),
+            "{where_}: {kind} telegraphed twice"
+        );
+        expected.push(found);
+
+        match kind {
+            "Attack" | "DeathBlow" => {
+                let a = intents.attack.expect("an attacking intent carries numbers");
+                check_field(&where_, a.damage, damage, &updates("scaleintent", &key, 6));
+                check_field(&where_, a.repeats, count, &updates("scaleintent", &key, 5));
+            }
+            "StatusCard" => {
+                assert_eq!(damage, "-", "{where_}: a status intent with damage");
+                let c = intents.cards.expect("a status intent carries a count");
+                check_field(&where_, c, count, &updates("scaleintent", &key, 5));
+            }
+            // Everything else carries no numbers, and the dump has to agree. A
+            // number in a column with no field for it would otherwise be
+            // dropped without a word.
+            _ => {
+                assert_eq!(count, "-", "{where_}: {kind} carries a count");
+                assert_eq!(damage, "-", "{where_}: {kind} carries damage");
+            }
+        }
+    }
+
+    // The other direction: a bit the dump never asked for would otherwise sit
+    // in the set unnoticed, and so would a payload with no intent to belong to.
+    let mut got: Vec<IntentKind> = intents.kinds.iter().collect();
+    let mut want = expected.clone();
+    got.sort_by_key(|k| *k as u8);
+    want.sort_by_key(|k| *k as u8);
+    assert_eq!(got, want, "{monster}.{state}: the set has extra kinds");
+
+    let attacks = expected
+        .iter()
+        .filter(|k| matches!(k, IntentKind::Attack | IntentKind::DeathBlow))
+        .count();
+    assert_eq!(
+        intents.attack.is_some(),
+        attacks == 1,
+        "{monster}.{state}: attack payload"
+    );
+    assert_eq!(
+        intents.cards.is_some(),
+        expected.contains(&IntentKind::StatusCard),
+        "{monster}.{state}: cards payload"
+    );
+
+    rows.len()
 }
 
 /// Exactly the branch weights the game works out from combat state, and no
