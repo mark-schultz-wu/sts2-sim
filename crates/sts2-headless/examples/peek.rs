@@ -1,11 +1,11 @@
-use sts2_headless::{Command, Config, Oracle};
+use sts2_headless::{Command, Config, Game};
 
 fn main() -> anyhow::Result<()> {
     let dir = sts2_headless::game_dir_from_env().expect("STS2_GAME_DIR");
-    let mut o = Oracle::launch(Config::new(dir))?;
+    let mut o = Game::launch(Config::new(dir))?;
     let start = Command::Start {
-        seed: Some("ORACLE1".into()),
-        character: Some("IRONCLAD".into()),
+        seed: "ORACLE1".into(),
+        character: "IRONCLAD".into(),
         ascension: 0,
         modifiers: vec![],
     };

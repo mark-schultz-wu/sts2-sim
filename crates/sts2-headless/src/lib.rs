@@ -1,25 +1,26 @@
 //! A client for the `sts2_headless` mod.
 //!
-//! The oracle is the real game, run headless, driven one decision at a time. This
-//! crate owns the transport and nothing above it: launching the game, the
-//! handshake, and one typed request/response pair per call. What the state
-//! *means* is deliberately left alone — see [`response`].
+//! The game is the oracle the simulator gets checked against: the real thing,
+//! run headless, driven one decision at a time. This crate owns the transport
+//! and nothing above it: launching the game, the handshake, and one typed
+//! request/response pair per call. What the state *means* is deliberately left
+//! alone — see [`response`].
 //!
 //! [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) is the contract this
 //! implements.
 //!
 //! ```no_run
-//! use sts2_headless::{Command, Config, Oracle, Response};
+//! use sts2_headless::{Command, Config, Game, Response};
 //!
-//! let mut oracle = Oracle::launch(Config::new("/path/to/Slay the Spire 2"))?;
-//! let reply = oracle.send(&Command::Start {
-//!     seed: Some("ABCDEF".into()),
-//!     character: Some("IRONCLAD".into()),
+//! let mut game = Game::launch(Config::new("/path/to/Slay the Spire 2"))?;
+//! let reply = game.send(&Command::Start {
+//!     seed: "ABCDEF".into(),
+//!     character: "IRONCLAD".into(),
 //!     ascension: 0,
 //!     modifiers: vec![],
 //! })?;
 //!
-//! // The outer `?` above covered the transport. This is the oracle's answer.
+//! // The outer `?` above covered the transport. This is the game's answer.
 //! match reply {
 //!     Ok(Response::Observation { digest, .. }) => println!("agreed at {digest}"),
 //!     Ok(other) => println!("{other}"),
@@ -37,7 +38,7 @@ pub use response::{CardOption, Question, Refusal, Response, RewardDetail, Reward
 
 /// What one command produced.
 ///
-/// The inner `Err` is the oracle declining the command; the session is fine and
+/// The inner `Err` is the game declining the command; the session is fine and
 /// the next command will work. Contrast [`Error`], the outer failure, which
 /// means the transport or the game process is in trouble and nothing further
 /// will work. Two layers because they are genuinely two questions: *did this
@@ -82,7 +83,7 @@ impl Config {
         Self {
             game_dir: game_dir.into(),
             inherit_game_output: false,
-            // Measured at ~3s from spawn to a connected oracle — the ~10s the
+            // Measured at ~3s from spawn to a connected game — the ~10s the
             // mod README quotes is startup to the main menu, which serve mode
             // never reaches. The slack is for a loaded machine, not for a game
             // that is never going to arrive.
@@ -98,12 +99,12 @@ impl Config {
     }
 }
 
-/// A running oracle, and the game process behind it.
+/// A running game, and the process behind it.
 ///
-/// Dropping this closes the connection, which the oracle treats as a normal
+/// Dropping this closes the connection, which the game treats as a normal
 /// shutdown, and then reaps the process — so a client that dies does not leave a
 /// game behind.
-pub struct Oracle {
+pub struct Game {
     child: Child,
     writer: TcpStream,
     reader: BufReader<TcpStream>,
@@ -111,7 +112,7 @@ pub struct Oracle {
     command_timeout: Duration,
 }
 
-/// What the oracle said about itself when it connected.
+/// What the game said about itself when it connected.
 ///
 /// Deserialized directly rather than through [`Response`], because the greeting
 /// arrives once before any request and is never a reply to one — putting it in
@@ -122,14 +123,14 @@ pub struct Greeting {
     pub game: String,
     #[serde(rename = "assemblyHash")]
     pub assembly_hash: i64,
-    /// Every command this oracle accepts.
+    /// Every command this game accepts.
     pub commands: Vec<String>,
 }
 
-impl Oracle {
+impl Game {
     /// Launches the game and waits for it to connect back.
     ///
-    /// The oracle dials out: this binds an ephemeral port first and passes it to
+    /// The game dials out: this binds an ephemeral port first and passes it to
     /// the game, so there is no port-allocation race and no connect-retry loop.
     pub fn launch(config: Config) -> Result<Self, Error> {
         let binary = config.game_dir.join(BINARY);
@@ -138,7 +139,7 @@ impl Oracle {
         }
 
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
-            .map_err(|e| Error::Io("binding a port for the oracle to dial", e))?;
+            .map_err(|e| Error::Io("binding a port for the game to dial", e))?;
         let port = listener
             .local_addr()
             .map_err(|e| Error::Io("reading the bound port", e))?
@@ -244,7 +245,7 @@ impl Oracle {
         Ok((writer, reader, greeting))
     }
 
-    /// What the oracle said about itself: protocol version, game build, and
+    /// What the game said about itself: protocol version, game build, and
     /// every command it accepts.
     pub fn greeting(&self) -> &Greeting {
         &self.greeting
@@ -253,7 +254,7 @@ impl Oracle {
     /// Sends one command and returns what it produced.
     ///
     /// The outer `Result` is whether the exchange happened at all; the inner one
-    /// is whether the oracle accepted the command. See [`Reply`].
+    /// is whether the game accepted the command. See [`Reply`].
     pub fn send(&mut self, command: &Command) -> Result<Reply, Error> {
         let line = serde_json::to_string(command).map_err(|e| Error::Encode(command.clone(), e))?;
 
@@ -278,9 +279,9 @@ impl Oracle {
     }
 }
 
-impl Drop for Oracle {
+impl Drop for Game {
     fn drop(&mut self) {
-        // Closing the socket is the documented shutdown: the oracle sees EOF and
+        // Closing the socket is the documented shutdown: the game sees EOF and
         // exits. Shutting down explicitly rather than relying on field drop
         // order, so the child is already on its way out before we wait for it.
         let _ = self.writer.shutdown(std::net::Shutdown::Both);
@@ -288,9 +289,9 @@ impl Drop for Oracle {
     }
 }
 
-impl fmt::Debug for Oracle {
+impl fmt::Debug for Game {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Oracle")
+        f.debug_struct("Game")
             .field("pid", &self.child.id())
             .field("game", &self.greeting.game)
             .field("protocol", &self.greeting.protocol)
@@ -298,8 +299,8 @@ impl fmt::Debug for Oracle {
     }
 }
 
-/// Waits for the oracle to dial in, giving up if the deadline passes or the game
-/// dies first.
+/// Waits for the game to dial in, giving up if the deadline passes or the
+/// process dies first.
 ///
 /// Polling rather than a blocking accept, because a game that crashes during
 /// startup would otherwise hang the caller until the deadline for no reason.
@@ -310,7 +311,7 @@ fn accept_before(
 ) -> Result<TcpStream, Error> {
     listener
         .set_nonblocking(true)
-        .map_err(|e| Error::Io("waiting for the oracle to connect", e))?;
+        .map_err(|e| Error::Io("waiting for the game to connect", e))?;
 
     let deadline = Instant::now() + timeout;
     loop {
@@ -322,7 +323,7 @@ fn accept_before(
                 return Ok(stream);
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-            Err(e) => return Err(Error::Io("waiting for the oracle to connect", e)),
+            Err(e) => return Err(Error::Io("waiting for the game to connect", e)),
         }
 
         if let Ok(Some(status)) = child.try_wait() {
@@ -334,7 +335,7 @@ fn accept_before(
         }
 
         if Instant::now() >= deadline {
-            return Err(Error::Timeout("waiting for the oracle to connect"));
+            return Err(Error::Timeout("waiting for the game to connect"));
         }
 
         std::thread::sleep(Duration::from_millis(25));
@@ -344,9 +345,9 @@ fn accept_before(
 fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, Error> {
     let mut line = String::new();
     match reader.read_line(&mut line) {
-        // A clean EOF here means the oracle went away mid-conversation, which is
+        // A clean EOF here means the game went away mid-conversation, which is
         // never something the caller asked for.
-        Ok(0) => Err(Error::OracleGone),
+        Ok(0) => Err(Error::GameGone),
         Ok(_) => Ok(line.trim_end().to_string()),
         Err(e)
             if matches!(
@@ -360,7 +361,7 @@ fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, Error> {
     }
 }
 
-/// Splits a reply into "the oracle refused" and "the oracle answered".
+/// Splits a reply into "the game refused" and "the game answered".
 ///
 /// The discriminator is read before deserializing, so a refusal is routed by
 /// what it says it is rather than by which struct happens to accept it.
@@ -378,7 +379,7 @@ fn parse_reply(line: &str) -> Result<Reply, Error> {
 ///
 /// Checked in two steps so a wrong message names itself. Deserializing straight
 /// into [`Greeting`] would report a missing `protocol` field when what actually
-/// happened is that the oracle said `bye`.
+/// happened is that the game said `bye`.
 fn parse_greeting(line: &str) -> Result<Greeting, Error> {
     let value: Value =
         serde_json::from_str(line).map_err(|e| Error::Decode(line.to_string(), e))?;
@@ -420,7 +421,7 @@ fn preload() -> String {
 
 /// A per-session token, to notice a stray local connection.
 ///
-/// Not a secret and not trying to be: it distinguishes our oracle from something
+/// Not a secret and not trying to be: it distinguishes our game from something
 /// else that happened to dial the port, which is the whole job. Anything on this
 /// machine can read the environment it is passed in.
 fn fresh_token() -> String {
@@ -446,21 +447,21 @@ pub enum Error {
     #[error("the game was killed before connecting")]
     GameKilled,
 
-    /// Something connected to our port, but it was not our oracle.
-    #[error("something other than the oracle connected to our port")]
+    /// Something connected to our port, but it was not our game.
+    #[error("something other than the game connected to our port")]
     WrongPeer,
 
-    /// The oracle's first message was not a greeting.
+    /// The game's first message was not a greeting.
     #[error("expected a greeting, got a '{0}' message")]
     NoGreeting(String),
 
-    /// The oracle speaks a protocol this crate does not.
-    #[error("the oracle speaks protocol v{found}, this client speaks v{expected}")]
+    /// The game speaks a protocol this crate does not.
+    #[error("the game speaks protocol v{found}, this client speaks v{expected}")]
     ProtocolMismatch { expected: u32, found: u32 },
 
     /// The connection closed mid-conversation.
-    #[error("the oracle closed the connection")]
-    OracleGone,
+    #[error("the game closed the connection")]
+    GameGone,
 
     /// A deadline passed. The session is not usable afterwards.
     #[error("timed out {0}")]
@@ -510,7 +511,7 @@ mod handshake {
         config
     }
 
-    /// Drives [`Oracle::connect`] against a peer speaking `lines`.
+    /// Drives [`Game::connect`] against a peer speaking `lines`.
     ///
     /// The peer connects *before* the accept, sitting in the listener's backlog,
     /// which keeps this single-threaded — and keeps its stream alive for the
@@ -526,7 +527,7 @@ mod handshake {
         peer.flush().unwrap();
 
         let mut child = idle_child();
-        let result = Oracle::connect(&listener, &mut child, token, &quick(Duration::from_secs(5)))
+        let result = Game::connect(&listener, &mut child, token, &quick(Duration::from_secs(5)))
             .map(|(_, _, hello)| hello);
         reap(&mut child);
         result
@@ -588,11 +589,11 @@ mod handshake {
         drop(peer);
 
         let mut child = idle_child();
-        let err = Oracle::connect(&listener, &mut child, "tok", &quick(Duration::from_secs(5)))
+        let err = Game::connect(&listener, &mut child, "tok", &quick(Duration::from_secs(5)))
             .map(|_| ())
             .expect_err("should fail");
         reap(&mut child);
-        assert!(matches!(err, Error::OracleGone), "got {err:?}");
+        assert!(matches!(err, Error::GameGone), "got {err:?}");
     }
 
     /// A game that dies during startup should say so immediately rather than
@@ -634,7 +635,7 @@ mod handshake {
     #[test]
     fn a_missing_game_is_caught_before_anything_is_spawned() {
         let config = Config::new("/nonexistent/game/dir");
-        let err = Oracle::launch(config).map(|_| ()).expect_err("should fail");
+        let err = Game::launch(config).map(|_| ()).expect_err("should fail");
         assert!(matches!(err, Error::GameNotFound(_)), "got {err:?}");
     }
 
@@ -655,7 +656,7 @@ mod handshake {
         };
         assert_eq!(
             mismatch.to_string(),
-            "the oracle speaks protocol v2, this client speaks v1"
+            "the game speaks protocol v2, this client speaks v1"
         );
 
         // The cause has to survive, or `{:#}` and anyhow's chain lose the

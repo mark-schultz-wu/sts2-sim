@@ -21,7 +21,7 @@
 use serde_json::Value;
 use serial_test::serial;
 use std::time::{Duration, Instant};
-use sts2_headless::{Answer, Command, Config, Error, Oracle, PROTOCOL_VERSION, Reply, Response};
+use sts2_headless::{Answer, Command, Config, Error, Game, PROTOCOL_VERSION, Reply, Response};
 
 /// The seed the mod itself defaults to. Named here so the determinism test is
 /// obviously asking both runs the same question.
@@ -31,10 +31,10 @@ const SEED: &str = "ORACLE1";
 /// encounter picks with its own RNG — which is what makes it worth checking.
 const ENCOUNTER: &str = "BOWLBUGS_WEAK";
 
-fn launch() -> Oracle {
+fn launch() -> Game {
     let dir = sts2_headless::game_dir_from_env()
         .expect("set STS2_GAME_DIR to the game directory (`just live` does this)");
-    Oracle::launch(Config::new(dir)).expect("the game should launch and connect back")
+    Game::launch(Config::new(dir)).expect("the game should launch and connect back")
 }
 
 /// The parts of an observation these tests look at.
@@ -66,11 +66,11 @@ fn observation(reply: Reply) -> Seen {
     }
 }
 
-fn start(oracle: &mut Oracle) -> Seen {
-    let reply = oracle
+fn start(game: &mut Game) -> Seen {
+    let reply = game
         .send(&Command::Start {
-            seed: Some(SEED.into()),
-            character: None,
+            seed: SEED.into(),
+            character: "IRONCLAD".into(),
             ascension: 0,
             modifiers: vec![],
         })
@@ -82,17 +82,17 @@ fn start(oracle: &mut Oracle) -> Seen {
 #[ignore = "launches the real game"]
 #[serial(game)]
 fn the_greeting_matches_what_this_client_speaks() {
-    let oracle = launch();
-    let greeting = oracle.greeting();
+    let game = launch();
+    let greeting = game.greeting();
 
     assert_eq!(greeting.protocol, PROTOCOL_VERSION);
     assert_eq!(greeting.game, "v0.107.1");
     assert_eq!(greeting.assembly_hash, 1_692_500_715);
 
-    // Every command this crate can build must be one the oracle accepts, or the
+    // Every command this crate can build must be one the game accepts, or the
     // enum has drifted from the protocol it claims to implement.
     //
-    // The oracle also offers `observe`, which this client deliberately does not
+    // The game also offers `observe`, which this client deliberately does not
     // build: it reports state without advancing, and every response that reports
     // state already carries it.
     for cmd in [
@@ -110,7 +110,7 @@ fn the_greeting_matches_what_this_client_speaks() {
     ] {
         assert!(
             greeting.commands.iter().any(|c| c == cmd),
-            "oracle does not offer '{cmd}'; it offers {:?}",
+            "game does not offer '{cmd}'; it offers {:?}",
             greeting.commands
         );
     }
@@ -120,8 +120,8 @@ fn the_greeting_matches_what_this_client_speaks() {
 #[ignore = "launches the real game"]
 #[serial(game)]
 fn every_observation_carries_state() {
-    let mut oracle = launch();
-    let observed = start(&mut oracle);
+    let mut game = launch();
+    let observed = start(&mut game);
 
     assert!(observed.resolved);
     assert!(!observed.digest.is_empty());
@@ -141,12 +141,12 @@ fn every_observation_carries_state() {
 #[serial(game)]
 fn the_same_seed_gives_the_same_digest() {
     let first = {
-        let mut oracle = launch();
-        start(&mut oracle).digest
+        let mut game = launch();
+        start(&mut game).digest
     };
     let second = {
-        let mut oracle = launch();
-        start(&mut oracle).digest
+        let mut game = launch();
+        start(&mut game).digest
     };
 
     assert_eq!(first, second, "same seed, different state");
@@ -165,9 +165,9 @@ fn the_same_seed_gives_the_same_digest() {
 #[serial(game)]
 fn the_same_encounter_gives_the_same_fight_across_a_second() {
     fn build() -> (String, Instant) {
-        let mut oracle = launch();
-        start(&mut oracle);
-        let reply = oracle
+        let mut game = launch();
+        start(&mut game);
+        let reply = game
             .send(&Command::Fight {
                 encounter: ENCOUNTER.into(),
             })
@@ -195,11 +195,11 @@ fn the_same_encounter_gives_the_same_fight_across_a_second() {
 #[ignore = "launches the real game"]
 #[serial(game)]
 fn a_refusal_leaves_the_session_usable() {
-    let mut oracle = launch();
-    start(&mut oracle);
+    let mut game = launch();
+    start(&mut game);
 
     // Nothing is pending, so this is refused — and the refusal names the command.
-    let refusal = oracle
+    let refusal = game
         .send(&Command::Answer(Answer::Cards(vec![0])))
         .expect("a refusal is still a reply, not a transport failure")
         .expect_err("nothing is pending, so this must be refused");
@@ -207,7 +207,7 @@ fn a_refusal_leaves_the_session_usable() {
     assert!(!refusal.message.is_empty());
 
     // The session survived it: a real command still works, and advances.
-    let after = start(&mut oracle);
+    let after = start(&mut game);
     assert!(after.state.is_object());
 }
 
@@ -229,10 +229,10 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
     /// Asserts a command is turned down, and turned down for the stated reason.
     ///
     /// The reason matters as much as the refusal: a command refused because the
-    /// oracle misunderstood it looks identical to one refused correctly, and
+    /// game misunderstood it looks identical to one refused correctly, and
     /// only the message tells them apart.
-    fn refused(oracle: &mut Oracle, command: Command, expect: &str) {
-        let refusal = oracle
+    fn refused(game: &mut Game, command: Command, expect: &str) {
+        let refusal = game
             .send(&command)
             .expect("a refusal is still a reply, not a transport failure")
             .expect_err(&format!("{command:?} should have been refused"));
@@ -247,24 +247,24 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
         );
     }
 
-    let mut oracle = launch();
-    start(&mut oracle);
+    let mut game = launch();
+    start(&mut game);
 
     // Out of combat, so nothing that needs one may proceed.
     refused(
-        &mut oracle,
+        &mut game,
         Command::PlayCard {
             index: 0,
             target: None,
         },
         "not in combat",
     );
-    refused(&mut oracle, Command::EndTurn, "not in combat");
-    refused(&mut oracle, Command::Buy { index: 0 }, "not in a shop");
+    refused(&mut game, Command::EndTurn, "not in combat");
+    refused(&mut game, Command::Buy { index: 0 }, "not in a shop");
 
     // Malformed in themselves.
     refused(
-        &mut oracle,
+        &mut game,
         Command::Grant {
             card: None,
             relic: None,
@@ -272,7 +272,7 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
         "requires",
     );
     refused(
-        &mut oracle,
+        &mut game,
         Command::Answer(Answer::Skip),
         "nothing is pending",
     );
@@ -280,7 +280,7 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
     // Names the game does not know. The message comes from the game rather than
     // from us, which is the point of asking it instead of guessing.
     refused(
-        &mut oracle,
+        &mut game,
         Command::Grant {
             relic: Some("NOT_A_REAL_RELIC".into()),
             card: None,
@@ -288,7 +288,7 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
         "NOT_A_REAL_RELIC",
     );
     refused(
-        &mut oracle,
+        &mut game,
         Command::Fight {
             encounter: "NOT_A_REAL_ENCOUNTER".into(),
         },
@@ -297,7 +297,7 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
 
     // Legal shape, illegal move: the refusal lists what would have worked.
     refused(
-        &mut oracle,
+        &mut game,
         Command::Travel { col: 99, row: 99 },
         "travelable",
     );
@@ -305,7 +305,7 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
     // Eight refusals later the session still advances. `start` rather than
     // `observe`, which this client does not build — a command that changes
     // something is a better proof of life than one that only reports.
-    let after = start(&mut oracle);
+    let after = start(&mut game);
     assert!(after.state.is_object());
     assert_eq!(after.game_errors, None, "a refusal should log nothing");
 }
@@ -322,27 +322,25 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
 #[ignore = "launches the real game"]
 #[serial(game)]
 fn an_ordinary_card_play_logs_no_game_errors() {
-    let mut oracle = launch();
-    start(&mut oracle);
+    let mut game = launch();
+    start(&mut game);
 
     let fought = observation(
-        oracle
-            .send(&Command::Fight {
-                encounter: ENCOUNTER.into(),
-            })
-            .expect("fight should not fail at the transport level"),
+        game.send(&Command::Fight {
+            encounter: ENCOUNTER.into(),
+        })
+        .expect("fight should not fail at the transport level"),
     );
     assert_eq!(fought.game_errors, None, "entering a fight logged errors");
 
     // Index 2 is the Strike in this encounter's opening hand; creature 1 is the
     // Bowlbug Rock. Both come from the observation above.
     let played = observation(
-        oracle
-            .send(&Command::PlayCard {
-                index: 2,
-                target: Some(1),
-            })
-            .expect("play_card should not fail at the transport level"),
+        game.send(&Command::PlayCard {
+            index: 2,
+            target: Some(1),
+        })
+        .expect("play_card should not fail at the transport level"),
     );
     assert_eq!(played.game_errors, None, "playing a card logged errors");
     assert!(played.resolved);
@@ -355,10 +353,10 @@ fn an_ordinary_card_play_logs_no_game_errors() {
 #[ignore = "launches the real game"]
 #[serial(game)]
 fn a_room_type_that_is_not_a_room_is_refused() {
-    let mut oracle = launch();
-    start(&mut oracle);
+    let mut game = launch();
+    start(&mut game);
 
-    let refusal = oracle
+    let refusal = game
         .send(&Command::EnterRoom {
             room: "Unassigned".into(),
         })
@@ -385,9 +383,9 @@ fn a_room_type_that_is_not_a_room_is_refused() {
 #[serial(game)]
 fn dropping_the_client_stops_the_game() {
     let pid = {
-        let oracle = launch();
-        let pid = oracle.pid();
-        drop(oracle);
+        let game = launch();
+        let pid = game.pid();
+        drop(game);
         pid
     };
 
@@ -409,7 +407,7 @@ fn dropping_the_client_stops_the_game() {
 /// branch had never been taken, because the only way to reach it is to break
 /// determinism — and it stopped being broken the day the exit was added.
 ///
-/// Launched directly rather than through [`Oracle`], because the client always
+/// Launched directly rather than through [`Game`], because the client always
 /// supplies `LD_PRELOAD` and the point is to withhold it: without libgcc,
 /// Harmony cannot patch, `sts2_determinism` stays inert, and the driver refuses.
 #[test]
@@ -445,7 +443,7 @@ fn refusing_to_start_exits_rather_than_hanging() {
 /// where it was said to be.
 #[test]
 fn a_bad_game_dir_fails_without_the_game() {
-    let err = Oracle::launch(Config::new("/definitely/not/the/game"))
+    let err = Game::launch(Config::new("/definitely/not/the/game"))
         .map(|_| ())
         .expect_err("should refuse");
     assert!(matches!(err, Error::GameNotFound(_)), "got {err:?}");

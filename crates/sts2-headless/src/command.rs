@@ -1,4 +1,4 @@
-//! The commands the oracle accepts.
+//! The commands the game accepts.
 //!
 //! See [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) for what each argument
 //! means.
@@ -12,13 +12,10 @@ use serde::{Serialize, Serializer, ser::SerializeMap};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum Command {
-    /// Starts a fresh run. Omitted fields fall back to the oracle's defaults:
-    /// seed `ORACLE1`, and the Ironclad.
+    /// Starts a fresh run.
     Start {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        seed: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        character: Option<String>,
+        seed: String,
+        character: String,
         ascension: u32,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         modifiers: Vec<String>,
@@ -62,7 +59,7 @@ pub enum Command {
     Buy {
         index: usize,
     },
-    /// At least one of `card` or `relic` must be set, or the oracle refuses it.
+    /// At least one of `card` or `relic` must be set, or the game refuses it.
     Grant {
         #[serde(skip_serializing_if = "Option::is_none")]
         card: Option<String>,
@@ -93,7 +90,7 @@ pub enum Answer {
 impl Serialize for Answer {
     /// Written by hand because `skip` is the literal `true` rather than a value
     /// the caller supplies — deriving it would need a `bool` field that could be
-    /// set to `false`, which is not an answer the oracle accepts.
+    /// set to `false`, which is not an answer the game accepts.
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(Some(1))?;
         match self {
@@ -108,7 +105,7 @@ impl Serialize for Answer {
 /// One entry in an [`Answer::Take`].
 ///
 /// `card` is required when the reward is a card reward and meaningless
-/// otherwise; the oracle refuses a card reward without one rather than choosing
+/// otherwise; the game refuses a card reward without one rather than choosing
 /// the first card for you.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TakeReward {
@@ -122,24 +119,10 @@ mod tests {
     use serde_json::{json, to_value};
 
     #[test]
-    fn start_omits_what_was_not_asked_for() {
-        let bare = Command::Start {
-            seed: None,
-            character: None,
-            ascension: 0,
-            modifiers: vec![],
-        };
-        assert_eq!(
-            to_value(&bare).unwrap(),
-            json!({"cmd": "start", "ascension": 0})
-        );
-    }
-
-    #[test]
     fn start_carries_what_was() {
         let full = Command::Start {
-            seed: Some("ABC".into()),
-            character: Some("SILENT".into()),
+            seed: "ABC".into(),
+            character: "SILENT".into(),
             ascension: 5,
             modifiers: vec!["HEIRLOOM".into()],
         };
