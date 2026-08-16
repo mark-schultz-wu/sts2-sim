@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <!-- The loader looks for <manifest id>.dll, so this must equal the id. -->
+    <AssemblyName>sts2_dump</AssemblyName>
+    <RootNamespace>Sts2Dump</RootNamespace>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Sts2PinDir Condition="'$(Sts2PinDir)' == ''">$(HOME)/sts-artifacts/sts2-cli-lib</Sts2PinDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Private=false throughout: the game and the other mods supply these at
+         runtime, and shipping copies would mean running a stale one. -->
+    <Reference Include="sts2">
+      <HintPath>$(Sts2PinDir)/sts2.dll.original</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Only for Driver, which gets the game to a state where the model
+         database is populated and then hands control back. -->
+    <Reference Include="sts2_headless">
+      <HintPath>../sts2_headless/bin/Release/net9.0/sts2_headless.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

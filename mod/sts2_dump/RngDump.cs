@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Random;
 
-namespace Sts2DeterminismTest;
+namespace Sts2Dump;
 
 /// <summary>
 /// Prints what the game's <c>Rng</c> produces, as ground truth for the

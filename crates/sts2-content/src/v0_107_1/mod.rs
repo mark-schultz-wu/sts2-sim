@@ -1,7 +1,7 @@
 //! Content for game build `v0.107.1`.
 //!
 //! `dumps/` holds what the running game printed — `STS2_HEADLESS_MODE=carddump`
-//! and friends, see `mod/sts2_determinism_test/`. Each dump carries the content
+//! and friends, see `mod/sts2_dump/`. Each dump carries the content
 //! hash in its header, and [`tests`] requires that to match [`VERSION`], so
 //! regenerating against a different build fails rather than quietly replacing
 //! the tables. `generated/` mirrors it, one module per kind of content.

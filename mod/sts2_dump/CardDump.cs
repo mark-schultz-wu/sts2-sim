@@ -9,7 +9,7 @@ using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
 
-namespace Sts2DeterminismTest;
+namespace Sts2Dump;
 
 /// <summary>
 /// Prints every card's static data, as ground truth for the simulator's

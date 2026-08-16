@@ -21,7 +21,7 @@
 //! building an argument and seeking a stream forward.
 //!
 //! Checked against `tests/megarandom.txt`, dumped from the game. Regenerate
-//! with `STS2_HEADLESS_MODE=rngdump` — see `mod/sts2_determinism_test/RngDump.cs`.
+//! with `STS2_HEADLESS_MODE=rngdump` — see `mod/sts2_dump/RngDump.cs`.
 
 mod bounds;
 
