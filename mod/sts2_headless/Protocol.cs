@@ -472,7 +472,25 @@ internal static class Protocol
                     return;
                 }
 
-                await sync.ChooseLocalOption(index);
+                // Tracked, never awaited here — the same rule the event branch
+                // below follows, and for the same reason.
+                //
+                // ChooseLocalOption awaits the option's OnSelect, and
+                // SmithRestSiteOption.OnSelect awaits
+                // CardSelectCmd.FromDeckForUpgrade, which parks a question for
+                // the client. The serve loop cannot read the answer to that
+                // question until this handler returns, so awaiting here waits
+                // for something only this handler's return can produce.
+                //
+                // Measured before the fix: `choose_option` on SMITH never
+                // replied and the client timed out at 20s. HEAL was unaffected,
+                // which is why the rest site looked fine — one of its two
+                // options resolves by itself.
+                //
+                // WaitForDecisionPoint below handles both halves: for HEAL it
+                // waits on BackgroundWork.InFlight until the heal lands, and for
+                // SMITH it returns as soon as the selection parks.
+                BackgroundWork.Track(sync.ChooseLocalOption(index));
                 break;
             }
 

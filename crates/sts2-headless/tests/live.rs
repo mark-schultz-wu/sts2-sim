@@ -21,7 +21,9 @@
 use serde_json::Value;
 use serial_test::serial;
 use std::time::{Duration, Instant};
-use sts2_headless::{Answer, Command, Config, Error, Game, PROTOCOL_VERSION, Reply, Response};
+use sts2_headless::{
+    Answer, Command, Config, Error, Game, PROTOCOL_VERSION, Question, Reply, Response,
+};
 
 /// The seed the mod itself defaults to. Named here so the determinism test is
 /// obviously asking both runs the same question.
@@ -447,4 +449,82 @@ fn a_bad_game_dir_fails_without_the_game() {
         .map(|_| ())
         .expect_err("should refuse");
     assert!(matches!(err, Error::GameNotFound(_)), "got {err:?}");
+}
+
+/// A rest site option that asks a question must not deadlock the driver.
+///
+/// This is the one class of bug only a live test can catch. The C# selftest
+/// calls `Driver` directly and never touches `Protocol`, so it exercises rest
+/// sites happily while the *protocol* path is wedged — which is exactly what
+/// happened: 201 selftest assertions passed against a `choose_option` that
+/// never replied.
+///
+/// The mechanism, since a future edit could reintroduce it: the handler used to
+/// `await sync.ChooseLocalOption(index)`. For SMITH that awaits
+/// `CardSelectCmd.FromDeckForUpgrade`, which parks a question for the client —
+/// and the serve loop cannot read the client's answer until the handler returns.
+/// The handler was waiting for something only its own return could produce.
+/// Measured before the fix: no reply, client timed out at 20s.
+///
+/// HEAL is deliberately not the case under test. It resolves by itself, so it
+/// would pass against the broken code and prove nothing.
+#[test]
+#[ignore = "launches the real game"]
+#[serial(game)]
+fn a_rest_site_option_that_asks_a_question_still_replies() {
+    let mut game = launch();
+    start(&mut game);
+
+    let seen = observation(
+        game.send(&Command::EnterRoom {
+            room: "RestSite".into(),
+        })
+        .expect("entering a rest site should not fail at the transport level"),
+    );
+
+    let smith = seen.state["room"]["options"]
+        .as_array()
+        .expect("a rest site reports its options")
+        .iter()
+        .find(|o| o["id"] == "SMITH")
+        .and_then(|o| o["index"].as_u64())
+        .expect("a fresh rest site offers SMITH");
+
+    // The assertion is that this returns at all. A transport error here is the
+    // deadlock; the command timeout is what turns the hang into a failure.
+    let reply = game
+        .send(&Command::ChooseOption {
+            index: smith as usize,
+        })
+        .expect("choose_option on SMITH must reply, not hang");
+
+    match reply.expect("SMITH should be accepted") {
+        Response::Pending { question, .. } => match question {
+            Question::SelectCards { min, options, .. } => {
+                assert_eq!(min, 1, "smithing upgrades exactly one card");
+                assert!(!options.is_empty(), "the deck should be offered");
+            }
+            other => panic!("expected a card selection, got {other:?}"),
+        },
+        other => panic!("SMITH should park a question, got {other:?}"),
+    }
+
+    // Returning is not the same as working: answer it and check the run moved.
+    let after = observation(
+        game.send(&Command::Answer(Answer::Cards(vec![0])))
+            .expect("answering should not fail at the transport level"),
+    );
+
+    let upgraded = after.state["deck"]
+        .as_array()
+        .expect("the deck is reported")
+        .iter()
+        .filter_map(|c| c.as_str())
+        // `Ident` packs the upgrade level into the id, as a `+N` suffix.
+        .filter(|s| s.contains('+'))
+        .count();
+    assert_eq!(
+        upgraded, 1,
+        "smithing upgrades exactly one card in the deck"
+    );
 }
