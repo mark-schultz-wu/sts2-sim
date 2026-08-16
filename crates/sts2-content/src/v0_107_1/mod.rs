@@ -24,9 +24,14 @@ pub const VERSION: Version = Version {
     content_hash: 3_954_186_980,
 };
 
-/// The dump, verbatim. Parsed by the tests; the generated tables are built from
-/// it by `cargo xtask codegen`.
-pub const CARDS: &str = include_str!("cards.txt");
+/// The dump, verbatim — test data, not runtime data.
+///
+/// `cargo xtask codegen` reads it from disk to build [`generated`], and the
+/// tests below replay it to check that table. Nothing at runtime should parse
+/// it: that is what the generated table is for, and a `pub const` here would
+/// both invite it and put 38KB of text into every binary that links this crate.
+#[cfg(test)]
+const CARDS: &str = include_str!("cards.txt");
 
 #[cfg(test)]
 mod tests {
