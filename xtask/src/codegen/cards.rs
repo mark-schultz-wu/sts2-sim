@@ -1,0 +1,518 @@
+//! Every card's static data.
+//!
+//! Card identity nests by the game's own twelve card pools, so `Strike` needs
+//! no suffix: `IroncladCard::Strike` and `SilentCard::Strike` are different
+//! variants of different types. The game disambiguates with a flat namespace
+//! instead — `STRIKE_IRONCLAD` — and that id is preserved as the serde rename,
+//! so the wire form is unchanged and the generated file stays diffable against
+//! the game's own names.
+//!
+//! Only ten of 578 ids actually carry a pool suffix, all of them `STRIKE_*` and
+//! `DEFEND_*`. The stripping rule matters for exactly those, and is a no-op
+//! everywhere else.
+//!
+//! One file per pool rather than one for everything. A content patch usually
+//! touches one character, and that should read as a diff to one file rather
+//! than a churn in the middle of eight thousand lines.
+
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+use std::fs;
+use std::path::Path;
+
+use super::{DERIVES, Dump, banner, camel, sanitize};
+
+/// Pool id, module name, Rust enum name, and the id suffix to strip inside it.
+const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
+    (
+        "IRONCLAD_CARD_POOL",
+        "ironclad",
+        "IroncladCard",
+        Some("IRONCLAD"),
+    ),
+    ("SILENT_CARD_POOL", "silent", "SilentCard", Some("SILENT")),
+    ("REGENT_CARD_POOL", "regent", "RegentCard", Some("REGENT")),
+    (
+        "NECROBINDER_CARD_POOL",
+        "necrobinder",
+        "NecrobinderCard",
+        Some("NECROBINDER"),
+    ),
+    ("DEFECT_CARD_POOL", "defect", "DefectCard", Some("DEFECT")),
+    ("COLORLESS_CARD_POOL", "colorless", "ColorlessCard", None),
+    ("CURSE_CARD_POOL", "curse", "CurseCard", None),
+    ("EVENT_CARD_POOL", "event", "EventCard", None),
+    ("QUEST_CARD_POOL", "quest", "QuestCard", None),
+    ("STATUS_CARD_POOL", "status", "StatusCard", None),
+    ("TOKEN_CARD_POOL", "token", "TokenCard", None),
+    ("DEPRECATED_CARD_POOL", "deprecated", "DeprecatedCard", None),
+];
+
+struct Card {
+    id: String,
+    pool: String,
+    kind: String,
+    rarity: String,
+    target: String,
+    cost: String,
+    costs_x: bool,
+    max_upgrade: String,
+    keywords: Vec<String>,
+}
+
+/// Members the game declares that are not values of the field they name.
+///
+/// A C# enum has a zero, so a `None` gets declared whether or not it means
+/// anything, and `Option<T>` is the honest Rust for the ones that don't.
+/// Dropping a member does not renumber the rest — every member is emitted at
+/// the game's own discriminant, so the generated enum stays a subset of the
+/// game's rather than a reshuffle of it.
+///
+/// `TargetType::None` stays: 35 cards declare it outright, and "takes no
+/// target" is a real answer that `Option` would only spell the same way.
+const DROPPED: [(&str, &str, &str); 3] = [
+    (
+        "CardKeyword",
+        "None",
+        "not one keyword in the game names it — not a declaration, a comparison, \
+         or a set member. It is the C# zero and nothing else.",
+    ),
+    (
+        "CardRarity",
+        "None",
+        "no card has it and `CardRarityExtensions.ToLocString` throws on it. \
+         Every real use is an absent answer — `CardFactory` returns it when no \
+         rarity was selected, `GetNextHighestRarityWithWrapping` when there is \
+         no next one — which is `Option<CardRarity>` here.",
+    ),
+    (
+        "CardType",
+        "None",
+        "the only way to reach it is a Mad Science whose Tinker Time type has \
+         not been set, and all three sites that create one assign it on the \
+         next line — `CreateCard<MadScience>()` cannot take the type as an \
+         argument, so `_tinkerTimeType` sits at the C# zero for two statements. \
+         That is a two-phase constructor, not a value: here the type is a \
+         constructor argument, and a card that has not chosen one is \
+         `Option<CardType>` at the call site that asks.",
+    ),
+];
+
+fn dropped(enum_name: &str, member: &str) -> bool {
+    DROPPED
+        .iter()
+        .any(|&(e, m, _)| e == enum_name && m == member)
+}
+
+/// The dump's two cost columns as the one `Cost` they encode.
+///
+/// The pairing is checked rather than assumed: `CardEnergyCost` zeroes the
+/// canonical cost for X-cost cards and treats any negative base as "no cost",
+/// so an X card with a number or a negative other than -1 would mean the game
+/// changed under us and the mapping below is no longer faithful.
+fn cost(card: &Card) -> Result<String, String> {
+    match (card.costs_x, card.cost.as_str()) {
+        (true, "0") => Ok("Cost::X".into()),
+        (true, n) => Err(format!("{}: costs X but canonical cost is {n}", card.id)),
+        (false, "-1") => Ok("Cost::None".into()),
+        (false, n) if n.starts_with('-') => Err(format!(
+            "{}: negative cost {n} is not the -1 sentinel",
+            card.id
+        )),
+        (false, n) => n
+            .parse::<u8>()
+            .map(|n| format!("Cost::Energy({n})"))
+            .map_err(|e| format!("{}: cost {n}: {e}", card.id)),
+    }
+}
+
+/// The variant name a card gets inside its pool's enum.
+fn variant(card: &Card, suffix: Option<&str>) -> String {
+    match suffix {
+        Some(s) if card.id.ends_with(&format!("_{s}")) => {
+            camel(&card.id[..card.id.len() - s.len() - 1])
+        }
+        _ => camel(&card.id),
+    }
+}
+
+/// Every card, as one module per pool plus the shared field enums.
+///
+/// Returns the dump's content hash, which stamps the roll-up too.
+pub fn generate(root: &Path) -> Result<String, String> {
+    let dump = Dump::read("cards.txt")?;
+    let content_hash = dump.hash.clone();
+
+    let cards: Vec<Card> = dump
+        .of("card")
+        .map(|f| Card {
+            id: f[1].clone(),
+            pool: f[2].clone(),
+            kind: f[3].clone(),
+            rarity: f[4].clone(),
+            target: f[5].clone(),
+            cost: f[6].clone(),
+            costs_x: f[7] == "1",
+            max_upgrade: f[8].clone(),
+            keywords: if f[9] == "-" {
+                Vec::new()
+            } else {
+                f[9].split(',').map(String::from).collect()
+            },
+        })
+        .collect();
+
+    // Discriminant and name, because a dropped member leaves a hole that the
+    // rest must not slide into.
+    let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
+    for f in dump.of("enum") {
+        let discriminant = f[2]
+            .parse::<u8>()
+            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        enums
+            .entry(f[1].clone())
+            .or_default()
+            .push((discriminant, f[3].clone()));
+    }
+
+    let dir = root.join("cards");
+    fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+
+    let mut total = 0usize;
+    let mut stripped = 0usize;
+
+    // One file per pool: the enum, its members, and its data table.
+    for (pool_id, module, enum_name, suffix) in POOLS {
+        let members: Vec<&Card> = cards.iter().filter(|c| c.pool == pool_id).collect();
+        total += members.len();
+
+        let mut out = banner(
+            &format!("Cards in `{pool_id}`."),
+            "cards.txt",
+            &content_hash,
+        );
+        writeln!(
+            out,
+            "\nuse super::{{CardData, CardKeyword, CardRarity, CardType, KeywordSet, TargetType}};\n\
+             use crate::{{Cost, Field}};\n\
+             use serde::{{Deserialize, Serialize}};\n"
+        )
+        .unwrap();
+
+        writeln!(out, "{DERIVES}").unwrap();
+        writeln!(out, "#[repr(u16)]").unwrap();
+        writeln!(out, "pub enum {enum_name} {{").unwrap();
+        for card in &members {
+            if suffix.is_some_and(|s| card.id.ends_with(&format!("_{s}"))) {
+                stripped += 1;
+            }
+            writeln!(out, "    #[serde(rename = \"{}\")]", card.id).unwrap();
+            writeln!(out, "    {},", variant(card, suffix)).unwrap();
+        }
+        writeln!(out, "}}\n").unwrap();
+
+        writeln!(out, "impl {enum_name} {{").unwrap();
+        writeln!(out, "    /// The game's own id, and the wire form.").unwrap();
+        writeln!(out, "    pub const fn id(self) -> &'static str {{").unwrap();
+        writeln!(out, "        match self {{").unwrap();
+        for card in &members {
+            writeln!(
+                out,
+                "            Self::{} => \"{}\",",
+                variant(card, suffix),
+                card.id
+            )
+            .unwrap();
+        }
+        writeln!(out, "        }}").unwrap();
+        writeln!(out, "    }}\n").unwrap();
+
+        // By value: `CardData` fits in a register now, so a reference would be
+        // strictly larger than the thing it points at — and returning one would
+        // force the rows back into a static, since a `const fn` call is not a
+        // promotable expression.
+        writeln!(
+            out,
+            "    /// What is true of the card with no run in progress."
+        )
+        .unwrap();
+        writeln!(out, "    pub const fn data(self) -> CardData {{").unwrap();
+        writeln!(out, "        match self {{").unwrap();
+        for card in &members {
+            let kind = if card.kind == "dynamic" {
+                "Field::Computed".into()
+            } else {
+                format!("Field::Constant(CardType::{})", sanitize(&card.kind))
+            };
+            let target = if card.target == "dynamic" {
+                "Field::Computed".into()
+            } else {
+                format!("Field::Constant(TargetType::{})", sanitize(&card.target))
+            };
+            let keywords = card
+                .keywords
+                .iter()
+                .map(|k| format!("CardKeyword::{}", sanitize(k)))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            writeln!(
+                out,
+                "            Self::{} => CardData {{",
+                variant(card, suffix)
+            )
+            .unwrap();
+            writeln!(out, "                kind: {kind},").unwrap();
+            writeln!(
+                out,
+                "                rarity: CardRarity::{},",
+                sanitize(&card.rarity)
+            )
+            .unwrap();
+            writeln!(out, "                target: {target},").unwrap();
+            writeln!(out, "                cost: {},", cost(card)?).unwrap();
+            writeln!(out, "                max_upgrade: {},", card.max_upgrade).unwrap();
+            writeln!(
+                out,
+                "                keywords: KeywordSet::new(&[{keywords}]),"
+            )
+            .unwrap();
+            writeln!(out, "            }},").unwrap();
+        }
+        writeln!(out, "        }}").unwrap();
+        writeln!(out, "    }}").unwrap();
+        writeln!(out, "}}").unwrap();
+
+        let path = dir.join(format!("{module}.rs"));
+        fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    }
+
+    // The shared half: the field enums, the data shape, and the outer enum.
+    let mut out = banner(
+        "The field enums, the data shape, and the outer card enum.",
+        "cards.txt",
+        &content_hash,
+    );
+    writeln!(out, "\nuse crate::{{Cost, Field}};").unwrap();
+    writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
+
+    for (_, module, _, _) in POOLS {
+        writeln!(out, "mod {module};").unwrap();
+    }
+    writeln!(out).unwrap();
+    for (_, module, _, _) in POOLS {
+        writeln!(out, "pub use {module}::*;").unwrap();
+    }
+    writeln!(out).unwrap();
+
+    // Reflected from the game, so a member nothing uses is still present —
+    // absent from the table is not absent from the enum. The exceptions are in
+    // `DROPPED`, and each carries its reason into the generated file.
+    for (name, members) in &enums {
+        for (_, member, why) in DROPPED.iter().filter(|&&(e, _, _)| e == name) {
+            writeln!(out, "// `{name}::{member}` is not generated: {why}").unwrap();
+        }
+        writeln!(out, "{DERIVES}").unwrap();
+        writeln!(out, "#[repr(u8)]").unwrap();
+        writeln!(out, "pub enum {name} {{").unwrap();
+        for (discriminant, m) in members {
+            if dropped(name, m) {
+                continue;
+            }
+            let ident = sanitize(m);
+            if ident != m {
+                writeln!(out, "    #[serde(rename = \"{m}\")]").unwrap();
+            }
+            // The game's own number, spelled out: a dropped member leaves a
+            // hole rather than pulling everything after it down one.
+            writeln!(out, "    {ident} = {discriminant},").unwrap();
+        }
+        writeln!(out, "}}\n").unwrap();
+    }
+
+    // A bitset rather than a slice. The game keeps keywords in a
+    // `HashSet<CardKeyword>` and asks `.Contains(…)` almost exclusively, so a
+    // set is what it means; a slice was 16 bytes of pointer and length to
+    // carry at most four one-byte members, and its order came from the dump's
+    // sort rather than from the game. It also has to survive being the
+    // per-card runtime state, because `AddKeyword`/`RemoveKeyword` mutate it
+    // mid-combat, and a `u8` clones for free where a set does not.
+    let keywords: Vec<&(u8, String)> = enums["CardKeyword"]
+        .iter()
+        .filter(|(_, m)| !dropped("CardKeyword", m))
+        .collect();
+    let widest = keywords.iter().map(|&&(d, _)| d).max().unwrap_or(0);
+    if widest >= 8 {
+        return Err(format!(
+            "CardKeyword's highest discriminant is {widest} and KeywordSet is a u8"
+        ));
+    }
+    writeln!(
+        out,
+        "/// A set of [`CardKeyword`]s: one bit per keyword, at its discriminant.\n\
+         ///\n\
+         /// Bit 0 is unused, because the game's zero is `None` and that is not a\n\
+         /// keyword. Using the discriminant anyway keeps a bit meaning the same\n\
+         /// thing here as it does there."
+    )
+    .unwrap();
+    writeln!(out, "#[derive(Clone, Copy, PartialEq, Eq, Hash)]").unwrap();
+    writeln!(out, "pub struct KeywordSet(u8);\n").unwrap();
+    writeln!(out, "impl KeywordSet {{").unwrap();
+    writeln!(
+        out,
+        "    /// Every keyword, in the game's declaration order."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const MEMBERS: [CardKeyword; {}] = [",
+        keywords.len()
+    )
+    .unwrap();
+    for (_, k) in &keywords {
+        writeln!(out, "        CardKeyword::{},", sanitize(k)).unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
+    writeln!(
+        out,
+        "    pub const fn new(keywords: &[CardKeyword]) -> Self {{"
+    )
+    .unwrap();
+    writeln!(out, "        let mut bits = 0u8;").unwrap();
+    writeln!(out, "        let mut i = 0;").unwrap();
+    writeln!(out, "        while i < keywords.len() {{").unwrap();
+    writeln!(out, "            bits |= 1u8 << keywords[i] as u8;").unwrap();
+    writeln!(out, "            i += 1;").unwrap();
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "        Self(bits)").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+    writeln!(
+        out,
+        "    pub const fn contains(self, keyword: CardKeyword) -> bool {{"
+    )
+    .unwrap();
+    writeln!(out, "        self.0 & (1u8 << keyword as u8) != 0").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+    writeln!(out, "    /// The members, in the game's declaration order.").unwrap();
+    writeln!(
+        out,
+        "    pub fn iter(self) -> impl Iterator<Item = CardKeyword> {{"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        Self::MEMBERS.into_iter().filter(move |&k| self.contains(k))"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl std::fmt::Debug for KeywordSet {{").unwrap();
+    writeln!(
+        out,
+        "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{"
+    )
+    .unwrap();
+    writeln!(out, "        f.debug_set().entries(self.iter()).finish()").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    // No id: that is the card's identity, which the enum variant already is.
+    // Storing it here would put a second spelling of the same fact 16 bytes
+    // into every row, and let a `CardData` be passed around as if it named a
+    // card. Ask the variant instead — `Cards::id` is a match over string
+    // literals, no lookup and no allocation.
+    writeln!(out, "/// What is true of a card with no run in progress.").unwrap();
+    writeln!(out, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]").unwrap();
+    writeln!(out, "pub struct CardData {{").unwrap();
+    writeln!(
+        out,
+        "    /// `Computed` when the card works it out from combat state."
+    )
+    .unwrap();
+    writeln!(out, "    pub kind: Field<CardType>,").unwrap();
+    writeln!(out, "    pub rarity: CardRarity,").unwrap();
+    writeln!(out, "    pub target: Field<TargetType>,").unwrap();
+    writeln!(out, "    pub cost: Cost,").unwrap();
+    writeln!(
+        out,
+        "    /// How many times the card can be upgraded. 0 or 1 on this build,\n\
+         \x20   /// but `CardModel` branches on higher values, so it is not a flag."
+    )
+    .unwrap();
+    writeln!(out, "    pub max_upgrade: u8,").unwrap();
+    writeln!(out, "    pub keywords: KeywordSet,").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    // Untagged, so it round-trips as the flat id the wire already uses: the
+    // nesting is ours and the game never sees it.
+    writeln!(out, "/// Every card, grouped by the pool it belongs to.").unwrap();
+    writeln!(out, "{DERIVES}").unwrap();
+    writeln!(out, "#[serde(untagged)]").unwrap();
+    writeln!(out, "pub enum Cards {{").unwrap();
+    for (_, _, enum_name, _) in POOLS {
+        writeln!(
+            out,
+            "    {}({enum_name}),",
+            enum_name.trim_end_matches("Card")
+        )
+        .unwrap();
+    }
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl Cards {{").unwrap();
+    writeln!(out, "    pub const fn data(self) -> CardData {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for (_, _, enum_name, _) in POOLS {
+        writeln!(
+            out,
+            "            Cards::{}(c) => c.data(),",
+            enum_name.trim_end_matches("Card")
+        )
+        .unwrap();
+    }
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+
+    writeln!(out, "    /// Every card in the build, pools flattened.").unwrap();
+    writeln!(out, "    pub const ALL: [Cards; {total}] = [").unwrap();
+    for (pool_id, _, enum_name, suffix) in POOLS {
+        for card in cards.iter().filter(|c| c.pool == pool_id) {
+            writeln!(
+                out,
+                "        Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, suffix)
+            )
+            .unwrap();
+        }
+    }
+    writeln!(out, "    ];\n").unwrap();
+
+    writeln!(out, "    /// The game's own id, and the wire form.").unwrap();
+    writeln!(out, "    pub const fn id(self) -> &'static str {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for (_, _, enum_name, _) in POOLS {
+        writeln!(
+            out,
+            "            Cards::{}(c) => c.id(),",
+            enum_name.trim_end_matches("Card")
+        )
+        .unwrap();
+    }
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}").unwrap();
+
+    let path = dir.join("mod.rs");
+    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+
+    println!(
+        "  cards: {total} across {} pools ({stripped} ids had a pool suffix stripped), {} field enums",
+        POOLS.len(),
+        enums.len()
+    );
+
+    Ok(content_hash)
+}

@@ -1,10 +1,10 @@
 //! Content for game build `v0.107.1`.
 //!
-//! `cards.txt` is dumped from the running game — `STS2_HEADLESS_MODE=carddump`,
-//! see `mod/sts2_determinism_test/CardDump.cs`. It carries the content hash in
-//! its header, and [`tests`] requires that to match [`VERSION`], so
+//! `dumps/` holds what the running game printed — `STS2_HEADLESS_MODE=carddump`
+//! and friends, see `mod/sts2_determinism_test/`. Each dump carries the content
+//! hash in its header, and [`tests`] requires that to match [`VERSION`], so
 //! regenerating against a different build fails rather than quietly replacing
-//! the table.
+//! the tables. `generated/` mirrors it, one module per kind of content.
 //!
 //! Static means true of the card with no run in progress. `Type` and
 //! `TargetType` are virtual, and a few cards compute them from combat state —
@@ -24,19 +24,42 @@ pub const VERSION: Version = Version {
     content_hash: 3_954_186_980,
 };
 
-/// The dump, verbatim — test data, not runtime data.
+/// The card dump, verbatim — test data, not runtime data.
 ///
-/// `cargo xtask codegen` reads it from disk to build [`generated`], and the
-/// tests below replay it to check that table. Nothing at runtime should parse
-/// it: that is what the generated table is for, and a `pub const` here would
-/// both invite it and put 38KB of text into every binary that links this crate.
+/// `cargo xtask codegen` reads it from disk to build [`cards`], and the tests
+/// below replay it to check that table. Nothing at runtime should parse it:
+/// that is what the generated table is for, and a `pub const` here would both
+/// invite it and put 38KB of text into every binary that links this crate.
 #[cfg(test)]
-const CARDS: &str = include_str!("cards.txt");
+const CARDS: &str = include_str!("dumps/cards.txt");
 
 #[cfg(test)]
 mod tests {
+    use super::cards::*;
     use super::*;
-    use crate::Field;
+    use crate::{Cost, Field};
+
+    /// The dump's `cost` and `costsX` columns as the `Cost` they should have
+    /// generated, spelled out independently of the codegen that produced the
+    /// table — otherwise the cross-check would only prove codegen agrees with
+    /// itself.
+    ///
+    /// The two columns are not independent. `CardEnergyCost` sets
+    /// `Canonical = CostsX ? 0 : canonicalCost`, so an X-cost card carries no
+    /// number, and it treats any negative base as "no cost", so `-1` is a
+    /// sentinel rather than a cost of minus one. Both are asserted here: if a
+    /// future build breaks either, this fails instead of silently encoding an
+    /// X-cost card as costing whatever number came along.
+    fn cost(canonical: &str, costs_x: &str) -> Cost {
+        match (costs_x, canonical) {
+            ("1", n) => {
+                assert_eq!(n, "0", "an X-cost card carries a canonical cost");
+                Cost::X
+            }
+            (_, "-1") => Cost::None,
+            (_, n) => Cost::Energy(n.parse().expect("a non-negative energy cost")),
+        }
+    }
 
     /// The game's own spelling of a value, which is the serde rename rather
     /// than the Rust identifier.
@@ -60,8 +83,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{} is in the dump but not generated", row[1]));
 
             let d = card.data();
-            assert_eq!(d.cost.to_string(), row[6], "{}: cost", row[1]);
-            assert_eq!(d.costs_x, row[7] == "1", "{}: costs_x", row[1]);
+            assert_eq!(d.cost, cost(row[6], row[7]), "{}: cost", row[1]);
             assert_eq!(d.max_upgrade.to_string(), row[8], "{}: max_upgrade", row[1]);
             assert_eq!(format!("{:?}", d.rarity), row[4], "{}: rarity", row[1]);
 
@@ -82,7 +104,12 @@ mod tests {
                 Field::Constant(target) => assert_eq!(wire(&target), row[5], "{}: target", row[1]),
             }
 
-            let keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
+            // Sorted, because the set iterates in the game's declaration order
+            // and the dump sorts alphabetically. Neither order is meaningful:
+            // `CardKeywordOrder` gives the display order separately, and the
+            // game itself stores a `HashSet`.
+            let mut keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
+            keywords.sort();
             let expected = if row[9] == "-" {
                 Vec::new()
             } else {
@@ -184,6 +211,32 @@ mod tests {
         }
     }
 
+    /// Three members the game declares are deliberately not generated: they
+    /// are the C# zero rather than values of the field they name, and each is
+    /// an `Option` at the one place that needs it. See `DROPPED` in
+    /// `xtask/src/codegen.rs` for the evidence per member.
+    ///
+    /// Dropping one is only sound while no card carries it, so that is what
+    /// this pins. The converse is not asserted — a generated member no card
+    /// uses is normal, which is why `TargetType`'s unused `AnyPlayer`,
+    /// `TargetedNoCreature` and `Osty` are still generated.
+    #[test]
+    fn no_card_uses_a_member_that_is_not_generated() {
+        for (column, member) in [(3, "CardType::None"), (4, "CardRarity::None")] {
+            let uses: Vec<&str> = rows("card")
+                .filter(|r| r[column] == "None")
+                .map(|r| r[1])
+                .collect();
+            assert!(uses.is_empty(), "{member} is on {uses:?}");
+        }
+
+        let keywords: Vec<&str> = rows("card")
+            .filter(|r| r[9].split(',').any(|k| k == "None"))
+            .map(|r| r[1])
+            .collect();
+        assert!(keywords.is_empty(), "CardKeyword::None is on {keywords:?}");
+    }
+
     /// Ids are the enum variants and the wire form, so a duplicate would make
     /// two different cards the same card.
     #[test]
@@ -192,6 +245,18 @@ mod tests {
         for row in rows("card") {
             assert!(seen.insert(row[1]), "duplicate card id {}", row[1]);
         }
+    }
+
+    /// `max_upgrade` is a `u8`, so a build that grew a negative or a large one
+    /// would truncate silently. It is 0 or 1 on every shipped card — but
+    /// `CardModel` has a real `if (MaxUpgradeLevel > 1)` branch, so the field
+    /// is a count rather than a flag and this is the check that it stays small.
+    #[test]
+    fn upgrade_levels_stay_in_a_byte() {
+        let mut seen: Vec<&str> = rows("card").map(|r| r[8]).collect();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen, ["0", "1"], "max upgrade levels changed");
     }
 
     /// Exactly the four cards that compute a field, and no others. If a future
