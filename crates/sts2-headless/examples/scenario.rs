@@ -16,7 +16,7 @@
 //! ```
 
 use anyhow::bail;
-use sts2_oracle::{Command, Config, Oracle, Response};
+use sts2_headless::{Command, Config, Oracle, Response};
 
 /// Sends one command, prints what came back, and stops at the first refusal.
 ///
@@ -35,7 +35,7 @@ fn step(oracle: &mut Oracle, command: Command) -> anyhow::Result<Response> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let dir = sts2_oracle::game_dir_from_env()
+    let dir = sts2_headless::game_dir_from_env()
         .expect("set STS2_GAME_DIR — the repo's .envrc exports it, run `direnv allow`");
     let mut oracle = Oracle::launch(Config::new(dir))?;
     println!(

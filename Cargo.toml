@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sts2-oracle"]
+members = ["crates/sts2-headless"]
 
 [profile.release]
 debug = true

@@ -21,7 +21,7 @@
 use serde_json::Value;
 use serial_test::serial;
 use std::time::{Duration, Instant};
-use sts2_oracle::{Answer, Command, Config, Error, Oracle, PROTOCOL_VERSION, Reply, Response};
+use sts2_headless::{Answer, Command, Config, Error, Oracle, PROTOCOL_VERSION, Reply, Response};
 
 /// The seed the mod itself defaults to. Named here so the determinism test is
 /// obviously asking both runs the same question.
@@ -32,7 +32,7 @@ const SEED: &str = "ORACLE1";
 const ENCOUNTER: &str = "BOWLBUGS_WEAK";
 
 fn launch() -> Oracle {
-    let dir = sts2_oracle::game_dir_from_env()
+    let dir = sts2_headless::game_dir_from_env()
         .expect("set STS2_GAME_DIR to the game directory (`just live` does this)");
     Oracle::launch(Config::new(dir)).expect("the game should launch and connect back")
 }
@@ -416,7 +416,7 @@ fn dropping_the_client_stops_the_game() {
 #[ignore = "launches the real game"]
 #[serial(game)]
 fn refusing_to_start_exits_rather_than_hanging() {
-    let dir = sts2_oracle::game_dir_from_env().expect("STS2_GAME_DIR");
+    let dir = sts2_headless::game_dir_from_env().expect("STS2_GAME_DIR");
     let began = Instant::now();
 
     let status = std::process::Command::new(dir.join("SlayTheSpire2"))

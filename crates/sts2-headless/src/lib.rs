@@ -9,7 +9,7 @@
 //! implements.
 //!
 //! ```no_run
-//! use sts2_oracle::{Command, Config, Oracle, Response};
+//! use sts2_headless::{Command, Config, Oracle, Response};
 //!
 //! let mut oracle = Oracle::launch(Config::new("/path/to/Slay the Spire 2"))?;
 //! let reply = oracle.send(&Command::Start {
@@ -25,7 +25,7 @@
 //!     Ok(other) => println!("{other}"),
 //!     Err(refusal) => println!("{refusal}"),
 //! }
-//! # Ok::<(), sts2_oracle::Error>(())
+//! # Ok::<(), sts2_headless::Error>(())
 //! ```
 
 mod command;

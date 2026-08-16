@@ -1,5 +1,5 @@
 [package]
-name = "sts2-oracle"
+name = "sts2-headless"
 version = "0.1.0"
 edition = "2024"
 
