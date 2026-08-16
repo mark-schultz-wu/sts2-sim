@@ -35,11 +35,24 @@ public static class DeterminismTest
     /// </summary>
     public static void Init()
     {
-        if (Environment.GetEnvironmentVariable("STS2_HEADLESS_MODE") == "determinism")
+        string? mode = Environment.GetEnvironmentVariable("STS2_HEADLESS_MODE");
+
+        if (mode == "determinism")
         {
             // Not awaited: Init must return so startup can finish populating the
             // model database, which the driver's first stage waits for.
             _ = Driver.Run(Run);
+        }
+        else if (mode == "rngdump")
+        {
+            // A second mode rather than a second mod: it needs nothing from a
+            // run, only the assembly, and it belongs beside the other thing here
+            // that measures the game rather than driving it.
+            _ = Driver.Run(_ =>
+            {
+                RngDump.Run();
+                return Task.CompletedTask;
+            });
         }
     }
 
