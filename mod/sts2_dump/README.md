@@ -20,6 +20,7 @@ cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=carddump \
 | Mode | What it prints | Lands in |
 | --- | --- | --- |
 | `carddump` | every card's static data | `crates/sts2-content/src/v0_107_1/dumps/cards.txt` |
+| `monsterdump` | HP ranges and move state machines, at every ascension | `crates/sts2-content/src/v0_107_1/dumps/monsters.txt` |
 | `rngdump` | 1024 draws per seed, every `Rng` method | `crates/sts2-rng/tests/megarandom.txt` |
 
 Then `cargo xtask codegen`.
@@ -31,13 +32,26 @@ side refuses a dump whose hash does not match the version module it generates
 into. A dump taken against a different build fails loudly rather than quietly
 replacing a table with one describing a game nobody is talking to.
 
+## Ascension
+
+`AscensionManager.HasLevel` is `_level >= (int)level`, so ascension is a scalar
+and each level is a threshold: anything behind
+`AscensionHelper.GetValueIfAscension` is a step function of the run's level.
+
+`monsterdump` therefore reads every value at all eleven levels and emits a
+`scale*` row wherever one actually moves, rather than dumping one ascension and
+calling it the table. Which levels matter is measured, not read off the source —
+which is how Gremlin Merc turned up gating its damage on `ToughEnemies` where
+every other monster gates on `DeadlyEnemies`.
+
 ## What is not dumped
 
 Behaviour. A card's effect, a relic's hook, a monster's move body, and the
-and a monster's move body are all code, and code gets ported by hand.
+lambdas a monster's branch weights are written in are all code, and code gets
+ported by hand.
 
 Where a value *might* be code, the dump says `dynamic` rather than guessing —
-`CardDump` marks a card that overrides `Type` or `TargetType` rather than
-reading it off a model with no combat running. Deliberately conservative:
-marking a constant as dynamic costs one method, marking a dynamic as constant
-costs a divergence nobody can see.
+`CardDump` marks a card that overrides `Type` or `TargetType`, and `MonsterDump`
+marks a branch weight whose delegate could read mutable state. Both are
+deliberately conservative: marking a constant as dynamic costs one method,
+marking a dynamic as constant costs a divergence nobody can see.

@@ -4,3 +4,4 @@
 //! Source: `dumps/`, content hash 3954186980.
 
 pub mod cards;
+pub mod monsters;

@@ -26,6 +26,52 @@ pub enum Field<T> {
     Computed,
 }
 
+/// A number that ascension changes.
+///
+/// Ascension is a scalar, not a set of flags: `AscensionManager.HasLevel` is
+/// `_level >= (int)level`, so each `AscensionLevel` is a threshold and any
+/// value behind `AscensionHelper.GetValueIfAscension` is a step function of the
+/// run's level. [`steps`](Scaled::steps) holds those thresholds, so a value
+/// that never moves carries an empty slice and costs nothing to ask about.
+///
+/// The thresholds are measured rather than assumed — the dump reads every
+/// value at every level and records where it actually moves. That is how
+/// Gremlin Merc turned up: its damage steps at `ToughEnemies`, where every
+/// other monster's steps at `DeadlyEnemies`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Scaled<T: 'static> {
+    /// The value below every threshold — ascension 0.
+    pub base: T,
+    /// `(level, value)` in ascending order of level.
+    pub steps: &'static [(u8, T)],
+}
+
+impl<T: Copy> Scaled<T> {
+    /// The value at a run's ascension level.
+    ///
+    /// Any level is meaningful, including one past the highest the game
+    /// allows: the game's own test is `>=`, so a larger number simply lands on
+    /// the top step.
+    pub const fn at(&self, ascension: u8) -> T {
+        let mut value = self.base;
+        let mut i = 0;
+        while i < self.steps.len() {
+            let (level, stepped) = self.steps[i];
+            if ascension < level {
+                break;
+            }
+            value = stepped;
+            i += 1;
+        }
+        value
+    }
+
+    /// Whether ascension moves this at all.
+    pub const fn is_flat(&self) -> bool {
+        self.steps.is_empty()
+    }
+}
+
 /// What a card costs to play, before anything in a run touches it.
 ///
 /// Three states rather than a number and a flag, because the game's own

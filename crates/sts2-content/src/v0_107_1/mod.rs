@@ -33,6 +33,13 @@ pub const VERSION: Version = Version {
 #[cfg(test)]
 const CARDS: &str = include_str!("dumps/cards.txt");
 
+/// The monster dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const MONSTERS: &str = include_str!("dumps/monsters.txt");
+
+#[cfg(test)]
+mod monster_tests;
+
 #[cfg(test)]
 mod tests {
     use super::cards::*;

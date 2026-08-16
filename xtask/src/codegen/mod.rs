@@ -16,6 +16,7 @@
 //! worth being able to see.
 
 mod cards;
+mod monsters;
 
 use std::fmt::Write as _;
 use std::fs;
@@ -26,7 +27,7 @@ const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and powers each get a dump, a
 /// submodule, and an entry here.
-const DOMAINS: [&str; 1] = ["cards"];
+const DOMAINS: [&str; 2] = ["cards", "monsters"];
 
 const DERIVES: &str = "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]";
 
@@ -106,7 +107,7 @@ pub fn run() -> Result<String, String> {
     let root = Path::new(VERSION_DIR).join("generated");
     fs::create_dir_all(&root).map_err(|e| format!("creating {}: {e}", root.display()))?;
 
-    let hashes = [cards::generate(&root)?];
+    let hashes = [cards::generate(&root)?, monsters::generate(&root)?];
 
     // Two dumps from two builds would produce a crate whose tables describe
     // neither. Cheap to check, and impossible to notice by eye.
@@ -138,7 +139,7 @@ pub fn run() -> Result<String, String> {
     format(&root)?;
 
     Ok(format!(
-        "generated {VERSION_DIR}/generated/ — {} domain(s): {}\n  content hash {hash}",
+        "generated {VERSION_DIR}/generated/ — {} domains: {}\n  content hash {hash}",
         DOMAINS.len(),
         DOMAINS.join(", ")
     ))
