@@ -78,15 +78,13 @@ pub enum RelicFlag {
 
 /// The flags a relic has, and the ones it works out at the time.
 ///
-/// Two words, because a flag is true, false, or computed — `IsUsedUp`
-/// and `ShowCounter` are `virtual` and some relics decide them from
-/// combat state. `get` returns a [`Field<bool>`] so there is no way to
-/// read a computed flag as a plain `false`.
-///
-/// [`Field<bool>`]: crate::Field
+/// `IsUsedUp` and `ShowCounter` are `virtual` and some relics decide
+/// them from combat state — ten and eighteen of them.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RelicFlags {
+    /// The flags that are set. A computed flag is never in here.
     yes: u16,
+    /// The flags the model decides at the time.
     computed: u16,
 }
 
@@ -104,11 +102,11 @@ impl RelicFlags {
         RelicFlag::GatedAtNeow,
     ];
 
-    /// The flags a relic sets, and the ones it computes.
+    /// The flags a model sets, and the ones it computes.
     ///
-    /// A flag in both lists is a contradiction, and this is a
-    /// `const fn` called from a `const`, so saying so fails the
-    /// build rather than the run.
+    /// A flag in both lists is a contradiction, and this is a `const
+    /// fn` called from a `const`, so saying so fails the build rather
+    /// than the run.
     pub const fn new(yes: &[RelicFlag], computed: &[RelicFlag]) -> Self {
         let mut set = 0u16;
         let mut i = 0;
@@ -131,7 +129,11 @@ impl RelicFlags {
         }
     }
 
-    /// One flag: the answer, or the cue to ask the relic for it.
+    /// One flag: the answer, or the cue to ask for it.
+    ///
+    /// There is no `contains`. A computed flag has no answer until
+    /// something asks the model, and a `bool` would have to invent
+    /// one.
     pub const fn get(self, flag: RelicFlag) -> Field<bool> {
         let bit = 1u16 << flag as u8;
         if self.computed & bit != 0 {

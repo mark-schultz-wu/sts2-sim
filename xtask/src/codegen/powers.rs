@@ -68,6 +68,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::flags;
 use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, repr};
 
@@ -317,7 +318,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         writeln!(out, "}}\n").unwrap();
     }
 
-    emit_shape(&mut out);
+    emit_shape(&mut out)?;
     emit_powers(&mut out, &powers)?;
 
     // The rows, one file per kind. `mod.rs` keeps the shape and the enum; a
@@ -385,8 +386,8 @@ fn doc(out: &mut String, name: &str) {
     }
 }
 
-fn emit_shape(out: &mut String) {
-    emit_flags(out);
+fn emit_shape(out: &mut String) -> Result<(), String> {
+    emit_flags(out)?;
 
     writeln!(
         out,
@@ -413,6 +414,8 @@ fn emit_shape(out: &mut String) {
     .unwrap();
     writeln!(out, "    pub flags: PowerFlags,").unwrap();
     writeln!(out, "}}\n").unwrap();
+
+    Ok(())
 }
 
 /// The flag member enum and the set that carries them.
@@ -422,114 +425,25 @@ fn emit_shape(out: &mut String) {
 /// worked out from combat state, and two are. Keeping the computed ones in
 /// their own word is what lets `PowerFlags::get` hand back a `Field<bool>`
 /// instead of quietly answering `false` for a question the table cannot answer.
-fn emit_flags(out: &mut String) {
-    writeln!(
+fn emit_flags(out: &mut String) -> Result<(), String> {
+    flags::emit(
         out,
-        "/// A yes-or-no fact about a power.\n\
-         ///\n\
-         /// Five separate `PowerModel` overrides rather than a game enum, so\n\
-         /// unlike the card keywords there is no discriminant to inherit. The\n\
-         /// numbering is the order the dump writes the columns in, which is the\n\
-         /// order `PowerModel` declares them.\n\
-         {DERIVES}\n\
-         #[repr(u8)]\n\
-         pub enum PowerFlag {{"
+        &flags::Set {
+            flag: "PowerFlag",
+            set: "PowerFlags",
+            flag_doc: "\n\
+                       Five separate `PowerModel` overrides rather than a game enum, so\n\
+                       unlike the card keywords there is no discriminant to inherit. The\n\
+                       numbering is the order the dump writes the columns in, which is the\n\
+                       order `PowerModel` declares them.",
+            set_doc: "The flags a power has, and the ones it works out at the time.\n\
+                      \n\
+                      Two powers compute one: `REATTACH_POWER` decides whether its\n\
+                      owner's death is fatal from how many segments are still alive,\n\
+                      and a mock decides whether it scales in multiplayer.",
+            members: &FLAGS.map(|f| (f, describe(f))),
+        },
     )
-    .unwrap();
-    for (bit, flag) in FLAGS.iter().enumerate() {
-        doc(out, flag);
-        writeln!(out, "    {flag} = {bit},").unwrap();
-    }
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The flags a power has, and the ones it works out at the time.\n\
-         ///\n\
-         /// Two words, because a flag is true, false, or computed. A single\n\
-         /// bitset would have to spell the third as one of the first two, and\n\
-         /// there is no honest choice between them — so `get` returns a\n\
-         /// [`Field<bool>`] and there is no way to ask the question that\n\
-         /// cannot be answered.\n\
-         ///\n\
-         /// [`Field<bool>`]: crate::Field\n\
-         #[derive(Clone, Copy, PartialEq, Eq, Hash)]\n\
-         pub struct PowerFlags {{\n\
-         \x20   /// The flags that are set. A computed flag is never in here.\n\
-         \x20   yes: u8,\n\
-         \x20   /// The flags the power decides at the time.\n\
-         \x20   computed: u8,\n\
-         }}\n\
-         \n\
-         impl PowerFlags {{\n\
-         \x20   /// Every flag, in bit order.\n\
-         \x20   const MEMBERS: [PowerFlag; {n}] = [{members}];\n\
-         \n\
-         \x20   /// The flags a power sets, and the ones it computes.\n\
-         \x20   ///\n\
-         \x20   /// A flag in both lists is a contradiction, and this is a `const\n\
-         \x20   /// fn` called from a `const`, so saying so fails the build rather\n\
-         \x20   /// than the run.\n\
-         \x20   pub const fn new(yes: &[PowerFlag], computed: &[PowerFlag]) -> Self {{\n\
-         \x20       let mut set = 0u8;\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < yes.len() {{\n\
-         \x20           set |= 1u8 << yes[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \n\
-         \x20       let mut asked = 0u8;\n\
-         \x20       i = 0;\n\
-         \x20       while i < computed.len() {{\n\
-         \x20           asked |= 1u8 << computed[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \n\
-         \x20       assert!(\n\
-         \x20           set & asked == 0,\n\
-         \x20           \"a flag cannot be both set and computed\"\n\
-         \x20       );\n\
-         \x20       Self {{ yes: set, computed: asked }}\n\
-         \x20   }}\n\
-         \n\
-         \x20   /// One flag: the answer, or the cue to ask the power for it.\n\
-         \x20   pub const fn get(self, flag: PowerFlag) -> Field<bool> {{\n\
-         \x20       let bit = 1u8 << flag as u8;\n\
-         \x20       if self.computed & bit != 0 {{\n\
-         \x20           return Field::Computed;\n\
-         \x20       }}\n\
-         \x20       Field::Constant(self.yes & bit != 0)\n\
-         \x20   }}\n\
-         }}\n\
-         \n\
-         impl std::fmt::Debug for PowerFlags {{\n\
-         \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
-         \x20       let mut set = f.debug_set();\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < Self::MEMBERS.len() {{\n\
-         \x20           let flag = Self::MEMBERS[i];\n\
-         \x20           match self.get(flag) {{\n\
-         \x20               Field::Constant(true) => {{\n\
-         \x20                   set.entry(&flag);\n\
-         \x20               }}\n\
-         \x20               Field::Computed => {{\n\
-         \x20                   set.entry(&format_args!(\"{{flag:?}}: computed\"));\n\
-         \x20               }}\n\
-         \x20               Field::Constant(false) => {{}}\n\
-         \x20           }}\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \x20       set.finish()\n\
-         \x20   }}\n\
-         }}\n",
-        n = FLAGS.len(),
-        members = FLAGS
-            .iter()
-            .map(|f| format!("PowerFlag::{f}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
-    .unwrap();
 }
 
 /// One value cell, as the literal it should generate.

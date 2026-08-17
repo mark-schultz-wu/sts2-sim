@@ -63,18 +63,14 @@ pub enum PowerFlag {
 
 /// The flags a power has, and the ones it works out at the time.
 ///
-/// Two words, because a flag is true, false, or computed. A single
-/// bitset would have to spell the third as one of the first two, and
-/// there is no honest choice between them — so `get` returns a
-/// [`Field<bool>`] and there is no way to ask the question that
-/// cannot be answered.
-///
-/// [`Field<bool>`]: crate::Field
+/// Two powers compute one: `REATTACH_POWER` decides whether its
+/// owner's death is fatal from how many segments are still alive,
+/// and a mock decides whether it scales in multiplayer.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PowerFlags {
     /// The flags that are set. A computed flag is never in here.
     yes: u8,
-    /// The flags the power decides at the time.
+    /// The flags the model decides at the time.
     computed: u8,
 }
 
@@ -88,7 +84,7 @@ impl PowerFlags {
         PowerFlag::OwnerIsSecondaryEnemy,
     ];
 
-    /// The flags a power sets, and the ones it computes.
+    /// The flags a model sets, and the ones it computes.
     ///
     /// A flag in both lists is a contradiction, and this is a `const
     /// fn` called from a `const`, so saying so fails the build rather
@@ -115,7 +111,11 @@ impl PowerFlags {
         }
     }
 
-    /// One flag: the answer, or the cue to ask the power for it.
+    /// One flag: the answer, or the cue to ask for it.
+    ///
+    /// There is no `contains`. A computed flag has no answer until
+    /// something asks the model, and a `bool` would have to invent
+    /// one.
     pub const fn get(self, flag: PowerFlag) -> Field<bool> {
         let bit = 1u8 << flag as u8;
         if self.computed & bit != 0 {

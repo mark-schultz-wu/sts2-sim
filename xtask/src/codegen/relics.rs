@@ -37,6 +37,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::flags;
 use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, repr};
 
@@ -230,7 +231,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         writeln!(out, "}}\n").unwrap();
     }
 
-    emit_flags(&mut out);
+    emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_relics(&mut out, &relics, &pools_of)?;
 
@@ -285,108 +286,22 @@ pub fn generate(root: &Path) -> Result<String, String> {
 ///
 /// Two `u8`s, like a power's, because a flag has three answers: `IsUsedUp` and
 /// `ShowCounter` are `virtual` and some relics work them out.
-fn emit_flags(out: &mut String) {
-    writeln!(
+fn emit_flags(out: &mut String) -> Result<(), String> {
+    flags::emit(
         out,
-        "/// A yes-or-no fact about a relic.\n\
-         ///\n\
-         /// Nine separate `RelicModel` members rather than a game enum, so the\n\
-         /// numbering is the order the dump writes the columns in.\n\
-         {DERIVES}\n\
-         #[repr(u8)]\n\
-         pub enum RelicFlag {{"
+        &flags::Set {
+            flag: "RelicFlag",
+            set: "RelicFlags",
+            flag_doc: "\n\
+                       Nine separate `RelicModel` members rather than a game enum, so the\n\
+                       numbering is the order the dump writes the columns in.",
+            set_doc: "The flags a relic has, and the ones it works out at the time.\n\
+                      \n\
+                      `IsUsedUp` and `ShowCounter` are `virtual` and some relics decide\n\
+                      them from combat state — ten and eighteen of them.",
+            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+        },
     )
-    .unwrap();
-    for (bit, (name, _, doc)) in FLAGS.iter().enumerate() {
-        for line in doc.lines() {
-            writeln!(out, "    /// {}", line.trim()).unwrap();
-        }
-        writeln!(out, "    {name} = {bit},").unwrap();
-    }
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The flags a relic has, and the ones it works out at the time.\n\
-         ///\n\
-         /// Two words, because a flag is true, false, or computed — `IsUsedUp`\n\
-         /// and `ShowCounter` are `virtual` and some relics decide them from\n\
-         /// combat state. `get` returns a [`Field<bool>`] so there is no way to\n\
-         /// read a computed flag as a plain `false`.\n\
-         ///\n\
-         /// [`Field<bool>`]: crate::Field\n\
-         #[derive(Clone, Copy, PartialEq, Eq, Hash)]\n\
-         pub struct RelicFlags {{\n\
-         \x20   yes: u16,\n\
-         \x20   computed: u16,\n\
-         }}\n\
-         \n\
-         impl RelicFlags {{\n\
-         \x20   /// Every flag, in bit order.\n\
-         \x20   const MEMBERS: [RelicFlag; {n}] = [{members}];\n\
-         \n\
-         \x20   /// The flags a relic sets, and the ones it computes.\n\
-         \x20   ///\n\
-         \x20   /// A flag in both lists is a contradiction, and this is a\n\
-         \x20   /// `const fn` called from a `const`, so saying so fails the\n\
-         \x20   /// build rather than the run.\n\
-         \x20   pub const fn new(yes: &[RelicFlag], computed: &[RelicFlag]) -> Self {{\n\
-         \x20       let mut set = 0u16;\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < yes.len() {{\n\
-         \x20           set |= 1u16 << yes[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \n\
-         \x20       let mut asked = 0u16;\n\
-         \x20       i = 0;\n\
-         \x20       while i < computed.len() {{\n\
-         \x20           asked |= 1u16 << computed[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \n\
-         \x20       assert!(set & asked == 0, \"a flag cannot be both set and computed\");\n\
-         \x20       Self {{ yes: set, computed: asked }}\n\
-         \x20   }}\n\
-         \n\
-         \x20   /// One flag: the answer, or the cue to ask the relic for it.\n\
-         \x20   pub const fn get(self, flag: RelicFlag) -> Field<bool> {{\n\
-         \x20       let bit = 1u16 << flag as u8;\n\
-         \x20       if self.computed & bit != 0 {{\n\
-         \x20           return Field::Computed;\n\
-         \x20       }}\n\
-         \x20       Field::Constant(self.yes & bit != 0)\n\
-         \x20   }}\n\
-         }}\n\
-         \n\
-         impl std::fmt::Debug for RelicFlags {{\n\
-         \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
-         \x20       let mut set = f.debug_set();\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < Self::MEMBERS.len() {{\n\
-         \x20           let flag = Self::MEMBERS[i];\n\
-         \x20           match self.get(flag) {{\n\
-         \x20               Field::Constant(true) => {{\n\
-         \x20                   set.entry(&flag);\n\
-         \x20               }}\n\
-         \x20               Field::Computed => {{\n\
-         \x20                   set.entry(&format_args!(\"{{flag:?}}: computed\"));\n\
-         \x20               }}\n\
-         \x20               Field::Constant(false) => {{}}\n\
-         \x20           }}\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \x20       set.finish()\n\
-         \x20   }}\n\
-         }}\n",
-        n = FLAGS.len(),
-        members = FLAGS
-            .iter()
-            .map(|(name, ..)| format!("RelicFlag::{name}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
-    .unwrap();
 }
 
 fn emit_shape(out: &mut String) {

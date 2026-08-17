@@ -17,6 +17,7 @@
 
 mod cards;
 mod encounters;
+mod flags;
 mod monsters;
 mod powers;
 mod relics;
