@@ -35,6 +35,7 @@ public static class Dump
         {
             "carddump" => CardDump.Run,
             "monsterdump" => MonsterDump.Run,
+            "powerdump" => PowerDump.Run,
             "rngdump" => RngDump.Run,
             _ => null,
         };

@@ -37,8 +37,15 @@ const CARDS: &str = include_str!("dumps/cards.txt");
 #[cfg(test)]
 const MONSTERS: &str = include_str!("dumps/monsters.txt");
 
+/// The power dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const POWERS: &str = include_str!("dumps/powers.txt");
+
 #[cfg(test)]
 mod monster_tests;
+
+#[cfg(test)]
+mod power_tests;
 
 #[cfg(test)]
 mod tests {

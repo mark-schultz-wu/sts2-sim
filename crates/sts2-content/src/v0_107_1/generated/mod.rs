@@ -5,3 +5,4 @@
 
 pub mod cards;
 pub mod monsters;
+pub mod powers;

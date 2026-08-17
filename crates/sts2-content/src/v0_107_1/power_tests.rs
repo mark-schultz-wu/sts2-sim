@@ -1,0 +1,438 @@
+//! The power table against the dump it came from.
+//!
+//! Structured like the card tests: replay the dump, row by row, against the
+//! table it generated. What is particular here is the `dynamic` column, because
+//! it is the one thing a reader cannot check by eye — every one of these
+//! members is `virtual` or `abstract` on `PowerModel`, so nothing about a
+//! generated `Field::Constant` says whether the game really treats it as one.
+
+use super::powers::*;
+use super::{POWERS, VERSION};
+use crate::Field;
+
+fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
+    POWERS
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(|l| l.split_whitespace().collect::<Vec<_>>())
+        .filter(move |f| f.first() == Some(&kind))
+}
+
+fn power(id: &str) -> Power {
+    *Power::ALL
+        .iter()
+        .find(|p| p.id() == id)
+        .unwrap_or_else(|| panic!("{id} is in the dump but not generated"))
+}
+
+/// The game's own spelling of a value, which is the serde rename rather than
+/// the Rust identifier.
+fn wire<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_string(value)
+        .unwrap()
+        .trim_matches('"')
+        .to_string()
+}
+
+/// The dump's spelling of a column whose enum lost its `None`.
+///
+/// The absence is Rust's, not the dump's: the game writes the member name it
+/// declared, so `None` here has to spell itself back into `None` rather than
+/// into JSON's `null`. That is the whole of what dropping the member did — the
+/// value survives, only its spelling moved from a variant to the `Option`.
+fn maybe<T: serde::Serialize>(value: &Option<T>) -> String {
+    match value {
+        Some(v) => wire(v),
+        None => "None".to_string(),
+    }
+}
+
+/// The members `DROPPED` in `xtask/src/codegen/powers.rs`, spelled out again so
+/// that dropping another one has to be said twice.
+const DROPPED: [(&str, &str); 3] = [
+    ("PowerType", "None"),
+    ("PowerInstanceType", "None"),
+    ("PowerStackType", "None"),
+];
+
+fn dropped(enum_name: &str, member: &str) -> bool {
+    DROPPED.contains(&(enum_name, member))
+}
+
+/// The anchor, same as the other dumps': a dump from another build has another
+/// hash, and a table regenerated against one is the failure this prevents.
+#[test]
+fn the_dump_came_from_this_version() {
+    let header = POWERS.lines().next().expect("the dump has a header");
+    let hash: u32 = header
+        .rsplit_once(' ')
+        .expect("the header names a content hash")
+        .1
+        .parse()
+        .expect("the content hash is a number");
+
+    assert_eq!(
+        hash, VERSION.content_hash,
+        "powers.txt was dumped from a different build than this module claims"
+    );
+}
+
+#[test]
+fn every_power_is_generated() {
+    let dumped: Vec<&str> = rows("power").map(|r| r[1]).collect();
+    assert_eq!(dumped.len(), 273, "the build has 273 powers");
+    assert_eq!(Power::ALL.len(), dumped.len());
+
+    for id in dumped {
+        assert_eq!(power(id).id(), id);
+    }
+}
+
+/// Ids are the enum variants and the wire form, so a duplicate would make two
+/// different powers the same power.
+#[test]
+fn power_ids_are_unique() {
+    let mut seen = std::collections::HashSet::new();
+    for row in rows("power") {
+        assert!(seen.insert(row[1]), "duplicate power id {}", row[1]);
+    }
+}
+
+/// The generated table has to agree with the dump it was generated from —
+/// otherwise `cargo xtask codegen` was not re-run and the table describes a
+/// build nobody is talking to.
+///
+/// Every cell is compared through the dump's own spelling: enums through serde,
+/// because that is what the wire depends on, and flags against `1` and `0`,
+/// because that is what the dump writes and a cell reading `dynamic` has to be
+/// visibly not a value in the same alphabet.
+///
+/// The flags are checked by column *and* by member, which is the point of
+/// pinning them here rather than trusting the generator: `PowerFlags` is a
+/// bitset whose numbering is ours rather than the game's, so a member reordered
+/// in `FLAGS` would move every bit after it without changing a single name.
+#[test]
+fn the_generated_table_matches_the_dump() {
+    let mut checked = 0;
+
+    for row in rows("power") {
+        let id = row[1];
+        let d = power(id).data();
+
+        check(id, "kind", d.kind, row[2], wire);
+        assert_eq!(maybe(&d.instance), row[3], "{id}: instance");
+        check(id, "stack", d.stack, row[4], maybe);
+
+        for (column, flag) in FLAG_COLUMNS {
+            check(
+                id,
+                &format!("{flag:?}"),
+                d.flags.get(flag),
+                row[column],
+                |b| if *b { "1" } else { "0" }.to_string(),
+            );
+        }
+
+        checked += 1;
+    }
+
+    assert_eq!(checked, 273);
+}
+
+/// The dump column each flag comes from.
+///
+/// Spelled out rather than taken as "the columns after the values", because
+/// that is the mapping `FLAGS` in the generator decides and the one a reorder
+/// would silently change.
+const FLAG_COLUMNS: [(usize, PowerFlag); 5] = [
+    (5, PowerFlag::AllowNegative),
+    (6, PowerFlag::RemovedOnOwnerDeath),
+    (7, PowerFlag::OwnerDeathIsFatal),
+    (8, PowerFlag::ScalesInMultiplayer),
+    (9, PowerFlag::OwnerIsSecondaryEnemy),
+];
+
+/// One `Field` cell against one dump column.
+///
+/// Matched rather than converted to an `Option`: `Computed` means "ask the
+/// power" and is not a missing value, and the two have to stay distinguishable
+/// for the same reason they do on cards.
+fn check<T>(id: &str, field: &str, cell: Field<T>, dumped: &str, spell: impl Fn(&T) -> String) {
+    match cell {
+        Field::Computed => assert_eq!(dumped, "dynamic", "{id}: {field}"),
+        Field::Constant(v) => assert_eq!(spell(&v), dumped, "{id}: {field}"),
+    }
+}
+
+/// The enums the power fields draw from, reflected from the game rather than
+/// inferred from the values in use — a member no power happens to use is still
+/// a member, and an enum missing one fails to decode the first time content
+/// grows into it.
+#[test]
+fn the_game_declares_three_members_each() {
+    for name in ["PowerType", "PowerInstanceType", "PowerStackType"] {
+        let members: Vec<_> = rows("enum").filter(|r| r[1] == name).collect();
+        assert_eq!(members.len(), 3, "{name} member count changed");
+
+        // Discriminants are the wire and table encoding, so a gap or a reorder
+        // in what the *game* declares is a silent remapping rather than an
+        // addition. The generated enums are a subset of this, not a reshuffle.
+        for (i, m) in members.iter().enumerate() {
+            assert_eq!(m[2], i.to_string(), "{name} is no longer densely numbered");
+        }
+    }
+}
+
+/// The generated enums are the game's, minus exactly the dropped members, at
+/// the game's own numbers.
+///
+/// Three things at once, and each is a different way the drop could go wrong.
+/// A member that stopped parsing is one silently dropped; a member that started
+/// parsing is a `DROPPED` entry nobody removed from the generator; a member at
+/// the wrong discriminant is the renumbering that dropping deliberately avoids,
+/// which would remap every value after it without changing a single name.
+#[test]
+fn the_generated_enums_drop_only_what_was_declared_dropped() {
+    /// One enum: every member the game declares, against the Rust type.
+    macro_rules! check_enum {
+        ($ty:ty, $name:literal) => {
+            for row in rows("enum").filter(|r| r[1] == $name) {
+                let (member, discriminant) = (row[3], row[2].parse::<u8>().unwrap());
+                let parsed: Option<$ty> = serde_json::from_str(&format!("\"{member}\"")).ok();
+
+                match parsed {
+                    Some(v) => {
+                        assert!(
+                            !dropped($name, member),
+                            "{}::{member} is dropped but still parses",
+                            $name
+                        );
+                        assert_eq!(
+                            v as u8, discriminant,
+                            "{}::{member} is not at the game's own number",
+                            $name
+                        );
+                    }
+                    None => assert!(
+                        dropped($name, member),
+                        "{}::{member} is declared by the game but does not parse",
+                        $name
+                    ),
+                }
+            }
+        };
+    }
+
+    check_enum!(PowerType, "PowerType");
+    check_enum!(PowerInstanceType, "PowerInstanceType");
+    check_enum!(PowerStackType, "PowerStackType");
+}
+
+/// What each dropped member cost, counted.
+///
+/// The generator's reasons for dropping them are arguments about how many
+/// powers have the member and what reads it, and an argument stops being true
+/// when the numbers move. `PowerType::None` is the strongest case and the
+/// easiest to check: nothing has it at all, so the `Option` the other two
+/// needed would be an `Option` that is never `None`.
+#[test]
+fn the_dropped_members_are_as_rare_as_the_reasons_claim() {
+    let count = |column: usize, value: &str| rows("power").filter(|r| r[column] == value).count();
+
+    assert_eq!(count(2, "None"), 0, "some power now has PowerType::None");
+    assert_eq!(count(3, "None"), 252, "PowerInstanceType::None count moved");
+    assert_eq!(count(4, "None"), 1, "PowerStackType::None count moved");
+}
+
+/// Exactly the powers the game works something out for, and no others.
+///
+/// This is the assertion the whole `dynamic` mechanism rests on, and it is
+/// worth spelling the list out rather than counting. Every member here is
+/// `virtual` or `abstract` on `PowerModel`, so a future build can make any
+/// power compute any of them — and a table that generated a constant for one
+/// would be wrong in a way nothing else in this file would notice.
+///
+/// The twenty on `kind` are one family: `ITemporaryPower` descendants whose
+/// `Type` follows a `protected IsPositive`. In this build each of them is in
+/// fact constant, but constant *per subclass* rather than as a literal, and the
+/// dump reads IL rather than guessing — so they are marked computed. That is
+/// the conservative direction on purpose: a method costs one implementation, a
+/// wrong constant costs a divergence nobody can see.
+#[test]
+fn only_the_known_powers_are_computed() {
+    let computed = |column: usize| -> Vec<&str> {
+        rows("power")
+            .filter(|r| r[column] == "dynamic")
+            .map(|r| r[1])
+            .collect()
+    };
+
+    // `instance` is the one column with no `Field` to put a computed cell in,
+    // so codegen fails on a `dynamic` here rather than generating one. Said
+    // from this side too, because the generator that produced the table is not
+    // the thing that should be certifying it.
+    assert!(
+        computed(3).is_empty(),
+        "InstanceType is computed on {:?}, which the table cannot spell",
+        computed(3)
+    );
+
+    assert_eq!(
+        computed(2),
+        [
+            "ANTICIPATE_POWER",
+            "COORDINATE_POWER",
+            "CRUSH_UNDER_POWER",
+            "DARK_SHACKLES_POWER",
+            "DYING_STAR_POWER",
+            "ENFEEBLING_TOUCH_POWER",
+            "FEEDING_FRENZY_POWER",
+            "FLEX_POTION_POWER",
+            "FOCUSED_STRIKE_POWER",
+            "HELICAL_DART_POWER",
+            "HOTFIX_POWER",
+            "MANGLE_POWER",
+            "MOCK_TEMPORARY_STRENGTH_LOSS_POWER",
+            "MONARCHS_GAZE_STRENGTH_DOWN_POWER",
+            "PIERCING_WAIL_POWER",
+            "REPTILE_TRINKET_POWER",
+            "SETUP_STRIKE_POWER",
+            "SHACKLING_POTION_POWER",
+            "SPEED_POTION_POWER",
+            "SYNCHRONIZE_POWER",
+        ],
+        "the set of powers computing Type has changed"
+    );
+
+    // `ShrinkPower` is a counter until its amount goes negative and a single
+    // after; `MonologuePower` reads a dynamic var.
+    assert_eq!(
+        computed(4),
+        ["MONOLOGUE_POWER", "SHRINK_POWER"],
+        "the set of powers computing StackType has changed"
+    );
+
+    // Reattach only makes its owner's death fatal once every other segment is
+    // already dead.
+    assert_eq!(
+        computed(7),
+        ["REATTACH_POWER"],
+        "the set of powers computing ShouldOwnerDeathTriggerFatal has changed"
+    );
+
+    assert_eq!(
+        computed(8),
+        ["MOCK_SCALE_IN_MULTIPLAYER_POWER"],
+        "the set of powers computing ShouldScaleInMultiplayer has changed"
+    );
+
+    // The other three flags: nothing works them out in this build. A `Field`
+    // is what `PowerFlags` hands back either way, so a power that started
+    // computing one of these would generate fine and change nothing visible —
+    // which is exactly why it is worth saying out loud.
+    for (column, what) in [
+        (5, "AllowNegative"),
+        (6, "ShouldPowerBeRemovedAfterOwnerDeath"),
+        (9, "OwnerIsSecondaryEnemy"),
+    ] {
+        assert!(
+            computed(column).is_empty(),
+            "{what} is now computed on {:?}",
+            computed(column)
+        );
+    }
+}
+
+/// `from_id` binary-searches `ALL`, which only works if `ALL` is sorted.
+///
+/// The dump sorts by `StringComparer.Ordinal` and the ids are all `[A-Z_]`,
+/// where a C# ordinal comparison and Rust's byte one agree. Both halves are
+/// checked, because either one failing makes `from_id` miss a power that is
+/// right there in the table.
+#[test]
+fn the_ids_are_in_the_order_from_id_searches() {
+    let ids: Vec<&str> = Power::ALL.iter().map(|p| p.id()).collect();
+
+    for id in &ids {
+        assert!(
+            id.bytes().all(|b| b.is_ascii_uppercase() || b == b'_'),
+            "{id} is outside the alphabet where ordinal and byte order agree"
+        );
+    }
+
+    let mut sorted = ids.clone();
+    sorted.sort_unstable();
+    assert_eq!(ids, sorted, "ALL is no longer in id order");
+}
+
+/// The wire form is the id, in both directions.
+///
+/// `Serialize` and `Deserialize` are written against `id` rather than derived,
+/// so this is the test that says the hand-written pair actually agrees with the
+/// table — and that a string no power answers to is an error rather than some
+/// neighbouring power.
+#[test]
+fn a_power_round_trips_through_its_id() {
+    for power in Power::ALL {
+        let json = serde_json::to_string(&power).unwrap();
+        assert_eq!(json, format!("\"{}\"", power.id()));
+        assert_eq!(serde_json::from_str::<Power>(&json).unwrap(), power);
+        assert_eq!(Power::from_id(power.id()), Some(power));
+    }
+
+    assert_eq!(Power::from_id("NOT_A_POWER"), None);
+    assert!(serde_json::from_str::<Power>("\"NOT_A_POWER\"").is_err());
+
+    // The neighbours of a real id, which is what a binary search gets wrong
+    // when it gets anything wrong.
+    assert_eq!(Power::from_id("STRENGTH_POWE"), None);
+    assert_eq!(Power::from_id("STRENGTH_POWERS"), None);
+}
+
+/// `GetTypeForAmount`, which the game derives rather than stores.
+///
+/// Worth pinning because it is the one place these fields combine, and the
+/// combination is not obvious: a debuff that does not allow negatives reads as
+/// a *buff* while its amount is below zero, and a counter that does allow them
+/// reads as a debuff. Anything porting `Rend`, `Misery`, `UnsettlingLamp` or
+/// the Debuffer badge has to reproduce this, so here is the rule with the
+/// table's own values behind it.
+#[test]
+fn a_negative_amount_can_flip_a_powers_type() {
+    fn allows_negative(power: Power) -> bool {
+        match power.data().flags.get(PowerFlag::AllowNegative) {
+            Field::Constant(b) => b,
+            Field::Computed => panic!("{}: computes AllowNegative", power.id()),
+        }
+    }
+
+    fn type_for(power: Power, amount: i32) -> PowerType {
+        let d = power.data();
+        let (Field::Constant(kind), Field::Constant(stack)) = (d.kind, d.stack) else {
+            panic!("{}: computes what this test wants to derive", power.id());
+        };
+        let allow_negative = allows_negative(power);
+
+        if stack == Some(PowerStackType::Counter) && allow_negative && amount < 0 {
+            return PowerType::Debuff;
+        }
+        if !allow_negative && kind == PowerType::Debuff && amount < 0 {
+            return PowerType::Buff;
+        }
+        kind
+    }
+
+    // Vulnerable: a debuff that does not allow negatives, so a negative amount
+    // reads as a buff.
+    let vulnerable = power("VULNERABLE_POWER");
+    assert!(!allows_negative(vulnerable));
+    assert_eq!(type_for(vulnerable, 2), PowerType::Debuff);
+    assert_eq!(type_for(vulnerable, -1), PowerType::Buff);
+
+    // Strength: a buff that does allow negatives, so a negative amount reads as
+    // a debuff — which is why `Rend` and `Misery` count it.
+    let strength = power("STRENGTH_POWER");
+    assert!(allows_negative(strength));
+    assert_eq!(type_for(strength, 2), PowerType::Buff);
+    assert_eq!(type_for(strength, -1), PowerType::Debuff);
+}

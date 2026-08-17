@@ -21,6 +21,7 @@ cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=carddump \
 | --- | --- | --- |
 | `carddump` | every card's static data | `crates/sts2-content/src/v0_107_1/dumps/cards.txt` |
 | `monsterdump` | HP ranges and move state machines, at every ascension | `crates/sts2-content/src/v0_107_1/dumps/monsters.txt` |
+| `powerdump` | every power's static data | `crates/sts2-content/src/v0_107_1/dumps/powers.txt` |
 | `rngdump` | 1024 draws per seed, every `Rng` method | `crates/sts2-rng/tests/megarandom.txt` |
 
 Then `cargo xtask codegen`.
@@ -51,7 +52,13 @@ lambdas a monster's branch weights are written in are all code, and code gets
 ported by hand.
 
 Where a value *might* be code, the dump says `dynamic` rather than guessing —
-`CardDump` marks a card that overrides `Type` or `TargetType`, and `MonsterDump`
-marks a branch weight whose delegate could read mutable state. Both are
-deliberately conservative: marking a constant as dynamic costs one method,
+`CardDump` marks a card that overrides `Type` or `TargetType`, `MonsterDump`
+marks a branch weight whose delegate could read mutable state, and `PowerDump`
+marks any member whose IL is not literally "push a number, return". All three
+are deliberately conservative: marking a constant as dynamic costs one method,
 marking a dynamic as constant costs a divergence nobody can see.
+
+`PowerDump` needs the IL because `CardDump`'s rule does not carry over.
+"Overrides the base" works for cards, whose `CardModel.Type` has an
+implementation to inherit; `PowerModel.Type` and `StackType` are `abstract`, so
+every power overrides them and the rule would mark all 273 dynamic.
