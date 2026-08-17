@@ -20,6 +20,7 @@ cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=carddump \
 | Mode | What it prints | Lands in |
 | --- | --- | --- |
 | `carddump` | every card's static data | `crates/sts2-content/src/v0_107_1/dumps/cards.txt` |
+| `encounterdump` | what starts a fight: room, roster, slots, acts | `crates/sts2-content/src/v0_107_1/dumps/encounters.txt` |
 | `monsterdump` | HP ranges and move state machines, at every ascension | `crates/sts2-content/src/v0_107_1/dumps/monsters.txt` |
 | `powerdump` | every power's static data | `crates/sts2-content/src/v0_107_1/dumps/powers.txt` |
 | `rngdump` | 1024 draws per seed, every `Rng` method | `crates/sts2-rng/tests/megarandom.txt` |
@@ -39,11 +40,13 @@ replacing a table with one describing a game nobody is talking to.
 and each level is a threshold: anything behind
 `AscensionHelper.GetValueIfAscension` is a step function of the run's level.
 
-`monsterdump` therefore reads every value at all eleven levels and emits a
-`scale*` row wherever one actually moves, rather than dumping one ascension and
-calling it the table. Which levels matter is measured, not read off the source —
-which is how Gremlin Merc turned up gating its damage on `ToughEnemies` where
-every other monster gates on `DeadlyEnemies`.
+`monsterdump` and `encounterdump` therefore read every value at all eleven
+levels and emit a `scale*` row wherever one actually moves, rather than dumping
+one ascension and calling it the table — see `Ascension`, which both share.
+Which levels matter is measured, not read off the source, which is how Gremlin
+Merc turned up gating its damage on `ToughEnemies` where every other monster
+gates on `DeadlyEnemies`, and how `FAKE_MERCHANT_EVENT_ENCOUNTER` turned up
+paying a flat 300 gold where every other encounter is cut by Poverty.
 
 ## What is not dumped
 
@@ -62,3 +65,14 @@ marking a dynamic as constant costs a divergence nobody can see.
 "Overrides the base" works for cards, whose `CardModel.Type` has an
 implementation to inherit; `PowerModel.Type` and `StackType` are `abstract`, so
 every power overrides them and the rule would mark all 273 dynamic.
+
+`EncounterDump` cannot read either — `GenerateMonsters` is `abstract` too, and
+its body calls out — so it asks the randomness instead. The method is run
+against a fresh `Rng` and the `Counter` is read afterwards: an encounter that
+drew nothing cannot have rolled anything, whatever its body looks like. That is
+exact rather than conservative, and it is only possible because the dump runs
+inside the real game.
+
+`EncounterDump` also leaves out presentation: camera scaling and offset, scene
+paths, custom backgrounds, BGM and ambient SFX, and boss map-node art. A
+simulator that never draws a frame has no use for any of it.

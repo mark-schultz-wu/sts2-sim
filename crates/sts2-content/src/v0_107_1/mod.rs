@@ -41,6 +41,10 @@ const MONSTERS: &str = include_str!("dumps/monsters.txt");
 #[cfg(test)]
 const POWERS: &str = include_str!("dumps/powers.txt");
 
+/// The encounter dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const ENCOUNTERS: &str = include_str!("dumps/encounters.txt");
+
 /// The game's own spelling of a value: the serde rename.
 ///
 /// There is no `id` accessor beside the rename — two spellings of one string is
@@ -54,6 +58,9 @@ fn wire<T: serde::Serialize>(value: &T) -> String {
         .trim_matches('"')
         .to_string()
 }
+
+#[cfg(test)]
+mod encounter_tests;
 
 #[cfg(test)]
 mod monster_tests;

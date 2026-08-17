@@ -16,6 +16,7 @@
 //! worth being able to see.
 
 mod cards;
+mod encounters;
 mod monsters;
 mod powers;
 mod split;
@@ -29,7 +30,7 @@ const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and encounters each get a
 /// dump, a submodule, and an entry here.
-const DOMAINS: [&str; 3] = ["cards", "monsters", "powers"];
+const DOMAINS: [&str; 4] = ["cards", "encounters", "monsters", "powers"];
 
 const DERIVES: &str = "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]";
 
@@ -132,6 +133,7 @@ pub fn run() -> Result<String, String> {
 
     let hashes = [
         cards::generate(&root)?,
+        encounters::generate(&root)?,
         monsters::generate(&root)?,
         powers::generate(&root)?,
     ];

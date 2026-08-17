@@ -74,6 +74,68 @@ impl<T: Copy> Scaled<T> {
     }
 }
 
+/// A short list, laid out where it is used.
+///
+/// The generated tables are full of "at most a handful": an encounter fields at
+/// most four monsters and could ever field at most six. A `&'static [T]` spells
+/// one of those as a pointer and a length — sixteen bytes to reach a thing that
+/// is usually smaller than the pointer, plus an indirection to follow and a
+/// relocation to keep. `Few` is the same list inline.
+///
+/// `N` is a cap the generator checks rather than a guess: a build that grows a
+/// fifth spawn fails generation instead of truncating, and [`Few::new`] is a
+/// `const fn` called from a `const`, so overflowing it is a compile error and
+/// not a panic in a run.
+///
+/// Items are always a prefix — `new` fills from the front — so a `None` is the
+/// end of the list and never a hole in it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Few<T, const N: usize>([Option<T>; N]);
+
+impl<T: Copy, const N: usize> Few<T, N> {
+    pub const fn new(items: &[T]) -> Self {
+        assert!(items.len() <= N, "more items than this Few can hold");
+
+        let mut slots = [None; N];
+        let mut i = 0;
+        while i < items.len() {
+            slots[i] = Some(items[i]);
+            i += 1;
+        }
+
+        Few(slots)
+    }
+
+    pub const fn len(self) -> usize {
+        let mut n = 0;
+        while n < N {
+            if self.0[n].is_none() {
+                return n;
+            }
+            n += 1;
+        }
+        N
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    pub const fn get(self, i: usize) -> Option<T> {
+        if i < N { self.0[i] } else { None }
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = T> {
+        self.0.into_iter().flatten()
+    }
+}
+
+impl<T: Copy + std::fmt::Debug, const N: usize> std::fmt::Debug for Few<T, N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
 /// What a card costs to play, before anything in a run touches it.
 ///
 /// Three states rather than a number and a flag, because the game's own
