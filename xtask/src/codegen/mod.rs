@@ -60,6 +60,27 @@ fn camel(id: &str) -> String {
         .collect()
 }
 
+/// The narrowest discriminant that holds this many variants.
+///
+/// Layout only: serde goes through the variant rename, so nothing on the wire
+/// or in a dump depends on the number a variant compiles to. It is still worth
+/// choosing rather than defaulting to the wide one, because a discriminant sits
+/// next to other fields — an encounter's `Spawn` is a `Monster` beside a slot
+/// index, which is two bytes when `Monster` is a `u8` and four when it is a
+/// `u16`, and it appears four times in every roster.
+///
+/// So the domains differ: 88 cards in the largest pool and 126 monsters fit a
+/// byte, and 273 powers do not.
+fn repr(variants: usize) -> Result<&'static str, String> {
+    match variants {
+        n if n <= u8::MAX as usize + 1 => Ok("u8"),
+        n if n <= u16::MAX as usize + 1 => Ok("u16"),
+        n => Err(format!(
+            "{n} variants is past what even a u16 discriminant holds"
+        )),
+    }
+}
+
 /// A dump, split into whitespace-separated rows, with its content hash.
 ///
 /// Comment lines are dropped except the header, which every dump opens with and

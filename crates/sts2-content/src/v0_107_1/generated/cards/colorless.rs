@@ -8,7 +8,7 @@ use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum ColorlessCard {
     #[serde(rename = "ALCHEMIZE")]
     Alchemize,
@@ -141,76 +141,6 @@ pub enum ColorlessCard {
 }
 
 impl ColorlessCard {
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Alchemize => "ALCHEMIZE",
-            Self::Anointed => "ANOINTED",
-            Self::Automation => "AUTOMATION",
-            Self::BeaconOfHope => "BEACON_OF_HOPE",
-            Self::BeatDown => "BEAT_DOWN",
-            Self::BelieveInYou => "BELIEVE_IN_YOU",
-            Self::Bolas => "BOLAS",
-            Self::Calamity => "CALAMITY",
-            Self::Catastrophe => "CATASTROPHE",
-            Self::Coordinate => "COORDINATE",
-            Self::DarkShackles => "DARK_SHACKLES",
-            Self::Discovery => "DISCOVERY",
-            Self::DramaticEntrance => "DRAMATIC_ENTRANCE",
-            Self::Entropy => "ENTROPY",
-            Self::Equilibrium => "EQUILIBRIUM",
-            Self::EternalArmor => "ETERNAL_ARMOR",
-            Self::Fasten => "FASTEN",
-            Self::Finesse => "FINESSE",
-            Self::Fisticuffs => "FISTICUFFS",
-            Self::FlashOfSteel => "FLASH_OF_STEEL",
-            Self::GangUp => "GANG_UP",
-            Self::GoldAxe => "GOLD_AXE",
-            Self::HandOfGreed => "HAND_OF_GREED",
-            Self::HiddenGem => "HIDDEN_GEM",
-            Self::HuddleUp => "HUDDLE_UP",
-            Self::Impatience => "IMPATIENCE",
-            Self::Intercept => "INTERCEPT",
-            Self::Jackpot => "JACKPOT",
-            Self::JackOfAllTrades => "JACK_OF_ALL_TRADES",
-            Self::Knockdown => "KNOCKDOWN",
-            Self::Lift => "LIFT",
-            Self::MasterOfStrategy => "MASTER_OF_STRATEGY",
-            Self::Mayhem => "MAYHEM",
-            Self::Mimic => "MIMIC",
-            Self::MindBlast => "MIND_BLAST",
-            Self::Nostalgia => "NOSTALGIA",
-            Self::Omnislice => "OMNISLICE",
-            Self::Panache => "PANACHE",
-            Self::PanicButton => "PANIC_BUTTON",
-            Self::PrepTime => "PREP_TIME",
-            Self::Production => "PRODUCTION",
-            Self::Prolong => "PROLONG",
-            Self::Prowess => "PROWESS",
-            Self::Purity => "PURITY",
-            Self::Rally => "RALLY",
-            Self::Rend => "REND",
-            Self::Restlessness => "RESTLESSNESS",
-            Self::RollingBoulder => "ROLLING_BOULDER",
-            Self::Salvo => "SALVO",
-            Self::Scrawl => "SCRAWL",
-            Self::SecretTechnique => "SECRET_TECHNIQUE",
-            Self::SecretWeapon => "SECRET_WEAPON",
-            Self::SeekerStrike => "SEEKER_STRIKE",
-            Self::Shockwave => "SHOCKWAVE",
-            Self::Splash => "SPLASH",
-            Self::Stratagem => "STRATAGEM",
-            Self::TagTeam => "TAG_TEAM",
-            Self::TheBomb => "THE_BOMB",
-            Self::TheGambit => "THE_GAMBIT",
-            Self::ThinkingAhead => "THINKING_AHEAD",
-            Self::ThrummingHatchet => "THRUMMING_HATCHET",
-            Self::UltimateDefend => "ULTIMATE_DEFEND",
-            Self::UltimateStrike => "ULTIMATE_STRIKE",
-            Self::Volley => "VOLLEY",
-        }
-    }
-
     /// What is true of the card with no run in progress.
     pub const fn data(self) -> CardData {
         match self {

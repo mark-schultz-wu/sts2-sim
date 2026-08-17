@@ -32,14 +32,11 @@
 //! returns that as a `Field<bool>` — so there is no way to read a computed flag
 //! as a plain `false`, which is what a single bitset would have offered.
 //!
-//! # `id` and the wire form
+//! # The wire form
 //!
-//! The ids are spelled once, in `id`. `Serialize` and `Deserialize` are written
-//! against it rather than derived from 273 `#[serde(rename)]` attributes
-//! saying the same thing a second time, and `from_id` binary-searches `ALL`,
-//! which the dump already sorted the game's own ordinal way. So the id is a
-//! `const fn` returning a `&'static str` — no allocation, no serde — and the
-//! wire form cannot drift from it, because it *is* it.
+//! The id is the serde rename and nothing else spells it. There is no `id`
+//! accessor beside it: two spellings of one string is a way for them to
+//! disagree, and the derive is the one the wire already depends on.
 //!
 //! # Why the files are split by `kind`
 //!
@@ -72,7 +69,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel};
+use super::{DERIVES, Dump, banner, camel, repr};
 
 /// Members the game declares that are not values of the field they name.
 ///
@@ -589,15 +586,14 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
          /// not a type: a power's kind is a [`Field`] and twenty powers work it\n\
          /// out at the time. See `data`.\n\
          ///\n\
-         /// Serde is written against [`Power::id`] rather than derived, so the\n\
-         /// ids appear once instead of once per variant in a `rename` saying\n\
-         /// the same thing."
+         /// The id is the serde rename, and the only place it is spelled."
     )
     .unwrap();
-    writeln!(out, "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]").unwrap();
-    writeln!(out, "#[repr(u16)]").unwrap();
+    writeln!(out, "{DERIVES}").unwrap();
+    writeln!(out, "#[repr({})]", repr(powers.len())?).unwrap();
     writeln!(out, "pub enum Power {{").unwrap();
     for row in powers {
+        writeln!(out, "    #[serde(rename = \"{}\")]", row[1]).unwrap();
         writeln!(out, "    {},", camel(&row[1])).unwrap();
     }
     writeln!(out, "}}\n").unwrap();
@@ -615,46 +611,6 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
         writeln!(out, "        Power::{},", camel(&row[1])).unwrap();
     }
     writeln!(out, "    ];\n").unwrap();
-
-    writeln!(
-        out,
-        "    /// The game's own id, and the wire form.\n\
-         \x20   ///\n\
-         \x20   /// The only place an id is spelled: `Serialize` writes this and\n\
-         \x20   /// `Deserialize` reads it back through [`Power::from_id`], so the\n\
-         \x20   /// wire form cannot drift from the table."
-    )
-    .unwrap();
-    writeln!(out, "    pub const fn id(self) -> &'static str {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
-    for row in powers {
-        writeln!(
-            out,
-            "            Self::{} => \"{}\",",
-            camel(&row[1]),
-            row[1]
-        )
-        .unwrap();
-    }
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}\n").unwrap();
-
-    writeln!(
-        out,
-        "    /// The power with this id, if the build has one.\n\
-         \x20   ///\n\
-         \x20   /// A binary search rather than a second match over the same\n\
-         \x20   /// strings: `ALL` is in the game's own ordinal id order, and the\n\
-         \x20   /// ids are all `[A-Z_]`, where a byte comparison and a C#\n\
-         \x20   /// ordinal one agree.\n\
-         \x20   pub fn from_id(id: &str) -> Option<Power> {{\n\
-         \x20       Self::ALL\n\
-         \x20           .binary_search_by_key(&id, |power| power.id())\n\
-         \x20           .ok()\n\
-         \x20           .map(|i| Self::ALL[i])\n\
-         \x20   }}\n"
-    )
-    .unwrap();
 
     // By value, like `CardData`: the struct fits in a register, so a reference
     // would be larger than the thing it points at.
@@ -680,41 +636,7 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
-
-    // Not derived. The derive would want a `rename` on every variant, which is
-    // the id written a second time — and two spellings of one string is a way
-    // for them to disagree.
-    writeln!(
-        out,
-        "impl Serialize for Power {{\n\
-         \x20   fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {{\n\
-         \x20       serializer.serialize_str(self.id())\n\
-         \x20   }}\n\
-         }}\n\
-         \n\
-         impl<'de> Deserialize<'de> for Power {{\n\
-         \x20   fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {{\n\
-         \x20       struct Visitor;\n\
-         \n\
-         \x20       impl serde::de::Visitor<'_> for Visitor {{\n\
-         \x20           type Value = Power;\n\
-         \n\
-         \x20           fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
-         \x20               f.write_str(\"a power id\")\n\
-         \x20           }}\n\
-         \n\
-         \x20           fn visit_str<E: serde::de::Error>(self, id: &str) -> Result<Power, E> {{\n\
-         \x20               Power::from_id(id)\n\
-         \x20                   .ok_or_else(|| E::invalid_value(serde::de::Unexpected::Str(id), &self))\n\
-         \x20           }}\n\
-         \x20       }}\n\
-         \n\
-         \x20       deserializer.deserialize_str(Visitor)\n\
-         \x20   }}\n\
-         }}"
-    )
-    .unwrap();
+    writeln!(out, "}}").unwrap();
 
     Ok(())
 }

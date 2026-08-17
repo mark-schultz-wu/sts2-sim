@@ -8,7 +8,7 @@ use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum StatusCard {
     #[serde(rename = "BECKON")]
     Beckon,
@@ -37,24 +37,6 @@ pub enum StatusCard {
 }
 
 impl StatusCard {
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Beckon => "BECKON",
-            Self::Burn => "BURN",
-            Self::Dazed => "DAZED",
-            Self::Debris => "DEBRIS",
-            Self::FranticEscape => "FRANTIC_ESCAPE",
-            Self::Infection => "INFECTION",
-            Self::Slimed => "SLIMED",
-            Self::Soot => "SOOT",
-            Self::Toxic => "TOXIC",
-            Self::Void => "VOID",
-            Self::Wither => "WITHER",
-            Self::Wound => "WOUND",
-        }
-    }
-
     /// What is true of the card with no run in progress.
     pub const fn data(self) -> CardData {
         match self {

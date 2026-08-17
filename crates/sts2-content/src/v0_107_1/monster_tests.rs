@@ -8,7 +8,7 @@
 //! turn and walked to the wrong move.
 
 use super::monsters::*;
-use super::{MONSTERS, VERSION};
+use super::{MONSTERS, VERSION, wire};
 use crate::{Field, Scaled};
 
 fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
@@ -22,7 +22,7 @@ fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
 fn monster(id: &str) -> Monster {
     *Monster::ALL
         .iter()
-        .find(|m| m.id() == id)
+        .find(|m| wire(m) == id)
         .unwrap_or_else(|| panic!("{id} is in the dump but not generated"))
 }
 
@@ -182,7 +182,7 @@ fn every_monster_is_generated() {
     assert_eq!(Monster::ALL.len(), dumped.len());
 
     for id in dumped {
-        assert_eq!(monster(id).id(), id);
+        assert_eq!(wire(&monster(id)), id);
     }
 }
 
@@ -257,7 +257,7 @@ fn a_window_of_one_is_always_spelled_in_a_row() {
                     b.repeat,
                     Repeat::Cooldown(RepeatCount::One),
                     "{}: a cooldown of one that should be InARow(One)",
-                    m.id()
+                    wire(&m)
                 );
             }
         }
@@ -279,7 +279,7 @@ fn every_state_index_is_in_range() {
             assert!(
                 (i as usize) < n,
                 "{}: {what} points at state {i} of {n}",
-                m.id()
+                wire(&m)
             );
         };
 

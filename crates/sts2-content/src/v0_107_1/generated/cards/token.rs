@@ -8,7 +8,7 @@ use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum TokenCard {
     #[serde(rename = "DISINTEGRATION")]
     Disintegration,
@@ -41,26 +41,6 @@ pub enum TokenCard {
 }
 
 impl TokenCard {
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Disintegration => "DISINTEGRATION",
-            Self::Fuel => "FUEL",
-            Self::GiantRock => "GIANT_ROCK",
-            Self::Luminesce => "LUMINESCE",
-            Self::MindRot => "MIND_ROT",
-            Self::MinionDiveBomb => "MINION_DIVE_BOMB",
-            Self::MinionSacrifice => "MINION_SACRIFICE",
-            Self::MinionStrike => "MINION_STRIKE",
-            Self::Shiv => "SHIV",
-            Self::Sloth => "SLOTH",
-            Self::Soul => "SOUL",
-            Self::SovereignBlade => "SOVEREIGN_BLADE",
-            Self::SweepingGaze => "SWEEPING_GAZE",
-            Self::WasteAway => "WASTE_AWAY",
-        }
-    }
-
     /// What is true of the card with no run in progress.
     pub const fn data(self) -> CardData {
         match self {

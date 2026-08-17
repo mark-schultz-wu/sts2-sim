@@ -8,7 +8,7 @@ use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum CurseCard {
     #[serde(rename = "ASCENDERS_BANE")]
     AscendersBane,
@@ -49,30 +49,6 @@ pub enum CurseCard {
 }
 
 impl CurseCard {
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::AscendersBane => "ASCENDERS_BANE",
-            Self::BadLuck => "BAD_LUCK",
-            Self::Clumsy => "CLUMSY",
-            Self::CurseOfTheBell => "CURSE_OF_THE_BELL",
-            Self::Debt => "DEBT",
-            Self::Decay => "DECAY",
-            Self::Doubt => "DOUBT",
-            Self::Enthralled => "ENTHRALLED",
-            Self::Folly => "FOLLY",
-            Self::Greed => "GREED",
-            Self::Guilty => "GUILTY",
-            Self::Injury => "INJURY",
-            Self::Normality => "NORMALITY",
-            Self::PoorSleep => "POOR_SLEEP",
-            Self::Regret => "REGRET",
-            Self::Shame => "SHAME",
-            Self::SporeMind => "SPORE_MIND",
-            Self::Writhe => "WRITHE",
-        }
-    }
-
     /// What is true of the card with no run in progress.
     pub const fn data(self) -> CardData {
         match self {

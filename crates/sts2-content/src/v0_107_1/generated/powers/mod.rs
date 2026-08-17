@@ -190,284 +190,555 @@ pub struct PowerData {
 /// not a type: a power's kind is a [`Field`] and twenty powers work it
 /// out at the time. See `data`.
 ///
-/// Serde is written against [`Power::id`] rather than derived, so the
-/// ids appear once instead of once per variant in a `rename` saying
-/// the same thing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// The id is the serde rename, and the only place it is spelled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u16)]
 pub enum Power {
+    #[serde(rename = "ACCELERANT_POWER")]
     AccelerantPower,
+    #[serde(rename = "ACCURACY_POWER")]
     AccuracyPower,
+    #[serde(rename = "ADAPTABLE_POWER")]
     AdaptablePower,
+    #[serde(rename = "AFTERIMAGE_POWER")]
     AfterimagePower,
+    #[serde(rename = "AGGRESSION_POWER")]
     AggressionPower,
+    #[serde(rename = "ANTICIPATE_POWER")]
     AnticipatePower,
+    #[serde(rename = "ARSENAL_POWER")]
     ArsenalPower,
+    #[serde(rename = "ARTIFACT_POWER")]
     ArtifactPower,
+    #[serde(rename = "ASLEEP_POWER")]
     AsleepPower,
+    #[serde(rename = "AUTOMATION_POWER")]
     AutomationPower,
+    #[serde(rename = "BACK_ATTACK_LEFT_POWER")]
     BackAttackLeftPower,
+    #[serde(rename = "BACK_ATTACK_RIGHT_POWER")]
     BackAttackRightPower,
+    #[serde(rename = "BARRICADE_POWER")]
     BarricadePower,
+    #[serde(rename = "BATTLEWORN_DUMMY_TIME_LIMIT_POWER")]
     BattlewornDummyTimeLimitPower,
+    #[serde(rename = "BEACON_OF_HOPE_POWER")]
     BeaconOfHopePower,
+    #[serde(rename = "BIASED_COGNITION_POWER")]
     BiasedCognitionPower,
+    #[serde(rename = "BLACK_HOLE_POWER")]
     BlackHolePower,
+    #[serde(rename = "BLOCK_NEXT_TURN_POWER")]
     BlockNextTurnPower,
+    #[serde(rename = "BLUR_POWER")]
     BlurPower,
+    #[serde(rename = "BORROWED_TIME_POWER")]
     BorrowedTimePower,
+    #[serde(rename = "BUFFER_POWER")]
     BufferPower,
+    #[serde(rename = "BURROWED_POWER")]
     BurrowedPower,
+    #[serde(rename = "BURST_POWER")]
     BurstPower,
+    #[serde(rename = "CALAMITY_POWER")]
     CalamityPower,
+    #[serde(rename = "CALCIFY_POWER")]
     CalcifyPower,
+    #[serde(rename = "CALL_OF_THE_VOID_POWER")]
     CallOfTheVoidPower,
+    #[serde(rename = "CHAINS_OF_BINDING_POWER")]
     ChainsOfBindingPower,
+    #[serde(rename = "CHILD_OF_THE_STARS_POWER")]
     ChildOfTheStarsPower,
+    #[serde(rename = "CLARITY_POWER")]
     ClarityPower,
+    #[serde(rename = "COLOSSUS_POWER")]
     ColossusPower,
+    #[serde(rename = "CONFUSED_POWER")]
     ConfusedPower,
+    #[serde(rename = "CONQUEROR_POWER")]
     ConquerorPower,
+    #[serde(rename = "CONSTRICT_POWER")]
     ConstrictPower,
+    #[serde(rename = "CONSUMING_SHADOW_POWER")]
     ConsumingShadowPower,
+    #[serde(rename = "COOLANT_POWER")]
     CoolantPower,
+    #[serde(rename = "COORDINATE_POWER")]
     CoordinatePower,
+    #[serde(rename = "CORROSIVE_WAVE_POWER")]
     CorrosiveWavePower,
+    #[serde(rename = "CORRUPTION_POWER")]
     CorruptionPower,
+    #[serde(rename = "COUNTDOWN_POWER")]
     CountdownPower,
+    #[serde(rename = "COVERED_POWER")]
     CoveredPower,
+    #[serde(rename = "CRAB_RAGE_POWER")]
     CrabRagePower,
+    #[serde(rename = "CREATIVE_AI_POWER")]
     CreativeAiPower,
+    #[serde(rename = "CRIMSON_MANTLE_POWER")]
     CrimsonMantlePower,
+    #[serde(rename = "CRUELTY_POWER")]
     CrueltyPower,
+    #[serde(rename = "CRUSH_UNDER_POWER")]
     CrushUnderPower,
+    #[serde(rename = "CURIOUS_POWER")]
     CuriousPower,
+    #[serde(rename = "CURL_UP_POWER")]
     CurlUpPower,
+    #[serde(rename = "DAMPEN_POWER")]
     DampenPower,
+    #[serde(rename = "DANSE_MACABRE_POWER")]
     DanseMacabrePower,
+    #[serde(rename = "DARK_EMBRACE_POWER")]
     DarkEmbracePower,
+    #[serde(rename = "DARK_SHACKLES_POWER")]
     DarkShacklesPower,
+    #[serde(rename = "DEBILITATE_POWER")]
     DebilitatePower,
+    #[serde(rename = "DEMESNE_POWER")]
     DemesnePower,
+    #[serde(rename = "DEMISE_POWER")]
     DemisePower,
+    #[serde(rename = "DEMON_FORM_POWER")]
     DemonFormPower,
+    #[serde(rename = "DEVOUR_LIFE_POWER")]
     DevourLifePower,
+    #[serde(rename = "DEXTERITY_POWER")]
     DexterityPower,
+    #[serde(rename = "DIAMOND_DIADEM_POWER")]
     DiamondDiademPower,
+    #[serde(rename = "DIE_FOR_YOU_POWER")]
     DieForYouPower,
+    #[serde(rename = "DISINTEGRATION_POWER")]
     DisintegrationPower,
+    #[serde(rename = "DOOM_POWER")]
     DoomPower,
+    #[serde(rename = "DOUBLE_DAMAGE_POWER")]
     DoubleDamagePower,
+    #[serde(rename = "DRAW_CARDS_NEXT_TURN_POWER")]
     DrawCardsNextTurnPower,
+    #[serde(rename = "DUPLICATION_POWER")]
     DuplicationPower,
+    #[serde(rename = "DYING_STAR_POWER")]
     DyingStarPower,
+    #[serde(rename = "ECHO_FORM_POWER")]
     EchoFormPower,
+    #[serde(rename = "ENERGY_NEXT_TURN_POWER")]
     EnergyNextTurnPower,
+    #[serde(rename = "ENFEEBLING_TOUCH_POWER")]
     EnfeeblingTouchPower,
+    #[serde(rename = "ENRAGE_POWER")]
     EnragePower,
+    #[serde(rename = "ENTROPY_POWER")]
     EntropyPower,
+    #[serde(rename = "ENVENOM_POWER")]
     EnvenomPower,
+    #[serde(rename = "ESCAPE_ARTIST_POWER")]
     EscapeArtistPower,
+    #[serde(rename = "FAN_OF_KNIVES_POWER")]
     FanOfKnivesPower,
+    #[serde(rename = "FASTEN_POWER")]
     FastenPower,
+    #[serde(rename = "FEEDING_FRENZY_POWER")]
     FeedingFrenzyPower,
+    #[serde(rename = "FEEL_NO_PAIN_POWER")]
     FeelNoPainPower,
+    #[serde(rename = "FERAL_POWER")]
     FeralPower,
+    #[serde(rename = "FLAME_BARRIER_POWER")]
     FlameBarrierPower,
+    #[serde(rename = "FLANKING_POWER")]
     FlankingPower,
+    #[serde(rename = "FLEX_POTION_POWER")]
     FlexPotionPower,
+    #[serde(rename = "FLUTTER_POWER")]
     FlutterPower,
+    #[serde(rename = "FOCUSED_STRIKE_POWER")]
     FocusedStrikePower,
+    #[serde(rename = "FOCUS_POWER")]
     FocusPower,
+    #[serde(rename = "FORBIDDEN_GRIMOIRE_POWER")]
     ForbiddenGrimoirePower,
+    #[serde(rename = "FOREGONE_CONCLUSION_POWER")]
     ForegoneConclusionPower,
+    #[serde(rename = "FRAIL_POWER")]
     FrailPower,
+    #[serde(rename = "FREE_ATTACK_POWER")]
     FreeAttackPower,
+    #[serde(rename = "FREE_POWER_POWER")]
     FreePowerPower,
+    #[serde(rename = "FREE_SKILL_POWER")]
     FreeSkillPower,
+    #[serde(rename = "FRIENDSHIP_POWER")]
     FriendshipPower,
+    #[serde(rename = "FURNACE_POWER")]
     FurnacePower,
+    #[serde(rename = "GALVANIC_POWER")]
     GalvanicPower,
+    #[serde(rename = "GENESIS_POWER")]
     GenesisPower,
+    #[serde(rename = "GIGANTIFICATION_POWER")]
     GigantificationPower,
+    #[serde(rename = "GRAVITY_POWER")]
     GravityPower,
+    #[serde(rename = "GUARDED_POWER")]
     GuardedPower,
+    #[serde(rename = "HAILSTORM_POWER")]
     HailstormPower,
+    #[serde(rename = "HAMMER_TIME_POWER")]
     HammerTimePower,
+    #[serde(rename = "HANG_POWER")]
     HangPower,
+    #[serde(rename = "HARDENED_SHELL_POWER")]
     HardenedShellPower,
+    #[serde(rename = "HARD_TO_KILL_POWER")]
     HardToKillPower,
+    #[serde(rename = "HATCH_POWER")]
     HatchPower,
+    #[serde(rename = "HAUNT_POWER")]
     HauntPower,
+    #[serde(rename = "HEIST_POWER")]
     HeistPower,
+    #[serde(rename = "HELICAL_DART_POWER")]
     HelicalDartPower,
+    #[serde(rename = "HELLO_WORLD_POWER")]
     HelloWorldPower,
+    #[serde(rename = "HELLRAISER_POWER")]
     HellraiserPower,
+    #[serde(rename = "HEX_POWER")]
     HexPower,
+    #[serde(rename = "HIGH_VOLTAGE_POWER")]
     HighVoltagePower,
+    #[serde(rename = "HOTFIX_POWER")]
     HotfixPower,
+    #[serde(rename = "ILLUSION_POWER")]
     IllusionPower,
+    #[serde(rename = "IMBALANCED_POWER")]
     ImbalancedPower,
+    #[serde(rename = "IMPROVEMENT_POWER")]
     ImprovementPower,
+    #[serde(rename = "INFERNO_POWER")]
     InfernoPower,
+    #[serde(rename = "INFESTED_POWER")]
     InfestedPower,
+    #[serde(rename = "INFINITE_BLADES_POWER")]
     InfiniteBladesPower,
+    #[serde(rename = "INTANGIBLE_POWER")]
     IntangiblePower,
+    #[serde(rename = "INTERCEPT_POWER")]
     InterceptPower,
+    #[serde(rename = "ITERATION_POWER")]
     IterationPower,
+    #[serde(rename = "JUGGERNAUT_POWER")]
     JuggernautPower,
+    #[serde(rename = "JUGGLING_POWER")]
     JugglingPower,
+    #[serde(rename = "KNOCKDOWN_POWER")]
     KnockdownPower,
+    #[serde(rename = "LEADERSHIP_POWER")]
     LeadershipPower,
+    #[serde(rename = "LETHALITY_POWER")]
     LethalityPower,
+    #[serde(rename = "LIGHTNING_ROD_POWER")]
     LightningRodPower,
+    #[serde(rename = "LOOP_POWER")]
     LoopPower,
+    #[serde(rename = "MACHINE_LEARNING_POWER")]
     MachineLearningPower,
+    #[serde(rename = "MAGIC_BOMB_POWER")]
     MagicBombPower,
+    #[serde(rename = "MANGLE_POWER")]
     ManglePower,
+    #[serde(rename = "MASTER_PLANNER_POWER")]
     MasterPlannerPower,
+    #[serde(rename = "MAYHEM_POWER")]
     MayhemPower,
+    #[serde(rename = "MIND_ROT_POWER")]
     MindRotPower,
+    #[serde(rename = "MINION_POWER")]
     MinionPower,
+    #[serde(rename = "MOCK_CLONE_CARDS_ON_PLAY_POWER")]
     MockCloneCardsOnPlayPower,
+    #[serde(rename = "MOCK_DO_NOT_SCALE_IN_MULTIPLAYER_POWER")]
     MockDoNotScaleInMultiplayerPower,
+    #[serde(rename = "MOCK_EXTRA_TURN_POWER")]
     MockExtraTurnPower,
+    #[serde(rename = "MOCK_FREE_CARDS_POWER")]
     MockFreeCardsPower,
+    #[serde(rename = "MOCK_GAIN_BLOCK_ON_ATTACK_POWER")]
     MockGainBlockOnAttackPower,
+    #[serde(rename = "MOCK_INVINCIBLE_ON_DEATH_POWER")]
     MockInvincibleOnDeathPower,
+    #[serde(rename = "MOCK_MODIFY_ENERGY_COST_POWER")]
     MockModifyEnergyCostPower,
+    #[serde(rename = "MOCK_MODIFY_STAR_COST_POWER")]
     MockModifyStarCostPower,
+    #[serde(rename = "MOCK_PHASE_OBSERVER_POWER")]
     MockPhaseObserverPower,
+    #[serde(rename = "MOCK_PREVENT_DEATH_POWER")]
     MockPreventDeathPower,
+    #[serde(rename = "MOCK_REMOVE_DRAWN_CARDS_FROM_COMBAT_POWER")]
     MockRemoveDrawnCardsFromCombatPower,
+    #[serde(rename = "MOCK_RESET_COMBAT_ON_SHUFFLE_POWER")]
     MockResetCombatOnShufflePower,
+    #[serde(rename = "MOCK_REVIVE_POWER")]
     MockRevivePower,
+    #[serde(rename = "MOCK_SCALE_IN_MULTIPLAYER_POWER")]
     MockScaleInMultiplayerPower,
+    #[serde(rename = "MOCK_TEMPORARY_STRENGTH_LOSS_POWER")]
     MockTemporaryStrengthLossPower,
+    #[serde(rename = "MOCK_UNHITTABLE_POWER")]
     MockUnhittablePower,
+    #[serde(rename = "MONARCHS_GAZE_POWER")]
     MonarchsGazePower,
+    #[serde(rename = "MONARCHS_GAZE_STRENGTH_DOWN_POWER")]
     MonarchsGazeStrengthDownPower,
+    #[serde(rename = "MONOLOGUE_POWER")]
     MonologuePower,
+    #[serde(rename = "NECRO_MASTERY_POWER")]
     NecroMasteryPower,
+    #[serde(rename = "NEMESIS_POWER")]
     NemesisPower,
+    #[serde(rename = "NEUROSURGE_POWER")]
     NeurosurgePower,
+    #[serde(rename = "NIGHTMARE_POWER")]
     NightmarePower,
+    #[serde(rename = "NOSTALGIA_POWER")]
     NostalgiaPower,
+    #[serde(rename = "NOXIOUS_FUMES_POWER")]
     NoxiousFumesPower,
+    #[serde(rename = "NO_BLOCK_POWER")]
     NoBlockPower,
+    #[serde(rename = "NO_DRAW_POWER")]
     NoDrawPower,
+    #[serde(rename = "NO_ENERGY_GAIN_POWER")]
     NoEnergyGainPower,
+    #[serde(rename = "OBLIVION_POWER")]
     OblivionPower,
+    #[serde(rename = "ONE_TWO_PUNCH_POWER")]
     OneTwoPunchPower,
+    #[serde(rename = "ORBIT_POWER")]
     OrbitPower,
+    #[serde(rename = "OUTBREAK_POWER")]
     OutbreakPower,
+    #[serde(rename = "PAGESTORM_POWER")]
     PagestormPower,
+    #[serde(rename = "PAINFUL_STABS_POWER")]
     PainfulStabsPower,
+    #[serde(rename = "PALE_BLUE_DOT_POWER")]
     PaleBlueDotPower,
+    #[serde(rename = "PANACHE_POWER")]
     PanachePower,
+    #[serde(rename = "PAPER_CUTS_POWER")]
     PaperCutsPower,
+    #[serde(rename = "PARRY_POWER")]
     ParryPower,
+    #[serde(rename = "PERSONAL_HIVE_POWER")]
     PersonalHivePower,
+    #[serde(rename = "PHANTOM_BLADES_POWER")]
     PhantomBladesPower,
+    #[serde(rename = "PIERCING_WAIL_POWER")]
     PiercingWailPower,
+    #[serde(rename = "PILLAR_OF_CREATION_POWER")]
     PillarOfCreationPower,
+    #[serde(rename = "PLATING_POWER")]
     PlatingPower,
+    #[serde(rename = "PLOW_POWER")]
     PlowPower,
+    #[serde(rename = "POISON_POWER")]
     PoisonPower,
+    #[serde(rename = "POSSESS_SPEED_POWER")]
     PossessSpeedPower,
+    #[serde(rename = "POSSESS_STRENGTH_POWER")]
     PossessStrengthPower,
+    #[serde(rename = "PREP_TIME_POWER")]
     PrepTimePower,
+    #[serde(rename = "PYRE_POWER")]
     PyrePower,
+    #[serde(rename = "RADIANCE_POWER")]
     RadiancePower,
+    #[serde(rename = "RAGE_POWER")]
     RagePower,
+    #[serde(rename = "RAMPART_POWER")]
     RampartPower,
+    #[serde(rename = "RAVENOUS_POWER")]
     RavenousPower,
+    #[serde(rename = "REAPER_FORM_POWER")]
     ReaperFormPower,
+    #[serde(rename = "REATTACH_POWER")]
     ReattachPower,
+    #[serde(rename = "REBOUND_POWER")]
     ReboundPower,
+    #[serde(rename = "REFLECT_POWER")]
     ReflectPower,
+    #[serde(rename = "REGEN_POWER")]
     RegenPower,
+    #[serde(rename = "REPTILE_TRINKET_POWER")]
     ReptileTrinketPower,
+    #[serde(rename = "RETAIN_HAND_POWER")]
     RetainHandPower,
+    #[serde(rename = "RINGING_POWER")]
     RingingPower,
+    #[serde(rename = "RITUAL_POWER")]
     RitualPower,
+    #[serde(rename = "ROLLING_BOULDER_POWER")]
     RollingBoulderPower,
+    #[serde(rename = "ROYALTIES_POWER")]
     RoyaltiesPower,
+    #[serde(rename = "RUPTURE_POWER")]
     RupturePower,
+    #[serde(rename = "SANDPIT_POWER")]
     SandpitPower,
+    #[serde(rename = "SEEKING_EDGE_POWER")]
     SeekingEdgePower,
+    #[serde(rename = "SELF_FORMING_CLAY_POWER")]
     SelfFormingClayPower,
+    #[serde(rename = "SENTRY_MODE_POWER")]
     SentryModePower,
+    #[serde(rename = "SERPENT_FORM_POWER")]
     SerpentFormPower,
+    #[serde(rename = "SETUP_STRIKE_POWER")]
     SetupStrikePower,
+    #[serde(rename = "SHACKLING_POTION_POWER")]
     ShacklingPotionPower,
+    #[serde(rename = "SHADOWMELD_POWER")]
     ShadowmeldPower,
+    #[serde(rename = "SHADOW_STEP_POWER")]
     ShadowStepPower,
+    #[serde(rename = "SHRIEK_POWER")]
     ShriekPower,
+    #[serde(rename = "SHRINK_POWER")]
     ShrinkPower,
+    #[serde(rename = "SHROUD_POWER")]
     ShroudPower,
+    #[serde(rename = "SIC_EM_POWER")]
     SicEmPower,
+    #[serde(rename = "SIGNAL_BOOST_POWER")]
     SignalBoostPower,
+    #[serde(rename = "SKITTISH_POWER")]
     SkittishPower,
+    #[serde(rename = "SLEIGHT_OF_FLESH_POWER")]
     SleightOfFleshPower,
+    #[serde(rename = "SLIPPERY_POWER")]
     SlipperyPower,
+    #[serde(rename = "SLOTH_POWER")]
     SlothPower,
+    #[serde(rename = "SLOW_POWER")]
     SlowPower,
+    #[serde(rename = "SLUMBER_POWER")]
     SlumberPower,
+    #[serde(rename = "SMOGGY_POWER")]
     SmoggyPower,
+    #[serde(rename = "SMOKESTACK_POWER")]
     SmokestackPower,
+    #[serde(rename = "SNEAKY_POWER")]
     SneakyPower,
+    #[serde(rename = "SOAR_POWER")]
     SoarPower,
+    #[serde(rename = "SPECTRUM_SHIFT_POWER")]
     SpectrumShiftPower,
+    #[serde(rename = "SPEEDSTER_POWER")]
     SpeedsterPower,
+    #[serde(rename = "SPEED_POTION_POWER")]
     SpeedPotionPower,
+    #[serde(rename = "SPINNER_POWER")]
     SpinnerPower,
+    #[serde(rename = "SPIRIT_OF_ASH_POWER")]
     SpiritOfAshPower,
+    #[serde(rename = "STAMPEDE_POWER")]
     StampedePower,
+    #[serde(rename = "STAR_NEXT_TURN_POWER")]
     StarNextTurnPower,
+    #[serde(rename = "STEAM_ERUPTION_POWER")]
     SteamEruptionPower,
+    #[serde(rename = "STOCK_POWER")]
     StockPower,
+    #[serde(rename = "STORM_POWER")]
     StormPower,
+    #[serde(rename = "STRANGLE_POWER")]
     StranglePower,
+    #[serde(rename = "STRATAGEM_POWER")]
     StratagemPower,
+    #[serde(rename = "STRENGTH_POWER")]
     StrengthPower,
+    #[serde(rename = "SUBROUTINE_POWER")]
     SubroutinePower,
+    #[serde(rename = "SUCK_POWER")]
     SuckPower,
+    #[serde(rename = "SUMMON_NEXT_TURN_POWER")]
     SummonNextTurnPower,
+    #[serde(rename = "SURPRISE_POWER")]
     SurprisePower,
+    #[serde(rename = "SURROUNDED_POWER")]
     SurroundedPower,
+    #[serde(rename = "SWIPE_POWER")]
     SwipePower,
+    #[serde(rename = "SWORD_SAGE_POWER")]
     SwordSagePower,
+    #[serde(rename = "SYNCHRONIZE_POWER")]
     SynchronizePower,
+    #[serde(rename = "TAG_TEAM_POWER")]
     TagTeamPower,
+    #[serde(rename = "TAINTED_POWER")]
     TaintedPower,
+    #[serde(rename = "TANGLED_POWER")]
     TangledPower,
+    #[serde(rename = "TANK_POWER")]
     TankPower,
+    #[serde(rename = "TENDER_POWER")]
     TenderPower,
+    #[serde(rename = "TERRITORIAL_POWER")]
     TerritorialPower,
+    #[serde(rename = "THE_BOMB_POWER")]
     TheBombPower,
+    #[serde(rename = "THE_GAMBIT_POWER")]
     TheGambitPower,
+    #[serde(rename = "THE_HUNT_POWER")]
     TheHuntPower,
+    #[serde(rename = "THE_SEALED_THRONE_POWER")]
     TheSealedThronePower,
+    #[serde(rename = "THIEVERY_POWER")]
     ThieveryPower,
+    #[serde(rename = "THORNS_POWER")]
     ThornsPower,
+    #[serde(rename = "THUNDER_POWER")]
     ThunderPower,
+    #[serde(rename = "TOOLS_OF_THE_TRADE_POWER")]
     ToolsOfTheTradePower,
+    #[serde(rename = "TORIC_TOUGHNESS_POWER")]
     ToricToughnessPower,
+    #[serde(rename = "TRACKING_POWER")]
     TrackingPower,
+    #[serde(rename = "TRASH_TO_TREASURE_POWER")]
     TrashToTreasurePower,
+    #[serde(rename = "TYRANNY_POWER")]
     TyrannyPower,
+    #[serde(rename = "UNMOVABLE_POWER")]
     UnmovablePower,
+    #[serde(rename = "VEILPIERCER_POWER")]
     VeilpiercerPower,
+    #[serde(rename = "VICIOUS_POWER")]
     ViciousPower,
+    #[serde(rename = "VIGOR_POWER")]
     VigorPower,
+    #[serde(rename = "VITAL_SPARK_POWER")]
     VitalSparkPower,
+    #[serde(rename = "VOID_FORM_POWER")]
     VoidFormPower,
+    #[serde(rename = "VULNERABLE_POWER")]
     VulnerablePower,
+    #[serde(rename = "WASTE_AWAY_POWER")]
     WasteAwayPower,
+    #[serde(rename = "WEAK_POWER")]
     WeakPower,
+    #[serde(rename = "WELL_LAID_PLANS_POWER")]
     WellLaidPlansPower,
+    #[serde(rename = "WITHERING_PRESENCE_POWER")]
     WitheringPresencePower,
+    #[serde(rename = "WRAITH_FORM_POWER")]
     WraithFormPower,
 }
 
@@ -749,304 +1020,6 @@ impl Power {
         Power::WitheringPresencePower,
         Power::WraithFormPower,
     ];
-
-    /// The game's own id, and the wire form.
-    ///
-    /// The only place an id is spelled: `Serialize` writes this and
-    /// `Deserialize` reads it back through [`Power::from_id`], so the
-    /// wire form cannot drift from the table.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::AccelerantPower => "ACCELERANT_POWER",
-            Self::AccuracyPower => "ACCURACY_POWER",
-            Self::AdaptablePower => "ADAPTABLE_POWER",
-            Self::AfterimagePower => "AFTERIMAGE_POWER",
-            Self::AggressionPower => "AGGRESSION_POWER",
-            Self::AnticipatePower => "ANTICIPATE_POWER",
-            Self::ArsenalPower => "ARSENAL_POWER",
-            Self::ArtifactPower => "ARTIFACT_POWER",
-            Self::AsleepPower => "ASLEEP_POWER",
-            Self::AutomationPower => "AUTOMATION_POWER",
-            Self::BackAttackLeftPower => "BACK_ATTACK_LEFT_POWER",
-            Self::BackAttackRightPower => "BACK_ATTACK_RIGHT_POWER",
-            Self::BarricadePower => "BARRICADE_POWER",
-            Self::BattlewornDummyTimeLimitPower => "BATTLEWORN_DUMMY_TIME_LIMIT_POWER",
-            Self::BeaconOfHopePower => "BEACON_OF_HOPE_POWER",
-            Self::BiasedCognitionPower => "BIASED_COGNITION_POWER",
-            Self::BlackHolePower => "BLACK_HOLE_POWER",
-            Self::BlockNextTurnPower => "BLOCK_NEXT_TURN_POWER",
-            Self::BlurPower => "BLUR_POWER",
-            Self::BorrowedTimePower => "BORROWED_TIME_POWER",
-            Self::BufferPower => "BUFFER_POWER",
-            Self::BurrowedPower => "BURROWED_POWER",
-            Self::BurstPower => "BURST_POWER",
-            Self::CalamityPower => "CALAMITY_POWER",
-            Self::CalcifyPower => "CALCIFY_POWER",
-            Self::CallOfTheVoidPower => "CALL_OF_THE_VOID_POWER",
-            Self::ChainsOfBindingPower => "CHAINS_OF_BINDING_POWER",
-            Self::ChildOfTheStarsPower => "CHILD_OF_THE_STARS_POWER",
-            Self::ClarityPower => "CLARITY_POWER",
-            Self::ColossusPower => "COLOSSUS_POWER",
-            Self::ConfusedPower => "CONFUSED_POWER",
-            Self::ConquerorPower => "CONQUEROR_POWER",
-            Self::ConstrictPower => "CONSTRICT_POWER",
-            Self::ConsumingShadowPower => "CONSUMING_SHADOW_POWER",
-            Self::CoolantPower => "COOLANT_POWER",
-            Self::CoordinatePower => "COORDINATE_POWER",
-            Self::CorrosiveWavePower => "CORROSIVE_WAVE_POWER",
-            Self::CorruptionPower => "CORRUPTION_POWER",
-            Self::CountdownPower => "COUNTDOWN_POWER",
-            Self::CoveredPower => "COVERED_POWER",
-            Self::CrabRagePower => "CRAB_RAGE_POWER",
-            Self::CreativeAiPower => "CREATIVE_AI_POWER",
-            Self::CrimsonMantlePower => "CRIMSON_MANTLE_POWER",
-            Self::CrueltyPower => "CRUELTY_POWER",
-            Self::CrushUnderPower => "CRUSH_UNDER_POWER",
-            Self::CuriousPower => "CURIOUS_POWER",
-            Self::CurlUpPower => "CURL_UP_POWER",
-            Self::DampenPower => "DAMPEN_POWER",
-            Self::DanseMacabrePower => "DANSE_MACABRE_POWER",
-            Self::DarkEmbracePower => "DARK_EMBRACE_POWER",
-            Self::DarkShacklesPower => "DARK_SHACKLES_POWER",
-            Self::DebilitatePower => "DEBILITATE_POWER",
-            Self::DemesnePower => "DEMESNE_POWER",
-            Self::DemisePower => "DEMISE_POWER",
-            Self::DemonFormPower => "DEMON_FORM_POWER",
-            Self::DevourLifePower => "DEVOUR_LIFE_POWER",
-            Self::DexterityPower => "DEXTERITY_POWER",
-            Self::DiamondDiademPower => "DIAMOND_DIADEM_POWER",
-            Self::DieForYouPower => "DIE_FOR_YOU_POWER",
-            Self::DisintegrationPower => "DISINTEGRATION_POWER",
-            Self::DoomPower => "DOOM_POWER",
-            Self::DoubleDamagePower => "DOUBLE_DAMAGE_POWER",
-            Self::DrawCardsNextTurnPower => "DRAW_CARDS_NEXT_TURN_POWER",
-            Self::DuplicationPower => "DUPLICATION_POWER",
-            Self::DyingStarPower => "DYING_STAR_POWER",
-            Self::EchoFormPower => "ECHO_FORM_POWER",
-            Self::EnergyNextTurnPower => "ENERGY_NEXT_TURN_POWER",
-            Self::EnfeeblingTouchPower => "ENFEEBLING_TOUCH_POWER",
-            Self::EnragePower => "ENRAGE_POWER",
-            Self::EntropyPower => "ENTROPY_POWER",
-            Self::EnvenomPower => "ENVENOM_POWER",
-            Self::EscapeArtistPower => "ESCAPE_ARTIST_POWER",
-            Self::FanOfKnivesPower => "FAN_OF_KNIVES_POWER",
-            Self::FastenPower => "FASTEN_POWER",
-            Self::FeedingFrenzyPower => "FEEDING_FRENZY_POWER",
-            Self::FeelNoPainPower => "FEEL_NO_PAIN_POWER",
-            Self::FeralPower => "FERAL_POWER",
-            Self::FlameBarrierPower => "FLAME_BARRIER_POWER",
-            Self::FlankingPower => "FLANKING_POWER",
-            Self::FlexPotionPower => "FLEX_POTION_POWER",
-            Self::FlutterPower => "FLUTTER_POWER",
-            Self::FocusedStrikePower => "FOCUSED_STRIKE_POWER",
-            Self::FocusPower => "FOCUS_POWER",
-            Self::ForbiddenGrimoirePower => "FORBIDDEN_GRIMOIRE_POWER",
-            Self::ForegoneConclusionPower => "FOREGONE_CONCLUSION_POWER",
-            Self::FrailPower => "FRAIL_POWER",
-            Self::FreeAttackPower => "FREE_ATTACK_POWER",
-            Self::FreePowerPower => "FREE_POWER_POWER",
-            Self::FreeSkillPower => "FREE_SKILL_POWER",
-            Self::FriendshipPower => "FRIENDSHIP_POWER",
-            Self::FurnacePower => "FURNACE_POWER",
-            Self::GalvanicPower => "GALVANIC_POWER",
-            Self::GenesisPower => "GENESIS_POWER",
-            Self::GigantificationPower => "GIGANTIFICATION_POWER",
-            Self::GravityPower => "GRAVITY_POWER",
-            Self::GuardedPower => "GUARDED_POWER",
-            Self::HailstormPower => "HAILSTORM_POWER",
-            Self::HammerTimePower => "HAMMER_TIME_POWER",
-            Self::HangPower => "HANG_POWER",
-            Self::HardenedShellPower => "HARDENED_SHELL_POWER",
-            Self::HardToKillPower => "HARD_TO_KILL_POWER",
-            Self::HatchPower => "HATCH_POWER",
-            Self::HauntPower => "HAUNT_POWER",
-            Self::HeistPower => "HEIST_POWER",
-            Self::HelicalDartPower => "HELICAL_DART_POWER",
-            Self::HelloWorldPower => "HELLO_WORLD_POWER",
-            Self::HellraiserPower => "HELLRAISER_POWER",
-            Self::HexPower => "HEX_POWER",
-            Self::HighVoltagePower => "HIGH_VOLTAGE_POWER",
-            Self::HotfixPower => "HOTFIX_POWER",
-            Self::IllusionPower => "ILLUSION_POWER",
-            Self::ImbalancedPower => "IMBALANCED_POWER",
-            Self::ImprovementPower => "IMPROVEMENT_POWER",
-            Self::InfernoPower => "INFERNO_POWER",
-            Self::InfestedPower => "INFESTED_POWER",
-            Self::InfiniteBladesPower => "INFINITE_BLADES_POWER",
-            Self::IntangiblePower => "INTANGIBLE_POWER",
-            Self::InterceptPower => "INTERCEPT_POWER",
-            Self::IterationPower => "ITERATION_POWER",
-            Self::JuggernautPower => "JUGGERNAUT_POWER",
-            Self::JugglingPower => "JUGGLING_POWER",
-            Self::KnockdownPower => "KNOCKDOWN_POWER",
-            Self::LeadershipPower => "LEADERSHIP_POWER",
-            Self::LethalityPower => "LETHALITY_POWER",
-            Self::LightningRodPower => "LIGHTNING_ROD_POWER",
-            Self::LoopPower => "LOOP_POWER",
-            Self::MachineLearningPower => "MACHINE_LEARNING_POWER",
-            Self::MagicBombPower => "MAGIC_BOMB_POWER",
-            Self::ManglePower => "MANGLE_POWER",
-            Self::MasterPlannerPower => "MASTER_PLANNER_POWER",
-            Self::MayhemPower => "MAYHEM_POWER",
-            Self::MindRotPower => "MIND_ROT_POWER",
-            Self::MinionPower => "MINION_POWER",
-            Self::MockCloneCardsOnPlayPower => "MOCK_CLONE_CARDS_ON_PLAY_POWER",
-            Self::MockDoNotScaleInMultiplayerPower => "MOCK_DO_NOT_SCALE_IN_MULTIPLAYER_POWER",
-            Self::MockExtraTurnPower => "MOCK_EXTRA_TURN_POWER",
-            Self::MockFreeCardsPower => "MOCK_FREE_CARDS_POWER",
-            Self::MockGainBlockOnAttackPower => "MOCK_GAIN_BLOCK_ON_ATTACK_POWER",
-            Self::MockInvincibleOnDeathPower => "MOCK_INVINCIBLE_ON_DEATH_POWER",
-            Self::MockModifyEnergyCostPower => "MOCK_MODIFY_ENERGY_COST_POWER",
-            Self::MockModifyStarCostPower => "MOCK_MODIFY_STAR_COST_POWER",
-            Self::MockPhaseObserverPower => "MOCK_PHASE_OBSERVER_POWER",
-            Self::MockPreventDeathPower => "MOCK_PREVENT_DEATH_POWER",
-            Self::MockRemoveDrawnCardsFromCombatPower => {
-                "MOCK_REMOVE_DRAWN_CARDS_FROM_COMBAT_POWER"
-            }
-            Self::MockResetCombatOnShufflePower => "MOCK_RESET_COMBAT_ON_SHUFFLE_POWER",
-            Self::MockRevivePower => "MOCK_REVIVE_POWER",
-            Self::MockScaleInMultiplayerPower => "MOCK_SCALE_IN_MULTIPLAYER_POWER",
-            Self::MockTemporaryStrengthLossPower => "MOCK_TEMPORARY_STRENGTH_LOSS_POWER",
-            Self::MockUnhittablePower => "MOCK_UNHITTABLE_POWER",
-            Self::MonarchsGazePower => "MONARCHS_GAZE_POWER",
-            Self::MonarchsGazeStrengthDownPower => "MONARCHS_GAZE_STRENGTH_DOWN_POWER",
-            Self::MonologuePower => "MONOLOGUE_POWER",
-            Self::NecroMasteryPower => "NECRO_MASTERY_POWER",
-            Self::NemesisPower => "NEMESIS_POWER",
-            Self::NeurosurgePower => "NEUROSURGE_POWER",
-            Self::NightmarePower => "NIGHTMARE_POWER",
-            Self::NostalgiaPower => "NOSTALGIA_POWER",
-            Self::NoxiousFumesPower => "NOXIOUS_FUMES_POWER",
-            Self::NoBlockPower => "NO_BLOCK_POWER",
-            Self::NoDrawPower => "NO_DRAW_POWER",
-            Self::NoEnergyGainPower => "NO_ENERGY_GAIN_POWER",
-            Self::OblivionPower => "OBLIVION_POWER",
-            Self::OneTwoPunchPower => "ONE_TWO_PUNCH_POWER",
-            Self::OrbitPower => "ORBIT_POWER",
-            Self::OutbreakPower => "OUTBREAK_POWER",
-            Self::PagestormPower => "PAGESTORM_POWER",
-            Self::PainfulStabsPower => "PAINFUL_STABS_POWER",
-            Self::PaleBlueDotPower => "PALE_BLUE_DOT_POWER",
-            Self::PanachePower => "PANACHE_POWER",
-            Self::PaperCutsPower => "PAPER_CUTS_POWER",
-            Self::ParryPower => "PARRY_POWER",
-            Self::PersonalHivePower => "PERSONAL_HIVE_POWER",
-            Self::PhantomBladesPower => "PHANTOM_BLADES_POWER",
-            Self::PiercingWailPower => "PIERCING_WAIL_POWER",
-            Self::PillarOfCreationPower => "PILLAR_OF_CREATION_POWER",
-            Self::PlatingPower => "PLATING_POWER",
-            Self::PlowPower => "PLOW_POWER",
-            Self::PoisonPower => "POISON_POWER",
-            Self::PossessSpeedPower => "POSSESS_SPEED_POWER",
-            Self::PossessStrengthPower => "POSSESS_STRENGTH_POWER",
-            Self::PrepTimePower => "PREP_TIME_POWER",
-            Self::PyrePower => "PYRE_POWER",
-            Self::RadiancePower => "RADIANCE_POWER",
-            Self::RagePower => "RAGE_POWER",
-            Self::RampartPower => "RAMPART_POWER",
-            Self::RavenousPower => "RAVENOUS_POWER",
-            Self::ReaperFormPower => "REAPER_FORM_POWER",
-            Self::ReattachPower => "REATTACH_POWER",
-            Self::ReboundPower => "REBOUND_POWER",
-            Self::ReflectPower => "REFLECT_POWER",
-            Self::RegenPower => "REGEN_POWER",
-            Self::ReptileTrinketPower => "REPTILE_TRINKET_POWER",
-            Self::RetainHandPower => "RETAIN_HAND_POWER",
-            Self::RingingPower => "RINGING_POWER",
-            Self::RitualPower => "RITUAL_POWER",
-            Self::RollingBoulderPower => "ROLLING_BOULDER_POWER",
-            Self::RoyaltiesPower => "ROYALTIES_POWER",
-            Self::RupturePower => "RUPTURE_POWER",
-            Self::SandpitPower => "SANDPIT_POWER",
-            Self::SeekingEdgePower => "SEEKING_EDGE_POWER",
-            Self::SelfFormingClayPower => "SELF_FORMING_CLAY_POWER",
-            Self::SentryModePower => "SENTRY_MODE_POWER",
-            Self::SerpentFormPower => "SERPENT_FORM_POWER",
-            Self::SetupStrikePower => "SETUP_STRIKE_POWER",
-            Self::ShacklingPotionPower => "SHACKLING_POTION_POWER",
-            Self::ShadowmeldPower => "SHADOWMELD_POWER",
-            Self::ShadowStepPower => "SHADOW_STEP_POWER",
-            Self::ShriekPower => "SHRIEK_POWER",
-            Self::ShrinkPower => "SHRINK_POWER",
-            Self::ShroudPower => "SHROUD_POWER",
-            Self::SicEmPower => "SIC_EM_POWER",
-            Self::SignalBoostPower => "SIGNAL_BOOST_POWER",
-            Self::SkittishPower => "SKITTISH_POWER",
-            Self::SleightOfFleshPower => "SLEIGHT_OF_FLESH_POWER",
-            Self::SlipperyPower => "SLIPPERY_POWER",
-            Self::SlothPower => "SLOTH_POWER",
-            Self::SlowPower => "SLOW_POWER",
-            Self::SlumberPower => "SLUMBER_POWER",
-            Self::SmoggyPower => "SMOGGY_POWER",
-            Self::SmokestackPower => "SMOKESTACK_POWER",
-            Self::SneakyPower => "SNEAKY_POWER",
-            Self::SoarPower => "SOAR_POWER",
-            Self::SpectrumShiftPower => "SPECTRUM_SHIFT_POWER",
-            Self::SpeedsterPower => "SPEEDSTER_POWER",
-            Self::SpeedPotionPower => "SPEED_POTION_POWER",
-            Self::SpinnerPower => "SPINNER_POWER",
-            Self::SpiritOfAshPower => "SPIRIT_OF_ASH_POWER",
-            Self::StampedePower => "STAMPEDE_POWER",
-            Self::StarNextTurnPower => "STAR_NEXT_TURN_POWER",
-            Self::SteamEruptionPower => "STEAM_ERUPTION_POWER",
-            Self::StockPower => "STOCK_POWER",
-            Self::StormPower => "STORM_POWER",
-            Self::StranglePower => "STRANGLE_POWER",
-            Self::StratagemPower => "STRATAGEM_POWER",
-            Self::StrengthPower => "STRENGTH_POWER",
-            Self::SubroutinePower => "SUBROUTINE_POWER",
-            Self::SuckPower => "SUCK_POWER",
-            Self::SummonNextTurnPower => "SUMMON_NEXT_TURN_POWER",
-            Self::SurprisePower => "SURPRISE_POWER",
-            Self::SurroundedPower => "SURROUNDED_POWER",
-            Self::SwipePower => "SWIPE_POWER",
-            Self::SwordSagePower => "SWORD_SAGE_POWER",
-            Self::SynchronizePower => "SYNCHRONIZE_POWER",
-            Self::TagTeamPower => "TAG_TEAM_POWER",
-            Self::TaintedPower => "TAINTED_POWER",
-            Self::TangledPower => "TANGLED_POWER",
-            Self::TankPower => "TANK_POWER",
-            Self::TenderPower => "TENDER_POWER",
-            Self::TerritorialPower => "TERRITORIAL_POWER",
-            Self::TheBombPower => "THE_BOMB_POWER",
-            Self::TheGambitPower => "THE_GAMBIT_POWER",
-            Self::TheHuntPower => "THE_HUNT_POWER",
-            Self::TheSealedThronePower => "THE_SEALED_THRONE_POWER",
-            Self::ThieveryPower => "THIEVERY_POWER",
-            Self::ThornsPower => "THORNS_POWER",
-            Self::ThunderPower => "THUNDER_POWER",
-            Self::ToolsOfTheTradePower => "TOOLS_OF_THE_TRADE_POWER",
-            Self::ToricToughnessPower => "TORIC_TOUGHNESS_POWER",
-            Self::TrackingPower => "TRACKING_POWER",
-            Self::TrashToTreasurePower => "TRASH_TO_TREASURE_POWER",
-            Self::TyrannyPower => "TYRANNY_POWER",
-            Self::UnmovablePower => "UNMOVABLE_POWER",
-            Self::VeilpiercerPower => "VEILPIERCER_POWER",
-            Self::ViciousPower => "VICIOUS_POWER",
-            Self::VigorPower => "VIGOR_POWER",
-            Self::VitalSparkPower => "VITAL_SPARK_POWER",
-            Self::VoidFormPower => "VOID_FORM_POWER",
-            Self::VulnerablePower => "VULNERABLE_POWER",
-            Self::WasteAwayPower => "WASTE_AWAY_POWER",
-            Self::WeakPower => "WEAK_POWER",
-            Self::WellLaidPlansPower => "WELL_LAID_PLANS_POWER",
-            Self::WitheringPresencePower => "WITHERING_PRESENCE_POWER",
-            Self::WraithFormPower => "WRAITH_FORM_POWER",
-        }
-    }
-
-    /// The power with this id, if the build has one.
-    ///
-    /// A binary search rather than a second match over the same
-    /// strings: `ALL` is in the game's own ordinal id order, and the
-    /// ids are all `[A-Z_]`, where a byte comparison and a C#
-    /// ordinal one agree.
-    pub fn from_id(id: &str) -> Option<Power> {
-        Self::ALL
-            .binary_search_by_key(&id, |power| power.id())
-            .ok()
-            .map(|i| Self::ALL[i])
-    }
 
     /// What is true of the power with no combat running.
     ///
@@ -1332,33 +1305,6 @@ impl Power {
             Self::WitheringPresencePower => buffs::WITHERING_PRESENCE_POWER,
             Self::WraithFormPower => debuffs::WRAITH_FORM_POWER,
         }
-    }
-}
-
-impl Serialize for Power {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.id())
-    }
-}
-
-impl<'de> Deserialize<'de> for Power {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-
-        impl serde::de::Visitor<'_> for Visitor {
-            type Value = Power;
-
-            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str("a power id")
-            }
-
-            fn visit_str<E: serde::de::Error>(self, id: &str) -> Result<Power, E> {
-                Power::from_id(id)
-                    .ok_or_else(|| E::invalid_value(serde::de::Unexpected::Str(id), &self))
-            }
-        }
-
-        deserializer.deserialize_str(Visitor)
     }
 }
 mod buffs;

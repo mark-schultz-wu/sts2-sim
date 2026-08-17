@@ -8,7 +8,7 @@ use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum EventCard {
     #[serde(rename = "APOTHEOSIS")]
     Apotheosis,
@@ -67,39 +67,6 @@ pub enum EventCard {
 }
 
 impl EventCard {
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Apotheosis => "APOTHEOSIS",
-            Self::Apparition => "APPARITION",
-            Self::BrightestFlame => "BRIGHTEST_FLAME",
-            Self::ByrdSwoop => "BYRD_SWOOP",
-            Self::Caltrops => "CALTROPS",
-            Self::Clash => "CLASH",
-            Self::Distraction => "DISTRACTION",
-            Self::DualWield => "DUAL_WIELD",
-            Self::Enlightenment => "ENLIGHTENMENT",
-            Self::Entrench => "ENTRENCH",
-            Self::Exterminate => "EXTERMINATE",
-            Self::FeedingFrenzy => "FEEDING_FRENZY",
-            Self::HelloWorld => "HELLO_WORLD",
-            Self::MadScience => "MAD_SCIENCE",
-            Self::Maul => "MAUL",
-            Self::Metamorphosis => "METAMORPHOSIS",
-            Self::NeowsFury => "NEOWS_FURY",
-            Self::Outmaneuver => "OUTMANEUVER",
-            Self::Peck => "PECK",
-            Self::Rebound => "REBOUND",
-            Self::Relax => "RELAX",
-            Self::RipAndTear => "RIP_AND_TEAR",
-            Self::Squash => "SQUASH",
-            Self::Stack => "STACK",
-            Self::ToricToughness => "TORIC_TOUGHNESS",
-            Self::Whistle => "WHISTLE",
-            Self::Wish => "WISH",
-        }
-    }
-
     /// What is true of the card with no run in progress.
     pub const fn data(self) -> CardData {
         match self {

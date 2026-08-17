@@ -40,7 +40,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, sanitize};
+use super::{DERIVES, Dump, banner, camel, repr, sanitize};
 
 /// Intents that carry numbers, and which numbers.
 ///
@@ -1004,7 +1004,7 @@ fn emit_monsters(
     )
     .unwrap();
     writeln!(out, "{DERIVES}").unwrap();
-    writeln!(out, "#[repr(u16)]").unwrap();
+    writeln!(out, "#[repr({})]", repr(machines.len())?).unwrap();
     writeln!(out, "pub enum Monster {{").unwrap();
     for id in machines.keys() {
         writeln!(out, "    #[serde(rename = \"{id}\")]").unwrap();
@@ -1025,15 +1025,6 @@ fn emit_monsters(
         writeln!(out, "        Monster::{},", camel(id)).unwrap();
     }
     writeln!(out, "    ];\n").unwrap();
-
-    writeln!(out, "    /// The game's own id, and the wire form.").unwrap();
-    writeln!(out, "    pub const fn id(self) -> &'static str {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
-    for id in machines.keys() {
-        writeln!(out, "            Self::{} => \"{id}\",", camel(id)).unwrap();
-    }
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}\n").unwrap();
 
     writeln!(
         out,

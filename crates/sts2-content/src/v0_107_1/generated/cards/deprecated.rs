@@ -8,20 +8,13 @@ use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum DeprecatedCard {
     #[serde(rename = "DEPRECATED_CARD")]
     DeprecatedCard,
 }
 
 impl DeprecatedCard {
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::DeprecatedCard => "DEPRECATED_CARD",
-        }
-    }
-
     /// What is true of the card with no run in progress.
     pub const fn data(self) -> CardData {
         match self {

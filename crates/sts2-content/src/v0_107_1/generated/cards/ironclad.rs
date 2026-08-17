@@ -8,7 +8,7 @@ use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u16)]
+#[repr(u8)]
 pub enum IroncladCard {
     #[serde(rename = "AGGRESSION")]
     Aggression,
@@ -187,99 +187,6 @@ pub enum IroncladCard {
 }
 
 impl IroncladCard {
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Aggression => "AGGRESSION",
-            Self::Anger => "ANGER",
-            Self::Armaments => "ARMAMENTS",
-            Self::AshenStrike => "ASHEN_STRIKE",
-            Self::Barricade => "BARRICADE",
-            Self::Bash => "BASH",
-            Self::BattleTrance => "BATTLE_TRANCE",
-            Self::Bloodletting => "BLOODLETTING",
-            Self::BloodWall => "BLOOD_WALL",
-            Self::Bludgeon => "BLUDGEON",
-            Self::BodySlam => "BODY_SLAM",
-            Self::Brand => "BRAND",
-            Self::Break => "BREAK",
-            Self::Breakthrough => "BREAKTHROUGH",
-            Self::Bully => "BULLY",
-            Self::BurningPact => "BURNING_PACT",
-            Self::Cascade => "CASCADE",
-            Self::Cinder => "CINDER",
-            Self::Colossus => "COLOSSUS",
-            Self::Conflagration => "CONFLAGRATION",
-            Self::Corruption => "CORRUPTION",
-            Self::CrimsonMantle => "CRIMSON_MANTLE",
-            Self::Cruelty => "CRUELTY",
-            Self::DarkEmbrace => "DARK_EMBRACE",
-            Self::Defend => "DEFEND_IRONCLAD",
-            Self::DemonicShield => "DEMONIC_SHIELD",
-            Self::DemonForm => "DEMON_FORM",
-            Self::Dismantle => "DISMANTLE",
-            Self::Dominate => "DOMINATE",
-            Self::DrumOfBattle => "DRUM_OF_BATTLE",
-            Self::EvilEye => "EVIL_EYE",
-            Self::ExpectAFight => "EXPECT_A_FIGHT",
-            Self::Feed => "FEED",
-            Self::FeelNoPain => "FEEL_NO_PAIN",
-            Self::FiendFire => "FIEND_FIRE",
-            Self::FightMe => "FIGHT_ME",
-            Self::FlameBarrier => "FLAME_BARRIER",
-            Self::ForgottenRitual => "FORGOTTEN_RITUAL",
-            Self::Havoc => "HAVOC",
-            Self::Headbutt => "HEADBUTT",
-            Self::Hellraiser => "HELLRAISER",
-            Self::Hemokinesis => "HEMOKINESIS",
-            Self::HowlFromBeyond => "HOWL_FROM_BEYOND",
-            Self::Impervious => "IMPERVIOUS",
-            Self::InfernalBlade => "INFERNAL_BLADE",
-            Self::Inferno => "INFERNO",
-            Self::Inflame => "INFLAME",
-            Self::IronWave => "IRON_WAVE",
-            Self::Juggernaut => "JUGGERNAUT",
-            Self::Juggling => "JUGGLING",
-            Self::Mangle => "MANGLE",
-            Self::MoltenFist => "MOLTEN_FIST",
-            Self::NotYet => "NOT_YET",
-            Self::Offering => "OFFERING",
-            Self::OneTwoPunch => "ONE_TWO_PUNCH",
-            Self::PactsEnd => "PACTS_END",
-            Self::PerfectedStrike => "PERFECTED_STRIKE",
-            Self::Pillage => "PILLAGE",
-            Self::PommelStrike => "POMMEL_STRIKE",
-            Self::PrimalForce => "PRIMAL_FORCE",
-            Self::Pyre => "PYRE",
-            Self::Rage => "RAGE",
-            Self::Rampage => "RAMPAGE",
-            Self::Rupture => "RUPTURE",
-            Self::SecondWind => "SECOND_WIND",
-            Self::SetupStrike => "SETUP_STRIKE",
-            Self::ShrugItOff => "SHRUG_IT_OFF",
-            Self::Spite => "SPITE",
-            Self::Stampede => "STAMPEDE",
-            Self::Stoke => "STOKE",
-            Self::Stomp => "STOMP",
-            Self::StoneArmor => "STONE_ARMOR",
-            Self::Strike => "STRIKE_IRONCLAD",
-            Self::SwordBoomerang => "SWORD_BOOMERANG",
-            Self::Tank => "TANK",
-            Self::Taunt => "TAUNT",
-            Self::TearAsunder => "TEAR_ASUNDER",
-            Self::Thrash => "THRASH",
-            Self::Thunderclap => "THUNDERCLAP",
-            Self::Tremble => "TREMBLE",
-            Self::TrueGrit => "TRUE_GRIT",
-            Self::TwinStrike => "TWIN_STRIKE",
-            Self::Unmovable => "UNMOVABLE",
-            Self::Unrelenting => "UNRELENTING",
-            Self::Uppercut => "UPPERCUT",
-            Self::Vicious => "VICIOUS",
-            Self::Whirlwind => "WHIRLWIND",
-        }
-    }
-
     /// What is true of the card with no run in progress.
     pub const fn data(self) -> CardData {
         match self {

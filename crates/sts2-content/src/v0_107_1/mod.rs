@@ -41,6 +41,20 @@ const MONSTERS: &str = include_str!("dumps/monsters.txt");
 #[cfg(test)]
 const POWERS: &str = include_str!("dumps/powers.txt");
 
+/// The game's own spelling of a value: the serde rename.
+///
+/// There is no `id` accessor beside the rename — two spellings of one string is
+/// a way for them to disagree — so this is how a test names a card, a monster,
+/// an encounter or a power. It allocates and it is only for tests; the wire is
+/// what the simulator will talk over, and the wire is this.
+#[cfg(test)]
+fn wire<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_string(value)
+        .unwrap()
+        .trim_matches('"')
+        .to_string()
+}
+
 #[cfg(test)]
 mod monster_tests;
 
@@ -93,7 +107,7 @@ mod tests {
         for row in rows("card") {
             let card = Cards::ALL
                 .iter()
-                .find(|c| c.id() == row[1])
+                .find(|c| wire(c) == row[1])
                 .unwrap_or_else(|| panic!("{} is in the dump but not generated", row[1]));
 
             let d = card.data();

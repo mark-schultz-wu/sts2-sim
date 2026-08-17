@@ -766,22 +766,4 @@ impl Cards {
         Cards::Token(TokenCard::WasteAway),
         Cards::Deprecated(DeprecatedCard::DeprecatedCard),
     ];
-
-    /// The game's own id, and the wire form.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Cards::Ironclad(c) => c.id(),
-            Cards::Silent(c) => c.id(),
-            Cards::Regent(c) => c.id(),
-            Cards::Necrobinder(c) => c.id(),
-            Cards::Defect(c) => c.id(),
-            Cards::Colorless(c) => c.id(),
-            Cards::Curse(c) => c.id(),
-            Cards::Event(c) => c.id(),
-            Cards::Quest(c) => c.id(),
-            Cards::Status(c) => c.id(),
-            Cards::Token(c) => c.id(),
-            Cards::Deprecated(c) => c.id(),
-        }
-    }
 }

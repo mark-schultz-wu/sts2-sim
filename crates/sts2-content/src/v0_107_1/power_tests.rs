@@ -7,7 +7,7 @@
 //! generated `Field::Constant` says whether the game really treats it as one.
 
 use super::powers::*;
-use super::{POWERS, VERSION};
+use super::{POWERS, VERSION, wire};
 use crate::Field;
 
 fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
@@ -21,17 +21,8 @@ fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
 fn power(id: &str) -> Power {
     *Power::ALL
         .iter()
-        .find(|p| p.id() == id)
+        .find(|p| wire(p) == id)
         .unwrap_or_else(|| panic!("{id} is in the dump but not generated"))
-}
-
-/// The game's own spelling of a value, which is the serde rename rather than
-/// the Rust identifier.
-fn wire<T: serde::Serialize>(value: &T) -> String {
-    serde_json::to_string(value)
-        .unwrap()
-        .trim_matches('"')
-        .to_string()
 }
 
 /// The dump's spelling of a column whose enum lost its `None`.
@@ -84,7 +75,7 @@ fn every_power_is_generated() {
     assert_eq!(Power::ALL.len(), dumped.len());
 
     for id in dumped {
-        assert_eq!(power(id).id(), id);
+        assert_eq!(wire(&power(id)), id);
     }
 }
 
@@ -343,50 +334,23 @@ fn only_the_known_powers_are_computed() {
     }
 }
 
-/// `from_id` binary-searches `ALL`, which only works if `ALL` is sorted.
+/// The wire form round-trips, and it is the only spelling of an id.
 ///
-/// The dump sorts by `StringComparer.Ordinal` and the ids are all `[A-Z_]`,
-/// where a C# ordinal comparison and Rust's byte one agree. Both halves are
-/// checked, because either one failing makes `from_id` miss a power that is
-/// right there in the table.
+/// There is no `id` accessor: the serde rename is the id, so this is the test
+/// that says the 273 renames are the 273 ids the dump declares and that every
+/// one of them reads back.
 #[test]
-fn the_ids_are_in_the_order_from_id_searches() {
-    let ids: Vec<&str> = Power::ALL.iter().map(|p| p.id()).collect();
+fn a_power_round_trips_through_its_wire_form() {
+    let dumped: Vec<&str> = rows("power").map(|r| r[1]).collect();
 
-    for id in &ids {
-        assert!(
-            id.bytes().all(|b| b.is_ascii_uppercase() || b == b'_'),
-            "{id} is outside the alphabet where ordinal and byte order agree"
-        );
+    for (power, id) in Power::ALL.iter().zip(&dumped) {
+        let json = serde_json::to_string(power).unwrap();
+        assert_eq!(json, format!("\"{id}\""), "the rename is not the dump's id");
+        assert_eq!(&serde_json::from_str::<Power>(&json).unwrap(), power);
     }
 
-    let mut sorted = ids.clone();
-    sorted.sort_unstable();
-    assert_eq!(ids, sorted, "ALL is no longer in id order");
-}
-
-/// The wire form is the id, in both directions.
-///
-/// `Serialize` and `Deserialize` are written against `id` rather than derived,
-/// so this is the test that says the hand-written pair actually agrees with the
-/// table — and that a string no power answers to is an error rather than some
-/// neighbouring power.
-#[test]
-fn a_power_round_trips_through_its_id() {
-    for power in Power::ALL {
-        let json = serde_json::to_string(&power).unwrap();
-        assert_eq!(json, format!("\"{}\"", power.id()));
-        assert_eq!(serde_json::from_str::<Power>(&json).unwrap(), power);
-        assert_eq!(Power::from_id(power.id()), Some(power));
-    }
-
-    assert_eq!(Power::from_id("NOT_A_POWER"), None);
     assert!(serde_json::from_str::<Power>("\"NOT_A_POWER\"").is_err());
-
-    // The neighbours of a real id, which is what a binary search gets wrong
-    // when it gets anything wrong.
-    assert_eq!(Power::from_id("STRENGTH_POWE"), None);
-    assert_eq!(Power::from_id("STRENGTH_POWERS"), None);
+    assert!(serde_json::from_str::<Power>("\"STRENGTH_POWE\"").is_err());
 }
 
 /// `GetTypeForAmount`, which the game derives rather than stores.
@@ -402,14 +366,14 @@ fn a_negative_amount_can_flip_a_powers_type() {
     fn allows_negative(power: Power) -> bool {
         match power.data().flags.get(PowerFlag::AllowNegative) {
             Field::Constant(b) => b,
-            Field::Computed => panic!("{}: computes AllowNegative", power.id()),
+            Field::Computed => panic!("{}: computes AllowNegative", wire(&power)),
         }
     }
 
     fn type_for(power: Power, amount: i32) -> PowerType {
         let d = power.data();
         let (Field::Constant(kind), Field::Constant(stack)) = (d.kind, d.stack) else {
-            panic!("{}: computes what this test wants to derive", power.id());
+            panic!("{}: computes what this test wants to derive", wire(&power));
         };
         let allow_negative = allows_negative(power);
 

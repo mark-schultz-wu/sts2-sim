@@ -20,7 +20,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, sanitize};
+use super::{DERIVES, Dump, banner, camel, repr, sanitize};
 
 /// Pool id, module name, Rust enum name, and the id suffix to strip inside it.
 const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
@@ -187,7 +187,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
 
         let out = split.body(module);
         writeln!(out, "{DERIVES}").unwrap();
-        writeln!(out, "#[repr(u16)]").unwrap();
+        writeln!(out, "#[repr({})]", repr(members.len())?).unwrap();
         writeln!(out, "pub enum {enum_name} {{").unwrap();
         for card in &members {
             if suffix.is_some_and(|s| card.id.ends_with(&format!("_{s}"))) {
@@ -199,20 +199,6 @@ pub fn generate(root: &Path) -> Result<String, String> {
         writeln!(out, "}}\n").unwrap();
 
         writeln!(out, "impl {enum_name} {{").unwrap();
-        writeln!(out, "    /// The game's own id, and the wire form.").unwrap();
-        writeln!(out, "    pub const fn id(self) -> &'static str {{").unwrap();
-        writeln!(out, "        match self {{").unwrap();
-        for card in &members {
-            writeln!(
-                out,
-                "            Self::{} => \"{}\",",
-                variant(card, suffix),
-                card.id
-            )
-            .unwrap();
-        }
-        writeln!(out, "        }}").unwrap();
-        writeln!(out, "    }}\n").unwrap();
 
         // By value: `CardData` fits in a register now, so a reference would be
         // strictly larger than the thing it points at — and returning one would
@@ -474,19 +460,6 @@ pub fn generate(root: &Path) -> Result<String, String> {
     }
     writeln!(out, "    ];\n").unwrap();
 
-    writeln!(out, "    /// The game's own id, and the wire form.").unwrap();
-    writeln!(out, "    pub const fn id(self) -> &'static str {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
-    for (_, _, enum_name, _) in POOLS {
-        writeln!(
-            out,
-            "            Cards::{}(c) => c.id(),",
-            enum_name.trim_end_matches("Card")
-        )
-        .unwrap();
-    }
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}").unwrap();
     writeln!(out, "}}").unwrap();
 
     split.finish(
