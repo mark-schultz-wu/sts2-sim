@@ -15,17 +15,11 @@
 //! encounters' `AllPossibleMonsters`; here the two halves are dumped
 //! separately. They have to agree, and nothing but a test says so.
 
-use super::encounters::*;
-use super::monsters::Monster;
-use super::{ENCOUNTERS, MONSTERS, VERSION, wire};
+use super::super::encounters::*;
+use super::super::monsters::Monster;
+use super::super::{ENCOUNTERS, MONSTERS, VERSION};
+use super::{dump_hash, rows, wire};
 use std::collections::{BTreeMap, BTreeSet};
-
-fn rows(dump: &'static str, kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
-    dump.lines()
-        .filter(|l| !l.starts_with('#'))
-        .map(|l| l.split_whitespace().collect::<Vec<_>>())
-        .filter(move |f| f.first() == Some(&kind))
-}
 
 fn encounter(id: &str) -> Encounter {
     *Encounter::ALL
@@ -42,13 +36,7 @@ const DROPPED: [(&str, &str); 2] = [("Family", "None"), ("RoomType", "Unassigned
 /// regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
-    let header = ENCOUNTERS.lines().next().expect("the dump has a header");
-    let hash: u32 = header
-        .rsplit_once(' ')
-        .expect("the header names a content hash")
-        .1
-        .parse()
-        .expect("the content hash is a number");
+    let hash = dump_hash(ENCOUNTERS);
 
     assert_eq!(
         hash, VERSION.content_hash,

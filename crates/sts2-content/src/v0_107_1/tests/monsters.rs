@@ -7,17 +7,10 @@
 //! a mistranslation there would be invisible right up until a monster took a
 //! turn and walked to the wrong move.
 
-use super::monsters::*;
-use super::{MONSTERS, VERSION, wire};
+use super::super::monsters::*;
+use super::super::{MONSTERS, VERSION};
+use super::{dump_hash, rows, wire};
 use crate::{Field, Scaled};
-
-fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
-    MONSTERS
-        .lines()
-        .filter(|l| !l.starts_with('#'))
-        .map(|l| l.split_whitespace().collect::<Vec<_>>())
-        .filter(move |f| f.first() == Some(&kind))
-}
 
 fn monster(id: &str) -> Monster {
     *Monster::ALL
@@ -88,13 +81,7 @@ fn repeat(kind: &str, max_times: &str, cooldown: &str) -> Repeat {
 /// hash, and a table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
-    let header = MONSTERS.lines().next().expect("the dump has a header");
-    let hash: u32 = header
-        .rsplit_once(' ')
-        .expect("the header names a content hash")
-        .1
-        .parse()
-        .expect("the content hash is a number");
+    let hash = dump_hash(MONSTERS);
 
     assert_eq!(
         hash, VERSION.content_hash,
@@ -107,7 +94,9 @@ fn the_dump_came_from_this_version() {
 /// are the thresholds and a renumber would silently move every step.
 #[test]
 fn the_ascension_levels_are_the_thresholds() {
-    let levels: Vec<Vec<&str>> = rows("enum").filter(|r| r[1] == "AscensionLevel").collect();
+    let levels: Vec<Vec<&str>> = rows(MONSTERS, "enum")
+        .filter(|r| r[1] == "AscensionLevel")
+        .collect();
     assert_eq!(levels.len(), 11, "ascension level count changed");
 
     for (i, l) in levels.iter().enumerate() {
@@ -125,7 +114,7 @@ fn the_ascension_levels_are_the_thresholds() {
 /// out loud rather than leaving it implied.
 #[test]
 fn ascension_never_changes_a_graph() {
-    assert_eq!(rows("structurechange").count(), 0);
+    assert_eq!(rows(MONSTERS, "structurechange").count(), 0);
 }
 
 /// Where ascension actually moves something, measured rather than assumed.
@@ -136,11 +125,11 @@ fn ascension_never_changes_a_graph() {
 /// level instead of reading two names out of the source.
 #[test]
 fn the_ascension_thresholds_are_the_two_enemy_levels() {
-    let hp: Vec<&str> = rows("scalehp").map(|r| r[2]).collect();
+    let hp: Vec<&str> = rows(MONSTERS, "scalehp").map(|r| r[2]).collect();
     assert_eq!(hp.len(), 102, "monsters whose HP scales");
     assert!(hp.iter().all(|l| *l == "8"), "HP steps somewhere new");
 
-    let mut early: Vec<&str> = rows("scaleintent")
+    let mut early: Vec<&str> = rows(MONSTERS, "scaleintent")
         .filter(|r| r[4] != "9")
         .map(|r| r[1])
         .collect();
@@ -153,7 +142,7 @@ fn the_ascension_thresholds_are_the_two_enemy_levels() {
     );
 
     // Weights are the one dumped number ascension never touches.
-    assert_eq!(rows("scalebranch").count(), 0);
+    assert_eq!(rows(MONSTERS, "scalebranch").count(), 0);
 }
 
 /// `Scaled::at` walks the thresholds the way the game's `>=` does.
@@ -177,7 +166,7 @@ fn a_scaled_value_steps_at_its_threshold() {
 
 #[test]
 fn every_monster_is_generated() {
-    let dumped: Vec<&str> = rows("monster").map(|r| r[1]).collect();
+    let dumped: Vec<&str> = rows(MONSTERS, "monster").map(|r| r[1]).collect();
     assert_eq!(dumped.len(), 126, "the build has 126 monsters");
     assert_eq!(Monster::ALL.len(), dumped.len());
 
@@ -192,7 +181,7 @@ fn every_monster_is_generated() {
 #[test]
 fn the_acts_are_in_run_order() {
     let mut seen: Vec<&str> = Vec::new();
-    for row in rows("act") {
+    for row in rows(MONSTERS, "act") {
         if !seen.contains(&row[1]) {
             seen.push(row[1]);
         }
@@ -217,8 +206,8 @@ fn act(name: &str) -> Act {
 
 #[test]
 fn a_monsters_acts_are_the_ones_whose_encounters_name_it() {
-    for row in rows("monster") {
-        let expected: Vec<Act> = rows("act")
+    for row in rows(MONSTERS, "monster") {
+        let expected: Vec<Act> = rows(MONSTERS, "act")
             .filter(|a| a[2] == row[1])
             .map(|a| act(a[1]))
             .collect();
@@ -318,7 +307,7 @@ fn the_generated_table_matches_the_dump() {
     let mut branches = 0;
     let mut intents = 0;
 
-    for row in rows("monster") {
+    for row in rows(MONSTERS, "monster") {
         let id = row[1];
         let data = monster(id).data();
         let names = state_names(id);
@@ -368,7 +357,7 @@ fn the_generated_table_matches_the_dump() {
                     assert_eq!(list.len().to_string(), d[3], "{id}.{name}: branch count");
 
                     for (j, b) in list.iter().enumerate() {
-                        let d = rows("branch")
+                        let d = rows(MONSTERS, "branch")
                             .find(|r| r[1] == id && r[2] == name && r[3] == j.to_string())
                             .unwrap_or_else(|| panic!("{id}.{name} has no branch {j}"));
 
@@ -395,7 +384,7 @@ fn the_generated_table_matches_the_dump() {
                     assert_eq!(targets.len().to_string(), d[3], "{id}.{name}: branch count");
 
                     for (j, t) in targets.iter().enumerate() {
-                        let d = rows("condbranch")
+                        let d = rows(MONSTERS, "condbranch")
                             .find(|r| r[1] == id && r[2] == name && r[3] == j.to_string())
                             .unwrap_or_else(|| panic!("{id}.{name} has no condbranch {j}"));
                         assert_eq!(names[*t as usize], d[4], "{id}.{name}[{j}]: target");
@@ -410,15 +399,17 @@ fn the_generated_table_matches_the_dump() {
     // state the codegen dropped would pass everything above.
     assert_eq!(
         states,
-        rows("move").count() + rows("rand").count() + rows("cond").count()
+        rows(MONSTERS, "move").count()
+            + rows(MONSTERS, "rand").count()
+            + rows(MONSTERS, "cond").count()
     );
-    assert_eq!(branches, rows("branch").count());
-    assert_eq!(intents, rows("intent").count());
+    assert_eq!(branches, rows(MONSTERS, "branch").count());
+    assert_eq!(intents, rows(MONSTERS, "intent").count());
 }
 
 /// The dump row of a given kind for one monster's state.
 fn one(kind: &'static str, monster: &str, state: &str) -> Vec<&'static str> {
-    rows(kind)
+    rows(MONSTERS, kind)
         .find(|r| r[1] == monster && r[2] == state)
         .unwrap_or_else(|| panic!("no {kind} row for {monster}.{state}"))
 }
@@ -430,7 +421,7 @@ fn one(kind: &'static str, monster: &str, state: &str) -> Vec<&'static str> {
 /// that decides which ones become steps.
 fn updates(kind: &'static str, key: &[&str], column: usize) -> Vec<(u8, &'static str)> {
     let level = key.len() + 1;
-    rows(kind)
+    rows(MONSTERS, kind)
         .filter(|r| key.iter().enumerate().all(|(i, k)| r[i + 1] == *k))
         .map(|r| (r[level].parse().expect("an ascension level"), r[column]))
         .collect()
@@ -510,7 +501,7 @@ fn intent_kind(name: &str) -> IntentKind {
 /// the hover tips. Everything else is checked per row, including that the two
 /// payloads sit beside the right bits.
 fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> usize {
-    let rows: Vec<Vec<&str>> = rows("intent")
+    let rows: Vec<Vec<&str>> = rows(MONSTERS, "intent")
         .filter(|r| r[1] == monster && r[2] == state)
         .collect();
     assert_eq!(
@@ -592,7 +583,7 @@ fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> 
 /// rolling against a number that is no longer true.
 #[test]
 fn only_the_known_weights_are_computed() {
-    let mut computed: Vec<(&str, &str)> = rows("branch")
+    let mut computed: Vec<(&str, &str)> = rows(MONSTERS, "branch")
         .filter(|r| r[8] == "dynamic")
         .map(|r| (r[1], r[4]))
         .collect();
@@ -614,7 +605,7 @@ fn only_the_known_weights_are_computed() {
 /// as the weights.
 #[test]
 fn only_the_known_intents_are_computed() {
-    let mut computed: Vec<(&str, &str, &str)> = rows("intent")
+    let mut computed: Vec<(&str, &str, &str)> = rows(MONSTERS, "intent")
         .filter(|r| r[5] == "dynamic" || r[6] == "dynamic")
         .map(|r| (r[1], r[2], r[4]))
         .collect();

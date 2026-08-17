@@ -6,17 +6,10 @@
 //! members is `virtual` or `abstract` on `PowerModel`, so nothing about a
 //! generated `Field::Constant` says whether the game really treats it as one.
 
-use super::powers::*;
-use super::{POWERS, VERSION, wire};
+use super::super::powers::*;
+use super::super::{POWERS, VERSION};
+use super::{dump_hash, rows, wire};
 use crate::Field;
-
-fn rows(kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
-    POWERS
-        .lines()
-        .filter(|l| !l.starts_with('#'))
-        .map(|l| l.split_whitespace().collect::<Vec<_>>())
-        .filter(move |f| f.first() == Some(&kind))
-}
 
 fn power(id: &str) -> Power {
     *Power::ALL
@@ -54,13 +47,7 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 /// hash, and a table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
-    let header = POWERS.lines().next().expect("the dump has a header");
-    let hash: u32 = header
-        .rsplit_once(' ')
-        .expect("the header names a content hash")
-        .1
-        .parse()
-        .expect("the content hash is a number");
+    let hash = dump_hash(POWERS);
 
     assert_eq!(
         hash, VERSION.content_hash,
@@ -70,7 +57,7 @@ fn the_dump_came_from_this_version() {
 
 #[test]
 fn every_power_is_generated() {
-    let dumped: Vec<&str> = rows("power").map(|r| r[1]).collect();
+    let dumped: Vec<&str> = rows(POWERS, "power").map(|r| r[1]).collect();
     assert_eq!(dumped.len(), 273, "the build has 273 powers");
     assert_eq!(Power::ALL.len(), dumped.len());
 
@@ -84,7 +71,7 @@ fn every_power_is_generated() {
 #[test]
 fn power_ids_are_unique() {
     let mut seen = std::collections::HashSet::new();
-    for row in rows("power") {
+    for row in rows(POWERS, "power") {
         assert!(seen.insert(row[1]), "duplicate power id {}", row[1]);
     }
 }
@@ -106,7 +93,7 @@ fn power_ids_are_unique() {
 fn the_generated_table_matches_the_dump() {
     let mut checked = 0;
 
-    for row in rows("power") {
+    for row in rows(POWERS, "power") {
         let id = row[1];
         let d = power(id).data();
 
@@ -162,7 +149,7 @@ fn check<T>(id: &str, field: &str, cell: Field<T>, dumped: &str, spell: impl Fn(
 #[test]
 fn the_game_declares_three_members_each() {
     for name in ["PowerType", "PowerInstanceType", "PowerStackType"] {
-        let members: Vec<_> = rows("enum").filter(|r| r[1] == name).collect();
+        let members: Vec<_> = rows(POWERS, "enum").filter(|r| r[1] == name).collect();
         assert_eq!(members.len(), 3, "{name} member count changed");
 
         // Discriminants are the wire and table encoding, so a gap or a reorder
@@ -187,7 +174,7 @@ fn the_generated_enums_drop_only_what_was_declared_dropped() {
     /// One enum: every member the game declares, against the Rust type.
     macro_rules! check_enum {
         ($ty:ty, $name:literal) => {
-            for row in rows("enum").filter(|r| r[1] == $name) {
+            for row in rows(POWERS, "enum").filter(|r| r[1] == $name) {
                 let (member, discriminant) = (row[3], row[2].parse::<u8>().unwrap());
                 let parsed: Option<$ty> = serde_json::from_str(&format!("\"{member}\"")).ok();
 
@@ -228,7 +215,8 @@ fn the_generated_enums_drop_only_what_was_declared_dropped() {
 /// needed would be an `Option` that is never `None`.
 #[test]
 fn the_dropped_members_are_as_rare_as_the_reasons_claim() {
-    let count = |column: usize, value: &str| rows("power").filter(|r| r[column] == value).count();
+    let count =
+        |column: usize, value: &str| rows(POWERS, "power").filter(|r| r[column] == value).count();
 
     assert_eq!(count(2, "None"), 0, "some power now has PowerType::None");
     assert_eq!(count(3, "None"), 252, "PowerInstanceType::None count moved");
@@ -252,7 +240,7 @@ fn the_dropped_members_are_as_rare_as_the_reasons_claim() {
 #[test]
 fn only_the_known_powers_are_computed() {
     let computed = |column: usize| -> Vec<&str> {
-        rows("power")
+        rows(POWERS, "power")
             .filter(|r| r[column] == "dynamic")
             .map(|r| r[1])
             .collect()
@@ -341,7 +329,7 @@ fn only_the_known_powers_are_computed() {
 /// one of them reads back.
 #[test]
 fn a_power_round_trips_through_its_wire_form() {
-    let dumped: Vec<&str> = rows("power").map(|r| r[1]).collect();
+    let dumped: Vec<&str> = rows(POWERS, "power").map(|r| r[1]).collect();
 
     for (power, id) in Power::ALL.iter().zip(&dumped) {
         let json = serde_json::to_string(power).unwrap();
