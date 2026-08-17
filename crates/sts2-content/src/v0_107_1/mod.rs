@@ -66,5 +66,9 @@ const EVENTS: &str = include_str!("dumps/events.txt");
 #[cfg(test)]
 const POTIONS: &str = include_str!("dumps/potions.txt");
 
+/// The enchantment dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const ENCHANTMENTS: &str = include_str!("dumps/enchantments.txt");
+
 #[cfg(test)]
 mod tests;

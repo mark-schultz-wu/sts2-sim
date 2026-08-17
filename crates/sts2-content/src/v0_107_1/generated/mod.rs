@@ -5,6 +5,7 @@
 
 pub mod cards;
 pub mod characters;
+pub mod enchantments;
 pub mod encounters;
 pub mod events;
 pub mod monsters;
