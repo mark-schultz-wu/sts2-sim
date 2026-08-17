@@ -37,9 +37,9 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, sanitize};
 
 /// Intents that carry numbers, and which numbers.
@@ -299,75 +299,47 @@ pub fn generate(root: &Path) -> Result<String, String> {
     emit_shape(&mut out, largest);
     emit_monsters(&mut out, &machines, &act_of)?;
 
-    let dir = root.join("monsters");
-    fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
-
     // The graphs, one file per bucket. `mod.rs` keeps the shape and the enum;
     // a monster's data is a named const it points at, so `data()` stays a
     // readable index instead of eight thousand lines of table.
-    let mut buckets: BTreeMap<String, String> = BTreeMap::new();
+    let mut split = Split::new(root, "monsters", "monsters.txt", &hash)?;
     for (id, machine) in &machines {
-        let body = buckets.entry(bucket(act_of.get(id))).or_default();
+        let literal = machine_literal(id, machine)?;
         writeln!(
-            body,
-            "pub(super) const {id}: MonsterData = {};\n",
-            machine_literal(id, machine)?
+            split.body(&bucket(act_of.get(id))),
+            "pub(super) const {id}: MonsterData = {literal};\n"
         )
         .unwrap();
     }
 
-    for (file, body) in &buckets {
-        writeln!(out, "mod {file};").unwrap();
-
-        // Imports from what the file actually names: a bucket of monsters that
-        // never branch randomly has no use for `Branch` or `Repeat`, and an
-        // unused import is a warning that `-D warnings` turns into a build
-        // failure.
-        //
-        // Whole identifiers, not substrings: `RepeatCount` contains the text
-        // `Repeat`, and importing a `Repeat` the file never names is the same
-        // build failure from the other direction.
-        let named: std::collections::BTreeSet<&str> = body
-            .split(|c: char| !c.is_alphanumeric() && c != '_')
-            .collect();
-        let used = |names: &[&str]| {
-            names
-                .iter()
-                .filter(|n| named.contains(*n))
-                .copied()
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-
-        let mut file_body = banner(&describe(file), "monsters.txt", &hash);
-        writeln!(
-            file_body,
-            "\nuse super::{{{}}};\nuse crate::{{{}}};\n",
-            used(&[
-                "Branch",
-                "Attack",
-                "FollowUp",
-                "IntentKind",
-                "IntentSet",
-                "Intents",
-                "MonsterData",
-                "Move",
-                "Repeat",
-                "RepeatCount",
-                "State"
-            ]),
-            used(&["Field", "Scaled"])
-        )
-        .unwrap();
-        file_body.push_str(body);
-
-        let path = dir.join(format!("{file}.rs"));
-        fs::write(&path, &file_body).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    for name in split.names() {
+        writeln!(out, "mod {name};").unwrap();
     }
     writeln!(out).unwrap();
 
-    let path = dir.join("mod.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    split.finish(
+        &out,
+        describe,
+        &[
+            (
+                "super",
+                &[
+                    "Attack",
+                    "Branch",
+                    "FollowUp",
+                    "IntentKind",
+                    "IntentSet",
+                    "Intents",
+                    "MonsterData",
+                    "Move",
+                    "Repeat",
+                    "RepeatCount",
+                    "State",
+                ],
+            ),
+            ("crate", &["Field", "Scaled"]),
+        ],
+    )?;
 
     let computed = machines
         .values()

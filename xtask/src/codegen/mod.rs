@@ -17,6 +17,7 @@
 
 mod cards;
 mod monsters;
+mod split;
 
 use std::fmt::Write as _;
 use std::fs;
@@ -25,8 +26,8 @@ use std::process::Command;
 
 const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
-/// The domains generated so far. Relics, potions and powers each get a dump, a
-/// submodule, and an entry here.
+/// The domains generated so far. Relics, potions and encounters each get a
+/// dump, a submodule, and an entry here.
 const DOMAINS: [&str; 2] = ["cards", "monsters"];
 
 const DERIVES: &str = "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]";

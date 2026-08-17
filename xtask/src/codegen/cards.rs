@@ -17,9 +17,9 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, sanitize};
 
 /// Pool id, module name, Rust enum name, and the id suffix to strip inside it.
@@ -175,8 +175,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
             .push((discriminant, f[3].clone()));
     }
 
-    let dir = root.join("cards");
-    fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    let mut split = Split::new(root, "cards", "cards.txt", &content_hash)?;
 
     let mut total = 0usize;
     let mut stripped = 0usize;
@@ -186,19 +185,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         let members: Vec<&Card> = cards.iter().filter(|c| c.pool == pool_id).collect();
         total += members.len();
 
-        let mut out = banner(
-            &format!("Cards in `{pool_id}`."),
-            "cards.txt",
-            &content_hash,
-        );
-        writeln!(
-            out,
-            "\nuse super::{{CardData, CardKeyword, CardRarity, CardType, KeywordSet, TargetType}};\n\
-             use crate::{{Cost, Field}};\n\
-             use serde::{{Deserialize, Serialize}};\n"
-        )
-        .unwrap();
-
+        let out = split.body(module);
         writeln!(out, "{DERIVES}").unwrap();
         writeln!(out, "#[repr(u16)]").unwrap();
         writeln!(out, "pub enum {enum_name} {{").unwrap();
@@ -282,9 +269,6 @@ pub fn generate(root: &Path) -> Result<String, String> {
         writeln!(out, "        }}").unwrap();
         writeln!(out, "    }}").unwrap();
         writeln!(out, "}}").unwrap();
-
-        let path = dir.join(format!("{module}.rs"));
-        fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
     }
 
     // The shared half: the field enums, the data shape, and the outer enum.
@@ -505,8 +489,31 @@ pub fn generate(root: &Path) -> Result<String, String> {
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}").unwrap();
 
-    let path = dir.join("mod.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    split.finish(
+        &out,
+        |module| {
+            let (pool_id, ..) = POOLS
+                .iter()
+                .find(|(_, m, _, _)| *m == module)
+                .expect("every bucket is a pool");
+            format!("Cards in `{pool_id}`.")
+        },
+        &[
+            (
+                "super",
+                &[
+                    "CardData",
+                    "CardKeyword",
+                    "CardRarity",
+                    "CardType",
+                    "KeywordSet",
+                    "TargetType",
+                ],
+            ),
+            ("crate", &["Cost", "Field"]),
+            ("serde", &["Deserialize", "Serialize"]),
+        ],
+    )?;
 
     println!(
         "  cards: {total} across {} pools ({stripped} ids had a pool suffix stripped), {} field enums",
