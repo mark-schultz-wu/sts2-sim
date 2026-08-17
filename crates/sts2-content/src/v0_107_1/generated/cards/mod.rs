@@ -91,14 +91,14 @@ pub enum TargetType {
 
 /// A set of [`CardKeyword`]s: one bit per keyword, at its discriminant.
 ///
-/// Bit 0 is unused, because the game's zero is `None` and that is not a
-/// keyword. Using the discriminant anyway keeps a bit meaning the same
-/// thing here as it does there.
+/// Bit 0 is unused, because the game's zero is `None` and that is not
+/// a keyword. Using the discriminant anyway keeps a bit meaning the
+/// same thing here as it does there.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct KeywordSet(u8);
 
 impl KeywordSet {
-    /// Every keyword, in the game's declaration order.
+    /// Every member, in the enum's own order.
     const MEMBERS: [CardKeyword; 7] = [
         CardKeyword::Exhaust,
         CardKeyword::Ethereal,
@@ -109,23 +109,23 @@ impl KeywordSet {
         CardKeyword::Eternal,
     ];
 
-    pub const fn new(keywords: &[CardKeyword]) -> Self {
+    pub const fn new(members: &[CardKeyword]) -> Self {
         let mut bits = 0u8;
         let mut i = 0;
-        while i < keywords.len() {
-            bits |= 1u8 << keywords[i] as u8;
+        while i < members.len() {
+            bits |= 1u8 << members[i] as u8;
             i += 1;
         }
         Self(bits)
     }
 
-    pub const fn contains(self, keyword: CardKeyword) -> bool {
-        self.0 & (1u8 << keyword as u8) != 0
+    pub const fn contains(self, member: CardKeyword) -> bool {
+        self.0 & (1u8 << member as u8) != 0
     }
 
-    /// The members, in the game's declaration order.
+    /// The members, in the enum's own order.
     pub fn iter(self) -> impl Iterator<Item = CardKeyword> {
-        Self::MEMBERS.into_iter().filter(move |&k| self.contains(k))
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
     }
 }
 
@@ -169,12 +169,7 @@ impl CardTypeSet {
     }
 
     pub const fn is_empty(self) -> bool {
-        self.0 == 0
-    }
-
-    /// Whether the two sets share a member.
-    pub const fn intersects(self, other: CardTypeSet) -> bool {
-        self.0 & other.0 != 0
+        self.0 == 0u8
     }
 
     /// The members, in the enum's own order.

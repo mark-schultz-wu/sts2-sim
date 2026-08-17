@@ -6,7 +6,7 @@
 use super::cards::{CardType, CardTypeSet};
 use serde::{Deserialize, Serialize};
 
-/// A yes-or-no fact about an enchantment.
+/// A yes-or-no fact about a enchantment.
 ///
 /// Four separate `EnchantmentModel` members rather than a game enum,
 /// so the numbering is the order the dump writes the columns in.
@@ -28,13 +28,11 @@ pub enum EnchantmentFlag {
 }
 
 /// The flags an enchantment has.
-///
-/// One word and a `contains`: none of these is ever computed, because
-/// all four are read off the model with no run underneath it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EnchantmentFlags(u8);
 
 impl EnchantmentFlags {
+    /// Every member, in the enum's own order.
     const MEMBERS: [EnchantmentFlag; 4] = [
         EnchantmentFlag::ExtraCardText,
         EnchantmentFlag::ShowsAmount,
@@ -42,22 +40,23 @@ impl EnchantmentFlags {
         EnchantmentFlag::RefusesSomeCards,
     ];
 
-    pub const fn new(flags: &[EnchantmentFlag]) -> Self {
+    pub const fn new(members: &[EnchantmentFlag]) -> Self {
         let mut bits = 0u8;
         let mut i = 0;
-        while i < flags.len() {
-            bits |= 1u8 << flags[i] as u8;
+        while i < members.len() {
+            bits |= 1u8 << members[i] as u8;
             i += 1;
         }
         Self(bits)
     }
 
-    pub const fn contains(self, flag: EnchantmentFlag) -> bool {
-        self.0 & (1u8 << flag as u8) != 0
+    pub const fn contains(self, member: EnchantmentFlag) -> bool {
+        self.0 & (1u8 << member as u8) != 0
     }
 
+    /// The members, in the enum's own order.
     pub fn iter(self) -> impl Iterator<Item = EnchantmentFlag> {
-        Self::MEMBERS.into_iter().filter(move |&f| self.contains(f))
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
     }
 }
 

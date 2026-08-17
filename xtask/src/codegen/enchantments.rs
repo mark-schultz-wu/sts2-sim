@@ -42,7 +42,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{DERIVES, Dump, banner, camel, repr, sets};
 
 /// The card types an enchantment can actually be put on.
 ///
@@ -110,7 +110,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     writeln!(out, "\nuse super::cards::{{CardType, CardTypeSet}};").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
-    emit_flags(&mut out);
+    emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_enchantments(&mut out, &enchantments, &types)?;
 
@@ -129,70 +129,22 @@ pub fn generate(root: &Path) -> Result<String, String> {
     Ok(hash)
 }
 
-fn emit_flags(out: &mut String) {
-    writeln!(
+fn emit_flags(out: &mut String) -> Result<(), String> {
+    sets::plain(
         out,
-        "/// A yes-or-no fact about an enchantment.\n\
-         ///\n\
-         /// Four separate `EnchantmentModel` members rather than a game enum,\n\
-         /// so the numbering is the order the dump writes the columns in.\n\
-         {DERIVES}\n\
-         #[repr(u8)]\n\
-         pub enum EnchantmentFlag {{"
+        &sets::Set {
+            flag: "EnchantmentFlag",
+            set: "EnchantmentFlags",
+            flag_doc: "\n\
+                       Four separate `EnchantmentModel` members rather than a game enum,\n\
+                       so the numbering is the order the dump writes the columns in.",
+            set_doc: "The flags an enchantment has.",
+            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            declare: true,
+            extras: &[],
+            bits: FLAGS.len() - 1,
+        },
     )
-    .unwrap();
-    for (bit, (name, _, doc)) in FLAGS.iter().enumerate() {
-        for line in doc.lines() {
-            writeln!(out, "    /// {}", line.trim()).unwrap();
-        }
-        writeln!(out, "    {name} = {bit},").unwrap();
-    }
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The flags an enchantment has.\n\
-         ///\n\
-         /// One word and a `contains`: none of these is ever computed, because\n\
-         /// all four are read off the model with no run underneath it.\n\
-         #[derive(Clone, Copy, PartialEq, Eq, Hash)]\n\
-         pub struct EnchantmentFlags(u8);\n\
-         \n\
-         impl EnchantmentFlags {{\n\
-         \x20   const MEMBERS: [EnchantmentFlag; {n}] = [{members}];\n\
-         \n\
-         \x20   pub const fn new(flags: &[EnchantmentFlag]) -> Self {{\n\
-         \x20       let mut bits = 0u8;\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < flags.len() {{\n\
-         \x20           bits |= 1u8 << flags[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \x20       Self(bits)\n\
-         \x20   }}\n\
-         \n\
-         \x20   pub const fn contains(self, flag: EnchantmentFlag) -> bool {{\n\
-         \x20       self.0 & (1u8 << flag as u8) != 0\n\
-         \x20   }}\n\
-         \n\
-         \x20   pub fn iter(self) -> impl Iterator<Item = EnchantmentFlag> {{\n\
-         \x20       Self::MEMBERS.into_iter().filter(move |&f| self.contains(f))\n\
-         \x20   }}\n\
-         }}\n\
-         \n\
-         impl std::fmt::Debug for EnchantmentFlags {{\n\
-         \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
-         \x20       f.debug_set().entries(self.iter()).finish()\n\
-         \x20   }}\n\
-         }}\n",
-        n = FLAGS.len(),
-        members = FLAGS
-            .iter()
-            .map(|(name, ..)| format!("EnchantmentFlag::{name}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
-    .unwrap();
 }
 
 fn emit_shape(out: &mut String) {

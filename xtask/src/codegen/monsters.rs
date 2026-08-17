@@ -39,6 +39,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::sets;
 use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, repr, sanitize};
 
@@ -576,12 +577,7 @@ fn emit_intent(
         .get("IntentType")
         .ok_or("the dump declares no IntentType")?;
 
-    let widest = members.iter().map(|(d, _)| *d).max().unwrap_or(0);
-    if widest >= 16 {
-        return Err(format!(
-            "IntentType's highest discriminant is {widest} and IntentSet is a u16"
-        ));
-    }
+    let widest = members.iter().map(|(d, _)| *d).max().unwrap_or(0) as usize;
 
     writeln!(
         out,
@@ -606,73 +602,28 @@ fn emit_intent(
     // both presentation. Nothing in the rules reads them, and no move telegraphs
     // the same kind twice, so the order is the only thing a set loses and the
     // order is not a fact about the game.
-    writeln!(
+    sets::plain(
         out,
-        "/// A set of [`IntentKind`]s: one bit per kind, at its discriminant.\n\
-         ///\n\
-         /// A set rather than a list because the order is presentation. The\n\
-         /// game stores an ordered `AbstractIntent[]`, but the only readers are\n\
-         /// the node that lays out intent icons and the one that gathers hover\n\
-         /// tips; nothing in the rules looks at it, and no move in the build\n\
-         /// telegraphs one kind twice, so nothing else is lost."
-    )
-    .unwrap();
-    writeln!(out, "#[derive(Clone, Copy, PartialEq, Eq, Hash)]").unwrap();
-    writeln!(out, "pub struct IntentSet(u16);\n").unwrap();
-    writeln!(out, "impl IntentSet {{").unwrap();
-    writeln!(out, "    /// Every kind, in the game's declaration order.").unwrap();
-    writeln!(
-        out,
-        "    const MEMBERS: [IntentKind; {}] = [",
-        members.len()
-    )
-    .unwrap();
-    for (_, m) in members {
-        writeln!(out, "        IntentKind::{m},").unwrap();
-    }
-    writeln!(out, "    ];\n").unwrap();
-    writeln!(out, "    pub const fn new(kinds: &[IntentKind]) -> Self {{").unwrap();
-    writeln!(out, "        let mut bits = 0u16;").unwrap();
-    writeln!(out, "        let mut i = 0;").unwrap();
-    writeln!(out, "        while i < kinds.len() {{").unwrap();
-    writeln!(out, "            bits |= 1u16 << kinds[i] as u8;").unwrap();
-    writeln!(out, "            i += 1;").unwrap();
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "        Self(bits)").unwrap();
-    writeln!(out, "    }}\n").unwrap();
-    writeln!(
-        out,
-        "    pub const fn contains(self, kind: IntentKind) -> bool {{"
-    )
-    .unwrap();
-    writeln!(out, "        self.0 & (1u16 << kind as u8) != 0").unwrap();
-    writeln!(out, "    }}\n").unwrap();
-    writeln!(out, "    pub const fn is_empty(self) -> bool {{").unwrap();
-    writeln!(out, "        self.0 == 0").unwrap();
-    writeln!(out, "    }}\n").unwrap();
-    writeln!(out, "    /// The members, in the game's declaration order.").unwrap();
-    writeln!(
-        out,
-        "    pub fn iter(self) -> impl Iterator<Item = IntentKind> {{"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "        Self::MEMBERS.into_iter().filter(move |&k| self.contains(k))"
-    )
-    .unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(out, "impl std::fmt::Debug for IntentSet {{").unwrap();
-    writeln!(
-        out,
-        "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{"
-    )
-    .unwrap();
-    writeln!(out, "        f.debug_set().entries(self.iter()).finish()").unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
+        &sets::Set {
+            flag: "IntentKind",
+            set: "IntentSet",
+            flag_doc: "",
+            set_doc: "A set of [`IntentKind`]s: one bit per kind, at its discriminant.\n\
+                      \n\
+                      A set rather than a list because the order is presentation. The\n\
+                      game stores an ordered `AbstractIntent[]`, but the only readers are\n\
+                      the node that lays out intent icons and the one that gathers hover\n\
+                      tips; nothing in the rules looks at it, and no move in the build\n\
+                      telegraphs one kind twice, so nothing else is lost.",
+            members: &members
+                .iter()
+                .map(|(_, m)| (m.as_str(), ""))
+                .collect::<Vec<_>>(),
+            declare: false,
+            extras: &[],
+            bits: widest,
+        },
+    )?;
 
     writeln!(
         out,

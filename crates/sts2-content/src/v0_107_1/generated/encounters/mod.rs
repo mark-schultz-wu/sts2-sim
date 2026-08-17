@@ -80,13 +80,12 @@ pub enum RoomType {
 ///
 /// A set rather than the sequence the game declares, because the one
 /// reader cannot see an order: `SharesTagsWith` is
-/// `Tags.Intersect(other.Tags).Any()`, which is [`FamilySet::intersects`]
-/// here.
+/// `Tags.Intersect(other.Tags).Any()`, which is `intersects` here.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FamilySet(u16);
 
 impl FamilySet {
-    /// Every family, in the game's declaration order.
+    /// Every member, in the enum's own order.
     const MEMBERS: [Family; 14] = [
         Family::Burrower,
         Family::Chomper,
@@ -104,28 +103,28 @@ impl FamilySet {
         Family::Exoskeletons,
     ];
 
-    pub const fn new(families: &[Family]) -> Self {
+    pub const fn new(members: &[Family]) -> Self {
         let mut bits = 0u16;
         let mut i = 0;
-        while i < families.len() {
-            bits |= 1u16 << families[i] as u8;
+        while i < members.len() {
+            bits |= 1u16 << members[i] as u8;
             i += 1;
         }
         Self(bits)
     }
 
-    pub const fn contains(self, family: Family) -> bool {
-        self.0 & (1u16 << family as u8) != 0
+    pub const fn contains(self, member: Family) -> bool {
+        self.0 & (1u16 << member as u8) != 0
     }
 
-    /// Whether two encounters may not sit next to each other.
+    /// Whether the two sets share a member.
     pub const fn intersects(self, other: FamilySet) -> bool {
         self.0 & other.0 != 0
     }
 
-    /// The members, in the game's declaration order.
+    /// The members, in the enum's own order.
     pub fn iter(self) -> impl Iterator<Item = Family> {
-        Self::MEMBERS.into_iter().filter(move |&t| self.contains(t))
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
     }
 }
 
@@ -135,7 +134,7 @@ impl std::fmt::Debug for FamilySet {
     }
 }
 
-/// A yes-or-no fact about an encounter.
+/// A yes-or-no fact about a flagset.
 ///
 /// Three separate `EncounterModel` overrides rather than a game enum,
 /// so the numbering is the dump's column order. Unlike a power's
@@ -157,28 +156,30 @@ pub enum EncounterFlag {
 pub struct FlagSet(u8);
 
 impl FlagSet {
+    /// Every member, in the enum's own order.
     const MEMBERS: [EncounterFlag; 3] = [
         EncounterFlag::Weak,
         EncounterFlag::GivesRewards,
         EncounterFlag::Debug,
     ];
 
-    pub const fn new(flags: &[EncounterFlag]) -> Self {
+    pub const fn new(members: &[EncounterFlag]) -> Self {
         let mut bits = 0u8;
         let mut i = 0;
-        while i < flags.len() {
-            bits |= 1u8 << flags[i] as u8;
+        while i < members.len() {
+            bits |= 1u8 << members[i] as u8;
             i += 1;
         }
         Self(bits)
     }
 
-    pub const fn contains(self, flag: EncounterFlag) -> bool {
-        self.0 & (1u8 << flag as u8) != 0
+    pub const fn contains(self, member: EncounterFlag) -> bool {
+        self.0 & (1u8 << member as u8) != 0
     }
 
+    /// The members, in the enum's own order.
     pub fn iter(self) -> impl Iterator<Item = EncounterFlag> {
-        Self::MEMBERS.into_iter().filter(move |&f| self.contains(f))
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
     }
 }
 

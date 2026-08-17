@@ -188,6 +188,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
             members: &FLAGS.map(|(name, _, doc)| (name, doc)),
             declare: true,
             bits: FLAGS.len() - 1,
+            extras: &[],
         },
     )?;
 

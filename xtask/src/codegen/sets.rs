@@ -38,6 +38,17 @@ use std::fmt::Write as _;
 
 use super::DERIVES;
 
+/// A method a set gets only where a caller wants it.
+///
+/// `new`, `contains`, `iter` and `Debug` are the core and every set has them:
+/// build one, ask it, walk it, print it. These two are not, and handing them out
+/// anyway would be four sets carrying an `intersects` nothing calls.
+#[derive(PartialEq, Eq)]
+pub enum Extra {
+    IsEmpty,
+    Intersects,
+}
+
 /// One set to emit, in either shape.
 pub struct Set<'a> {
     /// The member enum's name, e.g. `PowerFlag`.
@@ -55,6 +66,8 @@ pub struct Set<'a> {
     pub members: &'a [(&'a str, &'a str)],
     /// Whether to emit the member enum, or only the set over it.
     pub declare: bool,
+    /// Methods beyond the core, emitted only where something calls them.
+    pub extras: &'a [Extra],
     /// The highest bit the set can use, which is the highest discriminant of
     /// any member — not the member count.
     ///
@@ -217,15 +230,7 @@ pub fn plain(out: &mut String, set: &Set<'_>) -> Result<(), String> {
          \x20       self.0 & (1{word} << member as u8) != 0\n\
          \x20   }}\n\
          \n\
-         \x20   pub const fn is_empty(self) -> bool {{\n\
-         \x20       self.0 == 0\n\
-         \x20   }}\n\
-         \n\
-         \x20   /// Whether the two sets share a member.\n\
-         \x20   pub const fn intersects(self, other: {name}) -> bool {{\n\
-         \x20       self.0 & other.0 != 0\n\
-         \x20   }}\n\
-         \n\
+{extras}\
          \x20   /// The members, in the enum's own order.\n\
          \x20   pub fn iter(self) -> impl Iterator<Item = {flag}> {{\n\
          \x20       Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))\n\
@@ -244,10 +249,35 @@ pub fn plain(out: &mut String, set: &Set<'_>) -> Result<(), String> {
             .map(|(m, _)| format!("{flag}::{m}"))
             .collect::<Vec<_>>()
             .join(", "),
+        extras = extras(set, word, name),
     )
     .unwrap();
 
     Ok(())
+}
+
+/// The optional methods, in a fixed order so two sets asking for both agree.
+fn extras(set: &Set<'_>, word: &str, name: &str) -> String {
+    let mut out = String::new();
+
+    if set.extras.contains(&Extra::IsEmpty) {
+        writeln!(out, "    pub const fn is_empty(self) -> bool {{").unwrap();
+        writeln!(out, "        self.0 == 0{word}").unwrap();
+        writeln!(out, "    }}\n").unwrap();
+    }
+
+    if set.extras.contains(&Extra::Intersects) {
+        writeln!(out, "    /// Whether the two sets share a member.").unwrap();
+        writeln!(
+            out,
+            "    pub const fn intersects(self, other: {name}) -> bool {{"
+        )
+        .unwrap();
+        writeln!(out, "        self.0 & other.0 != 0").unwrap();
+        writeln!(out, "    }}\n").unwrap();
+    }
+
+    out
 }
 
 /// The member enum, where the set declares one.
@@ -290,5 +320,59 @@ fn pad(line: &str) -> String {
         String::new()
     } else {
         format!(" {line}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set(members: usize, bits: usize) -> Set<'static> {
+        const NAMES: [(&str, &str); 40] = [("M", ""); 40];
+        Set {
+            flag: "Member",
+            set: "MemberSet",
+            flag_doc: "",
+            set_doc: "",
+            members: &NAMES[..members],
+            declare: false,
+            extras: &[],
+            bits,
+        }
+    }
+
+    /// The width comes from the highest bit, not the member count.
+    ///
+    /// The two agree on every enum in the build, so the generated tree cannot
+    /// tell the rules apart — which is why this is here. They come apart the
+    /// first time a domain drops a member in the middle of an enum, and then
+    /// sizing from the count silently truncates the set.
+    #[test]
+    fn the_word_holds_the_highest_bit_and_not_the_member_count() {
+        // Seven members reaching bit 7 — `CardKeyword`, which drops its zero.
+        // The count says six bits and the truth says eight.
+        assert_eq!(set(7, 7).word().unwrap(), "u8");
+
+        // The case that would break: few members, high discriminants.
+        assert_eq!(set(3, 9).word().unwrap(), "u16");
+        assert_eq!(set(3, 20).word().unwrap(), "u32");
+
+        // The boundaries themselves.
+        assert_eq!(set(1, 0).word().unwrap(), "u8");
+        assert_eq!(set(9, 7).word().unwrap(), "u8");
+        assert_eq!(set(9, 8).word().unwrap(), "u16");
+        assert_eq!(set(20, 15).word().unwrap(), "u16");
+        assert_eq!(set(20, 16).word().unwrap(), "u32");
+    }
+
+    /// Past a `u32` is an error rather than a truncation.
+    #[test]
+    fn a_set_too_wide_to_hold_fails_generation() {
+        let err = set(3, 32).word().unwrap_err();
+        assert!(err.contains("MemberSet"), "the error names the set: {err}");
+        assert!(
+            err.contains("bit 32"),
+            "and the bit it could not hold: {err}"
+        );
     }
 }

@@ -302,6 +302,7 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
             members: &FLAGS.map(|(name, _, doc)| (name, doc)),
             declare: true,
             bits: FLAGS.len() - 1,
+            extras: &[],
         },
     )
 }

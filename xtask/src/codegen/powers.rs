@@ -444,6 +444,7 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
             members: &FLAGS.map(|f| (f, describe(f))),
             declare: true,
             bits: FLAGS.len() - 1,
+            extras: &[],
         },
     )
 }

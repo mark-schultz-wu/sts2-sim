@@ -33,7 +33,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{DERIVES, Dump, banner, camel, repr, sets};
 
 /// The yes-or-no columns, in the order they become bits.
 const FLAGS: [(&str, usize, &str); 4] = [
@@ -156,7 +156,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         writeln!(out, "}}\n").unwrap();
     }
 
-    emit_flags(&mut out);
+    emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_events(&mut out, &events, &acts_of, &pooled)?;
 
@@ -206,71 +206,22 @@ pub fn generate(root: &Path) -> Result<String, String> {
 /// One word and a `contains`, unlike a power's or a relic's: nothing here is
 /// computed, because every one of these is read off the model with no combat
 /// running.
-fn emit_flags(out: &mut String) {
-    writeln!(
+fn emit_flags(out: &mut String) -> Result<(), String> {
+    sets::plain(
         out,
-        "/// A yes-or-no fact about an event.\n\
-         ///\n\
-         /// Four separate `EventModel` members rather than a game enum, so the\n\
-         /// numbering is the order the dump writes the columns in.\n\
-         {DERIVES}\n\
-         #[repr(u8)]\n\
-         pub enum EventFlag {{"
+        &sets::Set {
+            flag: "EventFlag",
+            set: "EventFlags",
+            flag_doc: "\n\
+                       Four separate `EventModel` members rather than a game enum, so the\n\
+                       numbering is the order the dump writes the columns in.",
+            set_doc: "The flags an event has.",
+            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            declare: true,
+            extras: &[],
+            bits: FLAGS.len() - 1,
+        },
     )
-    .unwrap();
-    for (bit, (name, _, doc)) in FLAGS.iter().enumerate() {
-        for line in doc.lines() {
-            writeln!(out, "    /// {}", line.trim()).unwrap();
-        }
-        writeln!(out, "    {name} = {bit},").unwrap();
-    }
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The flags an event has.\n\
-         ///\n\
-         /// One word, and `contains` rather than a `Field`: none of these is\n\
-         /// ever computed, because all four are read off the model with no run\n\
-         /// underneath it.\n\
-         #[derive(Clone, Copy, PartialEq, Eq, Hash)]\n\
-         pub struct EventFlags(u8);\n\
-         \n\
-         impl EventFlags {{\n\
-         \x20   const MEMBERS: [EventFlag; {n}] = [{members}];\n\
-         \n\
-         \x20   pub const fn new(flags: &[EventFlag]) -> Self {{\n\
-         \x20       let mut bits = 0u8;\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < flags.len() {{\n\
-         \x20           bits |= 1u8 << flags[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \x20       Self(bits)\n\
-         \x20   }}\n\
-         \n\
-         \x20   pub const fn contains(self, flag: EventFlag) -> bool {{\n\
-         \x20       self.0 & (1u8 << flag as u8) != 0\n\
-         \x20   }}\n\
-         \n\
-         \x20   pub fn iter(self) -> impl Iterator<Item = EventFlag> {{\n\
-         \x20       Self::MEMBERS.into_iter().filter(move |&f| self.contains(f))\n\
-         \x20   }}\n\
-         }}\n\
-         \n\
-         impl std::fmt::Debug for EventFlags {{\n\
-         \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
-         \x20       f.debug_set().entries(self.iter()).finish()\n\
-         \x20   }}\n\
-         }}\n",
-        n = FLAGS.len(),
-        members = FLAGS
-            .iter()
-            .map(|(name, ..)| format!("EventFlag::{name}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
-    .unwrap();
 }
 
 fn emit_shape(out: &mut String) {

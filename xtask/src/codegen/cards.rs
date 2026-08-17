@@ -329,97 +329,41 @@ pub fn generate(root: &Path) -> Result<String, String> {
 
     // A bitset rather than a slice. The game keeps keywords in a
     // `HashSet<CardKeyword>` and asks `.Contains(…)` almost exclusively, so a
-    // set is what it means; a slice was 16 bytes of pointer and length to
-    // carry at most four one-byte members, and its order came from the dump's
-    // sort rather than from the game. It also has to survive being the
-    // per-card runtime state, because `AddKeyword`/`RemoveKeyword` mutate it
-    // mid-combat, and a `u8` clones for free where a set does not.
-    let keywords: Vec<&(u8, String)> = enums["CardKeyword"]
+    // set is what it means; a slice was 16 bytes of pointer and length to carry
+    // at most four one-byte members, and its order came from the dump's sort
+    // rather than from the game. It also has to survive being the per-card
+    // runtime state, because `AddKeyword`/`RemoveKeyword` mutate it mid-combat,
+    // and a word clones for free where a set does not.
+    let keywords: Vec<(&str, &str)> = enums["CardKeyword"]
         .iter()
         .filter(|(_, m)| !dropped("CardKeyword", m))
+        .map(|(_, m)| (m.as_str(), ""))
         .collect();
-    let widest = keywords.iter().map(|&&(d, _)| d).max().unwrap_or(0);
-    if widest >= 8 {
-        return Err(format!(
-            "CardKeyword's highest discriminant is {widest} and KeywordSet is a u8"
-        ));
-    }
-    writeln!(
-        out,
-        "/// A set of [`CardKeyword`]s: one bit per keyword, at its discriminant.\n\
-         ///\n\
-         /// Bit 0 is unused, because the game's zero is `None` and that is not a\n\
-         /// keyword. Using the discriminant anyway keeps a bit meaning the same\n\
-         /// thing here as it does there."
-    )
-    .unwrap();
-    writeln!(out, "#[derive(Clone, Copy, PartialEq, Eq, Hash)]").unwrap();
-    writeln!(out, "pub struct KeywordSet(u8);\n").unwrap();
-    writeln!(out, "impl KeywordSet {{").unwrap();
-    writeln!(
-        out,
-        "    /// Every keyword, in the game's declaration order."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    const MEMBERS: [CardKeyword; {}] = [",
-        keywords.len()
-    )
-    .unwrap();
-    for (_, k) in &keywords {
-        writeln!(out, "        CardKeyword::{},", sanitize(k)).unwrap();
-    }
-    writeln!(out, "    ];\n").unwrap();
-    writeln!(
-        out,
-        "    pub const fn new(keywords: &[CardKeyword]) -> Self {{"
-    )
-    .unwrap();
-    writeln!(out, "        let mut bits = 0u8;").unwrap();
-    writeln!(out, "        let mut i = 0;").unwrap();
-    writeln!(out, "        while i < keywords.len() {{").unwrap();
-    writeln!(out, "            bits |= 1u8 << keywords[i] as u8;").unwrap();
-    writeln!(out, "            i += 1;").unwrap();
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "        Self(bits)").unwrap();
-    writeln!(out, "    }}\n").unwrap();
-    writeln!(
-        out,
-        "    pub const fn contains(self, keyword: CardKeyword) -> bool {{"
-    )
-    .unwrap();
-    writeln!(out, "        self.0 & (1u8 << keyword as u8) != 0").unwrap();
-    writeln!(out, "    }}\n").unwrap();
-    writeln!(out, "    /// The members, in the game's declaration order.").unwrap();
-    writeln!(
-        out,
-        "    pub fn iter(self) -> impl Iterator<Item = CardKeyword> {{"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "        Self::MEMBERS.into_iter().filter(move |&k| self.contains(k))"
-    )
-    .unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
+    let widest = enums["CardKeyword"]
+        .iter()
+        .filter(|(_, m)| !dropped("CardKeyword", m))
+        .map(|&(d, _)| d as usize)
+        .max()
+        .unwrap_or(0);
 
-    writeln!(out, "impl std::fmt::Debug for KeywordSet {{").unwrap();
-    writeln!(
-        out,
-        "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{"
-    )
-    .unwrap();
-    writeln!(out, "        f.debug_set().entries(self.iter()).finish()").unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}\n").unwrap();
+    sets::plain(
+        &mut out,
+        &sets::Set {
+            flag: "CardKeyword",
+            set: "KeywordSet",
+            flag_doc: "",
+            set_doc: "A set of [`CardKeyword`]s: one bit per keyword, at its discriminant.\n\
+                      \n\
+                      Bit 0 is unused, because the game's zero is `None` and that is not\n\
+                      a keyword. Using the discriminant anyway keeps a bit meaning the\n\
+                      same thing here as it does there.",
+            members: &keywords,
+            declare: false,
+            extras: &[],
+            bits: widest,
+        },
+    )?;
 
-    // No id: that is the card's identity, which the enum variant already is.
-    // Storing it here would put a second spelling of the same fact 16 bytes
-    // into every row, and let a `CardData` be passed around as if it named a
-    // card. Ask the variant instead — `Cards::id` is a match over string
-    // literals, no lookup and no allocation.
     // A set over `CardType`, for whoever needs one. Nothing in this domain
     // does — a card has one type, not a set of them — but the enum lives here,
     // so the set over it does too rather than in whichever domain happens to
@@ -447,6 +391,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
                 .map(|(_, m)| (m.as_str(), ""))
                 .collect::<Vec<_>>(),
             declare: false,
+            extras: &[sets::Extra::IsEmpty],
             bits: types.iter().map(|&&(d, _)| d as usize).max().unwrap_or(0),
         },
     )?;

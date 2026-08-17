@@ -71,7 +71,7 @@ pub enum IntentKind {
 pub struct IntentSet(u16);
 
 impl IntentSet {
-    /// Every kind, in the game's declaration order.
+    /// Every member, in the enum's own order.
     const MEMBERS: [IntentKind; 15] = [
         IntentKind::Attack,
         IntentKind::Buff,
@@ -90,27 +90,23 @@ impl IntentSet {
         IntentKind::Unknown,
     ];
 
-    pub const fn new(kinds: &[IntentKind]) -> Self {
+    pub const fn new(members: &[IntentKind]) -> Self {
         let mut bits = 0u16;
         let mut i = 0;
-        while i < kinds.len() {
-            bits |= 1u16 << kinds[i] as u8;
+        while i < members.len() {
+            bits |= 1u16 << members[i] as u8;
             i += 1;
         }
         Self(bits)
     }
 
-    pub const fn contains(self, kind: IntentKind) -> bool {
-        self.0 & (1u16 << kind as u8) != 0
+    pub const fn contains(self, member: IntentKind) -> bool {
+        self.0 & (1u16 << member as u8) != 0
     }
 
-    pub const fn is_empty(self) -> bool {
-        self.0 == 0
-    }
-
-    /// The members, in the game's declaration order.
+    /// The members, in the enum's own order.
     pub fn iter(self) -> impl Iterator<Item = IntentKind> {
-        Self::MEMBERS.into_iter().filter(move |&k| self.contains(k))
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
     }
 }
 

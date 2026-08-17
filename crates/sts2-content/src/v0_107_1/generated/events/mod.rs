@@ -16,7 +16,7 @@ pub enum EventLayoutType {
     Custom = 3,
 }
 
-/// A yes-or-no fact about an event.
+/// A yes-or-no fact about a event.
 ///
 /// Four separate `EventModel` members rather than a game enum, so the
 /// numbering is the order the dump writes the columns in.
@@ -40,14 +40,11 @@ pub enum EventFlag {
 }
 
 /// The flags an event has.
-///
-/// One word, and `contains` rather than a `Field`: none of these is
-/// ever computed, because all four are read off the model with no run
-/// underneath it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventFlags(u8);
 
 impl EventFlags {
+    /// Every member, in the enum's own order.
     const MEMBERS: [EventFlag; 4] = [
         EventFlag::Ancient,
         EventFlag::SharedBetweenPlayers,
@@ -55,22 +52,23 @@ impl EventFlags {
         EventFlag::Gated,
     ];
 
-    pub const fn new(flags: &[EventFlag]) -> Self {
+    pub const fn new(members: &[EventFlag]) -> Self {
         let mut bits = 0u8;
         let mut i = 0;
-        while i < flags.len() {
-            bits |= 1u8 << flags[i] as u8;
+        while i < members.len() {
+            bits |= 1u8 << members[i] as u8;
             i += 1;
         }
         Self(bits)
     }
 
-    pub const fn contains(self, flag: EventFlag) -> bool {
-        self.0 & (1u8 << flag as u8) != 0
+    pub const fn contains(self, member: EventFlag) -> bool {
+        self.0 & (1u8 << member as u8) != 0
     }
 
+    /// The members, in the enum's own order.
     pub fn iter(self) -> impl Iterator<Item = EventFlag> {
-        Self::MEMBERS.into_iter().filter(move |&f| self.contains(f))
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
     }
 }
 

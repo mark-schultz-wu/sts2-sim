@@ -39,7 +39,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{DERIVES, Dump, banner, camel, repr, sets};
 
 /// Members the game declares that are not values of the field they name.
 const DROPPED: [(&str, &str, &str); 2] = [
@@ -427,129 +427,58 @@ impl Steps {
 }
 
 /// The two bitsets: tags, which are the game's enum, and flags, which are not.
+/// The two bitsets: families, which are the game's enum, and flags, which are
+/// not.
 fn emit_sets(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), String> {
-    let families: Vec<&String> = enums
+    let families: Vec<(&str, &str)> = enums
         .get("EncounterTag")
         .ok_or("the dump reflects no EncounterTag")?
         .iter()
         .filter(|(_, m)| !dropped("Family", m))
-        .map(|(_, m)| m)
+        .map(|(_, m)| (m.as_str(), ""))
         .collect();
+    let widest = enums["EncounterTag"]
+        .iter()
+        .filter(|(_, m)| !dropped("Family", m))
+        .map(|&(d, _)| d as usize)
+        .max()
+        .unwrap_or(0);
 
-    writeln!(
+    sets::plain(
         out,
-        "/// The families an encounter fields.\n\
-         ///\n\
-         /// A set rather than the sequence the game declares, because the one\n\
-         /// reader cannot see an order: `SharesTagsWith` is\n\
-         /// `Tags.Intersect(other.Tags).Any()`, which is [`FamilySet::intersects`]\n\
-         /// here.\n\
-         #[derive(Clone, Copy, PartialEq, Eq, Hash)]\n\
-         pub struct FamilySet(u16);\n\
-         \n\
-         impl FamilySet {{\n\
-         \x20   /// Every family, in the game's declaration order.\n\
-         \x20   const MEMBERS: [Family; {n}] = [{members}];\n\
-         \n\
-         \x20   pub const fn new(families: &[Family]) -> Self {{\n\
-         \x20       let mut bits = 0u16;\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < families.len() {{\n\
-         \x20           bits |= 1u16 << families[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \x20       Self(bits)\n\
-         \x20   }}\n\
-         \n\
-         \x20   pub const fn contains(self, family: Family) -> bool {{\n\
-         \x20       self.0 & (1u16 << family as u8) != 0\n\
-         \x20   }}\n\
-         \n\
-         \x20   /// Whether two encounters may not sit next to each other.\n\
-         \x20   pub const fn intersects(self, other: FamilySet) -> bool {{\n\
-         \x20       self.0 & other.0 != 0\n\
-         \x20   }}\n\
-         \n\
-         \x20   /// The members, in the game's declaration order.\n\
-         \x20   pub fn iter(self) -> impl Iterator<Item = Family> {{\n\
-         \x20       Self::MEMBERS.into_iter().filter(move |&t| self.contains(t))\n\
-         \x20   }}\n\
-         }}\n\
-         \n\
-         impl std::fmt::Debug for FamilySet {{\n\
-         \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
-         \x20       f.debug_set().entries(self.iter()).finish()\n\
-         \x20   }}\n\
-         }}\n",
-        n = families.len(),
-        members = families
-            .iter()
-            .map(|t| format!("Family::{t}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
-    .unwrap();
+        &sets::Set {
+            flag: "Family",
+            set: "FamilySet",
+            flag_doc: "",
+            set_doc: "The families an encounter fields.\n\
+                      \n\
+                      A set rather than the sequence the game declares, because the one\n\
+                      reader cannot see an order: `SharesTagsWith` is\n\
+                      `Tags.Intersect(other.Tags).Any()`, which is `intersects` here.",
+            members: &families,
+            declare: false,
+            extras: &[sets::Extra::Intersects],
+            bits: widest,
+        },
+    )?;
 
-    writeln!(
+    sets::plain(
         out,
-        "/// A yes-or-no fact about an encounter.\n\
-         ///\n\
-         /// Three separate `EncounterModel` overrides rather than a game enum,\n\
-         /// so the numbering is the dump's column order. Unlike a power's\n\
-         /// flags these are never computed — nothing here asks the encounter —\n\
-         /// so the set is one word and `contains` can answer plainly.\n\
-         {DERIVES}\n\
-         #[repr(u8)]\n\
-         pub enum EncounterFlag {{"
-    )
-    .unwrap();
-    for (bit, (name, _, doc)) in FLAGS.iter().enumerate() {
-        writeln!(out, "    /// {doc}").unwrap();
-        writeln!(out, "    {name} = {bit},").unwrap();
-    }
-    writeln!(out, "}}\n").unwrap();
-
-    writeln!(
-        out,
-        "/// The flags an encounter has.\n\
-         #[derive(Clone, Copy, PartialEq, Eq, Hash)]\n\
-         pub struct FlagSet(u8);\n\
-         \n\
-         impl FlagSet {{\n\
-         \x20   const MEMBERS: [EncounterFlag; {n}] = [{members}];\n\
-         \n\
-         \x20   pub const fn new(flags: &[EncounterFlag]) -> Self {{\n\
-         \x20       let mut bits = 0u8;\n\
-         \x20       let mut i = 0;\n\
-         \x20       while i < flags.len() {{\n\
-         \x20           bits |= 1u8 << flags[i] as u8;\n\
-         \x20           i += 1;\n\
-         \x20       }}\n\
-         \x20       Self(bits)\n\
-         \x20   }}\n\
-         \n\
-         \x20   pub const fn contains(self, flag: EncounterFlag) -> bool {{\n\
-         \x20       self.0 & (1u8 << flag as u8) != 0\n\
-         \x20   }}\n\
-         \n\
-         \x20   pub fn iter(self) -> impl Iterator<Item = EncounterFlag> {{\n\
-         \x20       Self::MEMBERS.into_iter().filter(move |&f| self.contains(f))\n\
-         \x20   }}\n\
-         }}\n\
-         \n\
-         impl std::fmt::Debug for FlagSet {{\n\
-         \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
-         \x20       f.debug_set().entries(self.iter()).finish()\n\
-         \x20   }}\n\
-         }}\n",
-        n = FLAGS.len(),
-        members = FLAGS
-            .iter()
-            .map(|(name, ..)| format!("EncounterFlag::{name}"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    )
-    .unwrap();
+        &sets::Set {
+            flag: "EncounterFlag",
+            set: "FlagSet",
+            flag_doc: "\n\
+                       Three separate `EncounterModel` overrides rather than a game enum,\n\
+                       so the numbering is the dump's column order. Unlike a power's\n\
+                       flags these are never computed — nothing here asks the encounter —\n\
+                       so the set is one word and `contains` can answer plainly.",
+            set_doc: "The flags an encounter has.",
+            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            declare: true,
+            extras: &[],
+            bits: FLAGS.len() - 1,
+        },
+    )?;
 
     Ok(())
 }
