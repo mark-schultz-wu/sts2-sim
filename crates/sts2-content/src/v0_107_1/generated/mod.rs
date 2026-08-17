@@ -8,5 +8,6 @@ pub mod characters;
 pub mod encounters;
 pub mod events;
 pub mod monsters;
+pub mod potions;
 pub mod powers;
 pub mod relics;

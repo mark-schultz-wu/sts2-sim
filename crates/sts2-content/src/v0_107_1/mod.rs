@@ -62,5 +62,9 @@ const CHARACTERS: &str = include_str!("dumps/characters.txt");
 #[cfg(test)]
 const EVENTS: &str = include_str!("dumps/events.txt");
 
+/// The potion dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const POTIONS: &str = include_str!("dumps/potions.txt");
+
 #[cfg(test)]
 mod tests;

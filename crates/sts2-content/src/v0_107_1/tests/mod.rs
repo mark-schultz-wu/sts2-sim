@@ -17,6 +17,7 @@ mod characters;
 mod encounters;
 mod events;
 mod monsters;
+mod potions;
 mod powers;
 mod relics;
 

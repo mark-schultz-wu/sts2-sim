@@ -6,17 +6,18 @@
 //!
 //! # Which pools are typed
 //!
-//! `relic_pool` is the relics domain's own `RelicPool`, so the compiler
-//! checks it. `card_pool` and `potion_pool` are enums declared here, for two
-//! different reasons.
+//! `relic_pool` and `potion_pool` are the relics and potions domains' own
+//! types, so the compiler checks them. `card_pool` is an enum declared here.
 //!
 //! Cards have no pool type to point at: that domain *buckets* by pool but never
 //! names one, since a card's pool is which enum it is a variant of. And it could
 //! not be used here anyway — two characters draw from `MOCK_CARD_POOL`, which is
-//! not one of the twelve the cards domain generates.
+//! not one of the twelve the cards domain generates. So `CardPool` stays local,
+//! and is the only one that does.
 //!
-//! Potions are not dumped yet. When they are, `PotionPool` should move there and
-//! this should point at it, the way `relic_pool` already does.
+//! `potion_pool` used to be declared here for the same reason, and is not any
+//! more: the potions domain has a `PotionPool` and the five a character names
+//! are a subset of its ten, so this points at it.
 //!
 //! # No file split
 //!
@@ -46,7 +47,7 @@ const RELIC_CAP: usize = 2;
 const POOLS: [(&str, &str, usize, &str, bool); 3] = [
     ("card_pool", "CardPool", 9, "_CARD_POOL", true),
     ("relic_pool", "RelicPool", 10, "_RELIC_POOL", false),
-    ("potion_pool", "PotionPool", 11, "_POTION_POOL", true),
+    ("potion_pool", "PotionPool", 11, "_POTION_POOL", false),
 ];
 
 pub fn generate(root: &Path) -> Result<String, String> {
@@ -137,6 +138,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     named[1..].sort_unstable();
 
     writeln!(out, "\nuse super::cards::{{{}}};", named.join(", ")).unwrap();
+    writeln!(out, "use super::potions::PotionPool;").unwrap();
     writeln!(out, "use super::relics::{{Relic, RelicPool}};").unwrap();
     writeln!(out, "use crate::Few;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();

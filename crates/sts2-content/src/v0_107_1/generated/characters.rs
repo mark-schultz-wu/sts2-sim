@@ -4,6 +4,7 @@
 //! Source: `dumps/characters.txt`, content hash 3954186980.
 
 use super::cards::{Cards, DefectCard, IroncladCard, NecrobinderCard, RegentCard, SilentCard};
+use super::potions::PotionPool;
 use super::relics::{Relic, RelicPool};
 use crate::Few;
 use serde::{Deserialize, Serialize};
@@ -32,22 +33,6 @@ pub enum CardPool {
     Regent = 4,
     #[serde(rename = "SILENT_CARD_POOL")]
     Silent = 5,
-}
-
-/// The pools a character's `potion_pool` can name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum PotionPool {
-    #[serde(rename = "DEFECT_POTION_POOL")]
-    Defect = 0,
-    #[serde(rename = "IRONCLAD_POTION_POOL")]
-    Ironclad = 1,
-    #[serde(rename = "NECROBINDER_POTION_POOL")]
-    Necrobinder = 2,
-    #[serde(rename = "REGENT_POTION_POOL")]
-    Regent = 3,
-    #[serde(rename = "SILENT_POTION_POOL")]
-    Silent = 4,
 }
 
 /// The cards a run opens with, in the order they are added.

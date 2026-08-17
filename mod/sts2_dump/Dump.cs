@@ -38,6 +38,7 @@ public static class Dump
             "encounterdump" => EncounterDump.Run,
             "eventdump" => EventDump.Run,
             "monsterdump" => MonsterDump.Run,
+            "potiondump" => PotionDump.Run,
             "powerdump" => PowerDump.Run,
             "relicdump" => RelicDump.Run,
             "rngdump" => RngDump.Run,
