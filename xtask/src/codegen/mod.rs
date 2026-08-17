@@ -18,6 +18,7 @@
 mod cards;
 mod characters;
 mod encounters;
+mod events;
 mod flags;
 mod monsters;
 mod powers;
@@ -33,10 +34,11 @@ const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and encounters each get a
 /// dump, a submodule, and an entry here.
-const DOMAINS: [&str; 6] = [
+const DOMAINS: [&str; 7] = [
     "cards",
     "characters",
     "encounters",
+    "events",
     "monsters",
     "powers",
     "relics",
@@ -145,6 +147,7 @@ pub fn run() -> Result<String, String> {
         cards::generate(&root)?,
         characters::generate(&root)?,
         encounters::generate(&root)?,
+        events::generate(&root)?,
         monsters::generate(&root)?,
         powers::generate(&root)?,
         relics::generate(&root)?,

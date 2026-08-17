@@ -58,5 +58,9 @@ const RELICS: &str = include_str!("dumps/relics.txt");
 #[cfg(test)]
 const CHARACTERS: &str = include_str!("dumps/characters.txt");
 
+/// The event dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const EVENTS: &str = include_str!("dumps/events.txt");
+
 #[cfg(test)]
 mod tests;

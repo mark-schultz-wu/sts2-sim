@@ -36,6 +36,7 @@ public static class Dump
             "carddump" => CardDump.Run,
             "characterdump" => CharacterDump.Run,
             "encounterdump" => EncounterDump.Run,
+            "eventdump" => EventDump.Run,
             "monsterdump" => MonsterDump.Run,
             "powerdump" => PowerDump.Run,
             "relicdump" => RelicDump.Run,
