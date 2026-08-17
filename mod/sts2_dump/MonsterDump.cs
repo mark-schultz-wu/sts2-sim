@@ -79,20 +79,17 @@ public static class MonsterDump
             }
         }
 
-        // Every ascension, not one.
-        //
-        // `AscensionManager.HasLevel` is `_level >= (int)level`, so ascension is
-        // a scalar and each level is a threshold: an affected number is a step
-        // function of it. Rather than trusting a reading of which levels matter,
-        // this walks all eleven and records where a value actually moves.
-        string[] bodies = new string[AscensionManager.maxAscensionAllowed + 1];
-        for (int level = 0; level < bodies.Length; level++)
+        // Every ascension, not one — see `Ascension`. A whole body per level,
+        // because what scales is a number inside a row and the rows are what
+        // `Scaling` diffs.
+        string[] bodies = new string[Ascension.Levels.Length];
+        foreach (int level in Ascension.Levels)
         {
-            SetAscension(level);
+            Ascension.SetLevel(level);
             bodies[level] = Body();
         }
 
-        SetAscension(0);
+        Ascension.SetLevel(0);
         output.Append(bodies[0]);
         output.Append(Scaling(bodies));
 
@@ -201,35 +198,6 @@ public static class MonsterDump
         return output.ToString();
     }
 
-    /// <summary>
-    /// Sets the run's ascension level, so an ascension-dependent value can be
-    /// read at each one.
-    /// </summary>
-    /// <remarks>
-    /// `RunManager.HasAscension` returns false outright when no run is in
-    /// progress, so without one every level would read the same and the sweep
-    /// would report — convincingly — that nothing scales. Hence the check
-    /// rather than a silent zero.
-    /// </remarks>
-    private static void SetAscension(int level)
-    {
-        RunManager runs = RunManager.Instance;
-        if (!runs.IsInProgress)
-        {
-            throw new InvalidOperationException(
-                "no run in progress: every ascension level would read as 0 and the sweep would find nothing");
-        }
-
-        typeof(RunManager)
-            .GetProperty(nameof(RunManager.AscensionManager))!
-            .GetSetMethod(nonPublic: true)!
-            .Invoke(runs, new object[] { new AscensionManager(level) });
-
-        if (AscensionHelper.HasAscension(AscensionLevel.DoubleBoss) != (level >= (int)AscensionLevel.DoubleBoss))
-        {
-            throw new InvalidOperationException($"setting ascension {level} did not take");
-        }
-    }
 
     /// <summary>
     /// Where a value moves as ascension rises, as one row per change.
