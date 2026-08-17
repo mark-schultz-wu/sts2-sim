@@ -109,14 +109,14 @@ public static class PowerDump
     /// </remarks>
     private static string Cell(PowerModel power, string member)
     {
-        MethodInfo? method = Getter(power.GetType(), member);
+        MethodInfo? method = Il.Getter(power.GetType(), member);
         if (method == null)
         {
             throw new InvalidOperationException(
                 $"PowerModel.{member} is gone; this dump needs rewriting against whatever replaced it");
         }
 
-        if (!Constant(method, out int decoded))
+        if (!Il.Constant(method, out int decoded))
         {
             return "dynamic";
         }
@@ -140,68 +140,4 @@ public static class PowerDump
         return value;
     }
 
-    /// <summary>
-    /// The method behind a member, whether it is written as a property or as a
-    /// method. <c>PowerModel</c> spells the death rules as methods and
-    /// everything else as properties.
-    /// </summary>
-    private static MethodInfo? Getter(Type power, string member)
-    {
-        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
-
-        return power.GetProperty(member, flags)?.GetGetMethod()
-            ?? power.GetMethod(member, flags, binder: null, Type.EmptyTypes, modifiers: null);
-    }
-
-    /// <summary>
-    /// Whether a body is literally "push a number, return".
-    /// </summary>
-    /// <remarks>
-    /// The three shapes a constant compiles to: <c>ldc.i4.0</c> through
-    /// <c>ldc.i4.8</c> as single opcodes, <c>ldc.i4.s</c> with a byte, and
-    /// <c>ldc.i4</c> with four; each followed by <c>ret</c>. Every enum and
-    /// bool this dump reads fits in the first shape, but the other two cost a
-    /// line each and their absence would be an unexplained gap.
-    ///
-    /// Anything longer reads something — a field, a property, a branch — and is
-    /// dynamic by definition. That is what makes a whitelist right here: the
-    /// question is not "does this look complicated" but "can I prove it is
-    /// not".
-    /// </remarks>
-    private static bool Constant(MethodInfo method, out int value)
-    {
-        value = 0;
-
-        byte[]? il = method.GetMethodBody()?.GetILAsByteArray();
-        if (il == null)
-        {
-            return false;
-        }
-
-        const byte ldc_i4_0 = 0x16;
-        const byte ldc_i4_8 = 0x1E;
-        const byte ldc_i4_s = 0x1F;
-        const byte ldc_i4 = 0x20;
-        const byte ret = 0x2A;
-
-        if (il.Length == 2 && il[0] >= ldc_i4_0 && il[0] <= ldc_i4_8 && il[1] == ret)
-        {
-            value = il[0] - ldc_i4_0;
-            return true;
-        }
-
-        if (il.Length == 3 && il[0] == ldc_i4_s && il[2] == ret)
-        {
-            value = (sbyte)il[1];
-            return true;
-        }
-
-        if (il.Length == 6 && il[0] == ldc_i4 && il[5] == ret)
-        {
-            value = BitConverter.ToInt32(il, 1);
-            return true;
-        }
-
-        return false;
-    }
 }
