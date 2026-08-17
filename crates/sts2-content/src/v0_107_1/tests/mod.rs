@@ -13,6 +13,7 @@
 //! than sail through.
 
 mod cards;
+mod characters;
 mod encounters;
 mod monsters;
 mod powers;

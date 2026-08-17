@@ -34,6 +34,7 @@ public static class Dump
         Action? dump = mode switch
         {
             "carddump" => CardDump.Run,
+            "characterdump" => CharacterDump.Run,
             "encounterdump" => EncounterDump.Run,
             "monsterdump" => MonsterDump.Run,
             "powerdump" => PowerDump.Run,

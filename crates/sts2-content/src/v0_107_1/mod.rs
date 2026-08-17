@@ -54,5 +54,9 @@ const ENCOUNTERS: &str = include_str!("dumps/encounters.txt");
 #[cfg(test)]
 const RELICS: &str = include_str!("dumps/relics.txt");
 
+/// The character dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const CHARACTERS: &str = include_str!("dumps/characters.txt");
+
 #[cfg(test)]
 mod tests;

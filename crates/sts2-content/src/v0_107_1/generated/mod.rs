@@ -4,6 +4,7 @@
 //! Source: `dumps/`, content hash 3954186980.
 
 pub mod cards;
+pub mod characters;
 pub mod encounters;
 pub mod monsters;
 pub mod powers;

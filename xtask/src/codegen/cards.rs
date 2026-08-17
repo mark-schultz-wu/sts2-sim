@@ -23,7 +23,7 @@ use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, repr, sanitize};
 
 /// Pool id, module name, Rust enum name, and the id suffix to strip inside it.
-const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
+pub(super) const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
     (
         "IRONCLAD_CARD_POOL",
         "ironclad",
@@ -48,6 +48,7 @@ const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
     ("DEPRECATED_CARD_POOL", "deprecated", "DeprecatedCard", None),
 ];
 
+#[derive(Default)]
 struct Card {
     id: String,
     pool: String,
@@ -134,6 +135,31 @@ fn variant(card: &Card, suffix: Option<&str>) -> String {
         }
         _ => camel(&card.id),
     }
+}
+
+/// One card, as the path another domain has to spell to name it.
+///
+/// Card identity is pool-scoped — `Strike` is a variant of five different
+/// enums — so naming one from outside takes the pool as well as the id. The
+/// suffix rule lives here because this is the domain that invented it, and a
+/// second copy of it elsewhere is a second chance to get `STRIKE_IRONCLAD`
+/// wrong.
+pub(super) fn card_path(pool: &str, id: &str) -> Result<String, String> {
+    let (_, _, enum_name, suffix) = POOLS
+        .iter()
+        .find(|(pool_id, ..)| *pool_id == pool)
+        .ok_or_else(|| format!("{id} is in {pool}, which is not a card pool"))?;
+
+    let card = Card {
+        id: id.to_string(),
+        ..Card::default()
+    };
+
+    Ok(format!(
+        "Cards::{}({enum_name}::{})",
+        enum_name.trim_end_matches("Card"),
+        variant(&card, *suffix)
+    ))
 }
 
 /// Every card, as one module per pool plus the shared field enums.
