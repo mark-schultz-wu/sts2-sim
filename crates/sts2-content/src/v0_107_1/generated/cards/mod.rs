@@ -135,6 +135,60 @@ impl std::fmt::Debug for KeywordSet {
     }
 }
 
+/// A set of [`CardType`]s: one bit per type, at its discriminant.
+///
+/// Bit 0 is unused, because the game's zero is `None` and that is
+/// not a type a card can have. Using the discriminant anyway keeps
+/// a bit meaning the same thing here as it does there.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CardTypeSet(u8);
+
+impl CardTypeSet {
+    /// Every member, in the enum's own order.
+    const MEMBERS: [CardType; 6] = [
+        CardType::Attack,
+        CardType::Skill,
+        CardType::Power,
+        CardType::Status,
+        CardType::Curse,
+        CardType::Quest,
+    ];
+
+    pub const fn new(members: &[CardType]) -> Self {
+        let mut bits = 0u8;
+        let mut i = 0;
+        while i < members.len() {
+            bits |= 1u8 << members[i] as u8;
+            i += 1;
+        }
+        Self(bits)
+    }
+
+    pub const fn contains(self, member: CardType) -> bool {
+        self.0 & (1u8 << member as u8) != 0
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Whether the two sets share a member.
+    pub const fn intersects(self, other: CardTypeSet) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    /// The members, in the enum's own order.
+    pub fn iter(self) -> impl Iterator<Item = CardType> {
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
+    }
+}
+
+impl std::fmt::Debug for CardTypeSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_set().entries(self.iter()).finish()
+    }
+}
+
 /// What is true of a card with no run in progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CardData {

@@ -20,11 +20,11 @@ mod characters;
 mod enchantments;
 mod encounters;
 mod events;
-mod flags;
 mod monsters;
 mod potions;
 mod powers;
 mod relics;
+mod sets;
 mod split;
 
 use std::fmt::Write as _;

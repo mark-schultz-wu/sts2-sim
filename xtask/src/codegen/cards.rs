@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::sets;
 use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, repr, sanitize};
 
@@ -419,6 +420,37 @@ pub fn generate(root: &Path) -> Result<String, String> {
     // into every row, and let a `CardData` be passed around as if it named a
     // card. Ask the variant instead — `Cards::id` is a match over string
     // literals, no lookup and no allocation.
+    // A set over `CardType`, for whoever needs one. Nothing in this domain
+    // does — a card has one type, not a set of them — but the enum lives here,
+    // so the set over it does too rather than in whichever domain happens to
+    // want it first. Enchantments are that domain today.
+    //
+    // Over every card type, not the three an enchantment can reach: narrowing a
+    // type to its first caller is how the second one gets it wrong.
+    let types: Vec<&(u8, String)> = enums["CardType"]
+        .iter()
+        .filter(|(_, m)| !dropped("CardType", m))
+        .collect();
+    sets::plain(
+        &mut out,
+        &sets::Set {
+            flag: "CardType",
+            set: "CardTypeSet",
+            flag_doc: "",
+            set_doc: "A set of [`CardType`]s: one bit per type, at its discriminant.\n\
+                      \n\
+                      Bit 0 is unused, because the game's zero is `None` and that is\n\
+                      not a type a card can have. Using the discriminant anyway keeps\n\
+                      a bit meaning the same thing here as it does there.",
+            members: &types
+                .iter()
+                .map(|(_, m)| (m.as_str(), ""))
+                .collect::<Vec<_>>(),
+            declare: false,
+            bits: types.iter().map(|&&(d, _)| d as usize).max().unwrap_or(0),
+        },
+    )?;
+
     writeln!(out, "/// What is true of a card with no run in progress.").unwrap();
     writeln!(out, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]").unwrap();
     writeln!(out, "pub struct CardData {{").unwrap();

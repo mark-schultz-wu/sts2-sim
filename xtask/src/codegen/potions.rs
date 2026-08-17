@@ -28,7 +28,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, flags, repr};
+use super::{DERIVES, Dump, banner, camel, repr, sets};
 
 /// Members the game declares that are not values of the field they name.
 const DROPPED: [(&str, &str, &str); 2] = [
@@ -173,9 +173,9 @@ pub fn generate(root: &Path) -> Result<String, String> {
         writeln!(out, "}}\n").unwrap();
     }
 
-    flags::emit(
+    sets::computed(
         &mut out,
-        &flags::Set {
+        &sets::Set {
             flag: "PotionFlag",
             set: "PotionFlags",
             flag_doc: "\n\
@@ -186,6 +186,8 @@ pub fn generate(root: &Path) -> Result<String, String> {
                       `PassesCustomUsabilityCheck` is `virtual` and `FOUL_POTION`\n\
                       overrides it, which is the whole reason this is two words.",
             members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            declare: true,
+            bits: FLAGS.len() - 1,
         },
     )?;
 

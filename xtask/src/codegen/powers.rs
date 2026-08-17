@@ -68,7 +68,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use super::flags;
+use super::sets;
 use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, repr};
 
@@ -426,9 +426,9 @@ fn emit_shape(out: &mut String) -> Result<(), String> {
 /// their own word is what lets `PowerFlags::get` hand back a `Field<bool>`
 /// instead of quietly answering `false` for a question the table cannot answer.
 fn emit_flags(out: &mut String) -> Result<(), String> {
-    flags::emit(
+    sets::computed(
         out,
-        &flags::Set {
+        &sets::Set {
             flag: "PowerFlag",
             set: "PowerFlags",
             flag_doc: "\n\
@@ -442,6 +442,8 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
                       owner's death is fatal from how many segments are still alive,\n\
                       and a mock decides whether it scales in multiplayer.",
             members: &FLAGS.map(|f| (f, describe(f))),
+            declare: true,
+            bits: FLAGS.len() - 1,
         },
     )
 }

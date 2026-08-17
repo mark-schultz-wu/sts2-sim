@@ -7,7 +7,7 @@
 //! tests below check both halves, because the intersection is the one step
 //! codegen takes that the dump cannot show.
 
-use super::super::cards::CardType;
+use super::super::cards::{CardType, CardTypeSet};
 use super::super::enchantments::*;
 use super::super::{ENCHANTMENTS, VERSION};
 use super::{dump_hash, rows, wire};
@@ -193,4 +193,36 @@ fn an_enchantment_round_trips_through_its_wire_form() {
     }
 
     assert!(serde_json::from_str::<Enchantment>("\"NOT_AN_ENCHANTMENT\"").is_err());
+}
+
+/// `CardTypeSet` spans every card type, not just the reachable three.
+///
+/// The set lives in the cards domain beside `CardType` and is deliberately not
+/// narrowed to this domain's use: an enchantment can only be put on three of
+/// the six, and a set that could only hold three would be wrong for the next
+/// caller. What is narrow is the *value* stored here, not the type.
+#[test]
+fn the_card_type_set_is_not_narrowed_to_enchantments() {
+    let all = CardTypeSet::new(&[
+        CardType::Attack,
+        CardType::Skill,
+        CardType::Power,
+        CardType::Status,
+        CardType::Curse,
+        CardType::Quest,
+    ]);
+    assert_eq!(all.iter().count(), 6, "the set holds every card type");
+    assert!(all.contains(CardType::Curse));
+
+    // Bits are the game's own discriminants, so bit 0 stays unused: `CardType`
+    // starts at 1 because its zero is the dropped `None`.
+    assert_eq!(CardType::Attack as u8, 1);
+    assert!(CardTypeSet::new(&[]).is_empty());
+    assert!(!all.is_empty());
+
+    // Every enchantment's value is a subset of the reachable three, which is
+    // the domain's rule and not the type's.
+    for e in Enchantment::ALL {
+        assert!(e.data().enchants.iter().count() <= ENCHANTABLE.len());
+    }
 }

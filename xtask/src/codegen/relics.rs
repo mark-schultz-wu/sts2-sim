@@ -37,7 +37,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use super::flags;
+use super::sets;
 use super::split::Split;
 use super::{DERIVES, Dump, banner, camel, repr};
 
@@ -287,9 +287,9 @@ pub fn generate(root: &Path) -> Result<String, String> {
 /// Two `u8`s, like a power's, because a flag has three answers: `IsUsedUp` and
 /// `ShowCounter` are `virtual` and some relics work them out.
 fn emit_flags(out: &mut String) -> Result<(), String> {
-    flags::emit(
+    sets::computed(
         out,
-        &flags::Set {
+        &sets::Set {
             flag: "RelicFlag",
             set: "RelicFlags",
             flag_doc: "\n\
@@ -300,6 +300,8 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
                       `IsUsedUp` and `ShowCounter` are `virtual` and some relics decide\n\
                       them from combat state — ten and eighteen of them.",
             members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            declare: true,
+            bits: FLAGS.len() - 1,
         },
     )
 }

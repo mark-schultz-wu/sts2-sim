@@ -3,50 +3,8 @@
 //! Every enchantment's card types and flags.
 //! Source: `dumps/enchantments.txt`, content hash 3954186980.
 
-use super::cards::CardType;
+use super::cards::{CardType, CardTypeSet};
 use serde::{Deserialize, Serialize};
-
-/// The card types an enchantment can be put on.
-///
-/// Only ever a subset of `Attack`, `Skill` and `Power`:
-/// `EnchantmentModel.CanEnchant` refuses Status, Curse and Quest for
-/// every enchantment before asking it anything, so the other three are
-/// unreachable however `CanEnchantCardType` answers about them.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CardTypeSet(u8);
-
-impl CardTypeSet {
-    /// The reachable types, in the game's declaration order.
-    const MEMBERS: [CardType; 3] = [CardType::Attack, CardType::Skill, CardType::Power];
-
-    pub const fn new(types: &[CardType]) -> Self {
-        let mut bits = 0u8;
-        let mut i = 0;
-        while i < types.len() {
-            bits |= 1u8 << types[i] as u8;
-            i += 1;
-        }
-        Self(bits)
-    }
-
-    pub const fn contains(self, ty: CardType) -> bool {
-        self.0 & (1u8 << ty as u8) != 0
-    }
-
-    pub const fn is_empty(self) -> bool {
-        self.0 == 0
-    }
-
-    pub fn iter(self) -> impl Iterator<Item = CardType> {
-        Self::MEMBERS.into_iter().filter(move |&t| self.contains(t))
-    }
-}
-
-impl std::fmt::Debug for CardTypeSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_set().entries(self.iter()).finish()
-    }
-}
 
 /// A yes-or-no fact about an enchantment.
 ///
