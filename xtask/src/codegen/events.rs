@@ -143,7 +143,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
 
     let mut out = banner("Every event's acts and its shell.", "events.txt", &hash);
     writeln!(out, "\nuse super::encounters::Encounter;").unwrap();
-    writeln!(out, "use super::monsters::Act;").unwrap();
+    writeln!(out, "use super::acts::Act;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
     for (name, members) in &enums {

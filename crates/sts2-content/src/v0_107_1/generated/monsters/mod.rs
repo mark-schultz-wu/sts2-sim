@@ -3,22 +3,9 @@
 //! Every monster's HP range and move state machine.
 //! Source: `dumps/monsters.txt`, content hash 3954186980.
 
+use super::acts::Act;
 use crate::{Field, Scaled};
 use serde::{Deserialize, Serialize};
-
-/// The acts, in the order a run visits them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum Act {
-    #[serde(rename = "OVERGROWTH")]
-    Overgrowth = 0,
-    #[serde(rename = "UNDERDOCKS")]
-    Underdocks = 1,
-    #[serde(rename = "HIVE")]
-    Hive = 2,
-    #[serde(rename = "GLORY")]
-    Glory = 3,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]

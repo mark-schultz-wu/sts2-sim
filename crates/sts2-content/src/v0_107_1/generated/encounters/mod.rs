@@ -3,7 +3,8 @@
 //! Every encounter's room, roster and rewards.
 //! Source: `dumps/encounters.txt`, content hash 3954186980.
 
-use super::monsters::{Act, Monster};
+use super::acts::Act;
+use super::monsters::Monster;
 use crate::{Few, Scaled};
 use serde::{Deserialize, Serialize};
 

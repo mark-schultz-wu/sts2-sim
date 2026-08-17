@@ -257,20 +257,12 @@ pub fn generate(root: &Path) -> Result<String, String> {
         "monsters.txt",
         &hash,
     );
-    writeln!(out, "\nuse crate::{{Field, Scaled}};").unwrap();
+    // `Act` is the acts domain's, not this one's. It was declared here when
+    // nothing else described an act, which meant the enum was whichever ids
+    // happened to turn up in this dump — four of the build's five.
+    writeln!(out, "\nuse super::acts::Act;").unwrap();
+    writeln!(out, "use crate::{{Field, Scaled}};").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
-
-    // The act a monster can be met in. Not every monster has one: 24 arrive
-    // only by being summoned mid-combat, and no encounter table names them.
-    writeln!(out, "/// The acts, in the order a run visits them.").unwrap();
-    writeln!(out, "{DERIVES}").unwrap();
-    writeln!(out, "#[repr(u8)]").unwrap();
-    writeln!(out, "pub enum Act {{").unwrap();
-    for (i, act) in acts.iter().enumerate() {
-        writeln!(out, "    #[serde(rename = \"{act}\")]").unwrap();
-        writeln!(out, "    {} = {i},", camel(act)).unwrap();
-    }
-    writeln!(out, "}}\n").unwrap();
 
     for (name, members) in &enums {
         // `IntentType` becomes `Intent`, whose variants carry the numbers that

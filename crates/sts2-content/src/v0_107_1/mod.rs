@@ -29,6 +29,10 @@ pub const VERSION: Version = Version {
     content_hash: 3_954_186_980,
 };
 
+/// The act dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const ACTS: &str = include_str!("dumps/acts.txt");
+
 /// The card dump, verbatim — test data, not runtime data.
 ///
 /// `cargo xtask codegen` reads it from disk to build [`cards`], and the `tests` module

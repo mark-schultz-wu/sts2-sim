@@ -15,6 +15,7 @@
 //! and the simulator disagree, "which forty cards did that patch touch" is
 //! worth being able to see.
 
+mod acts;
 mod cards;
 mod characters;
 mod enchantments;
@@ -36,7 +37,8 @@ const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and encounters each get a
 /// dump, a submodule, and an entry here.
-const DOMAINS: [&str; 9] = [
+const DOMAINS: [&str; 10] = [
+    "acts",
     "cards",
     "characters",
     "enchantments",
@@ -148,6 +150,7 @@ pub fn run() -> Result<String, String> {
     fs::create_dir_all(&root).map_err(|e| format!("creating {}: {e}", root.display()))?;
 
     let hashes = [
+        acts::generate(&root)?,
         cards::generate(&root)?,
         characters::generate(&root)?,
         enchantments::generate(&root)?,

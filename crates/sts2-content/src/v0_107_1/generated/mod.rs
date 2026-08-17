@@ -3,6 +3,7 @@
 //! One module per kind of content.
 //! Source: `dumps/`, content hash 3954186980.
 
+pub mod acts;
 pub mod cards;
 pub mod characters;
 pub mod enchantments;

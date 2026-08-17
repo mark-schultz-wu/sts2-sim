@@ -7,6 +7,7 @@
 //! a mistranslation there would be invisible right up until a monster took a
 //! turn and walked to the wrong move.
 
+use super::super::acts::Act;
 use super::super::monsters::*;
 use super::super::{MONSTERS, VERSION};
 use super::{dump_hash, rows, wire};
@@ -188,9 +189,15 @@ fn the_acts_are_in_run_order() {
     }
 
     assert_eq!(seen, ["OVERGROWTH", "UNDERDOCKS", "HIVE", "GLORY"]);
-    assert_eq!(
-        seen.iter().map(|a| act(a) as u8).collect::<Vec<_>>(),
-        [0, 1, 2, 3]
+
+    // Ascending, but not from zero: `Act` is the acts domain's now and spans
+    // the build's five, so the deprecated act takes the first discriminant and
+    // the four a run visits follow it. What matters is that this dump's order
+    // is that order, not what the numbers happen to be.
+    let discriminants: Vec<u8> = seen.iter().map(|a| act(a) as u8).collect();
+    assert!(
+        discriminants.windows(2).all(|w| w[0] < w[1]),
+        "the dump's act order disagrees with the enum's: {discriminants:?}"
     );
 }
 

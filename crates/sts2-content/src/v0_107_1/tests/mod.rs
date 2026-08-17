@@ -12,6 +12,7 @@
 //! pins them by name: a build that changes one has to say so in a test rather
 //! than sail through.
 
+mod acts;
 mod cards;
 mod characters;
 mod enchantments;

@@ -33,6 +33,7 @@ public static class Dump
 
         Action? dump = mode switch
         {
+            "actdump" => ActDump.Run,
             "carddump" => CardDump.Run,
             "characterdump" => CharacterDump.Run,
             "enchantmentdump" => EnchantmentDump.Run,

@@ -294,7 +294,8 @@ pub fn generate(root: &Path) -> Result<String, String> {
         "encounters.txt",
         &hash,
     );
-    writeln!(out, "\nuse super::monsters::{{Act, Monster}};").unwrap();
+    writeln!(out, "\nuse super::acts::Act;").unwrap();
+    writeln!(out, "use super::monsters::Monster;").unwrap();
     writeln!(out, "use crate::{{Few, Scaled}};").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 

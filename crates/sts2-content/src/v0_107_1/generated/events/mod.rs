@@ -3,8 +3,8 @@
 //! Every event's acts and its shell.
 //! Source: `dumps/events.txt`, content hash 3954186980.
 
+use super::acts::Act;
 use super::encounters::Encounter;
-use super::monsters::Act;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
