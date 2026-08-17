@@ -7,10 +7,10 @@
 //!
 //! `EncounterModel.GenerateMonsters` is a method, and 81 of the 96 return the
 //! same fight every time. Fourteen roll one from an `Rng` seeded per floor, and
-//! those cannot be a table — they are [`Roster::Random`] and get ported by
+//! those cannot be a table — they are `Roster::Random` and get ported by
 //! hand, the way monster move bodies do.
 //!
-//! The third is [`Roster::Configured`], which is one encounter: the Battleworn
+//! The third is `Roster::Configured`, which is one encounter: the Battleworn
 //! Dummy event refuses to generate until the event tells it which of three
 //! friends turned up. Its roster is neither a list nor a roll; whatever starts
 //! the fight decides. Filing that as `Fixed` would have recorded whichever
@@ -28,7 +28,7 @@
 //!
 //! # Monsters are typed
 //!
-//! `possible` and a spawn's monster generate as [`Monster`] variants rather
+//! `possible` and a spawn's monster generate as `Monster` variants rather
 //! than ids, which makes the compiler the thing that checks an encounter names
 //! a monster the build has. That is why this domain reads one dump and still
 //! cannot drift from another: a monster removed from `monsters.txt` fails the
@@ -96,20 +96,18 @@ fn rust_name(game: &str) -> &str {
 ///
 /// Caps rather than guesses: the build's largest are 4 and 6, and generation
 /// fails rather than truncating if one ever grows past these. They are what
-/// lets a roster be inline instead of a pointer — see [`crate::Few`].
+/// lets a roster be inline instead of a pointer — see `sts2_content::Few`.
 const SPAWN_CAP: usize = 4;
 const POSSIBLE_CAP: usize = 6;
 
 /// The most slots an encounter can name.
 ///
-/// A cap rather than a `u8` for the same reason [`Few`] has one, and for one
+/// A cap rather than a `u8` for the same reason `sts2_content::Few` has one, and for one
 /// more: a slot index sits beside a `Monster` inside an `Option`, and only a
 /// type with spare values leaves a niche for the `Option` to use. The build's
 /// largest vocabulary is six — `OVICOPTER_NORMAL`, five eggs and the ovicopter
 /// — so this is headroom, and generation fails rather than truncating if one
 /// ever exceeds it.
-///
-/// [`Few`]: crate::Few
 const SLOT_CAP: usize = 8;
 
 /// What each slot position is called. Ordinals, because that is what a slot

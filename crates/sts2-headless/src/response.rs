@@ -51,7 +51,7 @@ pub enum Response {
     /// The game stopped mid-action to ask something.
     ///
     /// Until it is answered the game accepts only [`crate::Command::Answer`],
-    /// [`crate::Command::Observe`] and [`crate::Command::Quit`].
+    /// `Command::Observe` and `Command::Quit`.
     Pending {
         seq: u64,
         cmd: String,

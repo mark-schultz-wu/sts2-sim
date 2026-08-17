@@ -4,7 +4,7 @@
 //! it. What comes out is data — nodes, edges, branch order, repeat rules,
 //! cooldowns, intents — and the only holes are the weight lambdas and the
 //! conditional predicates, which arrive marked `dynamic` and become
-//! [`Field::Computed`](sts2_content::Field).
+//! `Field::Computed`.
 //!
 //! # State ids become indices
 //!
@@ -87,9 +87,9 @@ enum Limit {
     Once,
 }
 
-/// The largest window [`RepeatCount`] can spell, for either kind of rule.
+/// The largest window `RepeatCount` can spell, for either kind of rule.
 ///
-/// The point of a capped type rather than a `u8` is that [`Repeat`] needs two
+/// The point of a capped type rather than a `u8` is that `Repeat` needs two
 /// fieldless discriminants beside it, and only a payload with fewer than 255
 /// inhabitants leaves room for them. Anything up to 254 would do, so this is
 /// headroom rather than a bit: the build's largest is 3, and generation fails
@@ -718,7 +718,7 @@ fn emit_intent(
     Ok(())
 }
 
-/// English for a small number, which is what a [`RepeatCount`] variant is
+/// English for a small number, which is what a `RepeatCount` variant is
 /// called. Only ever asked for `1..=REPEAT_CAP`.
 fn word(n: u8) -> &'static str {
     const WORDS: [&str; 9] = [

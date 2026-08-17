@@ -4,7 +4,7 @@
 //! run headless, driven one decision at a time. This crate owns the transport
 //! and nothing above it: launching the game, the handshake, and one typed
 //! request/response pair per call. What the state *means* is deliberately left
-//! alone — see [`response`].
+//! alone — see the `response` module.
 //!
 //! [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) is the contract this
 //! implements.

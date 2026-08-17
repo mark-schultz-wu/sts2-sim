@@ -1,8 +1,10 @@
 //! Game content, one module per build.
 //!
-//! Content is the part that moves between game versions: which cards exist,
-//! what they cost, what they target. The trait layer above does not, so it
-//! lives elsewhere and this crate is what gets regenerated.
+//! Content is the part that moves between game versions: which cards exist and
+//! what they cost, which monsters exist and how they choose a move, what a
+//! power stacks as, what starts a fight. What any of it *does* is code, ported
+//! by hand and living elsewhere; what it *is* is a table, generated from the
+//! game's own dumps so that nobody types a number the game already knows.
 //!
 //! A version is identified by [`Version::content_hash`], not by its name.
 //! Names repeat across builds and say nothing about whether ids still line up;
@@ -15,8 +17,15 @@
 #[cfg(feature = "v0_107_1")]
 pub mod v0_107_1;
 
-/// A card field that is usually a constant, but which some cards work out from
+/// A field that is usually a constant, but which some content works out from
 /// combat state.
+///
+/// Every domain has a few: a card overriding `Type`, a monster's branch weight
+/// written as a lambda, a power whose `StackType` follows the sign of its
+/// amount. [`Field::Computed`] is the simulator's cue to ask rather than look
+/// up, and the dumps err towards it — marking a constant as computed costs one
+/// method, marking a computed value as constant costs a divergence nobody can
+/// see.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Field<T> {
     /// Fixed for this card, whatever the run is doing.

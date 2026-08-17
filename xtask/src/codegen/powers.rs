@@ -14,14 +14,14 @@
 //! as a counter or as a single depending on the sign of its amount;
 //! `MonologuePower` reads a dynamic var; the twenty `ITemporaryPower`
 //! descendants decide buff-or-debuff from a `protected IsPositive`. The dump
-//! marks those `dynamic` and they generate as [`Field::Computed`], which is the
+//! marks those `dynamic` and they generate as `Field::Computed`, which is the
 //! simulator's cue to ask rather than look up.
 //!
 //! # The flags
 //!
 //! Five of the eight columns are yes-or-no, and five booleans in a row is a
 //! shape where every call site has to remember an order nothing enforces. They
-//! are one [`PowerFlags`] bitset instead, on the same pattern as `KeywordSet`
+//! are one `PowerFlags` bitset instead, on the same pattern as `KeywordSet`
 //! and `IntentSet` — with one difference worth knowing: those reuse a game enum
 //! and its discriminants, and this one has no game enum behind it. The members
 //! are five separate `PowerModel` overrides, so the numbering is ours, chosen
@@ -125,7 +125,7 @@ const VALUES: [(&str, &str, Wrap); 3] = [
     ("stack", "PowerStackType", Wrap::FieldOption),
 ];
 
-/// The dump's remaining columns, as the members of [`PowerFlags`].
+/// The dump's remaining columns, as the members of `PowerFlags`.
 ///
 /// In dump order, which is the order `PowerModel` declares them, and which
 /// becomes each flag's bit. Unlike the card keywords, these are not a game
@@ -420,7 +420,7 @@ fn emit_shape(out: &mut String) {
 /// Two `u8`s rather than one, because a flag has three answers and not two:
 /// `PowerModel` declares every one of these `virtual`, so any of them can be
 /// worked out from combat state, and two are. Keeping the computed ones in
-/// their own word is what lets [`PowerFlags::get`] hand back a `Field<bool>`
+/// their own word is what lets `PowerFlags::get` hand back a `Field<bool>`
 /// instead of quietly answering `false` for a question the table cannot answer.
 fn emit_flags(out: &mut String) {
     writeln!(
