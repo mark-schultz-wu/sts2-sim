@@ -50,5 +50,9 @@ const POWERS: &str = include_str!("dumps/powers.txt");
 #[cfg(test)]
 const ENCOUNTERS: &str = include_str!("dumps/encounters.txt");
 
+/// The relic dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const RELICS: &str = include_str!("dumps/relics.txt");
+
 #[cfg(test)]
 mod tests;

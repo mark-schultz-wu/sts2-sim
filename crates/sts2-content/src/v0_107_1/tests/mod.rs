@@ -16,6 +16,7 @@ mod cards;
 mod encounters;
 mod monsters;
 mod powers;
+mod relics;
 
 /// A dump's rows of one kind, split on whitespace, comments dropped.
 ///

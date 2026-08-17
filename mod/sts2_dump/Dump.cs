@@ -37,6 +37,7 @@ public static class Dump
             "encounterdump" => EncounterDump.Run,
             "monsterdump" => MonsterDump.Run,
             "powerdump" => PowerDump.Run,
+            "relicdump" => RelicDump.Run,
             "rngdump" => RngDump.Run,
             _ => null,
         };

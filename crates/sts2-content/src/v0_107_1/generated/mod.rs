@@ -7,3 +7,4 @@ pub mod cards;
 pub mod encounters;
 pub mod monsters;
 pub mod powers;
+pub mod relics;
