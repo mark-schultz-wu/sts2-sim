@@ -14,7 +14,7 @@
 
 use super::super::orbs::*;
 use super::super::{ORBS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use crate::NonMaxU8;
 
 fn orb(id: &str) -> Orb {
@@ -35,8 +35,8 @@ fn value(id: &str, which: &str) -> Vec<&'static str> {
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(ORBS),
-        VERSION.content_hash,
+        build(ORBS),
+        VERSION,
         "orbs.txt was dumped from a different build than this module claims"
     );
 }

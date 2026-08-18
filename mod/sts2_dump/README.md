@@ -41,10 +41,30 @@ Then `cargo xtask codegen`.
 
 ## The one rule
 
-Every dump stamps `ModelIdSerializationCache.Hash` in its header, and the Rust
-side refuses a dump whose hash does not match the version module it generates
-into. A dump taken against a different build fails loudly rather than quietly
-replacing a table with one describing a game nobody is talking to.
+Every dump names the build it came from, and the Rust side refuses one that
+does not match the version module it generates into:
+
+```
+# act data
+# build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
+```
+
+Two hashes, because one is not enough. `content` is
+`ModelIdSerializationCache.Hash` — XxHash32 over the *set of model ids*. It
+moves when content is added, removed or renamed, which is most patches, since
+STS2 churns 20-50 cards a minor version. It does **not** move when a card's
+damage goes from 6 to 7, or when a hook is added, because neither changes an id.
+A dump anchored on it alone would be accepted by a build that had quietly
+rebalanced every number in it.
+
+`assembly` closes that. `MainAssemblyHash` is shipped in the game's
+`release_info.json` and identifies the release, so it moves on any code change
+at all, and it survives this project's IL-patched `sts2.dll` because it
+describes the release rather than the file. `sts2_determinism` already refuses
+to start against an unpinned one; `sts2_headless` already reports it in the
+greeting. The dumps were the last place trusting the content hash by itself.
+
+See `Stamp`, which all thirteen share.
 
 ## Ascension
 

@@ -50,7 +50,7 @@ public static class MonsterDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# monster data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("monster"));
         output.Append("# act <act> <monster>\n");
         output.Append("# monster <id> <minHp> <maxHp> <initialState> <stateCount>\n");
         output.Append("# move <monster> <state> <followUp> <mustPerformOnce> <intentCount>\n");

@@ -41,7 +41,7 @@ use std::path::Path;
 
 use super::sets;
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr, sanitize};
+use super::{Build, DERIVES, Dump, banner, camel, repr, sanitize};
 
 /// Intents that carry numbers, and which numbers.
 ///
@@ -222,9 +222,9 @@ fn state_id(state: &State) -> &str {
     }
 }
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("monsters.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     // Reflected from the game, so a member no monster happens to use is still
     // a member — the same reason the card dump reflects its own enums.
@@ -255,7 +255,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every monster's HP range and move state machine.",
         "monsters.txt",
-        &hash,
+        &build,
     );
     // `Act` is the acts domain's, not this one's. It was declared here when
     // nothing else described an act, which meant the enum was whichever ids
@@ -295,7 +295,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     // The graphs, one file per bucket. `mod.rs` keeps the shape and the enum;
     // a monster's data is a named const it points at, so `data()` stays a
     // readable index instead of eight thousand lines of table.
-    let mut split = Split::new(root, "monsters", "monsters.txt", &hash)?;
+    let mut split = Split::new(root, "monsters", "monsters.txt", &build)?;
     for (id, machine) in &machines {
         let literal = machine_literal(id, machine)?;
         writeln!(
@@ -351,7 +351,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         acts.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 /// Groups the dump's rows by monster.

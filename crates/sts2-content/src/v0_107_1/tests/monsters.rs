@@ -10,7 +10,7 @@
 use super::super::acts::Act;
 use super::super::monsters::*;
 use super::super::{MONSTERS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use crate::{Field, Scaled};
 
 fn monster(id: &str) -> Monster {
@@ -82,10 +82,9 @@ fn repeat(kind: &str, max_times: &str, cooldown: &str) -> Repeat {
 /// hash, and a table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
-    let hash = dump_hash(MONSTERS);
-
     assert_eq!(
-        hash, VERSION.content_hash,
+        build(MONSTERS),
+        VERSION,
         "monsters.txt was dumped from a different build than this module claims"
     );
 }

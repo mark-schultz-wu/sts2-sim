@@ -9,7 +9,7 @@
 
 use super::super::events::*;
 use super::super::{EVENTS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn event(id: &str) -> Event {
@@ -23,8 +23,8 @@ fn event(id: &str) -> Event {
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(EVENTS),
-        VERSION.content_hash,
+        build(EVENTS),
+        VERSION,
         "events.txt was dumped from a different build than this module claims"
     );
 }

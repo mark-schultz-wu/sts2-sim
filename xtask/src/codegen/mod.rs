@@ -106,12 +106,41 @@ fn repr(variants: usize) -> Result<&'static str, String> {
     }
 }
 
-/// A dump, split into whitespace-separated rows, with its content hash.
+/// The build a dump came from, as its `# build` line names it.
 ///
-/// Comment lines are dropped except the header, which every dump opens with and
-/// which ends in the hash.
+/// Two hashes, because one is not enough. `content_hash` is XxHash32 over the
+/// *set of model ids* — it moves when content is added, removed or renamed, and
+/// it does not move when a card's damage goes from 6 to 7 or when a hook is
+/// added, since neither changes an id. `assembly_hash` is shipped in the game's
+/// `release_info.json` and identifies the release, so it moves on any code
+/// change at all.
+///
+/// A dump anchored on the content hash alone would be accepted by a build that
+/// had quietly rebalanced every number in it. Both are checked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Build {
+    version: String,
+    commit: String,
+    assembly_hash: i64,
+    content_hash: u32,
+}
+
+impl std::fmt::Display for Build {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} ({}), assembly {}, content {}",
+            self.version, self.commit, self.assembly_hash, self.content_hash
+        )
+    }
+}
+
+/// A dump, split into whitespace-separated rows, with the build it came from.
+///
+/// Comment lines are dropped except the `# build` header, which every dump
+/// carries as its second line.
 struct Dump {
-    hash: String,
+    build: Build,
     rows: Vec<Vec<String>>,
 }
 
@@ -121,19 +150,38 @@ impl Dump {
         let text =
             fs::read_to_string(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
 
-        let header = text
+        let build = text
             .lines()
-            .next()
-            .ok_or_else(|| format!("{name} is empty"))?;
-        let hash = header
-            .rsplit_once(' ')
-            .ok_or_else(|| format!("{name}'s header names no content hash: {header}"))?
-            .1
-            .to_string();
+            .find_map(|l| l.strip_prefix("# build "))
+            .ok_or_else(|| format!("{name} has no `# build` header"))?;
 
-        if hash.parse::<u32>().is_err() {
-            return Err(format!("{name}'s content hash is not a number: {hash}"));
-        }
+        // Keyed rather than positional, so a field added later does not
+        // silently shift the meaning of the ones already there.
+        let field = |key: &str| -> Result<String, String> {
+            let mut words = build.split_whitespace();
+            match key {
+                // The version is the first word, before any key.
+                "" => words
+                    .next()
+                    .map(String::from)
+                    .ok_or_else(|| format!("{name}'s build header is empty")),
+                key => words
+                    .position(|w| w == key)
+                    .and_then(|at| build.split_whitespace().nth(at + 1))
+                    .map(String::from)
+                    .ok_or_else(|| format!("{name}'s build header names no {key}: {build}")),
+            }
+        };
+
+        let number = |key: &str, raw: String| -> Result<i64, String> {
+            raw.parse()
+                .map_err(|e| format!("{name}'s {key} is not a number: {raw}: {e}"))
+        };
+
+        let assembly_hash = number("assembly hash", field("assembly")?)?;
+        let content_hash = number("content hash", field("content")?)?;
+        let content_hash = u32::try_from(content_hash)
+            .map_err(|e| format!("{name}'s content hash does not fit a u32: {e}"))?;
 
         let rows = text
             .lines()
@@ -141,7 +189,15 @@ impl Dump {
             .map(|l| l.split_whitespace().map(String::from).collect())
             .collect();
 
-        Ok(Dump { hash, rows })
+        Ok(Dump {
+            build: Build {
+                version: field("")?,
+                commit: field("commit")?,
+                assembly_hash,
+                content_hash,
+            },
+            rows,
+        })
     }
 
     /// Every row of one kind, in dump order — which is load-bearing for rows
@@ -155,7 +211,7 @@ pub fn run() -> Result<String, String> {
     let root = Path::new(VERSION_DIR).join("generated");
     fs::create_dir_all(&root).map_err(|e| format!("creating {}: {e}", root.display()))?;
 
-    let hashes = [
+    let builds = [
         acts::generate(&root)?,
         afflictions::generate(&root)?,
         cards::generate(&root)?,
@@ -172,12 +228,15 @@ pub fn run() -> Result<String, String> {
     ];
 
     // Two dumps from two builds would produce a crate whose tables describe
-    // neither. Cheap to check, and impossible to notice by eye.
-    let hash = &hashes[0];
-    for (domain, h) in DOMAINS.iter().zip(&hashes) {
-        if h != hash {
+    // neither. Cheap to check, and impossible to notice by eye. Both hashes are
+    // compared, not just the content one: a rebalance that moved no ids would
+    // leave the content hash equal and the numbers different.
+    let build = &builds[0];
+    for (domain, b) in DOMAINS.iter().zip(&builds) {
+        if b != build {
             return Err(format!(
-                "{domain}'s dump has content hash {h}, but {} has {hash} — they came from different builds",
+                "{domain}'s dump came from {b}, but {}'s came from {build} — \
+                 they are different builds",
                 DOMAINS[0]
             ));
         }
@@ -186,7 +245,7 @@ pub fn run() -> Result<String, String> {
     // The roll-up. One line per domain, so adding relics is adding a dump, a
     // module, and an entry in `DOMAINS`.
     let mut out = format!(
-        "//! Generated by `cargo xtask codegen`. DO NOT EDIT.\n//!\n//! One module per kind of content.\n//! Source: `dumps/`, content hash {hash}.\n\n"
+        "//! Generated by `cargo xtask codegen`. DO NOT EDIT.\n//!\n//! One module per kind of content.\n//! Source: `dumps/`, build {build}.\n\n"
     );
     for domain in DOMAINS {
         writeln!(out, "pub mod {domain};").unwrap();
@@ -201,16 +260,16 @@ pub fn run() -> Result<String, String> {
     format(&root)?;
 
     Ok(format!(
-        "generated {VERSION_DIR}/generated/ — {} domains: {}\n  content hash {hash}",
+        "generated {VERSION_DIR}/generated/ — {} domains: {}\n  build {build}",
         DOMAINS.len(),
         DOMAINS.join(", ")
     ))
 }
 
 /// The banner every generated file opens with.
-fn banner(what: &str, source: &str, hash: &str) -> String {
+fn banner(what: &str, source: &str, build: &Build) -> String {
     format!(
-        "//! Generated by `cargo xtask codegen`. DO NOT EDIT.\n//!\n//! {what}\n//! Source: `dumps/{source}`, content hash {hash}.\n"
+        "//! Generated by `cargo xtask codegen`. DO NOT EDIT.\n//!\n//! {what}\n//! Source: `dumps/{source}`, build {build}.\n"
     )
 }
 

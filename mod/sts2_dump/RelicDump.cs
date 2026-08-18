@@ -55,7 +55,7 @@ public static class RelicDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# relic data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("relic"));
         output.Append("# pool <pool> <relic>\n");
         output.Append("# relic <id> <rarity> <merchantCost> ");
         output.Append(string.Join(" ", Flags.Select(f => "<" + Lower(f) + ">")));

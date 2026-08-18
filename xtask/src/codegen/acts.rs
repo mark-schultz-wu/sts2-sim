@@ -29,11 +29,11 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{Build, DERIVES, Dump, banner, camel, repr};
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("acts.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let acts: Vec<&Vec<String>> = dump.of("act").collect();
     if acts.is_empty() {
@@ -78,7 +78,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         ));
     }
 
-    let mut out = banner("Every act's shape and its bosses.", "acts.txt", &hash);
+    let mut out = banner("Every act's shape and its bosses.", "acts.txt", &build);
     writeln!(out, "\nuse super::encounters::Encounter;").unwrap();
     writeln!(out, "use crate::Few;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -95,7 +95,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         acts.iter().filter(|r| r[2] != "-1").count()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 /// The most bosses an act reveals.

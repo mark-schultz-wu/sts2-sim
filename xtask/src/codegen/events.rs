@@ -33,7 +33,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr, sets};
+use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
 
 /// The yes-or-no columns, in the order they become bits.
 const FLAGS: [(&str, usize, &str); 4] = [
@@ -91,9 +91,9 @@ fn bucket_doc(file: &str) -> String {
     }
 }
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("events.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let events: Vec<&Vec<String>> = dump.of("event").collect();
     if events.is_empty() {
@@ -141,7 +141,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         }
     }
 
-    let mut out = banner("Every event's acts and its shell.", "events.txt", &hash);
+    let mut out = banner("Every event's acts and its shell.", "events.txt", &build);
     writeln!(out, "\nuse super::encounters::Encounter;").unwrap();
     writeln!(out, "use super::acts::Act;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -160,7 +160,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     emit_shape(&mut out);
     emit_events(&mut out, &events, &acts_of, &pooled)?;
 
-    let mut split = Split::new(root, "events", "events.txt", &hash)?;
+    let mut split = Split::new(root, "events", "events.txt", &build)?;
     for row in &events {
         let empty = Vec::new();
         let of = acts_of.get(&row[1]).unwrap_or(&empty);
@@ -198,7 +198,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         pooled.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 /// The flags, as a one-word set.

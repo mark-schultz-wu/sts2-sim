@@ -2,7 +2,7 @@
 
 use super::super::cards::*;
 use super::super::{CARDS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use crate::{Cost, Field};
 
 /// The dump's `cost` and `costsX` columns as the `Cost` they should have
@@ -84,10 +84,9 @@ fn the_generated_table_matches_the_dump() {
 /// prevent.
 #[test]
 fn the_dump_came_from_this_version() {
-    let hash = dump_hash(CARDS);
-
     assert_eq!(
-        hash, VERSION.content_hash,
+        build(CARDS),
+        VERSION,
         "cards.txt was dumped from a different build than this module claims"
     );
 }

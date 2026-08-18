@@ -1,4 +1,5 @@
-# relic data, contentHash 3954186980
+# relic data
+# build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
 # pool <pool> <relic>
 # relic <id> <rarity> <merchantCost> <isUsedUp> <hasUponPickupEffect> <spawnsPets> <isStackable> <addsPet> <isAllowedInShops> <showCounter> <displayAmount> <gatedInRun> <gatedAtNeow>
 # scalecost <relic> <ascension> <merchantCost>

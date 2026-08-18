@@ -41,7 +41,7 @@ public static class EventDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# event data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("event"));
         output.Append("# act <act> <event>\n");
         output.Append("# sharedpool <event>\n");
         output.Append("# event <id> <ancient> <isShared> <isDeterministic> <layout> ");

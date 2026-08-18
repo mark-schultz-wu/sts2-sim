@@ -42,7 +42,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use super::{DERIVES, Dump, banner, camel, repr, sets};
+use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
 
 /// The card types an enchantment can actually be put on.
 ///
@@ -70,9 +70,9 @@ const FLAGS: [(&str, usize, &str); 4] = [
     ),
 ];
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("enchantments.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let enchantments: Vec<&Vec<String>> = dump.of("enchantment").collect();
     if enchantments.is_empty() {
@@ -105,7 +105,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every enchantment's card types and flags.",
         "enchantments.txt",
-        &hash,
+        &build,
     );
     writeln!(out, "\nuse super::cards::{{CardType, CardTypeSet}};").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -126,7 +126,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         enchantments.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 fn emit_flags(out: &mut String) -> Result<(), String> {

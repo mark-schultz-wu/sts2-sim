@@ -192,7 +192,28 @@ pub enum Cost {
 pub struct Version {
     /// The build's own version string. A label, not an identity.
     pub name: &'static str,
-    /// XxHash32 over the model-id namespace. This is the identity.
+    /// The commit the release was cut from. A label too, and the one that
+    /// distinguishes two builds sharing a version string.
+    pub commit: &'static str,
+    /// The hash shipped in the game's `release_info.json`, identifying the
+    /// release. This moves on any code change at all.
+    ///
+    /// Needed beside [`Version::content_hash`], not instead of it: a rebalance
+    /// that changed a card's damage without adding or removing content leaves
+    /// the content hash equal and every generated number wrong. This is the
+    /// hash that notices. `sts2_determinism` pins the same value before it will
+    /// run at all.
+    ///
+    /// `i64` rather than the game's `int` so it compares against a
+    /// `Greeting`'s field without a cast.
+    pub assembly_hash: i64,
+    /// XxHash32 over the model-id namespace — the *set of ids* and nothing
+    /// else.
+    ///
+    /// This is the identity of the content, and it is what the game itself uses
+    /// to refuse a replay recorded against different content. It moves when
+    /// content is added, removed or renamed; it does not move when a value on a
+    /// model changes, which is why [`Version::assembly_hash`] sits beside it.
     pub content_hash: u32,
 }
 

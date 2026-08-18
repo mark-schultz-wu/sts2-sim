@@ -7,7 +7,7 @@
 
 use super::super::modifiers::*;
 use super::super::{MODIFIERS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 
 fn modifier(id: &str) -> Modifier {
     *Modifier::ALL
@@ -20,8 +20,8 @@ fn modifier(id: &str) -> Modifier {
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(MODIFIERS),
-        VERSION.content_hash,
+        build(MODIFIERS),
+        VERSION,
         "modifiers.txt was dumped from a different build than this module claims"
     );
 }

@@ -54,7 +54,7 @@ public static class ModifierDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# modifier data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("modifier"));
         output.Append("# modifier <id> <kind> <clearsDeck> <offersNeowOption> <takesParameter>\n");
         output.Append("# exclusive <group> <modifier>\n");
 

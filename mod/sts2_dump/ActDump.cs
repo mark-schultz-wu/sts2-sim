@@ -39,7 +39,7 @@ public static class ActDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# act data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("act"));
         output.Append("# act <id> <index> <isDefault> <rooms> <weakEncounters>\n");
         output.Append("# boss <act> <order> <encounter>\n");
 

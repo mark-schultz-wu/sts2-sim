@@ -39,7 +39,7 @@ use std::path::Path;
 
 use super::sets;
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{Build, DERIVES, Dump, banner, camel, repr};
 
 /// The sentinel `MerchantCost` returns for a relic that is not for sale.
 const NOT_SOLD: &str = "999999999";
@@ -132,9 +132,9 @@ fn rust_member(enum_name: &str, member: &str) -> String {
         .map_or_else(|| member.to_string(), |&(_, _, rust)| rust.to_string())
 }
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("relics.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
@@ -187,7 +187,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every relic's rarity, price and flags.",
         "relics.txt",
-        &hash,
+        &build,
     );
     writeln!(out, "\nuse crate::Field;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -235,7 +235,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     emit_shape(&mut out);
     emit_relics(&mut out, &relics, &pools_of)?;
 
-    let mut split = Split::new(root, "relics", "relics.txt", &hash)?;
+    let mut split = Split::new(root, "relics", "relics.txt", &build)?;
     for row in &relics {
         let empty = Vec::new();
         let of = pools_of.get(&row[1]).unwrap_or(&empty);
@@ -279,7 +279,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         pools.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 /// The flag member enum and the set that carries them.

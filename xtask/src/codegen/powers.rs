@@ -70,7 +70,7 @@ use std::path::Path;
 
 use super::sets;
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{Build, DERIVES, Dump, banner, camel, repr};
 
 /// Members the game declares that are not values of the field they name.
 ///
@@ -259,9 +259,9 @@ fn describe(field: &str) -> &'static str {
     }
 }
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("powers.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     // Reflected from the game, so a member no power happens to use is still a
     // member — the same reason the card and monster dumps reflect their own.
@@ -291,7 +291,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         }
     }
 
-    let mut out = banner("Every power's static data.", "powers.txt", &hash);
+    let mut out = banner("Every power's static data.", "powers.txt", &build);
     writeln!(out, "\nuse crate::Field;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
@@ -324,7 +324,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     // The rows, one file per kind. `mod.rs` keeps the shape and the enum; a
     // power's data is a named const it points at, so `data()` stays a readable
     // index instead of three thousand lines of table.
-    let mut split = Split::new(root, "powers", "powers.txt", &hash)?;
+    let mut split = Split::new(root, "powers", "powers.txt", &build)?;
     for row in &powers {
         let literal = power_literal(row)?;
         writeln!(
@@ -369,7 +369,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         powers.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 /// Doc lines for one member, indented to sit inside a type.

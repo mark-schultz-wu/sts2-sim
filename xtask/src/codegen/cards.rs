@@ -21,7 +21,7 @@ use std::path::Path;
 
 use super::sets;
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr, sanitize};
+use super::{Build, DERIVES, Dump, banner, camel, repr, sanitize};
 
 /// Pool id, module name, Rust enum name, and the id suffix to strip inside it.
 pub(super) const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
@@ -166,9 +166,9 @@ pub(super) fn card_path(pool: &str, id: &str) -> Result<String, String> {
 /// Every card, as one module per pool plus the shared field enums.
 ///
 /// Returns the dump's content hash, which stamps the roll-up too.
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("cards.txt")?;
-    let content_hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let cards: Vec<Card> = dump
         .of("card")
@@ -202,7 +202,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
             .push((discriminant, f[3].clone()));
     }
 
-    let mut split = Split::new(root, "cards", "cards.txt", &content_hash)?;
+    let mut split = Split::new(root, "cards", "cards.txt", &build)?;
 
     let mut total = 0usize;
     let mut stripped = 0usize;
@@ -288,7 +288,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "The field enums, the data shape, and the outer card enum.",
         "cards.txt",
-        &content_hash,
+        &build,
     );
     writeln!(out, "\nuse crate::{{Cost, Field}};").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -497,5 +497,5 @@ pub fn generate(root: &Path) -> Result<String, String> {
         enums.len()
     );
 
-    Ok(content_hash)
+    Ok(build)
 }

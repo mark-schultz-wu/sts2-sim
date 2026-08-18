@@ -52,7 +52,7 @@ public static class EnchantmentDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# enchantment data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("enchantment"));
         output.Append("# enchantment <id> ");
         output.Append(string.Join(" ", Flags.Select(f => "<" + Lower(f) + ">")));
         output.Append(" <refusesSomeCards>\n");

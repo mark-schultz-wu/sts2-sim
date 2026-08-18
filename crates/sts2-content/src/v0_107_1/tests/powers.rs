@@ -8,7 +8,7 @@
 
 use super::super::powers::*;
 use super::super::{POWERS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use crate::Field;
 
 fn power(id: &str) -> Power {
@@ -47,10 +47,9 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 /// hash, and a table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
-    let hash = dump_hash(POWERS);
-
     assert_eq!(
-        hash, VERSION.content_hash,
+        build(POWERS),
+        VERSION,
         "powers.txt was dumped from a different build than this module claims"
     );
 }

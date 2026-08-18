@@ -1,4 +1,5 @@
-# event data, contentHash 3954186980
+# event data
+# build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
 # act <act> <event>
 # sharedpool <event>
 # event <id> <ancient> <isShared> <isDeterministic> <layout> <canonicalEncounter> <gated>

@@ -48,7 +48,7 @@ public static class PowerDump
 
         // Stamped, so regenerating against a different build fails visibly
         // rather than quietly replacing the table.
-        output.Append($"# power data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("power"));
         output.Append("# id type instance stack allowNegative removedOnOwnerDeath ");
         output.Append("ownerDeathIsFatal scalesInMultiplayer ownerIsSecondaryEnemy\n");
 

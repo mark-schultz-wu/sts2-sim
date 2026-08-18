@@ -9,7 +9,7 @@ use super::super::cards::Cards;
 use super::super::characters::*;
 use super::super::relics::RelicPool;
 use super::super::{CHARACTERS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use std::collections::BTreeMap;
 
 fn character(id: &str) -> Character {
@@ -23,8 +23,8 @@ fn character(id: &str) -> Character {
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(CHARACTERS),
-        VERSION.content_hash,
+        build(CHARACTERS),
+        VERSION,
         "characters.txt was dumped from a different build than this module claims"
     );
 }

@@ -41,7 +41,7 @@ public static class EncounterDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# encounter data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("encounter"));
         output.Append("# act <act> <encounter>\n");
         output.Append("# encounter <id> <roomType> <isWeak> <givesRewards> <isDebug> ");
         output.Append("<minGold> <maxGold> <spawns>\n");

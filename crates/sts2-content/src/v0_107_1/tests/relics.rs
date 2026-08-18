@@ -8,7 +8,7 @@
 
 use super::super::relics::*;
 use super::super::{RELICS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use crate::Field;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -31,8 +31,8 @@ fn relic(id: &str) -> Relic {
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(RELICS),
-        VERSION.content_hash,
+        build(RELICS),
+        VERSION,
         "relics.txt was dumped from a different build than this module claims"
     );
 }

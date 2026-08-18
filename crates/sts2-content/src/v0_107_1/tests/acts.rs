@@ -7,7 +7,7 @@
 
 use super::super::acts::*;
 use super::super::{ACTS, ENCOUNTERS, EVENTS, MONSTERS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use std::collections::BTreeSet;
 
 fn act(id: &str) -> Act {
@@ -21,8 +21,8 @@ fn act(id: &str) -> Act {
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(ACTS),
-        VERSION.content_hash,
+        build(ACTS),
+        VERSION,
         "acts.txt was dumped from a different build than this module claims"
     );
 }

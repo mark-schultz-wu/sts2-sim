@@ -10,7 +10,7 @@
 use super::super::cards::{CardType, CardTypeSet};
 use super::super::enchantments::*;
 use super::super::{ENCHANTMENTS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn enchantment(id: &str) -> Enchantment {
@@ -27,8 +27,8 @@ const ENCHANTABLE: [&str; 3] = ["Attack", "Skill", "Power"];
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(ENCHANTMENTS),
-        VERSION.content_hash,
+        build(ENCHANTMENTS),
+        VERSION,
         "enchantments.txt was dumped from a different build than this module claims"
     );
 }

@@ -41,7 +41,7 @@ public static class CharacterDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# character data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("character"));
         output.Append("# character <id> <playable> <gender> <startingHp> <startingGold> ");
         output.Append("<maxEnergy> <orbSlots> <alwaysShowsStarCounter> ");
         output.Append("<cardPool> <relicPool> <potionPool> <unlocksAfterRunAs>\n");

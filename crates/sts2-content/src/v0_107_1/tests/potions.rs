@@ -9,7 +9,7 @@
 use super::super::cards::TargetType;
 use super::super::potions::*;
 use super::super::{POTIONS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use crate::Field;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,8 +27,8 @@ const DROPPED: [(&str, &str); 2] = [("PotionUsage", "None"), ("PotionRarity", "N
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(POTIONS),
-        VERSION.content_hash,
+        build(POTIONS),
+        VERSION,
         "potions.txt was dumped from a different build than this module claims"
     );
 }

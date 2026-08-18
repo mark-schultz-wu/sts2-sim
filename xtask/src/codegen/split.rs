@@ -32,7 +32,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::banner;
+use super::{Build, banner};
 
 /// Where a bucket file may import from, and the names to consider from each.
 ///
@@ -44,19 +44,19 @@ pub type Imports<'a> = &'a [(&'a str, &'a [&'a str])];
 pub struct Split {
     dir: PathBuf,
     source: String,
-    hash: String,
+    build: Build,
     buckets: BTreeMap<String, String>,
 }
 
 impl Split {
-    pub fn new(root: &Path, module: &str, source: &str, hash: &str) -> Result<Split, String> {
+    pub fn new(root: &Path, module: &str, source: &str, build: &Build) -> Result<Split, String> {
         let dir = root.join(module);
         fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
 
         Ok(Split {
             dir,
             source: source.to_string(),
-            hash: hash.to_string(),
+            build: build.clone(),
             buckets: BTreeMap::new(),
         })
     }
@@ -87,7 +87,7 @@ impl Split {
         imports: Imports<'_>,
     ) -> Result<(), String> {
         for (name, body) in &self.buckets {
-            let mut out = banner(&doc(name), &self.source, &self.hash);
+            let mut out = banner(&doc(name), &self.source, &self.build);
             out.push('\n');
             out.push_str(&uses(body, imports));
             out.push('\n');

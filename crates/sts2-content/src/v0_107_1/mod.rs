@@ -26,6 +26,8 @@ use crate::Version;
 
 pub const VERSION: Version = Version {
     name: "v0.107.1",
+    commit: "59260271",
+    assembly_hash: 1_692_500_715,
     content_hash: 3_954_186_980,
 };
 

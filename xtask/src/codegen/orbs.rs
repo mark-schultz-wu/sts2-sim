@@ -65,7 +65,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{Build, DERIVES, Dump, banner, camel, repr};
 
 /// How the dump spells each trigger, and the variant it becomes.
 ///
@@ -85,9 +85,9 @@ const TRIGGERS: [(&str, &str, &str); 2] = [
     ),
 ];
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("orbs.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let orbs: Vec<&Vec<String>> = dump.of("orb").collect();
     if orbs.is_empty() {
@@ -105,7 +105,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every orb's values and when its passive fires.",
         "orbs.txt",
-        &hash,
+        &build,
     );
     writeln!(out, "\nuse crate::NonMaxU8;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -122,7 +122,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         rollable.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 /// The orbs a roll produces, in the order `NextItem` indexes them.

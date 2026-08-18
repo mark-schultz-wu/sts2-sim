@@ -39,7 +39,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr, sets};
+use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
 
 /// Members the game declares that are not values of the field they name.
 const DROPPED: [(&str, &str, &str); 2] = [
@@ -185,9 +185,9 @@ impl Steps {
     }
 }
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("encounters.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
@@ -292,7 +292,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every encounter's room, roster and rewards.",
         "encounters.txt",
-        &hash,
+        &build,
     );
     writeln!(out, "\nuse super::acts::Act;").unwrap();
     writeln!(out, "use super::monsters::Monster;").unwrap();
@@ -366,7 +366,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     emit_shape(&mut out);
     emit_encounters(&mut out, &encounters, &act_of)?;
 
-    let mut split = Split::new(root, "encounters", "encounters.txt", &hash)?;
+    let mut split = Split::new(root, "encounters", "encounters.txt", &build)?;
     for (id, encounter) in &encounters {
         let literal = literal(id, encounter)?;
         writeln!(
@@ -415,7 +415,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         acts.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 impl Steps {

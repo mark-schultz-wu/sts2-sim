@@ -18,7 +18,7 @@
 use super::super::encounters::*;
 use super::super::monsters::Monster;
 use super::super::{ENCOUNTERS, MONSTERS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn encounter(id: &str) -> Encounter {
@@ -36,10 +36,9 @@ const DROPPED: [(&str, &str); 2] = [("Family", "None"), ("RoomType", "Unassigned
 /// regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
-    let hash = dump_hash(ENCOUNTERS);
-
     assert_eq!(
-        hash, VERSION.content_hash,
+        build(ENCOUNTERS),
+        VERSION,
         "encounters.txt was dumped from a different build than this module claims"
     );
 }

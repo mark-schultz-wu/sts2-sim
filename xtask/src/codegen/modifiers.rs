@@ -34,7 +34,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use super::{DERIVES, Dump, banner, camel, repr, sets};
+use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
 
 /// How the dump spells each list, and the variant it becomes.
 ///
@@ -69,9 +69,9 @@ const FLAGS: [(&str, usize, &str); 3] = [
     ),
 ];
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("modifiers.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let modifiers: Vec<&Vec<String>> = dump.of("modifier").collect();
     if modifiers.is_empty() {
@@ -88,7 +88,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every modifier's kind, flags and exclusions.",
         "modifiers.txt",
-        &hash,
+        &build,
     );
     writeln!(out, "\nuse serde::{{Deserialize, Serialize}};\n").unwrap();
 
@@ -108,7 +108,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         exclusive.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 /// The exclusion groups, in the dump's order, each as a list of ids.

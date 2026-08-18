@@ -28,7 +28,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::split::Split;
-use super::{DERIVES, Dump, banner, camel, repr, sets};
+use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
 
 /// Members the game declares that are not values of the field they name.
 const DROPPED: [(&str, &str, &str); 2] = [
@@ -83,9 +83,9 @@ fn bucket_doc(file: &str) -> String {
     format!("Potions stocked by `{}_POTION_POOL`.", file.to_uppercase())
 }
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("potions.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let potions: Vec<&Vec<String>> = dump.of("potion").collect();
     if potions.is_empty() {
@@ -133,7 +133,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every potion's rarity, usage and target.",
         "potions.txt",
-        &hash,
+        &build,
     );
     writeln!(out, "\nuse super::cards::TargetType;").unwrap();
     writeln!(out, "use crate::Field;").unwrap();
@@ -195,7 +195,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     emit_shape(&mut out);
     emit_potions(&mut out, &potions, &pool_of)?;
 
-    let mut split = Split::new(root, "potions", "potions.txt", &hash)?;
+    let mut split = Split::new(root, "potions", "potions.txt", &build)?;
     for row in &potions {
         let literal = literal(row)?;
         writeln!(
@@ -237,7 +237,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
         pools.len()
     );
 
-    Ok(hash)
+    Ok(build)
 }
 
 fn emit_shape(out: &mut String) {

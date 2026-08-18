@@ -48,7 +48,7 @@ public static class PotionDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# potion data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("potion"));
         output.Append("# pool <pool> <potion>\n");
         output.Append("# potion <id> <rarity> <usage> <target> ");
         output.Append("<canBeGeneratedInCombat> <passesCustomUsabilityCheck>\n");

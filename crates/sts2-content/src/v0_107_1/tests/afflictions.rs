@@ -10,7 +10,7 @@
 use super::super::afflictions::*;
 use super::super::cards::CardType;
 use super::super::{AFFLICTIONS, VERSION};
-use super::{dump_hash, rows, wire};
+use super::{build, rows, wire};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn affliction(id: &str) -> Affliction {
@@ -27,8 +27,8 @@ const UNMODELLED: &str = "None";
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
-        dump_hash(AFFLICTIONS),
-        VERSION.content_hash,
+        build(AFFLICTIONS),
+        VERSION,
         "afflictions.txt was dumped from a different build than this module claims"
     );
 }

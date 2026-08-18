@@ -67,7 +67,7 @@ public static class OrbDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# orb data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("orb"));
         output.Append("# orb <id> <trigger> <randomIndex> <listed>\n");
         output.Append("# value <orb> <which> <amount> <hooked> <stored>\n");
 

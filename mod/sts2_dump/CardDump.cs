@@ -44,7 +44,7 @@ public static class CardDump
 
         // Stamped, so regenerating against a different build fails visibly
         // rather than quietly replacing the table.
-        output.Append($"# card data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("card"));
         output.Append("# id pool type rarity target cost costsX maxUpgrade keywords\n");
 
         List<CardModel> cards = ModelDb.AllCards

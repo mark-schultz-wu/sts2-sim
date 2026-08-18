@@ -53,7 +53,7 @@ public static class AfflictionDump
     {
         var output = new StringBuilder();
 
-        output.Append($"# affliction data, contentHash {ModelIdSerializationCache.Hash}\n");
+        output.Append(Stamp.Header("affliction"));
         output.Append("# affliction <id> ");
         output.Append(string.Join(" ", Flags.Select(f => "<" + Lower(f) + ">")));
         output.Append(" <refusesSomeCards>\n");

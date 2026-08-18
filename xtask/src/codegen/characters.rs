@@ -29,7 +29,7 @@ use std::fs;
 use std::path::Path;
 
 use super::cards::{POOLS as CARD_POOLS, card_path};
-use super::{DERIVES, Dump, banner, camel, repr};
+use super::{Build, DERIVES, Dump, banner, camel, repr};
 
 /// The most cards a starting deck holds, and the most starting relics.
 ///
@@ -50,9 +50,9 @@ const POOLS: [(&str, &str, usize, &str, bool); 3] = [
     ("potion_pool", "PotionPool", 11, "_POTION_POOL", false),
 ];
 
-pub fn generate(root: &Path) -> Result<String, String> {
+pub fn generate(root: &Path) -> Result<Build, String> {
     let dump = Dump::read("characters.txt")?;
-    let hash = dump.hash.clone();
+    let build = dump.build.clone();
 
     let characters: Vec<&Vec<String>> = dump.of("character").collect();
     if characters.is_empty() {
@@ -119,7 +119,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let mut out = banner(
         "Every character's starting kit and pools.",
         "characters.txt",
-        &hash,
+        &build,
     );
     // The pool enums the decks actually name, so the import list is what the
     // file uses and not every pool the game has.
@@ -232,7 +232,7 @@ pub fn generate(root: &Path) -> Result<String, String> {
     let playable = characters.iter().filter(|r| r[2] == "1").count();
     println!("  characters: {} ({playable} playable)", characters.len());
 
-    Ok(hash)
+    Ok(build)
 }
 
 fn emit_characters(
