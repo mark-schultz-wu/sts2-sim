@@ -6,7 +6,7 @@
 use super::cards::{CardType, CardTypeSet};
 use serde::{Deserialize, Serialize};
 
-/// A yes-or-no fact about a enchantment.
+/// A yes-or-no fact about an enchantment.
 ///
 /// Four separate `EnchantmentModel` members rather than a game enum,
 /// so the numbering is the order the dump writes the columns in.

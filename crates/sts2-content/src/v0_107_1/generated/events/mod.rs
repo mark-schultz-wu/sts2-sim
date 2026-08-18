@@ -16,7 +16,7 @@ pub enum EventLayoutType {
     Custom = 3,
 }
 
-/// A yes-or-no fact about a event.
+/// A yes-or-no fact about an event.
 ///
 /// Four separate `EventModel` members rather than a game enum, so the
 /// numbering is the order the dump writes the columns in.

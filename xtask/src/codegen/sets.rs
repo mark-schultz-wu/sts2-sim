@@ -290,7 +290,8 @@ fn declare(out: &mut String, set: &Set<'_>) {
         return;
     }
 
-    writeln!(out, "/// A yes-or-no fact about a {}.", article(set.set)).unwrap();
+    let noun = noun(set.set);
+    writeln!(out, "/// A yes-or-no fact about {} {noun}.", article(&noun)).unwrap();
     for line in set.flag_doc.lines() {
         writeln!(out, "///{}", pad(line)).unwrap();
     }
@@ -307,8 +308,19 @@ fn declare(out: &mut String, set: &Set<'_>) {
 }
 
 /// `PowerFlags` describes a power, `RelicFlags` a relic.
-fn article(set: &str) -> String {
+fn noun(set: &str) -> String {
     set.trim_end_matches("Flags").to_lowercase()
+}
+
+/// A power, but an affliction and an enchantment.
+///
+/// Crude — it reads the letter rather than the sound — but every noun here is a
+/// kind of game content, and none of them is a "hour" or a "user".
+fn article(noun: &str) -> &'static str {
+    match noun.starts_with(['a', 'e', 'i', 'o', 'u']) {
+        true => "an",
+        false => "a",
+    }
 }
 
 /// A doc line, with the space only a non-empty line gets.
