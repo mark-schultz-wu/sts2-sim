@@ -22,6 +22,7 @@ mod characters;
 mod enchantments;
 mod encounters;
 mod events;
+mod modifiers;
 mod monsters;
 mod orbs;
 mod potions;
@@ -39,7 +40,7 @@ const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and encounters each get a
 /// dump, a submodule, and an entry here.
-const DOMAINS: [&str; 12] = [
+const DOMAINS: [&str; 13] = [
     "acts",
     "afflictions",
     "cards",
@@ -47,6 +48,7 @@ const DOMAINS: [&str; 12] = [
     "enchantments",
     "encounters",
     "events",
+    "modifiers",
     "monsters",
     "orbs",
     "potions",
@@ -161,6 +163,7 @@ pub fn run() -> Result<String, String> {
         enchantments::generate(&root)?,
         encounters::generate(&root)?,
         events::generate(&root)?,
+        modifiers::generate(&root)?,
         monsters::generate(&root)?,
         orbs::generate(&root)?,
         potions::generate(&root)?,

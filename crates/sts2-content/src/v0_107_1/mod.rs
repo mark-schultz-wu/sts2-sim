@@ -82,5 +82,9 @@ const AFFLICTIONS: &str = include_str!("dumps/afflictions.txt");
 #[cfg(test)]
 const ORBS: &str = include_str!("dumps/orbs.txt");
 
+/// The modifier dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const MODIFIERS: &str = include_str!("dumps/modifiers.txt");
+
 #[cfg(test)]
 mod tests;

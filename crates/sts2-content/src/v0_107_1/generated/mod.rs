@@ -10,6 +10,7 @@ pub mod characters;
 pub mod enchantments;
 pub mod encounters;
 pub mod events;
+pub mod modifiers;
 pub mod monsters;
 pub mod orbs;
 pub mod potions;

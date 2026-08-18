@@ -29,6 +29,7 @@ under the name in the last column.
 | `enchantmentdump` | what an enchantment can go on, and its flags | `enchantments.txt` |
 | `encounterdump` | what starts a fight: room, roster, slots, acts | `encounters.txt` |
 | `eventdump` | every event, and the acts that offer it | `events.txt` |
+| `modifierdump` | run-wide rules: good or bad, what they rule out | `modifiers.txt` |
 | `monsterdump` | HP ranges and move state machines, at every ascension | `monsters.txt` |
 | `orbdump` | each orb's two values, its trigger, and the roll order | `orbs.txt` |
 | `potiondump` | every potion's rarity, usage and target | `potions.txt` |
