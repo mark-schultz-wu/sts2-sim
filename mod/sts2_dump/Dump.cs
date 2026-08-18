@@ -40,6 +40,7 @@ public static class Dump
             "enchantmentdump" => EnchantmentDump.Run,
             "encounterdump" => EncounterDump.Run,
             "eventdump" => EventDump.Run,
+            "hookdump" => HookDump.Run,
             "modifierdump" => ModifierDump.Run,
             "monsterdump" => MonsterDump.Run,
             "orbdump" => OrbDump.Run,
