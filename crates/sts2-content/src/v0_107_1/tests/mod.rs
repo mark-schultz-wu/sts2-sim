@@ -19,6 +19,7 @@ mod characters;
 mod enchantments;
 mod encounters;
 mod events;
+mod hooks;
 mod modifiers;
 mod monsters;
 mod orbs;

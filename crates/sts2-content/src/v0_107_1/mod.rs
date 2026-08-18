@@ -88,5 +88,14 @@ const ORBS: &str = include_str!("dumps/orbs.txt");
 #[cfg(test)]
 const MODIFIERS: &str = include_str!("dumps/modifiers.txt");
 
+/// The hook dump, verbatim — test data, on the same terms as [`CARDS`].
+///
+/// The one dump with no generated table beside it. It describes the interface
+/// between an engine and the things that react to it, which a simulator
+/// implements rather than looks up, so there is nothing to generate — but it is
+/// still a measurement of this build, and the tests are where it gets pinned.
+#[cfg(test)]
+const HOOKS: &str = include_str!("dumps/hooks.txt");
+
 #[cfg(test)]
 mod tests;

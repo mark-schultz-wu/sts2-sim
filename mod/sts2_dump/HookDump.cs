@@ -66,6 +66,7 @@ public static class HookDump
         output.Append(Stamp.Header("hook"));
         output.Append("# hook <name> <returns> <params> <dispatchers>\n");
         output.Append("# implements <model> <hook> <declaredBy>\n");
+        output.Append("# unregistered <type> <hook>\n");
 
         List<MethodInfo> hooks = Hooks();
         Dictionary<string, SortedSet<string>> dispatchers = Dispatchers(hooks);
@@ -88,20 +89,26 @@ public static class HookDump
         var names = new HashSet<string>(hooks.Select(h => h.Name), StringComparer.Ordinal);
         int answered = 0;
 
+        // A concrete model with no id is invisible to every other dump, which
+        // all swallow the same lookup failure. Here it would be a hole in a
+        // completeness claim, so it is counted rather than assumed empty.
+        List<Type> unregistered = Unregistered();
+        int stranded = 0;
+        foreach (Type type in unregistered)
+        {
+            foreach (string hook in Answers(type, names))
+            {
+                output.Append($"unregistered {type.Name} {hook}\n");
+                stranded++;
+            }
+        }
+
         foreach (AbstractModel model in AllModels())
         {
             // `GetBaseDefinition` walks an override back to where it was first
             // declared, which is what tells a hook apart from a method that
             // merely shares a name, and handles overloads without ambiguity.
-            IEnumerable<MethodInfo> overrides = model
-                .GetType()
-                .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .Where(m => m.DeclaringType != typeof(AbstractModel)
-                    && m.GetBaseDefinition().DeclaringType == typeof(AbstractModel)
-                    && names.Contains(m.Name))
-                .OrderBy(m => m.Name, StringComparer.Ordinal);
-
-            foreach (MethodInfo m in overrides)
+            foreach (MethodInfo m in Overrides(model.GetType(), names))
             {
                 output.Append($"implements {model.Id.Entry} {m.Name} {m.DeclaringType!.Name}\n");
                 answered++;
@@ -112,7 +119,8 @@ public static class HookDump
 
         output.Append(
             $"# {hooks.Count} hooks, {fired} dispatched, "
-            + $"{answered.ToString(CultureInfo.InvariantCulture)} answers\n");
+            + $"{answered.ToString(CultureInfo.InvariantCulture)} answers, "
+            + $"{unregistered.Count} unregistered types answering {stranded}\n");
 
         Log.Info("[hookdump] begin\n" + output);
         Log.Info("[hookdump] end");
@@ -287,15 +295,78 @@ public static class HookDump
         return $"{bare}<{args}>";
     }
 
-    private static List<AbstractModel> AllModels()
+    /// <summary>
+    /// The hooks a type overrides, most-derived declaration first.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetBaseDefinition</c> walks an override back to where it was first
+    /// declared, which tells a hook apart from a method that merely shares a
+    /// name and handles overloads without ambiguity.
+    /// </remarks>
+    private static IEnumerable<MethodInfo> Overrides(Type type, HashSet<string> names)
     {
-        MethodInfo get = typeof(ModelDb).GetMethod(
+        return type
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Where(m => m.DeclaringType != typeof(AbstractModel)
+                && m.GetBaseDefinition().DeclaringType == typeof(AbstractModel)
+                && names.Contains(m.Name))
+            .OrderBy(m => m.Name, StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> Answers(Type type, HashSet<string> names)
+    {
+        return Overrides(type, names).Select(m => m.Name);
+    }
+
+    /// <summary>
+    /// Concrete models the model database has no id for.
+    /// </summary>
+    /// <remarks>
+    /// Every dump in this mod swallows the same lookup failure, so a model
+    /// without an id is missing from all of them and says so nowhere. It cannot
+    /// be named by id here either — there is no id — so it is reported by type,
+    /// and only where it answers a hook, which is the case that would make a
+    /// completeness claim wrong.
+    /// </remarks>
+    private static List<Type> Unregistered()
+    {
+        MethodInfo get = Getter();
+
+        var stranded = new List<Type>();
+        foreach (Type t in ModelDb.AllAbstractModelSubtypes)
+        {
+            if (t.IsAbstract)
+            {
+                continue;
+            }
+
+            try
+            {
+                get.Invoke(null, new object[] { t });
+            }
+            catch (Exception)
+            {
+                stranded.Add(t);
+            }
+        }
+
+        return stranded.OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
+    }
+
+    private static MethodInfo Getter()
+    {
+        return typeof(ModelDb).GetMethod(
             "Get",
             BindingFlags.Static | BindingFlags.NonPublic,
             binder: null,
             types: new[] { typeof(Type) },
             modifiers: null)
             ?? throw new InvalidOperationException("ModelDb.Get(Type) is gone");
+    }
+
+    private static List<AbstractModel> AllModels()
+    {
+        MethodInfo get = Getter();
 
         var models = new List<AbstractModel>();
         foreach (Type t in ModelDb.AllAbstractModelSubtypes)

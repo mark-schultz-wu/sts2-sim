@@ -2,6 +2,7 @@
 # build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
 # hook <name> <returns> <params> <dispatchers>
 # implements <model> <hook> <declaredBy>
+# unregistered <type> <hook>
 hook AfterActEntered Task - Hook
 hook AfterAddToDeckPrevented Task CardModel CardPileCmd
 hook AfterAttack Task PlayerChoiceContext,AttackCommand Hook
@@ -1134,4 +1135,4 @@ implements WONGOS_MYSTERY_TICKET AfterCombatEnd WongosMysteryTicket
 implements WONGOS_MYSTERY_TICKET AfterModifyingRewards WongosMysteryTicket
 implements WONGOS_MYSTERY_TICKET TryModifyRewards WongosMysteryTicket
 implements WRAITH_FORM_POWER AfterSideTurnStart WraithFormPower
-# 181 hooks, 181 dispatched, 951 answers
+# 181 hooks, 181 dispatched, 951 answers, 0 unregistered types answering 0
