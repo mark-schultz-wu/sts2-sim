@@ -145,6 +145,24 @@ impl<T: Copy + std::fmt::Debug, const N: usize> std::fmt::Debug for Few<T, N> {
     }
 }
 
+/// A `u8` that is never `u8::MAX`, so `Option<NonMaxU8>` costs one byte.
+///
+/// Re-exported because it appears in the generated tables' public types — an
+/// orb value is `Option<NonMaxU8>` — and a caller matching on one should not
+/// have to name the crate it came from.
+///
+/// It is here rather than a plain `Option<u8>` because that would be two bytes,
+/// one of them spent saying whether the other counts, when the range of a byte
+/// already has room to say it. The niche is at `u8::MAX` rather than at zero,
+/// which matters: zero is a real value in the tables that use this — a mock
+/// orb's, a relic that costs nothing — and a zero-niche type would read it as an
+/// absence.
+///
+/// `NonMaxU8::new` answers `None` for 255, the one number it cannot hold, which
+/// is the same `None` a table uses for "no number here". Codegen refuses to emit
+/// a real 255 rather than letting the two meanings collide.
+pub use nonmax::NonMaxU8;
+
 /// What a card costs to play, before anything in a run touches it.
 ///
 /// Three states rather than a number and a flag, because the game's own
@@ -176,4 +194,30 @@ pub struct Version {
     pub name: &'static str,
     /// XxHash32 over the model-id namespace. This is the identity.
     pub content_hash: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NonMaxU8;
+
+    /// The reason the tables use this type: the `Option` is free.
+    ///
+    /// A guarantee `nonmax` makes and this crate leans on, so it is asserted
+    /// rather than assumed — a version bump that lost the niche would otherwise
+    /// grow every table that carries one, silently.
+    #[test]
+    fn an_optional_non_max_costs_no_more_than_the_number() {
+        assert_eq!(size_of::<Option<NonMaxU8>>(), 1);
+        assert_eq!(size_of::<Option<u8>>(), 2, "which is what it is instead of");
+    }
+
+    /// Zero is a number, and 255 is the one that is not.
+    ///
+    /// The reason the niche is at the top of the range rather than the bottom:
+    /// the tables that use this have real zeroes in them.
+    #[test]
+    fn zero_survives_and_the_max_does_not() {
+        assert_eq!(NonMaxU8::new(0).map(|n| n.get()), Some(0));
+        assert_eq!(NonMaxU8::new(u8::MAX), None);
+    }
 }

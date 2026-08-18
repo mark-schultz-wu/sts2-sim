@@ -34,12 +34,14 @@ public static class Dump
         Action? dump = mode switch
         {
             "actdump" => ActDump.Run,
+            "afflictiondump" => AfflictionDump.Run,
             "carddump" => CardDump.Run,
             "characterdump" => CharacterDump.Run,
             "enchantmentdump" => EnchantmentDump.Run,
             "encounterdump" => EncounterDump.Run,
             "eventdump" => EventDump.Run,
             "monsterdump" => MonsterDump.Run,
+            "orbdump" => OrbDump.Run,
             "potiondump" => PotionDump.Run,
             "powerdump" => PowerDump.Run,
             "relicdump" => RelicDump.Run,

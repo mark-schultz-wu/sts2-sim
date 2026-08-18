@@ -4,12 +4,14 @@
 //! Source: `dumps/`, content hash 3954186980.
 
 pub mod acts;
+pub mod afflictions;
 pub mod cards;
 pub mod characters;
 pub mod enchantments;
 pub mod encounters;
 pub mod events;
 pub mod monsters;
+pub mod orbs;
 pub mod potions;
 pub mod powers;
 pub mod relics;

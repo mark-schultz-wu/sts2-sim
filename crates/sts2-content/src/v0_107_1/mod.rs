@@ -74,5 +74,13 @@ const POTIONS: &str = include_str!("dumps/potions.txt");
 #[cfg(test)]
 const ENCHANTMENTS: &str = include_str!("dumps/enchantments.txt");
 
+/// The affliction dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const AFFLICTIONS: &str = include_str!("dumps/afflictions.txt");
+
+/// The orb dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const ORBS: &str = include_str!("dumps/orbs.txt");
+
 #[cfg(test)]
 mod tests;

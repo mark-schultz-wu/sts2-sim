@@ -16,12 +16,14 @@
 //! worth being able to see.
 
 mod acts;
+mod afflictions;
 mod cards;
 mod characters;
 mod enchantments;
 mod encounters;
 mod events;
 mod monsters;
+mod orbs;
 mod potions;
 mod powers;
 mod relics;
@@ -37,14 +39,16 @@ const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and encounters each get a
 /// dump, a submodule, and an entry here.
-const DOMAINS: [&str; 10] = [
+const DOMAINS: [&str; 12] = [
     "acts",
+    "afflictions",
     "cards",
     "characters",
     "enchantments",
     "encounters",
     "events",
     "monsters",
+    "orbs",
     "potions",
     "powers",
     "relics",
@@ -151,12 +155,14 @@ pub fn run() -> Result<String, String> {
 
     let hashes = [
         acts::generate(&root)?,
+        afflictions::generate(&root)?,
         cards::generate(&root)?,
         characters::generate(&root)?,
         enchantments::generate(&root)?,
         encounters::generate(&root)?,
         events::generate(&root)?,
         monsters::generate(&root)?,
+        orbs::generate(&root)?,
         potions::generate(&root)?,
         powers::generate(&root)?,
         relics::generate(&root)?,

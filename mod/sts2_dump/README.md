@@ -17,12 +17,23 @@ cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=carddump \
     ./SlayTheSpire2 --headless --force-steam=off
 ```
 
+Every mode but `rngdump` lands in `crates/sts2-content/src/v0_107_1/dumps/`,
+under the name in the last column.
+
 | Mode | What it prints | Lands in |
 | --- | --- | --- |
-| `carddump` | every card's static data | `crates/sts2-content/src/v0_107_1/dumps/cards.txt` |
-| `encounterdump` | what starts a fight: room, roster, slots, acts | `crates/sts2-content/src/v0_107_1/dumps/encounters.txt` |
-| `monsterdump` | HP ranges and move state machines, at every ascension | `crates/sts2-content/src/v0_107_1/dumps/monsters.txt` |
-| `powerdump` | every power's static data | `crates/sts2-content/src/v0_107_1/dumps/powers.txt` |
+| `actdump` | each act's length, and its bosses in discovery order | `acts.txt` |
+| `afflictiondump` | what an affliction can be stuck to, and its flags | `afflictions.txt` |
+| `carddump` | every card's static data | `cards.txt` |
+| `characterdump` | starting deck, relics, HP and pools | `characters.txt` |
+| `enchantmentdump` | what an enchantment can go on, and its flags | `enchantments.txt` |
+| `encounterdump` | what starts a fight: room, roster, slots, acts | `encounters.txt` |
+| `eventdump` | every event, and the acts that offer it | `events.txt` |
+| `monsterdump` | HP ranges and move state machines, at every ascension | `monsters.txt` |
+| `orbdump` | each orb's two values, its trigger, and the roll order | `orbs.txt` |
+| `potiondump` | every potion's rarity, usage and target | `potions.txt` |
+| `powerdump` | every power's static data | `powers.txt` |
+| `relicdump` | every relic's rarity, price and pool | `relics.txt` |
 | `rngdump` | 1024 draws per seed, every `Rng` method | `crates/sts2-rng/tests/megarandom.txt` |
 
 Then `cargo xtask codegen`.
@@ -73,6 +84,36 @@ drew nothing cannot have rolled anything, whatever its body looks like. That is
 exact rather than conservative, and it is only possible because the dump runs
 inside the real game.
 
+`OrbDump` needs its own decoder rather than `Il`'s. `PassiveVal` and `EvokeVal`
+are `decimal` and mostly wrapped in `ModifyOrbValue`, which asks a hook, which
+reads an `Owner` a canonical model does not have — so reading the property
+throws, and its IL is not "push a number, return" either. What it is instead is
+four shapes wide, including `ldsfld Decimal::One`, which is how the C# compiler
+spells `1m`. Anything else is `dynamic`, on the same terms as everywhere else.
+
+It also reports two things a number alone cannot say. `hooked` is whether the
+getter runs `ModifyOrbValue`, which is whether Focus reaches it, since
+`FocusPower` and `InfusedCore` are what implement that hook. `stored` is whether
+the number lives in a field the orb keeps, in which case what is dumped is the
+field's initialiser — Dark's evoke and Glass's passive are the two, and a
+simulator needs a slot for each.
+
+`stored` is deliberately not "does the value change", and the Rust side does not
+generate it — a value's number is the same whether a literal or a field holds it,
+and sorting the values by that sorts the game's source rather than the game. It
+is dumped because a build moving a value between the two would change behaviour
+while the number stayed put, and the content tests pin it from here.
+
 `EncounterDump` also leaves out presentation: camera scaling and offset, scene
 paths, custom backgrounds, BGM and ambient SFX, and boss map-node art. A
 simulator that never draws a frame has no use for any of it.
+
+## Two lists that are not the same list
+
+`ModelDb` is not always the live table. `ModelDb.Orbs` names four orbs and
+nothing that plays reads it; `OrbModel.GetRandomOrb` draws from a private
+`_validOrbs` of five, and that is what `Chaos` rolls against. `OrbDump` prints
+both memberships so the difference is a row rather than a decision someone made
+once — the same reason the dumps reflect over `ModelDb.AllAbstractModelSubtypes`
+instead of walking the usage tables, which miss summon-only monsters and
+event-only encounters.

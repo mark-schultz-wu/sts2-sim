@@ -1,0 +1,85 @@
+# affliction data, contentHash 3954186980
+# affliction <id> <isStackable> <canAfflictUnplayableCards> <hasExtraCardText> <refusesSomeCards>
+# afflicts <affliction> <cardType>
+affliction BOUND 0 1 1 0
+afflicts BOUND None
+afflicts BOUND Attack
+afflicts BOUND Skill
+afflicts BOUND Power
+afflicts BOUND Status
+afflicts BOUND Curse
+afflicts BOUND Quest
+affliction ENTANGLED 0 1 0 0
+afflicts ENTANGLED None
+afflicts ENTANGLED Attack
+afflicts ENTANGLED Skill
+afflicts ENTANGLED Power
+afflicts ENTANGLED Status
+afflicts ENTANGLED Curse
+afflicts ENTANGLED Quest
+affliction GALVANIZED 1 1 1 0
+afflicts GALVANIZED None
+afflicts GALVANIZED Attack
+afflicts GALVANIZED Skill
+afflicts GALVANIZED Power
+afflicts GALVANIZED Status
+afflicts GALVANIZED Curse
+afflicts GALVANIZED Quest
+affliction HEXED 0 1 0 0
+afflicts HEXED None
+afflicts HEXED Attack
+afflicts HEXED Skill
+afflicts HEXED Power
+afflicts HEXED Status
+afflicts HEXED Curse
+afflicts HEXED Quest
+affliction MOCK_NO_UNPLAYABLE_AFFLICTION 0 0 0 0
+afflicts MOCK_NO_UNPLAYABLE_AFFLICTION None
+afflicts MOCK_NO_UNPLAYABLE_AFFLICTION Attack
+afflicts MOCK_NO_UNPLAYABLE_AFFLICTION Skill
+afflicts MOCK_NO_UNPLAYABLE_AFFLICTION Power
+afflicts MOCK_NO_UNPLAYABLE_AFFLICTION Status
+afflicts MOCK_NO_UNPLAYABLE_AFFLICTION Curse
+afflicts MOCK_NO_UNPLAYABLE_AFFLICTION Quest
+affliction MOCK_SELF_DAMAGE_AFFLICTION 1 1 0 0
+afflicts MOCK_SELF_DAMAGE_AFFLICTION None
+afflicts MOCK_SELF_DAMAGE_AFFLICTION Attack
+afflicts MOCK_SELF_DAMAGE_AFFLICTION Skill
+afflicts MOCK_SELF_DAMAGE_AFFLICTION Power
+afflicts MOCK_SELF_DAMAGE_AFFLICTION Status
+afflicts MOCK_SELF_DAMAGE_AFFLICTION Curse
+afflicts MOCK_SELF_DAMAGE_AFFLICTION Quest
+affliction MOCK_USELESS_AFFLICTION 0 1 0 0
+afflicts MOCK_USELESS_AFFLICTION None
+afflicts MOCK_USELESS_AFFLICTION Attack
+afflicts MOCK_USELESS_AFFLICTION Skill
+afflicts MOCK_USELESS_AFFLICTION Power
+afflicts MOCK_USELESS_AFFLICTION Status
+afflicts MOCK_USELESS_AFFLICTION Curse
+afflicts MOCK_USELESS_AFFLICTION Quest
+affliction RINGING 0 1 1 0
+afflicts RINGING None
+afflicts RINGING Attack
+afflicts RINGING Skill
+afflicts RINGING Power
+afflicts RINGING Status
+afflicts RINGING Curse
+afflicts RINGING Quest
+affliction SMOG 0 1 0 0
+afflicts SMOG None
+afflicts SMOG Attack
+afflicts SMOG Skill
+afflicts SMOG Power
+afflicts SMOG Status
+afflicts SMOG Curse
+afflicts SMOG Quest
+affliction TAINTED 1 1 1 0
+afflicts TAINTED Skill
+# 10 afflictions
+enum CardType 0 None
+enum CardType 1 Attack
+enum CardType 2 Skill
+enum CardType 3 Power
+enum CardType 4 Status
+enum CardType 5 Curse
+enum CardType 6 Quest

@@ -13,12 +13,14 @@
 //! than sail through.
 
 mod acts;
+mod afflictions;
 mod cards;
 mod characters;
 mod enchantments;
 mod encounters;
 mod events;
 mod monsters;
+mod orbs;
 mod potions;
 mod powers;
 mod relics;
