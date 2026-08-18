@@ -15,7 +15,7 @@
 use super::super::orbs::*;
 use super::super::{ORBS, VERSION};
 use super::{build, rows, wire};
-use crate::NonMaxU8;
+use nonmax::NonMaxU8;
 
 fn orb(id: &str) -> Orb {
     *Orb::ALL

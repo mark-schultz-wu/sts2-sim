@@ -89,23 +89,6 @@ fn the_dump_came_from_this_version() {
     );
 }
 
-/// The eleven ascension levels, densely numbered, because a level is a
-/// threshold compared against the run's scalar level — so the discriminants
-/// are the thresholds and a renumber would silently move every step.
-#[test]
-fn the_ascension_levels_are_the_thresholds() {
-    let levels: Vec<Vec<&str>> = rows(MONSTERS, "enum")
-        .filter(|r| r[1] == "AscensionLevel")
-        .collect();
-    assert_eq!(levels.len(), 11, "ascension level count changed");
-
-    for (i, l) in levels.iter().enumerate() {
-        assert_eq!(l[2], i.to_string(), "AscensionLevel is no longer dense");
-    }
-    assert_eq!(levels[8][3], "ToughEnemies");
-    assert_eq!(levels[9][3], "DeadlyEnemies");
-}
-
 /// Ascension moves numbers, never a monster's graph.
 ///
 /// The dump reads every value at every level; a `structurechange` row would

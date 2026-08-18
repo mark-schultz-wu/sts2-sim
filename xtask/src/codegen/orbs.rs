@@ -107,7 +107,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         "orbs.txt",
         &build,
     );
-    writeln!(out, "\nuse crate::NonMaxU8;").unwrap();
+    writeln!(out, "\nuse nonmax::NonMaxU8;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
     emit_shape(&mut out);

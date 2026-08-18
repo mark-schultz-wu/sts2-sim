@@ -99,7 +99,7 @@ unplayable `play_card` names the reason and the blocking model, and a bad
 
 | cmd | arguments |
 |---|---|
-| `start` | `seed`, `character`, `ascension` (default `0`), `modifiers` — an array of modifier entry names, matched case-insensitively |
+| `start` | `seed`, `character`, `ascension` — a level name such as `DeadlyEnemies` or a number, default `0`, matched case-insensitively; `modifiers` — an array of modifier entry names, matched case-insensitively |
 | `fight` | `encounter` — a model entry name, e.g. `BOWLBUGS_WEAK` |
 | `enter_room` | `type` — a `RoomType` name, case-insensitive |
 | `travel` | `col`, `row` — integers |

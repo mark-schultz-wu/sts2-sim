@@ -17,6 +17,7 @@
 
 mod acts;
 mod afflictions;
+mod ascension;
 mod cards;
 mod characters;
 mod enchantments;
@@ -40,9 +41,10 @@ const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and encounters each get a
 /// dump, a submodule, and an entry here.
-const DOMAINS: [&str; 13] = [
+const DOMAINS: [&str; 14] = [
     "acts",
     "afflictions",
+    "ascension",
     "cards",
     "characters",
     "enchantments",
@@ -214,6 +216,7 @@ pub fn run() -> Result<String, String> {
     let builds = [
         acts::generate(&root)?,
         afflictions::generate(&root)?,
+        ascension::generate(&root)?,
         cards::generate(&root)?,
         characters::generate(&root)?,
         enchantments::generate(&root)?,

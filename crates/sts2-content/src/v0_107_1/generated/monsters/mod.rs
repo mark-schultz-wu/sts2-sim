@@ -7,22 +7,6 @@ use super::acts::Act;
 use crate::{Field, Scaled};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum AscensionLevel {
-    None = 0,
-    SwarmingElites = 1,
-    WearyTraveler = 2,
-    Poverty = 3,
-    TightBelt = 4,
-    AscendersBane = 5,
-    Inflation = 6,
-    Scarcity = 7,
-    ToughEnemies = 8,
-    DeadlyEnemies = 9,
-    DoubleBoss = 10,
-}
-
 /// What a monster telegraphs before a move resolves.
 ///
 /// Not what the move does — that is the move body, ported by hand. The

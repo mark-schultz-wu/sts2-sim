@@ -231,6 +231,90 @@ fn splitmix64(x: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
+/// A run's seed, as the player types it.
+///
+/// Canonical by construction. The game folds a typed seed before using it —
+/// `SeedHelper.CanonicalizeSeed` uppercases, trims, and maps `O` to `0` and `I`
+/// to `1` — because its alphabet has no `I` or `O`, precisely so that neither
+/// can be confused with `1` or `0`. Two spellings of one seed are the same run,
+/// and a type that did not fold them would make them two.
+///
+/// That folding is not currently applied by `sts2_headless`, which passes the
+/// string through to the game verbatim: sending `"abcdef"` there starts a
+/// different run from `"ABCDEF"`, where a player typing either into the game
+/// gets the same one. Constructing through this type is what closes that.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Seed(String);
+
+impl Seed {
+    /// The characters a seed is made of.
+    ///
+    /// Thirty-four: the digits and the letters, less `I` and `O`.
+    pub const ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+    /// What the game generates when it picks one — `SeedHelper.seedDefaultLength`.
+    ///
+    /// Not a limit. The game accepts other lengths, and its own headless driver
+    /// defaults to a seven-character one.
+    pub const DEFAULT_LENGTH: usize = 10;
+
+    /// Folds a typed seed into its canonical form, or says why it is not one.
+    pub fn new(typed: &str) -> Result<Seed, Error> {
+        let folded: String = typed
+            .trim()
+            .chars()
+            .map(|c| match c.to_ascii_uppercase() {
+                'O' => '0',
+                'I' => '1',
+                upper => upper,
+            })
+            .collect();
+
+        if folded.is_empty() {
+            return Err(Error::EmptySeed);
+        }
+
+        match folded.chars().find(|c| !Self::ALPHABET.contains(*c)) {
+            Some(bad) => Err(Error::SeedCharacter(bad)),
+            None => Ok(Seed(folded)),
+        }
+    }
+
+    /// The canonical spelling, which is what goes to the game.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// The number the run's streams are seeded from.
+    ///
+    /// `RunRngSet` is `Seed = (uint)StringHelper.GetDeterministicHashCode(seed)`,
+    /// so this is where a typed seed stops being text.
+    pub fn stream_seed(&self) -> u32 {
+        deterministic_hash(&self.0) as u32
+    }
+}
+
+impl serde::Serialize for Seed {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.0)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Seed {
+    /// Through [`Seed::new`], so a seed that arrives unfolded is folded and one
+    /// that is not a seed at all is a parse error rather than a value.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let typed = <std::borrow::Cow<'_, str> as serde::Deserialize>::deserialize(d)?;
+        Seed::new(&typed).map_err(serde::de::Error::custom)
+    }
+}
+
+impl std::fmt::Display for Seed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// `StringHelper.GetDeterministicHashCode` — two interleaved lanes over UTF-16
 /// code units, in wrapping `i32`. Reached through [`GameRng::named`].
 fn deterministic_hash(s: &str) -> i32 {
@@ -249,4 +333,67 @@ fn deterministic_hash(s: &str) -> i32 {
     }
 
     a.wrapping_add(b.wrapping_mul(1566083941))
+}
+
+#[cfg(test)]
+mod seeds {
+    use super::{Error, Seed};
+
+    /// Two spellings of one seed are one seed.
+    ///
+    /// This is the whole reason the type exists. `SeedHelper.CanonicalizeSeed`
+    /// folds case, trims, and maps the two characters the alphabet leaves out;
+    /// a client that sent the typed string verbatim would start a different run
+    /// from the one a player typing the same thing gets.
+    #[test]
+    fn a_seed_folds_the_way_the_game_folds_it() {
+        let canonical = Seed::new("ABCDEF").unwrap();
+
+        for typed in ["abcdef", "  ABCDEF  ", "AbCdEf", "\tabcdef\n"] {
+            assert_eq!(Seed::new(typed).unwrap(), canonical, "{typed:?}");
+        }
+
+        // `I` and `O` are not in the alphabet precisely so they cannot be
+        // confused with `1` and `0`, so they fold rather than fail.
+        assert_eq!(Seed::new("IO").unwrap().as_str(), "10");
+        assert_eq!(Seed::new("io").unwrap().as_str(), "10");
+    }
+
+    /// The alphabet is the game's, and it is missing exactly two letters.
+    #[test]
+    fn the_alphabet_omits_the_letters_that_look_like_digits() {
+        assert_eq!(Seed::ALPHABET.len(), 34);
+        assert!(!Seed::ALPHABET.contains('I'));
+        assert!(!Seed::ALPHABET.contains('O'));
+
+        for c in "0123456789".chars() {
+            assert!(Seed::ALPHABET.contains(c));
+        }
+    }
+
+    /// What is refused is what folding cannot rescue.
+    #[test]
+    fn a_seed_that_is_not_one_says_which_character() {
+        assert!(matches!(Seed::new("   "), Err(Error::EmptySeed)));
+        assert!(matches!(Seed::new(""), Err(Error::EmptySeed)));
+        assert!(matches!(Seed::new("AB-CD"), Err(Error::SeedCharacter('-'))));
+        assert!(matches!(Seed::new("ABÉ"), Err(Error::SeedCharacter('É'))));
+    }
+
+    /// A seed stops being text at exactly one point.
+    ///
+    /// `RunRngSet` is `(uint)GetDeterministicHashCode(seed)`, so the folded
+    /// spelling is what gets hashed — which is the other half of why folding has
+    /// to happen before the seed leaves this process.
+    #[test]
+    fn the_stream_seed_is_taken_from_the_folded_spelling() {
+        assert_eq!(
+            Seed::new("abcdef").unwrap().stream_seed(),
+            Seed::new("ABCDEF").unwrap().stream_seed()
+        );
+        assert_ne!(
+            Seed::new("ABCDEF").unwrap().stream_seed(),
+            Seed::new("ABCDEG").unwrap().stream_seed()
+        );
+    }
 }

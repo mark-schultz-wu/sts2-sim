@@ -11,8 +11,8 @@ default = ["v0_107_1"]
 v0_107_1 = []
 
 [dependencies]
-nonmax = "0.5.5"
-serde = { version = "1", features = ["derive"] }
+nonmax = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
-serde_json = "1"
+serde_json = { workspace = true }

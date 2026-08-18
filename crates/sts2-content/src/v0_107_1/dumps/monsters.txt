@@ -12,17 +12,6 @@
 # scaleintent <monster> <state> <index> <ascension> <count> <damage>
 # scalebranch <monster> <state> <index> <ascension> <weight>
 # rows above are ascension 0; a scale* row is the level at which a value changes
-enum AscensionLevel 0 None
-enum AscensionLevel 1 SwarmingElites
-enum AscensionLevel 2 WearyTraveler
-enum AscensionLevel 3 Poverty
-enum AscensionLevel 4 TightBelt
-enum AscensionLevel 5 AscendersBane
-enum AscensionLevel 6 Inflation
-enum AscensionLevel 7 Scarcity
-enum AscensionLevel 8 ToughEnemies
-enum AscensionLevel 9 DeadlyEnemies
-enum AscensionLevel 10 DoubleBoss
 act OVERGROWTH ASSASSIN_RUBY_RAIDER
 act OVERGROWTH AXE_RUBY_RAIDER
 act OVERGROWTH BRUTE_RUBY_RAIDER

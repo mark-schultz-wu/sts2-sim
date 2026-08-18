@@ -35,6 +35,7 @@ public static class Dump
         {
             "actdump" => ActDump.Run,
             "afflictiondump" => AfflictionDump.Run,
+            "ascensiondump" => AscensionDump.Run,
             "carddump" => CardDump.Run,
             "characterdump" => CharacterDump.Run,
             "enchantmentdump" => EnchantmentDump.Run,

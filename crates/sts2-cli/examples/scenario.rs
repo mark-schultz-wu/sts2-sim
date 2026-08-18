@@ -16,7 +16,17 @@
 //! ```
 
 use anyhow::bail;
+use nonmax::NonMaxU32;
+use sts2_content::ContentVersion;
+use sts2_content::v0_107_1::V0_107_1;
 use sts2_headless::{Command, Config, Game, Response};
+use sts2_rng::Seed;
+
+type V = V0_107_1;
+type AscensionLevel = <V as ContentVersion>::AscensionLevel;
+type Character = <V as ContentVersion>::Character;
+type Encounter = <V as ContentVersion>::Encounter;
+type Relic = <V as ContentVersion>::Relic;
 
 /// Sends one command, prints what came back, and stops at the first refusal.
 ///
@@ -24,10 +34,10 @@ use sts2_headless::{Command, Config, Game, Response};
 /// the inner match is "did the game accept it". Without the second, a refused
 /// command reads as success and every command after it runs against a state the
 /// caller is not expecting.
-fn step(game: &mut Game, command: Command) -> anyhow::Result<Response> {
+fn step(game: &mut Game<V>, command: Command<V>) -> anyhow::Result<Response> {
     match game.send(&command)? {
         Ok(response) => {
-            println!("{response}\n");
+            println!("{}\n", sts2_cli::Readable(&response));
             Ok(response)
         }
         Err(refusal) => bail!("{command:?} was refused: {refusal}"),
@@ -48,9 +58,9 @@ fn main() -> anyhow::Result<()> {
     step(
         &mut game,
         Command::Start {
-            seed: "ORACLE1".into(),
-            character: "IRONCLAD".into(),
-            ascension: 0,
+            seed: Seed::new("ORACLE1")?,
+            character: Character::Ironclad,
+            ascension: AscensionLevel::None,
             modifiers: vec![],
         },
     )?;
@@ -62,18 +72,17 @@ fn main() -> anyhow::Result<()> {
     step(
         &mut game,
         Command::Grant {
-            relic: Some("GOLDEN_PEARL".into()),
+            relic: Some(Relic::GoldenPearl),
             card: None,
         },
     )?;
 
-    // 3. A refusal is a value, not an exception. An encounter name the game does
-    //    not know comes back with the game's own message: there is no id set on
-    //    this side to validate against, so it answers better than we could.
-    let wrong = Command::Fight {
-        encounter: "NO_SUCH_ENCOUNTER".into(),
-    };
-    match game.send(&wrong)? {
+    // 3. A refusal is a value, not an exception. An encounter name the game
+    //    does not know cannot be built as a `Command` at all now — the tables
+    //    have every real one — so asking for a refusal means going around the
+    //    typed API deliberately, which is what `send_raw` is for.
+    let wrong = serde_json::json!({"cmd": "fight", "encounter": "NO_SUCH_ENCOUNTER"});
+    match game.send_raw(&wrong)? {
         Ok(_) => bail!("expected the game to refuse an unknown encounter"),
         Err(refusal) => println!("refused, as it should be: {refusal}\n"),
     }
@@ -85,7 +94,7 @@ fn main() -> anyhow::Result<()> {
     step(
         &mut game,
         Command::Fight {
-            encounter: "BOWLBUGS_WEAK".into(),
+            encounter: Encounter::BowlbugsWeak,
         },
     )?;
 
@@ -97,7 +106,7 @@ fn main() -> anyhow::Result<()> {
         &mut game,
         Command::PlayCard {
             index: 2,
-            target: Some(1),
+            target: NonMaxU32::new(1),
         },
     )?;
 

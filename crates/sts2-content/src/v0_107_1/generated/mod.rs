@@ -5,6 +5,7 @@
 
 pub mod acts;
 pub mod afflictions;
+pub mod ascension;
 pub mod cards;
 pub mod characters;
 pub mod enchantments;

@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
@@ -227,13 +228,47 @@ internal static class Protocol
     }
 
     /// <summary>Discards the current run and starts another (H6's fresh-run case).</summary>
+    /// <summary>
+    /// The run's ascension, as a level name or as a number.
+    /// </summary>
+    /// <remarks>
+    /// Names are the primary form, because every other content value on this
+    /// protocol travels as the game's own name — a character, a room type, a
+    /// modifier — and `"DeadlyEnemies"` says in a log what `9` does not. Numbers
+    /// stay accepted: ascension is a scalar and callers that have one as an
+    /// integer should not have to look up its name to send it.
+    ///
+    /// Absent means zero. A value that is neither throws, which the caller sees
+    /// as a refusal naming the field, rather than the previous behaviour of a
+    /// raw type-mismatch message from the JSON reader.
+    /// </remarks>
+    private static int Ascension(JsonElement req)
+    {
+        if (!req.TryGetProperty("ascension", out JsonElement a))
+        {
+            return 0;
+        }
+
+        if (a.ValueKind == JsonValueKind.Number && a.TryGetInt32(out int level))
+        {
+            return level;
+        }
+
+        if (a.ValueKind == JsonValueKind.String
+            && Enum.TryParse(a.GetString(), ignoreCase: true, out AscensionLevel named))
+        {
+            return (int)named;
+        }
+
+        throw new ArgumentException(
+            $"ascension must be a number or one of: {string.Join(" ", Enum.GetNames(typeof(AscensionLevel)))}");
+    }
+
     private static async Task Start(JsonElement req)
     {
         string? seed = Str(req, "seed");
         string? character = Str(req, "character");
-        int ascension = req.TryGetProperty("ascension", out JsonElement a) && a.TryGetInt32(out int lvl)
-            ? lvl
-            : 0;
+        int ascension = Ascension(req);
 
         _state = await Driver.Restart(seed, character, ascension, Modifiers(req));
         await Observe(req, "start");

@@ -4,10 +4,19 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2.0.20"
+nonmax = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# The trait only. A transport that is generic over the build has no business
+# compiling one, and with default features it was pulling in all fourteen
+# generated domains to reach `ContentVersion`.
+sts2-content = { workspace = true }
+sts2-rng = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-serial_test = "4.0.1"
-anyhow = "1.0.104"
+anyhow = { workspace = true }
+# The tests and examples do name a build, because driving a real game means
+# picking one.
+sts2-content = { workspace = true, features = ["v0_107_1"] }
+serial_test = { workspace = true }

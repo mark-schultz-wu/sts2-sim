@@ -1,4 +1,5 @@
 using System;
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Rewards;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;
@@ -239,6 +240,13 @@ public static class Driver
     private static RunState BuildRunState(
         string seed, IReadOnlyList<ModifierModel> modifiers, CharacterModel character, int ascension)
     {
+        // The game folds a typed seed before using it, and a run seeded from the
+        // unfolded spelling is a different run from the one a player typing the
+        // same characters gets: the alphabet has no `I` or `O`, so both map onto
+        // `1` and `0`. Doing it here means every caller gets it, not just the
+        // ones that remember.
+        seed = SeedHelper.CanonicalizeSeed(seed);
+
         Stage = "building run state";
 
         // UnlockState.all so no scenario is unreachable because a profile has

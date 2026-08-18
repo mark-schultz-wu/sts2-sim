@@ -77,6 +77,46 @@ The cost of the arrangement is that content and engine are different crates, so
 the engine's state has to be reachable through a trait. That is the same cost
 MegaCrit pays with `ICombatState`.
 
+## Naming a build, once
+
+`ContentVersion` in `sts2-content` is the seam. The generated tables are
+concrete types per build, so anything working against content would otherwise be
+pinned to one of them; the trait turns that into a type parameter, and the
+associated types carry every id.
+
+**The rule: reaching into a version module for anything but its marker type is a
+mistake.** A caller names `V0_107_1` once and takes the rest through the trait:
+
+```rust
+type V = V0_107_1;
+type Character = <V as ContentVersion>::Character;
+```
+
+not `use v0_107_1::characters::Character`, which puts the build back into every
+call site — the exact coupling the parameter exists to remove. With the aliases,
+pointing a test, an example or a binary at another build is one line.
+
+The bounds are spelled out on each associated type rather than hidden behind a
+blanket-implemented alias trait. An alias would abbreviate and nothing else: it
+constrains nothing the bounds do not, and it makes a missing bound report as
+`V::Card: Id` instead of naming the trait actually missing.
+
+`Error` stays concrete. An error type generic over the build would put the
+parameter in every signature that can fail, to carry a diagnostic string nobody
+matches on.
+
+The parameter earns more than typing. `ContentVersion::VERSION` lets
+`Game::launch` compare the build it is talking to against the build its tables
+describe, and refuse — so a client physically cannot drive the wrong game, where
+before that check was the caller's to remember.
+
+The one door around it is `Game::send_raw`. The typed API is exhaustive over what
+the tables know, which is exactly why it cannot express a request the game
+*should* refuse — an encounter that does not exist, a `RoomType` codegen drops.
+Testing the refusal path needs those, and that is a different operation from
+driving the game, so it says so at the call site rather than in the type of every
+field.
+
 ## Two things called hooks
 
 Worth separating, because only one of them forces a crate boundary.

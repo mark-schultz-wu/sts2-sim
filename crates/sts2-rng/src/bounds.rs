@@ -32,6 +32,20 @@ pub enum Error {
     #[error("an interval's end must not precede its start")]
     Inverted,
 
+    /// A seed with nothing in it once trimmed.
+    #[error("a seed must have at least one character")]
+    EmptySeed,
+
+    /// A character outside the seed alphabet.
+    ///
+    /// Named rather than counted, because the near-miss is the interesting
+    /// case: the alphabet omits `I` and `O` so they cannot be confused with `1`
+    /// and `0`, and a seed carrying either is folded rather than refused. What
+    /// reaches here is something else entirely — punctuation, or a letter from
+    /// another script.
+    #[error("{0:?} is not a character a seed can contain")]
+    SeedCharacter(char),
+
     /// A counter asked to move backwards. A stream is a position in a
     /// sequence, so rewinding is not a slower version of seeking, it is
     /// meaningless.

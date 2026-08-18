@@ -24,6 +24,33 @@ pub use generated::*;
 
 use crate::Version;
 
+/// This build, as a type.
+///
+/// Zero-sized: it exists to be a type parameter, so that a client or a
+/// simulator names the build once and every id follows. See
+/// [`ContentVersion`](crate::ContentVersion).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct V0_107_1;
+
+impl crate::ContentVersion for V0_107_1 {
+    const VERSION: Version = VERSION;
+
+    type AscensionLevel = generated::ascension::AscensionLevel;
+    type Act = generated::acts::Act;
+    type Affliction = generated::afflictions::Affliction;
+    type Card = generated::cards::Cards;
+    type Character = generated::characters::Character;
+    type Enchantment = generated::enchantments::Enchantment;
+    type Encounter = generated::encounters::Encounter;
+    type Modifier = generated::modifiers::Modifier;
+    type Monster = generated::monsters::Monster;
+    type Orb = generated::orbs::Orb;
+    type Potion = generated::potions::Potion;
+    type Power = generated::powers::Power;
+    type Relic = generated::relics::Relic;
+    type RoomType = generated::encounters::RoomType;
+}
+
 pub const VERSION: Version = Version {
     name: "v0.107.1",
     commit: "59260271",
@@ -87,6 +114,10 @@ const ORBS: &str = include_str!("dumps/orbs.txt");
 /// The modifier dump, verbatim — test data, on the same terms as [`CARDS`].
 #[cfg(test)]
 const MODIFIERS: &str = include_str!("dumps/modifiers.txt");
+
+/// The ascension dump, verbatim — test data, on the same terms as [`CARDS`].
+#[cfg(test)]
+const ASCENSION: &str = include_str!("dumps/ascension.txt");
 
 /// The hook dump, verbatim — test data, on the same terms as [`CARDS`].
 ///

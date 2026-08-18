@@ -18,12 +18,29 @@
 //! and the handshake tests that only bind loopback ports — still runs in
 //! parallel, so `cargo test --include-ignored` is safe with no extra flags.
 
+use nonmax::NonMaxU32;
 use serde_json::Value;
+use serde_json::json;
 use serial_test::serial;
 use std::time::{Duration, Instant};
+use sts2_content::ContentVersion;
+use sts2_content::v0_107_1::V0_107_1;
 use sts2_headless::{
     Answer, Command, Config, Error, Game, PROTOCOL_VERSION, Question, Reply, Response,
 };
+use sts2_rng::Seed;
+
+/// The build these tests drive.
+///
+/// Every other content type is reached through [`ContentVersion`] rather than
+/// out of the version module, so pointing this at another build is a one-line
+/// change. Naming `v0_107_1::characters::Character` directly would put the build
+/// back into every call site, which is what the parameter exists to remove.
+type V = V0_107_1;
+type AscensionLevel = <V as ContentVersion>::AscensionLevel;
+type Character = <V as ContentVersion>::Character;
+type Encounter = <V as ContentVersion>::Encounter;
+type RoomType = <V as ContentVersion>::RoomType;
 
 /// The seed the mod itself defaults to. Named here so the determinism test is
 /// obviously asking both runs the same question.
@@ -31,12 +48,12 @@ const SEED: &str = "ORACLE1";
 
 /// The encounter the scenario tests jump into. Two monsters, one of which the
 /// encounter picks with its own RNG — which is what makes it worth checking.
-const ENCOUNTER: &str = "BOWLBUGS_WEAK";
+const ENCOUNTER: Encounter = Encounter::BowlbugsWeak;
 
-fn launch() -> Game {
+fn launch() -> Game<V> {
     let dir = sts2_headless::game_dir_from_env()
         .expect("set STS2_GAME_DIR to the game directory (`just live` does this)");
-    Game::launch(Config::new(dir)).expect("the game should launch and connect back")
+    Game::<V>::launch(Config::new(dir)).expect("the game should launch and connect back")
 }
 
 /// The parts of an observation these tests look at.
@@ -68,12 +85,12 @@ fn observation(reply: Reply) -> Seen {
     }
 }
 
-fn start(game: &mut Game) -> Seen {
+fn start(game: &mut Game<V>) -> Seen {
     let reply = game
         .send(&Command::Start {
-            seed: SEED.into(),
-            character: "IRONCLAD".into(),
-            ascension: 0,
+            seed: Seed::new(SEED).expect("a seed"),
+            character: Character::Ironclad,
+            ascension: AscensionLevel::None,
             modifiers: vec![],
         })
         .expect("start should not fail at the transport level");
@@ -171,7 +188,7 @@ fn the_same_encounter_gives_the_same_fight_across_a_second() {
         start(&mut game);
         let reply = game
             .send(&Command::Fight {
-                encounter: ENCOUNTER.into(),
+                encounter: ENCOUNTER,
             })
             .expect("fight should not fail at the transport level");
         (observation(reply).digest, Instant::now())
@@ -233,7 +250,29 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
     /// The reason matters as much as the refusal: a command refused because the
     /// game misunderstood it looks identical to one refused correctly, and
     /// only the message tells them apart.
-    fn refused(game: &mut Game, command: Command, expect: &str) {
+    /// The same check for a command the typed API cannot build.
+    ///
+    /// Only for ids the content tables deliberately do not have — a name the
+    /// game should refuse, or a `RoomType` codegen drops. A command that ought
+    /// to work and cannot be built is a gap in the tables, not a reason to
+    /// reach for this.
+    fn refused_raw(game: &mut Game<V>, command: serde_json::Value, expect: &str) {
+        let refusal = game
+            .send_raw(&command)
+            .expect("a refusal is still a reply, not a transport failure")
+            .expect_err(&format!("{command} should have been refused"));
+        assert!(
+            refusal
+                .message
+                .to_lowercase()
+                .contains(&expect.to_lowercase()),
+            "{command} was refused, but not for the stated reason:\n  \
+             wanted something mentioning {expect:?}\n  got {:?}",
+            refusal.message
+        );
+    }
+
+    fn refused(game: &mut Game<V>, command: Command<V>, expect: &str) {
         let refusal = game
             .send(&command)
             .expect("a refusal is still a reply, not a transport failure")
@@ -281,19 +320,17 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
 
     // Names the game does not know. The message comes from the game rather than
     // from us, which is the point of asking it instead of guessing.
-    refused(
+    // Names the tables do not have, so they cannot be built as a `Command` at
+    // all — which is the point of the typed API, and why the refusal path has
+    // its own door.
+    refused_raw(
         &mut game,
-        Command::Grant {
-            relic: Some("NOT_A_REAL_RELIC".into()),
-            card: None,
-        },
+        json!({"cmd": "grant", "relic": "NOT_A_REAL_RELIC"}),
         "NOT_A_REAL_RELIC",
     );
-    refused(
+    refused_raw(
         &mut game,
-        Command::Fight {
-            encounter: "NOT_A_REAL_ENCOUNTER".into(),
-        },
+        json!({"cmd": "fight", "encounter": "NOT_A_REAL_ENCOUNTER"}),
         "not found",
     );
 
@@ -329,18 +366,23 @@ fn an_ordinary_card_play_logs_no_game_errors() {
 
     let fought = observation(
         game.send(&Command::Fight {
-            encounter: ENCOUNTER.into(),
+            encounter: ENCOUNTER,
         })
         .expect("fight should not fail at the transport level"),
     );
     assert_eq!(fought.game_errors, None, "entering a fight logged errors");
 
-    // Index 2 is the Strike in this encounter's opening hand; creature 1 is the
-    // Bowlbug Rock. Both come from the observation above.
+    // Index 0 is the Strike in this encounter's opening hand — which is
+    // `["STRIKE_IRONCLAD", "BASH", "DEFEND_IRONCLAD", ...]` — and creature 1 is
+    // the Bowlbug Rock. Both come from the observation above.
+    //
+    // It used to be index 2, and moved when `Seed` started folding `ORACLE1` to
+    // `0RACLE1` the way the game does. That is the whole point of the type: the
+    // old spelling was seeding a run no player could reach by typing it.
     let played = observation(
         game.send(&Command::PlayCard {
-            index: 2,
-            target: Some(1),
+            index: 0,
+            target: NonMaxU32::new(1),
         })
         .expect("play_card should not fail at the transport level"),
     );
@@ -358,10 +400,10 @@ fn a_room_type_that_is_not_a_room_is_refused() {
     let mut game = launch();
     start(&mut game);
 
+    // `Unassigned` is a real `RoomType` that codegen deliberately drops, so the
+    // typed API cannot name it and this has to go raw.
     let refusal = game
-        .send(&Command::EnterRoom {
-            room: "Unassigned".into(),
-        })
+        .send_raw(&json!({"cmd": "enter_room", "type": "Unassigned"}))
         .expect("a refusal is still a reply")
         .expect_err("Unassigned is not somewhere to jump to");
 
@@ -445,7 +487,7 @@ fn refusing_to_start_exits_rather_than_hanging() {
 /// where it was said to be.
 #[test]
 fn a_bad_game_dir_fails_without_the_game() {
-    let err = Game::launch(Config::new("/definitely/not/the/game"))
+    let err = Game::<V>::launch(Config::new("/definitely/not/the/game"))
         .map(|_| ())
         .expect_err("should refuse");
     assert!(matches!(err, Error::GameNotFound(_)), "got {err:?}");
@@ -477,7 +519,7 @@ fn a_rest_site_option_that_asks_a_question_still_replies() {
 
     let seen = observation(
         game.send(&Command::EnterRoom {
-            room: "RestSite".into(),
+            room: RoomType::RestSite,
         })
         .expect("entering a rest site should not fail at the transport level"),
     );
@@ -493,9 +535,7 @@ fn a_rest_site_option_that_asks_a_question_still_replies() {
     // The assertion is that this returns at all. A transport error here is the
     // deadlock; the command timeout is what turns the hang into a failure.
     let reply = game
-        .send(&Command::ChooseOption {
-            index: smith as usize,
-        })
+        .send(&Command::ChooseOption { index: smith as u8 })
         .expect("choose_option on SMITH must reply, not hang");
 
     match reply.expect("SMITH should be accepted") {

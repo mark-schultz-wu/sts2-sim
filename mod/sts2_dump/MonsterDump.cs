@@ -64,11 +64,6 @@ public static class MonsterDump
         output.Append("# scalebranch <monster> <state> <index> <ascension> <weight>\n");
         output.Append("# rows above are ascension 0; a scale* row is the level at which a value changes\n");
 
-        foreach (string name in Enum.GetNames(typeof(AscensionLevel)))
-        {
-            output.Append($"enum AscensionLevel {Convert.ToInt64(Enum.Parse(typeof(AscensionLevel), name)).ToString(CultureInfo.InvariantCulture)} {name}\n");
-        }
-
         // Which act a monster can be met in, via the encounters that can spawn
         // it. A monster appearing in two acts gets two rows.
         foreach (ActModel act in ModelDb.Acts)

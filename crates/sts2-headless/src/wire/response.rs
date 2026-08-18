@@ -13,7 +13,7 @@
 //! Envelope drift is what the protocol version in the handshake is for, and
 //! [`crate::Game`] checks it.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// A request that the game accepted.
@@ -162,7 +162,7 @@ pub enum RewardKind {
 ///
 /// Kept private and converted immediately: `type` selects which of the remaining
 /// fields are meaningful, which is a sum type wearing a struct's clothes.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct WireReward {
     index: usize,
     #[serde(rename = "type")]

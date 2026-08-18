@@ -3,7 +3,7 @@
 //! Every orb's values and when its passive fires.
 //! Source: `dumps/orbs.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
-use crate::NonMaxU8;
+use nonmax::NonMaxU8;
 use serde::{Deserialize, Serialize};
 
 /// When an orb's passive fires.

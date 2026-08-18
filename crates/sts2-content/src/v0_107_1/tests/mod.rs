@@ -14,6 +14,7 @@
 
 mod acts;
 mod afflictions;
+mod ascension;
 mod cards;
 mod characters;
 mod enchantments;
@@ -26,6 +27,7 @@ mod orbs;
 mod potions;
 mod powers;
 mod relics;
+mod version;
 
 /// A dump's rows of one kind, split on whitespace, comments dropped.
 ///

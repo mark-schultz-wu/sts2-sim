@@ -145,24 +145,6 @@ impl<T: Copy + std::fmt::Debug, const N: usize> std::fmt::Debug for Few<T, N> {
     }
 }
 
-/// A `u8` that is never `u8::MAX`, so `Option<NonMaxU8>` costs one byte.
-///
-/// Re-exported because it appears in the generated tables' public types — an
-/// orb value is `Option<NonMaxU8>` — and a caller matching on one should not
-/// have to name the crate it came from.
-///
-/// It is here rather than a plain `Option<u8>` because that would be two bytes,
-/// one of them spent saying whether the other counts, when the range of a byte
-/// already has room to say it. The niche is at `u8::MAX` rather than at zero,
-/// which matters: zero is a real value in the tables that use this — a mock
-/// orb's, a relic that costs nothing — and a zero-niche type would read it as an
-/// absence.
-///
-/// `NonMaxU8::new` answers `None` for 255, the one number it cannot hold, which
-/// is the same `None` a table uses for "no number here". Codegen refuses to emit
-/// a real 255 rather than letting the two meanings collide.
-pub use nonmax::NonMaxU8;
-
 /// What a card costs to play, before anything in a run touches it.
 ///
 /// Three states rather than a number and a flag, because the game's own
@@ -185,6 +167,165 @@ pub enum Cost {
     /// a no-op, and Confused skip the card entirely. It still resolves to
     /// spending zero, because `GetAmountToSpend` clamps at zero.
     None,
+}
+
+/// One game build's content, as the types that name it.
+///
+/// The generated tables are concrete types per build, so anything that works
+/// against content — the oracle client, the simulator — would otherwise be
+/// pinned to one of them. This is the seam: name the build once, as a type
+/// parameter, and every id follows from it.
+///
+/// The bounds are spelled out on each associated type rather than hidden behind
+/// a blanket-implemented alias. An alias would abbreviate and nothing else: it
+/// constrains nothing the bounds do not, and it makes a missing bound report as
+/// `V::Card: Id` instead of naming the trait actually missing. The one thing
+/// that would earn a real trait here is a `wire()` accessor, and that is
+/// deliberately absent everywhere — the serde rename is the only spelling of an
+/// id, because two spellings are how they come to disagree.
+///
+/// The supertraits are what a `#[derive]` on a generic holding these asks for:
+/// `Command<V>` derives `Debug`, `Clone`, `Eq` and `Serialize`, and each of
+/// those writes a bound on `V` itself even though `V` is a zero-sized marker.
+///
+/// [`ContentVersion::VERSION`] is what makes the parameter more than typing: a
+/// client can check the build it is talking to against the build its tables
+/// describe, and refuse rather than quietly drive the wrong game.
+pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
+    /// The build these types were generated from.
+    const VERSION: Version;
+
+    /// One rung of the ascension ladder.
+    ///
+    /// Version-dependent in a way that is easy to miss: builds move what a level
+    /// means, so the same number is a different rule across two of them.
+    type AscensionLevel: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// Where in a run a room sits.
+    type Act: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A debuff attached to one card.
+    type Affliction: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// Every card, across all twelve pools.
+    ///
+    /// The pool-wrapped `Cards`, which is `#[serde(untagged)]`, so it
+    /// still spells `STRIKE_IRONCLAD` on the wire.
+    type Card: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A playable character.
+    type Character: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A modifier stuck to a card.
+    type Enchantment: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// What starts a fight.
+    type Encounter: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A run-wide rule chosen before the run starts.
+    type Modifier: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// One creature in a fight.
+    type Monster: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A Defect orb.
+    type Orb: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A potion.
+    type Potion: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A buff or debuff on a creature.
+    type Power: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// A permanent passive.
+    type Relic: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
+
+    /// What kind of room a map point is.
+    type RoomType: std::fmt::Debug
+        + Copy
+        + Eq
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + 'static;
 }
 
 /// Which build a content module came from.
@@ -215,30 +356,4 @@ pub struct Version {
     /// content is added, removed or renamed; it does not move when a value on a
     /// model changes, which is why [`Version::assembly_hash`] sits beside it.
     pub content_hash: u32,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::NonMaxU8;
-
-    /// The reason the tables use this type: the `Option` is free.
-    ///
-    /// A guarantee `nonmax` makes and this crate leans on, so it is asserted
-    /// rather than assumed — a version bump that lost the niche would otherwise
-    /// grow every table that carries one, silently.
-    #[test]
-    fn an_optional_non_max_costs_no_more_than_the_number() {
-        assert_eq!(size_of::<Option<NonMaxU8>>(), 1);
-        assert_eq!(size_of::<Option<u8>>(), 2, "which is what it is instead of");
-    }
-
-    /// Zero is a number, and 255 is the one that is not.
-    ///
-    /// The reason the niche is at the top of the range rather than the bottom:
-    /// the tables that use this have real zeroes in them.
-    #[test]
-    fn zero_survives_and_the_max_does_not() {
-        assert_eq!(NonMaxU8::new(0).map(|n| n.get()), Some(0));
-        assert_eq!(NonMaxU8::new(u8::MAX), None);
-    }
 }
