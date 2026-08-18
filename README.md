@@ -38,12 +38,23 @@ prefix names the file it lives in.
 | `sts2-rng` | the game's draw stream, checked against 1024 draws per seed of the real one |
 | `xtask` | `cargo xtask codegen`, which turns the dumps into `sts2-content` |
 
-Content so far is cards, monsters, powers and encounters. What a piece of
-content *does* is code and gets ported by hand; what it *is* is a table, and
-the table is generated so that nobody types a number the game already knows.
-The generated tree is committed rather than built by a `build.rs`, so a content
-patch reads as a diff.
+Content is thirteen domains — acts, afflictions, cards, characters,
+enchantments, encounters, events, modifiers, monsters, orbs, potions, powers and
+relics — plus the hook surface, which is measured but has no table because a
+simulator implements it rather than looking it up. What a piece of content *does*
+is code and gets ported by hand; what it *is* is a table, and the table is
+generated so that nobody types a number the game already knows. The generated
+tree is committed rather than built by a `build.rs`, so a content patch reads as
+a diff.
 
-Every dump carries the build's content hash, and the generated tables refuse a
-dump whose hash does not match the version module it generates into — so a
-table can never quietly come to describe a game nobody is talking to.
+Every dump names the build it came from, with two hashes: the content hash over
+the set of model ids, and the assembly hash that moves on any code change at all.
+One alone is not enough — a rebalance that adds no content leaves the content
+hash equal and every generated number wrong. Codegen refuses to generate when two
+dumps disagree, so a table can never quietly come to describe a game nobody is
+talking to.
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is where things live and why —
+the content/code dividing rule, why ported behaviour belongs beside the tables
+rather than in the engine, how the hook surface is held to what was measured, and
+the four layers a table has to survive to be believed.
