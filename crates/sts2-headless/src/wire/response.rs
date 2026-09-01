@@ -1,31 +1,15 @@
 //! What the game sends back.
-//!
-//! The envelope is typed; the observation payload is not. `state` stays a
-//! [`serde_json::Value`] on purpose — narrowing it into Rust structs is a large
-//! job whose right shape depends on what the simulator turns out to need, and
-//! doing it now would mean designing against a consumer that does not exist yet.
-//! Nothing is lost by waiting: the raw value carries every field the game
-//! reported, so no state can go missing while it is still untyped.
-//!
-//! That argument covers the payload and not the envelope, and the difference
-//! once mattered: [`Response::Pending`] carried `digest` and `state` on the wire
-//! with no fields to receive them, so serde discarded both on every pending.
-//! Envelope drift is what the protocol version in the handshake is for, and
-//! [`crate::Game`] checks it.
+//! The envelope is typed, but the observation payload is not. `state` remains a [`serde_json::Value`] until the simulator defines the required shape. The raw value preserves every reported field.
+//! That argument covers the payload and not the envelope. The difference once mattered: [`Response::Pending`] carried `digest` and `state` on the wire with no fields to receive them, so serde discarded both on every pending. Envelope drift is what the protocol version in the handshake is for, and [`crate::Game`] checks it.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// A request that the game accepted.
 ///
-/// Exactly one reply arrives per request, though not always the kind the command
-/// implies — anything can be answered with [`Response::Pending`].
+/// Exactly one reply arrives per request, though not always the kind the command implies, anything can be answered with [`Response::Pending`].
 ///
-/// Two messages are deliberately absent. A [`Refusal`] is the inner `Err` of a
-/// [`crate::Reply`] rather than a variant here, since it is the one reply that
-/// means nothing happened. And the greeting arrives once, before any request,
-/// and [`crate::Game`] consumes it during the handshake — so a variant for it
-/// would be one every caller must match and none could ever receive.
+/// Two messages are deliberately absent. A [`Refusal`] is the inner `Err` of a [`crate::Reply`] rather than a variant here, since it is the one reply that means nothing happened. And the greeting arrives once, before any request, and [`crate::Game`] consumes it during the handshake. Therefore a variant for it is one every caller must match and none can ever receive.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
@@ -34,29 +18,23 @@ pub enum Response {
         /// Increments per observation or pending, not per request.
         seq: u64,
         cmd: String,
-        /// False when combat ended mid-cascade and the decision was abandoned
-        /// rather than completed. Not an error — but a simulator that resolved
-        /// it fully has diverged, even if the resulting state looks agreeable.
+        /// False when combat ended mid-cascade and the decision was abandoned rather than completed. Not an error, but a simulator that resolved it fully has diverged, even if the resulting state looks agreeable.
         resolved: bool,
         digest: String,
         /// The whole state the digest was taken over.
         state: Value,
-        /// Errors the game logged while running the command. Never suppressed:
-        /// the command may have half-happened, and only the caller can decide
-        /// whether to trust the state.
+        /// Errors the game logged while running the command. Never suppressed: the command can have half-happened, and only the caller can decide whether to trust the state.
         #[serde(rename = "gameErrors", default)]
         game_errors: Option<Vec<String>>,
     },
 
     /// The game stopped mid-action to ask something.
     ///
-    /// Until it is answered the game accepts only [`crate::Command::Answer`],
-    /// `Command::Observe` and `Command::Quit`.
+    /// Until it is answered the game accepts only [`crate::Command::Answer`], `Command::Observe` and `Command::Quit`.
     Pending {
         seq: u64,
         cmd: String,
-        /// A parked game still reports where it is: `digest` and `state` are
-        /// attached to a pending exactly as they are to an observation.
+        /// A parked game still reports where it is: `digest` and `state` are attached to a pending exactly as they are to an observation.
         digest: String,
         state: Value,
         #[serde(flatten)]
@@ -69,19 +47,14 @@ pub enum Response {
 
 /// A refused command.
 ///
-/// Its own type rather than a [`Response`] variant, because it is the one reply
-/// that means the game did not move. [`crate::Game::send`] returns it in the
-/// inner `Err` of a [`crate::Reply`]: a refusal fails the command while leaving
-/// the session healthy, which is a different thing from the transport failing.
+/// Its own type rather than a [`Response`] variant, because it is the one reply that means the game did not move. [`crate::Game::send`] returns it in the inner `Err` of a [`crate::Reply`]: a refusal fails the command while leaving the session healthy. This is a different thing from the transport failing.
 ///
-/// There is no state on one, for the same reason — nothing advanced, so whatever
-/// the caller already had is still current.
+/// There is no state on one, for the same reason, nothing advanced, so whatever the caller already had is still current.
 #[derive(Debug, Clone, Deserialize, thiserror::Error)]
 #[error("refused {cmd}: {message}")]
 pub struct Refusal {
     pub cmd: String,
-    /// Written to be read: an illegal `travel` lists the legal coords, an
-    /// unplayable card names the reason and what blocked it.
+    /// Written to be read: an illegal `travel` lists the legal coords, an unplayable card names the reason and what blocked it.
     pub message: String,
 }
 
@@ -93,8 +66,7 @@ pub enum Question {
     SelectCards {
         min: u32,
         max: u32,
-        /// The running action, not the game's own prompt text — a selector never
-        /// receives the prompt, so this is attribution rather than wording.
+        /// The running action, not the game's own prompt text, a selector never receives the prompt, so this is attribution rather than wording.
         asker: Option<String>,
         options: Vec<CardOption>,
     },
@@ -117,24 +89,20 @@ pub struct CardOption {
 #[serde(try_from = "WireReward")]
 pub struct RewardDetail {
     pub index: usize,
-    /// A reward can exist in the set without content, which is not the same as
-    /// the reward being absent. Reported for every kind, including
-    /// [`RewardKind::Other`].
+    /// A reward can exist in the set without content, which is not the same as the reward being absent. Reported for every kind, including [`RewardKind::Other`].
     pub populated: bool,
     pub reward: RewardKind,
 }
 
 /// What a reward actually offers.
 ///
-/// A sum rather than a struct of mutually exclusive `Option`s: the game sends
-/// exactly one shape per reward, so anything else should not be expressible.
+/// A sum rather than a struct of mutually exclusive `Option`s: the game sends exactly one shape per reward, so anything else must not be expressible.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RewardKind {
     Gold {
         amount: i64,
     },
-    /// Entry names, in the form [`CardOption::card`] uses. Empty is possible —
-    /// an unpopulated card reward still reports the field.
+    /// Entry names, in the form [`CardOption::card`] uses. Empty is possible. An unpopulated card reward still reports the field.
     Card {
         cards: Vec<String>,
     },
@@ -149,10 +117,7 @@ pub enum RewardKind {
     },
     /// A reward type this crate does not unpack, named rather than anonymous.
     ///
-    /// Deliberately not a catch-all meaning "cannot say": an earlier attempt in
-    /// this repo used one of those for screens, and a value indistinguishable
-    /// from a real answer is worse than no value. This says only that the game
-    /// described a reward whose per-type fields are not modelled here.
+    /// Deliberately not a catch-all meaning "cannot say": an earlier attempt in this repo used one of those for screens. A value indistinguishable from a real answer is worse than no value. This says only that the game described a reward whose per-type fields are not modelled here.
     Other {
         kind: String,
     },
@@ -160,8 +125,7 @@ pub enum RewardKind {
 
 /// The flat form the game actually sends.
 ///
-/// Kept private and converted immediately: `type` selects which of the remaining
-/// fields are meaningful, which is a sum type wearing a struct's clothes.
+/// Kept private and converted immediately: `type` selects which of the remaining fields are meaningful, which is a sum type wearing a struct's clothes.
 #[derive(Serialize, Deserialize)]
 struct WireReward {
     index: usize,
@@ -185,8 +149,7 @@ impl TryFrom<WireReward> for RewardDetail {
 
     fn try_from(w: WireReward) -> Result<Self, Self::Error> {
         // A known type missing the field that defines it is a protocol
-        // disagreement, not something to paper over by falling back to `Other` —
-        // that would turn a broken game into a reward the client silently
+        // disagreement, not something to paper over by falling back to `Other`,         // that will turn a broken game into a reward the client silently
         // cannot act on.
         let missing = |field: &str| format!("{} is missing '{field}'", w.kind);
 
@@ -221,9 +184,7 @@ mod tests {
         serde_json::from_str(line).expect("sample should parse")
     }
 
-    /// The client always asks for full observations, so one arriving without
-    /// state means the game disagreed about that. Refusing it is the point of
-    /// `state` not being an `Option`.
+    /// The client always asks for full observations, so one arriving without state means the game disagreed about that. Refusing it is the point of `state` not being an `Option`.
     #[test]
     fn an_observation_without_state_is_refused() {
         let err = serde_json::from_str::<Response>(
@@ -278,9 +239,7 @@ mod tests {
         assert_eq!(game_errors.as_deref(), Some(&["boom".to_string()][..]));
     }
 
-    /// Regression. `Pending` had no fields for `digest` or `state`, and serde
-    /// drops what it has nowhere to put — so every pending silently threw away
-    /// the state of a parked game, which is when you most want it.
+    /// Regression. `Pending` had no fields for `digest` or `state`, and serde drops what it has nowhere to put. Therefore every pending silently threw away the state of a parked game, which is when you most want it.
     #[test]
     fn a_pending_reports_where_the_game_is() {
         let r = parse(
@@ -295,8 +254,7 @@ mod tests {
         assert_eq!(state["gold"], 99);
     }
 
-    /// The envelope and the question arrive flat in one object, so this pins
-    /// that `flatten` plus an internally tagged enum works inside a variant.
+    /// The envelope and the question arrive flat in one object, so this pins that `flatten` plus an internally tagged enum works inside a variant.
     #[test]
     fn select_cards_flattens_into_the_envelope() {
         let r = parse(
@@ -362,8 +320,7 @@ mod tests {
             }
         );
 
-        // An explicit null is what an unpopulated relic reward actually sends —
-        // the mod sets no ignore condition, so nulls go on the wire.
+        // An explicit null is what an unpopulated relic reward actually sends,         // the mod sets no ignore condition, so nulls go on the wire.
         assert!(!rewards[2].populated);
         assert_eq!(
             rewards[2].reward,
@@ -385,8 +342,7 @@ mod tests {
         assert_eq!(r.reward, RewardKind::Potion { potion: None });
     }
 
-    /// A reward type this crate does not model keeps its name, so a caller can
-    /// say what it saw rather than only that it saw something.
+    /// A reward type this crate does not model keeps its name. Therefore a caller can say what it saw rather than only that it saw something.
     #[test]
     fn an_unmodelled_reward_type_is_named() {
         let r = reward(r#"{"index":3,"type":"SapphireReward","populated":true}"#)
@@ -400,8 +356,7 @@ mod tests {
         assert!(r.populated);
     }
 
-    /// A known type missing the field that defines it is a disagreement with the
-    /// game, and has to be loud rather than degrading into `Other`.
+    /// A known type missing the field that defines it is a disagreement with the game, and has to be loud rather than degrading into `Other`.
     #[test]
     fn a_known_type_missing_its_field_is_refused() {
         let err = reward(r#"{"index":0,"type":"GoldReward","populated":true}"#)

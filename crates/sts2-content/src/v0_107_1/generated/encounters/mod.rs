@@ -193,8 +193,8 @@ impl std::fmt::Debug for FlagSet {
 /// Which of an encounter's slots a monster stands in.
 ///
 /// An index, not a name: slot names are encounter-local scene
-/// positions with no shared vocabulary — 44 of them across 96
-/// encounters — and nothing outside the game ever sees one. Capped
+/// positions with no shared vocabulary, 44 of them across 96
+/// encounters, and nothing outside the game ever sees one. Capped
 /// rather than a `u8` so that the spare values leave a niche, which is
 /// what makes `Option<Slot>` cost nothing beside a `Monster`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -236,7 +236,7 @@ pub struct Spawn {
 /// The monsters a fight opens with, in order.
 pub type Spawns = Few<Spawn, 4>;
 
-/// Every monster an encounter could ever field.
+/// Every monster an encounter can ever field.
 pub type Possible = Few<Monster, 6>;
 
 /// Who is on the board when the fight starts.
@@ -281,7 +281,7 @@ pub struct EncounterData {
 /// Every encounter in the build.
 ///
 /// Flat, and ordered by the game's own id. The generated files group by
-/// room type, which is what `ActModel` itself groups them by — it
+/// room type, which is what `ActModel` itself groups them by, it
 /// caches `AllRegularEncounters`, `AllEliteEncounters` and
 /// `AllBossEncounters` as three filters on exactly that.
 ///

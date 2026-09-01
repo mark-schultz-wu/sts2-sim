@@ -1,19 +1,7 @@
 //! Every card's static data.
-//!
-//! Card identity nests by the game's own twelve card pools, so `Strike` needs
-//! no suffix: `IroncladCard::Strike` and `SilentCard::Strike` are different
-//! variants of different types. The game disambiguates with a flat namespace
-//! instead — `STRIKE_IRONCLAD` — and that id is preserved as the serde rename,
-//! so the wire form is unchanged and the generated file stays diffable against
-//! the game's own names.
-//!
-//! Only ten of 578 ids actually carry a pool suffix, all of them `STRIKE_*` and
-//! `DEFEND_*`. The stripping rule matters for exactly those, and is a no-op
-//! everywhere else.
-//!
-//! One file per pool rather than one for everything. A content patch usually
-//! touches one character, and that should read as a diff to one file rather
-//! than a churn in the middle of eight thousand lines.
+//! Card identity nests by the game's own twelve card pools, so `Strike` needs no suffix: `IroncladCard::Strike` and `SilentCard::Strike` are different variants of different types. The game disambiguates with a flat namespace instead, `STRIKE_IRONCLAD`, and that id is preserved as the serde rename. Therefore the wire form is unchanged and the generated file stays diffable against the game's own names.
+//! Only ten of 578 ids actually carry a pool suffix, all of them `STRIKE_*` and `DEFEND_*`. The stripping rule matters for exactly those, and is a no-op everywhere else.
+//! Each pool gets one file. A content patch usually touches one character, so its diff stays out of an eight-thousand-line monolith.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -64,14 +52,9 @@ struct Card {
 
 /// Members the game declares that are not values of the field they name.
 ///
-/// A C# enum has a zero, so a `None` gets declared whether or not it means
-/// anything, and `Option<T>` is the honest Rust for the ones that don't.
-/// Dropping a member does not renumber the rest — every member is emitted at
-/// the game's own discriminant, so the generated enum stays a subset of the
-/// game's rather than a reshuffle of it.
+/// A C# enum has a zero, so a `None` gets declared whether or not it means anything. `Option<T>` is the honest Rust for the ones that don't. Dropping a member does not renumber the rest, every member is emitted at the game's own discriminant. Therefore the generated enum stays a subset of the game's rather than a reshuffle of it.
 ///
-/// `TargetType::None` stays: 35 cards declare it outright, and "takes no
-/// target" is a real answer that `Option` would only spell the same way.
+/// `TargetType::None` stays: 35 cards declare it outright, and "takes no target" is a real answer that `Option` will only spell the same way.
 const DROPPED: [(&str, &str, &str); 3] = [
     (
         "CardKeyword",
@@ -108,10 +91,7 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 
 /// The dump's two cost columns as the one `Cost` they encode.
 ///
-/// The pairing is checked rather than assumed: `CardEnergyCost` zeroes the
-/// canonical cost for X-cost cards and treats any negative base as "no cost",
-/// so an X card with a number or a negative other than -1 would mean the game
-/// changed under us and the mapping below is no longer faithful.
+/// The pairing is checked rather than assumed: `CardEnergyCost` zeroes the canonical cost for X-cost cards and treats any negative base as "no cost". Therefore an X card with a number or a negative other than -1 means the game changed under us. The mapping below is no longer faithful.
 fn cost(card: &Card) -> Result<String, String> {
     match (card.costs_x, card.cost.as_str()) {
         (true, "0") => Ok("Cost::X".into()),
@@ -140,11 +120,7 @@ fn variant(card: &Card, suffix: Option<&str>) -> String {
 
 /// One card, as the path another domain has to spell to name it.
 ///
-/// Card identity is pool-scoped — `Strike` is a variant of five different
-/// enums — so naming one from outside takes the pool as well as the id. The
-/// suffix rule lives here because this is the domain that invented it, and a
-/// second copy of it elsewhere is a second chance to get `STRIKE_IRONCLAD`
-/// wrong.
+/// Card identity is pool-scoped, `Strike` is a variant of five different enums, so naming one from outside takes the pool as well as the id. The suffix rule lives here because this is the domain that invented it. A second copy of it elsewhere is a second chance to get `STRIKE_IRONCLAD` wrong.
 pub(super) fn card_path(pool: &str, id: &str) -> Result<String, String> {
     let (_, _, enum_name, suffix) = POOLS
         .iter()
@@ -227,8 +203,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
         writeln!(out, "impl {enum_name} {{").unwrap();
 
-        // By value: `CardData` fits in a register now, so a reference would be
-        // strictly larger than the thing it points at — and returning one would
+        // By value: `CardData` fits in a register now, so a reference is
+        // strictly larger than the thing it points at, and returning one will
         // force the rows back into a static, since a `const fn` call is not a
         // promotable expression.
         writeln!(
@@ -302,8 +278,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
     writeln!(out).unwrap();
 
-    // Reflected from the game, so a member nothing uses is still present —
-    // absent from the table is not absent from the enum. The exceptions are in
+    // Reflected from the game, so a member nothing uses is still present,     // absent from the table is not absent from the enum. The exceptions are in
     // `DROPPED`, and each carries its reason into the generated file.
     for (name, members) in &enums {
         for (_, member, why) in DROPPED.iter().filter(|&&(e, _, _)| e == name) {
@@ -329,7 +304,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     // A bitset rather than a slice. The game keeps keywords in a
     // `HashSet<CardKeyword>` and asks `.Contains(…)` almost exclusively, so a
-    // set is what it means; a slice was 16 bytes of pointer and length to carry
+    // set is what it means. A slice was 16 bytes of pointer and length to carry
     // at most four one-byte members, and its order came from the dump's sort
     // rather than from the game. It also has to survive being the per-card
     // runtime state, because `AddKeyword`/`RemoveKeyword` mutate it mid-combat,
@@ -365,7 +340,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     )?;
 
     // A set over `CardType`, for whoever needs one. Nothing in this domain
-    // does — a card has one type, not a set of them — but the enum lives here,
+    // does, a card has one type, not a set of them, but the enum lives here,
     // so the set over it does too rather than in whichever domain happens to
     // want it first. Enchantments are that domain today.
     //

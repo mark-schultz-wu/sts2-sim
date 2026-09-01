@@ -1,33 +1,11 @@
-//! Every modifier: whether a run can offer it, what it rules out, and the two
-//! things it changes about how a run begins.
-//!
-//! A modifier is a run-wide rule chosen before the run starts. Almost all of
-//! what one *does* is hooks — `ModifyGeneratedMap`, `TryModifyRewardsLate`,
-//! `ModifyRestSiteHealAmount` — and hooks are code.
-//!
+//! Every modifier: whether a run can offer it, what it rules out, and the two things it changes about how a run begins.
+//! A modifier is a run-wide rule chosen before the run starts. Almost all of what one *does* is hooks, `ModifyGeneratedMap`, `TryModifyRewardsLate`, `ModifyRestSiteHealAmount`, and hooks are code.
 //! # Which hooks are not here
-//!
-//! Deliberately. A simulator's ported Midas already knows it hooks rewards, so a
-//! list of overridden method names would describe the game's API surface rather
-//! than the game, and a caller could do nothing with it that the ported body
-//! does not already do. What is generated is what a caller needs *before* any
-//! ported code runs: whether a run can pick this, what picking it rules out, and
-//! the two things that happen at setup.
-//!
+//! Deliberately. A simulator's ported Midas already knows it hooks rewards. Therefore a list of overridden method names will describe the game's API surface rather than the game. A caller can do nothing with it that the ported body does not already do. What is generated is what a caller needs *before* any ported code runs: whether a run can pick this, what picking it rules out. The two things that happen at setup.
 //! # `kind` is the two lists, and there is a third state
-//!
-//! `ModelDb.GoodModifiers` and `BadModifiers` are what a run offers from, and
-//! between them they are the whole classification. A modifier in neither is one
-//! no run can pick, which is `None` here and is the deprecated one — the same
-//! shape the deprecated act takes, and for the same reason.
-//!
+//! `ModelDb.GoodModifiers` and `BadModifiers` are what a run offers from, and between them they are the whole classification. A modifier in neither is one no run can pick. This is `None` here and is the deprecated one, the same shape the deprecated act takes, and for the same reason.
 //! # Exclusion is a set, not a pair
-//!
-//! `MutuallyExclusiveModifiers` is a list of sets and there is one set in it,
-//! holding three. A pair would have been the easy read and would have been wrong
-//! the moment a fourth arrived, so `EXCLUSIVE` is a list of `ModifierSet`
-//! and `intersects` is the question a caller has: does what I have chosen
-//! already conflict with this.
+//! `MutuallyExclusiveModifiers` is a list of sets and there is one set in it, holding three. A pair has been the easy read and has been wrong the moment a fourth arrived. Therefore `EXCLUSIVE` is a list of `ModifierSet` and `intersects` is the question a caller has: does what I have chosen already conflict with this.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -38,8 +16,7 @@ use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
 
 /// How the dump spells each list, and the variant it becomes.
 ///
-/// `unused` is not a variant: a modifier no run can offer has no kind, which is
-/// `Option::None` rather than a third thing to be.
+/// `unused` is not a variant: a modifier no run can offer has no kind, which is `Option::None` rather than a third thing to be.
 const KINDS: [(&str, &str, &str); 2] = [
     ("good", "Good", "Offered as a boon. Nine of the seventeen."),
     ("bad", "Bad", "Offered as a drawback. Seven."),
@@ -135,7 +112,7 @@ fn exclusive(dump: &Dump, modifiers: &[&Vec<String>]) -> Result<Vec<Vec<String>>
         ));
     }
 
-    // A group of one rules nothing out, and would be a sign the dump lost a
+    // A group of one rules nothing out, and is a sign the dump lost a
     // member rather than that the game has a singleton.
     for (at, group) in ordered.iter().enumerate() {
         if group.len() < 2 {
@@ -155,7 +132,7 @@ fn emit_kind(out: &mut String) {
         "/// Which list a run offers a modifier from.\n\
          ///\n\
          /// The two are `ModelDb.GoodModifiers` and `BadModifiers`, and a\n\
-         /// modifier in neither is one no run can pick at all — that is no kind\n\
+         /// modifier in neither is one no run can pick at all, that is no kind\n\
          /// rather than a third one."
     )
     .unwrap();
@@ -309,7 +286,7 @@ fn emit_exclusive(
          ///\n\
          /// One group of three in this build, and a list of sets rather than a\n\
          /// list of pairs because that is what the game holds: reading it as\n\
-         /// pairs would be right today and wrong the moment a fourth member\n\
+         /// pairs is right today and wrong the moment a fourth member\n\
          /// arrived. `ModifierSet::intersects` is the question a caller has.\n\
          pub const EXCLUSIVE: [ModifierSet; {}] = [",
         exclusive.len()

@@ -40,7 +40,7 @@ pub(super) fn combat_of(f: &mut fmt::Formatter<'_>, combat: &Value) -> fmt::Resu
         if let Some(intent) = c.str_at("intent") {
             line.push_str(&format!(" → {intent}"));
             // A move carries a list of intents, so an attack that also blocks
-            // reports both. Only attacks have numbers; the rest name themselves,
+            // reports both. Only attacks have numbers. The rest name themselves,
             // because the game has no amount to report for them either.
             let detail: Vec<String> = c
                 .list_at("intents")
@@ -95,7 +95,7 @@ pub(super) fn combat_of(f: &mut fmt::Formatter<'_>, combat: &Value) -> fmt::Resu
                         .collect();
                     // Both halves are needed. Ids alone leave an empty list
                     // ambiguous between "targets itself, nothing to pick" and
-                    // "targets enemies, none are alive" — which are not at all
+                    // "targets enemies, none are alive", which are not at all
                     // the same thing to a caller deciding what to play.
                     let kind = l.str_at("target").unwrap_or("?");
                     if targets.is_empty() {

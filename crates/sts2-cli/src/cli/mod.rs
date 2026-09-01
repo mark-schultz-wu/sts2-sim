@@ -1,9 +1,5 @@
 //! The command surface, and how it becomes a game command.
-//!
-//! Ids are named the way the game names them — `IRONCLAD`, `BOWLBUGS_WEAK`,
-//! `DeadlyEnemies` — because that is the serde rename on every generated type,
-//! so parsing is one `serde_json::from_value` rather than a table of aliases
-//! that would drift.
+//! Ids are named the way the game names them, `IRONCLAD`, `BOWLBUGS_WEAK`, `DeadlyEnemies`, because that is the serde rename on every generated type. Therefore parsing is one `serde_json::from_value` rather than a table of aliases that will drift.
 
 pub mod choose;
 
@@ -28,9 +24,7 @@ fn id<T: DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
 
 #[derive(Debug, Args)]
 pub struct StartArgs {
-    /// The run's seed. Folded the way the game folds it, so `oracle1` and
-    /// `ORACLE1` are one run — and both are `0RACLE1`, since the alphabet has
-    /// no `O`.
+    /// The run's seed. Folded the way the game folds it, so `oracle1` and `ORACLE1` are one run, and both are `0RACLE1`, since the alphabet has no `O`.
     pub seed: String,
     /// A character id, such as `IRONCLAD`.
     pub character: String,
@@ -44,9 +38,7 @@ pub struct StartArgs {
 
 /// One reward being taken: which reward, and which card inside it.
 ///
-/// Spelled `N` or `N.M`. The dot is doing real work — a card reward holds
-/// several cards and the game will not pick one for you, so `0` and `0.1` are
-/// different requests rather than one with a default.
+/// Spelled `N` or `N.M`. The dot is doing real work, a card reward holds several cards and the game will not pick one for you. Therefore `0` and `0.1` are different requests rather than one with a default.
 #[derive(Debug, Clone, Copy)]
 pub struct Taking {
     reward: usize,
@@ -104,10 +96,7 @@ pub enum Answering {
     Skip,
     /// Takes rewards from a reward screen.
     ///
-    /// A reward is `N`, and a card inside a card reward is `N.M` — `take 0.1`
-    /// is the second card of the first reward. The game refuses a card reward
-    /// taken without a card rather than choosing one, so the pair is not
-    /// optional there.
+    /// A reward is `N`, and a card inside a card reward is `N.M`, `take 0.1` is the second card of the first reward. The game refuses a card reward taken without a card rather than choosing one, so the pair is not optional there.
     Take {
         #[arg(value_delimiter = ' ', num_args = 1..)]
         rewards: Vec<Taking>,
@@ -143,9 +132,7 @@ pub enum Play {
     Buy { index: u8 },
     /// Answers the pending question.
     ///
-    /// One command with three shapes, because that is what the protocol has —
-    /// and because which shape applies depends on which question is pending,
-    /// which the observation prints beside it.
+    /// One command with three shapes, because that is what the protocol has. The pending question selects the shape, which the observation prints beside it.
     #[command(subcommand)]
     Answer(Answering),
     /// Puts a card or relic into the run, for constructing a scenario.

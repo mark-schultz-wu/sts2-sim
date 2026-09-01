@@ -1,37 +1,11 @@
 //! Every relic's static data, and which pool drafts it.
-//!
-//! A relic is a permanent passive, and nearly all of what one *does* is hooks,
-//! ported by hand. What is table is where it comes from, what it costs, and the
-//! handful of yes-or-no facts the engine reads off it without asking.
-//!
+//! A relic is a permanent passive, and nearly all of what one *does* is hooks, ported by hand. What is table is where it comes from, what it costs, and the handful of yes-or-no facts the engine reads off it without asking.
 //! # `Price` rather than a number
-//!
-//! `RelicModel.MerchantCost` returns 999999999 for a relic that is not for
-//! sale, which is a sentinel and not a price — nothing should do arithmetic on
-//! it, and a shop comparing gold against it would be comparing against a number
-//! that means "never". So it is `Price::NotSold`, the same move `Cost::None`
-//! makes for a card's -1.
-//!
-//! It has to be read per relic rather than derived from rarity. The base
-//! implementation maps Ancient, Starter and Event to the sentinel, but nine
-//! relics override `MerchantCost` outright — so of the 35 Event-rarity relics,
-//! 26 are unsellable and 9 have a real price. Deriving would have got those
-//! nine wrong.
-//!
-//! The price is flat. Both properties were read at all eleven ascension levels
-//! and nothing moved, so unlike an encounter's gold there is no `Scaled` here —
-//! which is a measurement rather than an assumption, and the reason the dump
-//! sweeps at all.
-//!
+//! `RelicModel.MerchantCost` returns 999999999 for a relic that is not for sale. This is a sentinel and not a price, nothing must do arithmetic on it. A shop comparing gold against it is comparing against a number that means "never". So it is `Price::NotSold`, the same move `Cost::None` makes for a card's -1.
+//! It has to be read per relic rather than derived from rarity. The base implementation maps Ancient, Starter and Event to the sentinel, but nine relics override `MerchantCost` outright. Therefore of the 35 Event-rarity relics, 26 are unsellable and 9 have a real price. Deriving has got those nine wrong.
+//! The price is flat. Both properties were read at all eleven ascension levels and nothing moved, so unlike an encounter's gold there is no `Scaled` here. Which is a measurement rather than an assumption, and the reason the dump sweeps at all.
 //! # `Undrafted` rather than `None`
-//!
-//! `RelicRarity.None` is not the C# zero standing in for "unset": two relics
-//! carry it, and it means the rarity system does not reach them.
-//! `RelicGrabBag` gives it no deque — `rarity == None ? null : GetDeque(rarity)`
-//! — so no roll can produce one; they arrive only when something hands them
-//! over. `CIRCLET` is the fallback pool's only member, which is what you get
-//! when there is nothing left to get, and `DEPRECATED_RELIC` is the deprecated
-//! pool's. The wire keeps the game's spelling; the Rust name says what it does.
+//! `RelicRarity.None` is not the C# zero standing in for "unset": two relics carry it, and it means the rarity system does not reach them. `RelicGrabBag` gives it no deque, `rarity == None ? Null : GetDeque(rarity)` , so no roll can produce one. They arrive only when something hands them over. `CIRCLET` is the fallback pool's only member, which is what you get when there is nothing left to get, and `DEPRECATED_RELIC` is the deprecated pool's. The wire keeps the game's spelling. The Rust name says what it does.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -46,16 +20,12 @@ const NOT_SOLD: &str = "999999999";
 
 /// Enum members whose Rust name differs from the game's.
 ///
-/// The rename is Rust-side only: the serde spelling stays the game's, so the
-/// wire and the dump are unchanged and the generated file is still diffable
-/// against the assembly.
+/// The rename is Rust-side only: the serde spelling stays the game's. Therefore the wire and the dump are unchanged and the generated file is still diffable against the assembly.
 const RENAMED: [(&str, &str, &str); 1] = [("RelicRarity", "None", "Undrafted")];
 
 /// The yes-or-no columns, in the order they become bits.
 ///
-/// Not a game enum — nine separate `RelicModel` members — so the numbering is
-/// ours and this order is the whole of it. `column` is where the dump writes
-/// each one.
+/// Not a game enum, nine separate `RelicModel` members, so the numbering is ours and this order is the whole of it. `column` is where the dump writes each one.
 const FLAGS: [(&str, usize, &str); 9] = [
     ("UsedUp", 4, "Spent, and gone once it fires."),
     (
@@ -98,14 +68,9 @@ const FLAGS: [(&str, usize, &str); 9] = [
 
 /// The bucket a relic's row lands in, from the pools that draft it.
 ///
-/// A genuine partition: every relic is in at least one pool — unlike a monster,
-/// which may be summon-only, or an encounter, which may be started by an event
-/// — and three are in two. Those get their own bucket rather than being filed
-/// under whichever pool came first, which would put a relic somewhere its own
-/// `pools()` does not lead.
+/// A genuine partition: every relic is in at least one pool, and three are in two. Multi-pool relics get their own bucket instead of an arbitrary first pool. Each bucket therefore agrees with `pools()`.
 ///
-/// `crossover` and not `shared`, because `SHARED_RELIC_POOL` is itself a pool
-/// and a file named for both would name neither.
+/// `crossover` and not `shared`, because `SHARED_RELIC_POOL` is itself a pool and a file named for both will name neither.
 fn bucket(pools: &[String]) -> Result<String, String> {
     match pools {
         [] => Err("a relic is in no pool at all".into()),
@@ -164,7 +129,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
 
     // The dump swept `MerchantCost` at every ascension and found nothing, which
-    // is why `Price` is flat. A build that starts scaling it would generate a
+    // is why `Price` is flat. A build that starts scaling it will generate a
     // table that silently describes ascension 0 only, so it fails here instead.
     if dump.of("scalecost").next().is_some() {
         return Err(
@@ -284,8 +249,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
 /// The flag member enum and the set that carries them.
 ///
-/// Two `u8`s, like a power's, because a flag has three answers: `IsUsedUp` and
-/// `ShowCounter` are `virtual` and some relics work them out.
+/// Two `u8`s, like a power's, because a flag has three answers: `IsUsedUp` and `ShowCounter` are `virtual` and some relics work them out.
 fn emit_flags(out: &mut String) -> Result<(), String> {
     sets::computed(
         out,
@@ -313,13 +277,13 @@ fn emit_shape(out: &mut String) {
         "/// What a merchant charges, or that there is no such thing.\n\
          ///\n\
          /// `MerchantCost` returns 999999999 for a relic that is not for sale,\n\
-         /// which is a sentinel and not a price: nothing should do arithmetic\n\
-         /// on it, and a shop comparing a player's gold against it would be\n\
+         /// which is a sentinel and not a price: nothing must do arithmetic\n\
+         /// on it, and a shop comparing a player's gold against it is\n\
          /// comparing against a number that means never.\n\
          ///\n\
          /// Read per relic rather than derived from rarity. The base\n\
          /// implementation maps Ancient, Starter and Event to the sentinel, but\n\
-         /// nine relics override it — so nine of the 35 Event-rarity relics do\n\
+         /// nine relics override it, so nine of the 35 Event-rarity relics do\n\
          /// have a price.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub enum Price {{\n\

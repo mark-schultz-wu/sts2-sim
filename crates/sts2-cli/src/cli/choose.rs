@@ -1,19 +1,7 @@
 //! One verb for "pick the numbered thing", whichever mechanism the game wants.
-//!
-//! The protocol has three ways to take a numbered option — `choose_option` for a
-//! room's own list, `answer` with cards for a selection, `answer` with take for a
-//! reward screen — and which applies is a property of the game's state, not of
-//! what the user meant. Asking someone to work that out is asking them to learn
-//! the protocol to press a button.
-//!
-//! The dispatch is unambiguous because the protocol makes it so: a pending
-//! question blocks every command except `answer`, `observe` and `quit`, so there
-//! is never a moment when both a pending and a room option could be meant.
-//!
-//! The explicit commands stay. This is the convenience for a person reading
-//! output and typing the next thing; a script should say `answer cards 0` and
-//! fail loudly if the game was not asking that, rather than silently doing
-//! whatever was in front of it.
+//! The protocol has three ways to take a numbered option, `choose_option` for a room's own list, `answer` with cards for a selection. `answer` with take for a reward screen, and which applies is a property of the game's state, not of what the user meant. Asking someone to work that out is asking them to learn the protocol to press a button.
+//! The dispatch is unambiguous because the protocol makes it so: a pending question blocks every command except `answer`, `observe` and `quit`. Therefore there is never a moment when both a pending and a room option can be meant.
+//! The explicit commands stay. This is the convenience for a person reading output and typing the next thing. A script must say `answer cards 0` and fail loudly if the game was not asking that, rather than silently doing whatever was in front of it.
 
 use super::Taking;
 use anyhow::{Result, bail};
@@ -27,7 +15,7 @@ pub enum Awaiting {
     RoomOption,
 }
 
-/// Reads one observation and says which mechanism a choice would go through.
+/// Reads one observation and says which mechanism a choice will go through.
 pub fn awaiting(response: &Response) -> Result<Awaiting> {
     match response {
         Response::Pending { question, .. } => Ok(match question {
@@ -59,10 +47,7 @@ pub fn awaiting(response: &Response) -> Result<Awaiting> {
 
 /// The command that takes those indices, given what the game is waiting for.
 ///
-/// Indices arrive as [`Taking`] because a reward screen needs the two-level
-/// `N.M` form and the other two do not. A card selection or a room option given
-/// a dotted index is a misunderstanding worth naming: nothing there has an
-/// inside.
+/// Indices arrive as [`Taking`] because a reward screen needs the two-level `N.M` form and the other two do not. A card selection or a room option given a dotted index is a misunderstanding worth naming: nothing there has an inside.
 pub fn command<V: ContentVersion>(awaiting: &Awaiting, indices: &[Taking]) -> Result<Command<V>> {
     let flat = |what: &str| -> Result<Vec<usize>> {
         indices

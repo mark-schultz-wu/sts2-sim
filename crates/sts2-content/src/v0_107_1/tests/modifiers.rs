@@ -1,9 +1,5 @@
 //! The modifier table against the dump it came from.
-//!
-//! Seventeen rows and almost no columns, because a modifier is its hooks and
-//! hooks are code. What the tests hold are the three facts a caller needs before
-//! any ported hook runs: which list a run offers it from, what picking it rules
-//! out, and what it changes about setting the run up.
+//! Seventeen rows and almost no columns, because a modifier is its hooks and hooks are code. What the tests hold are the three facts a caller needs before any ported hook runs. Which list a run offers it from, what picking it rules out, and what it changes about setting the run up.
 
 use super::super::modifiers::*;
 use super::super::{MODIFIERS, VERSION};
@@ -55,10 +51,7 @@ fn the_generated_table_matches_the_dump() {
 
 /// Nine good, seven bad, and one a run cannot offer at all.
 ///
-/// The two lists are the whole of what a run picks from, so a modifier in
-/// neither is unreachable — the deprecated one, which is here for the same
-/// reason `DEPRECATED_ACT` is: the enum spans the build rather than the
-/// playable part of it.
+/// The two lists are the whole of what a run picks from, so a modifier in neither is unreachable, the deprecated one. This is here for the same reason `DEPRECATED_ACT` is: the enum spans the build rather than the playable part of it.
 #[test]
 fn the_deprecated_modifier_is_the_only_one_no_run_can_offer() {
     let of = |kind: Option<ModifierKind>| -> Vec<String> {
@@ -90,12 +83,7 @@ fn the_deprecated_modifier_is_the_only_one_no_run_can_offer() {
 
 /// The one exclusion group is exactly the three that clear the deck.
 ///
-/// Two facts the game states separately — `MutuallyExclusiveModifiers` and three
-/// overrides of `ClearsPlayerDeck` — and they coincide, which is the sort of
-/// thing worth pinning rather than relying on. If a build ever adds a
-/// deck-clearing modifier outside the group, or a group member that keeps the
-/// deck, this says so instead of the coincidence quietly becoming an assumption
-/// somebody coded against.
+/// Two facts the game states separately, `MutuallyExclusiveModifiers` and three overrides of `ClearsPlayerDeck`, and they coincide. This is the sort of thing worth pinning rather than relying on. If a build ever adds a deck-clearing modifier outside the group, or a group member that keeps the deck. This says so instead of the coincidence quietly becoming an assumption somebody coded against.
 #[test]
 fn the_exclusion_group_is_the_deck_clearing_modifiers() {
     assert_eq!(EXCLUSIVE.len(), 1, "one group in this build");
@@ -118,9 +106,7 @@ fn the_exclusion_group_is_the_deck_clearing_modifiers() {
 
 /// `intersects` is the question a caller actually has.
 ///
-/// A group is a set rather than a pair because the game holds a set, so the
-/// useful operation is "does what I have already chosen conflict with this"
-/// rather than "is this the other one".
+/// A group is a set rather than a pair because the game holds a set. Therefore the useful operation is "does what I have already chosen conflict with this" rather than "is this the other one".
 #[test]
 fn a_second_modifier_from_a_group_is_what_the_set_rules_out() {
     let group = EXCLUSIVE[0];
@@ -159,7 +145,7 @@ fn the_flags_are_as_rare_as_they_look() {
         ]
     );
 
-    // `CHARACTER_CARDS` names a character, and which one is run state — the
+    // `CHARACTER_CARDS` names a character, and which one is run state, the
     // table can say there is a parameter and not what it is.
     assert_eq!(with(ModifierFlag::TakesParameter), ["CHARACTER_CARDS"]);
     assert_eq!(

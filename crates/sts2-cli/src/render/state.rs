@@ -82,7 +82,7 @@ fn room_of(f: &mut fmt::Formatter<'_>, room: &Value) -> fmt::Result {
 
     for o in room.list_at("options") {
         let index = o.int_at("index").unwrap_or(-1);
-        // An option is described by whichever of these it carries; the key is
+        // An option is described by whichever of these it carries. The key is
         // the fallback because every option has one.
         let what = o
             .str_at("relic")
@@ -111,8 +111,7 @@ fn room_of(f: &mut fmt::Formatter<'_>, room: &Value) -> fmt::Result {
     Ok(())
 }
 
-/// Only the streams that have moved. Fifteen counters of which one is non-zero
-/// is noise; the one that moved is the signal.
+/// Only the streams that have moved. Fifteen counters of which one is non-zero is noise. The one that moved is the signal.
 fn rng_of(f: &mut fmt::Formatter<'_>, rng: Option<&Value>) -> fmt::Result {
     let Some(map) = rng.and_then(Value::as_object) else {
         return Ok(());

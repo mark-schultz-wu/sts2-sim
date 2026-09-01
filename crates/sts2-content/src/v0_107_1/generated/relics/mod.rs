@@ -167,13 +167,13 @@ impl std::fmt::Debug for RelicFlags {
 /// What a merchant charges, or that there is no such thing.
 ///
 /// `MerchantCost` returns 999999999 for a relic that is not for sale,
-/// which is a sentinel and not a price: nothing should do arithmetic
-/// on it, and a shop comparing a player's gold against it would be
+/// which is a sentinel and not a price: nothing must do arithmetic
+/// on it, and a shop comparing a player's gold against it is
 /// comparing against a number that means never.
 ///
 /// Read per relic rather than derived from rarity. The base
 /// implementation maps Ancient, Starter and Event to the sentinel, but
-/// nine relics override it — so nine of the 35 Event-rarity relics do
+/// nine relics override it, so nine of the 35 Event-rarity relics do
 /// have a price.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Price {

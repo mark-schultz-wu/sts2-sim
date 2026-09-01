@@ -1,16 +1,6 @@
 //! Constructing a scenario, instead of hunting for a seed that happens to be one.
-//!
-//! The shape is H6's: a scenario **names construction operations**, the game
-//! executes them and emits a full observation, and a
-//! simulator starts from that observation. It never replays the construction —
-//! `RelicCmd.Obtain` removes the relic from the grab bag and runs
-//! `AfterObtained()`, which draws RNG for some relics, and reproducing all of
-//! that would mean teaching the simulator a dev console it has no business
-//! having.
-//!
-//! So a scenario is a sequence of commands here, not a file format. It becomes
-//! a format when something needs it to be one.
-//!
+//! The shape is H6's: a scenario **names construction operations**, the game executes them and emits a full observation, and a simulator starts from that observation. It never replays the construction. `RelicCmd.Obtain` removes the relic from the grab bag and runs `AfterObtained()`, which draws RNG for some relics. Reproducing all of that means teaching the simulator a dev console it has no business having.
+//! So a scenario is a sequence of commands here, not a file format. It becomes a format when something needs it to be one.
 //! ```text
 //! cargo run --example scenario
 //! ```
@@ -30,10 +20,7 @@ type Relic = <V as ContentVersion>::Relic;
 
 /// Sends one command, prints what came back, and stops at the first refusal.
 ///
-/// The two layers are the point: the outer `?` is "did the exchange happen",
-/// the inner match is "did the game accept it". Without the second, a refused
-/// command reads as success and every command after it runs against a state the
-/// caller is not expecting.
+/// The two layers are the point: the outer `?` is "did the exchange happen", the inner match is "did the game accept it". Without the second, a refused command reads as success and every command after it runs against a state the caller is not expecting.
 fn step(game: &mut Game<V>, command: Command<V>) -> anyhow::Result<Response> {
     match game.send(&command)? {
         Ok(response) => {
@@ -54,7 +41,7 @@ fn main() -> anyhow::Result<()> {
         game.greeting().protocol
     );
 
-    // 1. A fresh run, seeded explicitly. Nothing may start a run without one.
+    // 1. A fresh run, seeded explicitly. Nothing can start a run without one.
     step(
         &mut game,
         Command::Start {
@@ -67,7 +54,7 @@ fn main() -> anyhow::Result<()> {
 
     // 2. Edit it. Granting goes through the game's own `RelicCmd.Obtain` rather
     //    than writing to `Player.Relics`, so the effects that come with picking
-    //    a relic up actually happen — watch the gold move, because Golden Pearl
+    //    a relic up actually happen, watch the gold move, because Golden Pearl
     //    pays out on pickup.
     step(
         &mut game,
@@ -78,8 +65,8 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     // 3. A refusal is a value, not an exception. An encounter name the game
-    //    does not know cannot be built as a `Command` at all now — the tables
-    //    have every real one — so asking for a refusal means going around the
+    //    does not know cannot be built as a `Command` at all now, the tables
+    //    have every real one, so asking for a refusal means going around the
     //    typed API deliberately, which is what `send_raw` is for.
     let wrong = serde_json::json!({"cmd": "fight", "encounter": "NO_SUCH_ENCOUNTER"});
     match game.send_raw(&wrong)? {
@@ -87,10 +74,10 @@ fn main() -> anyhow::Result<()> {
         Err(refusal) => println!("refused, as it should be: {refusal}\n"),
     }
 
-    // 4. The chosen fight. Reaching this one by travelling would mean searching
+    // 4. The chosen fight. Reaching this one by travelling means searching
     //    for a seed that puts it where we want it, which is the seed-hunting
     //    this exists to avoid. The run lands off the map, so `map` and `combat`
-    //    disagree — that is construction, not a reachable state.
+    //    disagree, that is construction, not a reachable state.
     step(
         &mut game,
         Command::Fight {
@@ -99,8 +86,7 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     // 5. And it is an ordinary fight from here: play the Strike at the Rock.
-    //    The hand indices and the target id are different numbering schemes —
-    //    `index` is positional in hand, `target` is a CombatId that survives a
+    //    The hand indices and the target id are different numbering schemes,     //    `index` is positional in hand, `target` is a CombatId that survives a
     //    creature dying.
     step(
         &mut game,

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Which list a run offers a modifier from.
 ///
 /// The two are `ModelDb.GoodModifiers` and `BadModifiers`, and a
-/// modifier in neither is one no run can pick at all — that is no kind
+/// modifier in neither is one no run can pick at all, that is no kind
 /// rather than a third one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -302,7 +302,7 @@ impl std::fmt::Debug for ModifierSet {
 ///
 /// One group of three in this build, and a list of sets rather than a
 /// list of pairs because that is what the game holds: reading it as
-/// pairs would be right today and wrong the moment a fourth member
+/// pairs is right today and wrong the moment a fourth member
 /// arrived. `ModifierSet::intersects` is the question a caller has.
 pub const EXCLUSIVE: [ModifierSet; 1] = [ModifierSet::new(&[
     Modifier::Draft,

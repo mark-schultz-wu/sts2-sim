@@ -1,14 +1,6 @@
 //! The one line that says what to do.
-//!
-//! There were three: a card selection printed its answer, a room printed its
-//! options' command, a hand printed a play. Each decided independently, so a
-//! reward pending and a Neow room could both claim to be actionable in one
-//! observation — and only one of them was, because a pending blocks everything
-//! but `answer`, `observe` and `quit`.
-//!
-//! So it is computed once, from the whole response, in the protocol's own order
-//! of precedence. Sections still list what they hold; none of them offers
-//! advice.
+//! There were three: a card selection printed its answer, a room printed its options' command, a hand printed a play. Each decided independently, so a reward pending and a Neow room can both claim to be actionable in one observation. Only one of them was, because a pending blocks everything but `answer`, `observe` and `quit`.
+//! So it is computed once, from the whole response, in the protocol's own order of precedence. Sections still list what they hold. None of them offers advice.
 
 use super::Field;
 use serde_json::Value;
@@ -104,8 +96,7 @@ fn playing(combat: &Value) -> String {
 
 /// Where the map can go from here.
 ///
-/// A coordinate arrives as the string `"col,row"` rather than a pair of
-/// numbers, which is how the map section already reads it.
+/// A coordinate arrives as the string `"col,row"` rather than a pair of numbers, which is how the map section already reads it.
 fn travelling(state: &Value) -> Option<String> {
     let to = state
         .get("map")?
