@@ -8,26 +8,22 @@
 # order here does not matter; only that all of them arrive.
 set -euo pipefail
 
-# Dependencies first, so a build failure in one stops before anything installs
-# a half-updated set.
-MODS=(sts2_determinism sts2_headless sts2_headless_test sts2_determinism_test sts2_dump)
-
 GAME_DIR="${STS2_GAME_DIR:?is not set. The repo .envrc exports it: run 'direnv allow' in the repo root, or set it by hand}"
 PROFILE_DIR="${STS2_PROFILE_DIR:-$HOME/.local/share/SlayTheSpire2/default/1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}"
-export PATH="$DOTNET_ROOT:$PATH"
+# All of them, in dependency order, or none: build.sh stops on the first
+# failure so nothing below installs a half-updated set.
+"$HERE/build.sh"
 
-for mod in "${MODS[@]}"; do
-  dotnet build -c Release -v q --nologo "$HERE/$mod/$mod.csproj"
-done
-
-for mod in "${MODS[@]}"; do
+# A manifest is what makes a directory a mod, so the glob is the list. It needs
+# no order, and it cannot fall behind the one build.sh keeps.
+for manifest in "$HERE"/*/manifest.json; do
+  mod="$(basename "$(dirname "$manifest")")"
   DEST="$GAME_DIR/mods/$mod"
   mkdir -p "$DEST"
   cp "$HERE/$mod/bin/Release/net9.0/$mod.dll" "$DEST/"
-  cp "$HERE/$mod/manifest.json" "$DEST/"
+  cp "$manifest" "$DEST/"
   echo "installed -> $DEST"
 done
 

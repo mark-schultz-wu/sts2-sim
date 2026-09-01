@@ -1,0 +1,30 @@
+# The build of Slay the Spire 2 that this repository compiles and runs against.
+#
+# v0.107.1, the game's own commit 59260271, Steam buildid 23811903. The game is
+# not ours to redistribute, so it lives in a private generic package on the
+# forge and `mod/game.sh` moves it. What lives here is the pin: a hash for each
+# file, which is what makes fetching it a pin rather than a download.
+#
+# The pin matters because the alternative is the Steam install, which is
+# world-writable and updates on Steam's schedule. STS2 churns 20-50 cards on a
+# minor version and 80-120 on a major, so a result that changed because Steam
+# patched overnight does not look like a broken pin. It looks like a bug in the
+# simulator.
+#
+# sts2.dll here is the assembly as shipped. An older workflow IL-patched it in
+# place and kept the untouched copy as sts2.dll.original; nothing does that now,
+# so the plain name is the honest one.
+#
+# The archive is the whole install minus `mods/` and `crates/`, which are ours
+# rather than the game's. It unpacks to the directory .envrc names.
+#
+# To move the pin: install the new build, run `mod/game.sh publish`, and write
+# the version and hashes it prints here.
+#
+# package: sts2-game
+# version: 0.107.1-59260271
+
+ef1898322c9f5c86dc1b0758b272a9c440823b4a41ca9a0b82a3aa6b3d206387  0Harmony.dll
+0e4897ecdfb31456a97c7d8028dfb8d7dbdc632e2f73fc9b438d7b266a139289  GodotSharp.dll
+d13f3f150b1413b24c3a9c5575cdf5398dc74270877d55dec9a556dd8150bd03  sts2.dll
+d4a00fec90c95157fbecc88a1177495257b9d2a9e03825c5331955c580bb4c4a  sts2-game.tar.zst
