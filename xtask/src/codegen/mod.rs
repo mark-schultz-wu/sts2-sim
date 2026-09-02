@@ -25,7 +25,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
+pub(crate) const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
 
 /// The domains generated so far. Relics, potions and encounters each get a dump, a submodule, and an entry here.
 const DOMAINS: [&str; 14] = [
