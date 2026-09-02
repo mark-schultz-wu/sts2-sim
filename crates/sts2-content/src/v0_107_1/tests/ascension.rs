@@ -1,9 +1,5 @@
 //! The ascension ladder, against the dump it came from.
-//!
-//! Small, and load-bearing out of proportion to its size: every scaled value in
-//! the monster and encounter tables is a threshold on this ladder, stored as a
-//! bare discriminant. If the ladder reordered and these tables did not, every
-//! one of those thresholds would silently mean a different rule.
+//! Small, and load-bearing out of proportion to its size. Every scaled value in the monster and encounter tables is a threshold on this ladder, stored as a bare discriminant. If the ladder reordered and these tables did not, every one of those thresholds will silently mean a different rule.
 
 use super::super::ascension::*;
 use super::super::{ASCENSION, VERSION};
@@ -21,9 +17,7 @@ fn the_dump_came_from_this_version() {
 
 /// Eleven levels, dense and in the game's order.
 ///
-/// Dense is the whole model: `has` is `>=` on the discriminant, so a gap or a
-/// reorder would make it quietly wrong rather than fail. Codegen refuses a
-/// non-dense ladder; this says the same from the dump's side.
+/// Dense is the whole model: `has` is `>=` on the discriminant, so a gap or a reorder will make it quietly wrong rather than fail. Codegen refuses a non-dense ladder. This says the same from the dump's side.
 #[test]
 fn the_ladder_is_dense_and_in_order() {
     let dumped: Vec<(u8, &str)> = rows(ASCENSION, "level")
@@ -60,9 +54,7 @@ fn the_ladder_is_dense_and_in_order() {
 
 /// Ascension is a scalar, so a level carries everything below it.
 ///
-/// `AscensionManager.HasLevel` is `_level >= (int)level`, which is why the two
-/// enemy levels the monster tables key on — `ToughEnemies` and `DeadlyEnemies` —
-/// are thresholds and not switches.
+/// `AscensionManager.HasLevel` is `_level >= (int)level`, which is why the two enemy levels the monster tables key on, `ToughEnemies` and `DeadlyEnemies`. Are thresholds and not switches.
 #[test]
 fn a_level_has_every_rule_below_it() {
     let deadly = AscensionLevel::DeadlyEnemies;

@@ -1,11 +1,5 @@
-//! `sts2` — one game held open, one command per invocation.
-//!
-//! The game boots in seconds and holds every bit of run state, so a command
-//! cannot be a whole process. A daemon owns it and each invocation is a short
-//! conversation with that daemon, which means a script — or an agent — can send
-//! a command, read the answer, and decide the next one. A REPL could not offer
-//! that: its caller would have to commit to every input before seeing any
-//! output.
+//! `sts2`, one game held open, one command per invocation.
+//! The game boots in seconds and holds every bit of run state, so a command cannot be a whole process. A daemon owns it and each invocation is a short conversation with that daemon. This means a script, or an agent, can send a command, read the answer, and decide the next one. A REPL cannot offer that: its caller has to commit to every input before seeing any output.
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
@@ -18,8 +12,7 @@ use sts2_headless::{Command, Config, Response};
 
 /// The build this drives.
 ///
-/// Named once. Every id follows from it through `ContentVersion`, so pointing
-/// the tool at another build is a one-line change.
+/// Named once. Every id follows from it through `ContentVersion`, so pointing the tool at another build is a one-line change.
 type V = V0_107_1;
 
 #[derive(Debug, Parser)]
@@ -36,8 +29,7 @@ enum Top {
 
     /// Runs the daemon that holds the game.
     ///
-    /// Usually not typed: `sts2 start` spawns one in the background. Run it in
-    /// the foreground to watch what the game does.
+    /// Usually not typed: `sts2 start` spawns one in the background. Run it in the foreground to watch what the game does.
     Serve {
         /// Detach and return, leaving the daemon running.
         #[arg(long)]
@@ -49,13 +41,9 @@ enum Top {
 
     /// Takes a numbered option, whichever way the game is asking for it.
     ///
-    /// Room options, card selections and reward screens are three protocol
-    /// mechanisms for one idea, and which applies is the game's state rather
-    /// than the user's intent. This looks, then does the right one.
+    /// Room options, card selections and reward screens are three protocol mechanisms for one idea. Which applies is the game's state rather than the user's intent. This looks, then does the right one.
     ///
-    /// Scripts should prefer the explicit commands: `answer cards 0` fails
-    /// loudly if the game was not asking that, where this would quietly do
-    /// whatever was in front of it.
+    /// Scripts must prefer explicit commands. `answer cards 0` fails loudly when the game asks something else, while this command acts on whatever is pending.
     Choose {
         /// A plain index, or `N.M` for a card inside a card reward.
         #[arg(value_delimiter = ' ', num_args = 1..)]
@@ -129,7 +117,7 @@ fn main() -> Result<()> {
                 command: serde_json::to_value(&command)?,
             };
 
-            // Only `start` may bring a game up. Any other command against no
+            // Only `start` can bring a game up. Any other command against no
             // game is a mistake worth naming, not a twenty-second pause
             // followed by a refusal.
             let answer = match play {
@@ -167,7 +155,7 @@ fn report(answer: Answer) -> Result<()> {
                     println!("{}", Readable(&response));
                     Ok(())
                 }
-                // A refusal is the game answering, not this failing — but it is
+                // A refusal is the game answering, not this failing, but it is
                 // the wrong exit status for a script, so it is an error here.
                 Err(refusal) => bail!("{refusal}"),
             }

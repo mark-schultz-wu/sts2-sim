@@ -1,27 +1,13 @@
 //! The game's randomness: a trait, and one implementation of it.
-//!
-//! [`GameRng`] is a counted draw stream — `MegaCrit.Sts2.Core.Random.Rng`. An
-//! implementation supplies seeding and one raw draw; every gameplay method
-//! defaults to the game's own arithmetic, so a replacement can only get the
-//! core wrong, not the semantics.
-//!
+//! [`GameRng`] is a counted draw stream, `MegaCrit.Sts2.Core.Random.Rng`. An implementation supplies seeding and one raw draw. Every gameplay method defaults to the game's own arithmetic, so a replacement can only get the core wrong, not the semantics.
 //! Two things bite anyone porting this:
-//!
-//! * Bounded draws scale a double and truncate — `(int)(NextDouble() * max)`.
+//! * Bounded draws scale a double and truncate, `(int)(NextDouble() * max)`.
 //!   Not a modulo, not rejection sampling. Biased in a way the game depends on.
 //! * [`GameRng::next_bool`] is `next_int(2) == 0`, not a bit test.
 //!
-//! Every method costs exactly one raw draw and advances [`GameRng::counter`].
-//! That is what lets [`GameRng::with_counter`] rebuild a stream from where it
-//! left off, and it means an extra draw anywhere shifts everything after it.
-//!
-//! The game guards these methods by throwing. Here the guards are in the
-//! argument types — [`Bound`], [`Span`], [`Interval`] — so a draw that is
-//! reachable is a draw that is valid, and the only fallible operations are
-//! building an argument and seeking a stream forward.
-//!
-//! Checked against `tests/megarandom.txt`, dumped from the game. Regenerate
-//! with `STS2_HEADLESS_MODE=rngdump` — see `mod/sts2_dump/RngDump.cs`.
+//! Every method costs exactly one raw draw and advances [`GameRng::counter`]. That is what lets [`GameRng::with_counter`] rebuild a stream from where it left off, and it means an extra draw anywhere shifts everything after it.
+//! The game guards these methods by throwing. Here the guards are in the argument types, [`Bound`], [`Span`], [`Interval`], so a draw that is reachable is a draw that is valid. The only fallible operations are building an argument and seeking a stream forward.
+//! Checked against `tests/megarandom.txt`, dumped from the game. Regenerate with `STS2_HEADLESS_MODE=rngdump`, see `mod/sts2_dump/RngDump.cs`.
 
 mod bounds;
 
@@ -40,16 +26,13 @@ pub trait GameRng: Sized {
 
     fn seed(&self) -> u32;
 
-    /// How many draws this stream has taken. Observations report it, and it is
-    /// the position [`GameRng::with_counter`] rebuilds from.
+    /// How many draws this stream has taken. Observations report it, and it is the position [`GameRng::with_counter`] rebuilds from.
     fn counter(&self) -> i32;
 
-    /// One raw draw. Must advance the counter by one. Everything below is this
-    /// plus arithmetic.
+    /// One raw draw. Must advance the counter by one. Everything below is this plus arithmetic.
     fn next_u64(&mut self) -> u64;
 
-    /// Seeded by mixing in a name, the way the game names its streams. Getting
-    /// the mix wrong draws from a real stream that is the wrong one.
+    /// Seeded by mixing in a name, the way the game names its streams. Getting the mix wrong draws from a real stream that is the wrong one.
     fn named(seed: u32, name: &str) -> Self {
         Self::new(seed.wrapping_add(deterministic_hash(name) as u32))
     }
@@ -63,9 +46,7 @@ pub trait GameRng: Sized {
 
     /// Replays forward, one draw at a time.
     ///
-    /// Fails rather than panics on going backwards: a counter read from an
-    /// observation is input, and input that disagrees with where this stream
-    /// already is should be a value the caller handles.
+    /// Fails rather than panics on going backwards: a counter read from an observation is input. Input that disagrees with where this stream already is must be a value the caller handles.
     fn fast_forward(&mut self, target: i32) -> Result<(), Error> {
         if self.counter() > target {
             return Err(Error::Rewind {
@@ -85,7 +66,7 @@ pub trait GameRng: Sized {
         (self.next_u64() >> 11) as f64 * INCR_DOUBLE
     }
 
-    /// `next_int(2) == 0` — a scaled double against zero, not a bit test.
+    /// `next_int(2) == 0`, a scaled double against zero, not a bit test.
     #[inline]
     fn next_bool(&mut self) -> bool {
         self.next_int(TWO) == 0
@@ -97,8 +78,7 @@ pub trait GameRng: Sized {
         (self.next_double() * max.get() as f64) as i32
     }
 
-    /// A span wider than `i32::MAX` takes the game's 64-bit branch, which is a
-    /// different computation and not just a wider one.
+    /// A span wider than `i32::MAX` takes the game's 64-bit branch, which is a different computation and not just a wider one.
     #[inline]
     fn next_int_range(&mut self, range: Span<i32>) -> i32 {
         let width = range.max() as i64 - range.min() as i64;
@@ -109,8 +89,7 @@ pub trait GameRng: Sized {
         }
     }
 
-    /// The width is computed in unsigned arithmetic before scaling, so this is
-    /// not the signed path with a cast.
+    /// The width is computed in unsigned arithmetic before scaling, so this is not the signed path with a cast.
     #[inline]
     fn next_uint_range(&mut self, range: Span<u32>) -> u32 {
         let width = range.max().wrapping_sub(range.min()) as f64;
@@ -119,8 +98,7 @@ pub trait GameRng: Sized {
             .wrapping_add((self.next_double() * width) as u32)
     }
 
-    /// The width is narrowed to `f32` *before* widening back to `f64`, so this
-    /// is not [`GameRng::next_double_range`] with a cast.
+    /// The width is narrowed to `f32` *before* widening back to `f64`, so this is not [`GameRng::next_double_range`] with a cast.
     #[inline]
     fn next_f32_range(&mut self, range: Interval<f32>) -> f32 {
         (self.next_double() * (range.max() - range.min()) as f64 + range.min() as f64) as f32
@@ -131,9 +109,7 @@ pub trait GameRng: Sized {
         self.next_double() * (range.max() - range.min()) + range.min()
     }
 
-    /// Box–Muller with rejection: two draws per attempt, rejecting against
-    /// `[0, 1]` regardless of `scale` — the scaling happens after. So how far
-    /// the counter moves is part of what has to be reproduced.
+    /// Box–Muller with rejection: two draws per attempt, rejecting against `[0, 1]` regardless of `scale`, the scaling happens after. So how far the counter moves is part of what has to be reproduced.
     fn next_gaussian_double(&mut self, mean: f64, std_dev: f64, scale: Interval<f64>) -> f64 {
         loop {
             let a = 1.0 - self.next_double();
@@ -148,11 +124,9 @@ pub trait GameRng: Sized {
 
     /// As above but with `sin`, and rejecting against `accept` directly.
     ///
-    /// Rounds half to even, which is C#'s `Math.Round` default. Rust's
-    /// `f64::round` goes half away from zero and would disagree on exact ties.
+    /// Rounds half to even, which is C#'s `Math.Round` default. Rust's `f64::round` goes half away from zero and will disagree on exact ties.
     ///
-    /// The game has no guard here at all: an inverted interval would spin
-    /// forever rather than throw. [`Interval`] is what makes that unreachable.
+    /// The game has no guard here at all: an inverted interval will spin forever rather than throw. [`Interval`] is what makes that unreachable.
     fn next_gaussian_int(&mut self, mean: i32, std_dev: i32, accept: Interval<i32>) -> i32 {
         loop {
             let a = 1.0 - self.next_double();
@@ -221,8 +195,7 @@ impl GameRng for MegaRng {
     }
 }
 
-/// The seeding mixer. Advances `x`, which is how four state words come out of
-/// one seed.
+/// The seeding mixer. Advances `x`, which is how four state words come out of one seed.
 fn splitmix64(x: &mut u64) -> u64 {
     *x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *x;
@@ -233,16 +206,9 @@ fn splitmix64(x: &mut u64) -> u64 {
 
 /// A run's seed, as the player types it.
 ///
-/// Canonical by construction. The game folds a typed seed before using it —
-/// `SeedHelper.CanonicalizeSeed` uppercases, trims, and maps `O` to `0` and `I`
-/// to `1` — because its alphabet has no `I` or `O`, precisely so that neither
-/// can be confused with `1` or `0`. Two spellings of one seed are the same run,
-/// and a type that did not fold them would make them two.
+/// Canonical by construction. The game folds a typed seed before using it. `SeedHelper.CanonicalizeSeed` uppercases, trims, and maps `O` to `0` and `I` to `1`. This is because its alphabet has no `I` or `O`, precisely so that neither can be confused with `1` or `0`. Two spellings of one seed are the same run, and a type that did not fold them will make them two.
 ///
-/// That folding is not currently applied by `sts2_headless`, which passes the
-/// string through to the game verbatim: sending `"abcdef"` there starts a
-/// different run from `"ABCDEF"`, where a player typing either into the game
-/// gets the same one. Constructing through this type is what closes that.
+/// That folding is not currently applied by `sts2_headless`. This passes the string through to the game verbatim: sending `"abcdef"` there starts a different run from `"ABCDEF"`. Where a player typing either into the game gets the same one. Constructing through this type is what closes that.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seed(String);
 
@@ -252,10 +218,9 @@ impl Seed {
     /// Thirty-four: the digits and the letters, less `I` and `O`.
     pub const ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
-    /// What the game generates when it picks one — `SeedHelper.seedDefaultLength`.
+    /// What the game generates when it picks one, `SeedHelper.seedDefaultLength`.
     ///
-    /// Not a limit. The game accepts other lengths, and its own headless driver
-    /// defaults to a seven-character one.
+    /// Not a limit. The game accepts other lengths, and its own headless driver defaults to a seven-character one.
     pub const DEFAULT_LENGTH: usize = 10;
 
     /// Folds a typed seed into its canonical form, or says why it is not one.
@@ -287,8 +252,7 @@ impl Seed {
 
     /// The number the run's streams are seeded from.
     ///
-    /// `RunRngSet` is `Seed = (uint)StringHelper.GetDeterministicHashCode(seed)`,
-    /// so this is where a typed seed stops being text.
+    /// `RunRngSet` is `Seed = (uint)StringHelper.GetDeterministicHashCode(seed)`, so this is where a typed seed stops being text.
     pub fn stream_seed(&self) -> u32 {
         deterministic_hash(&self.0) as u32
     }
@@ -301,8 +265,7 @@ impl serde::Serialize for Seed {
 }
 
 impl<'de> serde::Deserialize<'de> for Seed {
-    /// Through [`Seed::new`], so a seed that arrives unfolded is folded and one
-    /// that is not a seed at all is a parse error rather than a value.
+    /// Uses [`Seed::new`]. An unfolded seed is folded, while invalid text becomes a parse error.
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let typed = <std::borrow::Cow<'_, str> as serde::Deserialize>::deserialize(d)?;
         Seed::new(&typed).map_err(serde::de::Error::custom)
@@ -315,8 +278,7 @@ impl std::fmt::Display for Seed {
     }
 }
 
-/// `StringHelper.GetDeterministicHashCode` — two interleaved lanes over UTF-16
-/// code units, in wrapping `i32`. Reached through [`GameRng::named`].
+/// `StringHelper.GetDeterministicHashCode`, two interleaved lanes over UTF-16 code units, in wrapping `i32`. Reached through [`GameRng::named`].
 fn deterministic_hash(s: &str) -> i32 {
     let units: Vec<u16> = s.encode_utf16().collect();
     let mut a: i32 = 352654597;
@@ -341,10 +303,7 @@ mod seeds {
 
     /// Two spellings of one seed are one seed.
     ///
-    /// This is the whole reason the type exists. `SeedHelper.CanonicalizeSeed`
-    /// folds case, trims, and maps the two characters the alphabet leaves out;
-    /// a client that sent the typed string verbatim would start a different run
-    /// from the one a player typing the same thing gets.
+    /// This is the whole reason the type exists. `SeedHelper.CanonicalizeSeed` folds case, trims, and maps the two characters the alphabet leaves out. A client that sent the typed string verbatim will start a different run from the one a player typing the same thing gets.
     #[test]
     fn a_seed_folds_the_way_the_game_folds_it() {
         let canonical = Seed::new("ABCDEF").unwrap();
@@ -382,9 +341,7 @@ mod seeds {
 
     /// A seed stops being text at exactly one point.
     ///
-    /// `RunRngSet` is `(uint)GetDeterministicHashCode(seed)`, so the folded
-    /// spelling is what gets hashed — which is the other half of why folding has
-    /// to happen before the seed leaves this process.
+    /// `RunRngSet` is `(uint)GetDeterministicHashCode(seed)`, so the folded spelling is what gets hashed. This is the other half of why folding has to happen before the seed leaves this process.
     #[test]
     fn the_stream_seed_is_taken_from_the_folded_spelling() {
         assert_eq!(

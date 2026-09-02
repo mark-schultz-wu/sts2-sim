@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 /// What a monster telegraphs before a move resolves.
 ///
-/// Not what the move does — that is the move body, ported by hand. The
+/// Not what the move does, that is the move body, ported by hand. The
 /// game declares the two separately, so this is only what is displayed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -125,7 +125,7 @@ pub struct Intents {
 /// A capped count rather than a `u8` so that `Repeat` stays small: it
 /// needs two fieldless discriminants beside this one, and a `u8` payload
 /// uses every pattern there is. The cap is 8, against a build
-/// whose largest window is 3 — `cargo xtask codegen` fails rather
+/// whose largest window is 3, `cargo xtask codegen` fails rather
 /// than truncating if one ever exceeds it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(u8)]
@@ -149,14 +149,14 @@ impl RepeatCount {
 
 /// What bars a branch the machine would otherwise be free to take.
 ///
-/// The game spends three fields on this — `MoveRepeatType`, `maxTimes`
-/// and `cooldown` — and `GetStateWeight` blocks the branch if *either*
+/// The game spends three fields on this, `MoveRepeatType`, `maxTimes`
+/// and `cooldown`, and `GetStateWeight` blocks the branch if *either*
 /// the repeat type or the cooldown says so. One of the two is always
 /// redundant, because each implies the other in one direction:
 ///
 /// - `InARow(n)` blocking means the last `n` log entries are all this
 ///   branch, and `n` is never zero, so the most recent entry is this
-///   branch — which is exactly what a cooldown of 1 or more already
+///   branch, which is exactly what a cooldown of 1 or more already
 ///   blocks on. A cooldown beside an in-a-row limit swallows it.
 /// - A cooldown blocking means the branch is somewhere in the log, which
 ///   is what [`Once`](Self::Once) blocks on. `Once` swallows a cooldown.
@@ -191,11 +191,11 @@ pub enum Repeat {
 /// enough and costs no hashing. Every index a generated table contains
 /// is in range for its monster, which the tests check.
 ///
-/// A `u8` and not a capped enum. Capping would buy nothing: the only
-/// thing that could use the spare discriminants is a niche, and
+/// A `u8` and not a capped enum. Capping will buy nothing: the only
+/// thing that can use the spare discriminants is a niche, and
 /// [`FollowUp`] has two variants carrying one of these, so it is a tag
 /// plus a payload either way. The build's largest graph is 8
-/// states; codegen refuses one that would not fit here.
+/// states. Codegen refuses one that will not fit here.
 pub type StateIndex = u8;
 
 /// Where the machine goes when it leaves a move.
@@ -209,7 +209,7 @@ pub type StateIndex = u8;
 /// A missing follow-up is not "no next state" either —
 /// `MoveState.GetNextState` throws on one. That is
 /// [`Never`](Self::Never), and it makes the combination the game can
-/// express but never uses — must perform once, then go nowhere —
+/// express but never uses, must perform once, then go nowhere —
 /// unrepresentable here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FollowUp {
@@ -247,7 +247,7 @@ pub struct Move {
 ///
 /// `Random` takes exactly one RNG draw and walks its branches in order;
 /// `Conditional` takes none and picks the first branch whose predicate
-/// holds. Both are transparent to `StateLog` — the machine loops until
+/// holds. Both are transparent to `StateLog`, the machine loops until
 /// it lands on a `Move`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
@@ -270,10 +270,10 @@ pub struct MonsterData {
 
 /// Every monster in the build.
 ///
-/// Flat rather than nested by act. Card ids are pool-scoped — `Strike`
-/// exists in two pools — so nesting them solves a real collision;
-/// monster ids are unique across the build, so nesting would cost a
-/// wrapper at every call site and buy nothing. Acts would make a poor
+/// Flat rather than nested by act. Card ids are pool-scoped, `Strike`
+/// exists in two pools, so nesting them solves a real collision;
+/// monster ids are unique across the build, so nesting will cost a
+/// wrapper at every call site and buy nothing. Acts will make a poor
 /// nesting anyway: 24 monsters are in none and two are in two.
 ///
 /// The generated files still group by act, because a monster's graph is

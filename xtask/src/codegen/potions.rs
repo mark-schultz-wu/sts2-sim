@@ -1,27 +1,10 @@
 //! Every potion's static data, and which pool stocks it.
-//!
-//! What a potion does is `OnUse`, which 63 of the 65 override, and that is
-//! ported by hand. What is table is where it comes from, when it can be drunk,
-//! and what it can be pointed at.
-//!
+//! What a potion does is `OnUse`, which 63 of the 65 override, and that is ported by hand. What is table is where it comes from, when it can be drunk, and what it can be pointed at.
 //! # Both `None`s throw
-//!
-//! `PotionUsage.None` is not generated at all: no potion has it, and
-//! `NPotionPopup` throws `"No potions should have 'None' usage."` when it sees
-//! one. The game says it should not exist and the build agrees.
-//!
-//! `PotionRarity.None` is generated as an absent `rarity`, which is the move
-//! `CardRarity.None` made and for the same reason: `PotionRarityExtensions
-//! .ToLocString` throws `ArgumentOutOfRangeException` on it, so it is not a
-//! rarity the game can name. Two models carry it — `DEPRECATED_POTION` and a
-//! mock — and neither is content, so `Option<PotionRarity>` says the true
-//! thing: they have no rarity rather than a rarity called none.
-//!
+//! `PotionUsage.None` is not generated at all: no potion has it, and `NPotionPopup` throws `"No potions must have 'None' usage."` when it sees one. The game says it must not exist and the build agrees.
+//! `PotionRarity.None` is generated as an absent `rarity`, which is the move `CardRarity.None` made and for the same reason: `PotionRarityExtensions .ToLocString` throws `ArgumentOutOfRangeException` on it. Therefore it is not a rarity the game can name. Two models carry it, `DEPRECATED_POTION` and a mock, and neither is content. Therefore `Option<PotionRarity>` says the true thing: they have no rarity rather than a rarity called none.
 //! # Pools partition
-//!
-//! Every potion is stocked by exactly one pool, which is not true next door: a
-//! relic can be in two and a monster in none. So the buckets are the pools, with
-//! no crossover file and no leftovers.
+//! Every potion is stocked by exactly one pool, which is not true next door: a relic can be in two and a monster in none. So the buckets are the pools, with no crossover file and no leftovers.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -109,8 +92,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
 
     // Which pool stocks a potion. Exactly one each, which is what makes the
-    // buckets a partition — so a second is an error rather than a crossover
-    // file nothing would ever land in.
+    // buckets a partition, so a second is an error rather than a crossover
+    // file nothing will ever land in.
     let mut pools: Vec<String> = Vec::new();
     let mut pool_of: BTreeMap<String, String> = BTreeMap::new();
     for row in dump.of("pool") {

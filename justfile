@@ -19,9 +19,13 @@ check: test lint
 test:
     cargo test --workspace
 
-lint:
+lint: prose
     cargo clippy --workspace --all-targets -- -D warnings
     cargo fmt --all --check
+
+# Rust documentation is part of the interface and follows the same prose rules.
+prose:
+    ./tools/prose-lint.py
 
 # Build the mod and install it into the game's mods directory.
 #

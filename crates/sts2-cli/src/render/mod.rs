@@ -1,17 +1,7 @@
 //! Human-readable rendering of an observation.
-//!
-//! A formatting choice, which is why it is here and not in `sts2-headless`. The
-//! transport reports what the game said; how that reads at a terminal is this
-//! front end's opinion, and a second front end is entitled to a different one.
-//!
-//! `Debug` on the response stays exhaustive and mechanical. This is the one
-//! meant to be read, and it reaches into the untyped `state` by key — the one
-//! place that assumes the observation's shape.
-//!
-//! It degrades rather than failing: a section whose keys are missing is skipped.
-//! That is right for a display and would be wrong anywhere else — nothing here
-//! feeds a comparison, so a field this cannot find is a gap in the rendering
-//! rather than a divergence being hidden.
+//! A formatting choice, which is why it is here and not in `sts2-headless`. The transport reports what the game said. How that reads at a terminal is this front end's opinion, and a second front end is entitled to a different one.
+//! `Debug` on the response stays exhaustive and mechanical. This is the one meant to be read, and it reaches into the untyped `state` by key, the one place that assumes the observation's shape.
+//! It degrades rather than failing: a section whose keys are missing is skipped. That is right for a display and is wrong anywhere else, nothing here feeds a comparison. Therefore a field this cannot find is a gap in the rendering rather than a divergence being hidden.
 
 mod combat;
 mod next;
@@ -25,10 +15,7 @@ use sts2_headless::{Question, Response, RewardKind};
 
 /// A response, rendered for a person.
 ///
-/// A wrapper because `Response` belongs to `sts2-headless` and `Display` to the
-/// standard library, so this crate cannot implement one for the other. That is
-/// the orphan rule doing something useful for once: the rendering has to say
-/// whose choice it is.
+/// A wrapper because `Response` belongs to `sts2-headless` and `Display` to the standard library, so this crate cannot implement one for the other. That is the orphan rule doing something useful for once: the rendering has to say whose choice it is.
 pub struct Readable<'a>(pub &'a Response);
 
 /// Fields a renderer asks for by name, returning nothing rather than panicking.
@@ -108,11 +95,7 @@ fn rule(f: &mut fmt::Formatter<'_>, seq: u64, cmd: &str, digest: &str) -> fmt::R
 
 /// A pending question, and the command that answers it.
 ///
-/// The command is the point. A pending blocks everything except answering it,
-/// so a reader who cannot tell which of `answer cards`, `answer take` and
-/// `answer skip` applies is stuck — and the two questions look alike until you
-/// know that one is a card selection and the other a reward screen. Naming the
-/// command inline is cheaper than expecting anyone to remember.
+/// The command is the point. A pending blocks everything except answering it, so a reader who cannot tell which of `answer cards`, `answer take` and `answer skip` applies is stuck. The two questions look alike until you know that one is a card selection and the other a reward screen. Naming the command inline is cheaper than expecting anyone to remember.
 fn question_of(f: &mut fmt::Formatter<'_>, question: &Question) -> fmt::Result {
     match question {
         Question::SelectCards {
@@ -137,11 +120,11 @@ fn question_of(f: &mut fmt::Formatter<'_>, question: &Question) -> fmt::Result {
         Question::Rewards { rewards, .. } => {
             writeln!(f, "asks    take rewards:")?;
 
-            // A card reward is two levels deep — which reward, then which card
-            // inside it — and the game refuses a card reward taken without a
+            // A card reward is two levels deep, which reward, then which card
+            // inside it, and the game refuses a card reward taken without a
             // card rather than choosing one for you. So the inner options are
             // listed with the pair that names them, and the hint is one of
-            // those pairs rather than a list of reward indices that would be
+            // those pairs rather than a list of reward indices that is
             // refused.
             for r in rewards {
                 let unpopulated = if r.populated { "" } else { "  [empty]" };
@@ -183,8 +166,7 @@ fn plain(reward: &RewardKind) -> String {
 
 /// Consecutive runs collapsed, order preserved.
 ///
-/// Order is the point for a draw pile — `STRIKE · BASH · 3x STRIKE` says
-/// something a global tally would destroy.
+/// Order is the point for a draw pile, `STRIKE · BASH · 3x STRIKE` says something a global tally will destroy.
 pub(super) fn cards(list: &[Value]) -> String {
     let mut out: Vec<String> = Vec::new();
     let mut run: Option<(&str, usize)> = None;
@@ -235,8 +217,7 @@ mod tests {
     use serde_json::json;
     use sts2_headless::Response;
 
-    /// Rendered, with runs of spaces collapsed so a test is about the words
-    /// rather than the column widths.
+    /// Rendered, with runs of spaces collapsed so a test is about the words rather than the column widths.
     fn rendered(pending: serde_json::Value) -> String {
         let response: Response =
             serde_json::from_value(pending).expect("a pending this crate can read");
@@ -250,10 +231,7 @@ mod tests {
 
     /// A card reward is two levels, and the hint has to say so.
     ///
-    /// `sts2 choose 0 1` was the old hint and it was not merely unclear, it was
-    /// wrong: the protocol refuses a card reward taken without a card rather
-    /// than choosing one, so it would have sent two rewards with no card and
-    /// been rejected. The dotted pair is the only form the game accepts.
+    /// `sts2 choose 0 1` was the old hint and it was not merely unclear, it was wrong. The protocol refuses a card reward taken without a card rather than choosing one. Therefore it has sent two rewards with no card and been rejected. The dotted pair is the only form the game accepts.
     #[test]
     fn a_card_reward_lists_its_cards_and_hints_a_pair() {
         let out = rendered(json!({

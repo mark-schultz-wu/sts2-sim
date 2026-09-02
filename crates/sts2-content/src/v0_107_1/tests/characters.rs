@@ -1,9 +1,5 @@
 //! The character table against the dump it came from.
-//!
-//! The smallest domain, and the one that points at the others. Most of what a
-//! character is, is a reference into a table another dump printed — so most of
-//! what is worth checking is that those references land where the dump said,
-//! and that the compiler is doing the rest.
+//! The smallest domain, and the one that points at the others. Most of what a character is, is a reference into a table another dump printed. Therefore most of what is worth checking is that those references land where the dump said, and that the compiler is doing the rest.
 
 use super::super::cards::Cards;
 use super::super::characters::*;
@@ -59,10 +55,7 @@ fn the_generated_table_matches_the_dump() {
 
 /// The starting deck, in order and with the right card from the right pool.
 ///
-/// Cards are pool-scoped — `Strike` is a variant of five different enums — so
-/// the deck is checked against both columns the dump writes. Getting only the
-/// id right would put the Ironclad's Strike in the Silent's deck and nothing
-/// would notice.
+/// Cards are pool-scoped, `Strike` is a variant of five different enums, so the deck is checked against both columns the dump writes. Getting only the id right will put the Ironclad's Strike in the Silent's deck and nothing will notice.
 #[test]
 fn the_starting_deck_is_the_dumped_one_in_order() {
     let mut dumped: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
@@ -91,11 +84,7 @@ fn the_starting_deck_is_the_dumped_one_in_order() {
 
 /// A starting deck is not always drawn from the character's own card pool.
 ///
-/// This is the reason the dump writes the pool beside each card rather than
-/// letting codegen infer it. `RANDOM_CHARACTER` opens with a Strike and a
-/// Defend from each of the five character pools while its own `card_pool` is
-/// the Ironclad's — so inferring would have named the wrong variant for eight
-/// of its ten cards, and every one of them would still have compiled.
+/// This is the reason the dump writes the pool beside each card rather than letting codegen infer it. `RANDOM_CHARACTER` opens with a Strike and a Defend from each of the five character pools while its own `card_pool` is the Ironclad's. Therefore inferring has named the wrong variant for eight of its ten cards, and every one of them will still have compiled.
 #[test]
 fn a_starting_deck_can_come_from_more_than_one_pool() {
     let mut foreign: Vec<&str> = Vec::new();
@@ -153,9 +142,7 @@ fn the_starting_relics_are_the_dumped_ones() {
 
 /// The unlock chain, which is the only edge between characters.
 ///
-/// A `None` means available from the start. Worth pinning as a shape rather
-/// than a set of pairs: it is a chain, so a build that made it a tree or a
-/// cycle would be saying something new about how a run is offered.
+/// A `None` means available from the start. Worth pinning as a shape rather than a set of pairs: it is a chain. Therefore a build that made it a tree or a cycle is saying something new about how a run is offered.
 #[test]
 fn the_unlock_chain_is_a_chain() {
     let mut unlocked_by: BTreeMap<String, String> = BTreeMap::new();
@@ -205,7 +192,7 @@ fn the_numbers_are_the_ones_a_run_starts_with() {
         .collect();
     assert_eq!(orbs, [("DEFECT".to_string(), 3)]);
 
-    // Every playable character starts on three energy and 99 gold; the two
+    // Every playable character starts on three energy and 99 gold. The two
     // placeholders are the ones with 100 energy and 1000 HP, which is how you
     // can tell them apart from content.
     for c in Character::ALL.iter().filter(|c| c.data().playable) {
@@ -223,10 +210,7 @@ fn the_numbers_are_the_ones_a_run_starts_with() {
 
 /// Every playable character draws from a pool named after itself.
 ///
-/// The three unplayable ones do not, which is the point: `RANDOM_CHARACTER`
-/// borrows the Ironclad's pools and the two placeholders draw cards from
-/// `MOCK_CARD_POOL` — a pool the cards domain does not generate at all, and the
-/// reason `CardPool` is declared in this domain rather than pointed at.
+/// The three unplayable ones do not, which is the point. `RANDOM_CHARACTER` borrows the Ironclad's pools and the two placeholders draw cards from `MOCK_CARD_POOL`, a pool the cards domain does not generate at all. The reason `CardPool` is declared in this domain rather than pointed at.
 #[test]
 fn a_playable_character_draws_from_its_own_pools() {
     for c in Character::ALL.iter().filter(|c| c.data().playable) {
@@ -270,9 +254,7 @@ fn a_character_round_trips_through_its_wire_form() {
 
 /// Starting HP and gold do not move with ascension.
 ///
-/// The dump read both at all eleven levels and emitted nothing, which is worth
-/// a test because the first game did scale starting HP — so this is a fact
-/// about this build rather than an assumption carried over.
+/// The dump read both at all eleven levels and emitted nothing, which is worth a test because the first game did scale starting HP. Therefore this is a fact about this build rather than an assumption carried over.
 #[test]
 fn no_character_starts_differently_at_a_higher_ascension() {
     assert_eq!(rows(CHARACTERS, "scalestart").count(), 0);

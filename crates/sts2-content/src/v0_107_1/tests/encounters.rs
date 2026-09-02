@@ -1,19 +1,7 @@
 //! The encounter table against the dump it came from.
-//!
-//! Structured like the other dumps' tests: replay the dump, row by row, against
-//! the table it generated. Two things here are not like the others.
-//!
-//! The first is `roster`. `GenerateMonsters` is a method, and whether it is a
-//! table at all was decided by running it and reading the `Rng` counter
-//! afterwards — so the set of encounters that roll is a claim about the build
-//! rather than something visible in the generated file, and it is pinned by
-//! name.
-//!
-//! The second is that this dump and the monster dump both project the same
-//! relation. `act <act> <monster>` in `monsters.txt` is
-//! `Acts.SelectMany(a => a.AllMonsters)`, which the game defines as its
-//! encounters' `AllPossibleMonsters`; here the two halves are dumped
-//! separately. They have to agree, and nothing but a test says so.
+//! Structured like the other dumps' tests: replay the dump, row by row, against the table it generated. Two things here are not like the others.
+//! The first is `roster`. `GenerateMonsters` is a method, and whether it is a table at all was decided by running it and reading the `Rng` counter afterwards. Therefore the set of encounters that roll is a claim about the build rather than something visible in the generated file. It is pinned by name.
+//! The second is that this dump and the monster dump both project the same relation. `act <act> <monster>` in `monsters.txt` is `Acts.SelectMany(a => a.AllMonsters)`, which the game defines as its encounters' `AllPossibleMonsters`. Here the two halves are dumped separately. They have to agree, and nothing but a test says so.
 
 use super::super::encounters::*;
 use super::super::monsters::Monster;
@@ -28,12 +16,10 @@ fn encounter(id: &str) -> Encounter {
         .unwrap_or_else(|| panic!("{id} is in the dump but not generated"))
 }
 
-/// The members `DROPPED` in `xtask/src/codegen/encounters.rs`, spelled out again
-/// so that dropping another one has to be said twice.
+/// The members `DROPPED` in `xtask/src/codegen/encounters.rs`, spelled out again so that dropping another one has to be said twice.
 const DROPPED: [(&str, &str); 2] = [("Family", "None"), ("RoomType", "Unassigned")];
 
-/// The anchor: a dump from another build has another hash, and a table
-/// regenerated against one is the failure this prevents.
+/// The anchor: a dump from another build has another hash, and a table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
@@ -106,7 +92,7 @@ fn the_generated_table_matches_the_dump() {
 
     // Tags and possible monsters are sets, so they are compared as sets. The
     // game declares `Tags` as a sequence, but its one reader is
-    // `Tags.Intersect(other.Tags).Any()` — which cannot see an order — so a
+    // `Tags.Intersect(other.Tags).Any()`, which cannot see an order, so a
     // bitset is faithful even though it yields in member order rather than
     // declaration order. `FLYCONID_NORMAL` is where the two differ.
     check_rows(
@@ -127,9 +113,7 @@ fn the_generated_table_matches_the_dump() {
 
 /// Slot names, which the table keeps only as counts and indices.
 ///
-/// Rebuilt from the dump the way codegen builds it — declared slots first, then
-/// any a spawn names and the encounter does not — so this is the rule itself
-/// under test and not codegen agreeing with codegen.
+/// Rebuilt from the dump the way codegen builds it, declared slots first, then any a spawn names and the encounter does not. Therefore this is the rule itself under test and not codegen agreeing with codegen.
 fn check_slots() {
     let mut declared: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for row in rows(ENCOUNTERS, "slot") {
@@ -176,11 +160,7 @@ fn check_slots() {
 
 /// One kind of hanging row, gathered per encounter and compared as a list.
 ///
-/// `ordered` says whether the comparison is a sequence or a set. A spawn's
-/// index is which monster it is, so that one is ordered; families and possible
-/// monsters are sets, and the table stores them as sets — the bitset yields in
-/// member order rather than the order the game declared them, which is faithful
-/// because the only reader is an intersection.
+/// `ordered` says whether the comparison is a sequence or a set. A spawn's index is which monster it is, so that one is ordered. Families and possible monsters are sets, and the table stores them as sets. The bitset yields in member order rather than the order the game declared them, which is faithful because the only reader is an intersection.
 fn check_rows(
     kind: &'static str,
     ordered: bool,
@@ -207,17 +187,12 @@ fn check_rows(
 
 /// The two dumps project the same relation and have to agree on it.
 ///
-/// `monsters.txt` says which monsters an act can field; `encounters.txt` says
-/// which encounters an act can roll and which monsters each can field. The
-/// game derives the first from the second — `ActModel.AllMonsters` is
-/// `AllEncounters.SelectMany(e => e.AllPossibleMonsters).Distinct()` — so a
-/// disagreement means one of the two dumps is reading something the other
-/// isn't, which is the kind of thing neither dump's own tests could notice.
+/// `monsters.txt` says which monsters an act can field. `encounters.txt` says which encounters an act can roll and which monsters each can field. The game derives the first from the second, `ActModel.AllMonsters` is `AllEncounters.SelectMany(e => e.AllPossibleMonsters).Distinct()`. Therefore a disagreement means one of the two dumps is reading something the other isn't. This is the kind of thing neither dump's own tests can notice.
 #[test]
 fn the_two_dumps_agree_on_which_monsters_an_act_can_field() {
     // Keyed by the act's own spelling, which is also how `monsters.txt`
-    // names it — `Act` is not `Ord`, and giving it an ordering for a test
-    // would be inventing one the game does not have.
+    // names it, `Act` is not `Ord`, and giving it an ordering for a test
+    // is inventing one the game does not have.
     let mut derived: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for e in Encounter::ALL {
         for act in e.acts() {
@@ -262,11 +237,7 @@ fn the_two_dumps_agree_on_which_monsters_an_act_can_field() {
 
 /// Exactly the encounters that do not have a roster, and no others.
 ///
-/// This is the assertion the whole `Roster` split rests on, and it cannot be
-/// checked by reading the generated file: whether an encounter rolls was
-/// decided by running `GenerateMonsters` against a fresh `Rng` and reading the
-/// counter afterwards. So the answer is pinned by name, and a build that makes
-/// a fifteenth encounter roll has to say so here.
+/// This is the assertion the whole `Roster` split rests on. It cannot be checked by reading the generated file. Whether an encounter rolls was decided by running `GenerateMonsters` against a fresh `Rng` and reading the counter afterwards. So the answer is pinned by name, and a build that makes a fifteenth encounter roll has to say so here.
 #[test]
 fn only_the_known_encounters_lack_a_roster() {
     let with = |want: Roster| -> Vec<String> {
@@ -309,11 +280,7 @@ fn only_the_known_encounters_lack_a_roster() {
 
 /// A spawn's slot is not an index into `slots`, and three encounters prove it.
 ///
-/// Worth pinning because the obvious modelling — resolve the name into a
-/// position, the way a monster's state ids become indices — is wrong here, and
-/// wrong in a way that only shows up on three rows out of 115. `Slots` is what
-/// `GetNextSlot` hands to a creature added mid-combat; where a monster *starts*
-/// is whatever `GenerateMonsters` names.
+/// Worth pinning because the obvious modelling, resolve the name into a position, the way a monster's state ids become indices, is wrong here. Wrong in a way that only shows up on three rows out of 115. `Slots` is what `GetNextSlot` hands to a creature added mid-combat. Where a monster *starts* is whatever `GenerateMonsters` names.
 #[test]
 fn a_spawn_can_start_in_a_slot_the_encounter_never_declares() {
     let mut undeclared: Vec<String> = Vec::new();
@@ -348,10 +315,7 @@ fn a_spawn_can_start_in_a_slot_the_encounter_never_declares() {
 
 /// Gold moves at Poverty and nowhere else, except where an override ignores it.
 ///
-/// The sweep reads both properties at all eleven ascension levels rather than
-/// at the one the source names, and this is what that bought: every encounter
-/// steps at level 3, and the one that does not steps at all is the one that
-/// overrides the properties outright.
+/// The sweep reads both properties at all eleven ascension levels rather than at the one the source names. This is what that bought: every encounter steps at level 3. The one that does not steps at all is the one that overrides the properties outright.
 #[test]
 fn gold_steps_only_at_poverty() {
     let mut flat: Vec<String> = Vec::new();
@@ -376,14 +340,9 @@ fn gold_steps_only_at_poverty() {
     );
 }
 
-/// The generated enums are the game's, minus exactly the dropped members, at
-/// the game's own numbers.
+/// The generated enums are the game's, minus exactly the dropped members, at the game's own numbers.
 ///
-/// Both members dropped here are a C# zero that means "no answer": nothing
-/// names `EncounterTag.None`, and every one of `RoomType.Unassigned`'s eight
-/// uses is an absence — one of them throws on it, and `AutoSlayer` waits for a
-/// room to stop being it. Dropping leaves a hole rather than renumbering, so
-/// `Monster` stays 1 whatever else changes.
+/// Both members dropped here are a C# zero that means "no answer": nothing names `EncounterTag.None`. Every one of `RoomType.Unassigned`'s eight uses is an absence, one of them throws on it, and `AutoSlayer` waits for a room to stop being it. Dropping leaves a hole rather than renumbering, so `Monster` stays 1 whatever else changes.
 #[test]
 fn the_generated_enums_drop_only_what_was_declared_dropped() {
     macro_rules! check_enum {
@@ -424,10 +383,7 @@ fn the_generated_enums_drop_only_what_was_declared_dropped() {
 
 /// Dropping `RoomType::Unassigned` is only safe because nothing here has it.
 ///
-/// The other seven members stay, used or not — `Treasure`, `Shop`, `RestSite`
-/// and `Map` are rooms an encounter is never in, and they are still rooms. What
-/// makes `Unassigned` different is not that it is unused but that it means
-/// nothing.
+/// The other seven members stay, used or not, `Treasure`, `Shop`, `RestSite` and `Map` are rooms an encounter is never in, and they are still rooms. What makes `Unassigned` different is not that it is unused but that it means nothing.
 #[test]
 fn every_encounter_is_in_a_room_that_holds_a_fight() {
     for row in rows(ENCOUNTERS, "encounter") {
@@ -442,9 +398,7 @@ fn every_encounter_is_in_a_room_that_holds_a_fight() {
 
 /// The wire form round-trips, and it is the only spelling of an id.
 ///
-/// There is no `id` accessor: the serde rename is the id, so this is the test
-/// that says the 96 renames are the 96 ids the dump declares and that every one
-/// of them reads back.
+/// There is no `id` accessor: the serde rename is the id. Therefore this is the test that says the 96 renames are the 96 ids the dump declares and that every one of them reads back.
 #[test]
 fn an_encounter_round_trips_through_its_wire_form() {
     let dumped: Vec<&str> = rows(ENCOUNTERS, "encounter").map(|r| r[1]).collect();
@@ -459,13 +413,9 @@ fn an_encounter_round_trips_through_its_wire_form() {
     assert!(serde_json::from_str::<Encounter>("\"KNIGHTS_ELIT\"").is_err());
 }
 
-/// Families exist for one reason, so the thing that reason needs is worth
-/// having.
+/// Families exist for one reason, so the thing that reason needs is worth having.
 ///
-/// `ActModel` will not put an encounter next to one it shares a family with,
-/// which is why two slime fights never sit together. `intersects` is that
-/// predicate. The name is this crate's: the game calls it `EncounterTag`, which
-/// says what it is stored as rather than what it means.
+/// `ActModel` will not put an encounter next to one it shares a family with, which is why two slime fights never sit together. `intersects` is that predicate. The name is this crate's: the game calls it `EncounterTag`, which says what it is stored as rather than what it means.
 #[test]
 fn sharing_a_family_is_what_keeps_two_encounters_apart() {
     let slimes = encounter("SLIMES_NORMAL").data().families;
@@ -476,7 +426,7 @@ fn sharing_a_family_is_what_keeps_two_encounters_apart() {
     assert!(slimes.intersects(weak_slimes), "both fights are slimes");
     assert!(!slimes.intersects(knights));
 
-    // An encounter with no tags shares nothing, including with itself — which
+    // An encounter with no tags shares nothing, including with itself, which
     // is what lets the untagged majority sit anywhere.
     let untagged = encounter("MYTES_NORMAL").data().families;
     assert_eq!(untagged.iter().count(), 0);

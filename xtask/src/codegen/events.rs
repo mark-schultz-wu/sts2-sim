@@ -1,32 +1,11 @@
 //! Every event: which acts offer it, and the shell around its choices.
-//!
-//! What an event *does* is `GenerateInitialOptions`, which all 69 override and
-//! which builds the player's choices out of run state. That is code and gets
-//! ported by hand. What is table is which acts can offer one at all, whether it
-//! carries a condition, and the few facts the room reads before the first page.
-//!
+//! What an event *does* is `GenerateInitialOptions`, which all 69 override and which builds the player's choices out of run state. That is code and gets ported by hand. What is table is which acts can offer one at all, whether it carries a condition. The few facts the room reads before the first page.
 //! # Two things called "shared"
-//!
-//! The game has both and they are unrelated, which is worth saying because the
-//! names do not.
-//!
-//! `ModelDb.AllSharedEvents` is a pool of nineteen that any act can roll,
-//! concatenated onto every act's own list. That is where an event comes from,
-//! and here it is the `anyact` bucket.
-//!
-//! `EventModel.IsShared` is the multiplayer sense: `EventSynchronizer` uses it
-//! to decide whether every player goes through the event together, and the
-//! layout only shows its label once there is more than one player. Eight events
-//! set it, and they are *not* the nineteen — `BATTLEWORN_DUMMY` sets it and sits
-//! in one act; `FAKE_MERCHANT` is in the pool and sets it too. So it generates
-//! as `shared_between_players`, which is what it means.
-//!
+//! The game has both and they are unrelated, which is worth saying because the names do not.
+//! `ModelDb.AllSharedEvents` is a pool of nineteen that any act can roll, concatenated onto every act's own list. That is where an event comes from, and here it is the `anyact` bucket.
+//! `EventModel.IsShared` is the multiplayer sense: `EventSynchronizer` uses it to decide whether every player goes through the event together. The layout only shows its label once there is more than one player. Eight events set it, and they are *not* the nineteen, `BATTLEWORN_DUMMY` sets it and sits in one act. `FAKE_MERCHANT` is in the pool and sets it too. So it generates as `shared_between_players`, which is what it means.
 //! # `deterministic` is not `!shared_between_players`
-//!
-//! `IsDeterministic` defaults to `!IsShared`, and reading that as a definition
-//! would be wrong: `CRYSTAL_SPHERE` overrides it and is neither shared nor
-//! deterministic. `EventRoom` branches on determinism alone, so the two are
-//! dumped as two columns and the table keeps them apart.
+//! `IsDeterministic` defaults to `!IsShared`, and reading that as a definition is wrong: `CRYSTAL_SPHERE` overrides it and is neither shared nor deterministic. `EventRoom` branches on determinism alone, so the two are dumped as two columns and the table keeps them apart.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -67,10 +46,7 @@ const FLAGS: [(&str, usize, &str); 4] = [
 
 /// The bucket an event's row lands in.
 ///
-/// Acts first, because that is where most events come from. The rest is what
-/// the act lists do not cover: `anyact` for the nineteen in
-/// `ModelDb.AllSharedEvents`, `crossover` for the two an act list names twice,
-/// and `unlisted` for the four nothing offers.
+/// Acts first, because that is where most events come from. The rest is what the act lists do not cover. `anyact` for the nineteen in `ModelDb.AllSharedEvents`, `crossover` for the two an act list names twice, and `unlisted` for the four nothing offers.
 fn bucket(acts: &[String], pooled: bool) -> String {
     match acts {
         [] if pooled => "anyact".into(),
@@ -132,7 +108,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     // The two memberships are meant to be disjoint: an event either belongs to
     // an act's list or to the pool every act draws from. Checked rather than
-    // assumed, because an event in both would be offered twice.
+    // assumed, because an event in both is offered twice.
     for id in &pooled {
         if acts_of.contains_key(*id) {
             return Err(format!(
@@ -203,9 +179,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
 /// The flags, as a one-word set.
 ///
-/// One word and a `contains`, unlike a power's or a relic's: nothing here is
-/// computed, because every one of these is read off the model with no combat
-/// running.
+/// One word and a `contains`, unlike a power's or a relic's: nothing here is computed. This is because every one of these is read off the model with no combat running.
 fn emit_flags(out: &mut String) -> Result<(), String> {
     sets::plain(
         out,

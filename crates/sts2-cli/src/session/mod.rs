@@ -1,15 +1,6 @@
 //! One long-lived game, and short-lived commands against it.
-//!
-//! The game takes seconds to boot and holds all the state, so a command cannot
-//! be a whole process: `sts2 play-card 0` has to reach a game that is already
-//! running. A REPL would be the smaller design and is the wrong one — anything
-//! driving this from a script or an agent gets one process per command, so it
-//! would have to commit to every input before seeing any output.
-//!
-//! So: a [`daemon`] owns the [`Game`](sts2_headless::Game) and listens on a unix
-//! socket; a [`client`] connects, sends one request, prints one answer and
-//! exits. The daemon shuts itself down after a period of quiet, because nothing
-//! else would — a client that crashes leaves no one to clean up.
+//! The game takes seconds to boot and holds all the state. Therefore a command cannot be a whole process: `sts2 play-card 0` has to reach a game that is already running. A REPL is the smaller design and is the wrong one. Anything driving this from a script or an agent gets one process per command. Therefore it has to commit to every input before seeing any output.
+//! So: a [`daemon`] owns the [`Game`](sts2_headless::Game) and listens on a unix socket. A [`client`] connects, sends one request, prints one answer and exits. The daemon shuts itself down after a period of quiet, because nothing else will, a client that crashes leaves no one to clean up.
 
 pub mod client;
 pub mod daemon;
@@ -24,9 +15,7 @@ pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 
 /// Where the socket lives.
 ///
-/// `XDG_RUNTIME_DIR` when there is one, because it is per-user, cleaned up at
-/// logout, and not world-writable. `/tmp` otherwise, with the uid in the name so
-/// two users on one machine do not collide.
+/// `XDG_RUNTIME_DIR` when there is one, because it is per-user, cleaned up at logout, and not world-writable. `/tmp` otherwise, with the uid in the name so two users on one machine do not collide.
 pub fn socket_path() -> PathBuf {
     match std::env::var_os("XDG_RUNTIME_DIR") {
         Some(dir) => PathBuf::from(dir).join("sts2.sock"),
@@ -36,9 +25,7 @@ pub fn socket_path() -> PathBuf {
 
 /// The user, for keeping two people's sockets apart under `/tmp`.
 ///
-/// Read from the environment rather than pulled in with a `libc` dependency for
-/// one number. It is a name, not a permission: the socket's own mode is what
-/// stops anyone else connecting, and this only avoids a collision.
+/// Read from the environment rather than pulled in with a `libc` dependency for one number. It is a name, not a permission: the socket's own mode is what stops anyone else connecting, and this only avoids a collision.
 fn uid() -> String {
     std::env::var("UID")
         .or_else(|_| std::env::var("USER"))
@@ -49,10 +36,9 @@ fn uid() -> String {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Request {
-    /// A game command, already encoded — the daemon relays it verbatim.
+    /// A game command, already encoded, the daemon relays it verbatim.
     ///
-    /// Encoded on the client, where the content types are, so the daemon stays
-    /// a relay and the typing happens once at the edge.
+    /// Encoded on the client, where the content types are, so the daemon stays a relay and the typing happens once at the edge.
     Game {
         command: Value,
     },
@@ -67,9 +53,7 @@ pub enum Request {
 pub enum Answer {
     /// The game's reply line, verbatim.
     ///
-    /// Unparsed on purpose: the daemon is a relay, and decoding a reply only to
-    /// re-encode it would need a `Serialize` inverse for every response type.
-    /// The client parses it once, with the same code any other caller uses.
+    /// Unparsed on purpose: the daemon is a relay, and decoding a reply only to re-encode it will need a `Serialize` inverse for every response type. The client parses it once, with the same code any other caller uses.
     Reply {
         line: String,
     },
@@ -80,7 +64,7 @@ pub enum Answer {
         idle_timeout_seconds: u64,
     },
     Stopping,
-    /// The daemon could not do it — no run started, the game died, and so on.
+    /// The daemon cannot do it, no run started, the game died, and so on.
     Failed {
         message: String,
     },

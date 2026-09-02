@@ -1,8 +1,5 @@
 //! The process that holds the game open.
-//!
-//! One game, one socket, one client at a time. Requests are served in the order
-//! they arrive because the game is a single state machine — two commands in
-//! flight would be two people playing one run.
+//! One game, one socket, one client at a time. Requests are served in the order they arrive because the game is a single state machine. Two commands in flight is two people playing one run.
 
 use super::{Answer, Request, socket_path};
 use anyhow::{Context, Result, bail};
@@ -14,17 +11,14 @@ use sts2_headless::{Config, Game};
 
 /// Runs until told to stop, or until nobody has asked for anything in a while.
 ///
-/// The timeout is not a nicety. A client is one short-lived process per command,
-/// so nothing observes the daemon's health and nothing tidies up after a client
-/// that crashed — without it, a forgotten game sits holding memory until the
-/// machine reboots.
+/// The timeout is not a nicety. A client is one short-lived process per command. Therefore nothing observes the daemon's health and nothing tidies up after a client that crashed, without it. A forgotten game sits holding memory until the machine reboots.
 pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Result<()> {
     let path = socket_path();
 
     // A socket left by a daemon that died is not a daemon. Removing it is safe
     // because binding is what proves the previous one is gone: if one is still
-    // listening, the connect in `client::probe` would have succeeded and we
-    // would not be here.
+    // listening, the connect in `client::probe` has succeeded and we
+    // will not be here.
     let _ = std::fs::remove_file(&path);
     let listener =
         UnixListener::bind(&path).with_context(|| format!("binding {}", path.display()))?;
@@ -57,7 +51,7 @@ pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Resul
     Ok(())
 }
 
-/// Handles one connection. Returns `false` when the daemon should stop.
+/// Handles one connection. Returns `false` when the daemon must stop.
 fn serve_one<V: ContentVersion>(
     stream: UnixStream,
     config: &Config,
@@ -102,9 +96,7 @@ fn serve_one<V: ContentVersion>(
 
 /// Sends one command to the game, launching it on the first one.
 ///
-/// Launching lazily means `sts2 start` is the only command that pays the boot
-/// cost, and a daemon spawned in the background is useful the moment it binds
-/// rather than twenty seconds later.
+/// Launching lazily means `sts2 start` is the only command that pays the boot cost. A daemon spawned in the background is useful the moment it binds rather than twenty seconds later.
 fn relay<V: ContentVersion>(
     config: &Config,
     game: &mut Option<Game<V>>,
@@ -158,7 +150,7 @@ pub fn spawn_detached(idle_timeout: Duration) -> Result<()> {
         .context("spawning the daemon")?;
 
     // Waiting for the socket rather than for the process: a daemon that has not
-    // bound yet is one a client would fail to reach.
+    // bound yet is one a client will fail to reach.
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
         if UnixStream::connect(socket_path()).is_ok() {

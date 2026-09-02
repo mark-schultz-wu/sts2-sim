@@ -14,9 +14,7 @@ use sts2_content::ContentVersion;
 
 /// A running game, and the process behind it.
 ///
-/// Dropping this closes the connection, which the game treats as a normal
-/// shutdown, and then reaps the process — so a client that dies does not leave a
-/// game behind.
+/// Dropping this closes the connection, which the game treats as a normal shutdown, and then reaps the process. Therefore a client that dies does not leave a game behind.
 pub struct Game<V: ContentVersion> {
     version: PhantomData<V>,
     child: Child,
@@ -29,8 +27,7 @@ pub struct Game<V: ContentVersion> {
 impl<V: ContentVersion> Game<V> {
     /// Launches the game and waits for it to connect back.
     ///
-    /// The game dials out: this binds an ephemeral port first and passes it to
-    /// the game, so there is no port-allocation race and no connect-retry loop.
+    /// The game dials out: this binds an ephemeral port first and passes it to the game. Therefore there is no port-allocation race and no connect-retry loop.
     pub fn launch(config: Config) -> Result<Self, Error> {
         let binary = config.game_dir.join(BINARY);
         if !binary.exists() {
@@ -141,7 +138,7 @@ impl<V: ContentVersion> Game<V> {
             });
         }
 
-        // The startup deadline was for a game that had not booted yet; commands
+        // The startup deadline was for a game that had not booted yet. Commands
         // get the shorter one.
         reader
             .get_ref()
@@ -151,16 +148,14 @@ impl<V: ContentVersion> Game<V> {
         Ok((writer, reader, greeting))
     }
 
-    /// What the game said about itself: protocol version, game build, and
-    /// every command it accepts.
+    /// What the game said about itself: protocol version, game build, and every command it accepts.
     pub fn greeting(&self) -> &Greeting {
         &self.greeting
     }
 
     /// Sends one command and returns what it produced.
     ///
-    /// The outer `Result` is whether the exchange happened at all; the inner one
-    /// is whether the game accepted the command. See [`Reply`].
+    /// The outer `Result` is whether the exchange happened at all. The inner one is whether the game accepted the command. See [`Reply`].
     pub fn send(&mut self, command: &Command<V>) -> Result<Reply, Error> {
         let line =
             serde_json::to_string(command).map_err(|e| Error::Encode(format!("{command:?}"), e))?;
@@ -170,16 +165,9 @@ impl<V: ContentVersion> Game<V> {
 
     /// Sends a command this crate's types cannot vouch for.
     ///
-    /// The typed API is exhaustive over what the tables know, which is exactly
-    /// why it cannot express a request the game should refuse — an encounter
-    /// that does not exist, a `RoomType` codegen deliberately drops. Testing the
-    /// refusal path needs to send those, and that is a different operation from
-    /// driving the game, so it says so here rather than in the type of every
-    /// field.
+    /// The typed API is exhaustive over what the tables know. This is exactly why it cannot express a request the game must refuse, an encounter that does not exist, a `RoomType` codegen deliberately drops. Testing the refusal path needs to send those, and that is a different operation from driving the game. Therefore it says so here rather than in the type of every field.
     ///
-    /// Nothing else should reach for this. A command that the typed API cannot
-    /// build and the game *should* accept is a gap in the content tables, and
-    /// the fix is there.
+    /// Nothing else must reach for this. A command that the typed API cannot build and the game *must* accept is a gap in the content tables, and the fix is there.
     pub fn send_raw(&mut self, command: &Value) -> Result<Reply, Error> {
         let line =
             serde_json::to_string(command).map_err(|e| Error::Encode(format!("{command}"), e))?;
@@ -189,11 +177,7 @@ impl<V: ContentVersion> Game<V> {
 
     /// Sends one already-encoded line and returns the game's answer unparsed.
     ///
-    /// For a relay — something holding the game open on behalf of another
-    /// process — which has no reason to decode a reply only to re-encode it.
-    /// Re-encoding would also need a `Serialize` inverse for every response
-    /// type, and `RewardKind` reads a flat wire form into a sum, so that inverse
-    /// would be hand-written and free to drift from the parser beside it.
+    /// For a relay, something holding the game open on behalf of another process, which has no reason to decode a reply only to re-encode it. Re-encoding will also need a `Serialize` inverse for every response type, and `RewardKind` reads a flat wire form into a sum. Therefore that inverse is hand-written and free to drift from the parser beside it.
     pub fn send_line(&mut self, line: &str) -> Result<String, Error> {
         self.write_line(line)?;
         read_line(&mut self.reader)
@@ -207,7 +191,7 @@ impl<V: ContentVersion> Game<V> {
             .map_err(|e| Error::Io("sending a command", e))
     }
 
-    /// How long a single command may take before [`Error::Timeout`].
+    /// How long a single command can take before [`Error::Timeout`].
     pub fn command_timeout(&self) -> Duration {
         self.command_timeout
     }
@@ -238,11 +222,9 @@ impl<V: ContentVersion> fmt::Debug for Game<V> {
     }
 }
 
-/// Waits for the game to dial in, giving up if the deadline passes or the
-/// process dies first.
+/// Waits for the game to dial in, giving up if the deadline passes or the process dies first.
 ///
-/// Polling rather than a blocking accept, because a game that crashes during
-/// startup would otherwise hang the caller until the deadline for no reason.
+/// Polling rather than a blocking accept, because a game that crashes during startup will otherwise hang the caller until the deadline for no reason.
 fn accept_before(
     listener: &TcpListener,
     child: &mut Child,
@@ -302,14 +284,9 @@ fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, Error> {
 
 /// Splits a reply into "the game refused" and "the game answered".
 ///
-/// The discriminator is read before deserializing, so a refusal is routed by
-/// what it says it is rather than by which struct happens to accept it.
-/// Reads one reply line the way [`Game::send`] does.
+/// Read the discriminator before deserialization. Route a refusal by its declared type, not by whichever struct accepts it. Reads one line as [`Game::send`] does.
 ///
-/// Public because [`Game::send_line`] hands a relay the raw line, and whatever
-/// finally reads it must decide response-or-refusal the same way. `Reply` is a
-/// `Result`, so deriving that decision from serde alone would look for an
-/// externally tagged `{"Ok": …}` and be wrong about every message.
+/// Public because [`Game::send_line`] hands a relay the raw line, and whatever finally reads it must decide response-or-refusal the same way. `Reply` is a `Result`, so deriving that decision from serde alone will look for an externally tagged `{"Ok": …}` and be wrong about every message.
 pub fn parse_reply(line: &str) -> Result<Reply, Error> {
     let decode = |e| Error::Decode(line.to_string(), e);
     let value: Value = serde_json::from_str(line).map_err(decode)?;
@@ -338,8 +315,7 @@ fn reap(child: &mut Child) {
 
 /// `libgcc_s.so.1`, ahead of anything the caller already asked for.
 ///
-/// Prepended rather than assigned, so a caller preloading something of their own
-/// keeps it. Linux-only, which this project is.
+/// Prepended rather than assigned, so a caller preloading something of their own keeps it. Linux-only, which this project is.
 fn preload() -> String {
     match std::env::var("LD_PRELOAD") {
         Ok(existing) if !existing.trim().is_empty() => format!("libgcc_s.so.1:{existing}"),
@@ -349,9 +325,7 @@ fn preload() -> String {
 
 /// A per-session token, to notice a stray local connection.
 ///
-/// Not a secret and not trying to be: it distinguishes our game from something
-/// else that happened to dial the port, which is the whole job. Anything on this
-/// machine can read the environment it is passed in.
+/// Not a secret and not trying to be: it distinguishes our game from something else that happened to dial the port. This is the whole job. Anything on this machine can read the environment it is passed in.
 fn fresh_token() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -371,8 +345,7 @@ mod handshake {
         "commit":"abc1234","assemblyHash":1692500715,"contentHash":42,
             "commands":["start","quit"]}"#;
 
-    /// A stand-in for the game: a process that stays alive long enough to be
-    /// reaped, so [`accept_before`] does not mistake it for a crashed launch.
+    /// A stand-in for the game: a process that stays alive long enough to be reaped, so [`accept_before`] does not mistake it for a crashed launch.
     fn idle_child() -> Child {
         Proc::new("sleep")
             .arg("60")
@@ -391,9 +364,7 @@ mod handshake {
 
     /// Drives [`Game::connect`] against a peer speaking `lines`.
     ///
-    /// The peer connects *before* the accept, sitting in the listener's backlog,
-    /// which keeps this single-threaded — and keeps its stream alive for the
-    /// whole handshake without a sleep to hold it open.
+    /// The peer connects *before* the accept, sitting in the listener's backlog, which keeps this single-threaded. Keeps its stream alive for the whole handshake without a sleep to hold it open.
     fn against(token: &str, lines: &[&str]) -> Result<Greeting, Error> {
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -476,8 +447,7 @@ mod handshake {
         assert!(matches!(err, Error::GameGone), "got {err:?}");
     }
 
-    /// A game that dies during startup should say so immediately rather than
-    /// making the caller wait out the whole deadline.
+    /// A game that dies during startup must say so immediately rather than making the caller wait out the whole deadline.
     #[test]
     fn a_game_that_exits_is_noticed_before_the_deadline() {
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
@@ -521,9 +491,7 @@ mod handshake {
         assert!(matches!(err, Error::GameNotFound(_)), "got {err:?}");
     }
 
-    /// These strings are what a caller sees when something goes wrong, and
-    /// `thiserror` generates them from attributes rather than a match, so it is
-    /// worth pinning that they still read as sentences and still chain.
+    /// These strings are what a caller sees when something goes wrong, and `thiserror` generates them from attributes rather than a match. Therefore it is worth pinning that they still read as sentences and still chain.
     #[test]
     fn errors_say_something_useful() {
         use std::error::Error as _;

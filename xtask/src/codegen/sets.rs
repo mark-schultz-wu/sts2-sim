@@ -1,38 +1,13 @@
 //! A bitset over a generated enum, in the two shapes the domains need.
-//!
-//! Every domain grows one sooner or later: a card's keywords, a monster's
-//! intents, the families an encounter fields, the card types an enchantment can
-//! be put on. They arrived independently and came out the same, which is the
-//! point — the shape is forced rather than chosen.
-//!
+//! Every domain grows one sooner or later: a card's keywords, a monster's intents, the families an encounter fields. The card types an enchantment can be put on. They arrived independently and came out the same, which is the point, the shape is forced rather than chosen.
 //! # Two shapes, and the difference is real
-//!
-//! [`plain`] is one word with a `contains`. It is right when the member either
-//! is or is not in the set, which is most of them.
-//!
-//! [`computed`] is two words and answers with a `Field<bool>`. It is right when
-//! some of the underlying members are `virtual` and a few models override them,
-//! so a member has three answers and not two.
-//!
+//! [`plain`] is one word with a `contains`. It is right when the member either is or is not in the set, which is most of them.
+//! [`computed`] is two words and answers with a `Field<bool>`. It is right when some of the underlying members are `virtual` and a few models override them. Therefore a member has three answers and not two.
 //! # Why the second shape needs two words
-//!
-//! A single bitset would have to spell "computed" as either true or false, and
-//! there is no honest choice between them. So the set carries the answers and
-//! the computed-ness separately, and the generated `get` hands back a `Field<bool>` —
-//! which means there is no way to ask the question that cannot be answered.
-//! There is deliberately no `contains`: it would be the lie this exists to
-//! avoid.
-//!
+//! A single bitset has to spell "computed" as either true or false, and there is no honest choice between them. So the set carries the answers and the computed-ness separately, and the generated `get` hands back a `Field<bool>`. Which means there is no way to ask the question that cannot be answered. There is deliberately no `contains`: it is the lie this exists to avoid.
 //! # What a domain still owns
-//!
-//! The member names and their docs, and the prose on the types. Those say what
-//! the members *are*, which is the part that differs; everything here says how
-//! a set of them is spelled, which is the part that does not.
-//!
-//! A set is over the whole enum, not over the members one caller happens to
-//! use. An enchantment can only be put on three of the six card types, and
-//! `CardTypeSet` still spans all six — narrowing the type to its first caller
-//! would make the second one wrong.
+//! The member names and their docs, and the prose on the types. Those say what the members *are*, which is the part that differs. Everything here says how a set of them is spelled, which is the part that does not.
+//! A set is over the whole enum, not over the members one caller happens to use. An enchantment can only be put on three of the six card types. `CardTypeSet` still spans all six, narrowing the type to its first caller will make the second one wrong.
 
 use std::fmt::Write as _;
 
@@ -40,9 +15,7 @@ use super::DERIVES;
 
 /// A method a set gets only where a caller wants it.
 ///
-/// `new`, `contains`, `iter` and `Debug` are the core and every set has them:
-/// build one, ask it, walk it, print it. These two are not, and handing them out
-/// anyway would be four sets carrying an `intersects` nothing calls.
+/// `new`, `contains`, `iter` and `Debug` are the core and every set has them: build one, ask it, walk it, print it. These two are not, and handing them out anyway is four sets carrying an `intersects` nothing calls.
 #[derive(PartialEq, Eq)]
 pub enum Extra {
     IsEmpty,
@@ -57,8 +30,7 @@ pub struct Set<'a> {
     pub set: &'a str,
     /// What the member enum's doc says, beyond the first line.
     ///
-    /// Empty when the enum is not emitted here — a set over an enum another
-    /// domain already declares, like `CardTypeSet` over `CardType`.
+    /// Empty when the enum is not emitted here, a set over an enum another domain already declares, like `CardTypeSet` over `CardType`.
     pub flag_doc: &'a str,
     /// What the set's doc says.
     pub set_doc: &'a str,
@@ -68,23 +40,16 @@ pub struct Set<'a> {
     pub declare: bool,
     /// Methods beyond the core, emitted only where something calls them.
     pub extras: &'a [Extra],
-    /// The highest bit the set can use, which is the highest discriminant of
-    /// any member — not the member count.
+    /// The highest bit the set can use, which is the highest discriminant of any member, not the member count.
     ///
-    /// The two differ whenever an enum has a hole in it. `CardKeyword` drops its
-    /// zero and runs 1..=7, so seven members reach bit 7 and the word has to
-    /// hold eight bits rather than seven. Sizing from the count would be right
-    /// by luck there and wrong the first time a domain drops a member in the
-    /// middle.
+    /// The two differ whenever an enum has a hole in it. `CardKeyword` drops its zero and runs 1.=7, so seven members reach bit 7 and the word has to hold eight bits rather than seven. Sizing from the count is right by luck there and wrong the first time a domain drops a member in the middle.
     pub bits: usize,
 }
 
 impl Set<'_> {
     /// The narrowest word that holds every bit.
     ///
-    /// The same decision `repr` makes and for the same reason: the set sits
-    /// inside a data struct, so a `u16` that only ever needs eight bits costs
-    /// two bytes in every row of the table.
+    /// The same decision `repr` makes and for the same reason: the set sits inside a data struct. Therefore a `u16` that only ever needs eight bits costs two bytes in every row of the table.
     fn word(&self) -> Result<&'static str, String> {
         match self.bits {
             n if n < 8 => Ok("u8"),
@@ -98,7 +63,7 @@ impl Set<'_> {
     }
 }
 
-/// Emits a set whose members may be computed: two words, and `get`.
+/// Emits a set whose members can be computed: two words, and `get`.
 pub fn computed(out: &mut String, set: &Set<'_>) -> Result<(), String> {
     let word = set.word()?;
     let (flag, name) = (set.flag, set.set);
@@ -193,11 +158,9 @@ pub fn computed(out: &mut String, set: &Set<'_>) -> Result<(), String> {
     Ok(())
 }
 
-/// Emits a set whose members are simply in it or not: one word, and `contains`.
+/// Emits a set whose members are  in it or not: one word, and `contains`.
 ///
-/// The bits are the member's own discriminant, so a bit means the same thing
-/// here as it does wherever the enum came from — which matters when the enum is
-/// another domain's and the numbers are the game's.
+/// The bits are the member's own discriminant, so a bit means the same thing here as it does wherever the enum came from. This matters when the enum is another domain's and the numbers are the game's.
 pub fn plain(out: &mut String, set: &Set<'_>) -> Result<(), String> {
     let word = set.word()?;
     let (flag, name) = (set.flag, set.set);
@@ -282,9 +245,7 @@ fn extras(set: &Set<'_>, word: &str, name: &str) -> String {
 
 /// The member enum, where the set declares one.
 ///
-/// A set over another domain's enum declares nothing: `CardTypeSet` is a set
-/// over `cards::CardType`, and a second `CardType` beside it would be the
-/// duplicate this module exists to avoid.
+/// A set over another domain's enum declares nothing: `CardTypeSet` is a set over `cards::CardType`. A second `CardType` beside it is the duplicate this module exists to avoid.
 fn declare(out: &mut String, set: &Set<'_>) {
     if !set.declare {
         return;
@@ -314,8 +275,7 @@ fn noun(set: &str) -> String {
 
 /// A power, but an affliction and an enchantment.
 ///
-/// Crude — it reads the letter rather than the sound — but every noun here is a
-/// kind of game content, and none of them is a "hour" or a "user".
+/// Crude, it reads the letter rather than the sound, but every noun here is a kind of game content. None of them is a "hour" or a "user".
 fn article(noun: &str) -> &'static str {
     match noun.starts_with(['a', 'e', 'i', 'o', 'u']) {
         true => "an",
@@ -325,8 +285,7 @@ fn article(noun: &str) -> &'static str {
 
 /// A doc line, with the space only a non-empty line gets.
 ///
-/// rustfmt strips a trailing space anyway, but the generated file reads better
-/// without one and a blank doc line is `///` rather than `/// `.
+/// rustfmt strips a trailing space anyway, but the generated file reads better without one and a blank doc line is `///` rather than `/// `.
 fn pad(line: &str) -> String {
     if line.is_empty() {
         String::new()
@@ -355,17 +314,14 @@ mod tests {
 
     /// The width comes from the highest bit, not the member count.
     ///
-    /// The two agree on every enum in the build, so the generated tree cannot
-    /// tell the rules apart — which is why this is here. They come apart the
-    /// first time a domain drops a member in the middle of an enum, and then
-    /// sizing from the count silently truncates the set.
+    /// The two agree on every enum in the build, so the generated tree cannot tell the rules apart, which is why this is here. They come apart the first time a domain drops a member in the middle of an enum. Then sizing from the count silently truncates the set.
     #[test]
     fn the_word_holds_the_highest_bit_and_not_the_member_count() {
-        // Seven members reaching bit 7 — `CardKeyword`, which drops its zero.
+        // Seven members reaching bit 7, `CardKeyword`, which drops its zero.
         // The count says six bits and the truth says eight.
         assert_eq!(set(7, 7).word().unwrap(), "u8");
 
-        // The case that would break: few members, high discriminants.
+        // The case that will break: few members, high discriminants.
         assert_eq!(set(3, 9).word().unwrap(), "u16");
         assert_eq!(set(3, 20).word().unwrap(), "u32");
 

@@ -1,10 +1,5 @@
 //! The relic table against the dump it came from.
-//!
-//! Replay the dump row by row, as the other domains do. What is particular here
-//! is `Price`, because it is the one column the table does not store the way
-//! the dump wrote it: 999999999 is a sentinel and becomes `Price::NotSold`,
-//! and the mapping has to be checked in both directions or the table would be
-//! free to invent a price nothing charges.
+//! Replay the dump row by row, as the other domains do. `Price` is the only column stored differently. The 999999999 sentinel becomes `Price::NotSold`. Both directions are checked.
 
 use super::super::relics::*;
 use super::super::{RELICS, VERSION};
@@ -14,9 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// The sentinel `RelicModel.MerchantCost` returns for a relic not for sale.
 ///
-/// Spelled here as well as in the generator, so that changing it has to be said
-/// twice — it is a magic number in the game and a variant in the table, and the
-/// only thing tying them together is that both files say it.
+/// Spelled here as well as in the generator. Therefore that changing it has to be said twice, it is a magic number in the game and a variant in the table. The only thing tying them together is that both files say it.
 const NOT_SOLD: &str = "999999999";
 
 fn relic(id: &str) -> Relic {
@@ -26,8 +19,7 @@ fn relic(id: &str) -> Relic {
         .unwrap_or_else(|| panic!("{id} is in the dump but not generated"))
 }
 
-/// The anchor: a dump from another build has another hash, and a table
-/// regenerated against one is the failure this prevents.
+/// The anchor: a dump from another build has another hash, and a table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
@@ -52,10 +44,7 @@ fn every_relic_is_generated() {
 
 /// The dump column each flag comes from.
 ///
-/// Spelled out rather than taken as "the columns after the rarity", because
-/// that is the mapping `FLAGS` in the generator decides: `RelicFlags` is a
-/// bitset whose numbering is ours, so a member reordered there would move every
-/// bit after it without changing a single name.
+/// Spelled out rather than taken as "the columns after the rarity". This is because that is the mapping `FLAGS` in the generator decides: `RelicFlags` is a bitset whose numbering is ours. Therefore a member reordered there will move every bit after it without changing a single name.
 const FLAG_COLUMNS: [(usize, RelicFlag); 9] = [
     (4, RelicFlag::UsedUp),
     (5, RelicFlag::UponPickup),
@@ -106,10 +95,7 @@ fn the_generated_table_matches_the_dump() {
 
 /// Every relic is drafted from at least one pool, and three from two.
 ///
-/// Worth saying because it is what makes the file buckets a partition, and it
-/// is not true of the neighbouring domains: 24 monsters are in no act because
-/// only a summon brings them in, and 16 encounters are in no act because an
-/// event starts them. A relic always comes from somewhere.
+/// Worth saying because it is what makes the file buckets a partition. It is not true of the neighbouring domains: 24 monsters are in no act because only a summon brings them in. 16 encounters are in no act because an event starts them. A relic always comes from somewhere.
 #[test]
 fn every_relic_is_in_a_pool() {
     let mut dumped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
@@ -143,12 +129,7 @@ fn every_relic_is_in_a_pool() {
 
 /// `NotSold` is read per relic, and cannot be derived from rarity.
 ///
-/// This is the assertion the `Price` split rests on. The base `MerchantCost`
-/// maps Ancient, Starter and Event to the sentinel, so deriving from rarity
-/// looks right — and is wrong for nine relics, because nine override
-/// `MerchantCost` outright. All nine are Event rarity, which is why the
-/// shortcut would have been invisible: 26 of the 35 Event relics are unsellable
-/// and the other 9 have a real price.
+/// This is the assertion the `Price` split rests on. The base `MerchantCost` maps Ancient, Starter and Event to the sentinel, so deriving from rarity looks right. Is wrong for nine relics, because nine override `MerchantCost` outright. All nine are Event rarity, which is why the shortcut has been invisible. 26 of the 35 Event relics are unsellable and the other 9 have a real price.
 #[test]
 fn not_sold_is_not_a_function_of_rarity() {
     let mut by_rarity: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
@@ -191,9 +172,7 @@ fn not_sold_is_not_a_function_of_rarity() {
 
 /// Exactly the relics the game works something out for, and no others.
 ///
-/// `IsUsedUp` and `ShowCounter` are `virtual`, so a future build can make any
-/// relic compute either, and a table that generated a constant for one would be
-/// wrong in a way nothing else here would notice.
+/// `IsUsedUp` and `ShowCounter` are `virtual`, so a future build can make any relic compute either. A table that generated a constant for one is wrong in a way nothing else here will notice.
 #[test]
 fn only_the_known_relics_are_computed() {
     let computed = |column: usize| -> Vec<&str> {
@@ -213,7 +192,7 @@ fn only_the_known_relics_are_computed() {
     // `display_amount` is never a constant other than zero: a relic either
     // reports nothing or works the number out. So the `Field<u16>` really only
     // ever holds two shapes, and a build that started storing a literal count
-    // would be doing something this table has never seen.
+    // is doing something this table has never seen.
     for row in rows(RELICS, "relic") {
         assert!(
             row[11] == "0" || row[11] == "dynamic",
@@ -230,7 +209,7 @@ fn only_the_known_relics_are_computed() {
     }
 
     // The converse does not hold, and one relic is why. `BONE_TEA` works out an
-    // amount while reporting that it shows no counter — so a simulator cannot
+    // amount while reporting that it shows no counter, so a simulator cannot
     // use `ShowsCounter` to decide whether the amount is worth asking for, and
     // the two stay separate fields rather than collapsing into one optional.
     let quiet: Vec<&str> = rows(RELICS, "relic")
@@ -244,7 +223,7 @@ fn only_the_known_relics_are_computed() {
     );
 
     // The columns with no computed cell at all. A relic that started computing
-    // one of these would still generate, because every flag is a `Field` — so
+    // one of these will still generate, because every flag is a `Field`, so
     // it is worth saying out loud that none does.
     for (column, what) in [
         (5, "HasUponPickupEffect"),
@@ -263,10 +242,7 @@ fn only_the_known_relics_are_computed() {
 
 /// `RelicRarity::None` keeps its two members and gets a better name.
 ///
-/// Unlike the `None`s dropped from the card, power and encounter enums, this
-/// one is a value two relics actually carry — so it stays, and only the Rust
-/// spelling changes. The serde rename is what keeps the wire and the dump
-/// unchanged, and that is what this checks.
+/// Unlike the `None`s dropped from the card, power and encounter enums, this one is a value two relics actually carry. Therefore it stays, and only the Rust spelling changes. The serde rename is what keeps the wire and the dump unchanged, and that is what this checks.
 #[test]
 fn undrafted_is_the_games_none_under_a_better_name() {
     assert_eq!(wire(&RelicRarity::Undrafted), "None");
@@ -314,10 +290,7 @@ fn a_relic_round_trips_through_its_wire_form() {
 
 /// The price never scales with ascension.
 ///
-/// The dump read `MerchantCost` at all eleven levels and emitted a `scalecost`
-/// row wherever it moved. It emitted none, which is why `Price` is a flat
-/// number rather than a `Scaled` — a measurement, not an assumption, and the
-/// same sweep that caught `FAKE_MERCHANT_EVENT_ENCOUNTER` paying flat gold.
+/// The dump read `MerchantCost` at all eleven levels and emitted a `scalecost` row wherever it moved. It emitted none, which is why `Price` is a flat number rather than a `Scaled`, a measurement, not an assumption. The same sweep that caught `FAKE_MERCHANT_EVENT_ENCOUNTER` paying flat gold.
 #[test]
 fn no_relic_changes_price_with_ascension() {
     assert_eq!(rows(RELICS, "scalecost").count(), 0);

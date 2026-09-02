@@ -1,10 +1,5 @@
 //! The power table against the dump it came from.
-//!
-//! Structured like the card tests: replay the dump, row by row, against the
-//! table it generated. What is particular here is the `dynamic` column, because
-//! it is the one thing a reader cannot check by eye — every one of these
-//! members is `virtual` or `abstract` on `PowerModel`, so nothing about a
-//! generated `Field::Constant` says whether the game really treats it as one.
+//! Structured like the card tests: replay the dump, row by row, against the table it generated. What is particular here is the `dynamic` column. This is because it is the one thing a reader cannot check by eye. Every one of these members is `virtual` or `abstract` on `PowerModel`. Therefore nothing about a generated `Field::Constant` says whether the game really treats it as one.
 
 use super::super::powers::*;
 use super::super::{POWERS, VERSION};
@@ -20,10 +15,7 @@ fn power(id: &str) -> Power {
 
 /// The dump's spelling of a column whose enum lost its `None`.
 ///
-/// The absence is Rust's, not the dump's: the game writes the member name it
-/// declared, so `None` here has to spell itself back into `None` rather than
-/// into JSON's `null`. That is the whole of what dropping the member did — the
-/// value survives, only its spelling moved from a variant to the `Option`.
+/// The absence is Rust's, not the dump's: the game writes the member name it declared. Therefore `None` here has to spell itself back into `None` rather than into JSON's `null`. That is the whole of what dropping the member did, the value survives, only its spelling moved from a variant to the `Option`.
 fn maybe<T: serde::Serialize>(value: &Option<T>) -> String {
     match value {
         Some(v) => wire(v),
@@ -31,8 +23,7 @@ fn maybe<T: serde::Serialize>(value: &Option<T>) -> String {
     }
 }
 
-/// The members `DROPPED` in `xtask/src/codegen/powers.rs`, spelled out again so
-/// that dropping another one has to be said twice.
+/// The members `DROPPED` in `xtask/src/codegen/powers.rs`, spelled out again so that dropping another one has to be said twice.
 const DROPPED: [(&str, &str); 3] = [
     ("PowerType", "None"),
     ("PowerInstanceType", "None"),
@@ -43,8 +34,7 @@ fn dropped(enum_name: &str, member: &str) -> bool {
     DROPPED.contains(&(enum_name, member))
 }
 
-/// The anchor, same as the other dumps': a dump from another build has another
-/// hash, and a table regenerated against one is the failure this prevents.
+/// The anchor, same as the other dumps': a dump from another build has another hash. A table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
@@ -65,8 +55,7 @@ fn every_power_is_generated() {
     }
 }
 
-/// Ids are the enum variants and the wire form, so a duplicate would make two
-/// different powers the same power.
+/// Ids are the enum variants and the wire form, so a duplicate will make two different powers the same power.
 #[test]
 fn power_ids_are_unique() {
     let mut seen = std::collections::HashSet::new();
@@ -75,19 +64,11 @@ fn power_ids_are_unique() {
     }
 }
 
-/// The generated table has to agree with the dump it was generated from —
-/// otherwise `cargo xtask codegen` was not re-run and the table describes a
-/// build nobody is talking to.
+/// The generated table has to agree with the dump it was generated from. Otherwise `cargo xtask codegen` was not re-run and the table describes a build nobody is talking to.
 ///
-/// Every cell is compared through the dump's own spelling: enums through serde,
-/// because that is what the wire depends on, and flags against `1` and `0`,
-/// because that is what the dump writes and a cell reading `dynamic` has to be
-/// visibly not a value in the same alphabet.
+/// Every cell uses the dump's spelling. Enums use serde because the wire depends on it. Flags use `1` and `0`. A `dynamic` cell remains outside that alphabet.
 ///
-/// The flags are checked by column *and* by member, which is the point of
-/// pinning them here rather than trusting the generator: `PowerFlags` is a
-/// bitset whose numbering is ours rather than the game's, so a member reordered
-/// in `FLAGS` would move every bit after it without changing a single name.
+/// The flags are checked by column *and* by member. This is the point of pinning them here rather than trusting the generator. `PowerFlags` is a bitset whose numbering is ours rather than the game's. Therefore a member reordered in `FLAGS` will move every bit after it without changing a single name.
 #[test]
 fn the_generated_table_matches_the_dump() {
     let mut checked = 0;
@@ -118,9 +99,7 @@ fn the_generated_table_matches_the_dump() {
 
 /// The dump column each flag comes from.
 ///
-/// Spelled out rather than taken as "the columns after the values", because
-/// that is the mapping `FLAGS` in the generator decides and the one a reorder
-/// would silently change.
+/// Spelled out rather than taken as "the columns after the values". This is because that is the mapping `FLAGS` in the generator decides and the one a reorder will silently change.
 const FLAG_COLUMNS: [(usize, PowerFlag); 5] = [
     (5, PowerFlag::AllowNegative),
     (6, PowerFlag::RemovedOnOwnerDeath),
@@ -131,9 +110,7 @@ const FLAG_COLUMNS: [(usize, PowerFlag); 5] = [
 
 /// One `Field` cell against one dump column.
 ///
-/// Matched rather than converted to an `Option`: `Computed` means "ask the
-/// power" and is not a missing value, and the two have to stay distinguishable
-/// for the same reason they do on cards.
+/// Matched rather than converted to an `Option`: `Computed` means "ask the power" and is not a missing value. The two have to stay distinguishable for the same reason they do on cards.
 fn check<T>(id: &str, field: &str, cell: Field<T>, dumped: &str, spell: impl Fn(&T) -> String) {
     match cell {
         Field::Computed => assert_eq!(dumped, "dynamic", "{id}: {field}"),
@@ -141,10 +118,7 @@ fn check<T>(id: &str, field: &str, cell: Field<T>, dumped: &str, spell: impl Fn(
     }
 }
 
-/// The enums the power fields draw from, reflected from the game rather than
-/// inferred from the values in use — a member no power happens to use is still
-/// a member, and an enum missing one fails to decode the first time content
-/// grows into it.
+/// The enums the power fields draw from, reflected from the game rather than inferred from the values in use. A member no power happens to use is still a member. An enum missing one fails to decode the first time content grows into it.
 #[test]
 fn the_game_declares_three_members_each() {
     for name in ["PowerType", "PowerInstanceType", "PowerStackType"] {
@@ -160,14 +134,9 @@ fn the_game_declares_three_members_each() {
     }
 }
 
-/// The generated enums are the game's, minus exactly the dropped members, at
-/// the game's own numbers.
+/// The generated enums are the game's, minus exactly the dropped members, at the game's own numbers.
 ///
-/// Three things at once, and each is a different way the drop could go wrong.
-/// A member that stopped parsing is one silently dropped; a member that started
-/// parsing is a `DROPPED` entry nobody removed from the generator; a member at
-/// the wrong discriminant is the renumbering that dropping deliberately avoids,
-/// which would remap every value after it without changing a single name.
+/// Three things at once, and each is a different way the drop can go wrong. A member that stopped parsing is one silently dropped. A member that started parsing is a `DROPPED` entry nobody removed from the generator. A member at the wrong discriminant is the renumbering that dropping deliberately avoids, which will remap every value after it without changing a single name.
 #[test]
 fn the_generated_enums_drop_only_what_was_declared_dropped() {
     /// One enum: every member the game declares, against the Rust type.
@@ -207,11 +176,7 @@ fn the_generated_enums_drop_only_what_was_declared_dropped() {
 
 /// What each dropped member cost, counted.
 ///
-/// The generator's reasons for dropping them are arguments about how many
-/// powers have the member and what reads it, and an argument stops being true
-/// when the numbers move. `PowerType::None` is the strongest case and the
-/// easiest to check: nothing has it at all, so the `Option` the other two
-/// needed would be an `Option` that is never `None`.
+/// The generator's reasons for dropping them are arguments about how many powers have the member and what reads it. An argument stops being true when the numbers move. `PowerType::None` is the strongest case and the easiest to check: nothing has it at all. Therefore the `Option` the other two needed is an `Option` that is never `None`.
 #[test]
 fn the_dropped_members_are_as_rare_as_the_reasons_claim() {
     let count =
@@ -224,18 +189,9 @@ fn the_dropped_members_are_as_rare_as_the_reasons_claim() {
 
 /// Exactly the powers the game works something out for, and no others.
 ///
-/// This is the assertion the whole `dynamic` mechanism rests on, and it is
-/// worth spelling the list out rather than counting. Every member here is
-/// `virtual` or `abstract` on `PowerModel`, so a future build can make any
-/// power compute any of them — and a table that generated a constant for one
-/// would be wrong in a way nothing else in this file would notice.
+/// This is the assertion the whole `dynamic` mechanism rests on, and it is worth spelling the list out rather than counting. Every member here is `virtual` or `abstract` on `PowerModel`, so a future build can make any power compute any of them. A table that generated a constant for one is wrong in a way nothing else in this file will notice.
 ///
-/// The twenty on `kind` are one family: `ITemporaryPower` descendants whose
-/// `Type` follows a `protected IsPositive`. In this build each of them is in
-/// fact constant, but constant *per subclass* rather than as a literal, and the
-/// dump reads IL rather than guessing — so they are marked computed. That is
-/// the conservative direction on purpose: a method costs one implementation, a
-/// wrong constant costs a divergence nobody can see.
+/// The twenty on `kind` are one family: `ITemporaryPower` descendants whose `Type` follows a `protected IsPositive`. In this build each of them is in fact constant, but constant *per subclass* rather than as a literal. The dump reads IL rather than guessing, so they are marked computed. That is the conservative direction on purpose: a method costs one implementation, a wrong constant costs a divergence nobody can see.
 #[test]
 fn only_the_known_powers_are_computed() {
     let computed = |column: usize| -> Vec<&str> {
@@ -248,7 +204,7 @@ fn only_the_known_powers_are_computed() {
     // `instance` is the one column with no `Field` to put a computed cell in,
     // so codegen fails on a `dynamic` here rather than generating one. Said
     // from this side too, because the generator that produced the table is not
-    // the thing that should be certifying it.
+    // the thing that must be certifying it.
     assert!(
         computed(3).is_empty(),
         "InstanceType is computed on {:?}, which the table cannot spell",
@@ -306,8 +262,7 @@ fn only_the_known_powers_are_computed() {
 
     // The other three flags: nothing works them out in this build. A `Field`
     // is what `PowerFlags` hands back either way, so a power that started
-    // computing one of these would generate fine and change nothing visible —
-    // which is exactly why it is worth saying out loud.
+    // computing one of these will generate fine and change nothing visible,     // which is exactly why it is worth saying out loud.
     for (column, what) in [
         (5, "AllowNegative"),
         (6, "ShouldPowerBeRemovedAfterOwnerDeath"),
@@ -323,9 +278,7 @@ fn only_the_known_powers_are_computed() {
 
 /// The wire form round-trips, and it is the only spelling of an id.
 ///
-/// There is no `id` accessor: the serde rename is the id, so this is the test
-/// that says the 273 renames are the 273 ids the dump declares and that every
-/// one of them reads back.
+/// There is no `id` accessor: the serde rename is the id. Therefore this is the test that says the 273 renames are the 273 ids the dump declares and that every one of them reads back.
 #[test]
 fn a_power_round_trips_through_its_wire_form() {
     let dumped: Vec<&str> = rows(POWERS, "power").map(|r| r[1]).collect();
@@ -342,12 +295,7 @@ fn a_power_round_trips_through_its_wire_form() {
 
 /// `GetTypeForAmount`, which the game derives rather than stores.
 ///
-/// Worth pinning because it is the one place these fields combine, and the
-/// combination is not obvious: a debuff that does not allow negatives reads as
-/// a *buff* while its amount is below zero, and a counter that does allow them
-/// reads as a debuff. Anything porting `Rend`, `Misery`, `UnsettlingLamp` or
-/// the Debuffer badge has to reproduce this, so here is the rule with the
-/// table's own values behind it.
+/// Worth pinning because it is the one place these fields combine. The combination is not obvious: a debuff that does not allow negatives reads as a *buff* while its amount is below zero. A counter that does allow them reads as a debuff. Anything porting `Rend`, `Misery`, `UnsettlingLamp` or the Debuffer badge has to reproduce this, so here is the rule with the table's own values behind it.
 #[test]
 fn a_negative_amount_can_flip_a_powers_type() {
     fn allows_negative(power: Power) -> bool {
@@ -381,7 +329,7 @@ fn a_negative_amount_can_flip_a_powers_type() {
     assert_eq!(type_for(vulnerable, -1), PowerType::Buff);
 
     // Strength: a buff that does allow negatives, so a negative amount reads as
-    // a debuff — which is why `Rend` and `Misery` count it.
+    // a debuff, which is why `Rend` and `Misery` count it.
     let strength = power("STRENGTH_POWER");
     assert!(allows_negative(strength));
     assert_eq!(type_for(strength, 2), PowerType::Buff);

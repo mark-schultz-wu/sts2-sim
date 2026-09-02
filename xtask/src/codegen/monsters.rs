@@ -1,39 +1,12 @@
 //! Every monster's HP range and move state machine.
-//!
-//! The state machine is a graph the game builds at runtime, and the dump walks
-//! it. What comes out is data — nodes, edges, branch order, repeat rules,
-//! cooldowns, intents — and the only holes are the weight lambdas and the
-//! conditional predicates, which arrive marked `dynamic` and become
-//! `Field::Computed`.
-//!
+//! The state machine is a graph the game builds at runtime, and the dump walks it. What comes out is data, nodes, edges, branch order, repeat rules, cooldowns, intents. The only holes are the weight lambdas and the conditional predicates, which arrive marked `dynamic` and become `Field::Computed`.
 //! # State ids become indices
-//!
-//! The game addresses states by string id and looks them up in a
-//! `Dictionary<string, MonsterState>`. Here a state is its position in the
-//! monster's own `states` slice, so a transition is a `u8` rather than a hash
-//! lookup. The ids survive on moves only, because `StateLog` records moves and
-//! the observation reports them; branch nodes have `ShouldAppearInLogs => false`
-//! and nothing outside the graph ever names them.
-//!
+//! The game addresses states by string id and looks them up in a `Dictionary<string, MonsterState>`. Here a state is its position in the monster's own `states` slice, so a transition is a `u8` rather than a hash lookup. The ids survive on moves only, because `StateLog` records moves and the observation reports them. Branch nodes have `ShouldAppearInLogs => false` and nothing outside the graph ever names them.
 //! # One file per act
-//!
-//! `mod.rs` holds the shape and the `Monster` enum; each monster's graph is a
-//! named const in the file for the acts it can be met in. `data` is then one
-//! arm per monster naming that const, which reads as an index rather than as
-//! eight thousand lines of table.
-//!
-//! The buckets partition, which "the act it is in" does not: `summoned` takes
-//! the 24 monsters no encounter can roll, and `shared` the two that turn up in
-//! more than one act. Filing those under whichever act came first would put a
-//! monster somewhere its own `acts()` never mentions.
-//!
+//! `mod.rs` holds the shape and the `Monster` enum. Each monster's graph is a named const in the file for the acts it can be met in. `data` is then one arm per monster naming that const, which reads as an index rather than as eight thousand lines of table.
+//! The buckets partition, which "the act it is in" does not: `summoned` takes the 24 monsters no encounter can roll. `shared` the two that turn up in more than one act. Filing those under whichever act came first will put a monster somewhere its own `acts()` never mentions.
 //! # Why the branch order matters
-//!
-//! `RandomBranchState.GetNextState` sums the weights, draws exactly one
-//! `rng.NextFloat(max)`, and subtracts weights walking the list in declaration
-//! order. So the order branches are emitted in is not presentation — it decides
-//! which move a given roll produces. Branch rows keep dump order for that
-//! reason, while states are sorted by id, which is what the dump already did.
+//! `RandomBranchState.GetNextState` sums the weights, draws exactly one `rng.NextFloat(max)`, and subtracts weights walking the list in declaration order. So the order branches are emitted in is not presentation, it decides which move a given roll produces. Branch rows keep dump order for that reason, while states are sorted by id, which is what the dump already did.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -45,29 +18,20 @@ use super::{Build, DERIVES, Dump, banner, camel, repr, sanitize};
 
 /// Intents that carry numbers, and which numbers.
 ///
-/// Taken from the C# types rather than from whichever columns happen to be
-/// filled in: `AttackIntent` has `DamageCalc` and `Repeats`, `DeathBlowIntent`
-/// extends `SingleAttackIntent` so it has both too, and `StatusIntent` has
-/// `CardCount`. Every other intent's numbers live in the move body, which is
-/// ported by hand — the intent is only what the player is shown.
+/// Taken from the C# types rather than from whichever columns happen to be filled in. `AttackIntent` has `DamageCalc` and `Repeats`, `DeathBlowIntent` extends `SingleAttackIntent` so it has both too, and `StatusIntent` has `CardCount`. Every other intent's numbers live in the move body, which is ported by hand, the intent is only what the player is shown.
 ///
-/// Every dumped row is checked against this, so a build that starts putting a
-/// number on a `HealIntent` fails generation rather than dropping it.
+/// Every dumped row is checked against this, so a build that starts putting a number on a `HealIntent` fails generation rather than dropping it.
 const INTENT_PAYLOAD: [(&str, Payload); 3] = [
     ("Attack", Payload::Attack),
     ("DeathBlow", Payload::Attack),
     ("StatusCard", Payload::Count),
 ];
 
-/// The `MoveRepeatType` members this knows how to translate, and how each reads
-/// the `maxTimes` beside it.
+/// The `MoveRepeatType` members this knows how to translate, and how each reads the `maxTimes` beside it.
 ///
-/// `CannotRepeat` and `CanRepeatXTimes` are the same rule with the number left
-/// implicit: `GetStateWeight` computes `num2 = CannotRepeat ? 1 : maxTimes` and
-/// then runs one loop for both.
+/// `CannotRepeat` and `CanRepeatXTimes` are the same rule with the number left implicit: `GetStateWeight` computes `num2 = CannotRepeat ? 1 : maxTimes` and then runs one loop for both.
 ///
-/// A build that grows a fifth member fails generation here rather than
-/// generating a graph that quietly ignores it.
+/// A build that grows a fifth member fails generation here rather than generating a graph that quietly ignores it.
 const REPEAT_LIMIT: [(&str, Limit); 4] = [
     ("CanRepeatForever", Limit::Forever),
     ("CanRepeatXTimes", Limit::InARow),
@@ -78,23 +42,19 @@ const REPEAT_LIMIT: [(&str, Limit); 4] = [
 /// How a `MoveRepeatType` reads `maxTimes`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Limit {
-    /// No limit; carries no number.
+    /// No limit. Carries no number.
     Forever,
     /// `InARow(maxTimes)`.
     InARow,
-    /// `InARow(1)` — the number is implied, so the dump writes 0.
+    /// `InARow(1)`, the number is implied, so the dump writes 0.
     InARowOnce,
-    /// `Once`; carries no number.
+    /// `Once`. Carries no number.
     Once,
 }
 
 /// The largest window `RepeatCount` can spell, for either kind of rule.
 ///
-/// The point of a capped type rather than a `u8` is that `Repeat` needs two
-/// fieldless discriminants beside it, and only a payload with fewer than 255
-/// inhabitants leaves room for them. Anything up to 254 would do, so this is
-/// headroom rather than a bit: the build's largest is 3, and generation fails
-/// rather than truncating if one ever exceeds it.
+/// The point of a capped type rather than a `u8` is that `Repeat` needs two fieldless discriminants beside it. Only a payload with fewer than 255 inhabitants leaves room for them. Anything up to 254 will do, so this is headroom rather than a bit: the build's largest is 3. Generation fails rather than truncating if one ever exceeds it.
 const REPEAT_CAP: u8 = 8;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -114,8 +74,7 @@ fn payload(intent: &str) -> Payload {
         .map_or(Payload::None, |(_, p)| *p)
 }
 
-/// One monster's states, in the order the dump emitted them, which is sorted by
-/// state id and is therefore the index each state gets.
+/// One monster's states, in the order the dump emitted them, which is sorted by state id and is therefore the index each state gets.
 struct Machine {
     min_hp: Steps,
     max_hp: Steps,
@@ -156,8 +115,7 @@ struct Branch {
 
 /// A value at ascension 0, plus the levels at which it changes.
 ///
-/// `dynamic` at the base means the game computes it at combat time, and such a
-/// value never carries steps — there is nothing constant to scale.
+/// `dynamic` at the base means the game computes it at combat time, and such a value never carries steps, there is nothing constant to scale.
 #[derive(Default)]
 struct Steps {
     base: String,
@@ -193,8 +151,8 @@ impl Steps {
         };
 
         // One threshold, because `AscensionHelper.GetValueIfAscension` takes
-        // one. A value that moved twice would need a monster nesting two calls,
-        // and `Scaled` has nowhere to put the second — so this fails rather
+        // one. A value that moved twice will need a monster nesting two calls,
+        // and `Scaled` has nowhere to put the second, so this fails rather
         // than dropping it.
         let step = match self.at.as_slice() {
             [] => "None".to_string(),
@@ -214,8 +172,7 @@ impl Steps {
     }
 }
 
-/// Every state has an id in the game; only moves keep theirs in the table.
-/// Branch nodes still need one here, because transitions target them by name.
+/// Every state has an id in the game. Only moves keep theirs in the table. Branch nodes still need one here, because transitions target them by name.
 fn state_id(state: &State) -> &str {
     match state {
         State::Move { id, .. } | State::Random { id, .. } | State::Conditional { id, .. } => id,
@@ -227,7 +184,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     let build = dump.build.clone();
 
     // Reflected from the game, so a member no monster happens to use is still
-    // a member — the same reason the card dump reflects its own enums.
+    // a member, the same reason the card dump reflects its own enums.
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
         let discriminant = f[2]
@@ -259,7 +216,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     );
     // `Act` is the acts domain's, not this one's. It was declared here when
     // nothing else described an act, which meant the enum was whichever ids
-    // happened to turn up in this dump — four of the build's five.
+    // happened to turn up in this dump, four of the build's five.
     writeln!(out, "\nuse super::acts::Act;").unwrap();
     writeln!(out, "use crate::{{Field, Scaled}};").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -268,7 +225,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         // `IntentType` becomes `Intent`, whose variants carry the numbers that
         // intent has; `MoveRepeatType` becomes `RepeatLimit`, which carries
         // `maxTimes`. Both are emitted below from the members, and re-emitting
-        // the bare enum as well would leave a second spelling nothing uses.
+        // the bare enum as well will leave a second spelling nothing uses.
         if name == "IntentType" || name == "MoveRepeatType" {
             continue;
         }
@@ -356,9 +313,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
 /// Groups the dump's rows by monster.
 ///
-/// Row order carries meaning twice over: states arrive sorted by id and their
-/// position becomes their index, and branches arrive in the order the game
-/// subtracts their weights.
+/// Row order carries meaning twice over: states arrive sorted by id and their position becomes their index. Branches arrive in the order the game subtracts their weights.
 fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, String> {
     let mut machines: BTreeMap<String, Machine> = BTreeMap::new();
     let mut current: Option<String> = None;
@@ -444,10 +399,7 @@ fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, String> {
 
 /// Folds the `scale*` rows into the values they move.
 ///
-/// The dump emits one row per threshold, in ascending level order, so these
-/// append in order and `Scaled::at` can walk them without sorting. A row that
-/// names a value the base rows never declared means the two halves of the dump
-/// disagree, which is worth stopping for.
+/// The dump emits one row per threshold, in ascending level order, so these append in order and `Scaled::at` can walk them without sorting. A row that names a value the base rows never declared means the two halves of the dump disagree, which is worth stopping for.
 fn scaling(dump: &Dump, machines: &mut BTreeMap<String, Machine>) -> Result<(), String> {
     // Ascension changing a monster's *graph* is not something the table models,
     // and the dump reports it rather than flattening it.
@@ -480,9 +432,7 @@ fn scaling(dump: &Dump, machines: &mut BTreeMap<String, Machine>) -> Result<(), 
     Ok(())
 }
 
-/// A step is only recorded where the value actually moved, so a column that
-/// matches the base is skipped — the two columns of a `scaleintent` row move
-/// independently.
+/// A step is only recorded where the value actually moved. Therefore a column that matches the base is skipped, the two columns of a `scaleintent` row move independently.
 fn push(
     steps: &mut Steps,
     level: u8,
@@ -555,12 +505,9 @@ fn branch_mut<'a>(
         .ok_or_else(|| format!("no branch {i} on {monster}.{state}"))
 }
 
-/// The intent enum: one variant per `IntentType` member, carrying whatever
-/// numbers that intent actually has.
+/// The intent enum: one variant per `IntentType` member, carrying whatever numbers that intent actually has.
 ///
-/// A variant rather than a type-plus-two-nullable-columns, because "a Buff has
-/// no damage" is a fact about buffs and belongs in the type. The dump spells it
-/// `-`; here it is simply absent.
+/// A variant rather than a type-plus-two-nullable-columns, because "a Buff has no damage" is a fact about buffs and belongs in the type. The dump spells it `-`. Here it is  absent.
 fn emit_intent(
     out: &mut String,
     enums: &BTreeMap<String, Vec<(u8, String)>>,
@@ -575,7 +522,7 @@ fn emit_intent(
         out,
         "/// What a monster telegraphs before a move resolves.\n\
          ///\n\
-         /// Not what the move does — that is the move body, ported by hand. The\n\
+         /// Not what the move does, that is the move body, ported by hand. The\n\
          /// game declares the two separately, so this is only what is displayed."
     )
     .unwrap();
@@ -590,8 +537,7 @@ fn emit_intent(
     // A set rather than a list, which is what the game's own use of it makes
     // it. `MoveState.Intents` is an ordered array, but the only two things that
     // read it are `NCreature.UpdateIntent`, which lays icons left to right into
-    // a Godot container, and `Creature.HoverTips`, which collects tooltips —
-    // both presentation. Nothing in the rules reads them, and no move telegraphs
+    // a Godot container, and `Creature.HoverTips`, which collects tooltips,     // both presentation. Nothing in the rules reads them, and no move telegraphs
     // the same kind twice, so the order is the only thing a set loses and the
     // order is not a fact about the game.
     sets::plain(
@@ -661,8 +607,7 @@ fn emit_intent(
     Ok(())
 }
 
-/// English for a small number, which is what a `RepeatCount` variant is
-/// called. Only ever asked for `1..=REPEAT_CAP`.
+/// English for a small number, which is what a `RepeatCount` variant is called. Only ever asked for `1.=REPEAT_CAP`.
 fn word(n: u8) -> &'static str {
     const WORDS: [&str; 9] = [
         "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
@@ -672,10 +617,7 @@ fn word(n: u8) -> &'static str {
 
 /// The repeat rule: when a branch stops being eligible.
 ///
-/// Three of the game's fields become one enum. `maxTimes` folds in because it
-/// is only meaningful for one `MoveRepeatType`, and `cooldown` folds in because
-/// it is redundant with whichever rule sits beside it — see
-/// [`repeat_literal`] for the argument and for the translation itself.
+/// Three of the game's fields become one enum. `maxTimes` folds in because it is only meaningful for one `MoveRepeatType`. `cooldown` folds in because it is redundant with whichever rule sits beside it, see [`repeat_literal`] for the argument and for the translation itself.
 fn emit_repeat(
     out: &mut String,
     enums: &BTreeMap<String, Vec<(u8, String)>>,
@@ -723,7 +665,7 @@ fn emit_repeat(
          /// A capped count rather than a `u8` so that `Repeat` stays small: it\n\
          /// needs two fieldless discriminants beside this one, and a `u8` payload\n\
          /// uses every pattern there is. The cap is {REPEAT_CAP}, against a build\n\
-         /// whose largest window is {largest} — `cargo xtask codegen` fails rather\n\
+         /// whose largest window is {largest}, `cargo xtask codegen` fails rather\n\
          /// than truncating if one ever exceeds it.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]\n\
          #[repr(u8)]\n\
@@ -750,14 +692,14 @@ fn emit_repeat(
         out,
         "/// What bars a branch the machine would otherwise be free to take.\n\
          ///\n\
-         /// The game spends three fields on this — `MoveRepeatType`, `maxTimes`\n\
-         /// and `cooldown` — and `GetStateWeight` blocks the branch if *either*\n\
+         /// The game spends three fields on this, `MoveRepeatType`, `maxTimes`\n\
+         /// and `cooldown`, and `GetStateWeight` blocks the branch if *either*\n\
          /// the repeat type or the cooldown says so. One of the two is always\n\
          /// redundant, because each implies the other in one direction:\n\
          ///\n\
          /// - `InARow(n)` blocking means the last `n` log entries are all this\n\
          ///   branch, and `n` is never zero, so the most recent entry is this\n\
-         ///   branch — which is exactly what a cooldown of 1 or more already\n\
+         ///   branch, which is exactly what a cooldown of 1 or more already\n\
          ///   blocks on. A cooldown beside an in-a-row limit swallows it.\n\
          /// - A cooldown blocking means the branch is somewhere in the log, which\n\
          ///   is what [`Once`](Self::Once) blocks on. `Once` swallows a cooldown.\n\
@@ -800,11 +742,11 @@ fn emit_shape(out: &mut String, states: usize) {
          /// enough and costs no hashing. Every index a generated table contains\n\
          /// is in range for its monster, which the tests check.\n\
          ///\n\
-         /// A `u8` and not a capped enum. Capping would buy nothing: the only\n\
-         /// thing that could use the spare discriminants is a niche, and\n\
+         /// A `u8` and not a capped enum. Capping will buy nothing: the only\n\
+         /// thing that can use the spare discriminants is a niche, and\n\
          /// [`FollowUp`] has two variants carrying one of these, so it is a tag\n\
          /// plus a payload either way. The build's largest graph is {states}\n\
-         /// states; codegen refuses one that would not fit here.\n\
+         /// states. Codegen refuses one that will not fit here.\n\
          pub type StateIndex = u8;\n"
     )
     .unwrap();
@@ -822,7 +764,7 @@ fn emit_shape(out: &mut String, states: usize) {
          /// A missing follow-up is not \"no next state\" either —\n\
          /// `MoveState.GetNextState` throws on one. That is\n\
          /// [`Never`](Self::Never), and it makes the combination the game can\n\
-         /// express but never uses — must perform once, then go nowhere —\n\
+         /// express but never uses, must perform once, then go nowhere —\n\
          /// unrepresentable here.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub enum FollowUp {{\n\
@@ -872,7 +814,7 @@ fn emit_shape(out: &mut String, states: usize) {
          ///\n\
          /// `Random` takes exactly one RNG draw and walks its branches in order;\n\
          /// `Conditional` takes none and picks the first branch whose predicate\n\
-         /// holds. Both are transparent to `StateLog` — the machine loops until\n\
+         /// holds. Both are transparent to `StateLog`, the machine loops until\n\
          /// it lands on a `Move`.\n\
          #[derive(Debug, Clone, Copy, PartialEq)]\n\
          pub enum State {{\n\
@@ -914,11 +856,7 @@ fn describe(file: &str) -> String {
 
 /// The file a monster's data lands in, from the acts it can be met in.
 ///
-/// A genuine partition, unlike "the act it is in": 24 monsters are in no act
-/// because only another monster ever summons them, and two — both
-/// `*_CONSTRUCT` — turn up in Glory as well as an earlier act. Those get their
-/// own buckets rather than being filed under whichever act came first, which
-/// would put a monster somewhere its own `acts()` does not mention.
+/// A genuine partition, unlike "the act it is in": 24 monsters are in no act because only another monster ever summons them. Two, both `*_CONSTRUCT`, turn up in Glory as well as an earlier act. Those get their own buckets rather than being filed under whichever act came first. This will put a monster somewhere its own `acts()` does not mention.
 fn bucket(acts: Option<&Vec<String>>) -> String {
     match acts {
         None => "summoned".to_string(),
@@ -936,10 +874,10 @@ fn emit_monsters(
     writeln!(
         out,
         "///\n\
-         /// Flat rather than nested by act. Card ids are pool-scoped — `Strike`\n\
-         /// exists in two pools — so nesting them solves a real collision;\n\
-         /// monster ids are unique across the build, so nesting would cost a\n\
-         /// wrapper at every call site and buy nothing. Acts would make a poor\n\
+         /// Flat rather than nested by act. Card ids are pool-scoped, `Strike`\n\
+         /// exists in two pools, so nesting them solves a real collision;\n\
+         /// monster ids are unique across the build, so nesting will cost a\n\
+         /// wrapper at every call site and buy nothing. Acts will make a poor\n\
          /// nesting anyway: 24 monsters are in none and two are in two.\n\
          ///\n\
          /// The generated files still group by act, because a monster's graph is\n\
@@ -1022,7 +960,7 @@ fn emit_monsters(
 fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
     let mut out = String::new();
     let out = &mut out;
-    // The dump names states; the table indexes them. Built here so that a name
+    // The dump names states. The table indexes them. Built here so that a name
     // the graph cannot resolve is a generation failure rather than a panic in
     // the simulator.
     let mut index: BTreeMap<&str, usize> = BTreeMap::new();
@@ -1059,7 +997,7 @@ fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
             } => {
                 // The bool gates the transition, so it lands inside it. A move
                 // that must be performed once and then goes nowhere is a
-                // combination `FollowUp` cannot spell — and one the game never
+                // combination `FollowUp` cannot spell, and one the game never
                 // uses, since the only move without a follow-up does not set it.
                 let next = match (follow_up.as_str(), must_perform_once) {
                     ("-", false) => "FollowUp::Never".to_string(),
@@ -1128,25 +1066,15 @@ fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
 
 /// One branch's three repeat columns as the single `Repeat` they mean.
 ///
-/// `GetStateWeight` blocks the branch if the repeat type says so *or* the
-/// cooldown does, and one of the two is always the weaker:
+/// `GetStateWeight` blocks the branch if the repeat type says so *or* the cooldown does, and one of the two is always the weaker:
 ///
-/// - a cooldown of `c >= 1` beside `CannotRepeat` or `CanRepeatXTimes(n)`
-///   swallows it, because the in-a-row test can only fire when the most recent
-///   log entry is this branch, and the cooldown already fires on that;
-/// - a cooldown beside `UseOnlyOnce` is swallowed by it, because "in the last
-///   `c`" implies "in the log";
+/// - a cooldown beside `CannotRepeat` or `CanRepeatXTimes(n)` swallows the limit because it already blocks the most recent log entry.
+/// - `UseOnlyOnce` swallows a cooldown because "in the last `c`" implies "in the log".
 /// - a cooldown beside `CanRepeatForever` is the only rule there is.
 ///
-/// So the pair collapses without losing behaviour. `Cooldown(One)` is not
-/// emitted: it is the same predicate as `InARow(One)`, and one spelling of a
-/// rule is worth more than a spelling that follows the dump's column.
+/// So the pair collapses without losing behaviour. `Cooldown(One)` is not emitted: it is the same predicate as `InARow(One)`. One spelling of a rule is worth more than a spelling that follows the dump's column.
 ///
-/// Everything the columns could say that the type cannot is an error rather
-/// than a value: a `maxTimes` on a member that does not read one would be
-/// silently dropped, a missing one on `CanRepeatXTimes` would generate a limit
-/// of zero — which `GetStateWeight` treats as a branch nothing can ever take —
-/// and a window past [`REPEAT_CAP`] has no spelling at all.
+/// Unsupported column combinations are errors. A missing `maxTimes` generates an unusable zero limit, and a window past [`REPEAT_CAP`] has no spelling.
 fn repeat_literal(monster: &str, branch: &Branch) -> Result<String, String> {
     let where_ = format!("{monster}.{} -> {}", branch.repeat, branch.target);
 
@@ -1191,11 +1119,7 @@ fn repeat_literal(monster: &str, branch: &Branch) -> Result<String, String> {
 
 /// A move's whole telegraph: the set of kinds, and the numbers beside it.
 ///
-/// The dump's rows are an ordered list; this is a set plus two payloads, so
-/// every way the two could fail to line up is checked here. A kind that turns
-/// up twice would silently collapse into one bit, a second attacking intent
-/// would silently overwrite the first, and a number on a kind with nowhere to
-/// put it would simply vanish — so all three fail generation instead.
+/// The dump's rows are an ordered list. This is a set plus two payloads, so every way the two can fail to line up is checked here. A kind that turns up twice will silently collapse into one bit, a second attacking intent will silently overwrite the first. A number on a kind with nowhere to put it will  vanish, so all three fail generation instead.
 fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<String, String> {
     let mut kinds: Vec<&str> = Vec::new();
     let mut attack: Option<String> = None;
@@ -1205,7 +1129,7 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
         let where_ = format!("{monster}.{state} {}", intent.kind);
         let kind = intent.kind.as_str();
 
-        // A set keeps one bit per kind, so a repeat would be invisible. No move
+        // A set keeps one bit per kind, so a repeat is invisible. No move
         // in this build telegraphs one twice, and that is what makes the set
         // lossless rather than lucky.
         if kinds.contains(&kind) {
@@ -1267,7 +1191,7 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
     ))
 }
 
-/// A bare `Scaled<T>` — no `Field`, for values the game never computes.
+/// A bare `Scaled<T>`, no `Field`, for values the game never computes.
 fn scaled(monster: &str, what: &str, steps: &Steps, ty: &str) -> Result<String, String> {
     if steps.is_dynamic() {
         return Err(format!("{monster}: {what} is computed, which has no table"));

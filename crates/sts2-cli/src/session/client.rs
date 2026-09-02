@@ -1,7 +1,5 @@
 //! One request, one answer, then exit.
-//!
-//! Everything a command needs to know about the daemon is here: whether one is
-//! running, how to start one, and how to ask it a question.
+//! Everything a command needs to know about the daemon is here: whether one is running, how to start one. How to ask it a question.
 
 use super::{Answer, Request, socket_path};
 use anyhow::{Context, Result, bail};
@@ -11,8 +9,7 @@ use std::time::Duration;
 
 /// Whether a daemon is listening.
 ///
-/// Connecting rather than checking for the file, because a socket left behind by
-/// a daemon that died is a file with nobody on the other end.
+/// Connect instead of checking for the file. A dead daemon can leave a socket file with nobody listening.
 pub fn running() -> bool {
     UnixStream::connect(socket_path()).is_ok()
 }

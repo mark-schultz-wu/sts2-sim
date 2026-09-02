@@ -1,27 +1,11 @@
 //! Every character: what a run starts with, and what it draws from.
-//!
-//! The smallest domain and the one that ties the others together. A character
-//! is three pool references, a starting deck, a starting relic and four
-//! numbers — so most of it points at content another dump already printed.
-//!
+//! The smallest domain and the one that ties the others together. A character is three pool references, a starting deck, a starting relic and four numbers. Therefore most of it points at content another dump already printed.
 //! # Which pools are typed
-//!
-//! `relic_pool` and `potion_pool` are the relics and potions domains' own
-//! types, so the compiler checks them. `card_pool` is an enum declared here.
-//!
-//! Cards have no pool type to point at: that domain *buckets* by pool but never
-//! names one, since a card's pool is which enum it is a variant of. And it could
-//! not be used here anyway — two characters draw from `MOCK_CARD_POOL`, which is
-//! not one of the twelve the cards domain generates. So `CardPool` stays local,
-//! and is the only one that does.
-//!
-//! `potion_pool` used to be declared here for the same reason, and is not any
-//! more: the potions domain has a `PotionPool` and the five a character names
-//! are a subset of its ten, so this points at it.
-//!
+//! `relic_pool` and `potion_pool` are the relics and potions domains' own types, so the compiler checks them. `card_pool` is an enum declared here.
+//! Cards have no pool type to point at: that domain *buckets* by pool but never names one. Since a card's pool is which enum it is a variant of. And it cannot be used here anyway, two characters draw from `MOCK_CARD_POOL`, which is not one of the twelve the cards domain generates. So `CardPool` stays local, and is the only one that does.
+//! `potion_pool` used to be declared here for the same reason. Is not any more: the potions domain has a `PotionPool` and the five a character names are a subset of its ten. Therefore this points at it.
 //! # No file split
-//!
-//! Eight rows. Splitting them would be filing for its own sake.
+//! Eight rows. Splitting them is filing for its own sake.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -33,17 +17,13 @@ use super::{Build, DERIVES, Dump, banner, camel, repr};
 
 /// The most cards a starting deck holds, and the most starting relics.
 ///
-/// Caps rather than guesses: the build's largest are the Silent's twelve cards
-/// and one relic apiece, and generation fails rather than truncating if either
-/// grows. They are what lets both be inline instead of a pointer — see
-/// `sts2_content::Few`.
+/// Caps rather than guesses: the build's largest are the Silent's twelve cards and one relic apiece, and generation fails rather than truncating if either grows. They are what lets both be inline instead of a pointer, see `sts2_content::Few`.
 const DECK_CAP: usize = 12;
 const RELIC_CAP: usize = 2;
 
 /// A pool column, and the type its values generate as.
 ///
-/// `RelicPool` is the relics domain's; the other two are declared here. See the
-/// module docs for why they differ.
+/// `RelicPool` is the relics domain's. The other two are declared here. See the module docs for why they differ.
 const POOLS: [(&str, &str, usize, &str, bool); 3] = [
     ("card_pool", "CardPool", 9, "_CARD_POOL", true),
     ("relic_pool", "RelicPool", 10, "_RELIC_POOL", false),
@@ -65,7 +45,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
 
     // Starting HP and gold were read at all eleven ascension levels and neither
-    // moved, so both are plain numbers. A build that starts scaling one would
+    // moved, so both are plain numbers. A build that starts scaling one will
     // generate a table describing ascension 0 only, so it fails here instead.
     if dump.of("scalestart").next().is_some() {
         return Err(

@@ -5,17 +5,9 @@ use super::super::{CARDS, VERSION};
 use super::{build, rows, wire};
 use crate::{Cost, Field};
 
-/// The dump's `cost` and `costsX` columns as the `Cost` they should have
-/// generated, spelled out independently of the codegen that produced the
-/// table — otherwise the cross-check would only prove codegen agrees with
-/// itself.
+/// The dump's `cost` and `costsX` columns as the `Cost` they must have generated, spelled out independently of the codegen that produced the table. Otherwise the cross-check will only prove codegen agrees with itself.
 ///
-/// The two columns are not independent. `CardEnergyCost` sets
-/// `Canonical = CostsX ? 0 : canonicalCost`, so an X-cost card carries no
-/// number, and it treats any negative base as "no cost", so `-1` is a
-/// sentinel rather than a cost of minus one. Both are asserted here: if a
-/// future build breaks either, this fails instead of silently encoding an
-/// X-cost card as costing whatever number came along.
+/// The two columns are not independent. `CardEnergyCost` sets `Canonical = CostsX ? 0 : canonicalCost`, so an X-cost card carries no number, and it treats any negative base as "no cost". Therefore `-1` is a sentinel rather than a cost of minus one. Both are asserted here: if a future build breaks either, this fails instead of silently encoding an X-cost card as costing whatever number came along.
 fn cost(canonical: &str, costs_x: &str) -> Cost {
     match (costs_x, canonical) {
         ("1", n) => {
@@ -27,9 +19,7 @@ fn cost(canonical: &str, costs_x: &str) -> Cost {
     }
 }
 
-/// The generated table has to agree with the dump it was generated from —
-/// otherwise `cargo xtask codegen` was not re-run and the table describes a
-/// build nobody is talking to.
+/// The generated table has to agree with the dump it was generated from. Otherwise `cargo xtask codegen` was not re-run and the table describes a build nobody is talking to.
 #[test]
 fn the_generated_table_matches_the_dump() {
     let mut checked = 0;
@@ -46,11 +36,11 @@ fn the_generated_table_matches_the_dump() {
 
         // Matched, not converted to an Option: `Constant(TargetType::None)`
         // means "targets nothing" and `Computed` means "ask the card", and
-        // an Option would spell both with the word None again.
+        // an Option will spell both with the word None again.
         //
         // Compared through serde rather than Debug, because
         // `TargetType::Self` is a Rust keyword and generates as
-        // `SelfTarget` — only the rename carries the game's own spelling,
+        // `SelfTarget`, only the rename carries the game's own spelling,
         // and that is what the wire depends on.
         match d.kind {
             Field::Computed => assert_eq!(row[3], "dynamic", "{}: kind", row[1]),
@@ -79,9 +69,7 @@ fn the_generated_table_matches_the_dump() {
     assert_eq!(checked, 578);
 }
 
-/// The anchor. A dump from another build has another hash, and a table
-/// silently regenerated against one is the failure this pairing exists to
-/// prevent.
+/// The anchor. A dump from another build has another hash, and a table silently regenerated against one is the failure this pairing exists to prevent.
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
@@ -102,8 +90,7 @@ fn every_card_is_present_and_well_formed() {
     }
 }
 
-/// The 12 pools are the groups the generated enums nest by, so an unknown
-/// one means the grouping is about to be wrong.
+/// The 12 pools are the groups the generated enums nest by, so an unknown one means the grouping is about to be wrong.
 #[test]
 fn every_card_belongs_to_a_known_pool() {
     const POOLS: [&str; 12] = [
@@ -131,10 +118,7 @@ fn every_card_belongs_to_a_known_pool() {
     }
 }
 
-/// The enums the card fields draw from, reflected from the game rather
-/// than inferred from the values in use — a member no card happens to use
-/// is still a member, and an enum missing one fails to decode the first
-/// time content grows into it.
+/// The enums the card fields draw from, reflected from the game rather than inferred from the values in use. A member no card happens to use is still a member. An enum missing one fails to decode the first time content grows into it.
 #[test]
 fn the_field_enums_are_complete() {
     for (name, count) in [
@@ -154,15 +138,9 @@ fn the_field_enums_are_complete() {
     }
 }
 
-/// Three members the game declares are deliberately not generated: they
-/// are the C# zero rather than values of the field they name, and each is
-/// an `Option` at the one place that needs it. See `DROPPED` in
-/// `xtask/src/codegen.rs` for the evidence per member.
+/// Three members the game declares are deliberately not generated: they are the C# zero rather than values of the field they name. Each is an `Option` at the one place that needs it. See `DROPPED` in `xtask/src/codegen.rs` for the evidence per member.
 ///
-/// Dropping one is only sound while no card carries it, so that is what
-/// this pins. The converse is not asserted — a generated member no card
-/// uses is normal, which is why `TargetType`'s unused `AnyPlayer`,
-/// `TargetedNoCreature` and `Osty` are still generated.
+/// Dropping one is only sound while no card carries it, so that is what this pins. The converse is not asserted, a generated member no card uses is normal, which is why `TargetType`'s unused `AnyPlayer`, `TargetedNoCreature` and `Osty` are still generated.
 #[test]
 fn no_card_uses_a_member_that_is_not_generated() {
     for (column, member) in [(3, "CardType::None"), (4, "CardRarity::None")] {
@@ -180,8 +158,7 @@ fn no_card_uses_a_member_that_is_not_generated() {
     assert!(keywords.is_empty(), "CardKeyword::None is on {keywords:?}");
 }
 
-/// Ids are the enum variants and the wire form, so a duplicate would make
-/// two different cards the same card.
+/// Ids are the enum variants and the wire form, so a duplicate will make two different cards the same card.
 #[test]
 fn card_ids_are_unique() {
     let mut seen = std::collections::HashSet::new();
@@ -190,10 +167,7 @@ fn card_ids_are_unique() {
     }
 }
 
-/// `max_upgrade` is a `u8`, so a build that grew a negative or a large one
-/// would truncate silently. It is 0 or 1 on every shipped card — but
-/// `CardModel` has a real `if (MaxUpgradeLevel > 1)` branch, so the field
-/// is a count rather than a flag and this is the check that it stays small.
+/// `max_upgrade` is a `u8`, so a build that grew a negative or a large one will truncate silently. It is 0 or 1 on every shipped card, but `CardModel` has a real `if (MaxUpgradeLevel > 1)` branch. Therefore the field is a count rather than a flag and this is the check that it stays small.
 #[test]
 fn upgrade_levels_stay_in_a_byte() {
     let mut seen: Vec<&str> = rows(CARDS, "card").map(|r| r[8]).collect();
@@ -202,9 +176,7 @@ fn upgrade_levels_stay_in_a_byte() {
     assert_eq!(seen, ["0", "1"], "max upgrade levels changed");
 }
 
-/// Exactly the four cards that compute a field, and no others. If a future
-/// build adds one, this fails rather than the simulator silently reading a
-/// constant that is not one.
+/// Exactly the four cards that compute a field, and no others. If a future build adds one, this fails rather than the simulator silently reading a constant that is not one.
 #[test]
 fn only_the_known_cards_are_dynamic() {
     let dynamic: Vec<&str> = rows(CARDS, "card")
