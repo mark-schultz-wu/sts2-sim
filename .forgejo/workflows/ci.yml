@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every pull request, not only the ones aimed at main. Work arrives here as a
+  # stack, and a pull request onto the branch below it in the stack is the
+  # normal case, not the exception.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -15,11 +17,17 @@ jobs:
       - name: Check out the repository
         uses: https://data.forgejo.org/actions/checkout@v6
 
+      # A step's exit status is its last command's, and that last command is an
+      # echo that always succeeds. So `set -e` to stop at the first failure, and
+      # a version check at the end to assert the thing is actually there: a
+      # toolchain step that installs nothing must not pass.
       - name: Install the Rust toolchain
         run: |
-          curl --proto '=https' --tlsv1.2 -fsS https://sh.rustup.rs \
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
             | sh -s -- -y --profile minimal --default-toolchain 1.96.0 --component clippy,rustfmt
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/cargo" --version
 
       - name: Test
         run: cargo test --workspace
@@ -32,3 +40,40 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all --check
+
+  # The C# side. Separate from `check` because it shares nothing with it: a
+  # different toolchain, and the game's own assemblies, which have to be
+  # fetched before anything will compile.
+  mods:
+    runs-on: docker
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: https://data.forgejo.org/actions/checkout@v6
+
+      # -L is not optional: dot.net answers 301 to builds.dotnet.microsoft.com,
+      # and a 301 is not an error to `curl -f`, so without it curl writes an
+      # empty file and exits 0, bash runs the empty file and exits 0, and the
+      # step goes green having installed nothing. `set -e` and the closing
+      # version check are the same lesson as the Rust step above.
+      - name: Install the .NET SDK
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -fsSL \
+            -o /tmp/dotnet-install.sh https://dot.net/v1/dotnet-install.sh
+          bash /tmp/dotnet-install.sh --channel 9.0 --install-dir "$HOME/.dotnet"
+          echo "$HOME/.dotnet" >> "$GITHUB_PATH"
+          "$HOME/.dotnet/dotnet" --version
+
+      # The three assemblies, not the 2.0G install: CI compiles the mods, it
+      # does not run the game.
+      - name: Fetch the pinned assemblies
+        env:
+          STS2_FORGE_TOKEN: ${{ secrets.STS2_FORGE_TOKEN }}
+          STS2_FORGE_URL: ${{ github.server_url }}
+        run: ./mod/game.sh fetch
+
+      # Sts2PinDir follows Sts2GameDir, so overriding the one points both at
+      # what was fetched.
+      - name: Build the mods
+        run: ./mod/build.sh -p:Sts2GameDir="$HOME/.local/share/sts2/pin"
