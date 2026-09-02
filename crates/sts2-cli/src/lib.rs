@@ -10,5 +10,6 @@ pub mod coverage;
 pub(crate) mod fixture;
 pub mod render;
 pub mod runs;
+pub mod tui;
 
 pub use render::Readable;
