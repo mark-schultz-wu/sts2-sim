@@ -6,6 +6,7 @@
 //! drifts.
 
 pub mod choose;
+pub mod moves;
 
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
