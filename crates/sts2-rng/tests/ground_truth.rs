@@ -1,5 +1,8 @@
 //! Replays `megarandom.txt`, dumped from the game, and requires an exact match.
-//! Generic over [`GameRng`], so a replacement implementation has to pass the same fixture. Each block reseeds and draws in index order, so index `0` means reseed.
+//!
+//! Generic over [`GameRng`], so a replacement implementation has to pass the
+//! same fixture. Each block reseeds and draws in index order, so index `0`
+//! means reseed.
 
 use sts2_rng::{Bound, GameRng, Interval, MegaRng, Span};
 
@@ -106,7 +109,7 @@ fn draws<G: GameRng>() -> usize {
 
 #[test]
 fn every_draw_matches_the_game() {
-    // An emptied fixture will pass while proving nothing.
+    // An emptied fixture would pass while proving nothing.
     assert_eq!(
         draws::<MegaRng>(),
         1024,
@@ -157,7 +160,8 @@ fn named_streams_land_on_the_right_seed() {
     assert_eq!(checked, 15);
 }
 
-/// A modulo implementation will pass a weaker version of the fixture test, so pin a bound where the two disagree.
+/// A modulo implementation passes a weaker version of the fixture test, so pin
+/// a bound where the two disagree.
 #[test]
 fn bounded_draws_are_scaled_not_reduced() {
     let mut scaled = MegaRng::new(42);
@@ -167,7 +171,8 @@ fn bounded_draws_are_scaled_not_reduced() {
     assert!(differs, "modulo is indistinguishable at this bound");
 }
 
-/// Streams are shared, so a method consuming an extra draw shifts everything after it. This is also what makes `fast_forward` able to replay.
+/// Streams are shared, so a method consuming an extra draw shifts everything
+/// after it. This is also what makes `fast_forward` able to replay.
 #[test]
 fn every_method_consumes_exactly_one_draw() {
     let probes: [&dyn Fn(&mut MegaRng); 8] = [
@@ -211,7 +216,8 @@ fn every_method_consumes_exactly_one_draw() {
     }
 }
 
-/// Seeking backwards is not a slower seek, it is meaningless, and it is now a value the caller handles rather than a panic.
+/// Seeking backwards is not a slower seek, it is meaningless. It is now a value
+/// the caller handles rather than a panic.
 #[test]
 fn a_stream_refuses_to_rewind() {
     let mut rng = MegaRng::with_counter(7, 10).unwrap();

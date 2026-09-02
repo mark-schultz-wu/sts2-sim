@@ -25,6 +25,7 @@ use sts2_rng::Seed;
 pub enum Command<V: ContentVersion> {
     /// Starts a fresh run.
     Start {
+        #[serde(serialize_with = "seed::serialize")]
         seed: Seed,
         character: V::Character,
         ascension: V::AscensionLevel,
@@ -117,6 +118,15 @@ pub struct TakeReward {
     pub card: Option<usize>,
 }
 
+mod seed {
+    use serde::Serializer;
+    use sts2_core::Seed;
+
+    pub fn serialize<S: Serializer>(seed: &Seed, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(seed.as_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,7 +147,7 @@ mod tests {
     #[test]
     fn start_carries_what_was() {
         let full = Cmd::Start {
-            seed: Seed::new("abc").expect("a seed"),
+            seed: Seed::new("ABC").expect("a seed"),
             character: Character::Silent,
             ascension: AscensionLevel::AscendersBane,
             modifiers: vec![Modifier::Draft],

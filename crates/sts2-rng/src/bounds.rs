@@ -1,41 +1,41 @@
 //! Argument types that carry their own validity.
-//! The game guards its draw methods by throwing, and a port that mirrors those guards with assertions has moved the invariant into a comment. These move it into the type instead: a [`Bound`] or a [`Span`] cannot be built wrong, so the draw methods have nothing left to check.
-//! The two span shapes are not interchangeable, because the game's guards are not. `NextInt(min, max)` and `NextUnsignedInt` reject `min >= max`, they index a half-open span that must contain something. The float and gaussian bounds reject only `min > max`. They scale or accept, and a single point is meaningful. Conflating them will let an empty span reach a method that divides by its width.
-//! Both constructors take `T: PartialOrd` and require the comparison to *hold* rather than requiring its negation to fail. For floats that rejects `NaN` for free, since every comparison against `NaN` is false.
+//!
+//! The game throws when draw arguments violate their bounds. [`Bound`] and
+//! [`Span`] encode those invariants before a draw begins.
+//!
+//! Integer spans are half-open and reject `min >= max`. Float and Gaussian
+//! bounds allow one point and reject only `min > max`. Constructors require the
+//! valid comparison to hold, which also rejects unordered floating-point values
+//! such as `NaN`.
 
-/// Why an argument cannot be built.
+/// Why an argument was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    /// A bound outside `1.=i32::MAX`. Zero will make a draw's range empty. The game throws on it.
+    /// A bound outside `1..=i32::MAX`. Zero makes a draw's range empty, and
+    /// the game throws on it.
     #[error("a draw bound must be in 1..=i32::MAX")]
     Bound,
 
-    /// A half-open span with nothing in it, `min >= max`, or a `NaN`.
+    /// A half-open span with nothing in it: `min >= max`, or a `NaN`.
     #[error("a half-open span must contain something")]
     Empty,
 
-    /// A closed interval whose ends are inverted, `min > max`, or a `NaN`.
+    /// A closed interval whose ends are inverted: `min > max`, or a `NaN`.
     #[error("an interval's end must not precede its start")]
     Inverted,
 
-    /// A seed with nothing in it once trimmed.
-    #[error("a seed must have at least one character")]
-    EmptySeed,
-
-    /// A character outside the seed alphabet.
-    ///
-    /// Named rather than counted, because the near-miss is the interesting case. The alphabet omits `I` and `O` so they cannot be confused with `1` and `0`, and a seed carrying either is folded rather than refused. What reaches here is something else entirely, punctuation, or a letter from another script.
-    #[error("{0:?} is not a character a seed can contain")]
-    SeedCharacter(char),
-
-    /// A counter asked to move backwards. A stream is a position in a sequence, so rewinding is not a slower version of seeking, it is meaningless.
+    /// A counter asked to move backwards. A stream is a position in a
+    /// sequence, so rewinding is not a slower version of seeking, it is
+    /// meaningless.
     #[error("cannot rewind a stream from {from} to {to}")]
     Rewind { from: i32, to: i32 },
 }
 
-/// An exclusive upper bound in `1.=i32::MAX`.
+/// An exclusive upper bound in `1..=i32::MAX`.
 ///
-/// Not [`core::num::NonZeroU32`], which will still admit values above `i32::MAX`, the game's parameter is an `int`. Scaling a double by something larger truncates to nonsense rather than failing.
+/// Not [`core::num::NonZeroU32`], which still admits values above `i32::MAX`.
+/// The game's parameter is an `int`, and scaling a double by something larger
+/// truncates to nonsense rather than failing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Bound(i32);
 
@@ -58,7 +58,7 @@ impl TryFrom<i32> for Bound {
     }
 }
 
-/// A half-open span `min.max`, known to contain something.
+/// A half-open span `min..max`, known to contain something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span<T> {
     min: T,
@@ -85,7 +85,7 @@ impl<T: Copy> Span<T> {
     }
 }
 
-/// A closed interval `min.=max`, known ordered. Can be a single point.
+/// A closed interval `min..=max`, known ordered. A single point is allowed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Interval<T> {
     min: T,
