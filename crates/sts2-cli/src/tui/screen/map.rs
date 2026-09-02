@@ -17,39 +17,6 @@ use crate::tui::theme;
 
 use super::titled;
 
-/// A letter per room type, close to the game's own icons.
-///
-/// By the build's name for the type and not by a discriminant, because this
-/// crate does not know which map point types a build has. An unfamiliar one is a
-/// dot rather than a reason to stop drawing.
-fn glyph(kind: &str) -> char {
-    match kind {
-        "Monster" => 'M',
-        "Elite" => 'E',
-        "Shop" => '$',
-        "Treasure" => 'T',
-        "RestSite" => 'R',
-        "Unknown" => '?',
-        "Boss" => 'B',
-        "Ancient" => 'A',
-        _ => '.',
-    }
-}
-
-fn describe(kind: &str) -> &'static str {
-    match kind {
-        "Monster" => "a fight",
-        "Elite" => "an elite",
-        "Shop" => "a shop",
-        "Treasure" => "a chest",
-        "RestSite" => "a fire",
-        "Unknown" => "unknown",
-        "Boss" => "the boss",
-        "Ancient" => "an ancient",
-        _ => "somewhere",
-    }
-}
-
 pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, map: &Map<V>)
 where
     V: ContentVersion,
@@ -94,7 +61,7 @@ pub fn grid_of<V: ContentVersion>(frame: &mut Frame, inner: Rect, map: &Map<V>, 
             };
 
             let kind = spelling(&node.kind);
-            let mark = glyph(&kind);
+            let mark = crate::map_point::mark(&kind).glyph;
             let tint = theme::room(&kind);
 
             // Where the run is standing. `@` rather than the room's letter,
@@ -154,7 +121,7 @@ fn legend() -> Vec<Span<'static>> {
     let mut spans = vec![Span::raw("    ")];
     for (kind, word) in SHOWN {
         spans.push(Span::styled(
-            glyph(kind).to_string(),
+            crate::map_point::mark(kind).glyph.to_string(),
             theme::room(kind).bold(),
         ));
         spans.push(Span::styled(format!(" {word}  "), theme::dim()));
@@ -211,7 +178,7 @@ fn where_to<V: ContentVersion>(
                         .unwrap_or_default();
                     (
                         kind.clone(),
-                        format!(" {} ", describe(&kind)),
+                        format!(" {} ", crate::map_point::mark(&kind).description),
                         format!("  {},{}", to.col, to.row),
                     )
                 }
@@ -226,7 +193,10 @@ fn where_to<V: ContentVersion>(
             };
             Line::from(vec![
                 Span::styled(format!(" {} ", n + 1), theme::label()),
-                Span::styled(glyph(&kind).to_string(), theme::room(&kind).bold()),
+                Span::styled(
+                    crate::map_point::mark(&kind).glyph.to_string(),
+                    theme::room(&kind).bold(),
+                ),
                 Span::styled(what, style),
                 Span::styled(where_, theme::dim()),
             ])

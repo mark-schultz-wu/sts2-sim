@@ -24,7 +24,6 @@ mod state;
 use prose::{asker as who_asked, one_line};
 use state::state_of;
 
-use serde_json::Value;
 use std::fmt;
 use sts2_core::{Applied, CardIdent, ContentVersion, FlagSet, ModelId, Question, RewardKind};
 
@@ -300,19 +299,8 @@ pub(super) fn render_run(name: &str, count: usize) -> String {
     }
 }
 
-/// One id, as the build spells it.
-///
-/// Uses serde, where generated ids carry their real names. Rust variant names
-/// are only codegen approximations.
-///
-/// Naming belongs in this front end, not `sts2-core`. An unrecognized shape
-/// falls back to `Debug` so display can continue.
-pub fn spelling<T: serde::Serialize + std::fmt::Debug>(id: &T) -> String {
-    match serde_json::to_value(id) {
-        Ok(Value::String(name)) => name,
-        _ => format!("{id:?}"),
-    }
-}
+// The display-safe spelling remains under `render` for existing rendering callers.
+pub use crate::id::display as spelling;
 
 /// A card identity, the way the observation spells one.
 ///
