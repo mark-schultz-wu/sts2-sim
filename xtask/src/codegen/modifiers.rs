@@ -1,11 +1,12 @@
-//! Every modifier: whether a run can offer it, what it rules out, and the two things it changes about how a run begins.
-//! A modifier is a run-wide rule chosen before the run starts. Almost all of what one *does* is hooks, `ModifyGeneratedMap`, `TryModifyRewardsLate`, `ModifyRestSiteHealAmount`, and hooks are code.
-//! # Which hooks are not here
-//! Deliberately. A simulator's ported Midas already knows it hooks rewards. Therefore a list of overridden method names will describe the game's API surface rather than the game. A caller can do nothing with it that the ported body does not already do. What is generated is what a caller needs *before* any ported code runs: whether a run can pick this, what picking it rules out. The two things that happen at setup.
-//! # `kind` is the two lists, and there is a third state
-//! `ModelDb.GoodModifiers` and `BadModifiers` are what a run offers from, and between them they are the whole classification. A modifier in neither is one no run can pick. This is `None` here and is the deprecated one, the same shape the deprecated act takes, and for the same reason.
-//! # Exclusion is a set, not a pair
-//! `MutuallyExclusiveModifiers` is a list of sets and there is one set in it, holding three. A pair has been the easy read and has been wrong the moment a fourth arrived. Therefore `EXCLUSIVE` is a list of `ModifierSet` and `intersects` is the question a caller has: does what I have chosen already conflict with this.
+//! Every modifier: whether a run can offer it, what it rules out, and the two
+//! things it changes about how a run begins.
+//!
+//! A modifier is a run-wide rule chosen before the run starts. Almost all of
+//! what one *does* is hooks: `ModifyGeneratedMap`, `TryModifyRewardsLate`,
+//! `ModifyRestSiteHealAmount`. Hooks are code.
+//!
+//! The xtask README says which hooks are deliberately not generated, what the
+//! third `kind` is, and why exclusion is a set.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -16,7 +17,8 @@ use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
 
 /// How the dump spells each list, and the variant it becomes.
 ///
-/// `unused` is not a variant: a modifier no run can offer has no kind, which is `Option::None` rather than a third thing to be.
+/// `unused` is not a variant: a modifier no run can offer has no kind, which is
+/// `Option::None` rather than a third thing to be.
 const KINDS: [(&str, &str, &str); 2] = [
     ("good", "Good", "Offered as a boon. Nine of the seventeen."),
     ("bad", "Bad", "Offered as a drawback. Seven."),
@@ -112,7 +114,7 @@ fn exclusive(dump: &Dump, modifiers: &[&Vec<String>]) -> Result<Vec<Vec<String>>
         ));
     }
 
-    // A group of one rules nothing out, and is a sign the dump lost a
+    // A group of one rules nothing out, and would be a sign the dump lost a
     // member rather than that the game has a singleton.
     for (at, group) in ordered.iter().enumerate() {
         if group.len() < 2 {
@@ -132,7 +134,7 @@ fn emit_kind(out: &mut String) {
         "/// Which list a run offers a modifier from.\n\
          ///\n\
          /// The two are `ModelDb.GoodModifiers` and `BadModifiers`, and a\n\
-         /// modifier in neither is one no run can pick at all, that is no kind\n\
+         /// modifier in neither is one no run can pick at all — that is no kind\n\
          /// rather than a third one."
     )
     .unwrap();
@@ -157,10 +159,9 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
                        Three separate `ModifierModel` members rather than a game enum,\n\
                        so the numbering is the order the dump writes the columns in.",
             set_doc: "The flags a modifier has.",
-            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            members: &sets::counted(FLAGS.map(|(name, _, doc)| (name, doc))),
             declare: true,
             extras: &[],
-            bits: FLAGS.len() - 1,
         },
     )
 }
@@ -257,14 +258,8 @@ fn emit_exclusive(
     modifiers: &[&Vec<String>],
     exclusive: &[Vec<String>],
 ) -> Result<(), String> {
-    let members: Vec<(String, String)> = modifiers
-        .iter()
-        .map(|row| (camel(&row[1]), String::new()))
-        .collect();
-    let members: Vec<(&str, &str)> = members
-        .iter()
-        .map(|(name, doc)| (name.as_str(), doc.as_str()))
-        .collect();
+    let names: Vec<String> = modifiers.iter().map(|row| camel(&row[1])).collect();
+    let members = sets::counted(names.iter().map(|name| (name.as_str(), "")));
 
     sets::plain(
         out,
@@ -276,7 +271,6 @@ fn emit_exclusive(
             members: &members,
             declare: false,
             extras: &[sets::Extra::IsEmpty, sets::Extra::Intersects],
-            bits: modifiers.len() - 1,
         },
     )?;
 
@@ -286,7 +280,7 @@ fn emit_exclusive(
          ///\n\
          /// One group of three in this build, and a list of sets rather than a\n\
          /// list of pairs because that is what the game holds: reading it as\n\
-         /// pairs is right today and wrong the moment a fourth member\n\
+         /// pairs would be right today and wrong the moment a fourth member\n\
          /// arrived. `ModifierSet::intersects` is the question a caller has.\n\
          pub const EXCLUSIVE: [ModifierSet; {}] = [",
         exclusive.len()

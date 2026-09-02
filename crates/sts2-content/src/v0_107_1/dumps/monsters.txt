@@ -11,6 +11,7 @@
 # scalehp <monster> <ascension> <minHp> <maxHp>
 # scaleintent <monster> <state> <index> <ascension> <count> <damage>
 # scalebranch <monster> <state> <index> <ascension> <weight>
+# installed <state> <declaringType>
 # rows above are ascension 0; a scale* row is the level at which a value changes
 act OVERGROWTH ASSASSIN_RUBY_RAIDER
 act OVERGROWTH AXE_RUBY_RAIDER
@@ -1202,6 +1203,10 @@ enum IntentType 11 StatusCard
 enum IntentType 12 CardDebuff
 enum IntentType 13 DeathBlow
 enum IntentType 14 Unknown
+installed REVIVE_MOVE IllusionPower
+installed STUNNED Creature
+installed UNSET_MOVE MoveState
+# 3 installed outside a machine, 1 unreadable, 0 tokens unresolved
 scalehp AEONGLASS 8 535 535
 scalehp ASSASSIN_RUBY_RAIDER 8 19 24
 scalehp AXEBOT 8 76 86

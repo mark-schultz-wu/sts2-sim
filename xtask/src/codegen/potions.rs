@@ -1,10 +1,11 @@
 //! Every potion's static data, and which pool stocks it.
-//! What a potion does is `OnUse`, which 63 of the 65 override, and that is ported by hand. What is table is where it comes from, when it can be drunk, and what it can be pointed at.
-//! # Both `None`s throw
-//! `PotionUsage.None` is not generated at all: no potion has it, and `NPotionPopup` throws `"No potions must have 'None' usage."` when it sees one. The game says it must not exist and the build agrees.
-//! `PotionRarity.None` is generated as an absent `rarity`, which is the move `CardRarity.None` made and for the same reason: `PotionRarityExtensions .ToLocString` throws `ArgumentOutOfRangeException` on it. Therefore it is not a rarity the game can name. Two models carry it, `DEPRECATED_POTION` and a mock, and neither is content. Therefore `Option<PotionRarity>` says the true thing: they have no rarity rather than a rarity called none.
-//! # Pools partition
-//! Every potion is stocked by exactly one pool, which is not true next door: a relic can be in two and a monster in none. So the buckets are the pools, with no crossover file and no leftovers.
+//!
+//! What a potion does is `OnUse`, which 63 of the 65 override, and that is
+//! ported by hand. What is table is where it comes from, when it can be drunk,
+//! and what it can be pointed at.
+//!
+//! The xtask README says what each of the game's two `None`s becomes, and why
+//! the pools partition.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -92,8 +93,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
 
     // Which pool stocks a potion. Exactly one each, which is what makes the
-    // buckets a partition, so a second is an error rather than a crossover
-    // file nothing will ever land in.
+    // buckets a partition — so a second is an error rather than a crossover
+    // file nothing would ever land in.
     let mut pools: Vec<String> = Vec::new();
     let mut pool_of: BTreeMap<String, String> = BTreeMap::new();
     for row in dump.of("pool") {
@@ -168,9 +169,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                       \n\
                       `PassesCustomUsabilityCheck` is `virtual` and `FOUL_POTION`\n\
                       overrides it, which is the whole reason this is two words.",
-            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            members: &sets::counted(FLAGS.map(|(name, _, doc)| (name, doc))),
             declare: true,
-            bits: FLAGS.len() - 1,
             extras: &[],
         },
     )?;
@@ -330,41 +330,43 @@ fn emit_potions(
     }
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(out, "impl Potion {{").unwrap();
+    let mut extras = String::new();
     writeln!(
-        out,
-        "    /// Every potion, so callers can sweep the table without a way to\n\
-         \x20   /// enumerate an enum."
-    )
-    .unwrap();
-    writeln!(out, "    pub const ALL: [Potion; {}] = [", potions.len()).unwrap();
-    for row in potions {
-        writeln!(out, "        Potion::{},", camel(&row[1])).unwrap();
-    }
-    writeln!(out, "    ];\n").unwrap();
-
-    writeln!(
-        out,
+        extras,
         "    /// The pool that stocks this potion.\n\
          \x20   ///\n\
          \x20   /// Exactly one, unlike a relic's: codegen refuses a potion in two\n\
          \x20   /// pools or in none."
     )
     .unwrap();
-    writeln!(out, "    pub const fn pool(self) -> PotionPool {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    writeln!(extras, "    fn pool(self) -> PotionPool {{").unwrap();
+    writeln!(extras, "        match self {{").unwrap();
     for row in potions {
         let pool = &pool_of[&row[1]];
         writeln!(
-            out,
+            extras,
             "            Self::{} => PotionPool::{},",
             camel(&row[1]),
             camel(pool.strip_suffix("_POTION_POOL").unwrap_or(pool))
         )
         .unwrap();
     }
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}\n").unwrap();
+    writeln!(extras, "        }}").unwrap();
+    writeln!(extras, "    }}").unwrap();
+
+    writeln!(out, "impl sts2_core::Table for Potion {{").unwrap();
+    writeln!(out, "    type Data = PotionData;\n").unwrap();
+    writeln!(
+        out,
+        "    /// Every potion, so callers can sweep the table without a way to\n\
+         \x20   /// enumerate an enum."
+    )
+    .unwrap();
+    writeln!(out, "    const ALL: &'static [Self] = &[").unwrap();
+    for row in potions {
+        writeln!(out, "        Potion::{},", camel(&row[1])).unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
 
     writeln!(
         out,
@@ -373,7 +375,7 @@ fn emit_potions(
          \x20   /// One arm per potion, naming the file its row lives in."
     )
     .unwrap();
-    writeln!(out, "    pub const fn data(self) -> PotionData {{").unwrap();
+    writeln!(out, "    fn data(self) -> PotionData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for row in potions {
         writeln!(
@@ -387,6 +389,11 @@ fn emit_potions(
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl sts2_core::PotionTable for Potion {{").unwrap();
+    writeln!(out, "    type Pool = PotionPool;\n").unwrap();
+    out.push_str(&extras);
     writeln!(out, "}}").unwrap();
 
     Ok(())

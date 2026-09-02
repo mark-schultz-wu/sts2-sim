@@ -309,10 +309,12 @@ pub enum Potion {
     WeakPotion,
 }
 
-impl Potion {
+impl sts2_core::Table for Potion {
+    type Data = PotionData;
+
     /// Every potion, so callers can sweep the table without a way to
     /// enumerate an enum.
-    pub const ALL: [Potion; 65] = [
+    const ALL: &'static [Self] = &[
         Potion::Ashwater,
         Potion::AttackPotion,
         Potion::BeetleJuice,
@@ -380,84 +382,10 @@ impl Potion {
         Potion::WeakPotion,
     ];
 
-    /// The pool that stocks this potion.
-    ///
-    /// Exactly one, unlike a relic's: codegen refuses a potion in two
-    /// pools or in none.
-    pub const fn pool(self) -> PotionPool {
-        match self {
-            Self::Ashwater => PotionPool::Ironclad,
-            Self::AttackPotion => PotionPool::Shared,
-            Self::BeetleJuice => PotionPool::Shared,
-            Self::BlessingOfTheForge => PotionPool::Shared,
-            Self::BlockPotion => PotionPool::Shared,
-            Self::BloodPotion => PotionPool::Ironclad,
-            Self::BoneBrew => PotionPool::Necrobinder,
-            Self::BottledPotential => PotionPool::Shared,
-            Self::Clarity => PotionPool::Shared,
-            Self::ColorlessPotion => PotionPool::Shared,
-            Self::CosmicConcoction => PotionPool::Regent,
-            Self::CunningPotion => PotionPool::Silent,
-            Self::CureAll => PotionPool::Shared,
-            Self::DeprecatedPotion => PotionPool::Deprecated,
-            Self::DexterityPotion => PotionPool::Shared,
-            Self::DistilledChaos => PotionPool::Shared,
-            Self::DropletOfPrecognition => PotionPool::Shared,
-            Self::Duplicator => PotionPool::Shared,
-            Self::EnergyPotion => PotionPool::Shared,
-            Self::EntropicBrew => PotionPool::Shared,
-            Self::EssenceOfDarkness => PotionPool::Defect,
-            Self::ExplosiveAmpoule => PotionPool::Shared,
-            Self::FairyInABottle => PotionPool::Shared,
-            Self::FirePotion => PotionPool::Shared,
-            Self::FlexPotion => PotionPool::Shared,
-            Self::FocusPotion => PotionPool::Defect,
-            Self::Fortifier => PotionPool::Shared,
-            Self::FoulPotion => PotionPool::Event,
-            Self::FruitJuice => PotionPool::Shared,
-            Self::FyshOil => PotionPool::Shared,
-            Self::GamblersBrew => PotionPool::Shared,
-            Self::GhostInAJar => PotionPool::Silent,
-            Self::GigantificationPotion => PotionPool::Shared,
-            Self::GlowwaterPotion => PotionPool::Event,
-            Self::HeartOfIron => PotionPool::Shared,
-            Self::KingsCourage => PotionPool::Regent,
-            Self::LiquidBronze => PotionPool::Shared,
-            Self::LiquidMemories => PotionPool::Shared,
-            Self::LuckyTonic => PotionPool::Shared,
-            Self::MazalethsGift => PotionPool::Shared,
-            Self::MockDiscardAndAddShivsPotion => PotionPool::Mock,
-            Self::OrobicAcid => PotionPool::Shared,
-            Self::PoisonPotion => PotionPool::Silent,
-            Self::PotionOfBinding => PotionPool::Shared,
-            Self::PotionOfCapacity => PotionPool::Defect,
-            Self::PotionOfDoom => PotionPool::Necrobinder,
-            Self::PotionShapedRock => PotionPool::Token,
-            Self::PotOfGhouls => PotionPool::Necrobinder,
-            Self::PowderedDemise => PotionPool::Shared,
-            Self::PowerPotion => PotionPool::Shared,
-            Self::RadiantTincture => PotionPool::Shared,
-            Self::RegenPotion => PotionPool::Shared,
-            Self::ShacklingPotion => PotionPool::Shared,
-            Self::ShipInABottle => PotionPool::Shared,
-            Self::SkillPotion => PotionPool::Shared,
-            Self::SneckoOil => PotionPool::Shared,
-            Self::SoldiersStew => PotionPool::Ironclad,
-            Self::SpeedPotion => PotionPool::Shared,
-            Self::StableSerum => PotionPool::Shared,
-            Self::StarPotion => PotionPool::Regent,
-            Self::StrengthPotion => PotionPool::Shared,
-            Self::SwiftPotion => PotionPool::Shared,
-            Self::TouchOfInsanity => PotionPool::Shared,
-            Self::VulnerablePotion => PotionPool::Shared,
-            Self::WeakPotion => PotionPool::Shared,
-        }
-    }
-
     /// The rarity, the usage, the target and the flags.
     ///
     /// One arm per potion, naming the file its row lives in.
-    pub const fn data(self) -> PotionData {
+    fn data(self) -> PotionData {
         match self {
             Self::Ashwater => ironclad::ASHWATER,
             Self::AttackPotion => shared::ATTACK_POTION,
@@ -524,6 +452,84 @@ impl Potion {
             Self::TouchOfInsanity => shared::TOUCH_OF_INSANITY,
             Self::VulnerablePotion => shared::VULNERABLE_POTION,
             Self::WeakPotion => shared::WEAK_POTION,
+        }
+    }
+}
+
+impl sts2_core::PotionTable for Potion {
+    type Pool = PotionPool;
+
+    /// The pool that stocks this potion.
+    ///
+    /// Exactly one, unlike a relic's: codegen refuses a potion in two
+    /// pools or in none.
+    fn pool(self) -> PotionPool {
+        match self {
+            Self::Ashwater => PotionPool::Ironclad,
+            Self::AttackPotion => PotionPool::Shared,
+            Self::BeetleJuice => PotionPool::Shared,
+            Self::BlessingOfTheForge => PotionPool::Shared,
+            Self::BlockPotion => PotionPool::Shared,
+            Self::BloodPotion => PotionPool::Ironclad,
+            Self::BoneBrew => PotionPool::Necrobinder,
+            Self::BottledPotential => PotionPool::Shared,
+            Self::Clarity => PotionPool::Shared,
+            Self::ColorlessPotion => PotionPool::Shared,
+            Self::CosmicConcoction => PotionPool::Regent,
+            Self::CunningPotion => PotionPool::Silent,
+            Self::CureAll => PotionPool::Shared,
+            Self::DeprecatedPotion => PotionPool::Deprecated,
+            Self::DexterityPotion => PotionPool::Shared,
+            Self::DistilledChaos => PotionPool::Shared,
+            Self::DropletOfPrecognition => PotionPool::Shared,
+            Self::Duplicator => PotionPool::Shared,
+            Self::EnergyPotion => PotionPool::Shared,
+            Self::EntropicBrew => PotionPool::Shared,
+            Self::EssenceOfDarkness => PotionPool::Defect,
+            Self::ExplosiveAmpoule => PotionPool::Shared,
+            Self::FairyInABottle => PotionPool::Shared,
+            Self::FirePotion => PotionPool::Shared,
+            Self::FlexPotion => PotionPool::Shared,
+            Self::FocusPotion => PotionPool::Defect,
+            Self::Fortifier => PotionPool::Shared,
+            Self::FoulPotion => PotionPool::Event,
+            Self::FruitJuice => PotionPool::Shared,
+            Self::FyshOil => PotionPool::Shared,
+            Self::GamblersBrew => PotionPool::Shared,
+            Self::GhostInAJar => PotionPool::Silent,
+            Self::GigantificationPotion => PotionPool::Shared,
+            Self::GlowwaterPotion => PotionPool::Event,
+            Self::HeartOfIron => PotionPool::Shared,
+            Self::KingsCourage => PotionPool::Regent,
+            Self::LiquidBronze => PotionPool::Shared,
+            Self::LiquidMemories => PotionPool::Shared,
+            Self::LuckyTonic => PotionPool::Shared,
+            Self::MazalethsGift => PotionPool::Shared,
+            Self::MockDiscardAndAddShivsPotion => PotionPool::Mock,
+            Self::OrobicAcid => PotionPool::Shared,
+            Self::PoisonPotion => PotionPool::Silent,
+            Self::PotionOfBinding => PotionPool::Shared,
+            Self::PotionOfCapacity => PotionPool::Defect,
+            Self::PotionOfDoom => PotionPool::Necrobinder,
+            Self::PotionShapedRock => PotionPool::Token,
+            Self::PotOfGhouls => PotionPool::Necrobinder,
+            Self::PowderedDemise => PotionPool::Shared,
+            Self::PowerPotion => PotionPool::Shared,
+            Self::RadiantTincture => PotionPool::Shared,
+            Self::RegenPotion => PotionPool::Shared,
+            Self::ShacklingPotion => PotionPool::Shared,
+            Self::ShipInABottle => PotionPool::Shared,
+            Self::SkillPotion => PotionPool::Shared,
+            Self::SneckoOil => PotionPool::Shared,
+            Self::SoldiersStew => PotionPool::Ironclad,
+            Self::SpeedPotion => PotionPool::Shared,
+            Self::StableSerum => PotionPool::Shared,
+            Self::StarPotion => PotionPool::Regent,
+            Self::StrengthPotion => PotionPool::Shared,
+            Self::SwiftPotion => PotionPool::Shared,
+            Self::TouchOfInsanity => PotionPool::Shared,
+            Self::VulnerablePotion => PotionPool::Shared,
+            Self::WeakPotion => PotionPool::Shared,
         }
     }
 }

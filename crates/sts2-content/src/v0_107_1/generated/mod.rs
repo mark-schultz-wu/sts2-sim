@@ -17,3 +17,5 @@ pub mod orbs;
 pub mod potions;
 pub mod powers;
 pub mod relics;
+pub mod restsite;
+pub mod runstate;

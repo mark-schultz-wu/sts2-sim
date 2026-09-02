@@ -1,15 +1,12 @@
-//! An orb is almost entirely behaviour, `Passive` and `Evoke` pick targets, deal damage, grant block or energy, and that is code. Three things around them are table, and one of them is a trap.
-//! # The list a roll indexes
-//! There are two lists of orbs in this build and they are not the same list. `ModelDb.Orbs` holds four and is used by nothing that plays. `OrbModel.GetRandomOrb` draws from a private `_validOrbs` holding five, and that is what `Chaos` and `TrashToTreasurePower` roll against. Generating from `ModelDb.Orbs` will quietly make Chaos never channel a Glass orb.
-//! `ROLLABLE` is the second list, in its own order. This is because `GetRandomOrb` is `rng.NextItem(_validOrbs)`: the position of an orb in that array is which roll produces it. Therefore the order is the RNG contract and not a listing order.
-//! The first list is not generated, a caller reaching for it is reaching for the trap. But generation checks it: every orb `ModelDb.Orbs` names has to be one a roll can produce. This is true here and is what makes the dead list harmless. A build that broke it will fail generation rather than leave two plausible lists side by side.
-//! # The values are numbers, and nothing more
-//! There is no taxonomy of *kinds* of orb value here. There was: an earlier version sorted them by whether the getter read a literal, a field the orb keeps, or an expression over other values. That sorted the C# rather than the orb, and Plasma is the case that shows it. Plasma's evoke is twice its passive and is spelled `1m` and `2m`. Glass's evoke is twice its passive and is spelled `PassiveVal * 2`. The same relationship, and the table was giving them different shapes for no reason a caller can act on. A simulator that can double a passive can double either one, whether the number behind it is a literal or a counter it keeps.
-//! So a value is `Option<NonMaxU8>` plus [`hooked`](#hooked-is-the-focus-question), and `None` carries no meaning beyond "the getter names no number to take". Glass's evoke is the only one, and it is not a special orb, it is a getter with no numeral in it. How any of these values combine, decay or accumulate is the orb's body, which is ported by hand like every other body in this crate.
-//! The dump still measures which values live in a field the orb keeps. A build that moves one changes behaviour. Tests pin this fact instead of generating it.
-//! # `hooked` is the Focus question
-//! A hooked value runs `ModifyOrbValue`, and two models implement that hook: `FocusPower` adds its amount to every hooked value, and `InfusedCore` adds to Lightning's. That makes the flag worth carrying, an unhooked value is one Focus does not reach. This is Plasma's energy at either end, and Dark's evoke, which feels Focus only through the passive it accumulates.
-//! The bodies: which creature Lightning hits, that Dark picks the weakest enemy, that Glass hits everything. Presentation: colours, icons, sounds and text.
+//! Every orb: its two values, when its passive fires, and the list a random
+//! orb is drawn from.
+//!
+//! An orb is almost entirely behaviour. `Passive` and `Evoke` pick targets, deal
+//! damage, grant block or energy, and that is code. Three things around them are
+//! table, and one of them is a trap.
+//!
+//! The xtask README says which of the two orb lists a roll indexes. It also
+//! says why a value is a number and nothing more, and what `hooked` asks.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -20,7 +17,8 @@ use super::{Build, DERIVES, Dump, banner, camel, repr};
 
 /// How the dump spells each trigger, and the variant it becomes.
 ///
-/// `none` is not a variant: an orb with no passive has no trigger, which is `Option::None` rather than a third way to fire.
+/// `none` is not a variant: an orb with no passive has no trigger, which is
+/// `Option::None` rather than a third way to fire.
 const TRIGGERS: [(&str, &str, &str); 2] = [
     (
         "turnEnd",
@@ -77,7 +75,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
 /// The orbs a roll produces, in the order `NextItem` indexes them.
 ///
-/// Built from the index column rather than from dump order, because that column *is* the array's order and dump order is alphabetical.
+/// Built from the index column rather than from dump order, because that column
+/// *is* the array's order and dump order is alphabetical.
 fn rollable(orbs: &[&Vec<String>]) -> Result<Vec<String>, String> {
     let mut placed: BTreeMap<usize, String> = BTreeMap::new();
 
@@ -146,9 +145,9 @@ fn values(dump: &Dump, orbs: &[&Vec<String>]) -> Result<BTreeMap<String, [String
                     .map_err(|e| format!("{}: {} value {n}: {e}", row[1], row[2]))?;
                 // `NonMaxU8` spends 255 on being the absent marker, and this
                 // field's absence already means "the getter names no number".
-                // So a real 255 will arrive as `None` and read as no value at
+                // So a real 255 would arrive as `None` and read as no value at
                 // all. Every orb value in this build is 0-8, so this is dormant
-                //, it is here for the domain that adopts `NonMaxU8` with a
+                // — it is here for the domain that adopts `NonMaxU8` with a
                 // range that reaches the top of a byte.
                 if n == u8::MAX {
                     return Err(format!(
@@ -289,7 +288,7 @@ fn emit_orbs(
          /// `OrbModel.GetRandomOrb` is `rng.NextItem(_validOrbs)`, so this is\n\
          /// that array and the order is which orb a given roll gives. It is not\n\
          /// `ModelDb.Orbs`, which holds four of these and is used by nothing\n\
-         /// that plays, see the module docs.\n\
+         /// that plays — see the module docs.\n\
          pub const ROLLABLE: [Orb; {}] = [",
         rollable.len()
     )

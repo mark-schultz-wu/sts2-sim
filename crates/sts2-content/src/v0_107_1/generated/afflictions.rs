@@ -62,6 +62,20 @@ impl std::fmt::Debug for AfflictionFlags {
     }
 }
 
+impl sts2_core::FlagSet for AfflictionFlags {
+    type Member = AfflictionFlag;
+
+    const MEMBERS: &'static [AfflictionFlag] = &Self::MEMBERS;
+
+    fn from_members(members: &[AfflictionFlag]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: AfflictionFlag) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// What is true of an affliction with no run in progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AfflictionData {

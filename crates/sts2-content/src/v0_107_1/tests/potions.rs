@@ -1,5 +1,10 @@
 //! The potion table against the dump it came from.
-//! Both game `None` members throw when reached. The table omits one and represents the other as an absent `rarity`. These tests distinguish intentional omissions from accidental ones.
+//!
+//! What is particular here is that both of the game's `None`s throw when
+//! reached, and the table handles them differently. One is not generated at all
+//! and the other became an absent `rarity`. The tests below pin which is which.
+//! From the Rust side, a member missing for a good reason looks exactly like one
+//! missing by accident.
 
 use super::super::cards::TargetType;
 use super::super::potions::*;
@@ -7,6 +12,7 @@ use super::super::{POTIONS, VERSION};
 use super::{build, rows, wire};
 use crate::Field;
 use std::collections::{BTreeMap, BTreeSet};
+use sts2_core::{PotionTable, Table};
 
 fn potion(id: &str) -> Potion {
     *Potion::ALL
@@ -66,7 +72,9 @@ fn the_generated_table_matches_the_dump() {
 
 /// Every potion is stocked by exactly one pool.
 ///
-/// The reason the buckets are a clean partition. Not something the neighbouring domains manage: a relic can be in two pools, a monster in no act. An event in neither an act nor the pool. A potion is always in one.
+/// The reason the buckets are a clean partition, and not something the
+/// neighbouring domains manage. A relic can be in two pools, a monster in no
+/// act, an event in neither an act nor the pool. A potion is always in one.
 #[test]
 fn every_potion_is_in_exactly_one_pool() {
     let mut dumped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
@@ -101,7 +109,10 @@ fn every_potion_is_in_exactly_one_pool() {
 
 /// `PotionUsage::None` is not generated, and nothing has it.
 ///
-/// `NPotionPopup` throws `"No potions must have 'None' usage."` on the branch that will handle one. That is the game saying the member must not exist, and the build agreeing. Therefore dropping it is safe only as long as both hold, which is what this checks.
+/// `NPotionPopup` throws `"No potions should have 'None' usage."` on the branch
+/// that handles one. That is the game declaring the member out of bounds, and
+/// the build agreeing. Dropping it is safe only as long as both hold, which is
+/// what this checks.
 #[test]
 fn no_potion_has_the_usage_the_game_says_it_should_not() {
     assert!(
@@ -125,7 +136,11 @@ fn no_potion_has_the_usage_the_game_says_it_should_not() {
 
 /// `PotionRarity::None` became an absent rarity, and two models have it.
 ///
-/// Unlike the usage, something does carry this, so it cannot  be dropped. `PotionRarityExtensions.ToLocString` throws on it, so it is not a rarity the game can name, and `Option` is what says that. Both carriers are non-content, which is worth pinning: a real potion turning up without a rarity means the reasoning here no longer holds.
+/// Unlike the usage, something does carry this, so it stayed.
+/// `PotionRarityExtensions.ToLocString` throws on it, so it is not a rarity the
+/// game can name, and `Option` is what says that. Both carriers are non-content,
+/// which is worth pinning. A real potion turning up without a rarity means the
+/// reasoning here no longer holds.
 #[test]
 fn only_non_content_has_no_rarity() {
     let unrated: Vec<String> = Potion::ALL
@@ -157,7 +172,10 @@ fn only_non_content_has_no_rarity() {
 
 /// Exactly the potions the game works something out for.
 ///
-/// One potion computes two of its cells, and it is the same one both times. `TargetType` and `PassesCustomUsabilityCheck` are the only members here a potion can decide at the time. Therefore a table that generated a constant for either is wrong invisibly.
+/// One potion computes two of its cells, and it is the same one both times.
+/// `TargetType` and `PassesCustomUsabilityCheck` are the only members here a
+/// potion can decide at the time. A table that generated a constant for either
+/// is wrong invisibly.
 #[test]
 fn only_foul_potion_is_computed() {
     let computed = |column: usize| -> Vec<&str> {
@@ -174,7 +192,8 @@ fn only_foul_potion_is_computed() {
         "the set computing a usability check"
     );
 
-    // Rarity and usage are read off the IL too, and nothing computes either,     // which is what lets them be plain values rather than a `Field`.
+    // Rarity and usage are read off the IL too, and nothing computes either,
+    // so they are plain values and not a `Field`.
     assert!(computed(2).is_empty(), "a potion now computes its rarity");
     assert!(computed(3).is_empty(), "a potion now computes its usage");
     assert!(
@@ -214,7 +233,7 @@ fn a_potion_targets_with_the_card_target_type() {
         }
     }
 
-    // The five a potion actually uses, out of the ten a card can.
+    // The five a potion actually uses, out of the ten a card may.
     assert_eq!(
         seen.into_iter().collect::<Vec<_>>(),
         ["AllEnemies", "AnyEnemy", "AnyPlayer", "Self"]

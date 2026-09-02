@@ -36,7 +36,9 @@ under the name in the last column.
 | `potiondump` | every potion's rarity, usage and target | `potions.txt` |
 | `powerdump` | every power's static data | `powers.txt` |
 | `relicdump` | every relic's rarity, price and pool | `relics.txt` |
+| `restsitedump` | the options a rest site can offer, by name | `restsite.txt` |
 | `rngdump` | 1024 draws per seed, every `Rng` method | `crates/sts2-rng/tests/megarandom.txt` |
+| `runstatedump` | the enums a run's position is described in | `runstate.txt` |
 
 Then `cargo xtask codegen`.
 

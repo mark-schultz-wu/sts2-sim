@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 /// What a monster telegraphs before a move resolves.
 ///
-/// Not what the move does, that is the move body, ported by hand. The
+/// Not what the move does — that is the move body, ported by hand. The
 /// game declares the two separately, so this is only what is displayed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -87,6 +87,20 @@ impl std::fmt::Debug for IntentSet {
     }
 }
 
+impl sts2_core::FlagSet for IntentSet {
+    type Member = IntentKind;
+
+    const MEMBERS: &'static [IntentKind] = &Self::MEMBERS;
+
+    fn from_members(members: &[IntentKind]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: IntentKind) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// The numbers an attacking intent displays.
 ///
 /// One type for `Attack` and `DeathBlow` alike, because
@@ -125,7 +139,7 @@ pub struct Intents {
 /// A capped count rather than a `u8` so that `Repeat` stays small: it
 /// needs two fieldless discriminants beside this one, and a `u8` payload
 /// uses every pattern there is. The cap is 8, against a build
-/// whose largest window is 3, `cargo xtask codegen` fails rather
+/// whose largest window is 3 — `cargo xtask codegen` fails rather
 /// than truncating if one ever exceeds it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(u8)]
@@ -149,14 +163,14 @@ impl RepeatCount {
 
 /// What bars a branch the machine would otherwise be free to take.
 ///
-/// The game spends three fields on this, `MoveRepeatType`, `maxTimes`
-/// and `cooldown`, and `GetStateWeight` blocks the branch if *either*
+/// The game spends three fields on this — `MoveRepeatType`, `maxTimes`
+/// and `cooldown` — and `GetStateWeight` blocks the branch if *either*
 /// the repeat type or the cooldown says so. One of the two is always
 /// redundant, because each implies the other in one direction:
 ///
 /// - `InARow(n)` blocking means the last `n` log entries are all this
 ///   branch, and `n` is never zero, so the most recent entry is this
-///   branch, which is exactly what a cooldown of 1 or more already
+///   branch — which is exactly what a cooldown of 1 or more already
 ///   blocks on. A cooldown beside an in-a-row limit swallows it.
 /// - A cooldown blocking means the branch is somewhere in the log, which
 ///   is what [`Once`](Self::Once) blocks on. `Once` swallows a cooldown.
@@ -191,11 +205,11 @@ pub enum Repeat {
 /// enough and costs no hashing. Every index a generated table contains
 /// is in range for its monster, which the tests check.
 ///
-/// A `u8` and not a capped enum. Capping will buy nothing: the only
-/// thing that can use the spare discriminants is a niche, and
+/// A `u8` and not a capped enum. Capping would buy nothing: the only
+/// thing that could use the spare discriminants is a niche, and
 /// [`FollowUp`] has two variants carrying one of these, so it is a tag
 /// plus a payload either way. The build's largest graph is 8
-/// states. Codegen refuses one that will not fit here.
+/// states; codegen refuses one that would not fit here.
 pub type StateIndex = u8;
 
 /// Where the machine goes when it leaves a move.
@@ -209,7 +223,7 @@ pub type StateIndex = u8;
 /// A missing follow-up is not "no next state" either —
 /// `MoveState.GetNextState` throws on one. That is
 /// [`Never`](Self::Never), and it makes the combination the game can
-/// express but never uses, must perform once, then go nowhere —
+/// express but never uses — must perform once, then go nowhere —
 /// unrepresentable here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FollowUp {
@@ -239,6 +253,13 @@ pub struct Branch {
 /// A move the monster can make.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Move {
+    /// The name the game calls this state, which is what an
+    /// observation reports as a monster's intent.
+    ///
+    /// Here so that the intent can be found in the graph: a move is
+    /// a state at a position, the wire names it, and without this
+    /// there is nothing to match the name against.
+    pub id: MoveId,
     pub follow_up: FollowUp,
     pub intents: Intents,
 }
@@ -247,7 +268,7 @@ pub struct Move {
 ///
 /// `Random` takes exactly one RNG draw and walks its branches in order;
 /// `Conditional` takes none and picks the first branch whose predicate
-/// holds. Both are transparent to `StateLog`, the machine loops until
+/// holds. Both are transparent to `StateLog` — the machine loops until
 /// it lands on a `Move`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
@@ -268,12 +289,848 @@ pub struct MonsterData {
     pub states: &'static [State],
 }
 
+/// The name of a move, as the game and the observation both spell it.
+///
+/// The id is the serde rename, and the only place it is spelled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u16)]
+pub enum MoveId {
+    #[serde(rename = "ABOUT_TO_BLOW_MOVE")]
+    AboutToBlowMove,
+    #[serde(rename = "ACID_GOOP")]
+    AcidGoop,
+    #[serde(rename = "ADAPT_MOVE")]
+    AdaptMove,
+    #[serde(rename = "ADVANCED_GAS_MOVE")]
+    AdvancedGasMove,
+    #[serde(rename = "ATTACK")]
+    Attack,
+    #[serde(rename = "ATTACK_AND_SUMMON_MINION")]
+    AttackAndSummonMinion,
+    #[serde(rename = "BARRAGE_MOVE")]
+    BarrageMove,
+    #[serde(rename = "BASH_MOVE")]
+    BashMove,
+    #[serde(rename = "BEAM_MOVE")]
+    BeamMove,
+    #[serde(rename = "BEAST_CRY_MOVE")]
+    BeastCryMove,
+    #[serde(rename = "BEAT_MOVE")]
+    BeatMove,
+    #[serde(rename = "BECKON_MOVE")]
+    BeckonMove,
+    #[serde(rename = "BEES_MOVE")]
+    BeesMove,
+    #[serde(rename = "BEETLE_CHARGE")]
+    BeetleCharge,
+    #[serde(rename = "BELOW_MOVE")]
+    BelowMove,
+    #[serde(rename = "BIG_POUNCE")]
+    BigPounce,
+    #[serde(rename = "BIG_SWING")]
+    BigSwing,
+    #[serde(rename = "BITE_MOVE")]
+    BiteMove,
+    #[serde(rename = "BLOAT_MOVE")]
+    BloatMove,
+    #[serde(rename = "BOOMERANG_MOVE")]
+    BoomerangMove,
+    #[serde(rename = "BOOT_UP_MOVE")]
+    BootUpMove,
+    #[serde(rename = "BUBBLE_BURP_MOVE")]
+    BubbleBurpMove,
+    #[serde(rename = "BUFF_MOVE")]
+    BuffMove,
+    #[serde(rename = "BUG_STING_MOVE")]
+    BugStingMove,
+    #[serde(rename = "BULK_MOVE")]
+    BulkMove,
+    #[serde(rename = "BURNING_GROWL_MOVE")]
+    BurningGrowlMove,
+    #[serde(rename = "BURN_BRIGHT_FOR_ME_MOVE")]
+    BurnBrightForMeMove,
+    #[serde(rename = "BURROW_MOVE")]
+    BurrowMove,
+    #[serde(rename = "BUTT_MOVE")]
+    ButtMove,
+    #[serde(rename = "CALL_FOR_BACKUP_MOVE")]
+    CallForBackupMove,
+    #[serde(rename = "CHARGE_MOVE")]
+    ChargeMove,
+    #[serde(rename = "CHARGE_UP_MOVE")]
+    ChargeUpMove,
+    #[serde(rename = "CHEW")]
+    Chew,
+    #[serde(rename = "CHOMP")]
+    Chomp,
+    #[serde(rename = "CHOMP_MOVE")]
+    ChompMove,
+    #[serde(rename = "CLAMP_MOVE")]
+    ClampMove,
+    #[serde(rename = "CLAW_MOVE")]
+    ClawMove,
+    #[serde(rename = "CLUMP_SHOT")]
+    ClumpShot,
+    #[serde(rename = "CONSTRICT")]
+    Constrict,
+    #[serde(rename = "CONSTRICT_MOVE")]
+    ConstrictMove,
+    #[serde(rename = "CRASH_MOVE")]
+    CrashMove,
+    #[serde(rename = "CRUSH_MOVE")]
+    CrushMove,
+    #[serde(rename = "CURL_AND_GROW_MOVE")]
+    CurlAndGrowMove,
+    #[serde(rename = "CURSE_OF_KNOWLEDGE_MOVE")]
+    CurseOfKnowledgeMove,
+    #[serde(rename = "DAMPEN_MOVE")]
+    DampenMove,
+    #[serde(rename = "DARK_STRIKE_MOVE")]
+    DarkStrikeMove,
+    #[serde(rename = "DEAD_MOVE")]
+    DeadMove,
+    #[serde(rename = "DEBILITATING_SMOG")]
+    DebilitatingSmog,
+    #[serde(rename = "DE_GAS_MOVE")]
+    DeGasMove,
+    #[serde(rename = "DISEASE_BITE_MOVE")]
+    DiseaseBiteMove,
+    #[serde(rename = "DISEMBOWEL_MOVE")]
+    DisembowelMove,
+    #[serde(rename = "DISINTEGRATE_MOVE")]
+    DisintegrateMove,
+    #[serde(rename = "DISMEMBER_MOVE")]
+    DismemberMove,
+    #[serde(rename = "DISTRACT_MOVE")]
+    DistractMove,
+    #[serde(rename = "DIZZY_MOVE")]
+    DizzyMove,
+    #[serde(rename = "DOUBLE_SMASH_MOVE")]
+    DoubleSmashMove,
+    #[serde(rename = "DRAIN_LIFE_MOVE")]
+    DrainLifeMove,
+    #[serde(rename = "DREAD")]
+    Dread,
+    #[serde(rename = "EBB_MOVE")]
+    EbbMove,
+    #[serde(rename = "ENERGY_ORB_MOVE")]
+    EnergyOrbMove,
+    #[serde(rename = "ENLARGE_MOVE")]
+    EnlargeMove,
+    #[serde(rename = "ENLARGING_STRIKE_MOVE")]
+    EnlargingStrikeMove,
+    #[serde(rename = "ENRAGE_MOVE")]
+    EnrageMove,
+    #[serde(rename = "ESCAPE_MOVE")]
+    EscapeMove,
+    #[serde(rename = "EXECUTION_MOVE")]
+    ExecutionMove,
+    #[serde(rename = "EXPEL_MOVE")]
+    ExpelMove,
+    #[serde(rename = "EXPLODE_MOVE")]
+    ExplodeMove,
+    #[serde(rename = "EYE_LASERS")]
+    EyeLasers,
+    #[serde(rename = "EYE_LASERS_MOVE")]
+    EyeLasersMove,
+    #[serde(rename = "FABRICATE_MOVE")]
+    FabricateMove,
+    #[serde(rename = "FABRICATING_STRIKE_MOVE")]
+    FabricatingStrikeMove,
+    #[serde(rename = "FADE_MOVE")]
+    FadeMove,
+    #[serde(rename = "FAST_PUNCH_MOVE")]
+    FastPunchMove,
+    #[serde(rename = "FIRE_MOVE")]
+    FireMove,
+    #[serde(rename = "FIRST_ACID_GOOP")]
+    FirstAcidGoop,
+    #[serde(rename = "FLAIL_MOVE")]
+    FlailMove,
+    #[serde(rename = "FLAMETHROWER_MOVE")]
+    FlamethrowerMove,
+    #[serde(rename = "FLAME_BEAM_MOVE")]
+    FlameBeamMove,
+    #[serde(rename = "FLEE_MOVE")]
+    FleeMove,
+    #[serde(rename = "FLUTTER_MOVE")]
+    FlutterMove,
+    #[serde(rename = "FORBIDDEN_INCANTATION_MOVE")]
+    ForbiddenIncantationMove,
+    #[serde(rename = "FOR_THE_QUEEN")]
+    ForTheQueen,
+    #[serde(rename = "FRAIL_SPORES_MOVE")]
+    FrailSporesMove,
+    #[serde(rename = "FURIOUS_PUMMELING_MOVE")]
+    FuriousPummelingMove,
+    #[serde(rename = "GALVANIC_BURST")]
+    GalvanicBurst,
+    #[serde(rename = "GAZE_MOVE")]
+    GazeMove,
+    #[serde(rename = "GIMME_MOVE")]
+    GimmeMove,
+    #[serde(rename = "GLOMP_MOVE")]
+    GlompMove,
+    #[serde(rename = "GOOP_MOVE")]
+    GoopMove,
+    #[serde(rename = "GRASPING_VINES_MOVE")]
+    GraspingVinesMove,
+    #[serde(rename = "GUARDED_STRIKE_MOVE")]
+    GuardedStrikeMove,
+    #[serde(rename = "GUARD_MOVE")]
+    GuardMove,
+    #[serde(rename = "HAMMER_UPPERCUT_MOVE")]
+    HammerUppercutMove,
+    #[serde(rename = "HARDENING_STRIKE_MOVE")]
+    HardeningStrikeMove,
+    #[serde(rename = "HATCH_MOVE")]
+    HatchMove,
+    #[serde(rename = "HAT_TRICK_MOVE")]
+    HatTrickMove,
+    #[serde(rename = "HAUNT_MOVE")]
+    HauntMove,
+    #[serde(rename = "HEADBUTT_MOVE")]
+    HeadbuttMove,
+    #[serde(rename = "HEAVY_CLEAVE_MOVE")]
+    HeavyCleaveMove,
+    #[serde(rename = "HEHE_MOVE")]
+    HeheMove,
+    #[serde(rename = "HEX")]
+    Hex,
+    #[serde(rename = "HISS_MOVE")]
+    HissMove,
+    #[serde(rename = "HOUNDS_MOVE")]
+    HoundsMove,
+    #[serde(rename = "ILLUSION_MOVE")]
+    IllusionMove,
+    #[serde(rename = "INCANTATION_MOVE")]
+    IncantationMove,
+    #[serde(rename = "INCREASING_INTENSITY_MOVE")]
+    IncreasingIntensityMove,
+    #[serde(rename = "INERTIA_MOVE")]
+    InertiaMove,
+    #[serde(rename = "INFECT_MOVE")]
+    InfectMove,
+    #[serde(rename = "INHALE")]
+    Inhale,
+    #[serde(rename = "INKY_LANCE_MOVE")]
+    InkyLanceMove,
+    #[serde(rename = "INK_BLOT_MOVE")]
+    InkBlotMove,
+    #[serde(rename = "INTANGIBLE")]
+    Intangible,
+    #[serde(rename = "JAB_MOVE")]
+    JabMove,
+    #[serde(rename = "JET_MOVE")]
+    JetMove,
+    #[serde(rename = "JUDICIAL_FLIGHT")]
+    JudicialFlight,
+    #[serde(rename = "KILLSHOT_MOVE")]
+    KillshotMove,
+    #[serde(rename = "KNOWLEDGE_OVERWHELMING_MOVE")]
+    KnowledgeOverwhelmingMove,
+    #[serde(rename = "LASER_MOVE")]
+    LaserMove,
+    #[serde(rename = "LASH")]
+    Lash,
+    #[serde(rename = "LASH_MOVE")]
+    LashMove,
+    #[serde(rename = "LATCH_MOVE")]
+    LatchMove,
+    #[serde(rename = "LAY_EGGS_MOVE")]
+    LayEggsMove,
+    #[serde(rename = "LEECHING_HUG_MOVE")]
+    LeechingHugMove,
+    #[serde(rename = "LIQUIFY_GROUND_MOVE")]
+    LiquifyGroundMove,
+    #[serde(rename = "LUNGING_BITE_MOVE")]
+    LungingBiteMove,
+    #[serde(rename = "MAELSTROM_MOVE")]
+    MaelstromMove,
+    #[serde(rename = "MAGIC_BOMB")]
+    MagicBomb,
+    #[serde(rename = "MAGISTRATE_SCRUTINY")]
+    MagistrateScrutiny,
+    #[serde(rename = "MANDIBLES_MOVE")]
+    MandiblesMove,
+    #[serde(rename = "MIASMA")]
+    Miasma,
+    #[serde(rename = "MORE_TEETH")]
+    MoreTeeth,
+    #[serde(rename = "MULTI_CLAW_MOVE")]
+    MultiClawMove,
+    #[serde(rename = "NAB_MOVE")]
+    NabMove,
+    #[serde(rename = "NASTY_BITE_MOVE")]
+    NastyBiteMove,
+    #[serde(rename = "NIBBLE_MOVE")]
+    NibbleMove,
+    #[serde(rename = "NOISE_MOVE")]
+    NoiseMove,
+    #[serde(rename = "NOTHING")]
+    Nothing,
+    #[serde(rename = "NOTHING_MOVE")]
+    NothingMove,
+    #[serde(rename = "NUTRITIONAL_PASTE_MOVE")]
+    NutritionalPasteMove,
+    #[serde(rename = "OFF_WITH_YOUR_HEAD_MOVE")]
+    OffWithYourHeadMove,
+    #[serde(rename = "OIL_SPRAY_MOVE")]
+    OilSprayMove,
+    #[serde(rename = "ONE_TWO_MOVE")]
+    OneTwoMove,
+    #[serde(rename = "ORB_OF_FRAILTY_MOVE")]
+    OrbOfFrailtyMove,
+    #[serde(rename = "ORB_OF_WEAKNESS_MOVE")]
+    OrbOfWeaknessMove,
+    #[serde(rename = "PECK_ASSAULT")]
+    PeckAssault,
+    #[serde(rename = "PECK_MOVE")]
+    PeckMove,
+    #[serde(rename = "PHASE3_LACERATE_MOVE")]
+    Phase3LacerateMove,
+    #[serde(rename = "PHEROMONE_SPIT_MOVE")]
+    PheromoneSpitMove,
+    #[serde(rename = "PIERCING_GAZE_MOVE")]
+    PiercingGazeMove,
+    #[serde(rename = "PIERCING_STABS_MOVE")]
+    PiercingStabsMove,
+    #[serde(rename = "PLOW_MOVE")]
+    PlowMove,
+    #[serde(rename = "POKE")]
+    Poke,
+    #[serde(rename = "POKEY_POUNCE_MOVE")]
+    PokeyPounceMove,
+    #[serde(rename = "PONDER_MOVE")]
+    PonderMove,
+    #[serde(rename = "POUNCE_MOVE")]
+    PounceMove,
+    #[serde(rename = "POWER_DANCE_MOVE")]
+    PowerDanceMove,
+    #[serde(rename = "POWER_SHIELD_MOVE")]
+    PowerShieldMove,
+    #[serde(rename = "PRECISION_BEAM_MOVE")]
+    PrecisionBeamMove,
+    #[serde(rename = "PREPARE_MOVE")]
+    PrepareMove,
+    #[serde(rename = "PREP_MOVE")]
+    PrepMove,
+    #[serde(rename = "PRESSURE_GUN_MOVE")]
+    PressureGunMove,
+    #[serde(rename = "PRESSURE_UP_MOVE")]
+    PressureUpMove,
+    #[serde(rename = "PRESSURIZE_MOVE")]
+    PressurizeMove,
+    #[serde(rename = "PROTRUDING_SPIKES_MOVE")]
+    ProtrudingSpikesMove,
+    #[serde(rename = "PULSATE_MOVE")]
+    PulsateMove,
+    #[serde(rename = "PUNCTURE_MOVE")]
+    PunctureMove,
+    #[serde(rename = "PUPPET_STRINGS_MOVE")]
+    PuppetStringsMove,
+    #[serde(rename = "QUICK_SLASH_MOVE")]
+    QuickSlashMove,
+    #[serde(rename = "RADIATE_MOVE")]
+    RadiateMove,
+    #[serde(rename = "RAGE_MOVE")]
+    RageMove,
+    #[serde(rename = "RAM_MOVE")]
+    RamMove,
+    #[serde(rename = "READY_MOVE")]
+    ReadyMove,
+    #[serde(rename = "REATTACH_MOVE")]
+    ReattachMove,
+    #[serde(rename = "RECHARGE_MOVE")]
+    RechargeMove,
+    #[serde(rename = "RELOAD_MOVE")]
+    ReloadMove,
+    #[serde(rename = "REPEATER_BLAST_MOVE")]
+    RepeaterBlastMove,
+    #[serde(rename = "REPEATER_BLAST_MOVE_2")]
+    RepeaterBlastMove2,
+    #[serde(rename = "RESPAWN_MOVE")]
+    RespawnMove,
+    #[serde(rename = "REVIVE_MOVE")]
+    ReviveMove,
+    #[serde(rename = "RIP_AND_TEAR_MOVE")]
+    RipAndTearMove,
+    #[serde(rename = "RITUAL_MOVE")]
+    RitualMove,
+    #[serde(rename = "ROAR_MOVE")]
+    RoarMove,
+    #[serde(rename = "ROLL_OUT_MOVE")]
+    RollOutMove,
+    #[serde(rename = "SAIL_MOVE")]
+    SailMove,
+    #[serde(rename = "SALIVATE_MOVE")]
+    SalivateMove,
+    #[serde(rename = "SAVAGE_MOVE")]
+    SavageMove,
+    #[serde(rename = "SCRATCH_MOVE")]
+    ScratchMove,
+    #[serde(rename = "SCREAM_MOVE")]
+    ScreamMove,
+    #[serde(rename = "SCREECH_MOVE")]
+    ScreechMove,
+    #[serde(rename = "SEA_KICK_MOVE")]
+    SeaKickMove,
+    #[serde(rename = "SHIELD_SLAM_MOVE")]
+    ShieldSlamMove,
+    #[serde(rename = "SHOCKING_SLAP")]
+    ShockingSlap,
+    #[serde(rename = "SHRINKER_MOVE")]
+    ShrinkerMove,
+    #[serde(rename = "SIPHON_MOVE")]
+    SiphonMove,
+    #[serde(rename = "SKITTER_MOVE")]
+    SkitterMove,
+    #[serde(rename = "SKULL_BASH_MOVE")]
+    SkullBashMove,
+    #[serde(rename = "SLAM_MOVE")]
+    SlamMove,
+    #[serde(rename = "SLAP_MOVE")]
+    SlapMove,
+    #[serde(rename = "SLASH2_MOVE")]
+    Slash2Move,
+    #[serde(rename = "SLASHES_MOVE")]
+    SlashesMove,
+    #[serde(rename = "SLASH_MOVE")]
+    SlashMove,
+    #[serde(rename = "SLEEP_MOVE")]
+    SleepMove,
+    #[serde(rename = "SLEEP_MOVE_2")]
+    SleepMove2,
+    #[serde(rename = "SLICE_MOVE")]
+    SliceMove,
+    #[serde(rename = "SMASH_MOVE")]
+    SmashMove,
+    #[serde(rename = "SMOTHER_MOVE")]
+    SmotherMove,
+    #[serde(rename = "SNORE_MOVE")]
+    SnoreMove,
+    #[serde(rename = "SOUL_BURN_MOVE")]
+    SoulBurnMove,
+    #[serde(rename = "SOUL_FLAME")]
+    SoulFlame,
+    #[serde(rename = "SOUL_SIPHON_MOVE")]
+    SoulSiphonMove,
+    #[serde(rename = "SOUL_SLASH")]
+    SoulSlash,
+    #[serde(rename = "SPAWNED_MOVE")]
+    SpawnedMove,
+    #[serde(rename = "SPEAR_MOVE")]
+    SpearMove,
+    #[serde(rename = "SPEW_COINS_MOVE")]
+    SpewCoinsMove,
+    #[serde(rename = "SPIKEN_MOVE")]
+    SpikenMove,
+    #[serde(rename = "SPIKE_EXPLOSION_MOVE")]
+    SpikeExplosionMove,
+    #[serde(rename = "SPIKE_SPIT_MOVE")]
+    SpikeSpitMove,
+    #[serde(rename = "SPINNING_KICK_MOVE")]
+    SpinningKickMove,
+    #[serde(rename = "STAB_MOVE")]
+    StabMove,
+    #[serde(rename = "STAMP_MOVE")]
+    StampMove,
+    #[serde(rename = "STICKY_SHOT")]
+    StickyShot,
+    #[serde(rename = "STICKY_SHOT_MOVE")]
+    StickyShotMove,
+    #[serde(rename = "STOMP_MOVE")]
+    StompMove,
+    #[serde(rename = "STRIKE_DOWN_EVIL")]
+    StrikeDownEvil,
+    #[serde(rename = "STRONG_PUNCH_MOVE")]
+    StrongPunchMove,
+    #[serde(rename = "STUB")]
+    Stub,
+    #[serde(rename = "STUNNED")]
+    Stunned,
+    #[serde(rename = "STUN_MOVE")]
+    StunMove,
+    #[serde(rename = "SUCK_MOVE")]
+    SuckMove,
+    #[serde(rename = "SUPER_GAS_BLAST_MOVE")]
+    SuperGasBlastMove,
+    #[serde(rename = "SWING_1")]
+    Swing1,
+    #[serde(rename = "SWING_2")]
+    Swing2,
+    #[serde(rename = "SWIPE_MOVE")]
+    SwipeMove,
+    #[serde(rename = "SWIPE_RANDOM_MOVE")]
+    SwipeRandomMove,
+    #[serde(rename = "SWOOP_MOVE")]
+    SwoopMove,
+    #[serde(rename = "TACKLE_2_MOVE")]
+    Tackle2Move,
+    #[serde(rename = "TACKLE_3_MOVE")]
+    Tackle3Move,
+    #[serde(rename = "TACKLE_4_MOVE")]
+    Tackle4Move,
+    #[serde(rename = "TACKLE_MOVE")]
+    TackleMove,
+    #[serde(rename = "TARGETING_RETICLE_MOVE")]
+    TargetingReticleMove,
+    #[serde(rename = "TENDERIZER_MOVE")]
+    TenderizerMove,
+    #[serde(rename = "TENDERIZING_GOOP_MOVE")]
+    TenderizingGoopMove,
+    #[serde(rename = "TERROR_MOVE")]
+    TerrorMove,
+    #[serde(rename = "THIEVERY_MOVE")]
+    ThieveryMove,
+    #[serde(rename = "THRASH2_MOVE")]
+    Thrash2Move,
+    #[serde(rename = "THRASH_MOVE")]
+    ThrashMove,
+    #[serde(rename = "THRASH_MOVE_2")]
+    ThrashMove2,
+    #[serde(rename = "THROW_RELIC_MOVE")]
+    ThrowRelicMove,
+    #[serde(rename = "THUNDER_STRIKE")]
+    ThunderStrike,
+    #[serde(rename = "THWACK")]
+    Thwack,
+    #[serde(rename = "TONGUE_LASH")]
+    TongueLash,
+    #[serde(rename = "TONGUE_LASH_MOVE")]
+    TongueLashMove,
+    #[serde(rename = "TOXIC_MOVE")]
+    ToxicMove,
+    #[serde(rename = "TOXIC_SPIT_MOVE")]
+    ToxicSpitMove,
+    #[serde(rename = "TRACK_MOVE")]
+    TrackMove,
+    #[serde(rename = "UNLOAD_MOVE")]
+    UnloadMove,
+    #[serde(rename = "UNLOAD_MOVE_2")]
+    UnloadMove2,
+    #[serde(rename = "UNSET_MOVE")]
+    UnsetMove,
+    #[serde(rename = "VERDICT")]
+    Verdict,
+    #[serde(rename = "VOMIT_ICHOR_MOVE")]
+    VomitIchorMove,
+    #[serde(rename = "VULNERABLE_SPORES_MOVE")]
+    VulnerableSporesMove,
+    #[serde(rename = "WAKE_MOVE")]
+    WakeMove,
+    #[serde(rename = "WAR_CHANT")]
+    WarChant,
+    #[serde(rename = "WEB_CANNON_MOVE")]
+    WebCannonMove,
+    #[serde(rename = "WHIP_SLAP_MOVE")]
+    WhipSlapMove,
+    #[serde(rename = "WHIRLWIND_MOVE")]
+    WhirlwindMove,
+    #[serde(rename = "WHIRL_MOVE")]
+    WhirlMove,
+    #[serde(rename = "WINDUP_MOVE")]
+    WindupMove,
+    #[serde(rename = "WRIGGLE_MOVE")]
+    WriggleMove,
+    #[serde(rename = "WRITHE_MOVE")]
+    WritheMove,
+    #[serde(rename = "YOU_ARE_MINE_MOVE")]
+    YouAreMineMove,
+    #[serde(rename = "ZAP")]
+    Zap,
+    #[serde(rename = "ZOOM_MOVE")]
+    ZoomMove,
+    #[serde(rename = "ZOOM_MOVE_2")]
+    ZoomMove2,
+}
+
+impl MoveId {
+    /// Every move name in the build, so a caller can sweep them.
+    pub const ALL: [MoveId; 274] = [
+        MoveId::AboutToBlowMove,
+        MoveId::AcidGoop,
+        MoveId::AdaptMove,
+        MoveId::AdvancedGasMove,
+        MoveId::Attack,
+        MoveId::AttackAndSummonMinion,
+        MoveId::BarrageMove,
+        MoveId::BashMove,
+        MoveId::BeamMove,
+        MoveId::BeastCryMove,
+        MoveId::BeatMove,
+        MoveId::BeckonMove,
+        MoveId::BeesMove,
+        MoveId::BeetleCharge,
+        MoveId::BelowMove,
+        MoveId::BigPounce,
+        MoveId::BigSwing,
+        MoveId::BiteMove,
+        MoveId::BloatMove,
+        MoveId::BoomerangMove,
+        MoveId::BootUpMove,
+        MoveId::BubbleBurpMove,
+        MoveId::BuffMove,
+        MoveId::BugStingMove,
+        MoveId::BulkMove,
+        MoveId::BurningGrowlMove,
+        MoveId::BurnBrightForMeMove,
+        MoveId::BurrowMove,
+        MoveId::ButtMove,
+        MoveId::CallForBackupMove,
+        MoveId::ChargeMove,
+        MoveId::ChargeUpMove,
+        MoveId::Chew,
+        MoveId::Chomp,
+        MoveId::ChompMove,
+        MoveId::ClampMove,
+        MoveId::ClawMove,
+        MoveId::ClumpShot,
+        MoveId::Constrict,
+        MoveId::ConstrictMove,
+        MoveId::CrashMove,
+        MoveId::CrushMove,
+        MoveId::CurlAndGrowMove,
+        MoveId::CurseOfKnowledgeMove,
+        MoveId::DampenMove,
+        MoveId::DarkStrikeMove,
+        MoveId::DeadMove,
+        MoveId::DebilitatingSmog,
+        MoveId::DeGasMove,
+        MoveId::DiseaseBiteMove,
+        MoveId::DisembowelMove,
+        MoveId::DisintegrateMove,
+        MoveId::DismemberMove,
+        MoveId::DistractMove,
+        MoveId::DizzyMove,
+        MoveId::DoubleSmashMove,
+        MoveId::DrainLifeMove,
+        MoveId::Dread,
+        MoveId::EbbMove,
+        MoveId::EnergyOrbMove,
+        MoveId::EnlargeMove,
+        MoveId::EnlargingStrikeMove,
+        MoveId::EnrageMove,
+        MoveId::EscapeMove,
+        MoveId::ExecutionMove,
+        MoveId::ExpelMove,
+        MoveId::ExplodeMove,
+        MoveId::EyeLasers,
+        MoveId::EyeLasersMove,
+        MoveId::FabricateMove,
+        MoveId::FabricatingStrikeMove,
+        MoveId::FadeMove,
+        MoveId::FastPunchMove,
+        MoveId::FireMove,
+        MoveId::FirstAcidGoop,
+        MoveId::FlailMove,
+        MoveId::FlamethrowerMove,
+        MoveId::FlameBeamMove,
+        MoveId::FleeMove,
+        MoveId::FlutterMove,
+        MoveId::ForbiddenIncantationMove,
+        MoveId::ForTheQueen,
+        MoveId::FrailSporesMove,
+        MoveId::FuriousPummelingMove,
+        MoveId::GalvanicBurst,
+        MoveId::GazeMove,
+        MoveId::GimmeMove,
+        MoveId::GlompMove,
+        MoveId::GoopMove,
+        MoveId::GraspingVinesMove,
+        MoveId::GuardedStrikeMove,
+        MoveId::GuardMove,
+        MoveId::HammerUppercutMove,
+        MoveId::HardeningStrikeMove,
+        MoveId::HatchMove,
+        MoveId::HatTrickMove,
+        MoveId::HauntMove,
+        MoveId::HeadbuttMove,
+        MoveId::HeavyCleaveMove,
+        MoveId::HeheMove,
+        MoveId::Hex,
+        MoveId::HissMove,
+        MoveId::HoundsMove,
+        MoveId::IllusionMove,
+        MoveId::IncantationMove,
+        MoveId::IncreasingIntensityMove,
+        MoveId::InertiaMove,
+        MoveId::InfectMove,
+        MoveId::Inhale,
+        MoveId::InkyLanceMove,
+        MoveId::InkBlotMove,
+        MoveId::Intangible,
+        MoveId::JabMove,
+        MoveId::JetMove,
+        MoveId::JudicialFlight,
+        MoveId::KillshotMove,
+        MoveId::KnowledgeOverwhelmingMove,
+        MoveId::LaserMove,
+        MoveId::Lash,
+        MoveId::LashMove,
+        MoveId::LatchMove,
+        MoveId::LayEggsMove,
+        MoveId::LeechingHugMove,
+        MoveId::LiquifyGroundMove,
+        MoveId::LungingBiteMove,
+        MoveId::MaelstromMove,
+        MoveId::MagicBomb,
+        MoveId::MagistrateScrutiny,
+        MoveId::MandiblesMove,
+        MoveId::Miasma,
+        MoveId::MoreTeeth,
+        MoveId::MultiClawMove,
+        MoveId::NabMove,
+        MoveId::NastyBiteMove,
+        MoveId::NibbleMove,
+        MoveId::NoiseMove,
+        MoveId::Nothing,
+        MoveId::NothingMove,
+        MoveId::NutritionalPasteMove,
+        MoveId::OffWithYourHeadMove,
+        MoveId::OilSprayMove,
+        MoveId::OneTwoMove,
+        MoveId::OrbOfFrailtyMove,
+        MoveId::OrbOfWeaknessMove,
+        MoveId::PeckAssault,
+        MoveId::PeckMove,
+        MoveId::Phase3LacerateMove,
+        MoveId::PheromoneSpitMove,
+        MoveId::PiercingGazeMove,
+        MoveId::PiercingStabsMove,
+        MoveId::PlowMove,
+        MoveId::Poke,
+        MoveId::PokeyPounceMove,
+        MoveId::PonderMove,
+        MoveId::PounceMove,
+        MoveId::PowerDanceMove,
+        MoveId::PowerShieldMove,
+        MoveId::PrecisionBeamMove,
+        MoveId::PrepareMove,
+        MoveId::PrepMove,
+        MoveId::PressureGunMove,
+        MoveId::PressureUpMove,
+        MoveId::PressurizeMove,
+        MoveId::ProtrudingSpikesMove,
+        MoveId::PulsateMove,
+        MoveId::PunctureMove,
+        MoveId::PuppetStringsMove,
+        MoveId::QuickSlashMove,
+        MoveId::RadiateMove,
+        MoveId::RageMove,
+        MoveId::RamMove,
+        MoveId::ReadyMove,
+        MoveId::ReattachMove,
+        MoveId::RechargeMove,
+        MoveId::ReloadMove,
+        MoveId::RepeaterBlastMove,
+        MoveId::RepeaterBlastMove2,
+        MoveId::RespawnMove,
+        MoveId::ReviveMove,
+        MoveId::RipAndTearMove,
+        MoveId::RitualMove,
+        MoveId::RoarMove,
+        MoveId::RollOutMove,
+        MoveId::SailMove,
+        MoveId::SalivateMove,
+        MoveId::SavageMove,
+        MoveId::ScratchMove,
+        MoveId::ScreamMove,
+        MoveId::ScreechMove,
+        MoveId::SeaKickMove,
+        MoveId::ShieldSlamMove,
+        MoveId::ShockingSlap,
+        MoveId::ShrinkerMove,
+        MoveId::SiphonMove,
+        MoveId::SkitterMove,
+        MoveId::SkullBashMove,
+        MoveId::SlamMove,
+        MoveId::SlapMove,
+        MoveId::Slash2Move,
+        MoveId::SlashesMove,
+        MoveId::SlashMove,
+        MoveId::SleepMove,
+        MoveId::SleepMove2,
+        MoveId::SliceMove,
+        MoveId::SmashMove,
+        MoveId::SmotherMove,
+        MoveId::SnoreMove,
+        MoveId::SoulBurnMove,
+        MoveId::SoulFlame,
+        MoveId::SoulSiphonMove,
+        MoveId::SoulSlash,
+        MoveId::SpawnedMove,
+        MoveId::SpearMove,
+        MoveId::SpewCoinsMove,
+        MoveId::SpikenMove,
+        MoveId::SpikeExplosionMove,
+        MoveId::SpikeSpitMove,
+        MoveId::SpinningKickMove,
+        MoveId::StabMove,
+        MoveId::StampMove,
+        MoveId::StickyShot,
+        MoveId::StickyShotMove,
+        MoveId::StompMove,
+        MoveId::StrikeDownEvil,
+        MoveId::StrongPunchMove,
+        MoveId::Stub,
+        MoveId::Stunned,
+        MoveId::StunMove,
+        MoveId::SuckMove,
+        MoveId::SuperGasBlastMove,
+        MoveId::Swing1,
+        MoveId::Swing2,
+        MoveId::SwipeMove,
+        MoveId::SwipeRandomMove,
+        MoveId::SwoopMove,
+        MoveId::Tackle2Move,
+        MoveId::Tackle3Move,
+        MoveId::Tackle4Move,
+        MoveId::TackleMove,
+        MoveId::TargetingReticleMove,
+        MoveId::TenderizerMove,
+        MoveId::TenderizingGoopMove,
+        MoveId::TerrorMove,
+        MoveId::ThieveryMove,
+        MoveId::Thrash2Move,
+        MoveId::ThrashMove,
+        MoveId::ThrashMove2,
+        MoveId::ThrowRelicMove,
+        MoveId::ThunderStrike,
+        MoveId::Thwack,
+        MoveId::TongueLash,
+        MoveId::TongueLashMove,
+        MoveId::ToxicMove,
+        MoveId::ToxicSpitMove,
+        MoveId::TrackMove,
+        MoveId::UnloadMove,
+        MoveId::UnloadMove2,
+        MoveId::UnsetMove,
+        MoveId::Verdict,
+        MoveId::VomitIchorMove,
+        MoveId::VulnerableSporesMove,
+        MoveId::WakeMove,
+        MoveId::WarChant,
+        MoveId::WebCannonMove,
+        MoveId::WhipSlapMove,
+        MoveId::WhirlwindMove,
+        MoveId::WhirlMove,
+        MoveId::WindupMove,
+        MoveId::WriggleMove,
+        MoveId::WritheMove,
+        MoveId::YouAreMineMove,
+        MoveId::Zap,
+        MoveId::ZoomMove,
+        MoveId::ZoomMove2,
+    ];
+}
+
 /// Every monster in the build.
 ///
-/// Flat rather than nested by act. Card ids are pool-scoped, `Strike`
-/// exists in two pools, so nesting them solves a real collision;
-/// monster ids are unique across the build, so nesting will cost a
-/// wrapper at every call site and buy nothing. Acts will make a poor
+/// Flat rather than nested by act. Card ids are pool-scoped — `Strike`
+/// exists in two pools — so nesting them solves a real collision;
+/// monster ids are unique across the build, so nesting would cost a
+/// wrapper at every call site and buy nothing. Acts would make a poor
 /// nesting anyway: 24 monsters are in none and two are in two.
 ///
 /// The generated files still group by act, because a monster's graph is
@@ -535,10 +1392,12 @@ pub enum Monster {
     Zapbot,
 }
 
-impl Monster {
+impl sts2_core::Table for Monster {
+    type Data = MonsterData;
+
     /// Every monster, so callers can sweep the table without a way to
     /// enumerate an enum.
-    pub const ALL: [Monster; 126] = [
+    const ALL: &'static [Self] = &[
         Monster::Aeonglass,
         Monster::Architect,
         Monster::AssassinRubyRaider,
@@ -667,145 +1526,12 @@ impl Monster {
         Monster::Zapbot,
     ];
 
-    /// The acts whose encounters can roll this monster. Empty for one
-    /// that only ever arrives as a summon.
-    pub const fn acts(self) -> &'static [Act] {
-        match self {
-            Self::Aeonglass => &[Act::Glory],
-            Self::Architect => &[],
-            Self::AssassinRubyRaider => &[Act::Overgrowth],
-            Self::Axebot => &[Act::Glory],
-            Self::AxeRubyRaider => &[Act::Overgrowth],
-            Self::BattleFriendV1 => &[],
-            Self::BattleFriendV2 => &[],
-            Self::BattleFriendV3 => &[],
-            Self::BigDummy => &[],
-            Self::BowlbugEgg => &[Act::Hive],
-            Self::BowlbugNectar => &[Act::Hive],
-            Self::BowlbugRock => &[Act::Hive],
-            Self::BowlbugSilk => &[Act::Hive],
-            Self::BruteRubyRaider => &[Act::Overgrowth],
-            Self::BygoneEffigy => &[Act::Overgrowth],
-            Self::Byrdonis => &[Act::Overgrowth],
-            Self::Byrdpip => &[],
-            Self::CalcifiedCultist => &[Act::Underdocks],
-            Self::CeremonialBeast => &[Act::Overgrowth],
-            Self::Chomper => &[Act::Hive],
-            Self::CorpseSlug => &[Act::Underdocks],
-            Self::CrossbowRubyRaider => &[Act::Overgrowth],
-            Self::Crusher => &[Act::Hive],
-            Self::CubexConstruct => &[Act::Overgrowth, Act::Glory],
-            Self::DampCultist => &[Act::Underdocks],
-            Self::DecimillipedeSegmentBack => &[Act::Hive],
-            Self::DecimillipedeSegmentFront => &[Act::Hive],
-            Self::DecimillipedeSegmentMiddle => &[Act::Hive],
-            Self::DeprecatedMonster => &[],
-            Self::DevotedSculptor => &[Act::Glory],
-            Self::Entomancer => &[Act::Hive],
-            Self::Exoskeleton => &[Act::Hive],
-            Self::EyeWithTeeth => &[Act::Overgrowth],
-            Self::Fabricator => &[Act::Glory],
-            Self::FakeMerchantMonster => &[],
-            Self::FatGremlin => &[Act::Underdocks],
-            Self::FlailKnight => &[Act::Glory],
-            Self::Flyconid => &[Act::Overgrowth],
-            Self::Fogmog => &[Act::Overgrowth],
-            Self::FossilStalker => &[Act::Underdocks],
-            Self::FrogKnight => &[Act::Glory],
-            Self::FuzzyWurmCrawler => &[Act::Overgrowth],
-            Self::GasBomb => &[Act::Underdocks],
-            Self::GlobeHead => &[Act::Glory],
-            Self::GremlinMerc => &[Act::Underdocks],
-            Self::Guardbot => &[Act::Glory],
-            Self::HauntedShip => &[Act::Underdocks],
-            Self::HunterKiller => &[Act::Hive],
-            Self::InfestedPrism => &[Act::Hive],
-            Self::Inklet => &[Act::Overgrowth],
-            Self::KinFollower => &[Act::Overgrowth],
-            Self::KinPriest => &[Act::Overgrowth],
-            Self::KnowledgeDemon => &[Act::Hive],
-            Self::LagavulinMatriarch => &[Act::Underdocks],
-            Self::LeafSlimeM => &[Act::Overgrowth],
-            Self::LeafSlimeS => &[Act::Overgrowth],
-            Self::LivingFog => &[Act::Underdocks],
-            Self::LivingShield => &[Act::Glory],
-            Self::LouseProgenitor => &[Act::Hive],
-            Self::MagiKnight => &[Act::Glory],
-            Self::Mawler => &[Act::Overgrowth],
-            Self::MechaKnight => &[Act::Glory],
-            Self::MockArtifactMonster => &[],
-            Self::MockAttackAndSummonMinionMonster => &[],
-            Self::MockAttackMonster => &[],
-            Self::MockIntangibleMonster => &[],
-            Self::MockPlatingMonster => &[],
-            Self::MockReattachMonster => &[],
-            Self::MultiAttackMoveMonster => &[],
-            Self::MysteriousKnight => &[],
-            Self::Myte => &[Act::Hive],
-            Self::Nibbit => &[Act::Overgrowth],
-            Self::Noisebot => &[Act::Glory],
-            Self::OneHpMonster => &[],
-            Self::Osty => &[],
-            Self::Ovicopter => &[Act::Hive],
-            Self::OwlMagistrate => &[Act::Glory],
-            Self::PaelsLegion => &[],
-            Self::Parafright => &[Act::Hive],
-            Self::PhantasmalGardener => &[Act::Underdocks],
-            Self::PhrogParasite => &[Act::Overgrowth],
-            Self::PunchConstruct => &[Act::Underdocks, Act::Glory],
-            Self::Queen => &[Act::Glory],
-            Self::Rocket => &[Act::Hive],
-            Self::ScrollOfBiting => &[Act::Glory],
-            Self::Seapunk => &[Act::Underdocks],
-            Self::SewerClam => &[Act::Underdocks],
-            Self::ShrinkerBeetle => &[Act::Overgrowth],
-            Self::SingleAttackMoveMonster => &[],
-            Self::SkulkingColony => &[Act::Underdocks],
-            Self::SlimedBerserker => &[Act::Glory],
-            Self::SlitheringStrangler => &[Act::Overgrowth],
-            Self::SludgeSpinner => &[Act::Underdocks],
-            Self::SlumberingBeetle => &[Act::Hive],
-            Self::SnappingJaxfruit => &[Act::Overgrowth],
-            Self::SneakyGremlin => &[Act::Underdocks],
-            Self::SoulFysh => &[Act::Underdocks],
-            Self::SoulNexus => &[Act::Glory],
-            Self::SpectralKnight => &[Act::Glory],
-            Self::SpinyToad => &[Act::Hive],
-            Self::Stabbot => &[Act::Glory],
-            Self::TenHpMonster => &[],
-            Self::TerrorEel => &[Act::Underdocks],
-            Self::TestSubject => &[Act::Glory],
-            Self::TheAdversaryMkOne => &[],
-            Self::TheAdversaryMkThree => &[],
-            Self::TheAdversaryMkTwo => &[],
-            Self::TheForgotten => &[Act::Glory],
-            Self::TheInsatiable => &[Act::Hive],
-            Self::TheLost => &[Act::Glory],
-            Self::TheObscura => &[Act::Hive],
-            Self::ThievingHopper => &[Act::Hive],
-            Self::Toadpole => &[Act::Underdocks],
-            Self::TorchHeadAmalgam => &[Act::Glory],
-            Self::ToughEgg => &[Act::Hive],
-            Self::TrackerRubyRaider => &[Act::Overgrowth],
-            Self::Tunneler => &[Act::Hive],
-            Self::TurretOperator => &[Act::Glory],
-            Self::TwigSlimeM => &[Act::Overgrowth],
-            Self::TwigSlimeS => &[Act::Overgrowth],
-            Self::TwoTailedRat => &[Act::Underdocks],
-            Self::Vantom => &[Act::Overgrowth],
-            Self::VineShambler => &[Act::Overgrowth],
-            Self::WaterfallGiant => &[Act::Underdocks],
-            Self::Wriggler => &[Act::Overgrowth],
-            Self::Zapbot => &[Act::Glory],
-        }
-    }
-
     /// The HP range and the move graph.
     ///
     /// One arm per monster, naming the file its data lives in — the
     /// graphs themselves are far too long to read in the middle of
     /// this.
-    pub const fn data(self) -> MonsterData {
+    fn data(self) -> MonsterData {
         match self {
             Self::Aeonglass => glory::AEONGLASS,
             Self::Architect => summoned::ARCHITECT,
@@ -935,6 +1661,143 @@ impl Monster {
             Self::WaterfallGiant => underdocks::WATERFALL_GIANT,
             Self::Wriggler => overgrowth::WRIGGLER,
             Self::Zapbot => glory::ZAPBOT,
+        }
+    }
+}
+
+impl sts2_core::MonsterTable for Monster {
+    type Act = Act;
+
+    /// The acts whose encounters can roll this monster. Empty for one
+    /// that only ever arrives as a summon.
+    fn acts(self) -> &'static [Act] {
+        match self {
+            Self::Aeonglass => &[Act::Glory],
+            Self::Architect => &[],
+            Self::AssassinRubyRaider => &[Act::Overgrowth],
+            Self::Axebot => &[Act::Glory],
+            Self::AxeRubyRaider => &[Act::Overgrowth],
+            Self::BattleFriendV1 => &[],
+            Self::BattleFriendV2 => &[],
+            Self::BattleFriendV3 => &[],
+            Self::BigDummy => &[],
+            Self::BowlbugEgg => &[Act::Hive],
+            Self::BowlbugNectar => &[Act::Hive],
+            Self::BowlbugRock => &[Act::Hive],
+            Self::BowlbugSilk => &[Act::Hive],
+            Self::BruteRubyRaider => &[Act::Overgrowth],
+            Self::BygoneEffigy => &[Act::Overgrowth],
+            Self::Byrdonis => &[Act::Overgrowth],
+            Self::Byrdpip => &[],
+            Self::CalcifiedCultist => &[Act::Underdocks],
+            Self::CeremonialBeast => &[Act::Overgrowth],
+            Self::Chomper => &[Act::Hive],
+            Self::CorpseSlug => &[Act::Underdocks],
+            Self::CrossbowRubyRaider => &[Act::Overgrowth],
+            Self::Crusher => &[Act::Hive],
+            Self::CubexConstruct => &[Act::Overgrowth, Act::Glory],
+            Self::DampCultist => &[Act::Underdocks],
+            Self::DecimillipedeSegmentBack => &[Act::Hive],
+            Self::DecimillipedeSegmentFront => &[Act::Hive],
+            Self::DecimillipedeSegmentMiddle => &[Act::Hive],
+            Self::DeprecatedMonster => &[],
+            Self::DevotedSculptor => &[Act::Glory],
+            Self::Entomancer => &[Act::Hive],
+            Self::Exoskeleton => &[Act::Hive],
+            Self::EyeWithTeeth => &[Act::Overgrowth],
+            Self::Fabricator => &[Act::Glory],
+            Self::FakeMerchantMonster => &[],
+            Self::FatGremlin => &[Act::Underdocks],
+            Self::FlailKnight => &[Act::Glory],
+            Self::Flyconid => &[Act::Overgrowth],
+            Self::Fogmog => &[Act::Overgrowth],
+            Self::FossilStalker => &[Act::Underdocks],
+            Self::FrogKnight => &[Act::Glory],
+            Self::FuzzyWurmCrawler => &[Act::Overgrowth],
+            Self::GasBomb => &[Act::Underdocks],
+            Self::GlobeHead => &[Act::Glory],
+            Self::GremlinMerc => &[Act::Underdocks],
+            Self::Guardbot => &[Act::Glory],
+            Self::HauntedShip => &[Act::Underdocks],
+            Self::HunterKiller => &[Act::Hive],
+            Self::InfestedPrism => &[Act::Hive],
+            Self::Inklet => &[Act::Overgrowth],
+            Self::KinFollower => &[Act::Overgrowth],
+            Self::KinPriest => &[Act::Overgrowth],
+            Self::KnowledgeDemon => &[Act::Hive],
+            Self::LagavulinMatriarch => &[Act::Underdocks],
+            Self::LeafSlimeM => &[Act::Overgrowth],
+            Self::LeafSlimeS => &[Act::Overgrowth],
+            Self::LivingFog => &[Act::Underdocks],
+            Self::LivingShield => &[Act::Glory],
+            Self::LouseProgenitor => &[Act::Hive],
+            Self::MagiKnight => &[Act::Glory],
+            Self::Mawler => &[Act::Overgrowth],
+            Self::MechaKnight => &[Act::Glory],
+            Self::MockArtifactMonster => &[],
+            Self::MockAttackAndSummonMinionMonster => &[],
+            Self::MockAttackMonster => &[],
+            Self::MockIntangibleMonster => &[],
+            Self::MockPlatingMonster => &[],
+            Self::MockReattachMonster => &[],
+            Self::MultiAttackMoveMonster => &[],
+            Self::MysteriousKnight => &[],
+            Self::Myte => &[Act::Hive],
+            Self::Nibbit => &[Act::Overgrowth],
+            Self::Noisebot => &[Act::Glory],
+            Self::OneHpMonster => &[],
+            Self::Osty => &[],
+            Self::Ovicopter => &[Act::Hive],
+            Self::OwlMagistrate => &[Act::Glory],
+            Self::PaelsLegion => &[],
+            Self::Parafright => &[Act::Hive],
+            Self::PhantasmalGardener => &[Act::Underdocks],
+            Self::PhrogParasite => &[Act::Overgrowth],
+            Self::PunchConstruct => &[Act::Underdocks, Act::Glory],
+            Self::Queen => &[Act::Glory],
+            Self::Rocket => &[Act::Hive],
+            Self::ScrollOfBiting => &[Act::Glory],
+            Self::Seapunk => &[Act::Underdocks],
+            Self::SewerClam => &[Act::Underdocks],
+            Self::ShrinkerBeetle => &[Act::Overgrowth],
+            Self::SingleAttackMoveMonster => &[],
+            Self::SkulkingColony => &[Act::Underdocks],
+            Self::SlimedBerserker => &[Act::Glory],
+            Self::SlitheringStrangler => &[Act::Overgrowth],
+            Self::SludgeSpinner => &[Act::Underdocks],
+            Self::SlumberingBeetle => &[Act::Hive],
+            Self::SnappingJaxfruit => &[Act::Overgrowth],
+            Self::SneakyGremlin => &[Act::Underdocks],
+            Self::SoulFysh => &[Act::Underdocks],
+            Self::SoulNexus => &[Act::Glory],
+            Self::SpectralKnight => &[Act::Glory],
+            Self::SpinyToad => &[Act::Hive],
+            Self::Stabbot => &[Act::Glory],
+            Self::TenHpMonster => &[],
+            Self::TerrorEel => &[Act::Underdocks],
+            Self::TestSubject => &[Act::Glory],
+            Self::TheAdversaryMkOne => &[],
+            Self::TheAdversaryMkThree => &[],
+            Self::TheAdversaryMkTwo => &[],
+            Self::TheForgotten => &[Act::Glory],
+            Self::TheInsatiable => &[Act::Hive],
+            Self::TheLost => &[Act::Glory],
+            Self::TheObscura => &[Act::Hive],
+            Self::ThievingHopper => &[Act::Hive],
+            Self::Toadpole => &[Act::Underdocks],
+            Self::TorchHeadAmalgam => &[Act::Glory],
+            Self::ToughEgg => &[Act::Hive],
+            Self::TrackerRubyRaider => &[Act::Overgrowth],
+            Self::Tunneler => &[Act::Hive],
+            Self::TurretOperator => &[Act::Glory],
+            Self::TwigSlimeM => &[Act::Overgrowth],
+            Self::TwigSlimeS => &[Act::Overgrowth],
+            Self::TwoTailedRat => &[Act::Underdocks],
+            Self::Vantom => &[Act::Overgrowth],
+            Self::VineShambler => &[Act::Overgrowth],
+            Self::WaterfallGiant => &[Act::Underdocks],
+            Self::Wriggler => &[Act::Overgrowth],
+            Self::Zapbot => &[Act::Glory],
         }
     }
 }

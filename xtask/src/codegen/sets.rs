@@ -1,13 +1,12 @@
 //! A bitset over a generated enum, in the two shapes the domains need.
-//! Every domain grows one sooner or later: a card's keywords, a monster's intents, the families an encounter fields. The card types an enchantment can be put on. They arrived independently and came out the same, which is the point, the shape is forced rather than chosen.
-//! # Two shapes, and the difference is real
-//! [`plain`] is one word with a `contains`. It is right when the member either is or is not in the set, which is most of them.
-//! [`computed`] is two words and answers with a `Field<bool>`. It is right when some of the underlying members are `virtual` and a few models override them. Therefore a member has three answers and not two.
-//! # Why the second shape needs two words
-//! A single bitset has to spell "computed" as either true or false, and there is no honest choice between them. So the set carries the answers and the computed-ness separately, and the generated `get` hands back a `Field<bool>`. Which means there is no way to ask the question that cannot be answered. There is deliberately no `contains`: it is the lie this exists to avoid.
-//! # What a domain still owns
-//! The member names and their docs, and the prose on the types. Those say what the members *are*, which is the part that differs. Everything here says how a set of them is spelled, which is the part that does not.
-//! A set is over the whole enum, not over the members one caller happens to use. An enchantment can only be put on three of the six card types. `CardTypeSet` still spans all six, narrowing the type to its first caller will make the second one wrong.
+//!
+//! Every domain grows one sooner or later. A card's keywords, a monster's
+//! intents, the families an encounter fields, the card types an enchantment can
+//! be put on. They arrived independently and came out the same, which is the
+//! point. The shape is forced rather than chosen.
+//!
+//! The xtask README says how the two shapes differ, why the computed one needs
+//! two words, and what a domain still owns.
 
 use std::fmt::Write as _;
 
@@ -15,7 +14,9 @@ use super::DERIVES;
 
 /// A method a set gets only where a caller wants it.
 ///
-/// `new`, `contains`, `iter` and `Debug` are the core and every set has them: build one, ask it, walk it, print it. These two are not, and handing them out anyway is four sets carrying an `intersects` nothing calls.
+/// `new`, `contains`, `iter` and `Debug` are the core, and every set has them:
+/// build one, ask it, walk it, print it. These two are not. Handing them out
+/// anyway gives four sets an `intersects` nothing calls.
 #[derive(PartialEq, Eq)]
 pub enum Extra {
     IsEmpty,
@@ -30,28 +31,70 @@ pub struct Set<'a> {
     pub set: &'a str,
     /// What the member enum's doc says, beyond the first line.
     ///
-    /// Empty when the enum is not emitted here, a set over an enum another domain already declares, like `CardTypeSet` over `CardType`.
+    /// Empty when the enum is not emitted here. That is a set over an enum
+    /// another domain already declares, like `CardTypeSet` over `CardType`.
     pub flag_doc: &'a str,
     /// What the set's doc says.
     pub set_doc: &'a str,
-    /// The members in bit order, each with its own doc.
-    pub members: &'a [(&'a str, &'a str)],
+    /// The members, each at the bit it occupies.
+    pub members: &'a [Member<'a>],
     /// Whether to emit the member enum, or only the set over it.
     pub declare: bool,
     /// Methods beyond the core, emitted only where something calls them.
     pub extras: &'a [Extra],
-    /// The highest bit the set can use, which is the highest discriminant of any member, not the member count.
+}
+
+/// One member of a set, and the bit it occupies.
+pub struct Member<'a> {
+    pub name: &'a str,
+    /// The bit, which is also the discriminant where the set declares the enum.
     ///
-    /// The two differ whenever an enum has a hole in it. `CardKeyword` drops its zero and runs 1.=7, so seven members reach bit 7 and the word has to hold eight bits rather than seven. Sizing from the count is right by luck there and wrong the first time a domain drops a member in the middle.
-    pub bits: usize,
+    /// Not the member's position. The two differ whenever an enum has a hole in
+    /// it. `CardKeyword` drops its zero and runs 1..=7, so seven members reach
+    /// bit 7 and the word has to hold eight bits. Numbering by position is
+    /// right by luck there, and wrong the first time a domain drops a member in
+    /// the middle.
+    pub bit: usize,
+    pub doc: &'a str,
+}
+
+/// Members at 0, 1, 2 …, for an enum this module declares.
+///
+/// A domain's flags are columns in its dump and not a game enum. There is no
+/// numbering to inherit, and position is the only one available.
+pub fn counted<'a>(members: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<Member<'a>> {
+    members
+        .into_iter()
+        .enumerate()
+        .map(|(bit, (name, doc))| Member { name, bit, doc })
+        .collect()
 }
 
 impl Set<'_> {
-    /// The narrowest word that holds every bit.
+    /// The highest bit any member occupies.
+    fn bits(&self) -> usize {
+        self.members.iter().map(|m| m.bit).max().unwrap_or(0)
+    }
+
+    /// The narrowest word that holds every bit, once the members are sound.
     ///
-    /// The same decision `repr` makes and for the same reason: the set sits inside a data struct. Therefore a `u16` that only ever needs eight bits costs two bytes in every row of the table.
+    /// The width is the same decision `repr` makes. A `u16` needing eight bits
+    /// costs two bytes in every row of the table.
+    ///
+    /// The soundness is that no two members share a bit. Two flags on one bit
+    /// answer for each other, and that is the mistake a domain numbering its
+    /// own members can make.
     fn word(&self) -> Result<&'static str, String> {
-        match self.bits {
+        for (i, m) in self.members.iter().enumerate() {
+            if let Some(other) = self.members[..i].iter().find(|o| o.bit == m.bit) {
+                return Err(format!(
+                    "{}: {} and {} are both bit {}",
+                    self.set, other.name, m.name, m.bit
+                ));
+            }
+        }
+
+        match self.bits() {
             n if n < 8 => Ok("u8"),
             n if n < 16 => Ok("u16"),
             n if n < 32 => Ok("u32"),
@@ -149,7 +192,7 @@ pub fn computed(out: &mut String, set: &Set<'_>) -> Result<(), String> {
         members = set
             .members
             .iter()
-            .map(|(m, _)| format!("{flag}::{m}"))
+            .map(|m| format!("{flag}::{}", m.name))
             .collect::<Vec<_>>()
             .join(", "),
     )
@@ -158,9 +201,11 @@ pub fn computed(out: &mut String, set: &Set<'_>) -> Result<(), String> {
     Ok(())
 }
 
-/// Emits a set whose members are  in it or not: one word, and `contains`.
+/// Emits a set whose members are in it or not: one word, and `contains`.
 ///
-/// The bits are the member's own discriminant, so a bit means the same thing here as it does wherever the enum came from. This matters when the enum is another domain's and the numbers are the game's.
+/// The bits are the member's own discriminant, so a bit means the same thing
+/// here as it does wherever the enum came from. That matters when the enum is
+/// another domain's and the numbers are the game's.
 pub fn plain(out: &mut String, set: &Set<'_>) -> Result<(), String> {
     let word = set.word()?;
     let (flag, name) = (set.flag, set.set);
@@ -204,12 +249,26 @@ pub fn plain(out: &mut String, set: &Set<'_>) -> Result<(), String> {
          \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
          \x20       f.debug_set().entries(self.iter()).finish()\n\
          \x20   }}\n\
+         }}\n\
+         \n\
+         impl sts2_core::FlagSet for {name} {{\n\
+         \x20   type Member = {flag};\n\
+         \n\
+         \x20   const MEMBERS: &'static [{flag}] = &Self::MEMBERS;\n\
+         \n\
+         \x20   fn from_members(members: &[{flag}]) -> Self {{\n\
+         \x20       Self::new(members)\n\
+         \x20   }}\n\
+         \n\
+         \x20   fn contains(self, member: {flag}) -> bool {{\n\
+         \x20       Self::contains(self, member)\n\
+         \x20   }}\n\
          }}\n",
         n = set.members.len(),
         members = set
             .members
             .iter()
-            .map(|(m, _)| format!("{flag}::{m}"))
+            .map(|m| format!("{flag}::{}", m.name))
             .collect::<Vec<_>>()
             .join(", "),
         extras = extras(set, word, name),
@@ -245,7 +304,9 @@ fn extras(set: &Set<'_>, word: &str, name: &str) -> String {
 
 /// The member enum, where the set declares one.
 ///
-/// A set over another domain's enum declares nothing: `CardTypeSet` is a set over `cards::CardType`. A second `CardType` beside it is the duplicate this module exists to avoid.
+/// A set over another domain's enum declares nothing. `CardTypeSet` is a set
+/// over `cards::CardType`, and a second `CardType` beside it is the duplicate
+/// this module exists to avoid.
 fn declare(out: &mut String, set: &Set<'_>) {
     if !set.declare {
         return;
@@ -259,11 +320,11 @@ fn declare(out: &mut String, set: &Set<'_>) {
     writeln!(out, "{DERIVES}").unwrap();
     writeln!(out, "#[repr(u8)]").unwrap();
     writeln!(out, "pub enum {} {{", set.flag).unwrap();
-    for (bit, (member, doc)) in set.members.iter().enumerate() {
-        for line in doc.lines() {
+    for member in set.members {
+        for line in member.doc.lines() {
             writeln!(out, "    ///{}", pad(line.trim())).unwrap();
         }
-        writeln!(out, "    {member} = {bit},").unwrap();
+        writeln!(out, "    {} = {},", member.name, member.bit).unwrap();
     }
     writeln!(out, "}}\n").unwrap();
 }
@@ -275,7 +336,8 @@ fn noun(set: &str) -> String {
 
 /// A power, but an affliction and an enchantment.
 ///
-/// Crude, it reads the letter rather than the sound, but every noun here is a kind of game content. None of them is a "hour" or a "user".
+/// Crude, because it reads the letter rather than the sound. But every noun
+/// here is a kind of game content, and none of them is a "hour" or a "user".
 fn article(noun: &str) -> &'static str {
     match noun.starts_with(['a', 'e', 'i', 'o', 'u']) {
         true => "an",
@@ -285,7 +347,8 @@ fn article(noun: &str) -> &'static str {
 
 /// A doc line, with the space only a non-empty line gets.
 ///
-/// rustfmt strips a trailing space anyway, but the generated file reads better without one and a blank doc line is `///` rather than `/// `.
+/// rustfmt strips a trailing space anyway, but the generated file reads better
+/// without one and a blank doc line is `///` rather than `/// `.
 fn pad(line: &str) -> String {
     if line.is_empty() {
         String::new()
@@ -298,49 +361,89 @@ fn pad(line: &str) -> String {
 mod tests {
     use super::*;
 
-    fn set(members: usize, bits: usize) -> Set<'static> {
-        const NAMES: [(&str, &str); 40] = [("M", ""); 40];
+    /// `members` members at distinct bits, the highest of which is `bits`.
+    ///
+    /// Distinct is not a choice here. Bits are what a set is made of, so a
+    /// member count above `bits + 1` describes nothing that exists.
+    fn set(members: usize, bits: usize) -> Vec<Member<'static>> {
+        assert!(
+            members <= bits + 1,
+            "{members} members do not fit under bit {bits}"
+        );
+        let mut all = counted(std::iter::repeat_n(("M", ""), members));
+        all.last_mut().unwrap().bit = bits;
+        all
+    }
+
+    fn width(members: &[Member<'_>]) -> Result<&'static str, String> {
         Set {
             flag: "Member",
             set: "MemberSet",
             flag_doc: "",
             set_doc: "",
-            members: &NAMES[..members],
+            members,
             declare: false,
             extras: &[],
-            bits,
         }
+        .word()
     }
 
     /// The width comes from the highest bit, not the member count.
     ///
-    /// The two agree on every enum in the build, so the generated tree cannot tell the rules apart, which is why this is here. They come apart the first time a domain drops a member in the middle of an enum. Then sizing from the count silently truncates the set.
+    /// The two agree on every enum in the build, so the generated tree cannot
+    /// tell the rules apart. That is why this is here. They come apart the
+    /// first time a domain drops a member in the middle of an enum. Sizing from
+    /// the count then silently truncates the set.
     #[test]
     fn the_word_holds_the_highest_bit_and_not_the_member_count() {
-        // Seven members reaching bit 7, `CardKeyword`, which drops its zero.
+        // Seven members reaching bit 7 — `CardKeyword`, which drops its zero.
         // The count says six bits and the truth says eight.
-        assert_eq!(set(7, 7).word().unwrap(), "u8");
+        assert_eq!(width(&set(7, 7)).unwrap(), "u8");
 
-        // The case that will break: few members, high discriminants.
-        assert_eq!(set(3, 9).word().unwrap(), "u16");
-        assert_eq!(set(3, 20).word().unwrap(), "u32");
+        // The case that would break: few members, high discriminants. Two
+        // members and a `u32`, where counting would say one byte.
+        assert_eq!(width(&set(2, 9)).unwrap(), "u16");
+        assert_eq!(width(&set(2, 20)).unwrap(), "u32");
 
-        // The boundaries themselves.
-        assert_eq!(set(1, 0).word().unwrap(), "u8");
-        assert_eq!(set(9, 7).word().unwrap(), "u8");
-        assert_eq!(set(9, 8).word().unwrap(), "u16");
-        assert_eq!(set(20, 15).word().unwrap(), "u16");
-        assert_eq!(set(20, 16).word().unwrap(), "u32");
+        // The boundaries themselves, from either side.
+        assert_eq!(width(&set(1, 0)).unwrap(), "u8");
+        assert_eq!(width(&set(8, 7)).unwrap(), "u8");
+        assert_eq!(width(&set(2, 8)).unwrap(), "u16");
+        assert_eq!(width(&set(2, 15)).unwrap(), "u16");
+        assert_eq!(width(&set(2, 16)).unwrap(), "u32");
     }
 
     /// Past a `u32` is an error rather than a truncation.
     #[test]
     fn a_set_too_wide_to_hold_fails_generation() {
-        let err = set(3, 32).word().unwrap_err();
+        let err = width(&set(3, 32)).unwrap_err();
         assert!(err.contains("MemberSet"), "the error names the set: {err}");
         assert!(
             err.contains("bit 32"),
             "and the bit it could not hold: {err}"
         );
+    }
+
+    /// Two members on one bit is the mistake explicit numbering allows.
+    ///
+    /// `counted` cannot make it, but a domain reading bits out of a dump can.
+    /// The result is two flags that answer for each other.
+    #[test]
+    fn two_members_on_one_bit_fail_generation() {
+        let members = [
+            Member {
+                name: "Early",
+                bit: 3,
+                doc: "",
+            },
+            Member {
+                name: "Late",
+                bit: 3,
+                doc: "",
+            },
+        ];
+        let err = width(&members).unwrap_err();
+        assert!(err.contains("Early") && err.contains("Late"), "{err}");
+        assert!(err.contains("bit 3"), "{err}");
     }
 }

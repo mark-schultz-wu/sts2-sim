@@ -375,6 +375,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sts2-content",
+ "sts2-core",
  "sts2-headless",
  "sts2-rng",
 ]
@@ -386,6 +387,18 @@ dependencies = [
  "nonmax",
  "serde",
  "serde_json",
+ "sts2-core",
+]
+
+[[package]]
+name = "sts2-core"
+version = "0.1.0"
+dependencies = [
+ "nonmax",
+ "serde",
+ "serde_json",
+ "sts2-content",
+ "thiserror",
 ]
 
 [[package]]
@@ -398,6 +411,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sts2-content",
+ "sts2-core",
  "sts2-rng",
  "thiserror",
 ]

@@ -1,11 +1,12 @@
 //! Every event: which acts offer it, and the shell around its choices.
-//! What an event *does* is `GenerateInitialOptions`, which all 69 override and which builds the player's choices out of run state. That is code and gets ported by hand. What is table is which acts can offer one at all, whether it carries a condition. The few facts the room reads before the first page.
-//! # Two things called "shared"
-//! The game has both and they are unrelated, which is worth saying because the names do not.
-//! `ModelDb.AllSharedEvents` is a pool of nineteen that any act can roll, concatenated onto every act's own list. That is where an event comes from, and here it is the `anyact` bucket.
-//! `EventModel.IsShared` is the multiplayer sense: `EventSynchronizer` uses it to decide whether every player goes through the event together. The layout only shows its label once there is more than one player. Eight events set it, and they are *not* the nineteen, `BATTLEWORN_DUMMY` sets it and sits in one act. `FAKE_MERCHANT` is in the pool and sets it too. So it generates as `shared_between_players`, which is what it means.
-//! # `deterministic` is not `!shared_between_players`
-//! `IsDeterministic` defaults to `!IsShared`, and reading that as a definition is wrong: `CRYSTAL_SPHERE` overrides it and is neither shared nor deterministic. `EventRoom` branches on determinism alone, so the two are dumped as two columns and the table keeps them apart.
+//!
+//! What an event *does* is `GenerateInitialOptions`, which all 69 override and
+//! which builds the player's choices out of run state. That is code and gets
+//! ported by hand. What is table is which acts can offer one at all. Whether it
+//! carries a condition, and the few facts the room reads before the first page.
+//!
+//! The xtask README says which two things the game calls "shared", and why
+//! `deterministic` is not the negation of either.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -46,7 +47,10 @@ const FLAGS: [(&str, usize, &str); 4] = [
 
 /// The bucket an event's row lands in.
 ///
-/// Acts first, because that is where most events come from. The rest is what the act lists do not cover. `anyact` for the nineteen in `ModelDb.AllSharedEvents`, `crossover` for the two an act list names twice, and `unlisted` for the four nothing offers.
+/// Acts first, because that is where most events come from. The rest is what the
+/// act lists do not cover. `anyact` for the nineteen in
+/// `ModelDb.AllSharedEvents`, `crossover` for the two an act list names twice,
+/// and `unlisted` for the four nothing offers.
 fn bucket(acts: &[String], pooled: bool) -> String {
     match acts {
         [] if pooled => "anyact".into(),
@@ -108,7 +112,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     // The two memberships are meant to be disjoint: an event either belongs to
     // an act's list or to the pool every act draws from. Checked rather than
-    // assumed, because an event in both is offered twice.
+    // assumed, because an event in both would be offered twice.
     for id in &pooled {
         if acts_of.contains_key(*id) {
             return Err(format!(
@@ -179,7 +183,9 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
 /// The flags, as a one-word set.
 ///
-/// One word and a `contains`, unlike a power's or a relic's: nothing here is computed. This is because every one of these is read off the model with no combat running.
+/// One word and a `contains`, unlike a power's or a relic's. Nothing here is
+/// computed, because every one of these is read off the model with no combat
+/// running.
 fn emit_flags(out: &mut String) -> Result<(), String> {
     sets::plain(
         out,
@@ -190,10 +196,9 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
                        Four separate `EventModel` members rather than a game enum, so the\n\
                        numbering is the order the dump writes the columns in.",
             set_doc: "The flags an event has.",
-            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            members: &sets::counted(FLAGS.map(|(name, _, doc)| (name, doc))),
             declare: true,
             extras: &[],
-            bits: FLAGS.len() - 1,
         },
     )
 }
@@ -264,29 +269,17 @@ fn emit_events(
     }
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(out, "impl Event {{").unwrap();
+    let mut extras = String::new();
     writeln!(
-        out,
-        "    /// Every event, so callers can sweep the table without a way to\n\
-         \x20   /// enumerate an enum."
-    )
-    .unwrap();
-    writeln!(out, "    pub const ALL: [Event; {}] = [", events.len()).unwrap();
-    for row in events {
-        writeln!(out, "        Event::{},", camel(&row[1])).unwrap();
-    }
-    writeln!(out, "    ];\n").unwrap();
-
-    writeln!(
-        out,
+        extras,
         "    /// The acts whose own list offers this event.\n\
          \x20   ///\n\
          \x20   /// Empty for one in the any-act pool — see [`Event::any_act`] —\n\
          \x20   /// and for the four nothing offers."
     )
     .unwrap();
-    writeln!(out, "    pub const fn acts(self) -> &'static [Act] {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    writeln!(extras, "    fn acts(self) -> &'static [Act] {{").unwrap();
+    writeln!(extras, "        match self {{").unwrap();
     for row in events {
         let list = acts_of
             .get(&row[1])
@@ -297,13 +290,13 @@ fn emit_events(
                     .join(", ")
             })
             .unwrap_or_default();
-        writeln!(out, "            Self::{} => &[{list}],", camel(&row[1])).unwrap();
+        writeln!(extras, "            Self::{} => &[{list}],", camel(&row[1])).unwrap();
     }
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}\n").unwrap();
+    writeln!(extras, "        }}").unwrap();
+    writeln!(extras, "    }}\n").unwrap();
 
     writeln!(
-        out,
+        extras,
         "    /// Whether any act can roll this event.\n\
          \x20   ///\n\
          \x20   /// `ModelDb.AllSharedEvents` is concatenated onto every act's own\n\
@@ -312,16 +305,30 @@ fn emit_events(
          \x20   /// event that is in both, since a map would offer it twice."
     )
     .unwrap();
-    writeln!(out, "    pub const fn any_act(self) -> bool {{").unwrap();
-    writeln!(out, "        matches!(").unwrap();
-    writeln!(out, "            self,").unwrap();
+    writeln!(extras, "    fn any_act(self) -> bool {{").unwrap();
+    writeln!(extras, "        matches!(").unwrap();
+    writeln!(extras, "            self,").unwrap();
     let names: Vec<String> = pooled
         .iter()
         .map(|id| format!("Self::{}", camel(id)))
         .collect();
-    writeln!(out, "            {}", names.join("\n                | ")).unwrap();
-    writeln!(out, "        )").unwrap();
-    writeln!(out, "    }}\n").unwrap();
+    writeln!(extras, "            {}", names.join("\n                | ")).unwrap();
+    writeln!(extras, "        )").unwrap();
+    writeln!(extras, "    }}").unwrap();
+
+    writeln!(out, "impl sts2_core::Table for Event {{").unwrap();
+    writeln!(out, "    type Data = EventData;\n").unwrap();
+    writeln!(
+        out,
+        "    /// Every event, so callers can sweep the table without a way to\n\
+         \x20   /// enumerate an enum."
+    )
+    .unwrap();
+    writeln!(out, "    const ALL: &'static [Self] = &[").unwrap();
+    for row in events {
+        writeln!(out, "        Event::{},", camel(&row[1])).unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
 
     writeln!(
         out,
@@ -330,7 +337,7 @@ fn emit_events(
          \x20   /// One arm per event, naming the file its row lives in."
     )
     .unwrap();
-    writeln!(out, "    pub const fn data(self) -> EventData {{").unwrap();
+    writeln!(out, "    fn data(self) -> EventData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for row in events {
         let empty = Vec::new();
@@ -346,6 +353,11 @@ fn emit_events(
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl sts2_core::EventTable for Event {{").unwrap();
+    writeln!(out, "    type Act = Act;\n").unwrap();
+    out.push_str(&extras);
     writeln!(out, "}}").unwrap();
 
     Ok(())

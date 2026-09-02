@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use nonmax::NonMaxU32;
 use serde::de::DeserializeOwned;
-use sts2_content::ContentVersion;
+use sts2_core::ContentVersion;
 use sts2_headless::{Answer as GameAnswer, Command, TakeReward};
 use sts2_rng::Seed;
 

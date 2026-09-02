@@ -1,11 +1,18 @@
 //! The monster table against the dump it came from.
-//! Structured like the card tests and for the same reason: a generated table is only trustworthy while something replays the dump against it. What is different here is that a monster's table is a graph, so most of this checks that the graph closes. The codegen turned state *names* into *indices*, and a mistranslation there is invisible right up until a monster took a turn. Walked to the wrong move.
+//!
+//! Structured like the card tests and for the same reason. A generated table is
+//! only trustworthy while something replays the dump against it. What is
+//! different here is that a monster's table is a graph, so most of this checks
+//! that the graph closes. The codegen turned state *names* into *indices*, and
+//! a mistranslation there stays invisible. It surfaces when a monster takes a
+//! turn and walks to the wrong move.
 
 use super::super::acts::Act;
 use super::super::monsters::*;
 use super::super::{MONSTERS, VERSION};
 use super::{build, rows, wire};
 use crate::{Field, Scaled};
+use sts2_core::{MonsterTable, Table};
 
 fn monster(id: &str) -> Monster {
     *Monster::ALL
@@ -16,7 +23,10 @@ fn monster(id: &str) -> Monster {
 
 /// A monster's state names in index order.
 ///
-/// The dump emits one row per state, sorted by id, and the codegen made a state's position in that sequence its index. So walking the rows in order reproduces the mapping. This is what lets every assertion below compare a generated index against the name the dump used.
+/// The dump emits one row per state, sorted by id. The codegen made a state's
+/// position in that sequence its index, so walking the rows in order reproduces
+/// the mapping. Every assertion below compares a generated index against the
+/// name the dump used at that position.
 fn state_names(id: &str) -> Vec<&'static str> {
     MONSTERS
         .lines()
@@ -27,9 +37,16 @@ fn state_names(id: &str) -> Vec<&'static str> {
         .collect()
 }
 
-/// The dump's `repeatType`, `maxTimes` and `cooldown` columns as the [`Repeat`] they must have generated. Spelled out here independently of the codegen that produced the table, otherwise this will only prove codegen agrees with itself.
+/// The dump's `repeatType`, `maxTimes` and `cooldown` columns as the [`Repeat`]
+/// they generate.
 ///
-/// Three columns become one enum and the mapping is not one to one, which is the whole reason to restate it rather than compare strings. `CannotRepeat` is `InARow(One)` because `GetStateWeight` computes `num2 = CannotRepeat ? 1 : maxTimes` and then runs the same loop for both. `maxTimes` is only read for `CanRepeatXTimes`, so a nonzero one anywhere else means the mapping has stopped being true. And a cooldown beside a repeat type absorbs it, or is absorbed by `UseOnlyOnce`. This is because `GetStateWeight` ORs the two tests and one of them always implies the other. The argument is in `Repeat`'s own documentation.
+/// Spelled out here independently of the codegen that produced the table, which
+/// otherwise only proves codegen agrees with itself.
+///
+/// Three columns become one enum and the mapping is not one to one.
+/// `CannotRepeat` is `InARow(One)`, because `GetStateWeight` computes
+/// `num2 = CannotRepeat ? 1 : maxTimes`. A cooldown beside a repeat type
+/// absorbs it, or is absorbed by `UseOnlyOnce`.
 fn repeat(kind: &str, max_times: &str, cooldown: &str) -> Repeat {
     let max_times: u8 = max_times.parse().expect("a maxTimes");
     let cooldown: u8 = cooldown.parse().expect("a cooldown");
@@ -58,7 +75,8 @@ fn repeat(kind: &str, max_times: &str, cooldown: &str) -> Repeat {
     }
 }
 
-/// The anchor, same as the card dump's: a dump from another build has another hash. A table regenerated against one is the failure this prevents.
+/// The anchor, same as the card dump's. A dump from another build has another
+/// hash, and a table regenerated against one is the failure this prevents.
 #[test]
 fn the_dump_came_from_this_version() {
     assert_eq!(
@@ -70,7 +88,10 @@ fn the_dump_came_from_this_version() {
 
 /// Ascension moves numbers, never a monster's graph.
 ///
-/// The dump reads every value at every level. A `structurechange` row means ascension changes a monster's graph, which the table cannot express. Codegen refuses such a row.
+/// The dump reads every value at every level. A `structurechange` row means a
+/// monster gains or loses a state or a branch as ascension rises, which the
+/// table has no way to express. Codegen refuses on one, and this says so out
+/// loud rather than leaving it implied.
 #[test]
 fn ascension_never_changes_a_graph() {
     assert_eq!(rows(MONSTERS, "structurechange").count(), 0);
@@ -78,7 +99,10 @@ fn ascension_never_changes_a_graph() {
 
 /// Where ascension actually moves something, measured rather than assumed.
 ///
-/// 102 of 126 monsters gain HP at `ToughEnemies`. Damage almost always steps at `DeadlyEnemies`, except Gremlin Merc, whose three attacks step at `ToughEnemies` instead. That exception is the reason the dump sweeps every level instead of reading two names out of the source.
+/// 102 of 126 monsters gain HP at `ToughEnemies`. Damage almost always steps at
+/// `DeadlyEnemies`. The exception is Gremlin Merc, whose three attacks step at
+/// `ToughEnemies` instead. That exception is the reason the dump sweeps every
+/// level instead of reading two names out of the source.
 #[test]
 fn the_ascension_thresholds_are_the_two_enemy_levels() {
     let hp: Vec<&str> = rows(MONSTERS, "scalehp").map(|r| r[2]).collect();
@@ -131,7 +155,9 @@ fn every_monster_is_generated() {
     }
 }
 
-/// The four acts, in the order a run visits them. This is the order `ModelDb.Acts` yields them and therefore the order the dump wrote them in. The discriminants encode that order, so a reshuffle is a silent remapping.
+/// The four acts, in the order a run visits them. That is the order
+/// `ModelDb.Acts` yields them, and therefore the order the dump wrote them in.
+/// The discriminants encode that order, so a reshuffle is a silent remapping.
 #[test]
 fn the_acts_are_in_run_order() {
     let mut seen: Vec<&str> = Vec::new();
@@ -176,7 +202,7 @@ fn a_monsters_acts_are_the_ones_whose_encounters_name_it() {
     }
 
     // Not every monster has one. These arrive only by being summoned, and no
-    // encounter table names them, an empty slice is a fact about the game
+    // encounter table names them — an empty slice is a fact about the game
     // rather than a gap in the dump, which is why `ModelDb.Monsters` alone was
     // not enough to enumerate them.
     let summoned = Monster::ALL.iter().filter(|m| m.acts().is_empty()).count();
@@ -185,9 +211,12 @@ fn a_monsters_acts_are_the_ones_whose_encounters_name_it() {
 
 /// One rule has one spelling.
 ///
-/// `Cooldown(One)` and `InARow(One)` are the same predicate, "the last move was this branch". Therefore a table free to use either will compare two identical rules unequal. Codegen canonicalises to `InARow(One)`. This is what stops that from being a comment.
+/// `Cooldown(One)` and `InARow(One)` are the same predicate. A table free to use
+/// either compares two identical rules unequal, so codegen canonicalises to
+/// `InARow(One)`.
 ///
-/// This build has no cooldown of 1 at all, so the assertion will hold even if codegen forgot. That is why the mutation matters more than the pass: flip the canonicalisation and this test still goes green. This is exactly what makes it worth pinning before a balance patch introduces one.
+/// This build has no cooldown of 1, so the assertion holds even if codegen
+/// forgets. Worth pinning before a balance patch introduces one.
 #[test]
 fn a_window_of_one_is_always_spelled_in_a_row() {
     for m in Monster::ALL {
@@ -209,7 +238,10 @@ fn a_window_of_one_is_always_spelled_in_a_row() {
 
 /// The graph closes.
 ///
-/// Every index the table holds, the initial state, a move's follow-up, a branch target, has to land inside its own monster's `states` slice. This is what makes the name-to-index translation safe to rely on, so nothing downstream has to bounds-check a transition.
+/// Every index the table holds has to land inside its own monster's `states`
+/// slice. That is the initial state, a move's follow-up, and a branch target.
+/// This is what makes the name-to-index translation safe to rely on, so nothing
+/// downstream has to bounds-check a transition.
 #[test]
 fn every_state_index_is_in_range() {
     for m in Monster::ALL {
@@ -249,7 +281,9 @@ fn every_state_index_is_in_range() {
 
 /// The table against the dump, row by row.
 ///
-/// Branch order is compared unsorted, and that is the point rather than laziness: `RandomBranchState.GetNextState` subtracts weights walking the list. Therefore reordering two branches changes which move a given roll produces.
+/// Branch order is compared unsorted, and that is the point rather than
+/// laziness. `RandomBranchState.GetNextState` subtracts weights walking the
+/// list, so reordering two branches changes which move a roll produces.
 #[test]
 fn the_generated_table_matches_the_dump() {
     let mut states = 0;
@@ -276,7 +310,7 @@ fn the_generated_table_matches_the_dump() {
         assert_eq!(data.states.len().to_string(), row[5], "{id}: state count");
         assert_eq!(names.len(), data.states.len(), "{id}: state rows");
 
-        // The dump names the initial state. The table indexes it. Checking the
+        // The dump names the initial state; the table indexes it. Checking the
         // name at that index is what proves the two agree.
         assert_eq!(names[data.initial as usize], row[4], "{id}: initial");
 
@@ -287,7 +321,7 @@ fn the_generated_table_matches_the_dump() {
                     // Two dump columns, one field. Restated as a pair so that
                     // both halves are pinned: `OncePerformed` differs from
                     // `Next` only in the bool, and a codegen that dropped the
-                    // bool will still name the right state.
+                    // bool would still name the right state.
                     let d = one("move", id, name);
                     let expected = match mv.follow_up {
                         FollowUp::Never => ("-", false),
@@ -344,8 +378,8 @@ fn the_generated_table_matches_the_dump() {
         }
     }
 
-    // Every dumped row was reached, not just every generated one, otherwise a
-    // state the codegen dropped will pass everything above.
+    // Every dumped row was reached, not just every generated one — otherwise a
+    // state the codegen dropped would pass everything above.
     assert_eq!(
         states,
         rows(MONSTERS, "move").count()
@@ -365,7 +399,9 @@ fn one(kind: &'static str, monster: &str, state: &str) -> Vec<&'static str> {
 
 /// Every `scale*` row matching a slot, as `(level, value)` in dump order.
 ///
-/// Raw: a row is included even when the column it names did not move. This is because replaying all of them is what makes this independent of the codegen rule that decides which ones become steps.
+/// Raw. A row is included even when the column it names did not move. Replaying
+/// all of them is what makes this independent of the codegen rule that decides
+/// which ones become steps.
 fn updates(kind: &'static str, key: &[&str], column: usize) -> Vec<(u8, &'static str)> {
     let level = key.len() + 1;
     rows(MONSTERS, kind)
@@ -388,7 +424,10 @@ fn check_field<T: Copy + std::fmt::Display>(
 
 /// A `Scaled` against the dump, by replaying it.
 ///
-/// Rather than comparing `steps` to the dump's rows. This will only prove the codegen agrees with its own rule about which rows become steps. This asks the value at every ascension level and checks it against the dump replayed to that level. What is compared is the meaning, not the encoding.
+/// Comparing `steps` to the dump's rows only proves the codegen agrees with its
+/// own rule about which rows become steps. So this asks the value at every
+/// ascension level, and checks it against the dump replayed to that level. What
+/// is compared is the meaning, not the encoding.
 fn check_scaled<T: Copy + std::fmt::Display>(
     where_: &str,
     scaled: Scaled<T>,
@@ -410,7 +449,10 @@ fn check_scaled<T: Copy + std::fmt::Display>(
     }
 }
 
-/// The dump's intent-type name as the [`IntentKind`] it must be, spelled out here rather than derived from `Debug`. Otherwise a renamed variant will rename both sides at once and prove nothing.
+/// The dump's intent-type name as the [`IntentKind`] it names.
+///
+/// Spelled out here rather than derived from `Debug`. Otherwise a renamed
+/// variant renames both sides at once and proves nothing.
 fn intent_kind(name: &str) -> IntentKind {
     match name {
         "Attack" => IntentKind::Attack,
@@ -434,9 +476,12 @@ fn intent_kind(name: &str) -> IntentKind {
 
 /// A move's telegraph against the dump's intent rows.
 ///
-/// The table holds a set and two payloads where the dump holds an ordered list. Therefore this walks the rows and rebuilds what the set must be, the same posture as `repeat`, restating the mapping instead of comparing spellings.
+/// The table holds a set and two payloads where the dump holds an ordered list,
+/// so this walks the rows and rebuilds the set. The same posture as `repeat`.
 ///
-/// Order is the one thing not checked, because it is the one thing the table deliberately drops. The game's array order reaches only the intent icons and the hover tips. Everything else is checked per row, including that the two payloads sit beside the right bits.
+/// Order is the one thing not checked, because it is the one thing the table
+/// deliberately drops. The game's array order reaches only the icons and the
+/// hover tips.
 fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> usize {
     let rows: Vec<Vec<&str>> = rows(MONSTERS, "intent")
         .filter(|r| r[1] == monster && r[2] == state)
@@ -476,7 +521,7 @@ fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> 
                 check_field(&where_, c, count, &updates("scaleintent", &key, 5));
             }
             // Everything else carries no numbers, and the dump has to agree. A
-            // number in a column with no field for it will otherwise be
+            // number in a column with no field for it would otherwise be
             // dropped without a word.
             _ => {
                 assert_eq!(count, "-", "{where_}: {kind} carries a count");
@@ -485,8 +530,8 @@ fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> 
         }
     }
 
-    // The other direction: a bit the dump never asked for will otherwise sit
-    // in the set unnoticed, and so will a payload with no intent to belong to.
+    // The other direction: a bit the dump never asked for would otherwise sit
+    // in the set unnoticed, and so would a payload with no intent to belong to.
     let mut got: Vec<IntentKind> = intents.kinds.iter().collect();
     let mut want = expected.clone();
     got.sort_by_key(|k| *k as u8);
@@ -511,9 +556,13 @@ fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> 
     rows.len()
 }
 
-/// Exactly the branch weights the game works out from combat state, and no others.
+/// Exactly the branch weights the game works out from combat state, and no
+/// others.
 ///
-/// All four are Two-Tailed Rat's `() => !CanSummon() ? 1f : 1f/12f`. The remaining 64 are literal constants the dump recovered. If a build makes one of those conditional, this fails rather than letting the simulator keep rolling against a number that is no longer true.
+/// All four are Two-Tailed Rat's `() => !CanSummon() ? 1f : 1f/12f`. The
+/// remaining 64 are literal constants the dump recovered. If a build makes one
+/// of those conditional, this fails rather than letting the simulator keep
+/// rolling against a number that is no longer true.
 #[test]
 fn only_the_known_weights_are_computed() {
     let mut computed: Vec<(&str, &str)> = rows(MONSTERS, "branch")
@@ -534,7 +583,8 @@ fn only_the_known_weights_are_computed() {
     );
 }
 
-/// The intents whose numbers the game works out at combat time. Same argument as the weights.
+/// The intents whose numbers the game works out at combat time. Same argument
+/// as the weights.
 #[test]
 fn only_the_known_intents_are_computed() {
     let mut computed: Vec<(&str, &str, &str)> = rows(MONSTERS, "intent")
@@ -553,5 +603,103 @@ fn only_the_known_intents_are_computed() {
             ("WATERFALL_GIANT", "PRESSURE_GUN_MOVE", "Attack"),
         ],
         "the set of intents reading combat state has changed"
+    );
+}
+
+/// A move carries the name the dump gave the state at that position.
+///
+/// The mapping the observation depends on. A `MoveId` beside the wrong state
+/// puts a simulator on the wrong branch while every index stays in range.
+///
+/// Checked against the dump rather than the table. `state_names` reads the
+/// names in dump order, and codegen turned that order into positions, so this
+/// compares the two derivations.
+#[test]
+fn every_move_carries_the_name_of_the_state_it_is() {
+    let mut checked = 0;
+
+    for row in rows(MONSTERS, "monster") {
+        let id = row[1];
+        let names = state_names(id);
+
+        for (index, state) in monster(id).data().states.iter().enumerate() {
+            let State::Move(m) = state else { continue };
+            assert_eq!(
+                wire(&m.id),
+                names[index],
+                "{id} state {index} is called {} in the dump",
+                names[index]
+            );
+            checked += 1;
+        }
+    }
+
+    assert_eq!(checked, 355, "the build has 355 move states");
+}
+
+/// `MoveId` is every move name the build has, once each.
+///
+/// One enum over the whole build rather than one per monster, so the count is
+/// the number of distinct *names*. 84 of the 355 share a name. Pinned by name at
+/// both ends, because a name added or dropped changes what a simulator can be
+/// compared on.
+///
+/// The `installed` rows count too. Three moves belong to no machine.
+#[test]
+fn the_move_names_are_every_name_in_the_dump() {
+    let mut dumped: Vec<&str> = rows(MONSTERS, "move").map(|r| r[2]).collect();
+    dumped.sort_unstable();
+    let total = dumped.len();
+    dumped.dedup();
+    let declared = dumped.len();
+
+    let mut installed: Vec<&str> = rows(MONSTERS, "installed").map(|r| r[1]).collect();
+    installed.sort_unstable();
+    assert_eq!(
+        installed,
+        ["REVIVE_MOVE", "STUNNED", "UNSET_MOVE"],
+        "the moves no machine declares"
+    );
+    dumped.extend(&installed);
+    dumped.sort_unstable();
+    assert_eq!(
+        dumped.len(),
+        declared + installed.len(),
+        "an installed move is also declared, so one of the two is not what it says"
+    );
+
+    // The difference and not the two lists: 271 names printed twice is not a
+    // diff anybody reads.
+    let generated: Vec<String> = MoveId::ALL.iter().map(wire).collect();
+    let missing: Vec<&&str> = dumped
+        .iter()
+        .filter(|n| !generated.iter().any(|g| g == **n))
+        .collect();
+    let extra: Vec<&String> = generated
+        .iter()
+        .filter(|g| !dumped.contains(&g.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "MoveId is not the dump's move names: missing {missing:?}, extra {extra:?}"
+    );
+    assert_eq!(generated.len(), dumped.len(), "MoveId repeats a name");
+    assert_eq!(
+        dumped.len(),
+        274,
+        "the build has 274 distinct move names: 271 declared and 3 installed"
+    );
+    assert_eq!(total, 355, "across 355 declared move states");
+
+    // The six that share one name really are six different states, which is why
+    // the monster has to travel beside the move.
+    let shared: Vec<&str> = rows(MONSTERS, "move")
+        .filter(|r| r[2] == "NOTHING_MOVE")
+        .map(|r| r[1])
+        .collect();
+    assert_eq!(
+        shared.len(),
+        6,
+        "NOTHING_MOVE is on six monsters: {shared:?}"
     );
 }

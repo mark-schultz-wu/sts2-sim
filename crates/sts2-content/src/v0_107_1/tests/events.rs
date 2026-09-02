@@ -1,11 +1,17 @@
 //! The event table against the dump it came from.
-//! Most of an event is code, `GenerateInitialOptions` builds the player's choices out of run state, and all 69 override it. Therefore what is here is the shell: which acts offer one, and the few facts the room reads first.
-//! Two of those facts share a name in the game and mean different things. The tests below keep them apart on purpose, because nothing else does.
+//!
+//! Most of an event is code. `GenerateInitialOptions` builds the player's
+//! choices out of run state, and all 69 override it. What is here is the shell:
+//! which acts offer one, and the few facts the room reads first.
+//!
+//! Two of those facts share a name in the game and mean different things. The
+//! tests below keep them apart on purpose, because nothing else does.
 
 use super::super::events::*;
 use super::super::{EVENTS, VERSION};
 use super::{build, rows, wire};
 use std::collections::{BTreeMap, BTreeSet};
+use sts2_core::{EventTable, Table};
 
 fn event(id: &str) -> Event {
     *Event::ALL
@@ -59,7 +65,8 @@ fn the_generated_table_matches_the_dump() {
 
 /// The acts that offer an event, and the pool that any act can roll.
 ///
-/// The two are disjoint, which codegen also refuses to generate otherwise: an event in both is offered twice by the same map.
+/// The two are disjoint, and codegen refuses to generate otherwise. An event in
+/// both is offered twice by the same map.
 #[test]
 fn an_event_comes_from_an_act_or_from_the_pool_but_not_both() {
     let mut dumped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
@@ -119,7 +126,11 @@ fn two_events_are_offered_by_two_acts() {
 
 /// `SharedBetweenPlayers` is the multiplayer sense, not the any-act pool.
 ///
-/// The game calls both "shared" and they are unrelated: `EventSynchronizer` reads `IsShared` to run an event for every player at once. While `AllSharedEvents` is where an event comes from. Eight events set the flag and nineteen are in the pool, and the two sets barely overlap. Therefore this is the test that stops the table from conflating them.
+/// The game calls both "shared" and they are unrelated. `EventSynchronizer`
+/// reads `IsShared` to run an event for every player at once, while
+/// `AllSharedEvents` is where an event comes from. Eight events set the flag and
+/// nineteen are in the pool, and the two sets barely overlap. This is the test
+/// that stops the table from conflating them.
 #[test]
 fn shared_between_players_is_not_the_any_act_pool() {
     let flagged: Vec<String> = Event::ALL
@@ -158,7 +169,9 @@ fn shared_between_players_is_not_the_any_act_pool() {
 
 /// `Deterministic` is not the negation of `SharedBetweenPlayers`.
 ///
-/// `EventModel.IsDeterministic` defaults to `!IsShared`, and reading that as a definition is wrong, `CRYSTAL_SPHERE` overrides it and is neither. `EventRoom` branches on determinism alone, so the two have to stay apart.
+/// `EventModel.IsDeterministic` defaults to `!IsShared`, and reading that as a
+/// definition is wrong. `CRYSTAL_SPHERE` overrides it and is neither.
+/// `EventRoom` branches on determinism alone, so the two have to stay apart.
 #[test]
 fn deterministic_is_its_own_fact() {
     let mut exceptions: Vec<String> = Vec::new();
@@ -184,7 +197,9 @@ fn deterministic_is_its_own_fact() {
 
 /// An ancient is a subclass, and the layout follows it exactly.
 ///
-/// Worth checking rather than assuming, because if the two ever disagreed the table has a flag. A layout saying different things about the same event, and only one of them drives the room.
+/// Worth checking rather than assuming. If the two ever disagree, the table has
+/// a flag and a layout saying different things about the same event. Only one of
+/// them drives the room.
 #[test]
 fn the_ancients_are_exactly_the_ancient_layout() {
     let ancient: Vec<String> = Event::ALL

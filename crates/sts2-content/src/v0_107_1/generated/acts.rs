@@ -54,10 +54,12 @@ pub enum Act {
     Glory,
 }
 
-impl Act {
+impl sts2_core::Table for Act {
+    type Data = ActData;
+
     /// Every act, so callers can sweep the table without a way to
     /// enumerate an enum.
-    pub const ALL: [Act; 5] = [
+    const ALL: &'static [Self] = &[
         Act::DeprecatedAct,
         Act::Overgrowth,
         Act::Underdocks,
@@ -66,7 +68,7 @@ impl Act {
     ];
 
     /// The act's shape and its bosses.
-    pub const fn data(self) -> ActData {
+    fn data(self) -> ActData {
         match self {
             Self::DeprecatedAct => ActData {
                 index: -1,

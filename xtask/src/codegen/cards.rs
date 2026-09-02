@@ -1,7 +1,11 @@
 //! Every card's static data.
-//! Card identity nests by the game's own twelve card pools, so `Strike` needs no suffix: `IroncladCard::Strike` and `SilentCard::Strike` are different variants of different types. The game disambiguates with a flat namespace instead, `STRIKE_IRONCLAD`, and that id is preserved as the serde rename. Therefore the wire form is unchanged and the generated file stays diffable against the game's own names.
-//! Only ten of 578 ids actually carry a pool suffix, all of them `STRIKE_*` and `DEFEND_*`. The stripping rule matters for exactly those, and is a no-op everywhere else.
-//! Each pool gets one file. A content patch usually touches one character, so its diff stays out of an eight-thousand-line monolith.
+//!
+//! Card identity nests by the game's own twelve card pools, so `Strike` needs
+//! no suffix. The game's flat `STRIKE_IRONCLAD` survives as the serde rename,
+//! and one file is written per pool.
+//!
+//! The xtask README says what the stripping rule is for, and why the files are
+//! split that way.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -52,9 +56,11 @@ struct Card {
 
 /// Members the game declares that are not values of the field they name.
 ///
-/// A C# enum has a zero, so a `None` gets declared whether or not it means anything. `Option<T>` is the honest Rust for the ones that don't. Dropping a member does not renumber the rest, every member is emitted at the game's own discriminant. Therefore the generated enum stays a subset of the game's rather than a reshuffle of it.
+/// A C# enum has a zero, so a `None` gets declared whether or not it means
+/// anything. `Option<T>` is the honest Rust for the ones that don't.
 ///
-/// `TargetType::None` stays: 35 cards declare it outright, and "takes no target" is a real answer that `Option` will only spell the same way.
+/// Dropping one does not renumber the rest, so the enum stays a subset of the
+/// game's. `TargetType::None` stays, because 35 cards declare it.
 const DROPPED: [(&str, &str, &str); 3] = [
     (
         "CardKeyword",
@@ -91,7 +97,10 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 
 /// The dump's two cost columns as the one `Cost` they encode.
 ///
-/// The pairing is checked rather than assumed: `CardEnergyCost` zeroes the canonical cost for X-cost cards and treats any negative base as "no cost". Therefore an X card with a number or a negative other than -1 means the game changed under us. The mapping below is no longer faithful.
+/// The pairing is checked rather than assumed. `CardEnergyCost` zeroes the
+/// canonical cost for X-cost cards, and it treats any negative base as "no
+/// cost". An X card with a number, or a negative other than -1, means the game
+/// changed under us. The mapping below is then no longer faithful.
 fn cost(card: &Card) -> Result<String, String> {
     match (card.costs_x, card.cost.as_str()) {
         (true, "0") => Ok("Cost::X".into()),
@@ -120,7 +129,12 @@ fn variant(card: &Card, suffix: Option<&str>) -> String {
 
 /// One card, as the path another domain has to spell to name it.
 ///
-/// Card identity is pool-scoped, `Strike` is a variant of five different enums, so naming one from outside takes the pool as well as the id. The suffix rule lives here because this is the domain that invented it. A second copy of it elsewhere is a second chance to get `STRIKE_IRONCLAD` wrong.
+/// Card identity is pool-scoped. `Strike` is a variant of five different enums,
+/// so naming one from outside takes the pool as well as the id.
+///
+/// The suffix rule lives here because this is the domain that invented it. A
+/// second copy of it elsewhere is a second chance to get `STRIKE_IRONCLAD`
+/// wrong.
 pub(super) fn card_path(pool: &str, id: &str) -> Result<String, String> {
     let (_, _, enum_name, suffix) = POOLS
         .iter()
@@ -203,8 +217,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
         writeln!(out, "impl {enum_name} {{").unwrap();
 
-        // By value: `CardData` fits in a register now, so a reference is
-        // strictly larger than the thing it points at, and returning one will
+        // By value: `CardData` fits in a register now, so a reference would be
+        // strictly larger than the thing it points at — and returning one would
         // force the rows back into a static, since a `const fn` call is not a
         // promotable expression.
         writeln!(
@@ -266,7 +280,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         "cards.txt",
         &build,
     );
-    writeln!(out, "\nuse crate::{{Cost, Field}};").unwrap();
+    writeln!(out, "\nuse super::characters::CardPool;").unwrap();
+    writeln!(out, "use crate::{{Cost, Field}};\nuse sts2_core::Table;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
     for (_, module, _, _) in POOLS {
@@ -278,7 +293,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
     writeln!(out).unwrap();
 
-    // Reflected from the game, so a member nothing uses is still present,     // absent from the table is not absent from the enum. The exceptions are in
+    // Reflected from the game, so a member nothing uses is still present —
+    // absent from the table is not absent from the enum. The exceptions are in
     // `DROPPED`, and each carries its reason into the generated file.
     for (name, members) in &enums {
         for (_, member, why) in DROPPED.iter().filter(|&&(e, _, _)| e == name) {
@@ -304,22 +320,20 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     // A bitset rather than a slice. The game keeps keywords in a
     // `HashSet<CardKeyword>` and asks `.Contains(…)` almost exclusively, so a
-    // set is what it means. A slice was 16 bytes of pointer and length to carry
+    // set is what it means; a slice was 16 bytes of pointer and length to carry
     // at most four one-byte members, and its order came from the dump's sort
     // rather than from the game. It also has to survive being the per-card
     // runtime state, because `AddKeyword`/`RemoveKeyword` mutate it mid-combat,
     // and a word clones for free where a set does not.
-    let keywords: Vec<(&str, &str)> = enums["CardKeyword"]
+    let keywords: Vec<sets::Member<'_>> = enums["CardKeyword"]
         .iter()
         .filter(|(_, m)| !dropped("CardKeyword", m))
-        .map(|(_, m)| (m.as_str(), ""))
+        .map(|(bit, m)| sets::Member {
+            name: m,
+            bit: *bit as usize,
+            doc: "",
+        })
         .collect();
-    let widest = enums["CardKeyword"]
-        .iter()
-        .filter(|(_, m)| !dropped("CardKeyword", m))
-        .map(|&(d, _)| d as usize)
-        .max()
-        .unwrap_or(0);
 
     sets::plain(
         &mut out,
@@ -335,20 +349,24 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             members: &keywords,
             declare: false,
             extras: &[],
-            bits: widest,
         },
     )?;
 
     // A set over `CardType`, for whoever needs one. Nothing in this domain
-    // does, a card has one type, not a set of them, but the enum lives here,
+    // does — a card has one type, not a set of them — but the enum lives here,
     // so the set over it does too rather than in whichever domain happens to
     // want it first. Enchantments are that domain today.
     //
     // Over every card type, not the three an enchantment can reach: narrowing a
     // type to its first caller is how the second one gets it wrong.
-    let types: Vec<&(u8, String)> = enums["CardType"]
+    let types: Vec<sets::Member<'_>> = enums["CardType"]
         .iter()
         .filter(|(_, m)| !dropped("CardType", m))
+        .map(|(bit, m)| sets::Member {
+            name: m,
+            bit: *bit as usize,
+            doc: "",
+        })
         .collect();
     sets::plain(
         &mut out,
@@ -361,13 +379,9 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                       Bit 0 is unused, because the game's zero is `None` and that is\n\
                       not a type a card can have. Using the discriminant anyway keeps\n\
                       a bit meaning the same thing here as it does there.",
-            members: &types
-                .iter()
-                .map(|(_, m)| (m.as_str(), ""))
-                .collect::<Vec<_>>(),
+            members: &types,
             declare: false,
             extras: &[sets::Extra::IsEmpty],
-            bits: types.iter().map(|&&(d, _)| d as usize).max().unwrap_or(0),
         },
     )?;
 
@@ -409,8 +423,9 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(out, "impl Cards {{").unwrap();
-    writeln!(out, "    pub const fn data(self) -> CardData {{").unwrap();
+    writeln!(out, "impl sts2_core::Table for Cards {{").unwrap();
+    writeln!(out, "    type Data = CardData;\n").unwrap();
+    writeln!(out, "    fn data(self) -> CardData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for (_, _, enum_name, _) in POOLS {
         writeln!(
@@ -424,7 +439,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "    }}\n").unwrap();
 
     writeln!(out, "    /// Every card in the build, pools flattened.").unwrap();
-    writeln!(out, "    pub const ALL: [Cards; {total}] = [").unwrap();
+    writeln!(out, "    const ALL: &'static [Self] = &[").unwrap();
     for (pool_id, _, enum_name, suffix) in POOLS {
         for card in cards.iter().filter(|c| c.pool == pool_id) {
             writeln!(
@@ -436,8 +451,36 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             .unwrap();
         }
     }
-    writeln!(out, "    ];\n").unwrap();
+    writeln!(out, "    ];").unwrap();
+    writeln!(out, "}}\n").unwrap();
 
+    // The variant is the pool, and the five that name a character are the
+    // five a run can draw from. The rest — colourless, curses, statuses,
+    // tokens, quest and event cards — are held by no character, which is not
+    // the same as being held by a pool nobody plays.
+    writeln!(out, "impl sts2_core::CardTable for Cards {{").unwrap();
+    writeln!(out, "    type Pool = CardPool;").unwrap();
+    writeln!(out, "    type Rarity = CardRarity;\n").unwrap();
+    writeln!(out, "    fn pool(self) -> Option<CardPool> {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for (pool_id, _, enum_name, suffix) in POOLS {
+        let name = enum_name.trim_end_matches("Card");
+        match suffix {
+            Some(_) => writeln!(
+                out,
+                "            Cards::{name}(_) => Some(CardPool::{}),",
+                camel(pool_id.trim_end_matches("_CARD_POOL"))
+            )
+            .unwrap(),
+            None => writeln!(out, "            Cards::{name}(_) => None,").unwrap(),
+        }
+    }
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+
+    writeln!(out, "    fn rarity(self) -> CardRarity {{").unwrap();
+    writeln!(out, "        self.data().rarity").unwrap();
+    writeln!(out, "    }}").unwrap();
     writeln!(out, "}}").unwrap();
 
     split.finish(

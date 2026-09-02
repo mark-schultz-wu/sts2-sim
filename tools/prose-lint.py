@@ -20,7 +20,7 @@ import sys
 
 MAX_WORDS = 25
 BANNED_MODALS = ["should", "would", "could", "may", "might"]
-MAX_ITEM_LINES = 4
+MAX_ITEM_WORDS = 70
 MAX_BLOCK_LINES = 12
 HUB_FILES = ("mod.rs", "lib.rs")
 DANGLING_ANY = "needs|need|is|are|was|were|has|have|does|do|gives|give|takes|take"
@@ -58,7 +58,7 @@ RULES = {
     "semicolon": "a semicolon. Write two sentences.",
     "banned-modal": "an ambiguous modal. Use `can`, `will` or `must`.",
     "slop": "a word that carries no fact.",
-    "item-volume": f"over {MAX_ITEM_LINES} prose lines on one item.",
+    "item-volume": f"over {MAX_ITEM_WORDS} words on one item.",
     "block-lines": f"a doc block over {MAX_BLOCK_LINES} lines.",
     "dangling-article": "an article with no noun. A word was deleted.",
     "doubled-word": "a word repeated. An edit landed twice.",
@@ -162,6 +162,13 @@ def prose_lines(block: Block) -> list[tuple[int, str, bool]]:
     return kept
 
 
+def words_in(texts: list[str]) -> int:
+    """Words, counting a backticked span as one. The same measure a sentence is
+    held to, so wrapping a comment differently does not change the answer."""
+    joined = " ".join(text.strip() for text in texts)
+    return len(re.sub(r"`[^`]*`", "█", joined).split())
+
+
 def prose_of(block: Block) -> str:
     texts = [text.rstrip() for _, text, _ in prose_lines(block)]
     joined = " ".join(f"{text}." if text.endswith(":") else text for text in texts)
@@ -173,15 +180,18 @@ def volume(block: Block, path: pathlib.Path) -> list[Finding]:
     if block.kind == "md":
         return findings
     hub_header = block.kind == "//!" and path.name in HUB_FILES
-    if not hub_header and len(block.lines) > MAX_BLOCK_LINES:
+    # Prose lines, not raw ones. A diagram in a fence is not a wall of text.
+    written = len(prose_lines(block))
+    if not hub_header and written > MAX_BLOCK_LINES:
         findings.append(
-            Finding(str(path), block.start, "block-lines", f"{len(block.lines)} lines, over {MAX_BLOCK_LINES}")
+            Finding(str(path), block.start, "block-lines", f"{written} prose lines, over {MAX_BLOCK_LINES}")
         )
     if block.kind == "///":
-        counted = [n for n, _, mandated in prose_lines(block) if not mandated]
-        if len(counted) > MAX_ITEM_LINES:
+        counted = [text for _, text, mandated in prose_lines(block) if not mandated]
+        words = words_in(counted)
+        if words > MAX_ITEM_WORDS:
             findings.append(
-                Finding(str(path), block.start, "item-volume", f"{len(counted)} prose lines, over {MAX_ITEM_LINES}")
+                Finding(str(path), block.start, "item-volume", f"{words} words, over {MAX_ITEM_WORDS}")
             )
     return findings
 

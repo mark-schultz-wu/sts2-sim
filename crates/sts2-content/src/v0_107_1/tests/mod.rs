@@ -1,6 +1,16 @@
 //! The generated tables, against the dumps they were generated from.
-//! One file per domain, each replaying its dump row by row. That is the whole shape of these: if `cargo xtask codegen` was not re-run, or was run against a dump from another build. The table describes a game nobody is talking to and the replay is what notices.
-//! What a replay cannot notice is a claim the dump makes about the *game*, that twenty powers work their type out. That fourteen encounters roll their roster, that gold moves at Poverty and nowhere else. Those were measured by the dump inside the running game and are invisible from here. Therefore each file pins them by name: a build that changes one has to say so in a test rather than sail through.
+//!
+//! One file per domain, each replaying its dump row by row. That is the whole
+//! shape of these. If `cargo xtask codegen` was not re-run, or was run against a
+//! dump from another build, the table describes a game nobody is talking to. The
+//! replay is what notices.
+//!
+//! What a replay cannot notice is a claim the dump makes about the *game*. That
+//! twenty powers work their type out, that fourteen encounters roll their
+//! roster, that gold moves at Poverty and nowhere else. Those were measured by
+//! the dump inside the running game and are invisible from here. Each file pins
+//! them by name, so a build that changes one has to say so in a test rather than
+//! sail through.
 
 mod acts;
 mod afflictions;
@@ -17,11 +27,18 @@ mod orbs;
 mod potions;
 mod powers;
 mod relics;
+mod restsite;
+mod runstate;
 mod version;
 
 /// A dump's rows of one kind, split on whitespace, comments dropped.
 ///
-/// Shared rather than written four times, which is what it was: the dumps have one format and this is it. Row order is preserved because it is load-bearing in three of the four, a monster's states are indexed by position. A branch's order decides which move a roll produces, and a spawn's order is which monster it is.
+/// Shared rather than written four times, which is what it was: the dumps have
+/// one format and this is it.
+///
+/// Row order is preserved because it is load-bearing in three of the four. A
+/// monster's states are indexed by position, a branch's order decides which move
+/// a roll produces, and a spawn's order is which monster it is.
 fn rows(dump: &'static str, kind: &'static str) -> impl Iterator<Item = Vec<&'static str>> {
     dump.lines()
         .filter(|l| !l.starts_with('#'))
@@ -31,9 +48,12 @@ fn rows(dump: &'static str, kind: &'static str) -> impl Iterator<Item = Vec<&'st
 
 /// The build a dump's `# build` header names.
 ///
-/// Every domain checks this against its version module. This is the one rule the whole arrangement rests on: a dump from another build describes a game nobody is talking to. A table regenerated against one is the failure the check prevents.
+/// Every domain checks this against its version module, which is the one rule
+/// the whole arrangement rests on. A table regenerated against another build's
+/// dump is the failure this prevents.
 ///
-/// Both hashes are compared, because the content one alone is not enough. It is XxHash32 over the *set of model ids*, so it moves when content is added, removed or renamed. It stays put when a card's damage goes from 6 to 7. A rebalance patch will slip past it with every generated number wrong. The assembly hash is shipped in the game's `release_info.json` and moves on any code change, which is what closes that.
+/// Both hashes are compared, because the content one alone is not enough. The
+/// xtask README says what each moves on.
 fn build(dump: &'static str) -> super::Version {
     let header = dump
         .lines()
@@ -63,7 +83,10 @@ fn build(dump: &'static str) -> super::Version {
 
 /// The game's own spelling of a value: the serde rename.
 ///
-/// There is no `id` accessor beside the rename, two spellings of one string is a way for them to disagree. Therefore this is how a test names a card, a monster, an encounter or a power. It allocates, and it is only for tests. The wire is what the simulator will talk over, and the wire is this.
+/// There is no `id` accessor beside the rename, because two spellings of one
+/// string is a way for them to disagree. This is how a test names a card, a
+/// monster, an encounter or a power. It allocates, and it is only for tests. The
+/// wire is what the simulator talks over, and the wire is this.
 fn wire<T: serde::Serialize>(value: &T) -> String {
     serde_json::to_string(value)
         .unwrap()

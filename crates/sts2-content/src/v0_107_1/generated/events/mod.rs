@@ -78,6 +78,20 @@ impl std::fmt::Debug for EventFlags {
     }
 }
 
+impl sts2_core::FlagSet for EventFlags {
+    type Member = EventFlag;
+
+    const MEMBERS: &'static [EventFlag] = &Self::MEMBERS;
+
+    fn from_members(members: &[EventFlag]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: EventFlag) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// What is true of an event with no run in progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventData {
@@ -240,10 +254,12 @@ pub enum Event {
     ZenWeaver,
 }
 
-impl Event {
+impl sts2_core::Table for Event {
+    type Data = EventData;
+
     /// Every event, so callers can sweep the table without a way to
     /// enumerate an enum.
-    pub const ALL: [Event; 69] = [
+    const ALL: &'static [Self] = &[
         Event::AbyssalBaths,
         Event::Amalgamator,
         Event::AromaOfChaos,
@@ -315,11 +331,92 @@ impl Event {
         Event::ZenWeaver,
     ];
 
+    /// The layout, the flags and the fight it starts.
+    ///
+    /// One arm per event, naming the file its row lives in.
+    fn data(self) -> EventData {
+        match self {
+            Self::AbyssalBaths => underdocks::ABYSSAL_BATHS,
+            Self::Amalgamator => hive::AMALGAMATOR,
+            Self::AromaOfChaos => overgrowth::AROMA_OF_CHAOS,
+            Self::BattlewornDummy => glory::BATTLEWORN_DUMMY,
+            Self::BrainLeech => anyact::BRAIN_LEECH,
+            Self::Bugslayer => hive::BUGSLAYER,
+            Self::ByrdonisNest => overgrowth::BYRDONIS_NEST,
+            Self::ColorfulPhilosophers => hive::COLORFUL_PHILOSOPHERS,
+            Self::ColossalFlower => hive::COLOSSAL_FLOWER,
+            Self::CrystalSphere => anyact::CRYSTAL_SPHERE,
+            Self::Darv => anyact::DARV,
+            Self::DenseVegetation => overgrowth::DENSE_VEGETATION,
+            Self::DeprecatedAncientEvent => unlisted::DEPRECATED_ANCIENT_EVENT,
+            Self::DeprecatedEvent => unlisted::DEPRECATED_EVENT,
+            Self::DollRoom => anyact::DOLL_ROOM,
+            Self::DoorsOfLightAndDark => underdocks::DOORS_OF_LIGHT_AND_DARK,
+            Self::DrowningBeacon => underdocks::DROWNING_BEACON,
+            Self::EndlessConveyor => underdocks::ENDLESS_CONVEYOR,
+            Self::FakeMerchant => anyact::FAKE_MERCHANT,
+            Self::FieldOfManSizedHoles => hive::FIELD_OF_MAN_SIZED_HOLES,
+            Self::GraveOfTheForgotten => glory::GRAVE_OF_THE_FORGOTTEN,
+            Self::HungryForMushrooms => glory::HUNGRY_FOR_MUSHROOMS,
+            Self::InfestedAutomaton => hive::INFESTED_AUTOMATON,
+            Self::JungleMazeAdventure => overgrowth::JUNGLE_MAZE_ADVENTURE,
+            Self::LostWisp => hive::LOST_WISP,
+            Self::LuminousChoir => overgrowth::LUMINOUS_CHOIR,
+            Self::MockEventModel => unlisted::MOCK_EVENT_MODEL,
+            Self::MorphicGrove => overgrowth::MORPHIC_GROVE,
+            Self::Neow => crossover::NEOW,
+            Self::Nonupeipe => glory::NONUPEIPE,
+            Self::Orobas => hive::OROBAS,
+            Self::Pael => hive::PAEL,
+            Self::PotionCourier => anyact::POTION_COURIER,
+            Self::PunchOff => underdocks::PUNCH_OFF,
+            Self::RanwidTheElder => anyact::RANWID_THE_ELDER,
+            Self::Reflections => glory::REFLECTIONS,
+            Self::RelicTrader => anyact::RELIC_TRADER,
+            Self::RoomFullOfCheese => anyact::ROOM_FULL_OF_CHEESE,
+            Self::RoundTeaParty => glory::ROUND_TEA_PARTY,
+            Self::SapphireSeed => overgrowth::SAPPHIRE_SEED,
+            Self::SelfHelpBook => anyact::SELF_HELP_BOOK,
+            Self::SlipperyBridge => anyact::SLIPPERY_BRIDGE,
+            Self::SpiralingWhirlpool => underdocks::SPIRALING_WHIRLPOOL,
+            Self::SpiritGrafter => hive::SPIRIT_GRAFTER,
+            Self::StoneOfAllTime => anyact::STONE_OF_ALL_TIME,
+            Self::SunkenStatue => crossover::SUNKEN_STATUE,
+            Self::SunkenTreasury => underdocks::SUNKEN_TREASURY,
+            Self::Symbiote => anyact::SYMBIOTE,
+            Self::TabletOfTruth => overgrowth::TABLET_OF_TRUTH,
+            Self::Tanx => glory::TANX,
+            Self::TeaMaster => anyact::TEA_MASTER,
+            Self::Tezcatara => hive::TEZCATARA,
+            Self::TheArchitect => unlisted::THE_ARCHITECT,
+            Self::TheFutureOfPotions => anyact::THE_FUTURE_OF_POTIONS,
+            Self::TheLanternKey => hive::THE_LANTERN_KEY,
+            Self::TheLegendsWereTrue => anyact::THE_LEGENDS_WERE_TRUE,
+            Self::ThisOrThat => anyact::THIS_OR_THAT,
+            Self::TinkerTime => glory::TINKER_TIME,
+            Self::TrashHeap => underdocks::TRASH_HEAP,
+            Self::Trial => glory::TRIAL,
+            Self::UnrestSite => overgrowth::UNREST_SITE,
+            Self::Vakuu => glory::VAKUU,
+            Self::WarHistorianRepy => anyact::WAR_HISTORIAN_REPY,
+            Self::WaterloggedScriptorium => underdocks::WATERLOGGED_SCRIPTORIUM,
+            Self::WelcomeToWongos => anyact::WELCOME_TO_WONGOS,
+            Self::Wellspring => overgrowth::WELLSPRING,
+            Self::WhisperingHollow => overgrowth::WHISPERING_HOLLOW,
+            Self::WoodCarvings => overgrowth::WOOD_CARVINGS,
+            Self::ZenWeaver => hive::ZEN_WEAVER,
+        }
+    }
+}
+
+impl sts2_core::EventTable for Event {
+    type Act = Act;
+
     /// The acts whose own list offers this event.
     ///
     /// Empty for one in the any-act pool — see [`Event::any_act`] —
     /// and for the four nothing offers.
-    pub const fn acts(self) -> &'static [Act] {
+    fn acts(self) -> &'static [Act] {
         match self {
             Self::AbyssalBaths => &[Act::Underdocks],
             Self::Amalgamator => &[Act::Hive],
@@ -399,7 +496,7 @@ impl Event {
     /// list, so these are offered everywhere and `acts` is empty for
     /// them. Disjoint from `acts` by construction: codegen refuses an
     /// event that is in both, since a map would offer it twice.
-    pub const fn any_act(self) -> bool {
+    fn any_act(self) -> bool {
         matches!(
             self,
             Self::BrainLeech
@@ -422,83 +519,6 @@ impl Event {
                 | Self::WarHistorianRepy
                 | Self::WelcomeToWongos
         )
-    }
-
-    /// The layout, the flags and the fight it starts.
-    ///
-    /// One arm per event, naming the file its row lives in.
-    pub const fn data(self) -> EventData {
-        match self {
-            Self::AbyssalBaths => underdocks::ABYSSAL_BATHS,
-            Self::Amalgamator => hive::AMALGAMATOR,
-            Self::AromaOfChaos => overgrowth::AROMA_OF_CHAOS,
-            Self::BattlewornDummy => glory::BATTLEWORN_DUMMY,
-            Self::BrainLeech => anyact::BRAIN_LEECH,
-            Self::Bugslayer => hive::BUGSLAYER,
-            Self::ByrdonisNest => overgrowth::BYRDONIS_NEST,
-            Self::ColorfulPhilosophers => hive::COLORFUL_PHILOSOPHERS,
-            Self::ColossalFlower => hive::COLOSSAL_FLOWER,
-            Self::CrystalSphere => anyact::CRYSTAL_SPHERE,
-            Self::Darv => anyact::DARV,
-            Self::DenseVegetation => overgrowth::DENSE_VEGETATION,
-            Self::DeprecatedAncientEvent => unlisted::DEPRECATED_ANCIENT_EVENT,
-            Self::DeprecatedEvent => unlisted::DEPRECATED_EVENT,
-            Self::DollRoom => anyact::DOLL_ROOM,
-            Self::DoorsOfLightAndDark => underdocks::DOORS_OF_LIGHT_AND_DARK,
-            Self::DrowningBeacon => underdocks::DROWNING_BEACON,
-            Self::EndlessConveyor => underdocks::ENDLESS_CONVEYOR,
-            Self::FakeMerchant => anyact::FAKE_MERCHANT,
-            Self::FieldOfManSizedHoles => hive::FIELD_OF_MAN_SIZED_HOLES,
-            Self::GraveOfTheForgotten => glory::GRAVE_OF_THE_FORGOTTEN,
-            Self::HungryForMushrooms => glory::HUNGRY_FOR_MUSHROOMS,
-            Self::InfestedAutomaton => hive::INFESTED_AUTOMATON,
-            Self::JungleMazeAdventure => overgrowth::JUNGLE_MAZE_ADVENTURE,
-            Self::LostWisp => hive::LOST_WISP,
-            Self::LuminousChoir => overgrowth::LUMINOUS_CHOIR,
-            Self::MockEventModel => unlisted::MOCK_EVENT_MODEL,
-            Self::MorphicGrove => overgrowth::MORPHIC_GROVE,
-            Self::Neow => crossover::NEOW,
-            Self::Nonupeipe => glory::NONUPEIPE,
-            Self::Orobas => hive::OROBAS,
-            Self::Pael => hive::PAEL,
-            Self::PotionCourier => anyact::POTION_COURIER,
-            Self::PunchOff => underdocks::PUNCH_OFF,
-            Self::RanwidTheElder => anyact::RANWID_THE_ELDER,
-            Self::Reflections => glory::REFLECTIONS,
-            Self::RelicTrader => anyact::RELIC_TRADER,
-            Self::RoomFullOfCheese => anyact::ROOM_FULL_OF_CHEESE,
-            Self::RoundTeaParty => glory::ROUND_TEA_PARTY,
-            Self::SapphireSeed => overgrowth::SAPPHIRE_SEED,
-            Self::SelfHelpBook => anyact::SELF_HELP_BOOK,
-            Self::SlipperyBridge => anyact::SLIPPERY_BRIDGE,
-            Self::SpiralingWhirlpool => underdocks::SPIRALING_WHIRLPOOL,
-            Self::SpiritGrafter => hive::SPIRIT_GRAFTER,
-            Self::StoneOfAllTime => anyact::STONE_OF_ALL_TIME,
-            Self::SunkenStatue => crossover::SUNKEN_STATUE,
-            Self::SunkenTreasury => underdocks::SUNKEN_TREASURY,
-            Self::Symbiote => anyact::SYMBIOTE,
-            Self::TabletOfTruth => overgrowth::TABLET_OF_TRUTH,
-            Self::Tanx => glory::TANX,
-            Self::TeaMaster => anyact::TEA_MASTER,
-            Self::Tezcatara => hive::TEZCATARA,
-            Self::TheArchitect => unlisted::THE_ARCHITECT,
-            Self::TheFutureOfPotions => anyact::THE_FUTURE_OF_POTIONS,
-            Self::TheLanternKey => hive::THE_LANTERN_KEY,
-            Self::TheLegendsWereTrue => anyact::THE_LEGENDS_WERE_TRUE,
-            Self::ThisOrThat => anyact::THIS_OR_THAT,
-            Self::TinkerTime => glory::TINKER_TIME,
-            Self::TrashHeap => underdocks::TRASH_HEAP,
-            Self::Trial => glory::TRIAL,
-            Self::UnrestSite => overgrowth::UNREST_SITE,
-            Self::Vakuu => glory::VAKUU,
-            Self::WarHistorianRepy => anyact::WAR_HISTORIAN_REPY,
-            Self::WaterloggedScriptorium => underdocks::WATERLOGGED_SCRIPTORIUM,
-            Self::WelcomeToWongos => anyact::WELCOME_TO_WONGOS,
-            Self::Wellspring => overgrowth::WELLSPRING,
-            Self::WhisperingHollow => overgrowth::WHISPERING_HOLLOW,
-            Self::WoodCarvings => overgrowth::WOOD_CARVINGS,
-            Self::ZenWeaver => hive::ZEN_WEAVER,
-        }
     }
 }
 mod anyact;
