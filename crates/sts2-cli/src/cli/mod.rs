@@ -1,5 +1,9 @@
 //! The command surface, and how it becomes a game command.
-//! Ids are named the way the game names them, `IRONCLAD`, `BOWLBUGS_WEAK`, `DeadlyEnemies`, because that is the serde rename on every generated type. Therefore parsing is one `serde_json::from_value` rather than a table of aliases that will drift.
+//!
+//! Ids are named the way the game names them: `IRONCLAD`, `BOWLBUGS_WEAK`,
+//! `DeadlyEnemies`. That is the serde rename on every generated type, so
+//! parsing is one `serde_json::from_value` rather than a table of aliases that
+//! drifts.
 
 pub mod choose;
 
@@ -7,9 +11,19 @@ use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use nonmax::NonMaxU32;
 use serde::de::DeserializeOwned;
+use std::path::Path;
 use sts2_core::ContentVersion;
-use sts2_headless::{Answer as GameAnswer, Command, TakeReward};
+use sts2_core::{Answer as GameAnswer, Coord, Decision, Gift, Setup, Step, TakeReward, Tool};
 use sts2_rng::Seed;
+
+/// An ascension level by the game's own name for it, such as `None`.
+///
+/// Public because the front end has to name one for a run started anywhere but
+/// the command line. `V::AscensionLevel` is an associated type with no default,
+/// and there is no way to spell "the lowest one" except by naming it.
+pub fn ascension<V: ContentVersion>(spelling: &str) -> Result<V::AscensionLevel> {
+    id("ascension level", spelling)
+}
 
 /// Parses an id from the game's own spelling of it.
 fn id<T: DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
@@ -24,7 +38,9 @@ fn id<T: DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
 
 #[derive(Debug, Args)]
 pub struct StartArgs {
-    /// The run's seed. Folded the way the game folds it, so `oracle1` and `ORACLE1` are one run, and both are `0RACLE1`, since the alphabet has no `O`.
+    /// The run's seed. Folded the way the game folds it, so `oracle1` and
+    /// `ORACLE1` are one run. Both are `0RACLE1`, since the alphabet has no
+    /// `O`.
     pub seed: String,
     /// A character id, such as `IRONCLAD`.
     pub character: String,
@@ -34,11 +50,70 @@ pub struct StartArgs {
     /// Modifier ids, such as `DRAFT`.
     #[arg(long, value_delimiter = ',')]
     pub modifiers: Vec<String>,
+    /// Write the run to this file as it is played, for `sts2 run replay`.
+    ///
+    /// On `start` rather than on every command, because the daemon does the
+    /// writing and only needs telling once. And because a recording that begins
+    /// halfway through a run is not a run.
+    ///
+    /// Omit it and the run is still recorded, under a name of its own in the
+    /// state directory. `--no-record` is how to not keep it.
+    #[arg(long, value_name = "FILE")]
+    pub record: Option<std::path::PathBuf>,
+    /// Do not write this run down at all.
+    #[arg(long, conflicts_with = "record")]
+    pub no_record: bool,
+}
+
+impl StartArgs {
+    /// Where this run gets written, if it does.
+    ///
+    /// Recording is the default because a valuable run is recognized only
+    /// afterwards. It can expose a divergence, an interface problem, or a seed
+    /// worth replaying. An unrecorded run cannot be shown to anybody. Each file
+    /// is only a few kilobytes.
+    pub fn recording(&self) -> Result<Option<std::path::PathBuf>> {
+        if self.no_record {
+            return Ok(None);
+        }
+        if let Some(path) = &self.record {
+            return Ok(Some(path.clone()));
+        }
+
+        let dir = crate::runs::runs_dir();
+        std::fs::create_dir_all(&dir).with_context(|| format!("making {}", dir.display()))?;
+        free_name(&dir, &self.seed, &self.character).map(Some)
+    }
+}
+
+/// The first unused `<seed>-<character>.jsonl` under `dir`.
+///
+/// Named for the run rather than the clock. The filesystem already records when
+/// it was played. The seed is folded first, so the name contains what the game
+/// used rather than what was typed.
+///
+/// A repeated seed and character gets a number. Overwriting the first attempt
+/// discards the run being compared.
+fn free_name(dir: &Path, seed: &str, character: &str) -> Result<std::path::PathBuf> {
+    let folded = Seed::fold(seed).map_or_else(|_| seed.to_uppercase(), |s| s.as_str().to_string());
+    let stem = format!("{folded}-{}", character.to_uppercase());
+
+    let first = dir.join(format!("{stem}.jsonl"));
+    if !first.exists() {
+        return Ok(first);
+    }
+
+    (2..1000)
+        .map(|n| dir.join(format!("{stem}-{n}.jsonl")))
+        .find(|path| !path.exists())
+        .with_context(|| format!("{stem} already has 999 recordings in {}", dir.display()))
 }
 
 /// One reward being taken: which reward, and which card inside it.
 ///
-/// Spelled `N` or `N.M`. The dot is doing real work, a card reward holds several cards and the game will not pick one for you. Therefore `0` and `0.1` are different requests rather than one with a default.
+/// Spelled `N` or `N.M`. The dot is doing real work. A card reward holds
+/// several cards and the game will not pick one for you. So `0` and `0.1` are
+/// different requests, rather than one with a default.
 #[derive(Debug, Clone, Copy)]
 pub struct Taking {
     reward: usize,
@@ -55,9 +130,12 @@ impl Taking {
     }
 
     pub(crate) fn take(&self) -> TakeReward {
-        TakeReward {
-            index: self.reward,
-            card: self.card,
+        match self.card {
+            Some(card) => TakeReward::Card {
+                index: self.reward,
+                card,
+            },
+            None => TakeReward::NonCard { index: self.reward },
         }
     }
 }
@@ -96,10 +174,25 @@ pub enum Answering {
     Skip,
     /// Takes rewards from a reward screen.
     ///
-    /// A reward is `N`, and a card inside a card reward is `N.M`, `take 0.1` is the second card of the first reward. The game refuses a card reward taken without a card rather than choosing one, so the pair is not optional there.
+    /// A reward is `N`, and a card inside a card reward is `N.M`. `take 0.1`
+    /// is the second card of the first reward. The game refuses a card reward
+    /// taken without a card rather than choosing one, so the pair is not
+    /// optional there.
     Take {
         #[arg(value_delimiter = ' ', num_args = 1..)]
         rewards: Vec<Taking>,
+    },
+    /// Uncovers a cell of the Crystal Sphere's grid.
+    ///
+    /// Costs one divination whichever tool it uses, so `--big` is a gamble and
+    /// not a saving. It uncovers the neighbours too, and one of the things
+    /// under them can be a curse.
+    Divine {
+        x: usize,
+        y: usize,
+        /// Uncover the neighbouring cells as well.
+        #[arg(long)]
+        big: bool,
     },
 }
 
@@ -112,8 +205,13 @@ pub enum Play {
         /// An encounter id, such as `BOWLBUGS_WEAK`.
         encounter: String,
     },
+    /// Jumps straight to a named event, off the map.
+    Event {
+        /// An event id, such as `CRYSTAL_SPHERE`.
+        event: String,
+    },
     /// Moves to a map point.
-    Travel { col: i32, row: i32 },
+    Travel { col: u8, row: u8 },
     /// Enters a room by type, such as `Shop`.
     EnterRoom { room: String },
     /// Plays a card from hand.
@@ -126,32 +224,60 @@ pub enum Play {
     },
     /// Ends the player's turn.
     EndTurn,
+    /// Drinks a potion from the belt.
+    UsePotion {
+        /// Index into the belt, from the last observation.
+        index: u8,
+        /// A creature's combat id.
+        #[arg(long)]
+        target: Option<u32>,
+    },
+    /// Leaves a finished act for the next one.
+    ///
+    /// The one move the map cannot express. An act's boss has no onward node,
+    /// so once it is beaten there is nowhere to travel, and this is the way
+    /// out.
+    Proceed,
     /// Takes an offered option by index.
     ChooseOption { index: u8 },
     /// Buys the shop item at an index.
     Buy { index: u8 },
     /// Answers the pending question.
     ///
-    /// One command with three shapes, because that is what the protocol has. The pending question selects the shape, which the observation prints beside it.
+    /// One command with three shapes, because that is what the protocol has.
+    /// Which shape applies depends on which question is pending, and the
+    /// observation prints that beside it.
     #[command(subcommand)]
     Answer(Answering),
-    /// Puts a card or relic into the run, for constructing a scenario.
+    /// Puts a card, relic or potion into the run, for constructing a scenario.
+    ///
+    /// One of the three. For more than one, run it again.
     Grant {
-        #[arg(long)]
+        #[arg(
+            long,
+            conflicts_with_all = ["relic", "potion"],
+            required_unless_present_any = ["relic", "potion"],
+        )]
         card: Option<String>,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "potion")]
         relic: Option<String>,
+        /// Procured the way the game procures one, so a full belt refuses it.
+        #[arg(long)]
+        potion: Option<String>,
     },
     /// Asks for the current state without changing anything.
     Observe,
 }
 
 impl Play {
-    /// The game command this asks for.
-    pub fn command<V: ContentVersion>(&self) -> Result<Command<V>> {
-        Ok(match self {
-            Play::Start(a) => Command::Start {
-                seed: Seed::new(&a.seed).context("that is not a seed")?,
+    /// The step this asks for, or `None` for one a run is not made of.
+    ///
+    /// `observe` is the only `None`: it reports state without advancing, so it
+    /// is a command the protocol has and [`sts2_core::Decision`] does not.
+    pub fn step<V: ContentVersion>(&self) -> Result<Option<Step<V>>> {
+        Ok(Some(match self {
+            Play::Start(a) => Decision::Start {
+                seed: Seed::fold(&a.seed).context("that is not a seed")?,
                 character: id("character", &a.character)?,
                 ascension: match &a.ascension {
                     Some(level) => id("ascension level", level)?,
@@ -162,39 +288,73 @@ impl Play {
                     .iter()
                     .map(|m| id("modifier", m))
                     .collect::<Result<_>>()?,
-            },
-            Play::Fight { encounter } => Command::Fight {
+            }
+            .into(),
+            Play::Fight { encounter } => Setup::Fight {
                 encounter: id("encounter", encounter)?,
-            },
-            Play::Travel { col, row } => Command::Travel {
-                col: *col,
-                row: *row,
-            },
-            Play::EnterRoom { room } => Command::EnterRoom {
+            }
+            .into(),
+            Play::Event { event } => Setup::Event {
+                event: id("event", event)?,
+            }
+            .into(),
+            Play::Travel { col, row } => Decision::Travel {
+                to: Coord::new(*col, *row),
+            }
+            .into(),
+            Play::EnterRoom { room } => Decision::EnterRoom {
                 room: id("room type", room)?,
-            },
-            Play::PlayCard { index, target } => Command::PlayCard {
+            }
+            .into(),
+            Play::PlayCard { index, target } => Decision::PlayCard {
                 index: *index,
                 target: match target {
                     Some(t) => Some(NonMaxU32::new(*t).context("u32::MAX is not a creature")?),
                     None => None,
                 },
-            },
-            Play::EndTurn => Command::EndTurn,
-            Play::ChooseOption { index } => Command::ChooseOption { index: *index },
-            Play::Buy { index } => Command::Buy { index: *index },
-            Play::Answer(answering) => Command::Answer(match answering {
+            }
+            .into(),
+            Play::EndTurn => Decision::EndTurn.into(),
+            Play::UsePotion { index, target } => Decision::UsePotion {
+                index: *index,
+                target: match target {
+                    Some(t) => Some(NonMaxU32::new(*t).context("u32::MAX is not a creature")?),
+                    None => None,
+                },
+            }
+            .into(),
+            Play::Proceed => Decision::Proceed.into(),
+            Play::ChooseOption { index } => Decision::ChooseOption { index: *index }.into(),
+            Play::Buy { index } => Decision::Buy { index: *index }.into(),
+            Play::Answer(answering) => Decision::Answer(match answering {
                 Answering::Cards { cards } => GameAnswer::Cards(cards.clone()),
                 Answering::Skip => GameAnswer::Skip,
                 Answering::Take { rewards } => {
                     GameAnswer::Take(rewards.iter().map(Taking::take).collect())
                 }
-            }),
-            Play::Grant { card, relic } => Command::Grant {
-                card: card.as_deref().map(|c| id("card", c)).transpose()?,
-                relic: relic.as_deref().map(|r| id("relic", r)).transpose()?,
-            },
-            Play::Observe => Command::Observe,
-        })
+                Answering::Divine { x, y, big } => GameAnswer::Divine {
+                    x: *x,
+                    y: *y,
+                    tool: if *big { Tool::Big } else { Tool::Small },
+                },
+            })
+            .into(),
+            Play::Grant {
+                card,
+                relic,
+                potion,
+            } => Setup::Grant(match (card, relic, potion) {
+                (Some(card), ..) => Gift::Card(id("card", card)?),
+                (_, Some(relic), _) => Gift::Relic(id("relic", relic)?),
+                (.., Some(potion)) => Gift::Potion(id("potion", potion)?),
+                // clap holds this off: `card` is required unless one of the
+                // others is present, and all three conflict.
+                (None, None, None) => {
+                    anyhow::bail!("grant needs a --card, a --relic or a --potion")
+                }
+            })
+            .into(),
+            Play::Observe => return Ok(None),
+        }))
     }
 }

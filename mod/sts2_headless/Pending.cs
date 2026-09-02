@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Rewards;
@@ -50,10 +51,16 @@ public abstract class Pending
     public abstract Dictionary<string, object?> Describe();
 
     /// <summary>
-    /// Validates and applies an answer. Returns an error message, or null on
+    /// Validates and applies an answer. Returns a refusal reason, or null on
     /// success — in which case the parked action has been resumed.
     /// </summary>
-    public abstract string? Accept(JsonElement req);
+    /// <remarks>
+    /// A tagged reason and not a sentence, for the reason <see cref="Refusals"/>
+    /// gives: every way of getting an answer wrong is particular to the question
+    /// asked, and a client that cannot tell them apart cannot be compared
+    /// against a simulator that also refuses.
+    /// </remarks>
+    public abstract Dictionary<string, object?>? Accept(JsonElement req);
 
     protected abstract void Fail(Exception e);
 
@@ -190,30 +197,36 @@ internal sealed class CardSelection : Pending
         {
             ["index"] = i,
             ["card"] = Observation.Ident(c),
+            ["text"] = Observation.Text(c),
         }).ToList(),
     };
 
-    public override string? Accept(JsonElement req)
+    public override Dictionary<string, object?>? Accept(JsonElement req)
     {
         if (!req.TryGetProperty("cards", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
         {
-            return $"'{Kind}' expects a 'cards' array of option indices";
+            return Refusals.Malformed($"'{Kind}' expects a 'cards' array of option indices");
         }
 
         var chosen = new List<CardModel>();
         var seen = new HashSet<int>();
         foreach (JsonElement e in el.EnumerateArray())
         {
-            if (!e.TryGetInt32(out int i) || i < 0 || i >= _options.Count)
+            if (!e.TryGetInt32(out int i))
             {
-                return $"option index {e} out of range; {_options.Count} option(s) offered";
+                return Refusals.Malformed($"'{Kind}' expects whole numbers in its 'cards' array");
+            }
+
+            if (i < 0 || i >= _options.Count)
+            {
+                return Refusals.OutOfRange(i, _options.Count);
             }
 
             // The same card twice would be one selection to the game and two to
             // the client, which is a divergence waiting to happen.
             if (!seen.Add(i))
             {
-                return $"option index {i} given twice";
+                return Refusals.Duplicate(i);
             }
 
             chosen.Add(_options[i]);
@@ -221,7 +234,7 @@ internal sealed class CardSelection : Pending
 
         if (chosen.Count < _min || chosen.Count > _max)
         {
-            return $"selected {chosen.Count}, but this decision takes {_min}..{_max}";
+            return Refusals.WrongCount(chosen.Count, _min, _max);
         }
 
         Release();
@@ -234,12 +247,29 @@ internal sealed class CardSelection : Pending
 
 /// <summary>What to take from a set of rewards, and which card within a card reward.</summary>
 /// <remarks>
-/// The whole choice is asked at once because <c>GetSelectedCardReward</c> is
-/// **synchronous** — by the time the game asks which card, there is no await to
-/// park on. The async <c>RewardsSet.testSelector</c> runs first, so the card
-/// index is gathered here and handed back later by
-/// <see cref="HeadlessCardSelector"/>. This is the one place the protocol's shape
-/// is dictated by a method signature rather than chosen.
+/// Asked once per decision, not once per set. The client takes what it wants
+/// and is asked again with the set as it now stands, until every reward has
+/// been taken or it says <c>skip</c>. Nothing is forfeited by omission: the
+/// only way to leave a reward behind is to ask for that.
+///
+/// This is the game's own shape rather than a convenience. A set completes when
+/// <c>AllRewardsSuccessfullySelected</c> — <c>RewardsSetSynchronizer</c> checks
+/// after every selection — and <c>SkipLocalRewardsSet</c> is what abandons the
+/// rest. The loop below is those two facts and nothing more.
+///
+/// It is possible at all because <c>RewardsSet.Offer</c> <em>awaits</em>
+/// <c>testSelector</c>, so the selector may park between rewards. The screen
+/// the real game shows cannot be reached headless — <c>ShowScreen</c> returns
+/// null while <c>TestMode.IsOn</c>, its scene needs a rendering device that
+/// <c>--headless</c> replaces with a dummy, and <c>NOverlayStack.Instance</c> is
+/// <c>NRun.Instance?.GlobalUi.Overlays</c>, which no headless run has — so this
+/// is the interleaving, and it turns out to be enough.
+///
+/// The card <em>within</em> a card reward is still gathered up front, because
+/// <c>GetSelectedCardReward</c> is <strong>synchronous</strong>: by the time the
+/// game asks which card, there is no await to park on. It is handed back later
+/// by <see cref="HeadlessCardSelector"/>. That is the one place the protocol's
+/// shape is dictated by a method signature rather than chosen.
 /// </remarks>
 internal sealed class RewardChoice : Pending
 {
@@ -281,6 +311,17 @@ internal sealed class RewardChoice : Pending
             ["index"] = index,
             ["type"] = reward.GetType().Name,
             ["populated"] = reward.IsPopulated,
+
+            // A reward already taken stays in the set and stays in this list,
+            // because the indices a client answers with are indices into the
+            // set. Renumbering the survivors between questions would make the
+            // same reward answer to a different number each time.
+            //
+            // It is also how a *failed* selection shows: OnSelect can return
+            // false — a potion with no free slot — and the reward is then
+            // neither taken nor gone, so the set never completes on its own and
+            // the client is asked again with this still false.
+            ["taken"] = reward.SuccessfullySelected,
         };
 
         switch (reward)
@@ -289,7 +330,11 @@ internal sealed class RewardChoice : Pending
                 d["amount"] = gold.Amount;
                 break;
             case CardReward card:
-                d["cards"] = card.Cards.Select(Observation.Ident).ToList();
+                d["cards"] = card.Cards.Select(c => new Dictionary<string, object?>
+                {
+                    ["card"] = Observation.Ident(c),
+                    ["text"] = Observation.Text(c),
+                }).ToList();
                 break;
             case RelicReward relic:
                 d["relic"] = relic.Relic?.Id.Entry;
@@ -303,14 +348,14 @@ internal sealed class RewardChoice : Pending
         return d;
     }
 
-    public override string? Accept(JsonElement req)
+    public override Dictionary<string, object?>? Accept(JsonElement req)
     {
         bool skip = req.TryGetProperty("skip", out JsonElement s) && s.ValueKind == JsonValueKind.True;
         if (skip)
         {
             if (_set.DisallowSkipping)
             {
-                return "this reward set cannot be skipped";
+                return Refusals.NotSkippable();
             }
 
             Release();
@@ -321,25 +366,34 @@ internal sealed class RewardChoice : Pending
 
         if (!req.TryGetProperty("take", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
         {
-            return "'rewards' expects a 'take' array, or \"skip\": true";
+            return Refusals.Malformed("'rewards' expects a 'take' array, or \"skip\": true");
         }
 
         var plan = new RewardPlan();
         var seen = new HashSet<int>();
         foreach (JsonElement e in el.EnumerateArray())
         {
-            if (!e.TryGetProperty("index", out JsonElement iEl) || !iEl.TryGetInt32(out int i)
-                || i < 0 || i >= _set.Rewards.Count)
+            if (!e.TryGetProperty("index", out JsonElement iEl) || !iEl.TryGetInt32(out int i))
             {
-                return $"reward index out of range; {_set.Rewards.Count} reward(s) offered";
+                return Refusals.Malformed("each 'take' entry needs a whole-number 'index'");
+            }
+
+            if (i < 0 || i >= _set.Rewards.Count)
+            {
+                return Refusals.OutOfRange(i, _set.Rewards.Count);
             }
 
             if (!seen.Add(i))
             {
-                return $"reward index {i} given twice";
+                return Refusals.Duplicate(i);
             }
 
             Reward reward = _set.Rewards[i];
+            if (reward.SuccessfullySelected)
+            {
+                return Refusals.AlreadyTaken(i);
+            }
+
             int? cardIndex = null;
 
             if (reward is CardReward card)
@@ -350,13 +404,22 @@ internal sealed class RewardChoice : Pending
                 {
                     // Refused rather than defaulted to the first card: choosing
                     // for the client is the one thing the oracle must not do.
-                    return $"reward {i} is a card reward and needs a 'card' index in 0..{count - 1}";
+                    return Refusals.NeedsCardChoice(i, count);
                 }
 
                 cardIndex = c;
             }
 
             plan.Take.Add((reward, cardIndex));
+        }
+
+        if (plan.Take.Count == 0)
+        {
+            // An empty take is the shape that used to mean "and forfeit the
+            // rest", so it is refused rather than treated as a no-op: a client
+            // still sending it is asking for the old behaviour and should hear
+            // that it is gone.
+            return Refusals.EmptyTake();
         }
 
         Release();
@@ -373,7 +436,8 @@ internal sealed class RewardChoice : Pending
     protected override void Fail(Exception e) => _answer.SetException(e);
 
     /// <summary>
-    /// Asks the client what to take from a reward set, then takes it.
+    /// Asks the client what to take from a reward set, until nothing is left to
+    /// ask about.
     /// </summary>
     /// <remarks>
     /// Runs on the game's stack, inside <c>RewardsSet.Offer</c>, which is the
@@ -381,6 +445,17 @@ internal sealed class RewardChoice : Pending
     /// and <c>SelectLocalReward</c> throws without that registration. Generating
     /// rewards and driving selection ourselves would mean reimplementing that
     /// bookkeeping, which is the class of mistake this project keeps finding.
+    ///
+    /// The loop's exit is the synchronizer's, not ours: <c>SelectLocalReward</c>
+    /// completes the set the moment every reward in it has been taken, and
+    /// <c>SkipLocalRewardsSet</c> completes it with the rest abandoned. Asking
+    /// again while it is incomplete is therefore always a question the client
+    /// can still answer.
+    ///
+    /// <c>BackgroundWork</c> is held across each application and released as the
+    /// next question is parked, with no await in between — so the run never
+    /// looks idle between two halves of one reward screen, and the client never
+    /// sees a state where its last reward has not landed yet.
     /// </remarks>
     internal static async Task TakeRewards(RewardsSet set)
     {
@@ -389,36 +464,40 @@ internal sealed class RewardChoice : Pending
         // of true, Offer would throw the moment the client skipped anything.
         set.ThrowInTestIfRewardsNotTaken = false;
 
-        RewardPlan plan = await RewardChoice.Ask(set);
         RewardsSetSynchronizer sync = RunManager.Instance.RewardsSetSynchronizer;
 
-        try
+        while (!sync.IsRewardsSetCompleted(set))
         {
-            if (plan.Skip)
-            {
-                sync.SkipLocalRewardsSet();
-                return;
-            }
+            RewardPlan plan = await RewardChoice.Ask(set);
 
-            foreach ((Reward reward, int? cardIndex) in plan.Take)
+            try
             {
-                // Read back by the synchronous GetSelectedCardReward, which
-                // cannot ask anyone anything. Cleared straight after so a later
-                // reward cannot silently inherit this one's answer.
-                RewardPlan.CardInFlight = cardIndex;
-                try
+                if (plan.Skip)
                 {
-                    await sync.SelectLocalReward(reward);
+                    sync.SkipLocalRewardsSet();
+                    return;
                 }
-                finally
+
+                foreach ((Reward reward, int? cardIndex) in plan.Take)
                 {
-                    RewardPlan.CardInFlight = null;
+                    // Read back by the synchronous GetSelectedCardReward, which
+                    // cannot ask anyone anything. Cleared straight after so a
+                    // later reward cannot silently inherit this one's answer.
+                    RewardPlan.CardInFlight = cardIndex;
+                    try
+                    {
+                        await sync.SelectLocalReward(reward);
+                    }
+                    finally
+                    {
+                        RewardPlan.CardInFlight = null;
+                    }
                 }
             }
-        }
-        finally
-        {
-            BackgroundWork.Release();
+            finally
+            {
+                BackgroundWork.Release();
+            }
         }
     }
 }
@@ -435,20 +514,6 @@ internal sealed class RewardPlan
     /// synchronous <c>GetSelectedCardReward</c> callback.
     /// </summary>
     public static int? CardInFlight { get; set; }
-
-    /// <summary>
-    /// True while a plan is being applied, so the driver does not call the run
-    /// quiescent halfway through it.
-    /// </summary>
-    /// <remarks>
-    /// Rewards are taken after combat has ended, and the readiness test treats
-    /// "not in combat" as ready — so without this the wait returns the instant
-    /// the answer is accepted, and the client sees the state *before* its own
-    /// rewards are applied: gold and deck unchanged, exactly as if nothing had
-    /// been taken. Nothing else marks the work in progress, because the game
-    /// fires `RewardsSet.Offer` without awaiting it.
-    /// </remarks>
-    public static bool Applying { get; set; }
 }
 
 /// <summary>
@@ -497,4 +562,192 @@ internal sealed class HeadlessCardSelector : ICardSelector
 
         return new CardRewardSelection { card = options[index.Value].Card };
     }
+}
+
+/// <summary>Where to divine, in the Crystal Sphere's minigame.</summary>
+/// <remarks>
+/// The one event in the game with a screen of its own. Both of its options
+/// <c>await CrystalSphereMinigame.PlayMinigame()</c>, which is
+/// <c>NCrystalSphereScreen.ShowScreen(this)</c> and then a wait on a
+/// <c>TaskCompletionSource</c> that only a click ever completes. Headless the
+/// scene is not in the cache, and instantiating it takes the process down
+/// without an exception — the last line in the log is
+/// <c>Asset not cached: crystal_sphere_screen.tscn</c>.
+///
+/// So the screen is skipped (see <c>DivineWithoutAScreen</c>) and the clicks
+/// arrive here instead. This is not the <c>NScreenShake</c> case: a click has
+/// consequences. Each one costs a divination, uncovers cells, and what those
+/// cells hold is what <c>DoLocalCrystalSphereRewards</c> pays out. A minigame
+/// resolved by the oracle would be the oracle choosing.
+///
+/// Parked across clicks rather than once per click, for the same reason
+/// <see cref="RewardChoice"/> is: the client answers, the count drops, and it is
+/// asked again with the grid as it now stands. <c>DivinationCount</c> is
+/// decremented at the top of <c>CellClicked</c>, before its first await, so
+/// whether that was the last one is known by the time this returns.
+/// </remarks>
+internal sealed class Divination : Pending
+{
+    private readonly CrystalSphereMinigame _game;
+
+    private Divination(CrystalSphereMinigame game) => _game = game;
+
+    public override string Kind => "divine";
+
+    public static void Ask(CrystalSphereMinigame game) => Park(new Divination(game));
+
+    /// <summary>
+    /// The grid, as what has been uncovered rather than as every cell.
+    /// </summary>
+    /// <remarks>
+    /// A hidden cell is the default and there are 121 of them, so listing the
+    /// cleared ones says the same thing in a line instead of a page. The client
+    /// has the dimensions and can take the complement.
+    ///
+    /// <c>revealed</c> is what the divinations have turned up so far, which is
+    /// the whole state of play: <c>IsGood</c> is false for a
+    /// <c>CrystalSphereCurse</c>, and it is why <c>Big</c> is a gamble rather
+    /// than a strictly better tool.
+    /// </remarks>
+    public override Dictionary<string, object?> Describe()
+    {
+        var cleared = new List<Dictionary<string, object?>>();
+        for (int x = 0; x < _game.GridSize.X; x++)
+        {
+            for (int y = 0; y < _game.GridSize.Y; y++)
+            {
+                if (!_game.cells[x, y].IsHidden)
+                {
+                    cleared.Add(new Dictionary<string, object?> { ["x"] = x, ["y"] = y });
+                }
+            }
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["kind"] = Kind,
+            ["left"] = _game.DivinationCount,
+            ["width"] = _game.GridSize.X,
+            ["height"] = _game.GridSize.Y,
+            ["tool"] = _game.CrystalSphereTool.ToString(),
+            ["cleared"] = cleared,
+            ["revealed"] = _game.Items
+                .Where(Uncovered)
+                .Select(i => new Dictionary<string, object?>
+                {
+                    ["item"] = i.GetType().Name,
+                    ["good"] = i.IsGood,
+                    ["x"] = i.Position.X,
+                    ["y"] = i.Position.Y,
+                    ["width"] = i.Size.X,
+                    ["height"] = i.Size.Y,
+                })
+                .ToList(),
+        };
+    }
+
+    /// <summary>Whether every cell an item sits on has been uncovered.</summary>
+    /// <remarks>
+    /// Derived rather than read. <c>CrystalSphereItem.Revealed</c> is an event,
+    /// and the minigame's <c>_revealed</c> list is private, but
+    /// <c>AreAllOccupiedCellsClear</c> is the same test this makes: an item is
+    /// found once nothing covers it.
+    /// </remarks>
+    private bool Uncovered(CrystalSphereItem item)
+    {
+        for (int x = item.Position.X; x < item.Position.X + item.Size.X; x++)
+        {
+            for (int y = item.Position.Y; y < item.Position.Y + item.Size.Y; y++)
+            {
+                if (x < 0 || x >= _game.GridSize.X || y < 0 || y >= _game.GridSize.Y)
+                {
+                    return false;
+                }
+
+                if (_game.cells[x, y].IsHidden)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public override Dictionary<string, object?>? Accept(JsonElement req)
+    {
+        if (!req.TryGetProperty("divine", out JsonElement at)
+            || at.ValueKind != JsonValueKind.Object)
+        {
+            return Refusals.Malformed($"'{Kind}' expects a 'divine' object of 'x', 'y' and 'tool'");
+        }
+
+        if (!at.TryGetProperty("x", out JsonElement xe) || !xe.TryGetInt32(out int x)
+            || !at.TryGetProperty("y", out JsonElement ye) || !ye.TryGetInt32(out int y))
+        {
+            return Refusals.Malformed("'divine' needs integer 'x' and 'y'");
+        }
+
+        if (x < 0 || x >= _game.GridSize.X || y < 0 || y >= _game.GridSize.Y)
+        {
+            return Refusals.OffGrid(x, y, _game.GridSize.X, _game.GridSize.Y);
+        }
+
+        // A cleared cell holds nothing left to uncover, so clicking one would
+        // spend a divination on nothing. The screen does not offer it either.
+        if (!_game.cells[x, y].IsHidden)
+        {
+            return Refusals.AlreadyUncovered(x, y);
+        }
+
+        // `None` is left out on purpose: `CellClicked` tests only for `Big`, so
+        // `None` and `Small` are one move under two names.
+        string tool = at.TryGetProperty("tool", out JsonElement te)
+            && te.ValueKind == JsonValueKind.String
+                ? te.GetString()!
+                : "";
+        CrystalSphereMinigame.CrystalSphereToolType picked = tool switch
+        {
+            "Small" => CrystalSphereMinigame.CrystalSphereToolType.Small,
+            "Big" => CrystalSphereMinigame.CrystalSphereToolType.Big,
+            _ => (CrystalSphereMinigame.CrystalSphereToolType)(-1),
+        };
+
+        if (picked == (CrystalSphereMinigame.CrystalSphereToolType)(-1))
+        {
+            return Refusals.Malformed($"'{tool}' is not a tool; 'Small' uncovers the cell, 'Big' its neighbours too");
+        }
+
+        _game.SetTool(picked);
+
+        // Released *before* the click, not after. The minigame's completion
+        // source is a bare TaskCompletionSource -- no
+        // RunContinuationsAsynchronously -- so the click that spends the last
+        // divination resumes `PlayMinigame` synchronously from inside
+        // `CellClicked`, which runs `CompleteMinigame` and offers the rewards.
+        // Releasing afterwards is too late: `RewardChoice.Ask` finds this
+        // question still parked and throws
+        // "the game asked 'rewards' while 'divine' is still unanswered".
+        //
+        // Knowing which click is the last is what makes this possible.
+        // `DivinationCount` is public and decremented once per click, so one
+        // remaining means this one ends it.
+        if (_game.DivinationCount <= 1)
+        {
+            Release();
+        }
+
+        // Not awaited: the click resumes the event, and a handler blocked on it
+        // could never send the question the event asks next. The wait loop
+        // follows it through BackgroundWork instead.
+        BackgroundWork.Track(_game.CellClicked(_game.cells[x, y]));
+
+        return null;
+    }
+
+    /// <summary>
+    /// Cancels the minigame's own wait, which is what <c>PlayMinigame</c> is
+    /// parked on. Nothing here holds a task of its own to fail.
+    /// </summary>
+    protected override void Fail(Exception e) => _game.ForceMinigameEnd();
 }

@@ -1,0 +1,462 @@
+//! Reading and writing a recording, in the oracle's spelling.
+//!
+//! JSON Lines: a build stamp, then one line per step, each step spelled as a
+//! [`crate::wire::command::Command`].
+//!
+//! The crate README has the format and the example, and says why the format is
+//! here rather than in `sts2-core`.
+
+use crate::stamp::Stamp;
+use crate::wire::command::Command;
+use std::fs::File;
+use std::io::{self, BufRead, Write};
+use std::marker::PhantomData;
+use std::path::{Path, PathBuf};
+use sts2_core::ContentVersion;
+use sts2_core::{Recording, Step, Tape};
+
+/// Writes the stamp and every step.
+///
+/// For a recording taken all at once. A caller writing as it plays uses
+/// [`open`] and [`append`] instead, which is what makes a killed session still
+/// leave a replayable file.
+pub fn write<V: ContentVersion>(recording: &Recording<V>, mut out: impl Write) -> io::Result<()> {
+    open::<V>(&mut out)?;
+    for step in recording.steps() {
+        append(&mut out, step)?;
+    }
+    Ok(())
+}
+
+/// Writes the stamp line that opens a recording of this build.
+pub fn open<V: ContentVersion>(mut out: impl Write) -> io::Result<()> {
+    writeln!(out, "{}", serde_json::to_string(&Stamp::of(&V::VERSION))?)
+}
+
+/// Writes one step.
+///
+/// Nothing here buffers across calls, so a process that dies between two steps
+/// has written the first.
+pub fn append<V: ContentVersion>(mut out: impl Write, step: &Step<V>) -> io::Result<()> {
+    let wire: Command<V> = step.into();
+    writeln!(out, "{}", serde_json::to_string(&wire)?)
+}
+
+/// A file being written to as the run is played.
+///
+/// The [`Tape`] a [`Recorder`](sts2_core::Recorder) writes to when the run is
+/// meant to survive the process. Flushed per step, which is the whole reason
+/// the format is one line per step.
+///
+/// Parameterised by the build, because the stamp is. A writer opened for one
+/// build and fed another's steps produces a file whose header lies.
+#[derive(Debug)]
+pub struct Writer<V: ContentVersion> {
+    path: PathBuf,
+    file: File,
+    steps: usize,
+    build: PhantomData<V>,
+}
+
+impl<V: ContentVersion> Writer<V> {
+    /// Begins a recording, replacing whatever was at the path.
+    pub fn create(path: impl Into<PathBuf>) -> io::Result<Writer<V>> {
+        let path = path.into();
+        let mut file = File::create(&path)?;
+        open::<V>(&mut file)?;
+        file.flush()?;
+
+        Ok(Writer {
+            path,
+            file,
+            steps: 0,
+            build: PhantomData,
+        })
+    }
+
+    /// Carries on a recording that already exists.
+    ///
+    /// What a replay wants. The file already holds the steps being replayed.
+    /// Rewriting it means destroying the run to reproduce it. A replay that
+    /// fails halfway then leaves the file somebody opened to investigate
+    /// truncated at the failure.
+    ///
+    /// The steps already there are counted rather than assumed to be none, so
+    /// [`Writer::steps`] is the run's length rather than this session's share
+    /// of it.
+    pub fn resume(path: impl Into<PathBuf>) -> io::Result<Writer<V>> {
+        let path = path.into();
+        let existing = std::fs::read_to_string(&path)?;
+
+        // Checked rather than subtracted from: an empty file has no stamp, and
+        // is not a recording to carry on.
+        let lines = existing.lines().filter(|l| !l.trim().is_empty()).count();
+        let steps = lines.checked_sub(1).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{} is empty; there is no recording to carry on",
+                    path.display()
+                ),
+            )
+        })?;
+
+        let file = File::options().append(true).open(&path)?;
+        Ok(Writer {
+            path,
+            file,
+            steps,
+            build: PhantomData,
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// How long the run on disk is, this session's steps included.
+    pub fn steps(&self) -> usize {
+        self.steps
+    }
+}
+
+impl<V: ContentVersion> Tape<V> for Writer<V> {
+    type Error = io::Error;
+
+    fn record(&mut self, step: &Step<V>) -> Result<(), io::Error> {
+        append(&mut self.file, step)?;
+        // Insurance, not the mechanism: `File` does not buffer, so the step is
+        // already down by the line above. It is here so that wrapping the file
+        // in something that *does* buffer stays correct rather than silently
+        // losing the last few steps of every killed session.
+        self.file.flush()?;
+        self.steps += 1;
+        Ok(())
+    }
+}
+
+/// Reads a recording, refusing one taken against another build.
+///
+/// The refusal is the point. Ids are the same strings across builds and mean
+/// different things. A recording from another version replays without complaint
+/// and produces a different run, which is the failure this project exists to
+/// make impossible.
+pub fn read<V: ContentVersion>(input: impl BufRead) -> Result<Recording<V>, Error> {
+    let mut lines = input.lines();
+
+    let head = lines.next().transpose()?.ok_or(Error::Empty)?;
+    let stamp: Stamp = serde_json::from_str(head.trim()).map_err(|e| Error::Header {
+        line: head.trim().to_string(),
+        source: e,
+    })?;
+
+    if !stamp.describes(&V::VERSION) {
+        return Err(Error::WrongBuild {
+            expected: Stamp::of(&V::VERSION).to_string(),
+            found: stamp.to_string(),
+        });
+    }
+
+    let mut steps = Vec::new();
+    for (at, line) in lines.enumerate() {
+        let line = line?;
+        // A recording gets concatenated, edited and pasted, and a trailing
+        // newline should not be a parse error.
+        if line.trim().is_empty() {
+            continue;
+        }
+        // Numbered as a reader would: the stamp is line 1.
+        let at = at + 2;
+        let named = |line: &str| line.trim().to_string();
+
+        let command: Command<V> = serde_json::from_str(line.trim()).map_err(|e| Error::Step {
+            at,
+            line: named(&line),
+            source: e,
+        })?;
+
+        steps.push(command.into_step().ok_or_else(|| Error::NotAStep {
+            at,
+            line: named(&line),
+        })?);
+    }
+
+    Ok(steps.into_iter().collect())
+}
+
+/// Why a recording did not read.
+///
+/// Its own type rather than a [`crate::Error`] variant. That one is what goes
+/// wrong between this process and the game, and a file is neither.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("the recording is empty; it should open with a build stamp")]
+    Empty,
+
+    #[error("recorded against {found}, but this is {expected}")]
+    WrongBuild { expected: String, found: String },
+
+    #[error("the first line is not a build stamp: {line}")]
+    Header {
+        line: String,
+        source: serde_json::Error,
+    },
+
+    #[error("line {at} is not a step this build knows: {line}")]
+    Step {
+        at: usize,
+        line: String,
+        source: serde_json::Error,
+    },
+
+    /// A command the protocol accepts but a run is not made of.
+    ///
+    /// `observe` and `quit` parse perfectly well and are not steps. Observing
+    /// changes nothing, and quitting ends the session rather than the run. A
+    /// recording holding one cannot be replayed past it. Refused on the way in
+    /// rather than skipped, because a file containing one was written by
+    /// something that misunderstood the format.
+    #[error("line {at} is a command but not a step in a run: {line}")]
+    NotAStep { at: usize, line: String },
+
+    #[error(transparent)]
+    Io(#[from] io::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sts2_content::v0_107_1::V0_107_1;
+    use sts2_core::Seed;
+    use sts2_core::{Coord, Decision};
+
+    type V = V0_107_1;
+    type Character = <V as ContentVersion>::Character;
+    type AscensionLevel = <V as ContentVersion>::AscensionLevel;
+
+    fn recorded() -> Recording<V> {
+        let mut r = Recording::new();
+        r.push(Decision::Start {
+            seed: Seed::new("SP1RE1").expect("a seed"),
+            character: Character::Ironclad,
+            ascension: AscensionLevel::None,
+            modifiers: vec![],
+        });
+        r.push(Decision::Travel {
+            to: Coord::new(1, 1),
+        });
+        r
+    }
+
+    fn written(r: &Recording<V>) -> String {
+        let mut out = Vec::new();
+        write(r, &mut out).expect("writing to a Vec cannot fail");
+        String::from_utf8(out).expect("json is utf-8")
+    }
+
+    #[test]
+    fn a_recording_round_trips() {
+        let text = written(&recorded());
+        assert_eq!(
+            read::<V>(text.as_bytes()).expect("its own build"),
+            recorded()
+        );
+    }
+
+    /// The stamp is a line of its own, so a step is a line of its own too.
+    #[test]
+    fn it_is_one_line_per_step() {
+        let text = written(&recorded());
+        let lines: Vec<&str> = text.lines().collect();
+
+        assert_eq!(lines.len(), 3, "a stamp and two steps: {text}");
+        assert!(lines[0].contains("contentHash"), "{text}");
+        assert_eq!(lines[2], r#"{"cmd":"travel","col":1,"row":1}"#);
+    }
+
+    /// A file cut off mid-run is a shorter run, not a broken file. The format
+    /// is lines so that this holds.
+    #[test]
+    fn a_truncated_recording_replays_as_far_as_it_got() {
+        let text = written(&recorded());
+        let cut = text.lines().take(2).collect::<Vec<_>>().join("\n");
+
+        let read = read::<V>(cut.as_bytes()).expect("still a recording");
+        assert_eq!(read.len(), 1);
+        assert!(matches!(
+            read.steps()[0],
+            Step::Decision(Decision::Start { .. })
+        ));
+    }
+
+    /// The refusal this format exists for.
+    #[test]
+    fn a_recording_from_another_build_is_refused() {
+        let text = written(&recorded()).replace(
+            &<V as ContentVersion>::VERSION.content_hash.to_string(),
+            "1234567",
+        );
+
+        let err = read::<V>(text.as_bytes()).expect_err("another build's content hash");
+
+        assert!(matches!(err, Error::WrongBuild { .. }), "{err}");
+        assert!(err.to_string().contains("1234567"), "{err}");
+    }
+
+    /// A rebalance leaves every id in place, so the content hash alone accepts
+    /// it. This is why the stamp carries both hashes.
+    #[test]
+    fn a_rebalanced_build_is_refused_too() {
+        let text = written(&recorded()).replace(
+            &<V as ContentVersion>::VERSION.assembly_hash.to_string(),
+            "999",
+        );
+
+        assert!(matches!(
+            read::<V>(text.as_bytes()),
+            Err(Error::WrongBuild { .. })
+        ));
+    }
+
+    #[test]
+    fn an_empty_file_is_not_a_recording() {
+        assert!(matches!(read::<V>(&b""[..]), Err(Error::Empty)));
+    }
+
+    /// The line number is the reader's, counting the stamp as line 1.
+    #[test]
+    fn a_step_this_build_does_not_know_names_its_line() {
+        let mut text = written(&recorded());
+        text.push_str("{\"cmd\":\"teleport\"}\n");
+
+        let err = read::<V>(text.as_bytes()).expect_err("no such command");
+
+        assert!(matches!(err, Error::Step { at: 4, .. }), "{err}");
+        assert!(err.to_string().contains("teleport"), "{err}");
+    }
+
+    /// Parses fine and is still not a run. The daemon has always filtered these
+    /// out when writing. Reading now says so, rather than trusting that it did.
+    #[test]
+    fn a_command_that_is_not_a_step_is_refused_by_name() {
+        for cmd in [r#"{"cmd":"observe"}"#, r#"{"cmd":"quit"}"#] {
+            let mut text = written(&recorded());
+            text.push_str(cmd);
+            text.push('\n');
+
+            let err = read::<V>(text.as_bytes()).expect_err("not a step");
+            assert!(matches!(err, Error::NotAStep { at: 4, .. }), "{cmd}: {err}");
+        }
+    }
+
+    /// A constructed run is the kind most worth keeping, since it is the kind
+    /// nobody reaches by playing.
+    #[test]
+    fn a_constructed_run_records_and_reads_back() {
+        let mut r: Recording<V> = Recording::new();
+        r.push(sts2_core::Setup::Fight {
+            encounter: <V as ContentVersion>::Encounter::ShrinkerBeetleWeak,
+        });
+
+        let text = written(&r);
+        assert!(
+            text.contains(r#"{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}"#),
+            "{text}"
+        );
+        assert_eq!(read::<V>(text.as_bytes()).expect("its own build"), r);
+    }
+
+    // -----------------------------------------------------------------------
+    // Writing as the run is played.
+    // -----------------------------------------------------------------------
+
+    /// A path nothing else in this suite is using.
+    fn scratch(name: &str) -> PathBuf {
+        let at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("a clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!("sts2-{name}-{}-{at}.jsonl", std::process::id()))
+    }
+
+    #[test]
+    fn a_writer_leaves_a_file_that_reads_back_as_the_run() {
+        let path = scratch("writer");
+        let mut writer = Writer::<V>::create(&path).expect("a file");
+
+        for step in recorded().steps() {
+            writer.record(step).expect("a step is written");
+        }
+        assert_eq!(writer.steps(), recorded().len());
+
+        let file = std::io::BufReader::new(File::open(&path).expect("the file"));
+        assert_eq!(read::<V>(file).expect("it reads back"), recorded());
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// The reason the format is one line per step. A session that is killed
+    /// leaves a file complete up to its last decision. Read here while the
+    /// writer is still open. A flush that only happens on drop is a flush that
+    /// does not happen when the process is killed.
+    #[test]
+    fn every_step_is_on_disk_before_the_next_one_is_asked_for() {
+        let path = scratch("flush");
+        let mut writer = Writer::<V>::create(&path).expect("a file");
+
+        let steps = recorded();
+        let first = &steps.steps()[0];
+        writer.record(first).expect("a step is written");
+
+        let file = std::io::BufReader::new(File::open(&path).expect("the file"));
+        let so_far = read::<V>(file).expect("a part-written recording still reads");
+        assert_eq!(
+            so_far.steps(),
+            std::slice::from_ref(first),
+            "the step is not on disk yet"
+        );
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// A replay carries on the file it is replaying rather than truncating it.
+    /// Rewriting means destroying the run to reproduce it.
+    #[test]
+    fn resuming_keeps_what_was_there_and_counts_it() {
+        let path = scratch("resume");
+        let mut writer = Writer::<V>::create(&path).expect("a file");
+        let steps = recorded();
+        writer.record(&steps.steps()[0]).expect("a step is written");
+        drop(writer);
+
+        let mut carried = Writer::<V>::resume(&path).expect("it resumes");
+        assert_eq!(
+            carried.steps(),
+            1,
+            "the stamp is not a step, and the step is"
+        );
+        carried
+            .record(&steps.steps()[1])
+            .expect("a step is written");
+        assert_eq!(carried.steps(), 2);
+
+        let file = std::io::BufReader::new(File::open(&path).expect("the file"));
+        let whole = read::<V>(file).expect("it reads back");
+        assert_eq!(whole.steps(), &steps.steps()[..2]);
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// An empty file has no stamp, so it is not a recording to carry on. Said
+    /// rather than underflowed.
+    #[test]
+    fn resuming_nothing_is_refused() {
+        let path = scratch("empty");
+        File::create(&path).expect("a file");
+
+        let err = Writer::<V>::resume(&path).expect_err("there is nothing to carry on");
+        assert!(err.to_string().contains("empty"), "{err}");
+
+        std::fs::remove_file(&path).ok();
+    }
+}

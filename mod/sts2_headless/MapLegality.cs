@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace Sts2Headless;
@@ -69,6 +70,27 @@ public static class MapLegality
         }
 
         return Sorted(MapTravel.GetTravelablePointsFrom(state, current));
+    }
+
+    /// <summary>
+    /// Whether the run is standing on a beaten boss, with the act behind it.
+    /// </summary>
+    /// <remarks>
+    /// The room half of the precondition
+    /// <c>NRewardsScreen.OnProceedButtonPressed</c> tests: a boss room, or the
+    /// run's victory room. Kept here rather than in <c>Protocol</c> because it is
+    /// a map rule — the answer to "where can this run go", asked about the one
+    /// move the grid cannot express.
+    ///
+    /// The other half is that the fight is over, which the caller checks: there
+    /// is no <c>IsFinished</c> on a room, and a boss room with its combat still
+    /// running is an ordinary fight. Refusing during combat is what stops this
+    /// from being a way to skip one.
+    /// </remarks>
+    public static bool CanProceed(RunState state)
+    {
+        AbstractRoom? room = state.CurrentRoom;
+        return room != null && (room.RoomType == RoomType.Boss || room.IsVictoryRoom);
     }
 
     private static IReadOnlyList<MapPoint> One(MapPoint p) => new[] { p };
