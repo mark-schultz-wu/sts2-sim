@@ -2,8 +2,8 @@
 
 An STS2 simulator, meant to be fast enough to train agents in.
 
-The real game can be driven programmatically, but only at a few hundred steps/s —
-against the ~10⁹ a training run wants. So the game isn't the environment. It's the
+The real game can be driven programmatically, but only at a few hundred steps/s.
+A training run wants about 10⁹. So the game isn't the environment. It's the
 reference the simulator gets checked against, step by step, on the same seed.
 
 So far that's five mods, the content they print, and a Rust side that consumes
@@ -20,7 +20,7 @@ both. The simulator itself isn't started.
 | [`sts2_headless_test`](mod/sts2_headless_test/README.md) | the legality suite for the second |
 
 Each test mod is installed only to run its suite, so nothing shipped carries
-tests. `mod/deploy.sh` builds and installs all five; the game's own manifest
+tests. `mod/deploy.sh` builds and installs all five. The game's own manifest
 `dependencies` field orders them.
 
 [The protocol](mod/sts2_headless/PROTOCOL.md) is the wire contract on one page.
@@ -38,23 +38,25 @@ prefix names the file it lives in.
 | `sts2-rng` | the game's draw stream, checked against 1024 draws per seed of the real one |
 | `xtask` | `cargo xtask codegen`, which turns the dumps into `sts2-content` |
 
-Content is thirteen domains — acts, afflictions, cards, characters,
-enchantments, encounters, events, modifiers, monsters, orbs, potions, powers and
-relics — plus the hook surface, which is measured but has no table because a
-simulator implements it rather than looking it up. What a piece of content *does*
-is code and gets ported by hand; what it *is* is a table, and the table is
-generated so that nobody types a number the game already knows. The generated
-tree is committed rather than built by a `build.rs`, so a content patch reads as
-a diff.
+Content is thirteen domains: acts, afflictions, cards, characters, enchantments,
+encounters, events, modifiers, monsters, orbs, potions, powers and relics. The
+hook surface comes with them. It is measured, but it has no table, because a
+simulator implements it rather than looking it up.
 
-Every dump names the build it came from, with two hashes: the content hash over
-the set of model ids, and the assembly hash that moves on any code change at all.
-One alone is not enough — a rebalance that adds no content leaves the content
+What a piece of content *does* is code, and gets ported by hand. What it *is* is
+a table. The table is generated, so that nobody types a number the game already
+knows. The generated tree is committed rather than built by a `build.rs`, so a
+content patch reads as a diff.
+
+Every dump names the build it came from, with two hashes. The content hash covers
+the set of model ids. The assembly hash moves on any code change at all.
+
+One hash alone is not enough. A rebalance that adds no content leaves the content
 hash equal and every generated number wrong. Codegen refuses to generate when two
 dumps disagree, so a table can never quietly come to describe a game nobody is
 talking to.
 
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is where things live and why —
-the content/code dividing rule, why ported behaviour belongs beside the tables
-rather than in the engine, how the hook surface is held to what was measured, and
-the four layers a table has to survive to be believed.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is where things live, and why. It
+covers the content/code dividing rule, and why ported behaviour belongs beside
+the tables rather than in the engine. It also covers how the hook surface is held
+to what was measured, and the four layers a table has to survive to be believed.

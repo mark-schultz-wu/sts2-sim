@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Lint Rust doc comments against a subset of ASD-STE100.
+"""Lint Rust doc comments and Markdown against a subset of ASD-STE100.
+
+Markdown is here so that relocating prose out of a doc comment is an editorial
+decision rather than an escape hatch. A README holds the same register the
+comment it replaced had to hold.
 
 Usage:
     tools/prose-lint.py [PATH ...]
@@ -117,6 +121,26 @@ def doc_blocks(lines: list[str]) -> list[Block]:
     return blocks
 
 
+def md_blocks(lines: list[str]) -> list[Block]:
+    """One block per paragraph. Prose rules read a paragraph the way they read a
+    doc comment, and a finding names the paragraph it is in."""
+    blocks: list[Block] = []
+    current: list[tuple[int, str]] = []
+    fenced = False
+    for number, line in enumerate(lines, start=1):
+        if line.strip().startswith("```"):
+            fenced = not fenced
+        if not fenced and not line.strip():
+            if current:
+                blocks.append(Block("md", current))
+                current = []
+            continue
+        current.append((number, line))
+    if current:
+        blocks.append(Block("md", current))
+    return blocks
+
+
 def prose_lines(block: Block) -> list[tuple[int, str, bool]]:
     kept: list[tuple[int, str, bool]] = []
     fenced = False
@@ -146,6 +170,8 @@ def prose_of(block: Block) -> str:
 
 def volume(block: Block, path: pathlib.Path) -> list[Finding]:
     findings: list[Finding] = []
+    if block.kind == "md":
+        return findings
     hub_header = block.kind == "//!" and path.name in HUB_FILES
     if not hub_header and len(block.lines) > MAX_BLOCK_LINES:
         findings.append(
@@ -163,12 +189,17 @@ def volume(block: Block, path: pathlib.Path) -> list[Finding]:
 def check(path: pathlib.Path, max_words: int) -> list[Finding]:
     findings: list[Finding] = []
     lines = path.read_text(encoding="utf-8").split("\n")
-    for block in doc_blocks(lines):
+    blocks = md_blocks(lines) if path.suffix == ".md" else doc_blocks(lines)
+    for block in blocks:
         findings.extend(volume(block, path))
         prose = prose_of(block)
         if not prose.strip():
             continue
-        for sentence in re.split(r"(?<=[.!?])\s+", prose):
+        # The terminator is often not the last character: a sentence ending
+        # inside bold or a quotation puts `**` or `"` after the full stop, and a
+        # splitter that demanded the stop be last would join that sentence to
+        # the next one and report the pair as one long one.
+        for sentence in re.split(r"(?<=[.!?])[*_)\]\"']*\s+", prose):
             words = len(sentence.split())
             if words > max_words:
                 findings.append(Finding(str(path), block.start, "long-sentence", f"{words} words: {sentence[:70]}…"))
@@ -207,17 +238,20 @@ def sources(paths: list[str]) -> list[pathlib.Path]:
         if path.is_dir():
             found.extend(
                 source
-                for source in sorted(path.rglob("*.rs"))
+                for pattern in ("*.rs", "*.md")
+                for source in sorted(path.rglob(pattern))
                 if "generated" not in source.parts
             )
-        elif path.suffix == ".rs" and "generated" not in path.parts:
+        elif path.suffix in (".rs", ".md") and "generated" not in path.parts:
             found.append(path)
     return found
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("paths", nargs="*", default=["crates", "xtask"])
+    parser.add_argument(
+        "paths", nargs="*", default=["crates", "xtask", "docs", "mod", "README.md"]
+    )
     parser.add_argument("--max-words", type=int, default=MAX_WORDS)
     parser.add_argument("--rule", action="append", help="check only these rules")
     parser.add_argument("--explain", action="store_true", help="why each rule exists")
