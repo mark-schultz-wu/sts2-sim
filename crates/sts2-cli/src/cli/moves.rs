@@ -29,6 +29,45 @@ pub fn legal<V: ContentVersion>(applied: &Applied<V>) -> Vec<Decision<V>> {
     }
 }
 
+/// The ordinary numbered choices shared by terminal and automation frontends.
+pub fn navigation<V: ContentVersion>(applied: &Applied<V>) -> Vec<Decision<V>> {
+    legal(applied)
+        .into_iter()
+        .filter(|decision| {
+            matches!(
+                decision,
+                Decision::ChooseOption { .. }
+                    | Decision::Buy { .. }
+                    | Decision::Travel { .. }
+                    | Decision::Proceed
+            )
+        })
+        .collect()
+}
+
+/// Every individual reward the pending set will still hand over.
+pub fn takeable<V: ContentVersion>(question: &Question<V>) -> Vec<TakeReward> {
+    let Question::Rewards { rewards, .. } = question else {
+        return Vec::new();
+    };
+
+    rewards
+        .iter()
+        .filter(|detail| !detail.taken)
+        .flat_map(|detail| match &detail.reward {
+            RewardKind::Card { cards } => (0..cards.len())
+                .map(|card| TakeReward::Card {
+                    index: detail.index,
+                    card,
+                })
+                .collect(),
+            _ => vec![TakeReward::NonCard {
+                index: detail.index,
+            }],
+        })
+        .collect()
+}
+
 /// Every answer a parked game accepts.
 fn answers<V: ContentVersion>(question: &Question<V>) -> Vec<Decision<V>> {
     match question {
@@ -45,24 +84,11 @@ fn answers<V: ContentVersion>(question: &Question<V>) -> Vec<Decision<V>> {
                 .collect()
         }
 
-        Question::Rewards { skippable, rewards } => {
-            let mut moves: Vec<Decision<V>> = Vec::new();
-
-            for reward in rewards.iter().filter(|r| !r.taken) {
-                match &reward.reward {
-                    // A card reward is refused without a card index rather than
-                    // defaulting to one, so each card is its own move.
-                    RewardKind::Card { cards } => moves.extend((0..cards.len()).map(|card| {
-                        Decision::Answer(Answer::Take(vec![TakeReward::Card {
-                            index: reward.index,
-                            card,
-                        }]))
-                    })),
-                    _ => moves.push(Decision::Answer(Answer::Take(vec![TakeReward::NonCard {
-                        index: reward.index,
-                    }]))),
-                }
-            }
+        Question::Rewards { skippable, .. } => {
+            let mut moves: Vec<Decision<V>> = takeable(question)
+                .into_iter()
+                .map(|take| Decision::Answer(Answer::Take(vec![take])))
+                .collect();
 
             if *skippable {
                 moves.push(Decision::Answer(Answer::Skip));
@@ -226,9 +252,39 @@ fn travel_moves<V: ContentVersion>(map: &Map<V>) -> Vec<Decision<V>> {
         .collect()
 }
 
+/// What a person-facing log says a decision did.
+pub fn describe<V: ContentVersion>(decision: &Decision<V>) -> String {
+    match decision {
+        Decision::PlayCard { index, target } => match target {
+            Some(t) => format!("played card {index} at {t}"),
+            None => format!("played card {index}"),
+        },
+        Decision::EndTurn => "ended the turn".into(),
+        Decision::UsePotion { index, target } => match target {
+            Some(t) => format!("drank potion {index} at {t}"),
+            None => format!("drank potion {index}"),
+        },
+        Decision::Travel { to } => format!("travelled to {},{}", to.col, to.row),
+        Decision::Proceed => "left the act".into(),
+        Decision::ChooseOption { index } => format!("chose option {index}"),
+        Decision::Buy { index } => format!("bought entry {index}"),
+        Decision::Answer(Answer::Skip) => "skipped".into(),
+        Decision::Answer(Answer::Cards(cards)) if cards.is_empty() => "chose no cards".into(),
+        Decision::Answer(Answer::Cards(cards)) => format!("chose cards {cards:?}"),
+        Decision::Answer(Answer::Take(taken)) => match taken.first() {
+            Some(TakeReward::Card { index, card }) => format!("took {index}.{card}"),
+            Some(TakeReward::NonCard { index }) => format!("took {index}"),
+            None => "took nothing".into(),
+        },
+        Decision::Answer(Answer::Divine { x, y, .. }) => format!("divined {x},{y}"),
+        Decision::Start { seed, .. } => format!("started {}", seed.as_str()),
+        Decision::EnterRoom { room } => format!("entered {}", crate::render::spelling(room)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::legal;
+    use super::{legal, navigation};
     use crate::fixture::{self, playable, unplayable};
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
@@ -312,6 +368,21 @@ mod tests {
         assert!(on_the_map.contains(&Decision::Travel {
             to: Coord::new(0, 3)
         }));
+    }
+
+    /// The TUI consumes this exact subset rather than deriving a parallel list.
+    #[test]
+    fn navigation_is_the_numbered_subset_of_legal_play() {
+        let applied = fixture::applied(json!({
+            "potions": [{"id": "ASHWATER", "usable": true, "reason": null, "targets": []}],
+            "room": {"type": "Event", "id": "WELLSPRING",
+                     "options": [{"index": 6, "key": "DRINK"}]}
+        }));
+
+        assert_eq!(
+            navigation(&applied),
+            vec![Decision::ChooseOption { index: 6 }]
+        );
     }
 
     /// A card that names a target is a different move per target.
@@ -405,11 +476,11 @@ mod tests {
             "state": {},
             "kind": "rewards", "skippable": true,
             "rewards": [
-                {"index": 0, "type": "GoldReward", "populated": true, "taken": false,
+                {"index": 4, "type": "GoldReward", "populated": true, "taken": false,
                  "amount": 25},
-                {"index": 1, "type": "CardReward", "populated": true, "taken": false,
+                {"index": 7, "type": "CardReward", "populated": true, "taken": false,
                  "cards": [{"card": "ANGER"}, {"card": "ARMAMENTS"}]},
-                {"index": 2, "type": "PotionReward", "populated": true, "taken": true,
+                {"index": 9, "type": "PotionReward", "populated": true, "taken": true,
                  "potion": "FLEX_POTION"}
             ]
         }));
@@ -418,7 +489,7 @@ mod tests {
         assert_eq!(out.len(), 4, "{out:?}");
         assert!(
             out.contains(&Decision::Answer(Answer::Take(vec![TakeReward::Card {
-                index: 1,
+                index: 7,
                 card: 1
             }])))
         );

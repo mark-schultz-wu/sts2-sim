@@ -10,7 +10,9 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
-use sts2_core::{ContentVersion, Play, Question, RewardKind, Room, Stock, Take, TakeReward};
+use sts2_core::{
+    ContentVersion, Decision, Play, Question, RewardKind, Room, Stock, Take, TakeReward,
+};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -43,11 +45,7 @@ where
     match room {
         Room::Shop { entries } => {
             let moves = app.moves();
-            let offered = |index: u8| {
-                moves
-                    .iter()
-                    .position(|m| *m == crate::tui::app::Move::Buy(index))
-            };
+            let offered = |index: u8| moves.iter().position(|m| m == &Decision::Buy { index });
             let choices = entries
                 .iter()
                 .map(|entry| {
@@ -174,17 +172,17 @@ where
 }
 
 /// Where a room's option sits in the list the keys act on.
-fn chose(moves: &[crate::tui::app::Move], index: u8) -> Option<usize> {
+fn chose<V: ContentVersion>(moves: &[Decision<V>], index: u8) -> Option<usize> {
     moves
         .iter()
-        .position(|m| *m == crate::tui::app::Move::Choose(index))
+        .position(|m| m == &Decision::ChooseOption { index })
 }
 
 /// The ways out, as rows at the end of a room's own list.
 ///
 /// A shop is the room that has both: stock to buy and a door to leave by, at
 /// the same time.
-fn leaving<V, G>(app: &App<V, G>, moves: &[crate::tui::app::Move]) -> Vec<Choice>
+fn leaving<V, G>(app: &App<V, G>, moves: &[Decision<V>]) -> Vec<Choice>
 where
     V: ContentVersion,
     G: Play<V>,
@@ -199,14 +197,14 @@ where
         .iter()
         .enumerate()
         .filter_map(|(at, one)| match one {
-            crate::tui::app::Move::Proceed => Some(Choice {
+            Decision::Proceed => Some(Choice {
                 key: Some(at),
                 what: "leave the act".into(),
                 note: None,
                 words: Vec::new(),
                 faded: false,
             }),
-            crate::tui::app::Move::Travel(to) => {
+            Decision::Travel { to } => {
                 let kind = travelable
                     .iter()
                     .find(|r| r.at == *to)

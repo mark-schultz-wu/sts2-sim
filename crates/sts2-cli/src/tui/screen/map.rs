@@ -9,7 +9,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use sts2_core::{ContentVersion, Coord, Map, Play};
+use sts2_core::{ContentVersion, Coord, Decision, Map, Play};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -137,7 +137,7 @@ fn where_to<V: ContentVersion>(
     frame: &mut Frame,
     area: Rect,
     map: &Map<V>,
-    moves: &[crate::tui::app::Move],
+    moves: &[Decision<V>],
     at: usize,
 ) {
     let block = titled("where to");
@@ -164,12 +164,12 @@ fn where_to<V: ContentVersion>(
                 false => theme::TEXT,
             };
             let (kind, what, where_) = match one {
-                crate::tui::app::Move::Proceed => (
+                Decision::Proceed => (
                     "Boss".to_string(),
                     " leave the act ".to_string(),
                     String::new(),
                 ),
-                crate::tui::app::Move::Travel(to) => {
+                Decision::Travel { to } => {
                     let kind = map
                         .travelable
                         .iter()
