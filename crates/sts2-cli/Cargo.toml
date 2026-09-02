@@ -2,7 +2,6 @@
 name = "sts2-cli"
 version = "0.1.0"
 edition = "2024"
-
 # Tools that drive the game, kept out of the library so that `sts2-headless`
 # stays a transport with no opinion about how it is used — and so a second
 # front end (a TUI, say) is a sibling here rather than a fork of it.
@@ -14,13 +13,19 @@ edition = "2024"
 name = "sts2"
 path = "src/main.rs"
 
+# Random legal play. A tool rather than a test: it has no pass condition, it
+# runs until it finds something or the run ends.
+[[bin]]
+name = "sts2-fuzz"
+path = "src/bin/fuzz.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 nonmax = { workspace = true }
 serde_json = { workspace = true }
-sts2-core = { workspace = true }
 sts2-content = { workspace = true, features = ["v0_107_1"] }
+sts2-core = { workspace = true }
 sts2-headless = { workspace = true }
 sts2-rng = { workspace = true }

@@ -5,6 +5,7 @@
 //! end can hold different ones.
 
 pub mod cli;
+pub mod coverage;
 #[cfg(test)]
 pub(crate) mod fixture;
 pub mod render;

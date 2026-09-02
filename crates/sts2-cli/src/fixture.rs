@@ -100,6 +100,18 @@ fn fill(state: &mut Value) {
     }
 }
 
+/// What that observation says.
+///
+/// What almost every reader wants. Everything but the renderer works from
+/// [`sts2_core::Applied`], because the sequence number and the game's own digest
+/// are not facts about the run.
+pub fn applied(overlay: Value) -> Applied<V> {
+    answered(json!({
+        "type": "observation", "seq": 1, "cmd": "observe",
+        "resolved": true, "digest": "AA", "state": state(overlay),
+    }))
+}
+
 /// A whole reply, a pending for instance, with a complete state put under it.
 ///
 /// Built as a wire message and read back through `sts2-headless`. A fixture then
@@ -134,6 +146,14 @@ pub fn playable(card: &str, targets: &[u32]) -> Value {
     json!({
         "card": card, "cost": 1, "target": "AnyEnemy", "playable": true,
         "reason": null, "preventer": null, "targets": targets, "effect": []
+    })
+}
+
+/// One card in hand that cannot be played, for that reason.
+pub fn unplayable(card: &str, reason: &str) -> Value {
+    json!({
+        "card": card, "cost": 1, "target": "None", "playable": false,
+        "reason": reason, "preventer": null, "targets": [], "effect": []
     })
 }
 
