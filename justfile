@@ -7,7 +7,7 @@
 #   set up      vendor-game, then deploy
 #   change code check, which is what CI runs
 #   exercise it selftest, determinism-test, live
-#   re-pin      publish-game, vendor-game, codegen, check
+#   re-pin      publish-game, vendor-game, dump, codegen, check
 #
 # Policy: this file is reviewed periodically and recipes nobody runs are
 # deleted. A command runner that accumulates dead recipes is worse than no
@@ -45,6 +45,16 @@ prose:
 [doc("Compile the C# mods, with no game to install them into")]
 mods:
     ./mod/build.sh
+
+# Ask the game for its own tables, one launch per mode, about 30s for all 16.
+#
+# The front half of a re-pin: `dump` asks the new build what it contains, then
+# `codegen` turns that into Rust. Re-running it against an unchanged build
+# rewrites every dump with the bytes already there, so a diff here is the game
+# having changed, never the pipeline.
+[doc("Ask the game for its own tables, and file what it prints")]
+dump: deploy
+    cargo xtask dump
 
 # The dumps live in sts2-content/src/<version>/. Every dump carries the build it came from, and codegen refuses one that does
 # not match the version module it generates into, so this fails loudly after a
