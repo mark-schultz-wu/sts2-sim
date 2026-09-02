@@ -1,6 +1,16 @@
 //! The orb table against the dump it came from.
-//! The smallest table with the sharpest trap in it. There are two lists of orbs in this build, `ModelDb.Orbs` with four, and `OrbModel._validOrbs` with five. Only the second is what a random channel rolls against. The table generates the second and the dump records both, so the tests below are mostly about that difference staying visible.
-//! The values themselves are plain numbers, and the tests hold them to that. What the dump measures beyond the number, whether a value lives in a field the orb keeps, is deliberately not generated. Therefore it is pinned here from the dump: it is a real fact about the game that a build can change. The only place it can be noticed is a test.
+//!
+//! The smallest table with the sharpest trap in it. There are two lists of orbs
+//! in this build: `ModelDb.Orbs` with four, and `OrbModel._validOrbs` with
+//! five. Only the second is what a random channel rolls against. The table
+//! generates the second and the dump records both, so the tests below are
+//! mostly about that difference staying visible.
+//!
+//! The values themselves are plain numbers, and the tests hold them to that.
+//! The dump measures one thing beyond the number, which is whether a value
+//! lives in a field the orb keeps. That is deliberately not generated, so it is
+//! pinned here from the dump. It is a real fact about the game that a build can
+//! change, and the only place it is noticed is a test.
 
 use super::super::orbs::*;
 use super::super::{ORBS, VERSION};
@@ -63,7 +73,10 @@ fn the_generated_table_matches_the_dump() {
 
 /// `ROLLABLE` is `_validOrbs`, in the order a roll indexes it.
 ///
-/// `GetRandomOrb` is `rng.NextItem(_validOrbs)`, so a reordering of that array changes which orb a given seed channels. The order is checked against the dump's index column rather than against the enum, because the enum is alphabetical and the array is not.
+/// `GetRandomOrb` is `rng.NextItem(_validOrbs)`, so a reordering of that array
+/// changes which orb a given seed channels. The order is checked against the
+/// dump's index column rather than against the enum, because the enum is
+/// alphabetical and the array is not.
 #[test]
 fn rollable_is_the_array_a_roll_indexes() {
     let mut dumped: Vec<(usize, &str)> = rows(ORBS, "orb")
@@ -91,7 +104,9 @@ fn rollable_is_the_array_a_roll_indexes() {
 
 /// The dead list is a subset of the live one, which is what makes it harmless.
 ///
-/// `ModelDb.Orbs` names four of the five and nothing that plays reads it, so it is not generated. That is only safe while every orb it names is one a roll can also produce. Otherwise there is an orb the game can hand out that this table calls unrollable. Glass is the difference today: rollable, and not listed.
+/// `ModelDb.Orbs` names four of the five and nothing that plays reads it, so it
+/// is not generated. That is only safe while every orb it names is one a roll
+/// also produces. Glass is the difference today: rollable, and not listed.
 #[test]
 fn the_list_that_is_not_generated_names_nothing_new() {
     let listed: Vec<&str> = rows(ORBS, "orb")
@@ -121,7 +136,9 @@ fn the_list_that_is_not_generated_names_nothing_new() {
 
 /// Plasma fires a turn earlier than everything else.
 ///
-/// Four orbs trigger before the turn ends and Plasma triggers after the turn starts, which is when its energy is spendable. The mock has no passive at all, and that is what `None` means here.
+/// Four orbs trigger before the turn ends and Plasma triggers after the turn
+/// starts, which is when its energy is spendable. The mock has no passive at
+/// all, and that is what `None` means here.
 #[test]
 fn only_plasma_pays_out_at_the_start_of_a_turn() {
     let with = |trigger: Option<OrbTrigger>| -> Vec<String> {
@@ -142,7 +159,9 @@ fn only_plasma_pays_out_at_the_start_of_a_turn() {
 
 /// The ten numbers, and the one getter that names none.
 ///
-/// Glass's evoke is the only `None`, and the point of this test is that it is not a special orb. Plasma's evoke is twice its passive too, 1 and 2, and it has a number here because the game spells it as a numeral. The table records what the getter names and nothing about how the orb uses it, so nothing must read `None` as a claim.
+/// Glass's evoke is the only `None`, and the point is that it is not a special
+/// orb. Plasma's evoke is twice its passive too, and has a number here because
+/// the game spells it as a numeral. The table records what the getter names.
 #[test]
 fn only_glasss_evoke_names_no_number() {
     let amounts: Vec<(String, Option<u8>, Option<u8>)> = Orb::ALL
@@ -182,7 +201,12 @@ fn only_glasss_evoke_names_no_number() {
 
 /// Two values live in a field the orb keeps, and that is not generated.
 ///
-/// The dump measures it because a build moving a value from a field to a literal, or the reverse. Is changing behaviour, Glass's passive stops decaying, Dark's evoke stops accumulating, while the number stayed the same. The table has no column for it, because the number is the same either way. Sorting the values by it sorted the game's source rather than the game. So this is where the claim lives.
+/// The dump measures it because a build moving a value between a field and a
+/// literal changes behaviour. The number stays the same, and Glass's passive
+/// stops decaying.
+///
+/// The table has no column for it, because sorting the values that way sorted
+/// the game's source rather than the game. So this is where the claim lives.
 #[test]
 fn the_two_values_the_orbs_keep_in_a_field() {
     let stored: Vec<(&str, &str)> = rows(ORBS, "value")
@@ -205,7 +229,11 @@ fn the_two_values_the_orbs_keep_in_a_field() {
 
 /// Which values Focus reaches.
 ///
-/// `hooked` is not an abstract "something can modify this": two models implement `ModifyOrbValue` in this build, `FocusPower` and `InfusedCore`. Focus is a core Defect mechanic. So the six rows below are exactly the values Focus adds to. The ones missing are the ones it does not, Plasma's energy at either end, which is the surprising half. Dark's evoke, which feels Focus only through the passive it accumulates.
+/// `hooked` is not an abstract "something modifies this". Two models implement
+/// `ModifyOrbValue`, so the six rows below are exactly the values Focus adds to.
+///
+/// The ones missing are Plasma's energy at either end, which is the surprising
+/// half, and Dark's evoke, which feels Focus through its passive.
 #[test]
 fn focus_does_not_reach_plasmas_energy() {
     let hooked: Vec<(String, &str)> = Orb::ALL
@@ -244,7 +272,10 @@ fn focus_does_not_reach_plasmas_energy() {
 
 /// The table is as small as the types promise.
 ///
-/// `OrbValue` is a number that can be absent and one flag. It fits in two bytes because the absence lives in `NonMaxU8`'s niche rather than in a discriminant beside it. Worth asserting rather than assuming: an `Option<u8>` here is the same code and a bigger table, and nothing else will say so.
+/// `OrbValue` is an optional number and one flag. It fits in two bytes because
+/// the absence lives in `NonMaxU8`'s niche rather than in a discriminant beside
+/// it. Worth asserting rather than assuming. An `Option<u8>` here is the same
+/// code and a bigger table, and nothing else says so.
 #[test]
 fn a_value_is_a_byte_for_the_number_and_a_byte_for_the_flag() {
     assert_eq!(size_of::<OrbValue>(), 2);

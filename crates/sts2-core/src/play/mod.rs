@@ -1,0 +1,98 @@
+//! What any implementation of the game answers to.
+//!
+//! Two traits, split so that the real game cannot pick up methods no real game
+//! has. The split also keeps a simulator from being forced to fake ones it has
+//! not earned. Both are one method wide, and both hand back the same
+//! [`Applied`]. That is the point: a comparison between two implementations is
+//! a comparison of what they handed back.
+//!
+//! # Two results, and only one of them is a failure
+//!
+//! ```text
+//! Result< Result< Applied<V>, Refusal >, Self::Error >
+//!         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ did the game accept it
+//! ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ did the exchange happen
+//! ```
+//!
+//! A [`Refusal`] is not an error. It is a legitimate, deterministic answer that
+//! both implementations must give. The fuzzer's headline finding is the game
+//! refusing a move the observation reported as legal.
+//!
+//! A *fault* is an error, and lives in the implementation's own
+//! [`Play::Error`]. A socket that died, a process that stopped answering, a
+//! reply that did not parse.
+
+pub mod recorder;
+pub mod recording;
+pub mod refusal;
+
+use crate::{ContentVersion, Decision, Observation, Question, Refusal, Setup, Step};
+
+/// What a decision produced.
+///
+/// The whole of what an implementation reports, and everything two of them are
+/// compared on. The oracle's protocol envelope does not survive into here,
+/// because none of it is a fact about the run. Not the sequence number, the
+/// command name, or the game's own digest.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Applied<V: ContentVersion> {
+    pub observation: Observation<V>,
+    /// The question the game stopped to ask, for a decision that parked it.
+    ///
+    /// A parked game still reports where it is standing, so this is beside the
+    /// observation rather than instead of it.
+    pub asking: Option<Question<V>>,
+    /// False when combat ended mid-cascade and the decision was abandoned
+    /// rather than completed.
+    ///
+    /// Not a failure. An implementation that resolved it fully has diverged,
+    /// even where the state it arrived at looks agreeable.
+    pub resolved: bool,
+}
+
+/// Whether the exchange happened, and then whether the game accepted it.
+pub type Answered<V> = Result<Applied<V>, Refusal<V>>;
+
+/// Playing: every implementation, and nothing beyond what a run needs.
+pub trait Play<V: ContentVersion> {
+    /// A fault, which is not a refusal. See the module docs.
+    type Error;
+
+    /// Plays one decision and reports what it produced.
+    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error>;
+
+    /// Where the run is standing, without moving it.
+    ///
+    /// Not a [`Decision`], because it decides nothing. A caller holding the
+    /// last [`Applied`] has this answer.
+    ///
+    /// It remains on the trait for a caller that is a whole process per
+    /// command with nothing in hand. Without this, such a front end reaches
+    /// past the trait and is pinned to one implementation.
+    ///
+    /// Refusable. There is no run to report before one is started.
+    fn observe(&mut self) -> Result<Answered<V>, Self::Error>;
+}
+
+/// Reaching a position that ordinary play takes an hour to arrive at.
+///
+/// Separate from [`Play`] because it is not a move in a run, and because not
+/// every implementation can make one. The oracle has it because the mod does,
+/// and a simulator gets it when it can.
+pub trait Construct<V: ContentVersion>: Play<V> {
+    /// Puts the run into a position, without playing to it.
+    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Self::Error>;
+
+    /// Plays one line of a recording, whichever half it is.
+    ///
+    /// Replaying a recording into something that can construct is a fold over
+    /// its steps. Something that cannot has to match on the [`Step`] itself and
+    /// say so. That is the correct answer: a run that was constructed cannot be
+    /// reproduced by an implementation that cannot construct.
+    fn step(&mut self, step: &Step<V>) -> Result<Answered<V>, Self::Error> {
+        match step {
+            Step::Decision(decision) => self.play(decision),
+            Step::Setup(setup) => self.setup(setup),
+        }
+    }
+}

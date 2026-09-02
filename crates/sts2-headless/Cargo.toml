@@ -7,10 +7,8 @@ edition = "2024"
 nonmax = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# The trait only. A transport that is generic over the build has no business
-# compiling one, and with default features it was pulling in all fourteen
-# generated domains to reach `ContentVersion`.
-sts2-content = { workspace = true }
+# The shared vocabulary and `ContentVersion` trait.
+sts2-core = { workspace = true }
 sts2-rng = { workspace = true }
 thiserror = { workspace = true }
 

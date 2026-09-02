@@ -1,0 +1,24 @@
+[package]
+name = "sts2-core"
+version = "0.1.0"
+edition = "2024"
+readme = "README.md"
+
+# No serde *derives*. This crate is the vocabulary two implementations share;
+# how any of it is spelled on a socket or in a file belongs to whatever does the
+# spelling. `serde` appears below as a trait bound only. See docs/STS2-CORE.md.
+[dependencies]
+nonmax = { workspace = true }
+# Bounds only: `ContentVersion`'s associated types require `Serialize` so that a
+# build's ids can be spelled by whatever does the spelling. Nothing in this
+# crate derives serde -- see the note above.
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# The tests do name a build, because spelling a decision means picking one.
+# A dev-dependency cycle, which cargo allows: `sts2-content` implements what
+# this crate declares, and these tests want a real build to spell.
+sts2-content = { workspace = true, features = ["v0_107_1"] }
+# One test asks what an id serializes *to*, which needs a format to look at.
+serde_json = { workspace = true }

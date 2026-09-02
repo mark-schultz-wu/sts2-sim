@@ -1,11 +1,11 @@
 //! Every relic's static data, and which pool drafts it.
-//! A relic is a permanent passive, and nearly all of what one *does* is hooks, ported by hand. What is table is where it comes from, what it costs, and the handful of yes-or-no facts the engine reads off it without asking.
-//! # `Price` rather than a number
-//! `RelicModel.MerchantCost` returns 999999999 for a relic that is not for sale. This is a sentinel and not a price, nothing must do arithmetic on it. A shop comparing gold against it is comparing against a number that means "never". So it is `Price::NotSold`, the same move `Cost::None` makes for a card's -1.
-//! It has to be read per relic rather than derived from rarity. The base implementation maps Ancient, Starter and Event to the sentinel, but nine relics override `MerchantCost` outright. Therefore of the 35 Event-rarity relics, 26 are unsellable and 9 have a real price. Deriving has got those nine wrong.
-//! The price is flat. Both properties were read at all eleven ascension levels and nothing moved, so unlike an encounter's gold there is no `Scaled` here. Which is a measurement rather than an assumption, and the reason the dump sweeps at all.
-//! # `Undrafted` rather than `None`
-//! `RelicRarity.None` is not the C# zero standing in for "unset": two relics carry it, and it means the rarity system does not reach them. `RelicGrabBag` gives it no deque, `rarity == None ? Null : GetDeque(rarity)` , so no roll can produce one. They arrive only when something hands them over. `CIRCLET` is the fallback pool's only member, which is what you get when there is nothing left to get, and `DEPRECATED_RELIC` is the deprecated pool's. The wire keeps the game's spelling. The Rust name says what it does.
+//!
+//! A relic is a permanent passive, and nearly all of what one *does* is hooks,
+//! ported by hand. What is table is where it comes from, what it costs, and the
+//! handful of yes-or-no facts the engine reads off it without asking.
+//!
+//! The xtask README says why the price is a `Price` rather than a number, and
+//! why the rarity is `Undrafted` rather than `None`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -20,12 +20,16 @@ const NOT_SOLD: &str = "999999999";
 
 /// Enum members whose Rust name differs from the game's.
 ///
-/// The rename is Rust-side only: the serde spelling stays the game's. Therefore the wire and the dump are unchanged and the generated file is still diffable against the assembly.
+/// The rename is Rust-side only. The serde spelling stays the game's, so the
+/// wire and the dump are unchanged, and the generated file is still diffable
+/// against the assembly.
 const RENAMED: [(&str, &str, &str); 1] = [("RelicRarity", "None", "Undrafted")];
 
 /// The yes-or-no columns, in the order they become bits.
 ///
-/// Not a game enum, nine separate `RelicModel` members, so the numbering is ours and this order is the whole of it. `column` is where the dump writes each one.
+/// Not a game enum, but nine separate `RelicModel` members, so the numbering
+/// is ours and this order is the whole of it. `column` is where the dump writes
+/// each one.
 const FLAGS: [(&str, usize, &str); 9] = [
     ("UsedUp", 4, "Spent, and gone once it fires."),
     (
@@ -68,9 +72,12 @@ const FLAGS: [(&str, usize, &str); 9] = [
 
 /// The bucket a relic's row lands in, from the pools that draft it.
 ///
-/// A genuine partition: every relic is in at least one pool, and three are in two. Multi-pool relics get their own bucket instead of an arbitrary first pool. Each bucket therefore agrees with `pools()`.
+/// A genuine partition, unlike a monster's act or an encounter's: every relic
+/// is in at least one pool. Three are in two, and those get their own bucket
+/// rather than being filed somewhere their own `pools()` does not lead.
 ///
-/// `crossover` and not `shared`, because `SHARED_RELIC_POOL` is itself a pool and a file named for both will name neither.
+/// `crossover` and not `shared`, because `SHARED_RELIC_POOL` is itself a pool
+/// and a file named for both names neither.
 fn bucket(pools: &[String]) -> Result<String, String> {
     match pools {
         [] => Err("a relic is in no pool at all".into()),
@@ -129,7 +136,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
 
     // The dump swept `MerchantCost` at every ascension and found nothing, which
-    // is why `Price` is flat. A build that starts scaling it will generate a
+    // is why `Price` is flat. A build that starts scaling it would generate a
     // table that silently describes ascension 0 only, so it fails here instead.
     if dump.of("scalecost").next().is_some() {
         return Err(
@@ -154,7 +161,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         "relics.txt",
         &build,
     );
-    writeln!(out, "\nuse crate::Field;").unwrap();
+    writeln!(out, "\nuse crate::Field;\nuse sts2_core::Table;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
     writeln!(out, "/// The pools a relic can be drafted from.").unwrap();
@@ -249,7 +256,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
 /// The flag member enum and the set that carries them.
 ///
-/// Two `u8`s, like a power's, because a flag has three answers: `IsUsedUp` and `ShowCounter` are `virtual` and some relics work them out.
+/// Two `u8`s, like a power's, because a flag has three answers: `IsUsedUp` and
+/// `ShowCounter` are `virtual` and some relics work them out.
 fn emit_flags(out: &mut String) -> Result<(), String> {
     sets::computed(
         out,
@@ -263,9 +271,8 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
                       \n\
                       `IsUsedUp` and `ShowCounter` are `virtual` and some relics decide\n\
                       them from combat state — ten and eighteen of them.",
-            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            members: &sets::counted(FLAGS.map(|(name, _, doc)| (name, doc))),
             declare: true,
-            bits: FLAGS.len() - 1,
             extras: &[],
         },
     )
@@ -277,13 +284,13 @@ fn emit_shape(out: &mut String) {
         "/// What a merchant charges, or that there is no such thing.\n\
          ///\n\
          /// `MerchantCost` returns 999999999 for a relic that is not for sale,\n\
-         /// which is a sentinel and not a price: nothing must do arithmetic\n\
-         /// on it, and a shop comparing a player's gold against it is\n\
+         /// which is a sentinel and not a price: nothing should do arithmetic\n\
+         /// on it, and a shop comparing a player's gold against it would be\n\
          /// comparing against a number that means never.\n\
          ///\n\
          /// Read per relic rather than derived from rarity. The base\n\
          /// implementation maps Ancient, Starter and Event to the sentinel, but\n\
-         /// nine relics override it, so nine of the 35 Event-rarity relics do\n\
+         /// nine relics override it — so nine of the 35 Event-rarity relics do\n\
          /// have a price.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub enum Price {{\n\
@@ -392,21 +399,9 @@ fn emit_relics(
     }
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(out, "impl Relic {{").unwrap();
+    let mut extras = String::new();
     writeln!(
-        out,
-        "    /// Every relic, so callers can sweep the table without a way to\n\
-         \x20   /// enumerate an enum."
-    )
-    .unwrap();
-    writeln!(out, "    pub const ALL: [Relic; {}] = [", relics.len()).unwrap();
-    for row in relics {
-        writeln!(out, "        Relic::{},", camel(&row[1])).unwrap();
-    }
-    writeln!(out, "    ];\n").unwrap();
-
-    writeln!(
-        out,
+        extras,
         "    /// The pools that draft this relic.\n\
          \x20   ///\n\
          \x20   /// Never empty — unlike a monster's acts or an encounter's,\n\
@@ -414,12 +409,8 @@ fn emit_relics(
          \x20   /// two."
     )
     .unwrap();
-    writeln!(
-        out,
-        "    pub const fn pools(self) -> &'static [RelicPool] {{"
-    )
-    .unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    writeln!(extras, "    fn pools(self) -> &'static [RelicPool] {{").unwrap();
+    writeln!(extras, "        match self {{").unwrap();
     for row in relics {
         let list = pools_of
             .get(&row[1])
@@ -435,10 +426,33 @@ fn emit_relics(
                     .join(", ")
             })
             .unwrap_or_default();
-        writeln!(out, "            Self::{} => &[{list}],", camel(&row[1])).unwrap();
+        writeln!(extras, "            Self::{} => &[{list}],", camel(&row[1])).unwrap();
     }
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}\n").unwrap();
+    writeln!(extras, "        }}").unwrap();
+    writeln!(extras, "    }}\n").unwrap();
+
+    writeln!(
+        extras,
+        "\n    /// Its rarity, which is also which screen offers it."
+    )
+    .unwrap();
+    writeln!(extras, "    fn rarity(self) -> RelicRarity {{").unwrap();
+    writeln!(extras, "        self.data().rarity").unwrap();
+    writeln!(extras, "    }}").unwrap();
+
+    writeln!(out, "impl sts2_core::Table for Relic {{").unwrap();
+    writeln!(out, "    type Data = RelicData;\n").unwrap();
+    writeln!(
+        out,
+        "    /// Every relic, so callers can sweep the table without a way to\n\
+         \x20   /// enumerate an enum."
+    )
+    .unwrap();
+    writeln!(out, "    const ALL: &'static [Self] = &[").unwrap();
+    for row in relics {
+        writeln!(out, "        Relic::{},", camel(&row[1])).unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
 
     writeln!(
         out,
@@ -447,7 +461,7 @@ fn emit_relics(
          \x20   /// One arm per relic, naming the file its row lives in."
     )
     .unwrap();
-    writeln!(out, "    pub const fn data(self) -> RelicData {{").unwrap();
+    writeln!(out, "    fn data(self) -> RelicData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for row in relics {
         let empty = Vec::new();
@@ -463,6 +477,12 @@ fn emit_relics(
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl sts2_core::RelicTable for Relic {{").unwrap();
+    writeln!(out, "    type Pool = RelicPool;").unwrap();
+    writeln!(out, "    type Rarity = RelicRarity;\n").unwrap();
+    out.push_str(&extras);
     writeln!(out, "}}").unwrap();
 
     Ok(())

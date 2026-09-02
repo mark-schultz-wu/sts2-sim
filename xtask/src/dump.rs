@@ -37,6 +37,8 @@ const DUMPS: &[(&str, Destination)] = &[
     ("potiondump", Content("potions.txt")),
     ("powerdump", Content("powers.txt")),
     ("relicdump", Content("relics.txt")),
+    ("restsitedump", Content("restsite.txt")),
+    ("runstatedump", Content("runstate.txt")),
     ("rngdump", At("crates/sts2-rng/tests/megarandom.txt")),
 ];
 
@@ -93,9 +95,12 @@ fn names() -> String {
 
 /// One launch of the real game, headless, with the mode set.
 ///
-/// Through `timeout -k`, not a bare `timeout`, for the reason the justfile gives. The mod's own deadline is the first line of defence. This is the second, for a build too broken to reach it. Without `-k` this sends a SIGTERM that an un-armed instance ignores.
+/// Through `timeout -k`, not a bare `timeout`, for the reason the justfile
+/// gives. Without `-k` this sends a SIGTERM that an un-armed instance ignores.
 ///
-/// `LD_PRELOAD` is not optional either. MonoMod's native helper imports `_Unwind_*` from libgcc and declares no dependency on it. The game does not link libgcc. Without the preload, every Harmony patch throws and the dump mod never runs.
+/// `LD_PRELOAD` is not optional either. MonoMod's native helper imports
+/// `_Unwind_*` from libgcc and declares no dependency on it, and the game does
+/// not link libgcc. Without the preload every Harmony patch throws.
 fn launch(game: &Path, mode: &str) -> Result<String, String> {
     let out = Command::new("timeout")
         .args(["-k", "5", "300"])

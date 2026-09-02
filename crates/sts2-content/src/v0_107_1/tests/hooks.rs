@@ -1,6 +1,16 @@
 //! The hook surface, against the dump that measured it.
-//! The one dump with no generated table beside it. It describes the interface between an engine and the things that react to it, a simulator implements that rather than looking it up. Therefore there is nothing to generate and this is the only place the measurement is held to anything.
-//! What these pin is a shape that has to stay true for a hook trait to be trustworthy. That every hook is dispatched, that the ones worth modelling are the ones some model answers. That nothing in the build is invisible to the count. The `dispatchers` column got that wrong twice while it was being written, and both times an anomaly here is what showed it. Therefore the cross-checks are kept rather than replaced by the counts they imply.
+//!
+//! The one dump with no generated table beside it. It describes the interface
+//! between an engine and the things that react to it. A simulator implements
+//! that rather than looking it up, so there is nothing to generate. This is the
+//! only place the measurement is held to anything.
+//!
+//! What these pin is a shape that has to stay true for a hook trait to be
+//! trustworthy. Every hook is dispatched. The ones worth modelling are the ones
+//! some model answers. And nothing in the build is invisible to the count. The
+//! `dispatchers` column got that wrong twice while it was being written, and
+//! both times an anomaly here is what showed it. So the cross-checks are kept
+//! rather than replaced by the counts they imply.
 
 use super::super::{HOOKS, VERSION};
 use super::{build, rows};
@@ -39,7 +49,12 @@ fn the_surface_is_the_size_it_was_measured_at() {
 
 /// Every hook is dispatched, and nothing is answered that is not declared.
 ///
-/// Both directions, because each caught a real bug in the dump. Name-matching `Hook`'s public methods reported 43 hooks as dispatched by nothing while models plainly answered them. Replacing that with a metadata-token scan and excluding model types, on the reasoning that a model reaching a hook token is `base.AfterX()`. Then hid the one hook `CardModel` genuinely fires at other models. A count has caught neither.
+/// Both directions, because each caught a real bug in the dump. Name-matching
+/// `Hook`'s public methods reported 43 hooks as dispatched by nothing.
+///
+/// The replacement excluded model types from a metadata-token scan, on the
+/// reasoning that a model reaching a hook token is `base.AfterX()`. That hid the
+/// one hook `CardModel` fires at other models. A count catches neither.
 #[test]
 fn every_hook_is_dispatched_and_every_answer_is_a_hook() {
     let undispatched: Vec<&str> = rows(HOOKS, "hook")
@@ -62,7 +77,9 @@ fn every_hook_is_dispatched_and_every_answer_is_a_hook() {
 
 /// Twenty-six hooks are dispatched and answered by nothing.
 ///
-/// Slots the engine fires into that no model in this build listens on. Worth a number rather than a list: a trait must not have methods for them. A build that starts using one is a signal to look.
+/// Slots the engine fires into that no model in this build listens on. Worth a
+/// number rather than a list. A trait has no methods for them, and a build that
+/// starts using one is a signal to look.
 #[test]
 fn twenty_six_hooks_are_slots_nothing_uses() {
     let dead: Vec<&str> = declared().difference(&answered()).copied().collect();
@@ -74,7 +91,10 @@ fn twenty_six_hooks_are_slots_nothing_uses() {
 
 /// `Hook` fires almost everything, and six other classes fire the rest.
 ///
-/// Not a curiosity: the trait's shape follows the engine's. Knowing that dispatch is nearly all in one place is what makes a single hook-listener walk the right thing to port. The seven hooks with two dispatchers are the ones where a helper answers the same question outside combat.
+/// Not a curiosity. The trait's shape follows the engine's. Dispatch being
+/// nearly all in one place is what makes a single hook-listener walk the right
+/// thing to port. The seven hooks with two dispatchers are the ones where a
+/// helper answers the same question outside combat.
 #[test]
 fn dispatch_is_almost_all_in_one_place() {
     let mut by_class: BTreeMap<&str, usize> = BTreeMap::new();
@@ -109,7 +129,11 @@ fn dispatch_is_almost_all_in_one_place() {
 
 /// Nothing in the build is invisible to the count.
 ///
-/// Every dump in the mod enumerates models by asking the model database for an id and swallowing the failure. A concrete model with no id is missing from all of them and will say so nowhere. Here it is a hole in a completeness claim the hook trait rests on. Measured rather than assumed, and today it is empty.
+/// Every dump in the mod enumerates models by asking the model database for an
+/// id and swallowing the failure. A concrete model with no id is missing from
+/// all of them and says so nowhere. Here it is a hole in a completeness claim
+/// the hook trait rests on. Measured rather than assumed, and today it is
+/// empty.
 #[test]
 fn no_model_answers_a_hook_without_an_id() {
     assert_eq!(
@@ -121,7 +145,12 @@ fn no_model_answers_a_hook_without_an_id() {
 
 /// The object protocol is not a hook surface.
 ///
-/// `ToString`, `Equals` and `CompareTo` are virtual, declared on `AbstractModel`, and overridden by models, so all three read as hooks until filtered. `ToString` was caught by being the only "hook" nothing dispatched. `CompareTo` needed the interface map, being a contract with the framework's sorting rather than something an engine fires. Together they were 584 phantom answers, all of them cards inheriting one override.
+/// `ToString`, `Equals` and `CompareTo` are virtual, declared on
+/// `AbstractModel`, and overridden by models. So all three read as hooks until
+/// filtered. `ToString` was caught by being the only "hook" nothing dispatched.
+/// `CompareTo` needed the interface map, being a contract with the framework's
+/// sorting rather than something an engine fires. Together they were 584
+/// phantom answers, all of them cards inheriting one override.
 #[test]
 fn the_object_protocol_is_not_in_the_surface() {
     for member in ["ToString", "Equals", "GetHashCode", "CompareTo"] {
@@ -131,7 +160,11 @@ fn the_object_protocol_is_not_in_the_surface() {
 
 /// Four classes answer hooks on behalf of more than one model.
 ///
-/// This is what `declaredBy` is for, and the payoff is narrower than it looks: of 951 answers, all but 23 are the model's own code. The exceptions are worth naming because they are the porting wins, one implementation of `TemporaryStrengthPower` covers fourteen ids. Therefore a checklist that read every id as separate work will overstate it.
+/// This is what `declaredBy` is for, and the payoff is narrower than it looks.
+/// Of 951 answers, all but 23 are the model's own code. The exceptions are
+/// worth naming because they are the porting wins. One implementation of
+/// `TemporaryStrengthPower` covers fourteen ids, so a checklist reading every
+/// id as separate work overstates it.
 #[test]
 fn a_few_implementations_are_shared_by_several_models() {
     let mut families: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();

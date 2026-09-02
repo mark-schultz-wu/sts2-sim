@@ -62,6 +62,7 @@ public static class MonsterDump
         output.Append("# scalehp <monster> <ascension> <minHp> <maxHp>\n");
         output.Append("# scaleintent <monster> <state> <index> <ascension> <count> <damage>\n");
         output.Append("# scalebranch <monster> <state> <index> <ascension> <weight>\n");
+        output.Append("# installed <state> <declaringType>\n");
         output.Append("# rows above are ascension 0; a scale* row is the level at which a value changes\n");
 
         // Which act a monster can be met in, via the encounters that can spawn
@@ -86,6 +87,7 @@ public static class MonsterDump
 
         Ascension.SetLevel(0);
         output.Append(bodies[0]);
+        output.Append(Installed(bodies[0]));
         output.Append(Scaling(bodies));
 
         Log.Info("[monsterdump] begin\n" + output);
@@ -193,6 +195,109 @@ public static class MonsterDump
         return output.ToString();
     }
 
+
+    /// <summary>
+    /// Move states the game installs on a monster that no machine declares.
+    /// </summary>
+    /// <remarks>
+    /// A <c>MonsterMoveStateMachine</c> is not the only place a
+    /// <c>MoveState</c> comes from. <c>Creature.Stun</c> builds a
+    /// <c>"STUNNED"</c> state and swaps it in, and <c>IllusionPower.AfterDeath</c>
+    /// builds a <c>"REVIVE_MOVE"</c> and calls <c>SetMoveImmediate</c> — so the
+    /// observation can report a move name that walking every machine in the
+    /// build never produces. The fuzzer found the second one after 288 moves,
+    /// which is how long a hole in a table stays invisible.
+    ///
+    /// Found by reading IL rather than by a list here: every
+    /// <c>newobj MoveState</c> in the assembly, taking the <c>ldstr</c> that
+    /// pushed its first argument. A construction this cannot read the id of is
+    /// reported rather than skipped, because a hole nobody can see is the thing
+    /// to avoid.
+    ///
+    /// Only the ones no machine declares are emitted. The other 271 are already
+    /// rows above, and repeating them here would be a second copy free to
+    /// disagree with the first.
+    /// </remarks>
+    private static string Installed(string body)
+    {
+        var declared = new HashSet<string>(
+            body.Split('\n')
+                .Where(l => l.StartsWith("move ", StringComparison.Ordinal))
+                .Select(l => l.Split(' ')[2]),
+            StringComparer.Ordinal);
+
+        var output = new StringBuilder();
+        var seen = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        int unreadable = 0;
+        int unresolved = 0;
+
+        foreach (Type type in typeof(MoveState).Assembly.GetTypes())
+        {
+            foreach (MethodBase method in Methods(type))
+            {
+                List<string?> ids = Il.Constructed(method, typeof(MoveState), out int failed);
+                unresolved += failed;
+
+                foreach (string? id in ids)
+                {
+                    if (id == null)
+                    {
+                        unreadable++;
+                    }
+                    else if (!declared.Contains(id) && !seen.ContainsKey(id))
+                    {
+                        seen[id] = Owner(type);
+                    }
+                }
+            }
+        }
+
+        foreach (KeyValuePair<string, string> pair in seen)
+        {
+            output.Append($"installed {pair.Key} {pair.Value}\n");
+        }
+
+        output.Append(
+            $"# {seen.Count} installed outside a machine, {unreadable} unreadable, "
+            + $"{unresolved} tokens unresolved\n");
+        return output.ToString();
+    }
+
+    /// <summary>
+    /// The type a body belongs to, past the compiler's own.
+    /// </summary>
+    /// <remarks>
+    /// An <c>async</c> method's body lives in a generated nested type named
+    /// <c>&lt;AfterDeath&gt;d__18</c>, which says nothing a reader wants. The
+    /// enclosing type does.
+    /// </remarks>
+    private static string Owner(Type type)
+    {
+        Type owner = type;
+        while (owner.Name.StartsWith("<", StringComparison.Ordinal) && owner.DeclaringType != null)
+        {
+            owner = owner.DeclaringType;
+        }
+
+        return owner.Name;
+    }
+
+    /// <summary>Every body a type has, constructors included.</summary>
+    private static IEnumerable<MethodBase> Methods(Type type)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic
+            | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+        foreach (MethodInfo m in type.GetMethods(flags))
+        {
+            yield return m;
+        }
+
+        foreach (ConstructorInfo c in type.GetConstructors(flags))
+        {
+            yield return c;
+        }
+    }
 
     /// <summary>
     /// Where a value moves as ascension rises, as one row per change.

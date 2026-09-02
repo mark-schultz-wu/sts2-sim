@@ -1,9 +1,18 @@
-//! The commands the game accepts.
-//! See [PROTOCOL.md](../../../../mod/sts2_headless/PROTOCOL.md) for what each argument means.
+//! How a decision is spelled on the wire.
+//!
+//! The mod's protocol, and only the mod's. `sts2_core::Decision` is the domain
+//! type and carries no serde at all, so this is where `{"cmd":"play_card"}`
+//! lives. Same rule the observation follows: the oracle's spelling stays in the
+//! oracle's crate.
+//!
+//! The two vocabularies are not the same set, which is the clearest sign they
+//! are not the same type. `observe` and `quit` exist here and have no domain
+//! counterpart. One reports state without advancing, and the other ends the
+//! session rather than the run.
 
 use nonmax::NonMaxU32;
 use serde::{Serialize, Serializer, ser::SerializeMap};
-use sts2_content::ContentVersion;
+use sts2_core::ContentVersion;
 use sts2_rng::Seed;
 
 /// One request.
@@ -24,13 +33,16 @@ pub enum Command<V: ContentVersion> {
     },
     /// Jumps straight into a named encounter, off the map (H6).
     ///
-    /// The encounter is named by type, so a name the tables do not have is a compile error rather than a refusal from the game. To send one anyway. Which is how the refusal path is tested, use `Game::send_raw`.
-    ///
-    /// The run lands at an unassigned map point, so map and room disagree by construction. That is what scenario construction is for, reaching a chosen fight by travelling means hunting for a seed that puts one where you want it.
+    /// The encounter is typed, so unknown names require `Game::send_raw`. The
+    /// run lands at an unassigned map point, deliberately allowing map and room
+    /// to disagree for scenario construction.
     Fight {
         encounter: V::Encounter,
     },
-    /// `room` is a `RoomType` name, matched case-insensitively.
+    /// `type` is a Rust keyword, so this is the one field a derive has to
+    /// rename. The generated id says `"Shop"`, which is the game enum's actual
+    /// name. A hand-written `"SHOP"` used to work only because the mod parses
+    /// with `ignoreCase: true`.
     EnterRoom {
         #[serde(rename = "type")]
         room: V::RoomType,
@@ -62,9 +74,7 @@ pub enum Command<V: ContentVersion> {
     },
     /// Responds to a [`crate::Response::Pending`].
     Answer(Answer),
-    /// Asks for the current state without changing anything.
-    ///
-    /// One of the three commands a pending question does not block, and one of the three still accepted once a run is over. Therefore it is how a caller finds out where it stands when everything else is refused.
+    /// No domain counterpart: the state without advancing.
     Observe,
 
     Quit,
@@ -84,7 +94,9 @@ pub enum Answer {
 }
 
 impl Serialize for Answer {
-    /// Written by hand because `skip` is the literal `true` rather than a value the caller supplies. Deriving it will need a `bool` field that can be set to `false`, which is not an answer the game accepts.
+    /// Written by hand because `skip` is the literal `true` rather than a value
+    /// the caller supplies. Deriving it needs a `bool` field that can be set to
+    /// `false`, which is not an answer the game accepts.
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(Some(1))?;
         match self {
@@ -109,8 +121,8 @@ pub struct TakeReward {
 mod tests {
     use super::*;
     use serde_json::{json, to_value};
-    use sts2_content::ContentVersion;
     use sts2_content::v0_107_1::V0_107_1;
+    use sts2_core::ContentVersion;
 
     /// The build these tests spell commands for.
     ///

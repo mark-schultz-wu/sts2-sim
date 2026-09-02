@@ -2,6 +2,7 @@
 name = "sts2-content"
 version = "0.1.0"
 edition = "2024"
+readme = "README.md"
 
 # One module per game build, each behind a feature: distinct types so two
 # versions can be diffed against each other in one binary, without compiling
@@ -11,6 +12,8 @@ default = ["v0_107_1"]
 v0_107_1 = []
 
 [dependencies]
+# The traits these tables implement. See docs/STS2-CORE.md.
+sts2-core = { workspace = true }
 nonmax = { workspace = true }
 serde = { workspace = true }
 

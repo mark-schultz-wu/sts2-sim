@@ -1,0 +1,13 @@
+# rest site data
+# build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
+# option <id>
+option CLONE
+option COOK
+option DIG
+option HATCH
+option HEAL
+option KINDLE
+option LIFT
+option MEND
+option SMITH
+# 9 options

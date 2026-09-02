@@ -1,16 +1,20 @@
 //! Tests that launch the real game.
-//! Each one costs a process and ~3s of startup, and they need the mod deployed into the game directory. Therefore they are `#[ignore]`d and run by `just live`. Everything checkable without the game lives in unit tests beside the code.
-//! # Why these are serial
-//! Every game process shares one profile directory, and a driven run writes to `saves/progress.save` inside it, `RelicCmd.Obtain` calls `SaveManager.MarkRelicAsSeen`. Fighting an enemy records a discovery. Two runs at once will race on that file, and D1 treats profile residue as a determinism concern rather than a tidiness one. Therefore it is not something to race on and hope.
-//! `#[serial(game)]` puts that constraint on the tests that have it instead of on whoever invokes cargo. Anything not in the `game` group, the unit tests, and the handshake tests that only bind loopback ports, still runs in parallel. Therefore `cargo test --include-ignored` is safe with no extra flags.
+//!
+//! Each one costs a process and ~3s of startup. They need the mod deployed into
+//! the game directory, so they are `#[ignore]`d and run by `just live`.
+//! Everything checkable without the game lives in unit tests beside the code.
+//!
+//! The tests that drive a run carry `#[serial(game)]`, because every game
+//! process shares one profile directory. The crate README says why that
+//! matters.
 
 use nonmax::NonMaxU32;
 use serde_json::Value;
 use serde_json::json;
 use serial_test::serial;
 use std::time::{Duration, Instant};
-use sts2_content::ContentVersion;
 use sts2_content::v0_107_1::V0_107_1;
+use sts2_core::ContentVersion;
 use sts2_headless::{
     Answer, Command, Config, Error, Game, PROTOCOL_VERSION, Question, Reply, Response,
 };
@@ -18,7 +22,10 @@ use sts2_rng::Seed;
 
 /// The build these tests drive.
 ///
-/// Every other content type is reached through [`ContentVersion`] rather than out of the version module, so pointing this at another build is a one-line change. Naming `v0_107_1::characters::Character` directly will put the build back into every call site, which is what the parameter exists to remove.
+/// Every other content type is reached through [`ContentVersion`] rather than
+/// out of the version module, so pointing this at another build is a one-line
+/// change. Naming `v0_107_1::characters::Character` directly puts the build back
+/// into every call site.
 type V = V0_107_1;
 type AscensionLevel = <V as ContentVersion>::AscensionLevel;
 type Character = <V as ContentVersion>::Character;
@@ -28,7 +35,8 @@ type RoomType = <V as ContentVersion>::RoomType;
 /// The seed the mod itself defaults to. Named here so the determinism test is obviously asking both runs the same question.
 const SEED: &str = "ORACLE1";
 
-/// The encounter the scenario tests jump into. Two monsters, one of which the encounter picks with its own RNG, which is what makes it worth checking.
+/// The encounter the scenario tests jump into. Two monsters, one of which the
+/// encounter picks with its own RNG. That is what makes it worth checking.
 const ENCOUNTER: Encounter = Encounter::BowlbugsWeak;
 
 fn launch() -> Game<V> {
@@ -37,9 +45,12 @@ fn launch() -> Game<V> {
     Game::<V>::launch(Config::new(dir)).expect("the game should launch and connect back")
 }
 
-/// The parts of an observation these tests look at.
+/// The parts of an answer these tests look at.
 ///
-/// `Response::Observation` is a struct variant, so there is no payload type to hand between helpers. This carries the few fields they share.
+/// Both halves: what the game said, typed, and the envelope it said it in. The
+/// envelope is here because these are the oracle's own tests. Several of them
+/// are about the game's digest and the state as it wrote it, and neither
+/// survives into [`Applied`].
 struct Seen {
     resolved: bool,
     digest: String,
@@ -132,7 +143,9 @@ fn every_observation_carries_state() {
     assert_eq!(observed.game_errors, None);
 }
 
-/// D1, and the property the whole project rests on: the same seed has to produce the same state. Two processes rather than two runs in one, so nothing carried over in memory can make them agree.
+/// D1, and the property the whole project rests on: the same seed has to produce
+/// the same state. Two processes rather than two runs in one, so nothing carried
+/// over in memory can make them agree.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -151,7 +164,11 @@ fn the_same_seed_gives_the_same_digest() {
 
 /// The encounter RNG patch, measured end to end.
 ///
-/// `sts2_determinism` patches `DebugRandomizeRng` so an encounter is seeded from the run rather than the clock, and `sts2_determinism_test` asserts the seed directly. This asserts the consequence: the same seed and the same encounter produce the same fight, in two processes, more than a wall-clock second apart. This is the granularity the clock seeding used, and so the interval over which an unpatched build will disagree with itself.
+/// `sts2_determinism` patches `DebugRandomizeRng` so an encounter is seeded from
+/// the run rather than the clock, and `sts2_determinism_test` asserts the seed
+/// directly. This asserts the consequence: the same seed and encounter produce
+/// the same fight in two processes, more than a wall-clock second apart. A
+/// second is the granularity the clock seeding used.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -180,7 +197,9 @@ fn the_same_encounter_gives_the_same_fight_across_a_second() {
     assert_eq!(first, second, "same seed and encounter, different fight");
 }
 
-/// A refused command is data, not a broken session. If this ever starts failing by timing out rather than by assertion, the refusal path has stopped replying at all.
+/// A refused command is data, not a broken session. If this ever starts failing
+/// by timing out rather than by assertion, the refusal path has stopped
+/// replying at all.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -203,18 +222,22 @@ fn a_refusal_leaves_the_session_usable() {
 
 /// Every way a command can be turned down, in one launch.
 ///
-/// The code review that prompted this found three bugs in paths nothing ran: the refusal to start, the exceptions around `Driver.Run`'s setup. Two unguarded dereferences. Tests that only walk the happy path leave the failure handling to be discovered in production. Here "production" is a divergence report nobody can explain.
+/// The code review that prompted this found three bugs in paths nothing ran:
+/// the refusal to start, the exceptions around `Driver.Run`'s setup, and two
+/// unguarded dereferences.
 ///
-/// One launch for the lot, because a launch costs ~3s and an assertion costs nothing. Every one of these is refused from the same opening state, so no case can disturb another, which the selftest suite learned the hard way.
+/// One launch for the lot, because a launch costs ~3s and an assertion costs
+/// nothing. Every case is refused from the same opening state, so none disturbs
+/// another.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
 fn illegal_commands_are_refused_and_leave_the_session_alive() {
     /// Asserts a command is turned down, and turned down for the stated reason.
     ///
-    /// The reason matters as much as the refusal: a command refused because the game misunderstood it looks identical to one refused correctly. Only the message tells them apart. The same check for a command the typed API cannot build.
-    ///
-    /// Only for ids the content tables deliberately do not have, a name the game must refuse, or a `RoomType` codegen drops. A command that ought to work and cannot be built is a gap in the tables, not a reason to reach for this.
+    /// Checks both refusal and reason, since a misunderstood command is also
+    /// refused. Used only for ids the tables omit or room types codegen drops.
+    /// An accepted command missing from the typed API is a table defect.
     fn refused_raw(game: &mut Game<V>, command: serde_json::Value, expect: &str) {
         let refusal = game
             .send_raw(&command)
@@ -310,7 +333,11 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
 
 /// A healthy run reports no game errors at all.
 ///
-/// It used to report one on every card played: the model layer calls presentation inline, `CreatureCmd` asks for a screen shake when damage lands. Headless has no screen to shake. `sts2_headless` patches that out, which is what makes a non-empty `gameErrors` mean something again, the field is how a half-completed action is caught. It cannot do that while it fires on every turn.
+/// Unpatched, the game reports one on every card played. The model layer calls
+/// presentation inline, `CreatureCmd` asks for a screen shake when damage lands,
+/// and headless has no screen to shake. `sts2_headless` patches that out, so a
+/// non-empty `gameErrors` means something again. The field catches a
+/// half-completed action, and cannot while it fires every turn.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -344,7 +371,9 @@ fn an_ordinary_card_play_logs_no_game_errors() {
     assert!(played.resolved);
 }
 
-/// `Unassigned` is a `RoomType` the enum carries and nothing can be jumped to. It is the "no map point" placeholder `fight` lands on. It used to parse, be offered in the refusal message, and be handed to `EnterRoomDebug`.
+/// `Unassigned` is a `RoomType` the enum carries and nothing can be jumped to.
+/// It is the "no map point" placeholder `fight` lands on. Left in the enum it
+/// parses, appears in the refusal message, and reaches `EnterRoomDebug`.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -372,7 +401,8 @@ fn a_room_type_that_is_not_a_room_is_refused() {
     );
 }
 
-/// Dropping the client has to take the game with it, or a test run leaves headless games behind.
+/// Dropping the client has to take the game with it, or a test run leaves
+/// headless games behind.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -396,9 +426,13 @@ fn dropping_the_client_stops_the_game() {
 
 /// Refusing to start must end the process, not sit there.
 ///
-/// This is the bug a code review found and nothing covered: `Driver.Run` called `Environment.Exit(1)`. This does not work from Godot's main loop, so the process logged "Exiting." and ran until something external killed it. The branch had never been taken, because the only way to reach it is to break determinism. It stopped being broken the day the exit was added.
+/// The bug a code review found and nothing covered. `Driver.Run` called
+/// `Environment.Exit(1)`, which does not work from Godot's main loop, so the
+/// process logged "Exiting." and ran until something killed it.
 ///
-/// Launched directly rather than through [`Game`], because the client always supplies `LD_PRELOAD` and the point is to withhold it. Without libgcc, Harmony cannot patch, `sts2_determinism` stays inert, and the driver refuses.
+/// Launched directly rather than through [`Game`], to withhold the `LD_PRELOAD`
+/// the client always supplies. Without libgcc, Harmony cannot patch,
+/// `sts2_determinism` stays inert, and the driver refuses.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -428,7 +462,8 @@ fn refusing_to_start_exits_rather_than_hanging() {
     );
 }
 
-/// The launch path has to fail loudly rather than hang when the game is not where it was said to be.
+/// The launch path has to fail loudly rather than hang when the game is not
+/// where it was said to be.
 #[test]
 fn a_bad_game_dir_fails_without_the_game() {
     let err = Game::<V>::launch(Config::new("/definitely/not/the/game"))
@@ -439,11 +474,9 @@ fn a_bad_game_dir_fails_without_the_game() {
 
 /// A rest site option that asks a question must not deadlock the driver.
 ///
-/// This is the one class of bug only a live test can catch. The C# selftest calls `Driver` directly and never touches `Protocol`, so it exercises rest sites happily while the *protocol* path is wedged. This is exactly what happened: 201 selftest assertions passed against a `choose_option` that never replied.
-///
-/// The mechanism, since a future edit can reintroduce it: the handler used to `await sync.ChooseLocalOption(index)`. For SMITH that awaits `CardSelectCmd.FromDeckForUpgrade`, which parks a question for the client. And the serve loop cannot read the client's answer until the handler returns. The handler was waiting for something only its own return can produce. Measured before the fix: no reply, client timed out at 20s.
-///
-/// HEAL is deliberately not the case under test. It resolves by itself, so it will pass against the broken code and prove nothing.
+/// The first of the deadlock class the crate README describes, and the one that
+/// says why only a live test catches it. SMITH is the case under test because
+/// HEAL resolves by itself.
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]

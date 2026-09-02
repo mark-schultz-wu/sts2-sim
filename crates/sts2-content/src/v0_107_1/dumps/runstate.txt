@@ -1,0 +1,45 @@
+# run state data
+# build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
+# enum <name> <discriminant> <member>
+# flags <name> -- the name is a [Flags] set, not one choice
+enum MapPointType 0 Unassigned
+enum MapPointType 1 Unknown
+enum MapPointType 2 Shop
+enum MapPointType 3 Treasure
+enum MapPointType 4 RestSite
+enum MapPointType 5 Monster
+enum MapPointType 6 Elite
+enum MapPointType 7 Boss
+enum MapPointType 8 Ancient
+enum CombatSide 0 None
+enum CombatSide 1 Player
+enum CombatSide 2 Enemy
+enum PlayerTurnPhase 0 None
+enum PlayerTurnPhase 1 Start
+enum PlayerTurnPhase 2 AutoPrePlay
+enum PlayerTurnPhase 3 Play
+enum PlayerTurnPhase 4 AutoPostPlay
+enum PlayerTurnPhase 5 End
+flags UnplayableReason
+enum UnplayableReason 0 None
+enum UnplayableReason 2 HasUnplayableKeyword
+enum UnplayableReason 4 BlockedByHook
+enum UnplayableReason 8 BlockedByCardLogic
+enum UnplayableReason 16 EnergyCostTooHigh
+enum UnplayableReason 32 StarCostTooHigh
+enum UnplayableReason 64 NoLivingAllies
+enum RunRngType 0 UpFront
+enum RunRngType 1 Shuffle
+enum RunRngType 2 UnknownMapPoint
+enum RunRngType 3 CombatCardGeneration
+enum RunRngType 4 CombatPotionGeneration
+enum RunRngType 5 CombatCardSelection
+enum RunRngType 6 CombatEnergyCosts
+enum RunRngType 7 CombatTargets
+enum RunRngType 8 MonsterAi
+enum RunRngType 9 Niche
+enum RunRngType 10 CombatOrbs
+enum RunRngType 11 TreasureRoomRelics
+enum PlayerRngType 0 Rewards
+enum PlayerRngType 1 Shops
+enum PlayerRngType 2 Transformations

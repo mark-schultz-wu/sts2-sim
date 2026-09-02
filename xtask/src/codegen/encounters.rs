@@ -1,12 +1,10 @@
 //! Every encounter: what room it is, which monsters it fields, and where.
-//! An encounter is how a fight starts. The monster table says what a monster does once it is on the board. This says which monsters are on the board.
-//! # `Roster` has three answers, not two
-//! `EncounterModel.GenerateMonsters` is a method, and 81 of the 96 return the same fight every time. Fourteen roll one from an `Rng` seeded per floor. Those cannot be a table, they are `Roster::Random` and get ported by hand, the way monster move bodies do.
-//! The third is `Roster::Configured`, which is one encounter. The Battleworn Dummy event refuses to generate until the event tells it which of three friends turned up. Its roster is neither a list nor a roll. Whatever starts the fight decides. Filing that as `Fixed` has recorded whichever branch happened to be reachable, which is a lie with a plausible shape.
-//! # Slots are two different lists
-//! `slots` is what `EncounterModel.GetNextSlot` searches, the first slot no living enemy stands in, so it is where a creature added *mid-combat* goes. A spawn's slot is where a monster starts. They are not the same list and codegen does not try to make them one. `KNIGHTS_ELITE` declares no `Slots` at all and starts three knights in `first`, `second` and `third`, and two more encounters do the same. Resolving a spawn's slot into an index will have failed on exactly those three.
-//! # Monsters are typed
-//! `possible` and a spawn's monster generate as `Monster` variants rather than ids. This makes the compiler the thing that checks an encounter names a monster the build has. That is why this domain reads one dump and still cannot drift from another: a monster removed from `monsters.txt` fails the build here.
+//!
+//! An encounter is how a fight starts. The monster table says what a monster
+//! does once it is on the board. This says which monsters are on the board.
+//!
+//! The xtask README says why a roster has three answers, why slots are two
+//! different lists, and what typing the monsters buys.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -43,7 +41,8 @@ const DROPPED: [(&str, &str, &str); 2] = [
 
 /// The flags an encounter carries, in the order they become bits.
 ///
-/// Not a game enum, three separate `EncounterModel` overrides, so the numbering is ours, and the dump's column order is what fixes it.
+/// Not a game enum, but three separate `EncounterModel` overrides. So the
+/// numbering is ours, and the dump's column order is what fixes it.
 const FLAGS: [(&str, usize, &str); 3] = [
     ("Weak", 3, "One of the first fights of an act."),
     ("GivesRewards", 4, "Winning it pays gold and a card."),
@@ -56,7 +55,8 @@ const FLAGS: [(&str, usize, &str); 3] = [
 
 /// What the game's enum is called here.
 ///
-/// `EncounterTag` is the only rename, and it earns it: see the doc the enum carries. `RoomType` keeps its name because that is what it is.
+/// `EncounterTag` is the only rename, and it earns it: see the doc the enum
+/// carries. `RoomType` keeps its name because that is what it is.
 fn rust_name(game: &str) -> &str {
     match game {
         "EncounterTag" => "Family",
@@ -66,16 +66,22 @@ fn rust_name(game: &str) -> &str {
 
 /// The most monsters a fight opens with, and the most one can ever field.
 ///
-/// Caps rather than guesses: the build's largest are 4 and 6, and generation fails rather than truncating if one ever grows past these. They are what lets a roster be inline instead of a pointer, see `sts2_content::Few`.
+/// Caps rather than guesses. The build's largest are 4 and 6, and generation
+/// fails rather than truncating if one ever grows past these. They are what
+/// lets a roster be inline instead of a pointer. See `sts2_content::Few`.
 const SPAWN_CAP: usize = 4;
 const POSSIBLE_CAP: usize = 6;
 
 /// The most slots an encounter can name.
 ///
-/// A cap rather than a `u8` for the same reason `sts2_content::Few` has one. For one more: a slot index sits beside a `Monster` inside an `Option`. Only a type with spare values leaves a niche for the `Option` to use. The build's largest vocabulary is six, `OVICOPTER_NORMAL`, five eggs and the ovicopter , so this is headroom. Generation fails rather than truncating if one ever exceeds it.
+/// A cap rather than a `u8` for the same reason `sts2_content::Few` has one,
+/// and for one more. A slot index sits beside a `Monster` inside an `Option`,
+/// and only a type with spare values leaves the `Option` a niche. The build's
+/// largest vocabulary is six, so this is headroom.
 const SLOT_CAP: usize = 8;
 
-/// What each slot position is called. Ordinals, because that is what a slot index is, and what the game itself calls its own common slots.
+/// What each slot position is called. Ordinals, because that is what a slot
+/// index is, and what the game itself calls its own common slots.
 const SLOT_NAMES: [&str; SLOT_CAP] = [
     "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth",
 ];
@@ -88,7 +94,8 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 
 /// The file an encounter's row lands in, from its room type.
 ///
-/// The game's own grouping: `ActModel` caches `AllRegularEncounters`, `AllEliteEncounters` and `AllBossEncounters`, each a filter on exactly this.
+/// The game's own grouping: `ActModel` caches `AllRegularEncounters`,
+/// `AllEliteEncounters` and `AllBossEncounters`, each a filter on exactly this.
 fn bucket(room: &str) -> Result<&'static str, String> {
     Ok(match room {
         "Monster" => "normal",
@@ -120,7 +127,8 @@ struct Encounter {
     spawns: Vec<(String, String)>,
 }
 
-/// A value at ascension 0 plus the level it steps at, which for gold is Poverty and nothing else.
+/// A value at ascension 0 plus the level it steps at, which for gold is Poverty
+/// and nothing else.
 #[derive(Default)]
 struct Steps {
     base: String,
@@ -238,7 +246,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
 
     // Which acts can roll an encounter. Empty for one only an event starts, and
-    // for the mocks, the same shape as a monster no encounter can roll.
+    // for the mocks — the same shape as a monster no encounter can roll.
     let mut acts: Vec<String> = Vec::new();
     let mut act_of: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for row in dump.of("act") {
@@ -258,7 +266,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     );
     writeln!(out, "\nuse super::acts::Act;").unwrap();
     writeln!(out, "use super::monsters::Monster;").unwrap();
-    writeln!(out, "use crate::{{Few, Scaled}};").unwrap();
+    writeln!(out, "use crate::{{Few, Scaled}};\nuse sts2_core::Table;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
     for (enum_name, member, why) in DROPPED {
@@ -389,21 +397,21 @@ impl Steps {
     }
 }
 
-/// The two bitsets: tags, which are the game's enum, and flags, which are not. The two bitsets: families, which are the game's enum, and flags, which are not.
+/// The two bitsets: tags, which are the game's enum, and flags, which are not.
+/// The two bitsets: families, which are the game's enum, and flags, which are
+/// not.
 fn emit_sets(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), String> {
-    let families: Vec<(&str, &str)> = enums
+    let families: Vec<sets::Member<'_>> = enums
         .get("EncounterTag")
         .ok_or("the dump reflects no EncounterTag")?
         .iter()
         .filter(|(_, m)| !dropped("Family", m))
-        .map(|(_, m)| (m.as_str(), ""))
+        .map(|(bit, m)| sets::Member {
+            name: m,
+            bit: *bit as usize,
+            doc: "",
+        })
         .collect();
-    let widest = enums["EncounterTag"]
-        .iter()
-        .filter(|(_, m)| !dropped("Family", m))
-        .map(|&(d, _)| d as usize)
-        .max()
-        .unwrap_or(0);
 
     sets::plain(
         out,
@@ -419,7 +427,6 @@ fn emit_sets(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> R
             members: &families,
             declare: false,
             extras: &[sets::Extra::Intersects],
-            bits: widest,
         },
     )?;
 
@@ -434,10 +441,9 @@ fn emit_sets(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> R
                        flags these are never computed — nothing here asks the encounter —\n\
                        so the set is one word and `contains` can answer plainly.",
             set_doc: "The flags an encounter has.",
-            members: &FLAGS.map(|(name, _, doc)| (name, doc)),
+            members: &sets::counted(FLAGS.map(|(name, _, doc)| (name, doc))),
             declare: true,
             extras: &[],
-            bits: FLAGS.len() - 1,
         },
     )?;
 
@@ -454,8 +460,8 @@ fn emit_shape(out: &mut String) {
         out,
         "///\n\
          /// An index, not a name: slot names are encounter-local scene\n\
-         /// positions with no shared vocabulary, 44 of them across 96\n\
-         /// encounters, and nothing outside the game ever sees one. Capped\n\
+         /// positions with no shared vocabulary — 44 of them across 96\n\
+         /// encounters — and nothing outside the game ever sees one. Capped\n\
          /// rather than a `u8` so that the spare values leave a niche, which is\n\
          /// what makes `Option<Slot>` cost nothing beside a `Monster`."
     )
@@ -496,7 +502,7 @@ fn emit_shape(out: &mut String) {
          /// The monsters a fight opens with, in order.\n\
          pub type Spawns = Few<Spawn, {SPAWN_CAP}>;\n\
          \n\
-         /// Every monster an encounter can ever field.\n\
+         /// Every monster an encounter could ever field.\n\
          pub type Possible = Few<Monster, {POSSIBLE_CAP}>;\n\
          \n\
          /// Who is on the board when the fight starts.\n\
@@ -543,9 +549,13 @@ fn emit_shape(out: &mut String) {
 
 /// One encounter's row, as the `const` its bucket file declares.
 ///
-/// The slot names become indices here. A slot name means nothing outside its own encounter, they are scene positions like `wriggler3` and `egg2`. 44 of them across 96 encounters with no shared vocabulary, so what survives is the position, which is all `GetNextSlot` and a hand-ported predicate need.
+/// The slot names become indices here. A name means nothing outside its own
+/// encounter, being a scene position like `wriggler3`, so what survives is the
+/// position `GetNextSlot` needs.
 ///
-/// The index space is the declared slots followed by any a spawn names and the encounter does not. Therefore `arrivals` is where the first kind stops. Three encounters need that second half: they declare no arrival slots and still start monsters in named positions.
+/// The index space is the declared slots, followed by any a spawn names and the
+/// encounter does not. `arrivals` is where the first kind stops. Three
+/// encounters need that second half.
 fn vocabulary(e: &Encounter) -> Vec<&str> {
     let mut vocabulary: Vec<&str> = e.slots.iter().map(String::as_str).collect();
     for (_, slot) in &e.spawns {
@@ -632,7 +642,7 @@ fn literal(id: &str, e: &Encounter) -> Result<String, String> {
         other => return Err(format!("{id}: {other} is not a roster")),
     };
 
-    // A roll that also listed a roster is two answers to one question.
+    // A roll that also listed a roster would be two answers to one question.
     if e.roster != "fixed" && !e.spawns.is_empty() {
         return Err(format!("{id}: {} but has spawn rows", e.roster));
     }
@@ -652,7 +662,7 @@ fn emit_encounters(
         "/// Every encounter in the build.\n\
          ///\n\
          /// Flat, and ordered by the game's own id. The generated files group by\n\
-         /// room type, which is what `ActModel` itself groups them by, it\n\
+         /// room type, which is what `ActModel` itself groups them by — it\n\
          /// caches `AllRegularEncounters`, `AllEliteEncounters` and\n\
          /// `AllBossEncounters` as three filters on exactly that.\n\
          ///\n\
@@ -668,32 +678,15 @@ fn emit_encounters(
     }
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(out, "impl Encounter {{").unwrap();
+    let mut extras = String::new();
     writeln!(
-        out,
-        "    /// Every encounter, so callers can sweep the table without a way\n\
-         \x20   /// to enumerate an enum."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    pub const ALL: [Encounter; {}] = [",
-        encounters.len()
-    )
-    .unwrap();
-    for id in encounters.keys() {
-        writeln!(out, "        Encounter::{},", camel(id)).unwrap();
-    }
-    writeln!(out, "    ];\n").unwrap();
-
-    writeln!(
-        out,
+        extras,
         "    /// The acts whose map can roll this encounter. Empty for one an\n\
          \x20   /// event starts instead, and for the mocks."
     )
     .unwrap();
-    writeln!(out, "    pub const fn acts(self) -> &'static [Act] {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    writeln!(extras, "    fn acts(self) -> &'static [Act] {{").unwrap();
+    writeln!(extras, "        match self {{").unwrap();
     for id in encounters.keys() {
         let list = act_of
             .get(id)
@@ -704,10 +697,33 @@ fn emit_encounters(
                     .join(", ")
             })
             .unwrap_or_default();
-        writeln!(out, "            Self::{} => &[{list}],", camel(id)).unwrap();
+        writeln!(extras, "            Self::{} => &[{list}],", camel(id)).unwrap();
     }
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "    }}\n").unwrap();
+    writeln!(extras, "        }}").unwrap();
+    writeln!(extras, "    }}").unwrap();
+
+    writeln!(
+        extras,
+        "\n    /// Monster, elite or boss — the room the encounter is."
+    )
+    .unwrap();
+    writeln!(extras, "    fn room(self) -> RoomType {{").unwrap();
+    writeln!(extras, "        self.data().room").unwrap();
+    writeln!(extras, "    }}").unwrap();
+
+    writeln!(out, "impl sts2_core::Table for Encounter {{").unwrap();
+    writeln!(out, "    type Data = EncounterData;\n").unwrap();
+    writeln!(
+        out,
+        "    /// Every encounter, so callers can sweep the table without a way\n\
+         \x20   /// to enumerate an enum."
+    )
+    .unwrap();
+    writeln!(out, "    const ALL: &'static [Self] = &[").unwrap();
+    for id in encounters.keys() {
+        writeln!(out, "        Encounter::{},", camel(id)).unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
 
     writeln!(
         out,
@@ -716,7 +732,7 @@ fn emit_encounters(
          \x20   /// One arm per encounter, naming the file its row lives in."
     )
     .unwrap();
-    writeln!(out, "    pub const fn data(self) -> EncounterData {{").unwrap();
+    writeln!(out, "    fn data(self) -> EncounterData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for (id, e) in encounters {
         writeln!(
@@ -730,6 +746,12 @@ fn emit_encounters(
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl sts2_core::EncounterTable for Encounter {{").unwrap();
+    writeln!(out, "    type Act = Act;").unwrap();
+    writeln!(out, "    type Room = RoomType;\n").unwrap();
+    out.push_str(&extras);
+    writeln!(out, "}}").unwrap();
 
     Ok(())
 }

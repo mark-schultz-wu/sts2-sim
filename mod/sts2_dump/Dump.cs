@@ -48,7 +48,9 @@ public static class Dump
             "potiondump" => PotionDump.Run,
             "powerdump" => PowerDump.Run,
             "relicdump" => RelicDump.Run,
+            "restsitedump" => RestSiteDump.Run,
             "rngdump" => RngDump.Run,
+            "runstatedump" => RunStateDump.Run,
             _ => null,
         };
 

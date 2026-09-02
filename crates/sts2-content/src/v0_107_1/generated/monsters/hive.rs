@@ -4,7 +4,7 @@
 //! Source: `dumps/monsters.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
 use super::{
-    Attack, Branch, FollowUp, IntentKind, IntentSet, Intents, MonsterData, Move, Repeat,
+    Attack, Branch, FollowUp, IntentKind, IntentSet, Intents, MonsterData, Move, MoveId, Repeat,
     RepeatCount, State,
 };
 use crate::{Field, Scaled};
@@ -20,6 +20,7 @@ pub(super) const BOWLBUG_EGG: MonsterData = MonsterData {
     },
     initial: 0,
     states: &[State::Move(Move {
+        id: MoveId::BiteMove,
         follow_up: FollowUp::Next(0),
         intents: Intents {
             kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Defend]),
@@ -50,6 +51,7 @@ pub(super) const BOWLBUG_NECTAR: MonsterData = MonsterData {
     initial: 2,
     states: &[
         State::Move(Move {
+            id: MoveId::BuffMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -58,6 +60,7 @@ pub(super) const BOWLBUG_NECTAR: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::Thrash2Move,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -75,6 +78,7 @@ pub(super) const BOWLBUG_NECTAR: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ThrashMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -106,6 +110,7 @@ pub(super) const BOWLBUG_ROCK: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::DizzyMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Stun]),
@@ -114,6 +119,7 @@ pub(super) const BOWLBUG_ROCK: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::HeadbuttMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -146,6 +152,7 @@ pub(super) const BOWLBUG_SILK: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::ThrashMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -163,6 +170,7 @@ pub(super) const BOWLBUG_SILK: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ToxicSpitMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Debuff]),
@@ -185,6 +193,7 @@ pub(super) const CHOMPER: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::ClampMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -202,6 +211,7 @@ pub(super) const CHOMPER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ScreechMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::StatusCard]),
@@ -227,6 +237,7 @@ pub(super) const CRUSHER: MonsterData = MonsterData {
     initial: 4,
     states: &[
         State::Move(Move {
+            id: MoveId::AdaptMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -235,6 +246,7 @@ pub(super) const CRUSHER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::BugStingMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
@@ -252,6 +264,7 @@ pub(super) const CRUSHER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::EnlargingStrikeMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -269,6 +282,7 @@ pub(super) const CRUSHER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::GuardedStrikeMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Defend]),
@@ -286,6 +300,7 @@ pub(super) const CRUSHER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ThrashMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -317,6 +332,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData = MonsterData {
     initial: 5,
     states: &[
         State::Move(Move {
+            id: MoveId::BulkMove,
             follow_up: FollowUp::Next(5),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
@@ -334,6 +350,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ConstrictMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
@@ -351,6 +368,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::DeadMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[]),
@@ -376,6 +394,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData = MonsterData {
             },
         ]),
         State::Move(Move {
+            id: MoveId::ReattachMove,
             follow_up: FollowUp::OncePerformed(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Heal]),
@@ -384,6 +403,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_BACK: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::WritheMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -415,6 +435,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData = MonsterData {
     initial: 5,
     states: &[
         State::Move(Move {
+            id: MoveId::BulkMove,
             follow_up: FollowUp::Next(5),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
@@ -432,6 +453,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ConstrictMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
@@ -449,6 +471,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::DeadMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[]),
@@ -474,6 +497,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData = MonsterData {
             },
         ]),
         State::Move(Move {
+            id: MoveId::ReattachMove,
             follow_up: FollowUp::OncePerformed(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Heal]),
@@ -482,6 +506,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_FRONT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::WritheMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -513,6 +538,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData = MonsterData {
     initial: 5,
     states: &[
         State::Move(Move {
+            id: MoveId::BulkMove,
             follow_up: FollowUp::Next(5),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
@@ -530,6 +556,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ConstrictMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
@@ -547,6 +574,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::DeadMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[]),
@@ -572,6 +600,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData = MonsterData {
             },
         ]),
         State::Move(Move {
+            id: MoveId::ReattachMove,
             follow_up: FollowUp::OncePerformed(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Heal]),
@@ -580,6 +609,7 @@ pub(super) const DECIMILLIPEDE_SEGMENT_MIDDLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::WritheMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -611,6 +641,7 @@ pub(super) const ENTOMANCER: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::BeesMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -628,6 +659,7 @@ pub(super) const ENTOMANCER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::PheromoneSpitMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -636,6 +668,7 @@ pub(super) const ENTOMANCER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::SpearMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -667,6 +700,7 @@ pub(super) const EXOSKELETON: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::EnrageMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -676,6 +710,7 @@ pub(super) const EXOSKELETON: MonsterData = MonsterData {
         }),
         State::Conditional(&[4, 2, 0, 3]),
         State::Move(Move {
+            id: MoveId::MandiblesMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -705,6 +740,7 @@ pub(super) const EXOSKELETON: MonsterData = MonsterData {
             },
         ]),
         State::Move(Move {
+            id: MoveId::SkitterMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -736,6 +772,7 @@ pub(super) const HUNTER_KILLER: MonsterData = MonsterData {
     initial: 3,
     states: &[
         State::Move(Move {
+            id: MoveId::BiteMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -753,6 +790,7 @@ pub(super) const HUNTER_KILLER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::PunctureMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -782,6 +820,7 @@ pub(super) const HUNTER_KILLER: MonsterData = MonsterData {
             },
         ]),
         State::Move(Move {
+            id: MoveId::TenderizingGoopMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Debuff]),
@@ -804,6 +843,7 @@ pub(super) const INFESTED_PRISM: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::JabMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -821,6 +861,7 @@ pub(super) const INFESTED_PRISM: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::PulsateMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff, IntentKind::Defend]),
@@ -838,6 +879,7 @@ pub(super) const INFESTED_PRISM: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::RadiateMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Defend]),
@@ -855,6 +897,7 @@ pub(super) const INFESTED_PRISM: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::WhirlwindMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -886,6 +929,7 @@ pub(super) const KNOWLEDGE_DEMON: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::CurseOfKnowledgeMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Debuff]),
@@ -895,6 +939,7 @@ pub(super) const KNOWLEDGE_DEMON: MonsterData = MonsterData {
         }),
         State::Conditional(&[0, 4]),
         State::Move(Move {
+            id: MoveId::KnowledgeOverwhelmingMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -912,6 +957,7 @@ pub(super) const KNOWLEDGE_DEMON: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::PonderMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Heal, IntentKind::Buff]),
@@ -929,6 +975,7 @@ pub(super) const KNOWLEDGE_DEMON: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::SlapMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -960,6 +1007,7 @@ pub(super) const LOUSE_PROGENITOR: MonsterData = MonsterData {
     initial: 2,
     states: &[
         State::Move(Move {
+            id: MoveId::CurlAndGrowMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Defend, IntentKind::Buff]),
@@ -968,6 +1016,7 @@ pub(super) const LOUSE_PROGENITOR: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::PounceMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -985,6 +1034,7 @@ pub(super) const LOUSE_PROGENITOR: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::WebCannonMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
@@ -1016,6 +1066,7 @@ pub(super) const MYTE: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::BiteMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1034,6 +1085,7 @@ pub(super) const MYTE: MonsterData = MonsterData {
         }),
         State::Conditional(&[3, 2]),
         State::Move(Move {
+            id: MoveId::SuckMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
@@ -1051,6 +1103,7 @@ pub(super) const MYTE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ToxicMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::StatusCard]),
@@ -1076,6 +1129,7 @@ pub(super) const OVICOPTER: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::LayEggsMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Summon]),
@@ -1084,6 +1138,7 @@ pub(super) const OVICOPTER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::NutritionalPasteMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -1092,6 +1147,7 @@ pub(super) const OVICOPTER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::SmashMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1110,6 +1166,7 @@ pub(super) const OVICOPTER: MonsterData = MonsterData {
         }),
         State::Conditional(&[0, 1]),
         State::Move(Move {
+            id: MoveId::TenderizerMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
@@ -1140,6 +1197,7 @@ pub(super) const PARAFRIGHT: MonsterData = MonsterData {
     },
     initial: 0,
     states: &[State::Move(Move {
+        id: MoveId::SlamMove,
         follow_up: FollowUp::Next(0),
         intents: Intents {
             kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1170,6 +1228,7 @@ pub(super) const ROCKET: MonsterData = MonsterData {
     initial: 4,
     states: &[
         State::Move(Move {
+            id: MoveId::ChargeUpMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -1178,6 +1237,7 @@ pub(super) const ROCKET: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::LaserMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1195,6 +1255,7 @@ pub(super) const ROCKET: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::PrecisionBeamMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1212,6 +1273,7 @@ pub(super) const ROCKET: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::RechargeMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Sleep]),
@@ -1220,6 +1282,7 @@ pub(super) const ROCKET: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::TargetingReticleMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1251,6 +1314,7 @@ pub(super) const SLUMBERING_BEETLE: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::RollOutMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
@@ -1268,6 +1332,7 @@ pub(super) const SLUMBERING_BEETLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::SnoreMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Sleep]),
@@ -1291,6 +1356,7 @@ pub(super) const SPINY_TOAD: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::ProtrudingSpikesMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -1299,6 +1365,7 @@ pub(super) const SPINY_TOAD: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::SpikeExplosionMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1316,6 +1383,7 @@ pub(super) const SPINY_TOAD: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::TongueLashMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1347,6 +1415,7 @@ pub(super) const THE_INSATIABLE: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::LiquifyGroundMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff, IntentKind::StatusCard]),
@@ -1358,6 +1427,7 @@ pub(super) const THE_INSATIABLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::LungingBiteMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1375,6 +1445,7 @@ pub(super) const THE_INSATIABLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::SalivateMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -1383,6 +1454,7 @@ pub(super) const THE_INSATIABLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ThrashMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1400,6 +1472,7 @@ pub(super) const THE_INSATIABLE: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ThrashMove2,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1431,6 +1504,7 @@ pub(super) const THE_OBSCURA: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::HardeningStrikeMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Defend]),
@@ -1448,6 +1522,7 @@ pub(super) const THE_OBSCURA: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::IllusionMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Summon]),
@@ -1456,6 +1531,7 @@ pub(super) const THE_OBSCURA: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::PiercingGazeMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1490,6 +1566,7 @@ pub(super) const THE_OBSCURA: MonsterData = MonsterData {
             },
         ]),
         State::Move(Move {
+            id: MoveId::SailMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -1512,6 +1589,7 @@ pub(super) const THIEVING_HOPPER: MonsterData = MonsterData {
     initial: 4,
     states: &[
         State::Move(Move {
+            id: MoveId::EscapeMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Escape]),
@@ -1520,6 +1598,7 @@ pub(super) const THIEVING_HOPPER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::FlutterMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -1528,6 +1607,7 @@ pub(super) const THIEVING_HOPPER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::HatTrickMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1545,6 +1625,7 @@ pub(super) const THIEVING_HOPPER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::NabMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1562,6 +1643,7 @@ pub(super) const THIEVING_HOPPER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ThieveryMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::CardDebuff]),
@@ -1593,6 +1675,7 @@ pub(super) const TOUGH_EGG: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::HatchMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Summon]),
@@ -1601,6 +1684,7 @@ pub(super) const TOUGH_EGG: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::NibbleMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1632,6 +1716,7 @@ pub(super) const TUNNELER: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::BelowMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1649,6 +1734,7 @@ pub(super) const TUNNELER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::BiteMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -1666,6 +1752,7 @@ pub(super) const TUNNELER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::BurrowMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff, IntentKind::Defend]),
@@ -1674,6 +1761,7 @@ pub(super) const TUNNELER: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::DizzyMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Stun]),

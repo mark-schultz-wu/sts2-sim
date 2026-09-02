@@ -2,7 +2,7 @@
 //! The game is the oracle the simulator gets checked against: the real thing, run headless, driven one decision at a time. This crate owns the transport and nothing above it: launching the game, the handshake, and one typed request/response pair per call. What the state *means* is deliberately left alone, see the `response` module.
 //! [PROTOCOL.md](../../../mod/sts2_headless/PROTOCOL.md) is the contract this implements.
 //! ```no_run
-//! use sts2_content::ContentVersion;
+//! use sts2_core::ContentVersion;
 //! use sts2_content::v0_107_1::V0_107_1;
 //! use sts2_headless::{Command, Config, Game, Response};
 //! use sts2_rng::Seed;

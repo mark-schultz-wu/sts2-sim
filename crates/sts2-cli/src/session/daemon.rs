@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::time::{Duration, Instant};
-use sts2_content::ContentVersion;
+use sts2_core::ContentVersion;
 use sts2_headless::{Config, Game};
 
 /// Runs until told to stop, or until nobody has asked for anything in a while.

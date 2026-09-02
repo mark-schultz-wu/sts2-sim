@@ -8,6 +8,7 @@ use super::potions::PotionPool;
 use super::relics::{Relic, RelicPool};
 use crate::Few;
 use serde::{Deserialize, Serialize};
+use sts2_core::Table;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -98,10 +99,12 @@ pub enum Character {
     Silent,
 }
 
-impl Character {
+impl sts2_core::Table for Character {
+    type Data = CharacterData;
+
     /// Every character, so callers can sweep the table without a way
     /// to enumerate an enum.
-    pub const ALL: [Character; 8] = [
+    const ALL: &'static [Self] = &[
         Character::Defect,
         Character::DeprecatedCharacter,
         Character::Deprived,
@@ -113,7 +116,7 @@ impl Character {
     ];
 
     /// What a run as this character starts with.
-    pub const fn data(self) -> CharacterData {
+    fn data(self) -> CharacterData {
         match self {
             Self::Defect => CharacterData {
                 playable: true,
@@ -296,5 +299,11 @@ impl Character {
                 unlocks_after: None,
             },
         }
+    }
+}
+
+impl sts2_core::CharacterTable for Character {
+    fn playable(self) -> bool {
+        self.data().playable
     }
 }

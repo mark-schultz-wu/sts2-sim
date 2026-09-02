@@ -66,6 +66,20 @@ impl std::fmt::Debug for EnchantmentFlags {
     }
 }
 
+impl sts2_core::FlagSet for EnchantmentFlags {
+    type Member = EnchantmentFlag;
+
+    const MEMBERS: &'static [EnchantmentFlag] = &Self::MEMBERS;
+
+    fn from_members(members: &[EnchantmentFlag]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: EnchantmentFlag) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// What is true of an enchantment with no run in progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EnchantmentData {

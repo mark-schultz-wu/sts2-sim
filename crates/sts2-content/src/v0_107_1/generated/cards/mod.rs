@@ -3,8 +3,10 @@
 //! The field enums, the data shape, and the outer card enum.
 //! Source: `dumps/cards.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
+use super::characters::CardPool;
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
+use sts2_core::Table;
 
 mod colorless;
 mod curse;
@@ -135,6 +137,20 @@ impl std::fmt::Debug for KeywordSet {
     }
 }
 
+impl sts2_core::FlagSet for KeywordSet {
+    type Member = CardKeyword;
+
+    const MEMBERS: &'static [CardKeyword] = &Self::MEMBERS;
+
+    fn from_members(members: &[CardKeyword]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: CardKeyword) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// A set of [`CardType`]s: one bit per type, at its discriminant.
 ///
 /// Bit 0 is unused, because the game's zero is `None` and that is
@@ -184,6 +200,20 @@ impl std::fmt::Debug for CardTypeSet {
     }
 }
 
+impl sts2_core::FlagSet for CardTypeSet {
+    type Member = CardType;
+
+    const MEMBERS: &'static [CardType] = &Self::MEMBERS;
+
+    fn from_members(members: &[CardType]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: CardType) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// What is true of a card with no run in progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CardData {
@@ -216,8 +246,10 @@ pub enum Cards {
     Deprecated(DeprecatedCard),
 }
 
-impl Cards {
-    pub const fn data(self) -> CardData {
+impl sts2_core::Table for Cards {
+    type Data = CardData;
+
+    fn data(self) -> CardData {
         match self {
             Cards::Ironclad(c) => c.data(),
             Cards::Silent(c) => c.data(),
@@ -235,7 +267,7 @@ impl Cards {
     }
 
     /// Every card in the build, pools flattened.
-    pub const ALL: [Cards; 578] = [
+    const ALL: &'static [Self] = &[
         Cards::Ironclad(IroncladCard::Aggression),
         Cards::Ironclad(IroncladCard::Anger),
         Cards::Ironclad(IroncladCard::Armaments),
@@ -815,4 +847,30 @@ impl Cards {
         Cards::Token(TokenCard::WasteAway),
         Cards::Deprecated(DeprecatedCard::DeprecatedCard),
     ];
+}
+
+impl sts2_core::CardTable for Cards {
+    type Pool = CardPool;
+    type Rarity = CardRarity;
+
+    fn pool(self) -> Option<CardPool> {
+        match self {
+            Cards::Ironclad(_) => Some(CardPool::Ironclad),
+            Cards::Silent(_) => Some(CardPool::Silent),
+            Cards::Regent(_) => Some(CardPool::Regent),
+            Cards::Necrobinder(_) => Some(CardPool::Necrobinder),
+            Cards::Defect(_) => Some(CardPool::Defect),
+            Cards::Colorless(_) => None,
+            Cards::Curse(_) => None,
+            Cards::Event(_) => None,
+            Cards::Quest(_) => None,
+            Cards::Status(_) => None,
+            Cards::Token(_) => None,
+            Cards::Deprecated(_) => None,
+        }
+    }
+
+    fn rarity(self) -> CardRarity {
+        self.data().rarity
+    }
 }

@@ -1,12 +1,20 @@
 //! The build as a type, and the claim that makes it usable on a wire.
-//! `ContentVersion` exists so that a client or a simulator names a build once and every id follows from it. That is only free if a typed id spells exactly what the game spells, otherwise every call site needs an adapter. An adapter is a second spelling waiting to disagree with the first.
+//!
+//! `ContentVersion` exists so that a client or a simulator names a build once
+//! and every id follows from it. That is only free if a typed id spells exactly
+//! what the game spells. Otherwise every call site needs an adapter, and an
+//! adapter is a second spelling waiting to disagree with the first.
 
 use super::super::*;
-use crate::ContentVersion;
+use sts2_core::ContentVersion;
 
 /// Serialized, each id is the game's own string and nothing around it.
 ///
-/// The pool-wrapped `Cards` is the one that can have gone wrong: it is an enum of enums. Externally tagged it will put `{"Ironclad": …}` on the wire. It is `#[serde(untagged)]`, so it does not, and the ten cards whose ids carry a pool suffix keep it in the rename. Therefore `Strike` in the Ironclad pool still says `STRIKE_IRONCLAD`.
+/// The pool-wrapped `Cards` is the one with room to go wrong. It is an enum of
+/// enums, and externally tagged it puts `{"Ironclad": …}` on the wire. It is
+/// `#[serde(untagged)]`, so it does not. The ten cards whose ids carry a pool
+/// suffix keep it in the rename, so `Strike` in the Ironclad pool still says
+/// `STRIKE_IRONCLAD`.
 #[test]
 fn every_id_spells_itself_the_way_the_game_does() {
     fn wire<T: serde::Serialize>(value: T) -> String {
@@ -48,7 +56,9 @@ fn an_id_parses_back_from_the_wire() {
 
 /// The type carries the build it was generated from.
 ///
-/// This is what makes the parameter more than typing. A client can compare the build it is talking to against the build its tables describe, and refuse rather than quietly drive the wrong game.
+/// This is what makes the parameter more than typing. A client can compare the
+/// build it is talking to against the build its tables describe, and refuse
+/// rather than quietly drive the wrong game.
 #[test]
 fn the_type_knows_which_build_it_describes() {
     assert_eq!(<V0_107_1 as ContentVersion>::VERSION, VERSION);

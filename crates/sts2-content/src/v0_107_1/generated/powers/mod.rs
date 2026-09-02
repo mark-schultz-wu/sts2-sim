@@ -742,10 +742,12 @@ pub enum Power {
     WraithFormPower,
 }
 
-impl Power {
+impl sts2_core::Table for Power {
+    type Data = PowerData;
+
     /// Every power, so callers can sweep the table without a way to
     /// enumerate an enum.
-    pub const ALL: [Power; 273] = [
+    const ALL: &'static [Self] = &[
         Power::AccelerantPower,
         Power::AccuracyPower,
         Power::AdaptablePower,
@@ -1025,7 +1027,7 @@ impl Power {
     ///
     /// One arm per power, naming the file its row lives in — buffs,
     /// debuffs, and the temporary family that decides at the time.
-    pub const fn data(self) -> PowerData {
+    fn data(self) -> PowerData {
         match self {
             Self::AccelerantPower => buffs::ACCELERANT_POWER,
             Self::AccuracyPower => buffs::ACCURACY_POWER,
@@ -1304,6 +1306,21 @@ impl Power {
             Self::WellLaidPlansPower => buffs::WELL_LAID_PLANS_POWER,
             Self::WitheringPresencePower => buffs::WITHERING_PRESENCE_POWER,
             Self::WraithFormPower => debuffs::WRAITH_FORM_POWER,
+        }
+    }
+}
+
+impl sts2_core::PowerTable for Power {
+    /// Whether the game counts this as a debuff.
+    ///
+    /// `None` for the powers whose type is `dynamic` in the dump:
+    /// they decide at the time, and a caller wanting the answer for
+    /// an amount has to ask the creature.
+    fn debuff(self) -> Option<bool> {
+        match <Self as sts2_core::Table>::data(self).kind {
+            Field::Constant(PowerType::Debuff) => Some(true),
+            Field::Constant(PowerType::Buff) => Some(false),
+            Field::Computed => None,
         }
     }
 }

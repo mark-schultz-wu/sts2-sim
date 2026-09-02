@@ -5,7 +5,7 @@
 
 use super::Taking;
 use anyhow::{Result, bail};
-use sts2_content::ContentVersion;
+use sts2_core::ContentVersion;
 use sts2_headless::{Answer as GameAnswer, Command, Question, Response};
 
 /// What the game is currently waiting to be told.

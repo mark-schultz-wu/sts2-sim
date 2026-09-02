@@ -1,15 +1,14 @@
-//! A power is a status a creature carries: Strength, Vulnerable, Artifact. What it *does* is hooks, `BeforeCardPlayed`, `AfterApplied`, and hooks are code, ported by hand. What is table is the handful of facts the engine consults without asking the power anything. Whether it is a buff or a debuff, how it stacks, whether several can coexist, and what happens to it when its owner dies.
-//! # Why some cells are `Computed`
-//! `PowerModel` declares all of these `virtual` or `abstract`, so any of them can be worked out from combat state, and a few are. `ShrinkPower` stacks as a counter or as a single depending on the sign of its amount. `MonologuePower` reads a dynamic var. The twenty `ITemporaryPower` descendants decide buff-or-debuff from a `protected IsPositive`. The dump marks those `dynamic` and they generate as `Field::Computed`, which is the simulator's cue to ask rather than look up.
-//! # The flags
-//! Five columns are yes-or-no. A `PowerFlags` bitset gives their order a type. Unlike `KeywordSet` and `IntentSet`, it has no game enum. Its numbering follows dump order.
-//! The set carries the computed-ness too, which is why it is two `u8`s rather than one. A flag is true, false, or worked out at the time, and `get` returns that as a `Field<bool>`. Therefore there is no way to read a computed flag as a plain `false`, which is what a single bitset has offered.
-//! The id is the serde rename and nothing else spells it. There is no `id` accessor beside it: two spellings of one string is a way for them to disagree. The derive is the one the wire already depends on.
-//! # Why the files are split by `kind`
-//! The game groups powers by nothing. They share one C# namespace and source directory. `ModelDb.AllPowers` reflects over every subclass rather than reading a registry. Powers have no pools or acts. Any power can be applied to anything that carries one.
-//! What the game does classify a power by is `Type`. It is the one fact everything branches on: `PowerCmd` checks it before Artifact eats a debuff, `Rend` and `Misery` count debuffs. The badge and hover tips sort by it. That is the same kind of thing `pool` is for cards, a column of the dump that the game itself switches on. Therefore it is what the buckets are.
-//! It partitions cleanly, and the third bucket is a family rather than a remainder. The twenty powers whose `Type` is computed are exactly the `ITemporaryPower` descendants, fourteen `TemporaryStrengthPower`, three `TemporaryDexterityPower`, three `TemporaryFocusPower`. This read buff-or-debuff off the sign of their own amount.
-//! `Power` itself stays one flat enum. A power's kind is a `Field` and twenty of them compute it, so a `BuffPower` type is a claim the table cannot make. And `GetTypeForAmount` flips the answer on a negative amount anyway. The split is where the rows are written, not what they are.
+//! Every power's static data.
+//!
+//! A power is a status a creature carries: Strength, Vulnerable, Artifact. What
+//! it *does* is hooks, such as `BeforeCardPlayed` and `AfterApplied`, and hooks
+//! are code ported by hand. What is table is the handful of facts the engine
+//! consults without asking the power anything. Those are whether it is a buff
+//! or a debuff, and how it stacks. Then whether several can coexist, and what
+//! happens to it when its owner dies.
+//!
+//! The xtask README says why some cells are computed. It also says why the
+//! flags are one bitset of two words, and why the files are split by `kind`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -21,9 +20,11 @@ use super::{Build, DERIVES, Dump, banner, camel, repr};
 
 /// Members the game declares that are not values of the field they name.
 ///
-/// A C# enum has a zero, so a `None` gets declared whether or not it means anything. Dropping one does not renumber the rest, every member is emitted at the game's own discriminant. Therefore the generated enum stays a subset of the game's rather than a reshuffle of it.
+/// A C# enum has a zero, so a `None` gets declared whether or not it means
+/// anything. Dropping one does not renumber the rest.
 ///
-/// The reason is emitted into the generated file. This is because a member missing for a good reason and one missing by accident look identical from the Rust side.
+/// The reason is emitted into the generated file. A member missing for a good
+/// reason and one missing by accident look identical from the Rust side.
 const DROPPED: [(&str, &str, &str); 3] = [
     (
         "PowerType",
@@ -61,7 +62,8 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 
 /// The dump's first three columns, as the table's own fields.
 ///
-/// The ones whose answer is a value rather than a yes or a no. Everything after them is a flag. See [`FLAGS`].
+/// The ones whose answer is a value rather than a yes or a no. Everything after
+/// them is a flag. See [`FLAGS`].
 const VALUES: [(&str, &str, Wrap); 3] = [
     ("kind", "PowerType", Wrap::Field),
     ("instance", "PowerInstanceType", Wrap::Option),
@@ -70,7 +72,10 @@ const VALUES: [(&str, &str, Wrap); 3] = [
 
 /// The dump's remaining columns, as the members of `PowerFlags`.
 ///
-/// In dump order, which is the order `PowerModel` declares them, and which becomes each flag's bit. Unlike the card keywords, these are not a game enum, there is nothing to inherit a number from. Therefore this order is the whole of the numbering and reordering it renumbers the set.
+/// In dump order, which is the order `PowerModel` declares them, and which
+/// becomes each flag's bit. Unlike the card keywords, these are not a game
+/// enum, so there is nothing to inherit a number from. This order is the whole
+/// of the numbering, and reordering it renumbers the set.
 const FLAGS: [&str; 5] = [
     "AllowNegative",
     "RemovedOnOwnerDeath",
@@ -81,7 +86,10 @@ const FLAGS: [&str; 5] = [
 
 /// How a value column is spelled once its enum's `None` is gone.
 ///
-/// Two different absences, and they stack. `Field::Computed` is "the power works it out, so ask it". `Option::None` is "there is no rule here at all". A column can need both, and `stack` is that column: two powers compute it, `DAMPEN_POWER` does not stack, and 225 are counters.
+/// Two different absences, and they stack. `Field::Computed` is "the power
+/// works it out, so ask it". `Option::None` is "there is no rule here at all".
+/// A column can need both, and `stack` is that column. Two powers compute it,
+/// `DAMPEN_POWER` does not stack, and 225 are counters.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Wrap {
     /// Some power computes this, so every power's cell is a `Field`.
@@ -115,7 +123,10 @@ impl Wrap {
 
 /// The file a power's row lands in, from its `kind` cell.
 ///
-/// A real partition: every power has exactly one `kind`. The ones that compute it are a family rather than a leftover, see the module docs. An unrecognised cell is an error rather than a fourth bucket. This is because a new `PowerType` member is a thing to look at and not a thing to file.
+/// A real partition. Every power has exactly one `kind`, and the ones that
+/// compute it are a family rather than a leftover. See the module docs. An
+/// unrecognised cell is an error rather than a fourth bucket. A new
+/// `PowerType` member is a thing to look at and not a thing to file.
 fn bucket(kind: &str) -> Result<&'static str, String> {
     Ok(match kind {
         "Buff" => "buffs",
@@ -197,7 +208,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     let build = dump.build.clone();
 
     // Reflected from the game, so a member no power happens to use is still a
-    // member, the same reason the card and monster dumps reflect their own.
+    // member — the same reason the card and monster dumps reflect their own.
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
         let discriminant = f[2]
@@ -254,7 +265,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_shape(&mut out)?;
     emit_powers(&mut out, &powers)?;
 
-    // The rows, one file per kind. `mod.rs` keeps the shape and the enum. A
+    // The rows, one file per kind. `mod.rs` keeps the shape and the enum; a
     // power's data is a named const it points at, so `data()` stays a readable
     // index instead of three thousand lines of table.
     let mut split = Split::new(root, "powers", "powers.txt", &build)?;
@@ -307,7 +318,9 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
 /// Doc lines for one member, indented to sit inside a type.
 ///
-/// Blank doc lines are `///` with nothing after, not `/// `. Rustfmt strips the trailing space anyway and `-D warnings` does not care, but the generated file reads better without it.
+/// Blank doc lines are `///` with nothing after, not `/// `. rustfmt strips the
+/// trailing space anyway and `-D warnings` does not care, but the generated
+/// file reads better without it.
 fn doc(out: &mut String, name: &str) {
     for line in describe(name).lines() {
         match line.trim() {
@@ -351,7 +364,10 @@ fn emit_shape(out: &mut String) -> Result<(), String> {
 
 /// The flag member enum and the set that carries them.
 ///
-/// Two `u8`s represent three answers per flag. Two flags depend on combat state. A separate computed word lets `PowerFlags::get` return `Field<bool>` instead of a false value.
+/// Two `u8`s rather than one, because a flag has three answers and not two.
+/// `PowerModel` declares every one of these `virtual`, and two are worked out
+/// from combat state. A second word is what lets `PowerFlags::get` hand back a
+/// `Field<bool>` rather than `false`.
 fn emit_flags(out: &mut String) -> Result<(), String> {
     sets::computed(
         out,
@@ -368,17 +384,19 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
                       Two powers compute one: `REATTACH_POWER` decides whether its\n\
                       owner's death is fatal from how many segments are still alive,\n\
                       and a mock decides whether it scales in multiplayer.",
-            members: &FLAGS.map(|f| (f, describe(f))),
+            members: &sets::counted(FLAGS.map(|f| (f, describe(f)))),
             declare: true,
-            bits: FLAGS.len() - 1,
             extras: &[],
         },
     )
 }
 
-/// One value cell, as the literal it must generate.
+/// One value cell, as the literal it generates.
 ///
-/// Every way a cell can fail to fit its column is an error rather than a value. A `dynamic` in a column with no `Field` will generate a constant that is not one. A dropped member in a column with no `Option` has no spelling at all and will otherwise emit `PowerType::None`. Naming a variant that no longer exists. Both name the power and the column, because the fix is always to change [`VALUES`] or [`DROPPED`] rather than to look away.
+/// Every way a cell fails to fit its column is an error rather than a value. A
+/// `dynamic` in a column with no `Field` generates a constant that is not one.
+/// A dropped member in a column with no `Option` names a variant that is gone.
+/// Both errors name the power and the column.
 fn cell(power: &str, field: &str, ty: &str, wrap: Wrap, raw: &str) -> Result<String, String> {
     if raw == "dynamic" {
         if !wrap.computes() {
@@ -437,7 +455,8 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
     }
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(out, "impl Power {{").unwrap();
+    writeln!(out, "impl sts2_core::Table for Power {{").unwrap();
+    writeln!(out, "    type Data = PowerData;\n").unwrap();
 
     writeln!(
         out,
@@ -445,14 +464,14 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
          \x20   /// enumerate an enum."
     )
     .unwrap();
-    writeln!(out, "    pub const ALL: [Power; {}] = [", powers.len()).unwrap();
+    writeln!(out, "    const ALL: &'static [Self] = &[").unwrap();
     for row in powers {
         writeln!(out, "        Power::{},", camel(&row[1])).unwrap();
     }
     writeln!(out, "    ];\n").unwrap();
 
     // By value, like `CardData`: the struct fits in a register, so a reference
-    // is larger than the thing it points at.
+    // would be larger than the thing it points at.
     writeln!(
         out,
         "    /// What is true of the power with no combat running.\n\
@@ -461,7 +480,7 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
          \x20   /// debuffs, and the temporary family that decides at the time."
     )
     .unwrap();
-    writeln!(out, "    pub const fn data(self) -> PowerData {{").unwrap();
+    writeln!(out, "    fn data(self) -> PowerData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for row in powers {
         writeln!(
@@ -475,7 +494,28 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    // Read straight off `data().kind` rather than tabulated a second time: two
+    // lists of the same fact drift, and this one is already generated.
+    writeln!(
+        out,
+        "impl sts2_core::PowerTable for Power {{\n\
+         \x20   /// Whether the game counts this as a debuff.\n\
+         \x20   ///\n\
+         \x20   /// `None` for the powers whose type is `dynamic` in the dump:\n\
+         \x20   /// they decide at the time, and a caller wanting the answer for\n\
+         \x20   /// an amount has to ask the creature.\n\
+         \x20   fn debuff(self) -> Option<bool> {{\n\
+         \x20       match <Self as sts2_core::Table>::data(self).kind {{\n\
+         \x20           Field::Constant(PowerType::Debuff) => Some(true),\n\
+         \x20           Field::Constant(PowerType::Buff) => Some(false),\n\
+         \x20           Field::Computed => None,\n\
+         \x20       }}\n\
+         \x20   }}\n\
+         }}"
+    )
+    .unwrap();
 
     Ok(())
 }

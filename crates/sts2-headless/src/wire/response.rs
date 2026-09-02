@@ -1,15 +1,31 @@
-//! What the game sends back.
-//! The envelope is typed, but the observation payload is not. `state` remains a [`serde_json::Value`] until the simulator defines the required shape. The raw value preserves every reported field.
-//! That argument covers the payload and not the envelope. The difference once mattered: [`Response::Pending`] carried `digest` and `state` on the wire with no fields to receive them, so serde discarded both on every pending. Envelope drift is what the protocol version in the handshake is for, and [`crate::Game`] checks it.
+//! What the game sends back, as an envelope.
+//!
+//! The protocol's own shape: a sequence number, the command it answers, the
+//! game's own digest, and a payload. None of that is a fact about the run, so
+//! none of it survives into [`sts2_core::Applied`]. That is what
+//! [`Response::applied`] produces.
+//!
+//! `state` stays a [`serde_json::Value`] here and is read into
+//! [`sts2_core::Observation`] on the way out. A `&Value` is a `Deserializer`,
+//! so the mirror is built out of the state where it sits. The relay in
+//! `sts2-cli` hands the same value on without reading it.
+//!
+//! This crate is strict about the envelope for a reason the crate README
+//! records. Envelope drift is what the protocol version in the handshake is
+//! for, and [`crate::Oracle`] checks it.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// A request that the game accepted.
 ///
-/// Exactly one reply arrives per request, though not always the kind the command implies, anything can be answered with [`Response::Pending`].
+/// Exactly one reply arrives per request, though not always the kind the command
+/// implies. Anything can be answered with [`Response::Pending`].
 ///
-/// Two messages are deliberately absent. A [`Refusal`] is the inner `Err` of a [`crate::Reply`] rather than a variant here, since it is the one reply that means nothing happened. And the greeting arrives once, before any request, and [`crate::Game`] consumes it during the handshake. Therefore a variant for it is one every caller must match and none can ever receive.
+/// Two messages are deliberately absent. A [`sts2_core::Refusal`] is the inner
+/// `Err` of a [`crate::Reply`], since it is the one reply that means nothing
+/// happened. The greeting arrives once, before any request, and is consumed
+/// during the handshake.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
@@ -18,23 +34,29 @@ pub enum Response {
         /// Increments per observation or pending, not per request.
         seq: u64,
         cmd: String,
-        /// False when combat ended mid-cascade and the decision was abandoned rather than completed. Not an error, but a simulator that resolved it fully has diverged, even if the resulting state looks agreeable.
+        /// False when combat ended mid-cascade and the decision was abandoned
+        /// rather than completed. Not an error. But a simulator that resolved
+        /// it fully has diverged, even if the resulting state looks agreeable.
         resolved: bool,
         digest: String,
         /// The whole state the digest was taken over.
         state: Value,
-        /// Errors the game logged while running the command. Never suppressed: the command can have half-happened, and only the caller can decide whether to trust the state.
+        /// Errors the game logged while running the command. Never suppressed.
+        /// The command can have half-happened, and only the caller decides
+        /// whether to trust the state.
         #[serde(rename = "gameErrors", default)]
         game_errors: Option<Vec<String>>,
     },
 
     /// The game stopped mid-action to ask something.
     ///
-    /// Until it is answered the game accepts only [`crate::Command::Answer`], `Command::Observe` and `Command::Quit`.
+    /// Until it is answered the game accepts only [`crate::Command::Answer`],
+    /// `Command::Observe` and `Command::Quit`.
     Pending {
         seq: u64,
         cmd: String,
-        /// A parked game still reports where it is: `digest` and `state` are attached to a pending exactly as they are to an observation.
+        /// A parked game still reports where it is: `digest` and `state` are
+        /// attached to a pending exactly as they are to an observation.
         digest: String,
         state: Value,
         #[serde(flatten)]
@@ -47,9 +69,9 @@ pub enum Response {
 
 /// A refused command.
 ///
-/// Its own type rather than a [`Response`] variant, because it is the one reply that means the game did not move. [`crate::Game::send`] returns it in the inner `Err` of a [`crate::Reply`]: a refusal fails the command while leaving the session healthy. This is a different thing from the transport failing.
-///
-/// There is no state on one, for the same reason, nothing advanced, so whatever the caller already had is still current.
+/// Separate from [`Response`] because the game did not move. [`crate::Game::send`]
+/// returns it through the inner `Err` while the session remains healthy. It has
+/// no state because the caller.s prior state is still current.
 #[derive(Debug, Clone, Deserialize, thiserror::Error)]
 #[error("refused {cmd}: {message}")]
 pub struct Refusal {
@@ -184,7 +206,9 @@ mod tests {
         serde_json::from_str(line).expect("sample should parse")
     }
 
-    /// The client always asks for full observations, so one arriving without state means the game disagreed about that. Refusing it is the point of `state` not being an `Option`.
+    /// The client always asks for full observations, so one arriving without
+    /// state means the game disagreed about that. Refusing it is the point of
+    /// `state` not being an `Option`.
     #[test]
     fn an_observation_without_state_is_refused() {
         let err = serde_json::from_str::<Response>(
@@ -239,7 +263,9 @@ mod tests {
         assert_eq!(game_errors.as_deref(), Some(&["boom".to_string()][..]));
     }
 
-    /// Regression. `Pending` had no fields for `digest` or `state`, and serde drops what it has nowhere to put. Therefore every pending silently threw away the state of a parked game, which is when you most want it.
+    /// Regression. `Pending` had no fields for `digest` or `state`, and serde
+    /// drops what it has nowhere to put. So every pending silently threw away
+    /// the state of a parked game, which is when you most want it.
     #[test]
     fn a_pending_reports_where_the_game_is() {
         let r = parse(

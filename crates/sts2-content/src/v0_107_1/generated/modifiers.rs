@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Which list a run offers a modifier from.
 ///
 /// The two are `ModelDb.GoodModifiers` and `BadModifiers`, and a
-/// modifier in neither is one no run can pick at all, that is no kind
+/// modifier in neither is one no run can pick at all — that is no kind
 /// rather than a third one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -76,6 +76,20 @@ impl ModifierFlags {
 impl std::fmt::Debug for ModifierFlags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_set().entries(self.iter()).finish()
+    }
+}
+
+impl sts2_core::FlagSet for ModifierFlags {
+    type Member = ModifierFlag;
+
+    const MEMBERS: &'static [ModifierFlag] = &Self::MEMBERS;
+
+    fn from_members(members: &[ModifierFlag]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: ModifierFlag) -> bool {
+        Self::contains(self, member)
     }
 }
 
@@ -298,11 +312,25 @@ impl std::fmt::Debug for ModifierSet {
     }
 }
 
+impl sts2_core::FlagSet for ModifierSet {
+    type Member = Modifier;
+
+    const MEMBERS: &'static [Modifier] = &Self::MEMBERS;
+
+    fn from_members(members: &[Modifier]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: Modifier) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// The groups a run may take at most one modifier from.
 ///
 /// One group of three in this build, and a list of sets rather than a
 /// list of pairs because that is what the game holds: reading it as
-/// pairs is right today and wrong the moment a fourth member
+/// pairs would be right today and wrong the moment a fourth member
 /// arrived. `ModifierSet::intersects` is the question a caller has.
 pub const EXCLUSIVE: [ModifierSet; 1] = [ModifierSet::new(&[
     Modifier::Draft,

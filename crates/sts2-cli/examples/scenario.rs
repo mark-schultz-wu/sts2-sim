@@ -7,8 +7,8 @@
 
 use anyhow::bail;
 use nonmax::NonMaxU32;
-use sts2_content::ContentVersion;
 use sts2_content::v0_107_1::V0_107_1;
+use sts2_core::ContentVersion;
 use sts2_headless::{Command, Config, Game, Response};
 use sts2_rng::Seed;
 

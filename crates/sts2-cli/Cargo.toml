@@ -20,6 +20,7 @@ clap = { workspace = true }
 serde = { workspace = true }
 nonmax = { workspace = true }
 serde_json = { workspace = true }
+sts2-core = { workspace = true }
 sts2-content = { workspace = true, features = ["v0_107_1"] }
 sts2-headless = { workspace = true }
 sts2-rng = { workspace = true }

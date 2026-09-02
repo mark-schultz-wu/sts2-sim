@@ -87,7 +87,7 @@ pub enum Orb {
 /// `OrbModel.GetRandomOrb` is `rng.NextItem(_validOrbs)`, so this is
 /// that array and the order is which orb a given roll gives. It is not
 /// `ModelDb.Orbs`, which holds four of these and is used by nothing
-/// that plays, see the module docs.
+/// that plays — see the module docs.
 pub const ROLLABLE: [Orb; 5] = [
     Orb::LightningOrb,
     Orb::FrostOrb,

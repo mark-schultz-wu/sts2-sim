@@ -3,7 +3,7 @@
 //! Monsters more than one act's encounters can roll.
 //! Source: `dumps/monsters.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
-use super::{Attack, FollowUp, IntentKind, IntentSet, Intents, MonsterData, Move, State};
+use super::{Attack, FollowUp, IntentKind, IntentSet, Intents, MonsterData, Move, MoveId, State};
 use crate::{Field, Scaled};
 
 pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
@@ -18,6 +18,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
     initial: 0,
     states: &[
         State::Move(Move {
+            id: MoveId::ChargeUpMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Buff]),
@@ -26,6 +27,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ExpelMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),
@@ -43,6 +45,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::RepeaterBlastMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
@@ -60,6 +63,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::RepeaterBlastMove2,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
@@ -91,6 +95,7 @@ pub(super) const PUNCH_CONSTRUCT: MonsterData = MonsterData {
     initial: 1,
     states: &[
         State::Move(Move {
+            id: MoveId::FastPunchMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
@@ -108,6 +113,7 @@ pub(super) const PUNCH_CONSTRUCT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::ReadyMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Defend]),
@@ -116,6 +122,7 @@ pub(super) const PUNCH_CONSTRUCT: MonsterData = MonsterData {
             },
         }),
         State::Move(Move {
+            id: MoveId::StrongPunchMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
                 kinds: IntentSet::new(&[IntentKind::Attack]),

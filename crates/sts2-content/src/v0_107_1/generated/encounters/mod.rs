@@ -7,6 +7,7 @@ use super::acts::Act;
 use super::monsters::Monster;
 use crate::{Few, Scaled};
 use serde::{Deserialize, Serialize};
+use sts2_core::Table;
 
 // `Family::None` is not generated: no encounter has it and nothing in the game names it: zero references in the whole assembly, its own declaration aside. `Tags` defaults to an empty sequence rather than to this, so the absence of a tag is already spelled as no tag.
 // `RoomType::Unassigned` is not generated: all eight uses are an absent answer, and one of them throws. `TryGetRoomTypeForTutorial` assigns it to its `out` before returning false; `RollRoomTypeFor` returns it for `MapPointType.Unassigned` and the reverse switch maps it back — not injectively, since `RoomType.Map` maps there too; `IBootstrapSettings` throws `ArgumentOutOfRangeException` on it; the three debug bootstrappers read it as `no room was chosen, enter the act`; and `AutoSlayer` waits for a room to stop being it, timing out with `Room type not assigned`. So it is `Option<RoomType>` at whatever site asks, and no encounter is ever in one — all 96 are Monster, Elite or Boss.
@@ -135,6 +136,20 @@ impl std::fmt::Debug for FamilySet {
     }
 }
 
+impl sts2_core::FlagSet for FamilySet {
+    type Member = Family;
+
+    const MEMBERS: &'static [Family] = &Self::MEMBERS;
+
+    fn from_members(members: &[Family]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: Family) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// A yes-or-no fact about a flagset.
 ///
 /// Three separate `EncounterModel` overrides rather than a game enum,
@@ -190,11 +205,25 @@ impl std::fmt::Debug for FlagSet {
     }
 }
 
+impl sts2_core::FlagSet for FlagSet {
+    type Member = EncounterFlag;
+
+    const MEMBERS: &'static [EncounterFlag] = &Self::MEMBERS;
+
+    fn from_members(members: &[EncounterFlag]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: EncounterFlag) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// Which of an encounter's slots a monster stands in.
 ///
 /// An index, not a name: slot names are encounter-local scene
-/// positions with no shared vocabulary, 44 of them across 96
-/// encounters, and nothing outside the game ever sees one. Capped
+/// positions with no shared vocabulary — 44 of them across 96
+/// encounters — and nothing outside the game ever sees one. Capped
 /// rather than a `u8` so that the spare values leave a niche, which is
 /// what makes `Option<Slot>` cost nothing beside a `Monster`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -236,7 +265,7 @@ pub struct Spawn {
 /// The monsters a fight opens with, in order.
 pub type Spawns = Few<Spawn, 4>;
 
-/// Every monster an encounter can ever field.
+/// Every monster an encounter could ever field.
 pub type Possible = Few<Monster, 6>;
 
 /// Who is on the board when the fight starts.
@@ -281,7 +310,7 @@ pub struct EncounterData {
 /// Every encounter in the build.
 ///
 /// Flat, and ordered by the game's own id. The generated files group by
-/// room type, which is what `ActModel` itself groups them by, it
+/// room type, which is what `ActModel` itself groups them by — it
 /// caches `AllRegularEncounters`, `AllEliteEncounters` and
 /// `AllBossEncounters` as three filters on exactly that.
 ///
@@ -483,10 +512,12 @@ pub enum Encounter {
     WaterfallGiantBoss,
 }
 
-impl Encounter {
+impl sts2_core::Table for Encounter {
+    type Data = EncounterData;
+
     /// Every encounter, so callers can sweep the table without a way
     /// to enumerate an enum.
-    pub const ALL: [Encounter; 96] = [
+    const ALL: &'static [Self] = &[
         Encounter::AeonglassBoss,
         Encounter::AxebotsNormal,
         Encounter::BattlewornDummyEventEncounter,
@@ -585,113 +616,10 @@ impl Encounter {
         Encounter::WaterfallGiantBoss,
     ];
 
-    /// The acts whose map can roll this encounter. Empty for one an
-    /// event starts instead, and for the mocks.
-    pub const fn acts(self) -> &'static [Act] {
-        match self {
-            Self::AeonglassBoss => &[Act::Glory],
-            Self::AxebotsNormal => &[Act::Glory],
-            Self::BattlewornDummyEventEncounter => &[],
-            Self::BowlbugsNormal => &[Act::Hive],
-            Self::BowlbugsWeak => &[Act::Hive],
-            Self::BygoneEffigyElite => &[Act::Overgrowth],
-            Self::ByrdonisElite => &[Act::Overgrowth],
-            Self::CeremonialBeastBoss => &[Act::Overgrowth],
-            Self::ChompersNormal => &[Act::Hive],
-            Self::ConstructMenagerieNormal => &[Act::Glory],
-            Self::CorpseSlugsNormal => &[Act::Underdocks],
-            Self::CorpseSlugsWeak => &[Act::Underdocks],
-            Self::CubexConstructNormal => &[Act::Overgrowth],
-            Self::CultistsNormal => &[Act::Underdocks],
-            Self::DecimillipedeElite => &[Act::Hive],
-            Self::DenseVegetationEventEncounter => &[],
-            Self::DeprecatedEncounter => &[],
-            Self::DevotedSculptorWeak => &[Act::Glory],
-            Self::EntomancerElite => &[Act::Hive],
-            Self::ExoskeletonsNormal => &[Act::Hive],
-            Self::ExoskeletonsWeak => &[Act::Hive],
-            Self::FabricatorNormal => &[Act::Glory],
-            Self::FakeMerchantEventEncounter => &[],
-            Self::FlyconidNormal => &[Act::Overgrowth],
-            Self::FogmogNormal => &[Act::Overgrowth],
-            Self::FossilStalkerNormal => &[Act::Underdocks],
-            Self::FrogKnightNormal => &[Act::Glory],
-            Self::FuzzyWurmCrawlerWeak => &[Act::Overgrowth],
-            Self::GlobeHeadNormal => &[Act::Glory],
-            Self::GremlinMercNormal => &[Act::Underdocks],
-            Self::HauntedShipNormal => &[Act::Underdocks],
-            Self::HunterKillerNormal => &[Act::Hive],
-            Self::InfestedPrismsElite => &[Act::Hive],
-            Self::InkletsNormal => &[Act::Overgrowth],
-            Self::KaiserCrabBoss => &[Act::Hive],
-            Self::KnightsElite => &[Act::Glory],
-            Self::KnowledgeDemonBoss => &[Act::Hive],
-            Self::LagavulinMatriarchBoss => &[Act::Underdocks],
-            Self::LivingFogNormal => &[Act::Underdocks],
-            Self::LouseProgenitorNormal => &[Act::Hive],
-            Self::MawlerNormal => &[Act::Overgrowth],
-            Self::MechaKnightElite => &[Act::Glory],
-            Self::MockArtifactEncounter => &[],
-            Self::MockAttackAndSummonEncounter => &[],
-            Self::MockBossEncounter => &[],
-            Self::MockEliteEncounter => &[],
-            Self::MockMonsterEncounter => &[],
-            Self::MockNoRewardsEncounter => &[],
-            Self::MockPlatingEncounter => &[],
-            Self::MockTwoMonsterEncounter => &[],
-            Self::MysteriousKnightEventEncounter => &[],
-            Self::MytesNormal => &[Act::Hive],
-            Self::NibbitsNormal => &[Act::Overgrowth],
-            Self::NibbitsWeak => &[Act::Overgrowth],
-            Self::OvergrowthCrawlers => &[Act::Overgrowth],
-            Self::OvicopterNormal => &[Act::Hive],
-            Self::OwlMagistrateNormal => &[Act::Glory],
-            Self::PhantasmalGardenersElite => &[Act::Underdocks],
-            Self::PhrogParasiteElite => &[Act::Overgrowth],
-            Self::PunchConstructNormal => &[Act::Underdocks],
-            Self::PunchOffEventEncounter => &[],
-            Self::QueenBoss => &[Act::Glory],
-            Self::RubyRaidersNormal => &[Act::Overgrowth],
-            Self::ScrollsOfBitingNormal => &[Act::Glory],
-            Self::ScrollsOfBitingWeak => &[Act::Glory],
-            Self::SeapunkNormal => &[Act::Underdocks],
-            Self::SeapunkWeak => &[Act::Underdocks],
-            Self::SewerClamNormal => &[Act::Underdocks],
-            Self::ShrinkerBeetleWeak => &[Act::Overgrowth],
-            Self::SkulkingColonyElite => &[Act::Underdocks],
-            Self::SlimedBerserkerNormal => &[Act::Glory],
-            Self::SlimesNormal => &[Act::Overgrowth],
-            Self::SlimesWeak => &[Act::Overgrowth],
-            Self::SlitheringStranglerNormal => &[Act::Overgrowth],
-            Self::SludgeSpinnerWeak => &[Act::Underdocks],
-            Self::SlumberingBeetleNormal => &[Act::Hive],
-            Self::SnappingJaxfruitNormal => &[Act::Overgrowth],
-            Self::SoulFyshBoss => &[Act::Underdocks],
-            Self::SoulNexusElite => &[Act::Glory],
-            Self::SpinyToadNormal => &[Act::Hive],
-            Self::TerrorEelElite => &[Act::Underdocks],
-            Self::TestSubjectBoss => &[Act::Glory],
-            Self::TheArchitectEventEncounter => &[],
-            Self::TheInsatiableBoss => &[Act::Hive],
-            Self::TheKinBoss => &[Act::Overgrowth],
-            Self::TheLostAndForgottenNormal => &[Act::Glory],
-            Self::TheObscuraNormal => &[Act::Hive],
-            Self::ThievingHopperWeak => &[Act::Hive],
-            Self::ToadpolesWeak => &[Act::Underdocks],
-            Self::TunnelerNormal => &[],
-            Self::TunnelerWeak => &[Act::Hive],
-            Self::TurretOperatorWeak => &[Act::Glory],
-            Self::TwoTailedRatsNormal => &[Act::Underdocks],
-            Self::VantomBoss => &[Act::Overgrowth],
-            Self::VineShamblerNormal => &[Act::Overgrowth],
-            Self::WaterfallGiantBoss => &[Act::Underdocks],
-        }
-    }
-
     /// The room, the roster and the rewards.
     ///
     /// One arm per encounter, naming the file its row lives in.
-    pub const fn data(self) -> EncounterData {
+    fn data(self) -> EncounterData {
         match self {
             Self::AeonglassBoss => boss::AEONGLASS_BOSS,
             Self::AxebotsNormal => normal::AXEBOTS_NORMAL,
@@ -793,6 +721,118 @@ impl Encounter {
     }
 }
 
+impl sts2_core::EncounterTable for Encounter {
+    type Act = Act;
+    type Room = RoomType;
+
+    /// The acts whose map can roll this encounter. Empty for one an
+    /// event starts instead, and for the mocks.
+    fn acts(self) -> &'static [Act] {
+        match self {
+            Self::AeonglassBoss => &[Act::Glory],
+            Self::AxebotsNormal => &[Act::Glory],
+            Self::BattlewornDummyEventEncounter => &[],
+            Self::BowlbugsNormal => &[Act::Hive],
+            Self::BowlbugsWeak => &[Act::Hive],
+            Self::BygoneEffigyElite => &[Act::Overgrowth],
+            Self::ByrdonisElite => &[Act::Overgrowth],
+            Self::CeremonialBeastBoss => &[Act::Overgrowth],
+            Self::ChompersNormal => &[Act::Hive],
+            Self::ConstructMenagerieNormal => &[Act::Glory],
+            Self::CorpseSlugsNormal => &[Act::Underdocks],
+            Self::CorpseSlugsWeak => &[Act::Underdocks],
+            Self::CubexConstructNormal => &[Act::Overgrowth],
+            Self::CultistsNormal => &[Act::Underdocks],
+            Self::DecimillipedeElite => &[Act::Hive],
+            Self::DenseVegetationEventEncounter => &[],
+            Self::DeprecatedEncounter => &[],
+            Self::DevotedSculptorWeak => &[Act::Glory],
+            Self::EntomancerElite => &[Act::Hive],
+            Self::ExoskeletonsNormal => &[Act::Hive],
+            Self::ExoskeletonsWeak => &[Act::Hive],
+            Self::FabricatorNormal => &[Act::Glory],
+            Self::FakeMerchantEventEncounter => &[],
+            Self::FlyconidNormal => &[Act::Overgrowth],
+            Self::FogmogNormal => &[Act::Overgrowth],
+            Self::FossilStalkerNormal => &[Act::Underdocks],
+            Self::FrogKnightNormal => &[Act::Glory],
+            Self::FuzzyWurmCrawlerWeak => &[Act::Overgrowth],
+            Self::GlobeHeadNormal => &[Act::Glory],
+            Self::GremlinMercNormal => &[Act::Underdocks],
+            Self::HauntedShipNormal => &[Act::Underdocks],
+            Self::HunterKillerNormal => &[Act::Hive],
+            Self::InfestedPrismsElite => &[Act::Hive],
+            Self::InkletsNormal => &[Act::Overgrowth],
+            Self::KaiserCrabBoss => &[Act::Hive],
+            Self::KnightsElite => &[Act::Glory],
+            Self::KnowledgeDemonBoss => &[Act::Hive],
+            Self::LagavulinMatriarchBoss => &[Act::Underdocks],
+            Self::LivingFogNormal => &[Act::Underdocks],
+            Self::LouseProgenitorNormal => &[Act::Hive],
+            Self::MawlerNormal => &[Act::Overgrowth],
+            Self::MechaKnightElite => &[Act::Glory],
+            Self::MockArtifactEncounter => &[],
+            Self::MockAttackAndSummonEncounter => &[],
+            Self::MockBossEncounter => &[],
+            Self::MockEliteEncounter => &[],
+            Self::MockMonsterEncounter => &[],
+            Self::MockNoRewardsEncounter => &[],
+            Self::MockPlatingEncounter => &[],
+            Self::MockTwoMonsterEncounter => &[],
+            Self::MysteriousKnightEventEncounter => &[],
+            Self::MytesNormal => &[Act::Hive],
+            Self::NibbitsNormal => &[Act::Overgrowth],
+            Self::NibbitsWeak => &[Act::Overgrowth],
+            Self::OvergrowthCrawlers => &[Act::Overgrowth],
+            Self::OvicopterNormal => &[Act::Hive],
+            Self::OwlMagistrateNormal => &[Act::Glory],
+            Self::PhantasmalGardenersElite => &[Act::Underdocks],
+            Self::PhrogParasiteElite => &[Act::Overgrowth],
+            Self::PunchConstructNormal => &[Act::Underdocks],
+            Self::PunchOffEventEncounter => &[],
+            Self::QueenBoss => &[Act::Glory],
+            Self::RubyRaidersNormal => &[Act::Overgrowth],
+            Self::ScrollsOfBitingNormal => &[Act::Glory],
+            Self::ScrollsOfBitingWeak => &[Act::Glory],
+            Self::SeapunkNormal => &[Act::Underdocks],
+            Self::SeapunkWeak => &[Act::Underdocks],
+            Self::SewerClamNormal => &[Act::Underdocks],
+            Self::ShrinkerBeetleWeak => &[Act::Overgrowth],
+            Self::SkulkingColonyElite => &[Act::Underdocks],
+            Self::SlimedBerserkerNormal => &[Act::Glory],
+            Self::SlimesNormal => &[Act::Overgrowth],
+            Self::SlimesWeak => &[Act::Overgrowth],
+            Self::SlitheringStranglerNormal => &[Act::Overgrowth],
+            Self::SludgeSpinnerWeak => &[Act::Underdocks],
+            Self::SlumberingBeetleNormal => &[Act::Hive],
+            Self::SnappingJaxfruitNormal => &[Act::Overgrowth],
+            Self::SoulFyshBoss => &[Act::Underdocks],
+            Self::SoulNexusElite => &[Act::Glory],
+            Self::SpinyToadNormal => &[Act::Hive],
+            Self::TerrorEelElite => &[Act::Underdocks],
+            Self::TestSubjectBoss => &[Act::Glory],
+            Self::TheArchitectEventEncounter => &[],
+            Self::TheInsatiableBoss => &[Act::Hive],
+            Self::TheKinBoss => &[Act::Overgrowth],
+            Self::TheLostAndForgottenNormal => &[Act::Glory],
+            Self::TheObscuraNormal => &[Act::Hive],
+            Self::ThievingHopperWeak => &[Act::Hive],
+            Self::ToadpolesWeak => &[Act::Underdocks],
+            Self::TunnelerNormal => &[],
+            Self::TunnelerWeak => &[Act::Hive],
+            Self::TurretOperatorWeak => &[Act::Glory],
+            Self::TwoTailedRatsNormal => &[Act::Underdocks],
+            Self::VantomBoss => &[Act::Overgrowth],
+            Self::VineShamblerNormal => &[Act::Overgrowth],
+            Self::WaterfallGiantBoss => &[Act::Underdocks],
+        }
+    }
+
+    /// Monster, elite or boss — the room the encounter is.
+    fn room(self) -> RoomType {
+        self.data().room
+    }
+}
 mod boss;
 mod elite;
 mod normal;
