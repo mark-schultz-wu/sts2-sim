@@ -11,7 +11,6 @@ pub mod moves;
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use nonmax::NonMaxU32;
-use serde::de::DeserializeOwned;
 use std::path::Path;
 use sts2_core::ContentVersion;
 use sts2_core::{Answer as GameAnswer, Coord, Decision, Gift, Setup, Step, TakeReward, Tool};
@@ -27,13 +26,13 @@ pub fn ascension<V: ContentVersion>(spelling: &str) -> Result<V::AscensionLevel>
 }
 
 /// Parses an id from the game's own spelling of it.
-fn id<T: DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
+fn id<T: serde::de::DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
     let article = match what.starts_with(['a', 'e', 'i', 'o', 'u']) {
         true => "an",
         false => "a",
     };
 
-    serde_json::from_value(serde_json::Value::String(spelling.to_string()))
+    crate::id::parse(spelling)
         .with_context(|| format!("{spelling:?} is not {article} {what} this build has"))
 }
 

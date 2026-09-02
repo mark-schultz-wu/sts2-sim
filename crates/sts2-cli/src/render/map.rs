@@ -14,25 +14,6 @@ use super::spelling;
 use std::fmt::Write as _;
 use sts2_core::{ContentVersion, Coord, Map};
 
-/// A letter per room type, close to the game's icons where one exists.
-///
-/// By the build's own name for the type rather than by a discriminant. This
-/// crate does not know which map point types a build has. A name it has not
-/// heard of is a dot rather than a reason to stop drawing.
-fn glyph(kind: &str) -> char {
-    match kind {
-        "Monster" => 'M',
-        "Elite" => 'E',
-        "Shop" => '$',
-        "Treasure" => 'T',
-        "RestSite" => 'R',
-        "Unknown" => '?',
-        "Boss" => 'B',
-        "Ancient" => 'A',
-        _ => '.',
-    }
-}
-
 /// The act as a picture, or nothing if the observation carried no graph.
 ///
 /// Returns a `String` rather than writing through a formatter, because the whole
@@ -55,7 +36,7 @@ pub fn drawn<V: ContentVersion>(map: &Map<V>) -> Option<String> {
     for row in (bottom..=top).rev() {
         let mut line = vec![' '; width];
         for p in map.points.iter().filter(|p| p.at.row == row) {
-            let mut mark = glyph(&spelling(&p.kind));
+            let mut mark = crate::map_point::mark(&spelling(&p.kind)).glyph;
             // A node already walked through is shown lowercase rather than
             // hidden: the route taken is what makes the rest of the map
             // readable, and on a second act the row numbers alone do not say

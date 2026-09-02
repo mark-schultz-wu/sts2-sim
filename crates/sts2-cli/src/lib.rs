@@ -8,6 +8,8 @@ pub mod cli;
 pub mod coverage;
 #[cfg(test)]
 pub(crate) mod fixture;
+pub mod id;
+pub mod map_point;
 pub mod render;
 pub mod runs;
 pub mod tui;

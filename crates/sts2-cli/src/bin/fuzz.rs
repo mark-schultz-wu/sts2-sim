@@ -265,7 +265,7 @@ fn where_it_is(applied: &Applied<V>) -> String {
 
 /// Parses an id from the game's own spelling of it.
 fn id<T: serde::de::DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
-    serde_json::from_value(serde_json::Value::String(spelling.to_string()))
+    sts2_cli::id::parse(spelling)
         .with_context(|| format!("{spelling:?} is not {what} this build has"))
 }
 

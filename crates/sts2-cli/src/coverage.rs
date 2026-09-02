@@ -11,8 +11,8 @@
 //! Ids remain strings so coverage can retain names absent from this build.s
 //! tables. Such a name is itself evidence that the table and game disagree.
 
+use crate::id::spelling;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeSet;
 use sts2_core::{
     Applied, CardIdent, CardTable, CharacterTable, Combat, ContentVersion, Decision,
@@ -487,15 +487,7 @@ fn slice<T: Copy>(every: &[(T, String)], keys: &Keys<T>, seen: &BTreeSet<String>
 
 /// Ids as the game spells them, which is their serialisation and nothing else.
 fn spellings<T: serde::Serialize>(values: &[T]) -> Vec<String> {
-    values.iter().filter_map(spelling).collect()
-}
-
-/// One id, as the game spells it.
-fn spelling<T: serde::Serialize>(id: &T) -> Option<String> {
-    match serde_json::to_value(id).ok()? {
-        Value::String(s) => Some(s),
-        _ => None,
-    }
+    values.iter().filter_map(crate::id::spelling).collect()
 }
 
 #[cfg(test)]
