@@ -55,8 +55,12 @@ struct Cli {
     #[arg(long, global = true)]
     rng: bool,
 
+    /// Nothing at all opens the game, held on the screen and played with the
+    /// keyboard. Subcommands form the non-interactive surface a script or agent drives:
+    /// one move per process, so the caller can read each answer before
+    /// deciding the next.
     #[command(subcommand)]
-    command: Top,
+    command: Option<Top>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -281,7 +285,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let show = Show { rng: cli.rng };
 
-    let command = grouped(cli.command);
+    let Some(top) = cli.command else {
+        return play(show);
+    };
+
+    let command = grouped(top);
 
     match command {
         Command::Serve {
@@ -390,6 +398,34 @@ fn main() -> Result<()> {
             report(&game, seen, show)
         }
     }
+}
+
+/// Opens the game on the screen.
+///
+/// The daemon is not started for this. A run is begun with `sts2 run start`,
+/// which is one line and says what it does. Bringing the game up on a bare
+/// `sts2` means twenty seconds of nothing, followed by a screen with no run in
+/// it. It also gives the player no way to say which seed they wanted.
+fn play(show: Show) -> Result<()> {
+    // The daemon comes up; the *game* does not. Launching the game is what
+    // costs twenty seconds, and the daemon only does that when a command needs
+    // one — so a bare `sts2` opens on the setup screen straight away and the
+    // game boots while the player is picking a character.
+    let fresh = !daemon::running();
+    if fresh {
+        daemon::spawn(serving(DEFAULT_IDLE_TIMEOUT)?)?;
+    }
+
+    let game = Game::new();
+    let recording = game.status().ok().and_then(|status| status.recording);
+    sts2_cli::tui::run::<V, _>(
+        game,
+        sts2_cli::tui::Options {
+            recording,
+            rng: show.rng,
+            fresh,
+        },
+    )
 }
 
 /// Sends one step and returns what any implementation says, refusals as errors.
