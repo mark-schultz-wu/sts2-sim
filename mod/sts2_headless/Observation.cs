@@ -8,12 +8,15 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
+using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
@@ -102,8 +105,13 @@ public static class Observation
             ["runOver"] = state.IsGameOver,
             ["victory"] = state.IsGameOver ? state.CurrentRoom?.IsVictoryRoom ?? false : null,
             ["gold"] = me.Gold,
-            ["relics"] = me.Relics.Select(Ident).ToList(),
-            ["potions"] = me.Potions.Select(p => p.Id.Entry).ToList(),
+            ["relics"] = me.Relics.Select(Carried).ToList(),
+            ["potions"] = me.Potions.Select(p => Held(p, me, state)).ToList(),
+
+            // The belt's size, not just what is in it. A full belt is what makes
+            // a potion refuse to be bought or taken, and `potions` alone cannot
+            // say whether three is full — relics change the count.
+            ["potionSlots"] = me.PotionSlots.Count,
             ["deck"] = me.Deck.Cards.Select(Ident).ToList(),
             ["inCombat"] = CombatManager.Instance.IsInProgress,
             ["map"] = MapPosition(state),
@@ -126,6 +134,15 @@ public static class Observation
                 ["phase"] = pcs.Phase.ToString(),
                 ["energy"] = pcs.Energy,
                 ["round"] = combat.RoundNumber,
+
+                // Which fight this is, which nothing else in the observation
+                // says: the roster is in `creatures`, but two encounters can
+                // field the same monsters at different counts and one monster
+                // appears in eleven of them. Absent for a combat with no
+                // encounter behind it -- `CombatState` allows one, and a null
+                // here is the difference between "some other fight" and "not a
+                // listed fight at all".
+                ["encounter"] = combat.Encounter?.Id.Entry,
                 ["hand"] = pcs.Hand.Cards.Select(Ident).ToList(),
                 ["draw"] = pcs.DrawPile.Cards.Select(Ident).ToList(),
                 ["discard"] = pcs.DiscardPile.Cards.Select(Ident).ToList(),
@@ -165,6 +182,21 @@ public static class Observation
     }
 
     /// <summary>Card identity: the id alone is not enough to compare two decks.</summary>
+    /// <remarks>
+    /// Everything a card carries that survives being put in a pile, because a
+    /// deck holding an upgraded Strike is not a deck holding a plain one and the
+    /// id is the same string either way. <c>CurrentUpgradeLevel</c>,
+    /// <c>Affliction</c> and <c>Enchantment</c> are the three, and they are the
+    /// same three <c>CombatState.IterateHookListeners</c> walks off a card.
+    ///
+    /// The separators are safe because an entry name cannot contain one:
+    /// <c>StringHelper.Slugify</c> ends in a <c>[^A-Z0-9_]</c> strip, so an id
+    /// is exactly those characters and nothing else.
+    ///
+    /// Packed into one string rather than an object per card, the way
+    /// <see cref="Id(ModelId)"/> packs a model id. A deck is forty of these and
+    /// four combat piles are more, so the key names would outweigh the values.
+    /// </remarks>
     public static string Ident(CardModel card)
     {
         string s = card.Id.Entry;
@@ -176,10 +208,241 @@ public static class Observation
         {
             s += "/" + card.Affliction.Id.Entry;
         }
+        if (card.Enchantment != null)
+        {
+            s += "*" + card.Enchantment.Id.Entry;
+        }
         return s;
     }
 
     private static string Ident(RelicModel relic) => relic.Id.Entry;
+
+    /// <summary>The words a <c>LocString</c> stands for, or nothing.</summary>
+    /// <remarks>
+    /// <c>GetFormattedText</c> throws a <c>LocException</c> for a key the table
+    /// does not have, and a missing key is ordinary: Neow's event has no page
+    /// description, and an option built with a title and no description gets a
+    /// <c>LocString</c> pointing at a key nobody wrote. <c>Exists</c> is the
+    /// game's own way of asking, so this reports absence as absence rather than
+    /// losing the whole observation to a key that was never going to be there.
+    ///
+    /// Not a try/catch: an exception thrown and swallowed on every observation
+    /// would hide a table that genuinely failed to load behind one that simply
+    /// has nothing to say here.
+    /// </remarks>
+    private static string? Words(LocString? loc) =>
+        loc != null && loc.Exists() ? loc.GetFormattedText() : null;
+
+    /// <summary>An event's prose, prepared the way the event room prepares it.</summary>
+    /// <remarks>
+    /// An event's text is not a fixed string. <em>Gain <c>{MaxHp}</c> Max HP</em>
+    /// is formatted against the event's <c>DynamicVars</c>, exactly as a card's
+    /// text is formatted against its own, and formatting it without them throws a
+    /// <c>FormattingException</c> rather than returning the raw string — so this
+    /// is not a nicety, it is what makes the field readable at all.
+    ///
+    /// The preparation mirrors <c>NEventRoom.SetDescription</c> and
+    /// <c>NEventOptionButton._Ready</c>, which are the two places the game itself
+    /// does it: the character's details, whether the run is multiplayer, and the
+    /// event's vars. Mirrored rather than reduced to "add the vars", because a
+    /// description referring to the character by name is written the same way and
+    /// would fail the same way.
+    ///
+    /// The event's <em>title</em> is deliberately not prepared: <c>SetTitle</c>
+    /// formats it bare, so a title that needed a variable would be a bug in the
+    /// game rather than here.
+    ///
+    /// This mutates the <c>LocString</c> — <c>Add</c> writes to a dictionary on
+    /// it — which is what the game's own screens do to the same objects. Nothing
+    /// the digest covers is touched.
+    /// </remarks>
+    private static string? Words(EventModel ev, LocString? loc)
+    {
+        if (loc == null || !loc.Exists())
+        {
+            return null;
+        }
+
+        ev.Owner?.Character.AddDetailsTo(loc);
+        if (ev.Owner != null)
+        {
+            loc.Add("IsMultiplayer", ev.Owner.RunState.Players.Count > 1);
+        }
+        ev.DynamicVars.AddTo(loc);
+        return loc.GetFormattedText();
+    }
+
+    /// <summary>One relic, and the words the game shows for it.</summary>
+    /// <remarks>
+    /// <c>DynamicDescription</c> rather than the raw <c>Description</c>: a relic
+    /// that counts prints its count, and formatting the string without the
+    /// variables throws rather than returning the unformatted text. It is what
+    /// <c>RelicModel.HoverTip</c> uses, so this is the same sentence a player
+    /// reads by hovering the relic.
+    ///
+    /// The two <c>HoverTip</c> wrappers are deliberately not mirrored. A melted
+    /// or used-up relic reads <em>"&lt;description&gt; (Melted)"</em> on screen,
+    /// which is a fact already in <c>flags</c> and does not belong glued to the
+    /// prose as well.
+    /// </remarks>
+    private static Dictionary<string, object?> Carried(RelicModel relic) =>
+        new()
+        {
+            ["id"] = relic.Id.Entry,
+            ["title"] = Words(relic.Title),
+            ["text"] = Words(relic.DynamicDescription),
+        };
+
+    /// <summary>One potion in the belt, and whether it can be drunk.</summary>
+    /// <remarks>
+    /// Deliberately the same shape as one card in <c>legal</c>: a reason that is
+    /// absent exactly when it can be drunk, and the creatures it may be pointed
+    /// at. A client applies no rule of its own — deciding this is the
+    /// implementation's job, and two implementations that decide differently is
+    /// a divergence rather than a screen bug.
+    /// </remarks>
+    private static Dictionary<string, object?> Held(PotionModel potion, Player me, RunState state)
+    {
+        string? reason = Undrinkable(potion, me);
+        return new Dictionary<string, object?>
+        {
+            ["id"] = potion.Id.Entry,
+            ["title"] = Words(potion.Title),
+            ["text"] = Words(potion.DynamicDescription),
+            ["usable"] = reason == null,
+            ["reason"] = reason,
+            ["targets"] = Targets(potion, state),
+        };
+    }
+
+    /// <summary>Why a potion cannot be drunk right now, or null when it can.</summary>
+    /// <remarks>
+    /// The game has no enum for this: <c>NPotionPopup</c> decides by enabling
+    /// and disabling a button, in <c>_Ready</c>'s switch over
+    /// <c>PotionUsage</c> and then in <c>RefreshButtons</c>. This is that
+    /// decision written down. The order is the order the game applies it, so
+    /// the reason reported is the first one that holds.
+    ///
+    /// <c>internal</c> because <c>Protocol.UsePotion</c> asks the same question
+    /// before it enqueues: a refusal that can be decided without awaiting is
+    /// decided in front of the action, not inside it.
+    /// </remarks>
+    internal static string? Undrinkable(PotionModel potion, Player me)
+    {
+        if (me.Creature.IsDead)
+        {
+            return "Dead";
+        }
+
+        if (potion.IsQueued)
+        {
+            return "Queued";
+        }
+
+        if (!me.CanRemovePotions)
+        {
+            return "Stuck";
+        }
+
+        switch (potion.Usage)
+        {
+            case PotionUsage.Automatic:
+                return "Automatic";
+
+            case PotionUsage.AnyTime:
+                break;
+
+            case PotionUsage.CombatOnly:
+                if (!CombatManager.Instance.IsInProgress)
+                {
+                    return "OutOfCombat";
+                }
+
+                // The rest of `RefreshButtons`. `InACardSelectScreen` is a
+                // screen the headless game never puts up, so the two that can
+                // hold are whose turn it is and whether the game has actions
+                // disabled while something resolves.
+                if (me.Creature.CombatState?.CurrentSide != me.Creature.Side
+                    || !me.Creature.IsAlive
+                    || CombatManager.Instance.PlayerActionsDisabled)
+                {
+                    return "NotYourTurn";
+                }
+
+                break;
+
+            // `PotionUsage.None` throws in the game's own switch, so it is not
+            // a state any potion is in. Reported rather than thrown, because a
+            // refusal is an answer and a crashed oracle is not.
+            default:
+                return "Automatic";
+        }
+
+        return potion.PassesCustomUsabilityCheck ? null : "ItsOwnCheck";
+    }
+
+    /// <summary>Every creature a potion must be chosen between.</summary>
+    /// <remarks>
+    /// <c>PotionModel.IsValidTarget</c>, asked of each creature in the fight —
+    /// but only for the target types where a creature is genuinely chosen.
+    ///
+    /// That restriction is what makes this field mean the same thing it means
+    /// beside a card, and it is the game's own distinction rather than ours.
+    /// <c>CardModel.IsValidTarget</c> returns false for <em>any</em> non-null
+    /// target unless the type is <c>AnyEnemy</c> or <c>AnyAlly</c>, so a Self
+    /// card already reports no targets and is played with none.
+    /// <c>PotionModel.IsValidTarget</c> is written the other way and answers
+    /// true for <c>Self</c> and <c>AnyPlayer</c> as well — yet the game never
+    /// asks: <c>NPotionPopup</c> labels its button <em>throw</em> only for
+    /// <c>AnyEnemy</c>, <c>AllEnemies</c>, <c>TargetedNoCreature</c> and
+    /// <c>CanThrowAtAlly</c>, and <em>drink</em> otherwise.
+    ///
+    /// So a self-targeted potion reports nothing here and is drunk with no
+    /// target, which is exactly what the game's own screen sends:
+    /// <c>EnqueueManualUse</c> fills the drinker in. Swift Potion is the case
+    /// that shows why <c>CanThrowAtAlly</c> is asked rather than its target
+    /// type read: it is <c>AnyPlayer</c>, and in a single-player run there is
+    /// no other player to throw it at, so it is drunk.
+    ///
+    /// Empty outside combat too, where there are no combat ids to name.
+    /// </remarks>
+    private static List<uint> Targets(PotionModel potion, RunState state)
+    {
+        CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+        if (combat == null || !CombatManager.Instance.IsInProgress)
+        {
+            return new List<uint>();
+        }
+
+        // `CanThrowAtAlly` rather than `AnyPlayer`, because it is the game's own
+        // test and it carries the part an enum cannot: an `AnyPlayer` potion is
+        // a choice only when there is another player to throw it at. In single
+        // player Swift Potion is drunk, and the button says so.
+        if (potion.TargetType is not (TargetType.AnyEnemy or TargetType.AnyAlly)
+            && !potion.CanThrowAtAlly())
+        {
+            return new List<uint>();
+        }
+
+        return combat.Creatures
+            .Where(c => c.CombatId.HasValue && potion.IsValidTarget(c))
+            .Select(c => c.CombatId!.Value)
+            .ToList();
+    }
+
+    /// <summary>What a card says on its face, for a card nobody is holding.</summary>
+    /// <remarks>
+    /// The rules text with this card's own numbers in it — upgrades and
+    /// enchantments included, since both are on the model — but with no combat
+    /// hooks applied, because there is no combat to apply them from.
+    /// <see cref="Effects"/> is the in-hand version and does run them.
+    ///
+    /// For a reward or a selection prompt that is the right answer anyway: the
+    /// question is which card to add to a deck, and the numbers that matter are
+    /// the ones it will have in every fight rather than the ones it would have
+    /// in this one.
+    /// </remarks>
+    public static string Text(CardModel card) => card.GetDescriptionForPile(PileType.None);
 
     /// <summary>A model id whose category is not fixed by the field it sits in.</summary>
     /// <remarks>
@@ -319,8 +582,111 @@ public static class Observation
                 // category travels with it.
                 ["preventer"] = preventer is null ? null : Id(preventer.Id),
                 ["targets"] = alive.Where(card.CanPlayTargeting).Select(c => c.CombatId).ToList(),
+                ["effect"] = Effects(card, alive),
             };
         }
+    }
+
+    /// <summary>What the card will actually do, with everything applied.</summary>
+    /// <remarks>
+    /// A card's numbers are not static data. Strike's 6 becomes 9 with Strength,
+    /// 13 against a Vulnerable target, less again under Shrinker — and none of
+    /// that is anywhere in the generated tables, because none of it is a
+    /// property of the card. It is the answer <c>Hook.ModifyDamage</c> and
+    /// <c>Hook.ModifyBlock</c> give for this card, this owner, this target, right
+    /// now.
+    ///
+    /// The game computes it through <c>CardModel.UpdateDynamicVarPreview</c>,
+    /// which is what fills in the number the player reads off the card face, and
+    /// that is what runs here — the same call the UI makes, not a
+    /// reimplementation of it. So the numbers reported are the numbers the game
+    /// would print, and a simulator disagreeing with them is a real disagreement
+    /// rather than an artifact of this file.
+    ///
+    /// One entry per distinct outcome. A targeted attack is previewed against
+    /// each creature it may legally hit, because that is exactly where the
+    /// numbers differ; identical entries collapse to a single one with no
+    /// target, so an untargeted card and a card whose damage happens not to vary
+    /// both report once.
+    ///
+    /// Running the hooks costs nothing, in the sense that matters: the
+    /// observation is captured after the game is quiescent, <c>previewMode</c>
+    /// tells every listener this is a preview, and <c>ClearPreview</c> puts the
+    /// vars back. <see cref="Intents"/> has run <c>Hook.ModifyDamage</c> from
+    /// this same file since it was written, and digests are stable across it.
+    /// </remarks>
+    private static List<Dictionary<string, object?>> Effects(CardModel card, List<Creature> alive)
+    {
+        // Only a card that names a single creature can vary by target. AllEnemies
+        // and Self resolve the same way whoever is hovered, and previewing them
+        // once per enemy would report the same numbers three times.
+        List<Creature?> targets = card.TargetType is TargetType.AnyEnemy or TargetType.AnyAlly or TargetType.AnyPlayer
+            ? alive.Where(card.CanPlayTargeting).Select(c => (Creature?)c).ToList()
+            : new List<Creature?>();
+
+        // A targeted card with nothing legal to hit still has numbers, and a
+        // client that cannot see them cannot tell why it should not play it.
+        if (targets.Count == 0)
+        {
+            targets.Add(null);
+        }
+
+        var previews = new List<Dictionary<string, object?>>();
+        try
+        {
+            foreach (Creature? target in targets)
+            {
+                card.UpdateDynamicVarPreview(CardPreviewMode.Normal, target, card.DynamicVars);
+                previews.Add(new Dictionary<string, object?>
+                {
+                    ["target"] = target?.CombatId,
+                    ["text"] = card.GetDescriptionForPile(PileType.Hand, target),
+                    ["vars"] = card.DynamicVars.ToDictionary(
+                        v => v.Key, v => (object?)(int)v.Value.PreviewValue),
+
+                    // What the card prints, beside what it will do. The two
+                    // differ exactly when something is modifying the card, which
+                    // is the thing a player wants to be told — and the only
+                    // reliable way to say it. The game marks a moved number by
+                    // wrapping it in [green] or [red] inside `text`, but those
+                    // tags are also just colours: an event's "Lose [red]12[/red]
+                    // Max HP" is red because losing Max HP is bad, not because
+                    // 12 is not 12.
+                    //
+                    // BaseValue is the printed value including upgrades and
+                    // enchantment, since both write to it. So this is "the card
+                    // as it sits in the deck" against "the card as it would be
+                    // played right now", which is the comparison worth making.
+                    ["base"] = card.DynamicVars.ToDictionary(
+                        v => v.Key, v => (object?)(int)v.Value.BaseValue),
+                });
+            }
+        }
+        finally
+        {
+            // Not optional. The preview writes over PreviewValue and, for an
+            // enchanted card, EnchantedValue; leaving one card's hover state
+            // behind would make the next observation depend on this one.
+            card.DynamicVars.ClearPreview();
+        }
+
+        if (previews.Count > 1 && previews.Skip(1).All(p => Same(previews[0], p)))
+        {
+            previews[0]["target"] = null;
+            previews.RemoveRange(1, previews.Count - 1);
+        }
+
+        return previews;
+    }
+
+    /// <summary>Two previews that differ only in who they were computed against.</summary>
+    private static bool Same(Dictionary<string, object?> a, Dictionary<string, object?> b)
+    {
+        // `base` cannot differ between two previews of one card, so `vars` and
+        // the text are the whole comparison.
+        return (string?)a["text"] == (string?)b["text"]
+            && ((Dictionary<string, object?>)a["vars"]!).OrderBy(kv => kv.Key)
+                .SequenceEqual(((Dictionary<string, object?>)b["vars"]!).OrderBy(kv => kv.Key));
     }
 
     /// <summary>
@@ -362,6 +728,51 @@ public static class Observation
                 };
             }
 
+            case TreasureRoom:
+            {
+                // The chest's relics, as options. Entering the room calls
+                // `BeginRelicPicking`, which fills `CurrentRelics` and waits for
+                // a vote — so unlike every other room here, a treasure room that
+                // is never answered leaves the run holding an open session, and
+                // the *next* chest throws.
+                //
+                // Skipping is one of the options rather than a separate command
+                // because the screen offers it as a button beside the relics, and
+                // because `OnRoomExited` only clears the session when it was
+                // skipped: leaving without choosing is not a way out.
+                IReadOnlyList<RelicModel>? relics =
+                    RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics;
+                bool answered = !Chest.Open(me);
+
+                List<Dictionary<string, object?>> options = (relics ?? new List<RelicModel>())
+                    .Select((r, i) => new Dictionary<string, object?>
+                    {
+                        ["index"] = i,
+                        ["id"] = r.Id.Entry,
+                        ["relic"] = r.Id.Entry,
+                        ["chosen"] = answered,
+                    })
+                    .ToList();
+
+                if (relics != null)
+                {
+                    options.Add(new Dictionary<string, object?>
+                    {
+                        ["index"] = options.Count,
+                        ["id"] = "SKIP",
+                        ["skip"] = true,
+                        ["chosen"] = answered,
+                    });
+                }
+
+                return new Dictionary<string, object?>
+                {
+                    ["type"] = "Treasure",
+                    ["finished"] = answered,
+                    ["options"] = options,
+                };
+            }
+
             case EventRoom eventRoom:
             {
                 EventModel ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
@@ -370,10 +781,24 @@ public static class Observation
                     ["type"] = "Event",
                     ["id"] = ev.Id.Entry,
                     ["finished"] = ev.IsFinished,
+
+                    // The words, beside the keys. An event is the one room whose
+                    // whole content is prose: `BYRDONIS_NEST.pages.INITIAL.options.EAT`
+                    // names an option without saying anything about it, and a
+                    // client choosing between three of those is guessing.
+                    //
+                    // Localisation resolves headless — the tables load with the
+                    // rest of the game and do not need a scene — so this is the
+                    // game's own text rather than a second copy of it kept in
+                    // sync by hand.
+                    ["title"] = Words(ev.Title),
+                    ["text"] = Words(ev, ev.Description),
                     ["options"] = ev.CurrentOptions.Select((o, i) => new Dictionary<string, object?>
                     {
                         ["index"] = i,
                         ["key"] = o.TextKey,
+                        ["title"] = Words(ev, o.Title),
+                        ["text"] = Words(ev, o.Description),
                         ["locked"] = o.IsLocked,
                         ["proceed"] = o.IsProceed,
                         ["chosen"] = o.WasChosen,
@@ -396,6 +821,7 @@ public static class Observation
                         ["cost"] = e.Cost,
                         ["stocked"] = e.IsStocked,
                         ["affordable"] = e.EnoughGold,
+                        ["blocked"] = Blocked(e, me),
                     }).ToList(),
                 };
             }
@@ -404,6 +830,32 @@ public static class Observation
                 return null;
         }
     }
+
+    /// <summary>Why this entry cannot be bought, beyond stock and gold.</summary>
+    /// <remarks>
+    /// <c>IsStocked</c> and <c>EnoughGold</c> are the two checks
+    /// <c>MerchantEntry.OnTryPurchaseWrapper</c> makes before it commits, and
+    /// for most entries they are the whole story. A potion has a third: it is
+    /// procured into a slot, and <c>PotionCmd.TryToProcure</c> fails with
+    /// <c>TooFull</c> when there is none — so a shop can offer a potion that is
+    /// stocked, affordable, and refused. That was found by playing at random,
+    /// not by reading, which is the point of playing at random.
+    ///
+    /// The other way <c>TryToProcure</c> fails is <c>Hook.ShouldProcurePotion</c>
+    /// saying no, which cannot be answered without running the hook and so is not
+    /// reported. This says what is knowable, and a caller that trusts it further
+    /// than that will be corrected by the game.
+    ///
+    /// <c>internal</c> because <c>Protocol.Buy</c> asks the same question before
+    /// it commits: the purchase itself cannot be awaited, so every refusal that
+    /// can be decided without awaiting has to be decided in front of it, and
+    /// this is one of them.
+    /// </remarks>
+    internal static string? Blocked(MerchantEntry entry, Player me) => entry switch
+    {
+        MerchantPotionEntry when !me.HasOpenPotionSlots => "no potion slot",
+        _ => null,
+    };
 
     private static string? EntryId(MerchantEntry entry) => entry switch
     {
@@ -435,7 +887,54 @@ public static class Observation
                     ["at"] = Coord(p),
                     ["type"] = p.PointType.ToString(),
                 }).ToList(),
+            ["points"] = Points(state.Map),
+
+            // The one move the graph cannot express. An act's boss has no
+            // children, so `travelable` is correctly empty once it is beaten and
+            // the run has nowhere to go — `proceed` is how it leaves.
+            ["proceed"] = MapLegality.CanProceed(state)
+                && !CombatManager.Instance.IsInProgress,
         };
+    }
+
+    /// <summary>Every node in the act, and which nodes it leads on to.</summary>
+    /// <remarks>
+    /// The shape of the act, which does not change as it is played — not the
+    /// legal moves, which do. <c>travelable</c> is the other half: it depends on
+    /// where the run is standing and on free travel, and neither field can be
+    /// derived from the other. Anything drawing the map wants both.
+    ///
+    /// Edges are <c>Children</c> verbatim, which is what
+    /// <c>NMapScreen.DrawPaths</c> draws the lines from — so a picture built
+    /// from this is the picture the game would show. Nothing is inferred here;
+    /// in particular the edge from the last grid row to the boss is already in
+    /// <c>Children</c>, which is the fallback <see cref="MapLegality"/> relies
+    /// on.
+    ///
+    /// The starting node and both bosses sit outside <c>Grid</c>, so
+    /// <c>GetAllMapPoints</c> never yields them and they are added by hand.
+    /// </remarks>
+    private static List<Dictionary<string, object?>> Points(ActMap map)
+    {
+        IEnumerable<MapPoint> outside = map.SecondBossMapPoint == null
+            ? new[] { map.StartingMapPoint, map.BossMapPoint }
+            : new[] { map.StartingMapPoint, map.BossMapPoint, map.SecondBossMapPoint };
+
+        return map.GetAllMapPoints()
+            .Concat(outside)
+            .OrderBy(p => p.coord.row)
+            .ThenBy(p => p.coord.col)
+            .Select(p => new Dictionary<string, object?>
+            {
+                ["at"] = Coord(p),
+                ["type"] = p.PointType.ToString(),
+                ["to"] = p.Children
+                    .OrderBy(c => c.coord.row)
+                    .ThenBy(c => c.coord.col)
+                    .Select(Coord)
+                    .ToList(),
+            })
+            .ToList();
     }
 
     private static string Coord(MapPoint p) => $"{p.coord.col},{p.coord.row}";

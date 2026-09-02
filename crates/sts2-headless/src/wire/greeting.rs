@@ -1,12 +1,14 @@
 //! What the game says about itself before anything is asked of it.
 
 use crate::Error;
+use crate::stamp::Stamp;
 use serde::Deserialize;
 use serde_json::Value;
 use sts2_core::Version;
 
-/// The protocol version this crate speaks. A mismatch is refused at the handshake rather than discovered field by field later.
-pub const PROTOCOL_VERSION: u32 = 1;
+// Written by `build.rs`, which hashes the mod's source with the same script the
+// mod's own build runs. See that file for why it is derived rather than stored.
+include!(concat!(env!("OUT_DIR"), "/mod_identity.rs"));
 
 /// What the game said about itself when it connected.
 ///
@@ -15,7 +17,12 @@ pub const PROTOCOL_VERSION: u32 = 1;
 /// the response enum obliges every caller to match a case none can reach.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Greeting {
-    pub protocol: u32,
+    /// Which build of the mod answered, as a hash of its source.
+    ///
+    /// Optional only so that a mod too old to identify itself is reported as
+    /// the stale mod it is. Not as a greeting missing a field.
+    #[serde(rename = "mod")]
+    pub identity: Option<String>,
     /// The build's own version string, not a constant the mod carries.
     pub game: String,
     pub commit: String,
@@ -31,6 +38,41 @@ pub struct Greeting {
 }
 
 impl Greeting {
+    /// Whether this is the mod this client was built against.
+    ///
+    /// Its own check, beside [`Greeting::describes`]. That one asks which
+    /// *game* is running, and this asks which *mod* is answering. The crate
+    /// README says what the difference catches.
+    ///
+    /// Deliberately strict: an edit to the mod's source invalidates a deployed
+    /// build. Narrowing it to the files that shape the wire
+    /// means maintaining a list, and that list is what rots.
+    pub(crate) fn built_from_our_source(&self) -> Result<(), Error> {
+        match self.identity.as_deref() {
+            Some(found) if found == MOD_IDENTITY => Ok(()),
+            Some(found) => Err(Error::WrongMod {
+                expected: MOD_IDENTITY.to_string(),
+                found: found.to_string(),
+            }),
+            // A mod from before the greeting carried this. It cannot be the one
+            // we were built against, since ours does.
+            None => Err(Error::WrongMod {
+                expected: MOD_IDENTITY.to_string(),
+                found: "a mod too old to say".to_string(),
+            }),
+        }
+    }
+
+    /// Which build connected.
+    pub fn stamp(&self) -> Stamp {
+        Stamp {
+            game: self.game.clone(),
+            commit: self.commit.clone(),
+            assembly_hash: self.assembly_hash,
+            content_hash: self.content_hash,
+        }
+    }
+
     /// Whether this is the build a set of content tables describes.
     ///
     /// Checked at launch, against the [`ContentVersion`] the game was typed
@@ -41,21 +83,14 @@ impl Greeting {
     /// asks too. Answering that question twice is how the two answers come to
     /// differ.
     pub(crate) fn describes(&self, version: &Version) -> Result<(), Error> {
-        if self.content_hash != version.content_hash || self.assembly_hash != version.assembly_hash
-        {
-            return Err(Error::WrongBuild {
-                expected: format!(
-                    "{} ({}), assembly {}, content {}",
-                    version.name, version.commit, version.assembly_hash, version.content_hash
-                ),
-                found: format!(
-                    "{} ({}), assembly {}, content {}",
-                    self.game, self.commit, self.assembly_hash, self.content_hash
-                ),
-            });
+        let found = self.stamp();
+        match found.describes(version) {
+            true => Ok(()),
+            false => Err(Error::WrongBuild {
+                expected: Stamp::of(version).to_string(),
+                found: found.to_string(),
+            }),
         }
-
-        Ok(())
     }
 }
 

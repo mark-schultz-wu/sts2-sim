@@ -2,14 +2,19 @@
 name = "sts2-headless"
 version = "0.1.0"
 edition = "2024"
+readme = "README.md"
 
 [dependencies]
 nonmax = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# The shared vocabulary and `ContentVersion` trait.
+# The decisions, the recording format, the build stamp and `ContentVersion`:
+# what this crate is an implementation *of*. See docs/STS2-CORE.md.
+#
+# No dependency on `sts2-content` at all outside the tests. Driving a game is
+# generic over the build, so nothing here needs a build to exist -- only the
+# tests, which have to pick one to spell a decision.
 sts2-core = { workspace = true }
-sts2-rng = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

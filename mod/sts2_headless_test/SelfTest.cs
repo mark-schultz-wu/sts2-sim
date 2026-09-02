@@ -23,6 +23,7 @@ using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Modifiers;
+using MegaCrit.Sts2.Core.Models.Potions;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
@@ -144,6 +145,7 @@ public static class SelfTest
         state = await Driver.Restart();
 
         await AShopReportsItsStockAndSells(state);
+        await AChestHandsOverWhatWasPicked(state);
         state = await Driver.Restart();
 
         await RoomsCanBeCrossedInSequence(state);
@@ -151,6 +153,9 @@ public static class SelfTest
 
         // Ends with a dead player, so it restarts like the case above it.
         await AnAbandonedDecisionIsReportedUnresolved(state);
+        state = await Driver.Restart();
+
+        await TheSoulNexusCanBeKilled(state);
         state = await Driver.Restart();
 
         await ReplayingAScriptGivesTheSameSequence(state);
@@ -170,6 +175,7 @@ public static class SelfTest
 
         // Out of combat first: map legality needs a map position, not a fight.
         covered.Add("WingedBoots");
+        TheMapGraphCoversTheWholeAct(state);
         await FreeTravelWidensTheMap(state, "WingedBoots", async () =>
             await RelicCmd.Obtain(ModelDb.Relic<WingedBoots>().ToMutable(), state.Players[0]));
         // Each in-combat case gets its own fight. The first version shared one,
@@ -468,6 +474,49 @@ public static class SelfTest
     }
 
     /// <summary>
+    /// The reported graph is the whole act, including the points off the grid.
+    /// </summary>
+    /// <remarks>
+    /// <c>travelable</c> answers "where may I step now"; this answers "what does
+    /// the act look like", which is the question a route is planned against and
+    /// which nothing else in the observation carries.
+    ///
+    /// The trap is the one <see cref="MapLegality"/> exists for: the boss, the
+    /// second boss and the starting node are not in <c>Grid</c>, so a graph built
+    /// from <c>GetAllMapPoints</c> alone is missing exactly the nodes an act ends
+    /// on — and a run reads correctly for fifteen floors before the hole shows.
+    /// So the checks are that every legal move is a node, and that the nodes
+    /// outside the grid are among them.
+    /// </remarks>
+    private static void TheMapGraphCoversTheWholeAct(RunState state)
+    {
+        JsonElement map = Capture(state).GetProperty("map");
+        List<string> points = map.GetProperty("points")
+            .EnumerateArray().Select(p => p.GetProperty("at").GetString() ?? "?").ToList();
+
+        Check($"map: the act is reported as a graph ({points.Count} point(s))", points.Count > 0);
+
+        List<string> travelable = map.GetProperty("travelable")
+            .EnumerateArray().Select(p => p.GetProperty("at").GetString() ?? "?").ToList();
+        Check($"map: every legal move is a node in the graph ({string.Join(" ", travelable)})",
+            travelable.All(points.Contains));
+
+        ActMap act = state.Map;
+        string boss = $"{act.BossMapPoint.coord.col},{act.BossMapPoint.coord.row}";
+        string begin = $"{act.StartingMapPoint.coord.col},{act.StartingMapPoint.coord.row}";
+        Check($"map: the boss is in the graph though it is not in the grid ({boss})",
+            points.Contains(boss));
+        Check($"map: the starting node is in the graph though it is not in the grid ({begin})",
+            points.Contains(begin));
+
+        // Edges are what makes it a map rather than a list, and the game draws
+        // its own lines from the same `Children`.
+        int edges = map.GetProperty("points").EnumerateArray()
+            .Sum(p => p.GetProperty("to").GetArrayLength());
+        Check($"map: the nodes are joined up ({edges} edge(s))", edges >= points.Count - 1);
+    }
+
+    /// <summary>
     /// All five characters can be started, fought with, and observed.
     /// </summary>
     /// <remarks>
@@ -668,10 +717,13 @@ public static class SelfTest
             }
 
             using JsonDocument doc = JsonDocument.Parse(answer);
-            string? refused = parked.Accept(doc.RootElement);
+            System.Collections.Generic.Dictionary<string, object?>? refused =
+                parked.Accept(doc.RootElement);
             if (refused != null)
             {
-                throw new InvalidOperationException($"selftest answer refused: {refused}");
+                throw new InvalidOperationException(
+                    "selftest answer refused: "
+                    + JsonSerializer.Serialize(refused));
             }
 
             await Driver.WaitForDecisionPoint();
@@ -816,7 +868,7 @@ public static class SelfTest
     }
 
     /// <summary>
-    /// Winning a fight parks a rewards decision, and it can be declined.
+    /// Winning a fight parks a rewards decision, and taking one leaves the rest.
     /// </summary>
     /// <remarks>
     /// <c>RewardChoice</c> and <c>TakeRewards</c> were asserted to be installed
@@ -829,6 +881,13 @@ public static class SelfTest
     /// So the thing under test is not that a reward can be taken, it is that the
     /// game asks instead of helping itself — an oracle that quietly pockets the
     /// rewards is one whose observations a simulator cannot reproduce.
+    ///
+    /// The middle of this case is the part that used to be wrong. Taking one
+    /// reward once meant forfeiting every reward not named in the same answer,
+    /// because <c>TakeRewards</c> asked once and applied a whole plan. It now
+    /// asks again until the set completes, so what is checked here is that a
+    /// second question arrives, that it remembers what was already taken, and
+    /// that the leftovers are still there to be taken or skipped.
     /// </remarks>
     private static async Task WinningAFightOffersRewards(RunState state)
     {
@@ -864,13 +923,99 @@ public static class SelfTest
                 parked.Accept(nonsense.RootElement) != null);
         }
 
-        using (JsonDocument skip = JsonDocument.Parse("{\"skip\":true}"))
+        using (JsonDocument empty = JsonDocument.Parse("{\"take\":[]}"))
         {
-            Check("rewards: declining is accepted", parked.Accept(skip.RootElement) == null);
+            // The old spelling of "take nothing and forfeit the rest". It has no
+            // meaning now, so it must not be silently accepted as a no-op.
+            Check("rewards: an empty take is refused rather than treated as a skip",
+                parked.Accept(empty.RootElement) != null);
+        }
+
+        // Gold, because it is the one reward that needs no follow-up question:
+        // a card reward would have to name a card, and a relic or potion can
+        // fail to populate.
+        int? gold = IndexOfRewardType(described, "GoldReward");
+        Check("rewards: a monster fight offers gold", gold != null);
+        if (gold == null)
+        {
+            using JsonDocument bail = JsonDocument.Parse("{\"skip\":true}");
+            parked.Accept(bail.RootElement);
+            await Driver.WaitForDecisionPoint();
+            return;
+        }
+
+        int goldBefore = state.Players[0].Gold;
+        using (JsonDocument take = JsonDocument.Parse($"{{\"take\":[{{\"index\":{gold}}}]}}"))
+        {
+            Check("rewards: taking one is accepted", parked.Accept(take.RootElement) == null);
         }
 
         await Driver.WaitForDecisionPoint();
-        Check("rewards: answering resolves it", Pending.Current == null);
+
+        Check("rewards: the gold landed", state.Players[0].Gold > goldBefore);
+
+        Pending? again = Pending.Current;
+        Check("rewards: taking one does not end the screen",
+            again is { Kind: "rewards" });
+        if (again == null)
+        {
+            return;
+        }
+
+        Dictionary<string, object?> after = again.Describe();
+        Check("rewards: the one that was taken says so", TakenAt(after, gold.Value) == true);
+        Check("rewards: the ones that were not are still on offer",
+            RewardEntries(after).Any(r => r["taken"] as bool? == false));
+
+        using (JsonDocument twice = JsonDocument.Parse($"{{\"take\":[{{\"index\":{gold}}}]}}"))
+        {
+            Check("rewards: taking the same one twice is refused",
+                again.Accept(twice.RootElement) != null);
+        }
+
+        using (JsonDocument skip = JsonDocument.Parse("{\"skip\":true}"))
+        {
+            Check("rewards: declining the rest is accepted", again.Accept(skip.RootElement) == null);
+        }
+
+        await Driver.WaitForDecisionPoint();
+        Check("rewards: skipping resolves it", Pending.Current == null);
+    }
+
+    /// <summary>The reward entries out of a <c>RewardChoice.Describe</c>.</summary>
+    private static IEnumerable<Dictionary<string, object?>> RewardEntries(
+        Dictionary<string, object?> described)
+    {
+        return described.TryGetValue("rewards", out object? offered)
+            && offered is IEnumerable<Dictionary<string, object?>> list
+            ? list
+            : Array.Empty<Dictionary<string, object?>>();
+    }
+
+    private static int? IndexOfRewardType(Dictionary<string, object?> described, string type)
+    {
+        foreach (Dictionary<string, object?> r in RewardEntries(described))
+        {
+            if (r.TryGetValue("type", out object? t) && (t as string) == type)
+            {
+                return r["index"] as int?;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool? TakenAt(Dictionary<string, object?> described, int index)
+    {
+        foreach (Dictionary<string, object?> r in RewardEntries(described))
+        {
+            if (r["index"] as int? == index)
+            {
+                return r["taken"] as bool?;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -978,6 +1123,46 @@ public static class SelfTest
     /// Throws rather than returning the refusal. A case that silently ran
     /// outside combat would report on rules it never exercised.
     /// </remarks>
+    /// <summary>
+    /// Killing the Soul Nexus does not take the process with it.
+    /// </summary>
+    /// <remarks>
+    /// <c>SoulNexus.AfterDeath</c> reads <c>NCombatRoom.Instance</c> without a
+    /// null check -- the <c>?.</c> is on the result of
+    /// <c>GetCreatureNode</c>, not on <c>Instance</c>, and
+    /// <c>BeforeRemovedFromRoom</c> eleven lines below it gets that right. With
+    /// no combat room the interop stub reads through a null native pointer and
+    /// the process takes SIGSEGV, printing nothing on the way out.
+    ///
+    /// So this case asserts almost nothing: reaching its last <c>Check</c> at
+    /// all is the assertion, because before <c>SoulNexusDiesWithoutAScene</c>
+    /// the suite died here with no output. The fuzzer found it after 1058 moves
+    /// with the monster on 1 HP, which is how long an unguarded line stays
+    /// invisible when only one monster in the build has it.
+    /// </remarks>
+    private static async Task TheSoulNexusCanBeKilled(RunState state)
+    {
+        string? refused = await Driver.EnterFight(state, "SOUL_NEXUS_ELITE");
+        Check($"soul nexus: the fight could be entered ({refused ?? "ok"})", refused == null);
+        if (refused != null)
+        {
+            return;
+        }
+
+        CmdResult killed = new KillConsoleCmd().Process(state.Players[0], new[] { "all" });
+        Check($"soul nexus: it could be killed ({killed.msg})", killed.success);
+        if (killed.task != null)
+        {
+            await killed.task;
+        }
+
+        await Driver.WaitForDecisionPoint();
+        Check("soul nexus: the process is still here to say so", true);
+
+        await AnswerAnythingParked();
+        Check("soul nexus: nothing is left pending", Pending.Current == null);
+    }
+
     private static async Task EnterFight(RunState state)
     {
         string? refused = await Driver.EnterFight(state, "BOWLBUGS_WEAK");
@@ -1623,7 +1808,140 @@ public static class SelfTest
         Check($"shop: the gold was spent ({before} -> {me.Gold}, cost {cost})",
             me.Gold == before - cost);
 
+        await APotionIsBlockedByAFullBelt(state, me);
+
         await SettledAfter(state, "a purchase");
+    }
+
+    /// <summary>
+    /// A chest hands over what was picked, and a second chest still opens.
+    /// </summary>
+    /// <remarks>
+    /// Two defects met here, both found by playing at random and neither
+    /// visible from one chest.
+    ///
+    /// Entering a treasure room calls <c>BeginRelicPicking</c>, which opens a
+    /// session and waits for a vote. Nothing here voted, so the session stayed
+    /// open — and <c>OnRoomExited</c> only tears it down when the pick was
+    /// *skipped*, so leaving was not a way out either. The next chest threw
+    /// "Attempted to start new relic picking session while one was already
+    /// occurring!", one room too late to say what caused it.
+    ///
+    /// And voting is not receiving. <c>AwardRelics</c> decides who gets what and
+    /// announces it; <c>NTreasureRoomRelicCollection</c> calls
+    /// <c>RelicCmd.Obtain</c> in among the animation. Headless the vote landed,
+    /// the chest closed, and the relic list did not change.
+    ///
+    /// So: take one and check it arrives, skip one and check nothing arrives,
+    /// and open a third to prove the session was really closed both times.
+    /// </remarks>
+    private static async Task AChestHandsOverWhatWasPicked(RunState state)
+    {
+        Player me = state.Players[0];
+
+        await EnterRoom(state, RoomType.Treasure);
+        JsonElement room = Room(state);
+        List<JsonElement> options = room.GetProperty("options").EnumerateArray().ToList();
+
+        Check($"chest: relics are on offer, and a skip ({options.Count} option(s))",
+            options.Count >= 2 && options[^1].GetProperty("skip").GetBoolean());
+        Check("chest: the room is not finished before it is answered",
+            !room.GetProperty("finished").GetBoolean());
+
+        string taken = options[0].GetProperty("relic").GetString() ?? "?";
+        int before = me.Relics.Count;
+
+        await Chest.Pick(state, 0);
+        Check($"chest: the relic was actually handed over ({taken})",
+            me.Relics.Count == before + 1 && me.Relics.Any(r => r.Id.Entry == taken));
+        Check("chest: the chest reports itself answered",
+            Room(state).GetProperty("finished").GetBoolean());
+
+        // A skip closes the session too, by a different path — and must not
+        // quietly hand anything over.
+        await EnterRoom(state, RoomType.Treasure);
+        int held = me.Relics.Count;
+        List<JsonElement> second = Room(state).GetProperty("options").EnumerateArray().ToList();
+        await Chest.Pick(state, second.Count - 1);
+
+        Check($"chest: a skip takes nothing ({held} relics before and after)",
+            me.Relics.Count == held);
+        Check("chest: a skipped chest reports itself answered",
+            Room(state).GetProperty("finished").GetBoolean());
+
+        // The one that used to throw.
+        await EnterRoom(state, RoomType.Treasure);
+        Check("chest: a third chest opens rather than throwing",
+            Room(state).GetProperty("options").EnumerateArray().Any());
+        await Chest.Pick(state, 0);
+        Check($"chest: and it hands over too ({me.Relics.Count} relics)",
+            me.Relics.Count == held + 1);
+    }
+
+    /// <summary>
+    /// A stocked, affordable potion the shop will not sell.
+    /// </summary>
+    /// <remarks>
+    /// <c>IsStocked</c> and <c>EnoughGold</c> are what
+    /// <c>MerchantEntry.OnTryPurchaseWrapper</c> checks before it commits, and a
+    /// potion has a third condition neither of them covers: it is procured into
+    /// a slot, and <c>PotionCmd.TryToProcure</c> fails with <c>TooFull</c> when
+    /// there is none. A client reading only the first two buys a potion, is
+    /// refused, and has no field that said so.
+    ///
+    /// Found by playing at random, not by reading — which is why the belt is
+    /// filled here by hand: the state is ordinary in a real run and awkward to
+    /// reach on purpose.
+    /// </remarks>
+    private static async Task APotionIsBlockedByAFullBelt(RunState state, Player me)
+    {
+        while (me.HasOpenPotionSlots)
+        {
+            await PotionCmd.TryToProcure<BlockPotion>(me);
+        }
+        await Driver.WaitForDecisionPoint();
+
+        Check($"shop: the belt is full ({me.Potions.Count()} of {me.PotionSlots.Count})",
+            !me.HasOpenPotionSlots);
+
+        JsonElement obs = Capture(state);
+        Check($"shop: the belt's size is reported ({me.PotionSlots.Count})",
+            obs.GetProperty("potionSlots").GetInt32() == me.PotionSlots.Count);
+
+        MerchantInventory inventory = ((MerchantRoom)state.CurrentRoom!).GetLocalInventory();
+        List<MerchantEntry> stock = inventory.AllEntries.ToList();
+        List<JsonElement> entries = obs.GetProperty("room").GetProperty("entries")
+            .EnumerateArray().ToList();
+
+        List<int> potions = stock
+            .Select((e, i) => (e, i))
+            .Where(t => t.e is MerchantPotionEntry)
+            .Select(t => t.i)
+            .ToList();
+
+        Check($"shop: there are potions on offer ({potions.Count})", potions.Count > 0);
+
+        foreach (int at in potions)
+        {
+            Check($"shop: potion {at} is blocked by the full belt",
+                entries[at].GetProperty("blocked").GetString() == "no potion slot");
+        }
+
+        Check("shop: nothing else is blocked",
+            stock.Select((e, i) => (e, i))
+                .Where(t => t.e is not MerchantPotionEntry)
+                .All(t => entries[t.i].GetProperty("blocked").ValueKind == JsonValueKind.Null));
+
+        // And the game agrees: the entry the observation calls blocked is the
+        // entry that refuses. Without this the field is a claim about the game
+        // rather than a report of it.
+        MerchantEntry blocked = stock[potions[0]];
+        Check($"shop: the blocked potion really does refuse (cost {blocked.Cost}, "
+            + $"gold {me.Gold})",
+            blocked.IsStocked && blocked.EnoughGold
+            && !await blocked.OnTryPurchaseWrapper(inventory));
+        await Driver.WaitForDecisionPoint();
+        await AnswerAnythingParked();
     }
 
     /// <summary>

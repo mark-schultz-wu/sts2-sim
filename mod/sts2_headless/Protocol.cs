@@ -18,6 +18,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.RestSite;
+using MegaCrit.Sts2.Core.Entities.TreasureRelicPicking;
 using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Rooms;
@@ -43,12 +44,6 @@ namespace Sts2Headless;
 /// </remarks>
 internal static class Protocol
 {
-    /// <summary>
-    /// Bumped whenever a client that understood the old shape would misread the
-    /// new one. The client refuses to proceed on mismatch rather than guessing.
-    /// </summary>
-    private const int Version = 1;
-
     private static readonly JsonSerializerOptions Json = new JsonSerializerOptions { WriteIndented = false };
 
     private static Channel _channel = null!;
@@ -60,7 +55,7 @@ internal static class Protocol
         _state = state;
         _channel = await Channel.Open();
 
-        Log.Info($"[headless] serving protocol v{Version} over {_channel.Describe}");
+        Log.Info($"[headless] serving mod {ModIdentity.Identity} over {_channel.Describe}");
 
         // Derived, not transcribed. These were literals -- `"v0.107.1"` and
         // `1692500715` -- which made the handshake a constant validating
@@ -72,7 +67,13 @@ internal static class Protocol
         await Send(new Dictionary<string, object?>
         {
             ["type"] = "hello",
-            ["protocol"] = Version,
+            // Which build of *this mod* is answering, as a hash of its own
+            // source. The stamp below identifies the game and cannot catch a
+            // mod that was edited and not redeployed, because redeploying a
+            // mod moves neither the assembly nor the content hash. The client
+            // refuses a mismatch at the handshake, which is two seconds in
+            // rather than four hundred decisions in.
+            ["mod"] = ModIdentity.Identity,
             ["game"] = release?.Version ?? "UNRELEASED",
             ["commit"] = release?.Commit ?? GitHelper.ShortCommitId ?? "UNKNOWN",
             ["assemblyHash"] = release?.MainAssemblyHash ?? 0,
@@ -82,7 +83,7 @@ internal static class Protocol
             // content change invalidates them. The game uses this exact value
             // to refuse a replay recorded against different content.
             ["contentHash"] = ModelIdSerializationCache.Hash,
-            ["commands"] = new[] { "start", "fight", "travel", "play_card", "end_turn", "answer", "grant", "enter_room", "choose_option", "buy", "observe", "quit" },
+            ["commands"] = new[] { "start", "fight", "event", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
         });
 
         while (true)
@@ -120,7 +121,7 @@ internal static class Protocol
 
             if (!req.TryGetProperty("cmd", out JsonElement cmdEl) || cmdEl.ValueKind != JsonValueKind.String)
             {
-                await Error("?", "request has no 'cmd' string");
+                await Error("?", Refusals.Malformed("request has no 'cmd' string"));
                 return false;
             }
 
@@ -133,13 +134,13 @@ internal static class Protocol
             // and the pending must survive the refusal.
             if (Pending.Current != null && cmd is not ("answer" or "observe" or "quit"))
             {
-                await Error(cmd, $"a '{Pending.Current.Kind}' decision is pending; answer it first");
+                await Error(cmd, Refusals.Pending(Pending.Current.Kind));
                 return false;
             }
 
             if (Pending.Current == null && cmd == "answer")
             {
-                await Error(cmd, "nothing is pending");
+                await Error(cmd, Refusals.NothingPending());
                 return false;
             }
 
@@ -151,8 +152,7 @@ internal static class Protocol
             if (_state.IsGameOver && cmd is not ("observe" or "start" or "quit"))
             {
                 bool won = _state.CurrentRoom?.IsVictoryRoom ?? false;
-                await Error(cmd,
-                    $"the run is over ({(won ? "victory" : "defeat")}); start a new run or quit");
+                await Error(cmd, Refusals.RunOver(won));
                 return false;
             }
 
@@ -168,6 +168,10 @@ internal static class Protocol
 
                 case "fight":
                     await Fight(req);
+                    return false;
+
+                case "event":
+                    await Event(req);
                     return false;
 
                 case "enter_room":
@@ -190,12 +194,20 @@ internal static class Protocol
                     await Travel(req);
                     return false;
 
+                case "proceed":
+                    await Proceed(req);
+                    return false;
+
                 case "play_card":
                     await PlayCard(req);
                     return false;
 
                 case "end_turn":
                     await EndTurn(req);
+                    return false;
+
+                case "use_potion":
+                    await UsePotion(req);
                     return false;
 
                 case "observe":
@@ -207,13 +219,13 @@ internal static class Protocol
                     return true;
 
                 default:
-                    await Error(cmd, $"unknown command '{cmd}'");
+                    await Error(cmd, Refusals.Malformed($"unknown command '{cmd}'"));
                     return false;
             }
         }
         catch (JsonException e)
         {
-            await Error(cmd, $"malformed JSON: {e.Message}");
+            await Error(cmd, Refusals.Malformed($"malformed JSON: {e.Message}"));
             return false;
         }
         catch (Exception e)
@@ -221,8 +233,12 @@ internal static class Protocol
             // The game throwing must reach the client. Swallowing it here would
             // leave the simulator comparing against a state the oracle no longer
             // understands.
-            Log.Error($"[headless] {cmd} failed: {e}");
-            await Error(cmd, $"{e.GetType().Name}: {e.Message}");
+            //
+            // As a fault and not a refusal. This is the adapter or the game
+            // breaking, not the game refusing a move, and sending it as a
+            // refusal filed a crash as a decision -- a client comparing
+            // refusals would have counted it as the game saying no.
+            await Fault(cmd, e);
             return false;
         }
     }
@@ -238,39 +254,51 @@ internal static class Protocol
     /// stay accepted: ascension is a scalar and callers that have one as an
     /// integer should not have to look up its name to send it.
     ///
-    /// Absent means zero. A value that is neither throws, which the caller sees
-    /// as a refusal naming the field, rather than the previous behaviour of a
-    /// raw type-mismatch message from the JSON reader.
+    /// Absent means zero. A value that is neither is refused by name, and
+    /// refused rather than thrown: a request this protocol cannot read is a
+    /// malformed request, not the mod falling over.
     /// </remarks>
-    private static int Ascension(JsonElement req)
+    private static bool Ascension(JsonElement req, out int ascension, out string malformed)
     {
+        ascension = 0;
+        malformed = "";
+
         if (!req.TryGetProperty("ascension", out JsonElement a))
         {
-            return 0;
+            return true;
         }
 
         if (a.ValueKind == JsonValueKind.Number && a.TryGetInt32(out int level))
         {
-            return level;
+            ascension = level;
+            return true;
         }
 
         if (a.ValueKind == JsonValueKind.String
             && Enum.TryParse(a.GetString(), ignoreCase: true, out AscensionLevel named))
         {
-            return (int)named;
+            ascension = (int)named;
+            return true;
         }
 
-        throw new ArgumentException(
-            $"ascension must be a number or one of: {string.Join(" ", Enum.GetNames(typeof(AscensionLevel)))}");
+        malformed =
+            $"ascension must be a number or one of: {string.Join(" ", Enum.GetNames(typeof(AscensionLevel)))}";
+        return false;
     }
 
     private static async Task Start(JsonElement req)
     {
         string? seed = Str(req, "seed");
         string? character = Str(req, "character");
-        int ascension = Ascension(req);
 
-        _state = await Driver.Restart(seed, character, ascension, Modifiers(req));
+        if (!Ascension(req, out int ascension, out string malformed)
+            || !Modifiers(req, out ModifierModel[] modifiers, out malformed))
+        {
+            await Error("start", Refusals.Malformed(malformed));
+            return;
+        }
+
+        _state = await Driver.Restart(seed, character, ascension, modifiers);
         await Observe(req, "start");
     }
 
@@ -298,14 +326,14 @@ internal static class Protocol
         string? encounter = Str(req, "encounter");
         if (encounter == null)
         {
-            await Error("fight", "fight requires an 'encounter' entry name");
+            await Error("fight", Refusals.Malformed("fight requires an 'encounter' entry name"));
             return;
         }
 
         string? refused = await Driver.EnterFight(_state, encounter);
         if (refused != null)
         {
-            await Error("fight", refused);
+            await Error("fight", Refusals.Console(refused));
             return;
         }
 
@@ -313,33 +341,118 @@ internal static class Protocol
         await Observe(req, "fight", resolved);
     }
 
+    /// <summary>Jumps the run to a named event, off the map.</summary>
+    /// <remarks>
+    /// The same shape as <see cref="Fight"/>, and refused by the game for the
+    /// same reason: <c>EventConsoleCmd</c> answers "Event 'X' not found" over a
+    /// list this mod does not hold.
+    ///
+    /// The run lands at an appended map point, so map and room disagree by
+    /// construction -- as they do after a <c>fight</c>.
+    /// </remarks>
+    private static async Task Event(JsonElement req)
+    {
+        string? entry = Str(req, "event");
+        if (entry == null)
+        {
+            await Error("event", Refusals.Malformed("event requires an 'event' entry name"));
+            return;
+        }
+
+        string? refused = await Driver.EnterEvent(_state, entry);
+        if (refused != null)
+        {
+            await Error("event", Refusals.Console(refused));
+            return;
+        }
+
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "event", resolved);
+    }
+
     private static async Task Grant(JsonElement req)
     {
         Player me = _state.Players[0];
         string? card = Str(req, "card");
         string? relic = Str(req, "relic");
+        string? potion = Str(req, "potion");
 
-        if (card == null && relic == null)
+        if (card == null && relic == null && potion == null)
         {
-            await Error("grant", "grant requires 'card' or 'relic'");
+            await Error("grant", Refusals.Malformed("grant requires 'card', 'relic' or 'potion'"));
             return;
         }
 
-        if (card != null)
+        // Tracked, never awaited. Obtaining a relic runs its AfterObtained, and
+        // an AfterObtained may park a question: Royal Stamp opens a one-card
+        // selection to enchant. The serve loop cannot read the answer until this
+        // handler returns, so awaiting here waits for something only this
+        // handler's return can produce -- the same deadlock `choose_option` on
+        // SMITH had, and it hung for the same reason.
+        //
+        // Measured before the fix: `grant` with ROYAL_STAMP never replied and
+        // the client timed out. Granting a card was unaffected, which is why
+        // this looked fine.
+        //
+        // WaitForDecisionPoint handles both halves. For a relic nothing hangs
+        // off it waits on BackgroundWork.InFlight until the obtain lands; for
+        // Royal Stamp it returns as soon as the selection parks.
+        // Both looked up before either is granted, so a request naming a good
+        // card and a bad relic grants neither. Half a grant is a state no
+        // client asked for and none can undo.
+        CardModel? grantCard = null;
+        if (card != null && (grantCard = Lookup<CardModel>(card, out string missing)) == null)
         {
-            await Driver.GrantCard(_state, Lookup<CardModel>(card).ToMutable());
+            await Error("grant", Refusals.Malformed(missing));
+            return;
         }
 
-        if (relic != null)
+        RelicModel? grantRelic = null;
+        if (relic != null && (grantRelic = Lookup<RelicModel>(relic, out string absent)) == null)
         {
-            await RelicCmd.Obtain(Lookup<RelicModel>(relic).ToMutable(), me);
+            await Error("grant", Refusals.Malformed(absent));
+            return;
         }
 
-        await Observe(req, "grant");
+        PotionModel? grantPotion = null;
+        if (potion != null && (grantPotion = Lookup<PotionModel>(potion, out string nothing)) == null)
+        {
+            await Error("grant", Refusals.Malformed(nothing));
+            return;
+        }
+
+        if (grantCard != null)
+        {
+            BackgroundWork.Track(Driver.GrantCard(_state, grantCard.ToMutable()));
+        }
+
+        if (grantRelic != null)
+        {
+            BackgroundWork.Track(RelicCmd.Obtain(grantRelic.ToMutable(), me));
+        }
+
+        // The same procure the game runs when a potion is picked up, so a full
+        // belt refuses this exactly as it refuses a reward — reported through
+        // the observation, where `potions` will simply not have grown.
+        if (grantPotion != null)
+        {
+            BackgroundWork.Track(PotionCmd.TryToProcure(grantPotion.ToMutable(), me));
+        }
+
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "grant", resolved);
     }
 
     /// <summary>Finds a canonical model by its id entry, or says what exists.</summary>
-    private static T Lookup<T>(string id) where T : AbstractModel
+    /// <remarks>
+    /// Null and a message rather than an exception. Naming something that does
+    /// not exist is a client bug and the client has to be told so, but it is a
+    /// <em>refusal</em> -- the request was not a request -- and throwing filed
+    /// it as a fault, which is the mod admitting it fell over. Granting nothing
+    /// silently would be worse than either: it hides the bug behind a
+    /// divergence three steps later.
+    /// </remarks>
+    private static T? Lookup<T>(string id, out string missing) where T : AbstractModel
     {
         List<T> all = ModelDb.AllAbstractModelSubtypes
             .Where(t => t.IsSubclassOf(typeof(T)))
@@ -347,22 +460,18 @@ internal static class Protocol
             .ToList();
 
         T? found = all.FirstOrDefault(x => string.Equals(x.Id.Entry, id, StringComparison.OrdinalIgnoreCase));
-        if (found == null)
-        {
-            // Naming something that does not exist is a client bug; starting
-            // without it would hide that behind a divergence three steps later.
-            throw new ArgumentException(
-                $"no {typeof(T).Name} with id '{id}' ({all.Count} known)");
-        }
-
+        missing = found == null ? $"no {typeof(T).Name} with id '{id}' ({all.Count} known)" : "";
         return found;
     }
 
-    private static ModifierModel[] Modifiers(JsonElement req)
+    private static bool Modifiers(JsonElement req, out ModifierModel[] modifiers, out string malformed)
     {
+        modifiers = Array.Empty<ModifierModel>();
+        malformed = "";
+
         if (!req.TryGetProperty("modifiers", out JsonElement el) || el.ValueKind != JsonValueKind.Array)
         {
-            return Array.Empty<ModifierModel>();
+            return true;
         }
 
         // Every modifier in the build, not the curated GoodModifiers/BadModifiers
@@ -387,14 +496,16 @@ internal static class Protocol
             // divergence three decisions later.
             if (found == null)
             {
-                throw new ArgumentException(
-                    $"no such modifier '{id}'; known: {string.Join(" ", all.Select(x => x.Id.Entry).OrderBy(s => s))}");
+                malformed =
+                    $"no such modifier '{id}'; known: {string.Join(" ", all.Select(x => x.Id.Entry).OrderBy(s => s))}";
+                return false;
             }
 
             mods.Add(found.ToMutable());
         }
 
-        return mods.ToArray();
+        modifiers = mods.ToArray();
+        return true;
     }
 
     /// <summary>
@@ -419,7 +530,7 @@ internal static class Protocol
         // that whatever it returns is taken as the player's choice, so an
         // out-of-range or over-long answer would not be rejected downstream —
         // it would silently become a different move.
-        string? rejected = pending.Accept(req);
+        Dictionary<string, object?>? rejected = pending.Accept(req);
         if (rejected != null)
         {
             await Error("answer", rejected);
@@ -464,8 +575,8 @@ internal static class Protocol
             || !Enum.TryParse(want, ignoreCase: true, out RoomType type)
             || !jumpable.Contains(type.ToString()))
         {
-            await Error("enter_room",
-                $"enter_room requires a 'type' from: {string.Join(" ", jumpable)}");
+            await Error("enter_room", Refusals.Malformed(
+                $"enter_room requires a 'type' from: {string.Join(" ", jumpable)}"));
             return;
         }
 
@@ -473,7 +584,7 @@ internal static class Protocol
         // room before `start` reached EnterRoomDebug with no run behind it.
         if (!RunManager.Instance.IsInProgress)
         {
-            await Error("enter_room", "a run is not in progress; start one first");
+            await Error("enter_room", Refusals.NoRun());
             return;
         }
 
@@ -497,7 +608,7 @@ internal static class Protocol
     {
         if (!req.TryGetProperty("index", out JsonElement el) || !el.TryGetInt32(out int index))
         {
-            await Error("choose_option", "choose_option requires an integer 'index'");
+            await Error("choose_option", Refusals.Malformed("choose_option requires an integer 'index'"));
             return;
         }
 
@@ -509,8 +620,7 @@ internal static class Protocol
                 IReadOnlyList<RestSiteOption> options = sync.GetLocalOptions();
                 if (index < 0 || index >= options.Count)
                 {
-                    await Error("choose_option",
-                        $"option {index} out of range; {options.Count} offered");
+                    await Error("choose_option", Refusals.OutOfRange(index, options.Count));
                     return;
                 }
 
@@ -519,7 +629,7 @@ internal static class Protocol
                 // disabled option would be taken rather than refused.
                 if (!options[index].IsEnabled)
                 {
-                    await Error("choose_option", $"rest site option '{options[index].OptionId}' is disabled");
+                    await Error("choose_option", Refusals.OptionDisabled());
                     return;
                 }
 
@@ -545,19 +655,45 @@ internal static class Protocol
                 break;
             }
 
+            case TreasureRoom:
+            {
+                IReadOnlyList<RelicModel>? relics =
+                    RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics;
+                if (relics == null || !Chest.Open(_state.Players[0]))
+                {
+                    await Error("choose_option", Refusals.AlreadyAnswered());
+                    return;
+                }
+
+                // One past the relics is the skip, which is what the screen's
+                // own button does.
+                if (index < 0 || index > relics.Count)
+                {
+                    // One past the relics is the skip, so the count offered is
+                    // one more than the relics on the screen.
+                    await Error("choose_option", Refusals.OutOfRange(index, relics.Count + 1));
+                    return;
+                }
+
+                await Chest.Pick(_state, index);
+                bool settled = await Driver.WaitForDecisionPoint();
+                await Observe(req, "choose_option", settled);
+                return;
+            }
+
             case EventRoom:
             {
                 EventSynchronizer sync = RunManager.Instance.EventSynchronizer;
                 IReadOnlyList<EventOption> options = sync.GetLocalEvent().CurrentOptions;
                 if (index < 0 || index >= options.Count)
                 {
-                    await Error("choose_option", $"option {index} out of range; {options.Count} offered");
+                    await Error("choose_option", Refusals.OutOfRange(index, options.Count));
                     return;
                 }
 
                 if (options[index].IsLocked)
                 {
-                    await Error("choose_option", $"event option '{options[index].TextKey}' is locked");
+                    await Error("choose_option", Refusals.OptionLocked());
                     return;
                 }
 
@@ -573,8 +709,7 @@ internal static class Protocol
             }
 
             default:
-                await Error("choose_option",
-                    $"the current room ({_state.CurrentRoom?.GetType().Name ?? "none"}) has no options");
+                await Error("choose_option", Refusals.NothingToChoose(_state.CurrentRoom));
                 return;
         }
 
@@ -596,13 +731,13 @@ internal static class Protocol
     {
         if (_state.CurrentRoom is not MerchantRoom shop)
         {
-            await Error("buy", "not in a shop");
+            await Error("buy", Refusals.WrongRoom(RoomType.Shop, _state.CurrentRoom));
             return;
         }
 
         if (!req.TryGetProperty("index", out JsonElement el) || !el.TryGetInt32(out int index))
         {
-            await Error("buy", "buy requires an integer 'index'");
+            await Error("buy", Refusals.Malformed("buy requires an integer 'index'"));
             return;
         }
 
@@ -610,18 +745,37 @@ internal static class Protocol
         List<MerchantEntry> entries = inventory.AllEntries.ToList();
         if (index < 0 || index >= entries.Count)
         {
-            await Error("buy", $"entry {index} out of range; {entries.Count} on offer");
+            await Error("buy", Refusals.OutOfRange(index, entries.Count));
             return;
         }
 
         MerchantEntry entry = entries[index];
-        if (!await entry.OnTryPurchaseWrapper(inventory))
+        Player buyer = _state.Players[0];
+
+        // Every refusal, decided in front of the purchase rather than read off
+        // it. `OnTryPurchaseWrapper` makes the first two checks itself before it
+        // commits to anything, and `Observation.Blocked` makes the third; all
+        // three are the same questions the observation already answers, so a
+        // client acting on what it was told still gets told when it is wrong.
+        if (!entry.IsStocked || !entry.EnoughGold || Observation.Blocked(entry, buyer) != null)
         {
-            await Error("buy",
-                $"purchase refused: cost {entry.Cost}, gold {_state.Players[0].Gold}, "
-                + $"stocked {entry.IsStocked}");
+            await Error("buy", Refusals.Unpurchasable(index, entry, buyer));
             return;
         }
+
+        // Tracked, never awaited -- the same rule `grant` and `choose_option`
+        // follow, and for the same reason. A card-removal entry's OnTryPurchase
+        // awaits DoMerchantCardRemoval, which awaits
+        // CardSelectCmd.FromDeckForRemoval and parks a question for the client.
+        // The serve loop cannot read the answer until this handler returns, so
+        // awaiting here waits for something only this handler's return can
+        // produce.
+        //
+        // Found by the fuzzer: `buy 13` in a shop -- the card removal entry --
+        // never replied and the client timed out at its command deadline. Buying
+        // a card, a relic or a potion was unaffected, which is why this looked
+        // fine for as long as it did.
+        BackgroundWork.Track(entry.OnTryPurchaseWrapper(inventory));
 
         bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "buy", resolved);
@@ -649,13 +803,13 @@ internal static class Protocol
         if (!req.TryGetProperty("col", out JsonElement colEl) || !colEl.TryGetInt32(out int col)
             || !req.TryGetProperty("row", out JsonElement rowEl) || !rowEl.TryGetInt32(out int row))
         {
-            await Error("travel", "travel requires integer 'col' and 'row'");
+            await Error("travel", Refusals.Malformed("travel requires integer 'col' and 'row'"));
             return;
         }
 
         if (CombatManager.Instance.IsInProgress)
         {
-            await Error("travel", "cannot travel during combat");
+            await Error("travel", Refusals.InCombat());
             return;
         }
 
@@ -663,14 +817,63 @@ internal static class Protocol
         MapPoint? target = legal.FirstOrDefault(p => p.coord.col == col && p.coord.row == row);
         if (target == null)
         {
-            await Error("travel",
-                $"({col},{row}) is not travelable from here; legal: "
-                + string.Join(" ", legal.Select(p => $"({p.coord.col},{p.coord.row})")));
+            // The legal set is not repeated here: the observation the client
+            // was acting on already reports it, and a refusal restating state
+            // is a second copy that can disagree with the first.
+            await Error("travel", Refusals.NotTravelable(col, row));
             return;
         }
 
         await RunManager.Instance.EnterMapCoord(target.coord);
         await Observe(req, "travel");
+    }
+
+    /// <summary>
+    /// Leaves a finished act for the next one.
+    /// </summary>
+    /// <remarks>
+    /// The one move that is not a map move. An act's boss sits outside the grid
+    /// with no children, so once it is beaten <c>MapLegality</c> correctly reports
+    /// nowhere to go — and without this the run simply stops there. Random play
+    /// found it: every run stalled on floor 17 with the boss dead and nothing
+    /// legal.
+    ///
+    /// The rule is <c>NRewardsScreen.OnProceedButtonPressed</c>'s, which is the
+    /// only place the game decides it. Two branches, and the order matters: an
+    /// act with a second boss goes to that boss rather than to the next act, and
+    /// it is the same button either way.
+    ///
+    /// Deliberately not a room option. It is available exactly when a boss room
+    /// is finished, which is a property of the run rather than a list the room
+    /// is offering, and folding it into <c>choose_option</c> would mean inventing
+    /// an option the game does not have.
+    /// </remarks>
+    private static async Task Proceed(JsonElement req)
+    {
+        if (CombatManager.Instance.IsInProgress)
+        {
+            await Error("proceed", Refusals.InCombat());
+            return;
+        }
+
+        if (!MapLegality.CanProceed(_state))
+        {
+            await Error("proceed", Refusals.CannotProceed());
+            return;
+        }
+
+        ActMap map = _state.Map;
+        if (map.SecondBossMapPoint != null && _state.CurrentMapCoord == map.BossMapPoint.coord)
+        {
+            await RunManager.Instance.ProceedFromTerminalRewardsScreen();
+        }
+        else
+        {
+            RunManager.Instance.ActChangeSynchronizer.SetLocalPlayerReady();
+        }
+
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "proceed", resolved);
     }
 
     /// <summary>
@@ -689,19 +892,19 @@ internal static class Protocol
         CombatState? combat = (_state.CurrentRoom as CombatRoom)?.CombatState;
         if (pcs == null || combat == null)
         {
-            await Error("play_card", "not in combat");
+            await Error("play_card", Refusals.NotInCombat());
             return;
         }
 
         if (!req.TryGetProperty("index", out JsonElement idxEl) || !idxEl.TryGetInt32(out int index))
         {
-            await Error("play_card", "play_card requires an integer 'index'");
+            await Error("play_card", Refusals.Malformed("play_card requires an integer 'index'"));
             return;
         }
 
         if (index < 0 || index >= pcs.Hand.Cards.Count)
         {
-            await Error("play_card", $"index {index} out of range; hand holds {pcs.Hand.Cards.Count}");
+            await Error("play_card", Refusals.OutOfRange(index, pcs.Hand.Cards.Count));
             return;
         }
 
@@ -712,14 +915,14 @@ internal static class Protocol
         {
             if (!tEl.TryGetUInt32(out uint targetId))
             {
-                await Error("play_card", "'target' must be a creature id");
+                await Error("play_card", Refusals.Malformed("'target' must be a creature id"));
                 return;
             }
 
             target = combat.Creatures.FirstOrDefault(c => c.CombatId == targetId);
             if (target == null)
             {
-                await Error("play_card", $"no creature with id {targetId}");
+                await Error("play_card", Refusals.NoSuchCreature(targetId));
                 return;
             }
         }
@@ -729,17 +932,13 @@ internal static class Protocol
         // legal set the oracle publishes.
         if (!card.CanPlay(out UnplayableReason reason, out AbstractModel? preventer))
         {
-            await Error("play_card",
-                $"{card.Id.Entry} is not playable: {reason}"
-                + (preventer != null ? $" (blocked by {preventer.Id.Entry})" : ""));
+            await Error("play_card", Refusals.Unplayable(card, reason, preventer));
             return;
         }
 
         if (!card.CanPlayTargeting(target))
         {
-            await Error("play_card",
-                $"{card.Id.Entry} cannot target {(target == null ? "nothing" : target.CombatId.ToString())}"
-                + $"; it targets {card.TargetType}");
+            await Error("play_card", Refusals.WrongTarget(card, target?.CombatId));
             return;
         }
 
@@ -749,13 +948,97 @@ internal static class Protocol
         await Observe(req, "play_card", resolved);
     }
 
+    /// <summary>
+    /// Drinks one potion from the belt, addressed by its index in the
+    /// observation.
+    /// </summary>
+    /// <remarks>
+    /// Addressed positionally for the same reason a card is: that is how the
+    /// observation reports the belt, and it is how two identical potions are
+    /// told apart at all. Targets are <c>CombatId</c>s, as a card's are.
+    ///
+    /// The body mirrors <c>PotionModel.EnqueueManualUse</c> rather than calling
+    /// it. Two differences, both deliberate: the enqueue goes through
+    /// <c>ActionQueueSet</c> the way every other command here does, instead of
+    /// the multiplayer synchronizer; and the refusals are decided in front of
+    /// the action rather than thrown from inside its constructor. What is
+    /// mirrored exactly is the target defaulting to the drinker where that is a
+    /// valid target, because a self-targeted potion is drunk with no argument.
+    /// </remarks>
+    private static async Task UsePotion(JsonElement req)
+    {
+        Player me = _state.Players[0];
+
+        if (!req.TryGetProperty("index", out JsonElement idxEl) || !idxEl.TryGetInt32(out int index))
+        {
+            await Error("use_potion", Refusals.Malformed("use_potion requires an integer 'index'"));
+            return;
+        }
+
+        // The belt is an `IEnumerable`, and the observation reports it by
+        // walking it — so an index means a position in this walk and nothing
+        // else. `GetPotionSlotIndex` counts empty slots too and is a different
+        // number; `UsePotionAction` works it out from the model itself.
+        List<PotionModel> belt = me.Potions.ToList();
+        if (index < 0 || index >= belt.Count)
+        {
+            await Error("use_potion", Refusals.OutOfRange(index, belt.Count));
+            return;
+        }
+
+        PotionModel potion = belt[index];
+
+        Creature? target = null;
+        if (req.TryGetProperty("target", out JsonElement tEl) && tEl.ValueKind != JsonValueKind.Null)
+        {
+            if (!tEl.TryGetUInt32(out uint targetId))
+            {
+                await Error("use_potion", Refusals.Malformed("'target' must be a creature id"));
+                return;
+            }
+
+            CombatState? combat = (_state.CurrentRoom as CombatRoom)?.CombatState;
+            target = combat?.Creatures.FirstOrDefault(c => c.CombatId == targetId);
+            if (target == null)
+            {
+                await Error("use_potion", Refusals.NoSuchCreature(targetId));
+                return;
+            }
+        }
+
+        if (Observation.Undrinkable(potion, me) is { } why)
+        {
+            await Error("use_potion", Refusals.Undrinkable(potion, why));
+            return;
+        }
+
+        // `EnqueueManualUse` does this, and a self-targeted potion relies on
+        // it: the belt reports no targets outside combat, so `target` is null
+        // and the drinker is who it lands on.
+        if (target == null && potion.IsValidTarget(me.Creature))
+        {
+            target = me.Creature;
+        }
+
+        if (!potion.IsValidTarget(target))
+        {
+            await Error("use_potion", Refusals.WrongPotionTarget(potion, target?.CombatId));
+            return;
+        }
+
+        var action = new UsePotionAction(potion, target, CombatManager.Instance.IsInProgress);
+        RunManager.Instance.ActionQueueSet.EnqueueWithoutSynchronizing(action);
+        bool resolved = await Driver.Quiesce(action);
+        await Observe(req, "use_potion", resolved);
+    }
+
     private static async Task EndTurn(JsonElement req)
     {
         Player me = _state.Players[0];
         PlayerCombatState? pcs = me.PlayerCombatState;
         if (pcs == null || !CombatManager.Instance.IsInProgress)
         {
-            await Error("end_turn", "not in combat");
+            await Error("end_turn", Refusals.NotInCombat());
             return;
         }
 
@@ -840,14 +1123,42 @@ internal static class Protocol
         return msg;
     }
 
-    private static async Task Error(string cmd, string message)
+    /// <summary>Refuses a command, saying why as a tagged reason.</summary>
+    /// <remarks>
+    /// No <c>message</c> beside the reason. The prose is the client's
+    /// <c>Display</c>, written once from the data, so the two cannot drift --
+    /// and the log line below serialises the same object, which is as readable
+    /// as the sentence was and has one source. See <see cref="Refusals"/>.
+    /// </remarks>
+    private static async Task Error(string cmd, Dictionary<string, object?> reason)
     {
-        Log.Warn($"[headless] rejecting {cmd}: {message}");
+        Log.Warn($"[headless] rejecting {cmd}: {JsonSerializer.Serialize(reason, Json)}");
         await Send(new Dictionary<string, object?>
         {
             ["type"] = "error",
             ["cmd"] = cmd,
-            ["message"] = message,
+            ["reason"] = reason,
+        });
+    }
+
+    /// <summary>The adapter broke, which is not the game deciding anything.</summary>
+    /// <remarks>
+    /// Its own message type because it is a different kind of answer. An
+    /// exception escaping a handler used to be sent as a refusal, which filed an
+    /// adapter crash as a game decision -- a client comparing refusals would
+    /// have counted a bug in this mod as the game saying no. A fault is the
+    /// outer failure: the session is suspect and the run is where the exception
+    /// left it.
+    /// </remarks>
+    private static async Task Fault(string cmd, Exception e)
+    {
+        Log.Error($"[headless] {cmd} failed: {e}");
+        await Send(new Dictionary<string, object?>
+        {
+            ["type"] = "fault",
+            ["cmd"] = cmd,
+            ["error"] = e.GetType().Name,
+            ["message"] = e.Message,
         });
     }
 

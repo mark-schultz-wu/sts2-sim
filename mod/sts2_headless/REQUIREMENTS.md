@@ -373,6 +373,7 @@ and events, and `buy {index}` for shops. Both rooms use
 | rest site `HEAL` at 0/80 hp | 0 → 24, and the remaining options clear |
 | event `AROMA_OF_CHAOS` / `LET_GO` | parks a nested `select_cards`, answered, resolved |
 | shop buy `STAMPEDE` @36 | gold 99 → 63, deck 10 → 11 |
+| shop buy card removal @75 | parks a `select_cards`, answered, deck 10 → 9 |
 | bad index, disabled option, locked option | refused, room unchanged |
 | unaffordable purchase | refused, naming cost and gold |
 | `choose_option` in a shop | refused |
@@ -393,6 +394,20 @@ That was the fourth instance of one bug, so the flags are now a single counter
 rather than one more each time. The shape, stated once. **Out of combat, every
 readiness test the driver has is trivially true, so work started outside the
 action queue is invisible to it.**
+
+There have been three more since, all the same shape, and all found by driving
+the game rather than by reading it. Those are `choose_option` on `SMITH`, `grant`
+of a relic whose `AfterObtained` parks (Royal Stamp), and `Chest.Pick` of one of
+the ten enchant-on-obtain relics. The fourth is `buy` of a shop's card removal
+entry, from the fuzzer at move 72 of a random run. `OnTryPurchaseWrapper` awaits
+`DoMerchantCardRemoval`, which parks a card selection.
+
+The rule, since the count keeps going up: **a handler never awaits work that can
+park a question.** It tracks the work and waits at the decision point. What that
+costs is the refusal the awaited call returns. So every refusal a handler can
+give has to be decided in front of the work rather than read off it. That is what
+`buy` now does with `IsStocked`, `EnoughGold` and `Observation.Blocked`, the same
+three the observation already reports.
 
 *Run-end, found here and now handled.* A driven run that lost kept accepting
 commands, and a dead player was observed healing at a rest site. The real game

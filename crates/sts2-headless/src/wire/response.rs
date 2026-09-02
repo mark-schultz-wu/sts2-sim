@@ -14,8 +14,12 @@
 //! records. Envelope drift is what the protocol version in the handshake is
 //! for, and [`crate::Oracle`] checks it.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
+use sts2_core::{Applied, ContentVersion};
+
+use super::observation::{Error as ObservationError, observation};
+use super::question::WireQuestion;
 
 /// A request that the game accepted.
 ///
@@ -59,144 +63,86 @@ pub enum Response {
         /// attached to a pending exactly as they are to an observation.
         digest: String,
         state: Value,
+        /// Flattened, because the mod writes a question's fields beside the
+        /// envelope's rather than under a key.
+        ///
+        /// Which is also why `WireQuestion` is not `deny_unknown_fields`.
+        /// A flattened deserializer sees `seq`, `cmd`, `digest` and `state`
+        /// too, so refusing what it does not know refuses every pending.
+        /// Every struct *inside* a question is strict, since none of them is
+        /// flattened.
         #[serde(flatten)]
-        question: Question,
+        question: Asked,
     },
 
     /// The reply to [`crate::Command::Quit`], and the last line the game sends.
     Bye,
 }
 
-/// A refused command.
-///
-/// Separate from [`Response`] because the game did not move. [`crate::Game::send`]
-/// returns it through the inner `Err` while the session remains healthy. It has
-/// no state because the caller.s prior state is still current.
-#[derive(Debug, Clone, Deserialize, thiserror::Error)]
-#[error("refused {cmd}: {message}")]
-pub struct Refusal {
-    pub cmd: String,
-    /// Written to be read: an illegal `travel` lists the legal coords, an unplayable card names the reason and what blocked it.
-    pub message: String,
-}
-
-/// What a parked game is asking.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Question {
-    /// Answer with [`crate::Answer::Cards`].
-    SelectCards {
-        min: u32,
-        max: u32,
-        /// The running action, not the game's own prompt text, a selector never receives the prompt, so this is attribution rather than wording.
-        asker: Option<String>,
-        options: Vec<CardOption>,
-    },
-    /// Answer with [`crate::Answer::Skip`] or [`crate::Answer::Take`].
-    Rewards {
-        skippable: bool,
-        rewards: Vec<RewardDetail>,
-    },
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CardOption {
-    pub index: usize,
-    /// Entry name, plus `+N` when upgraded, plus `/AFFLICTION` when afflicted.
-    pub card: String,
-}
-
-/// One reward on offer.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(try_from = "WireReward")]
-pub struct RewardDetail {
-    pub index: usize,
-    /// A reward can exist in the set without content, which is not the same as the reward being absent. Reported for every kind, including [`RewardKind::Other`].
-    pub populated: bool,
-    pub reward: RewardKind,
-}
-
-/// What a reward actually offers.
-///
-/// A sum rather than a struct of mutually exclusive `Option`s: the game sends exactly one shape per reward, so anything else must not be expressible.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RewardKind {
-    Gold {
-        amount: i64,
-    },
-    /// Entry names, in the form [`CardOption::card`] uses. Empty is possible. An unpopulated card reward still reports the field.
-    Card {
-        cards: Vec<String>,
-    },
-    Relic {
-        /// Absent when the reward exists but `RelicReward.Populate` found nothing.
-        relic: Option<String>,
-        rarity: String,
-    },
-    Potion {
-        /// Absent for the same reason a relic can be.
-        potion: Option<String>,
-    },
-    /// A reward type this crate does not unpack, named rather than anonymous.
+impl Response {
+    /// The state this reply carries, if it carries one.
     ///
-    /// Deliberately not a catch-all meaning "cannot say": an earlier attempt in this repo used one of those for screens. A value indistinguishable from a real answer is worse than no value. This says only that the game described a reward whose per-type fields are not modelled here.
-    Other {
-        kind: String,
-    },
-}
+    /// An observation and a pending both report where the run is standing, and
+    /// a `Bye` does not. Untyped, because this is the value a relay passes on
+    /// and [`Response::applied`] reads.
+    pub fn state(&self) -> Option<&Value> {
+        match self {
+            Self::Observation { state, .. } | Self::Pending { state, .. } => Some(state),
+            Self::Bye => None,
+        }
+    }
 
-/// The flat form the game actually sends.
-///
-/// Kept private and converted immediately: `type` selects which of the remaining fields are meaningful, which is a sum type wearing a struct's clothes.
-#[derive(Serialize, Deserialize)]
-struct WireReward {
-    index: usize,
-    #[serde(rename = "type")]
-    kind: String,
-    populated: bool,
-    #[serde(default)]
-    amount: Option<i64>,
-    #[serde(default)]
-    cards: Option<Vec<String>>,
-    #[serde(default)]
-    relic: Option<String>,
-    #[serde(default)]
-    rarity: Option<String>,
-    #[serde(default)]
-    potion: Option<String>,
-}
+    /// What the game logged while running the command.
+    ///
+    /// Never suppressed and never an error on its own. The command can have
+    /// half-happened, and only the caller decides whether to trust the state
+    /// that came back. Empty for a pending and for a `Bye`, neither of which
+    /// reports one.
+    pub fn game_errors(&self) -> &[String] {
+        match self {
+            Self::Observation { game_errors, .. } => game_errors.as_deref().unwrap_or(&[]),
+            Self::Pending { .. } | Self::Bye => &[],
+        }
+    }
 
-impl TryFrom<WireReward> for RewardDetail {
-    type Error = String;
+    /// This reply as the vocabulary two implementations share.
+    ///
+    /// `None` for a `Bye`, which reports no run. Everything the envelope adds
+    /// is dropped here: the sequence number, the command name, and the game's
+    /// own digest. None of it is carried into a type a simulator also fills
+    /// in.
+    pub fn applied<V: ContentVersion>(&self) -> Result<Option<Applied<V>>, ObservationError> {
+        let (state, resolved, asking) = match self {
+            Self::Observation {
+                state, resolved, ..
+            } => (state, *resolved, None),
 
-    fn try_from(w: WireReward) -> Result<Self, Self::Error> {
-        // A known type missing the field that defines it is a protocol
-        // disagreement, not something to paper over by falling back to `Other`,         // that will turn a broken game into a reward the client silently
-        // cannot act on.
-        let missing = |field: &str| format!("{} is missing '{field}'", w.kind);
+            // A parked game has not finished the decision, so it is not
+            // resolved; `asking` is what tells that apart from a decision the
+            // game abandoned.
+            Self::Pending {
+                state, question, ..
+            } => (state, false, Some(question.clone())),
 
-        let reward = match w.kind.as_str() {
-            "GoldReward" => RewardKind::Gold {
-                amount: w.amount.ok_or_else(|| missing("amount"))?,
-            },
-            "CardReward" => RewardKind::Card {
-                cards: w.cards.ok_or_else(|| missing("cards"))?,
-            },
-            "RelicReward" => RewardKind::Relic {
-                relic: w.relic,
-                rarity: w.rarity.ok_or_else(|| missing("rarity"))?,
-            },
-            "PotionReward" => RewardKind::Potion { potion: w.potion },
-            _ => RewardKind::Other { kind: w.kind },
+            Self::Bye => return Ok(None),
         };
 
-        Ok(Self {
-            index: w.index,
-            populated: w.populated,
-            reward,
-        })
+        Ok(Some(Applied {
+            observation: observation::<V>(state)?,
+            asking: asking.map(|q| q.0.into_domain::<V>()).transpose()?,
+            resolved,
+        }))
     }
 }
+
+/// The question a pending carries, unread.
+///
+/// Opaque on purpose. A caller reads it through [`Response::applied`], which
+/// produces the [`sts2_core::Question`] both implementations share. The wire's
+/// own spelling of one has no business outside this crate. A public field on a
+/// public enum variant cannot be made private any other way.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Asked(WireQuestion);
 
 #[cfg(test)]
 mod tests {
@@ -280,142 +226,23 @@ mod tests {
         assert_eq!(state["gold"], 99);
     }
 
-    /// The envelope and the question arrive flat in one object, so this pins that `flatten` plus an internally tagged enum works inside a variant.
+    /// The envelope and the question arrive flat in one object, so this pins
+    /// that `flatten` plus an internally tagged enum works inside a variant.
+    ///
+    /// What the question *says* is `wire::question`'s to test. This is only
+    /// that the two halves of a pending come off one object.
     #[test]
-    fn select_cards_flattens_into_the_envelope() {
+    fn a_question_flattens_into_the_envelope() {
         let r = parse(
             r#"{"type":"pending","seq":7,"cmd":"play_card","kind":"select_cards",
                 "digest":"D1","state":{},"min":1,"max":2,"asker":"DiscardAction",
                 "options":[{"index":0,"card":"STRIKE"},{"index":1,"card":"BASH+1"}]}"#,
         );
-        let Response::Pending {
-            seq, cmd, question, ..
-        } = r
-        else {
+        let Response::Pending { seq, cmd, .. } = r else {
             panic!("expected pending");
         };
         assert_eq!(seq, 7);
         assert_eq!(cmd, "play_card");
-        let Question::SelectCards {
-            min, max, options, ..
-        } = question
-        else {
-            panic!("expected select_cards");
-        };
-        assert_eq!((min, max), (1, 2));
-        assert_eq!(options[1].card, "BASH+1");
-    }
-
-    #[test]
-    fn a_selector_with_no_attribution_is_allowed() {
-        let r = parse(
-            r#"{"type":"pending","seq":8,"cmd":"answer","kind":"select_cards",
-                "digest":"D2","state":{},"min":0,"max":1,"asker":null,"options":[]}"#,
-        );
-        let Response::Pending { question, .. } = r else {
-            panic!("expected pending");
-        };
-        let Question::SelectCards { asker, .. } = question else {
-            panic!("expected select_cards");
-        };
-        assert!(asker.is_none());
-    }
-
-    #[test]
-    fn rewards_describe_each_type_differently() {
-        let r = parse(
-            r#"{"type":"pending","seq":9,"cmd":"end_turn","kind":"rewards",
-                "digest":"D3","state":{},"skippable":true,
-                "rewards":[
-                  {"index":0,"type":"GoldReward","populated":true,"amount":25},
-                  {"index":1,"type":"CardReward","populated":true,"cards":["STRIKE","BASH+1"]},
-                  {"index":2,"type":"RelicReward","populated":false,"relic":null,"rarity":"COMMON"}]}"#,
-        );
-        let Response::Pending { question, .. } = r else {
-            panic!("expected pending");
-        };
-        let Question::Rewards { skippable, rewards } = question else {
-            panic!("expected rewards");
-        };
-        assert!(skippable);
-        assert_eq!(rewards[0].reward, RewardKind::Gold { amount: 25 });
-        assert_eq!(
-            rewards[1].reward,
-            RewardKind::Card {
-                cards: vec!["STRIKE".into(), "BASH+1".into()],
-            }
-        );
-
-        // An explicit null is what an unpopulated relic reward actually sends,         // the mod sets no ignore condition, so nulls go on the wire.
-        assert!(!rewards[2].populated);
-        assert_eq!(
-            rewards[2].reward,
-            RewardKind::Relic {
-                relic: None,
-                rarity: "COMMON".into(),
-            }
-        );
-    }
-
-    fn reward(json: &str) -> Result<RewardDetail, serde_json::Error> {
-        serde_json::from_str(json)
-    }
-
-    #[test]
-    fn a_potion_reward_may_have_no_potion() {
-        let r = reward(r#"{"index":0,"type":"PotionReward","populated":false,"potion":null}"#)
-            .expect("should parse");
-        assert_eq!(r.reward, RewardKind::Potion { potion: None });
-    }
-
-    /// A reward type this crate does not model keeps its name. Therefore a caller can say what it saw rather than only that it saw something.
-    #[test]
-    fn an_unmodelled_reward_type_is_named() {
-        let r = reward(r#"{"index":3,"type":"SapphireReward","populated":true}"#)
-            .expect("should parse");
-        assert_eq!(
-            r.reward,
-            RewardKind::Other {
-                kind: "SapphireReward".into(),
-            }
-        );
-        assert!(r.populated);
-    }
-
-    /// A known type missing the field that defines it is a disagreement with the game, and has to be loud rather than degrading into `Other`.
-    #[test]
-    fn a_known_type_missing_its_field_is_refused() {
-        let err = reward(r#"{"index":0,"type":"GoldReward","populated":true}"#)
-            .expect_err("should refuse");
-        assert!(
-            err.to_string().contains("GoldReward is missing 'amount'"),
-            "unhelpful message: {err}"
-        );
-
-        let err = reward(r#"{"index":0,"type":"RelicReward","populated":true,"relic":"BURNING"}"#)
-            .expect_err("should refuse");
-        assert!(
-            err.to_string().contains("RelicReward is missing 'rarity'"),
-            "unhelpful message: {err}"
-        );
-    }
-
-    /// An empty card reward is legal and must not be confused with a broken one.
-    #[test]
-    fn an_empty_card_reward_is_not_a_missing_one() {
-        let r = reward(r#"{"index":0,"type":"CardReward","populated":false,"cards":[]}"#)
-            .expect("should parse");
-        assert_eq!(r.reward, RewardKind::Card { cards: vec![] });
-    }
-
-    #[test]
-    fn a_refusal_carries_the_command_it_refused() {
-        let r: Refusal =
-            serde_json::from_str(r#"{"type":"error","cmd":"travel","message":"not travelable"}"#)
-                .expect("should parse");
-        assert_eq!(r.cmd, "travel");
-        assert_eq!(r.message, "not travelable");
-        assert_eq!(r.to_string(), "refused travel: not travelable");
     }
 
     #[test]

@@ -39,12 +39,21 @@ sts2-rng        the game's draw stream, verified against 1024 draws per seed
 sts2-content    v0_107_1/generated/   xtask writes this, never hand-edited
                 v0_107_1/dumps/       what the game printed
 sts2-headless   a client for the headless mod, the oracle's transport
+                recording.rs          a run, as the decisions that made it
+sts2-cli        `sts2`: a daemon holding one game, and one command per invocation
 xtask           cargo xtask codegen
 ```
+
+`sts2-cli` is a front end, and the parts of it that are opinions say so. How an
+observation reads at a terminal is its choice and not the oracle's, which is why
+none of that lives in `sts2-headless`.
 
 Planned, and the subject of most of this document:
 
 ```
+sts2-core       the shared vocabulary: decisions, observations, refusals, and
+                the traits an implementation of the game satisfies. Both the
+                oracle and the engine implement them. See STS2-CORE.md.
 sts2-content    v0_107_1/behaviour/   hand-ported, never generated
 sts2-sim-core   the nouns and the traits. Combat state, creature, piles, and the
                 hook trait content implements. No content, no engine.
@@ -55,6 +64,139 @@ sts2-sim        the engine. Turn loop, map generation, rewards, shops, run
 Dependencies run `sts2-content → sts2-sim-core` and `sts2-sim → sts2-sim-core`.
 Content depends on the traits it implements. The engine depends on the same
 traits and calls them. Neither depends on the other.
+
+The cycle that forces a third crate is worth stating, because it is not obvious
+and every link in it is load-bearing. Behaviour is version-scoped, so it lives in
+`sts2-content`. Strike's behaviour mutates combat state, so it must name that
+type. Combat state belongs to an engine that is generic over the version, so the
+engine cannot be named by content without pointing back. A crate both can name
+and neither owns is what breaks it.
+
+**Rejected: declaring those nouns and traits in `sts2-content` instead**, to save
+a crate. It breaks the same cycle. Content states what it needs from a combat
+state, and the engine provides it, so the objection is not correctness.
+
+What it costs is the rule that makes `sts2-content` legible. That crate is
+scoped to the game's own content. It is dumped from the C# binaries, or
+hand-ported from them, and checked against the dump it came from. A mutable `Creature`
+holding current HP is neither. It is a state machine this project designed.
+Beside the generated tables it leaves the crate with no one-sentence answer to
+"what belongs here". That question is what codegen, the dumps, the version
+modules and the generated/ vs behaviour/ split are all organised around. A crate
+is cheaper than that rule.
+
+It also kept the dependency honest in a small way. `sts2-core` takes
+`sts2-content` for the `ContentVersion` trait alone. The alternative compiles
+engine declarations it never uses, in `sts2-headless` too.
+
+## Seeing the map
+
+`sts2 show map` draws the act. It is a command of its own rather than part of
+every reply, because the map does not change while a fight is being played.
+Fifteen rows printed after every card bury the fight.
+
+Which room to enter next is the decision above every other one in a run, and it
+is made by looking several rows ahead. That means whether the elite comes before
+the shop, and whether this branch reaches a campfire at all. The one-line
+summary in an observation answers "where am I and what is adjacent", which is
+the wrong question for that.
+
+The observation carries the graph (`map.points`) beside the legal moves
+(`map.travelable`), because neither can be derived from the other. Legality
+depends on the run and on free travel, and the graph does not. The renderer
+marks the node the run is on, the nodes it can step to, and the ones already
+walked. It draws the edges the game itself draws.
+
+## Playing at random
+
+`just fuzz` starts a run, stacks a hundred `Gorget`, and takes legal moves at
+random until the run ends or something breaks. It drives its own game process
+rather than the daemon, and records every move, so a finding is a file rather
+than a story.
+
+Three things count as a finding. The game refuses a move the oracle offered, the
+game logs an error while running one, or the game dies. The first is the useful
+one. It means the legality the oracle reports and the legality the game enforces
+have come apart. That is precisely the class of bug a simulator inherits.
+
+The legal set comes from `cli::moves`, which enumerates what `cli::choose`
+accepts. That shared source is deliberate. A fuzzer with its own idea of
+legality finds disagreements between itself and the CLI, rather than between the
+oracle and the game.
+
+It earns its keep immediately. Three runs found two real defects nobody
+constructs by hand. One is a shop offering a potion to a full belt: stocked,
+affordable, and refused. The other is every run stalling on floor 17 with the
+act boss dead and nothing legal. The act transition was not in the protocol at
+all.
+
+## Recording a run
+
+A run is a seed and a sequence of decisions. Determinism (D1) is what makes that
+a complete description. The same decisions from the same seed reproduce the run
+exactly, so a recording stores no state at all.
+
+A recording is only meaningful against a build. The steps name cards, encounters
+and rooms, and one replayed against the wrong version is not a broken file. It
+is a different run that happens to parse. So the build is the type parameter,
+`Recording<V>` beside `Oracle<V>` and `Command<V>`, and there is no version
+field. The stamp on disk is checked against `V` on the way in. It goes through
+`Stamp::describes`, which also decides whether a connecting game is the right
+build.
+
+It lives in `sts2-headless` because a step is a `Command<V>` and there is no
+other candidate. It was briefly in `sts2-content`, generic over an abstract step,
+which was wrong twice over. `sts2-content` knows what a build contains and has
+no protocol to record. And a step type nothing else ever supplies is an
+abstraction with one caller.
+
+**Superseded**: [STS2-CORE.md](STS2-CORE.md) moves it to `sts2-core`, which is
+now that other candidate. A recording is a list of decisions, and decisions stop
+belonging to the transport once a second implementation takes them. The
+`sts2-content` rejection above still stands: a step type with two real
+implementations is not an abstraction with one caller.
+
+The format is JSON Lines: a stamp, then one line per step. One line rather than
+one document, because a recording is written while the run is still being
+played. A session that is killed or times out then leaves a file complete up to
+its last decision. The daemon relays commands untyped but records them typed. So
+a line that cannot replay is refused when it is written, rather than when it is
+read.
+
+`sts2 run replay` picks a run back up rather than reproducing it and stopping.
+The game is left sitting at the last decision, and ordinary commands carry on
+from there.
+
+`sts2 run start` records by default, to
+`<state dir>/sts2/runs/<seed>-<character>.jsonl`. It is named for the run,
+because that is the question anyone opening the directory is asking. It is
+numbered on repeat, because a second attempt at a seed already kept is
+deliberate. Which run turns out to be worth having is recognised afterwards, and
+one that was not written down cannot be shown to anybody. A few kilobytes is the
+cheaper side of that trade. `--record FILE` overrides the name, and `--no-record`
+declines.
+
+Replaying is the exception, where writing is always asked for. A bare `replay`
+records nothing and does not touch the file. A command that silently appends to
+a file nobody named is one you have to remember not to run. The file it appends
+to is the one being investigated. On a replay, `--record FILE` says
+where the run goes from here. Name the file being replayed and it is carried on,
+appended to, since the steps just sent are already in it. That also means a
+replay that fails halfway cannot truncate the run it was opened to look at. Name
+any other file and it is written fresh, holding the replayed steps and
+everything after.
+
+`--steps N` lands mid-run, which makes a branch. Pointed at a fresh file, that is
+just a shorter run. Pointed at the source it rewrites it, which is destructive,
+and is what naming that file asked for.
+
+It earns its place twice. Now, an interface complaint stops being anecdotal. The
+run that read badly can be replayed to the exact decision, as often as the
+rendering needs changing. Later, it is the input to a divergence test. The same
+steps are driven into the oracle and into the simulator and compared step by
+step. The recording is the thing that says what "the same run" means. `just live`
+already runs that shape, with a second game standing in for the simulator that
+does not exist yet.
 
 ## Why behaviour lives in content
 
@@ -106,11 +248,11 @@ in every signature that can fail, to carry a diagnostic string nobody matches
 on.
 
 The parameter earns more than typing. `ContentVersion::VERSION` lets
-`Game::launch` compare the build it is talking to against the build its tables
+`Oracle::launch` compare the build it is talking to against the build its tables
 describe, and refuse. So a client physically cannot drive the wrong game. Before
 this, that check was the caller's to remember.
 
-The one door around it is `Game::send_raw`. The typed API is exhaustive over
+The one door around it is `Oracle::send_raw`. The typed API is exhaustive over
 what the tables know. That is exactly why it cannot express a request the game
 must refuse. An encounter that does not exist is one, and a `RoomType` codegen
 drops is another. Testing the refusal path needs those. That is a different
@@ -119,12 +261,18 @@ the type of every field.
 
 ## Two things called hooks
 
-Worth separating, because only one of them forces a crate boundary.
+Worth separating, because they point in opposite directions and only one of
+them is forced by the crate layout.
 
 - **`trait Relic { fn modify_damage(&self, state: &mut CombatState, …) }`.**
   Content implements, engine calls. Needed regardless.
 - **`trait CombatState`.** Engine implements, content calls. Needed only because
   content lives in a different crate from the state.
+
+Both are declared in `sts2-sim-core`, which is what lets the dependency run one
+way. The second one exists purely to pay for the crate boundary. An engine with
+behaviour inside it needs no such trait at all, and that arrangement was
+rejected for versioning reasons above.
 
 ## The hook trait is a superset
 
@@ -199,6 +347,15 @@ Four layers, each catching what the one before cannot.
    is shipped in the game's `release_info.json`, and moves on any code change.
    Codegen refuses to generate when two dumps disagree on any of it.
 
+   Neither hash says anything about **the mod**, because redeploying one moves
+   neither. So the greeting carries a third identity: the first 8 bytes of a
+   SHA-256 over the mod's own sources, produced by
+   `mod/sts2_headless/identity.sh`. That script is run by the mod's build and
+   again by `sts2-headless`'s `build.rs`, so one script answers for both ends.
+   The client refuses a mismatch at the handshake.
+   It replaced a hand-maintained `protocol` integer, which had the same job and
+   had to be remembered.
+
 2. **The replay.** Each domain's test walks its dump row by row against the
    generated table. This catches a table that was not regenerated.
 
@@ -211,6 +368,15 @@ Four layers, each catching what the one before cannot.
 4. **The oracle.** `sts2-headless` drives the real game one decision at a time
    and compares digests. It is the only thing that checks a *body* is right, and
    the only thing that catches a hook firing at the wrong point.
+
+   The digest it compares is `Observation<V>::digest`, taken in Rust over the
+   typed observation, so both implementations derive it from the same value. The
+   mod still sends one of its own, a SHA-256 over a JSON string built in C#.
+   That one can only ever compare the game against another copy of the game.
+   `just live` asserts the two agree about whether two runs are the same run.
+   That is what catches an observation that dropped a field the game's state
+   has. `just live` still runs a second game where the simulator will go,
+   because the simulator does not exist yet.
 
 ## Dumping technique
 

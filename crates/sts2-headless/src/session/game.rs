@@ -1,8 +1,10 @@
 //! The session: launching the game, and one request at a time over it.
 
 use crate::session::config::BINARY;
-use crate::wire::greeting::{PROTOCOL_VERSION, parse_greeting};
-use crate::{Command, Config, Error, Greeting, Reply};
+use crate::wire::command::Command;
+use crate::wire::greeting::parse_greeting;
+use crate::wire::refusal::{WireFault, WireRefusal};
+use crate::{Config, Error, Greeting, Reply, Response};
 use serde_json::Value;
 use std::fmt;
 use std::io::{BufRead, BufReader, Write};
@@ -11,20 +13,29 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::process::{Child, Command as Proc, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use sts2_core::ContentVersion;
+use sts2_core::{Answered, Construct, Decision, Play, Setup};
 
 /// A running game, and the process behind it.
 ///
-/// Dropping this closes the connection, which the game treats as a normal shutdown, and then reaps the process. Therefore a client that dies does not leave a game behind.
-pub struct Game<V: ContentVersion> {
+/// The name is what it is *for*. [`Play`] and [`Construct`] are the whole of
+/// what it offers a caller driving a run, and everything inherent below is
+/// oracle-specific.
+///
+/// Dropping this closes the connection, which the game treats as a normal
+/// shutdown, and then reaps the process. There is no `quit`: the protocol's is
+/// what `Drop` sends.
+pub struct Oracle<V: ContentVersion> {
     version: PhantomData<V>,
     child: Child,
     writer: TcpStream,
     reader: BufReader<TcpStream>,
     greeting: Greeting,
     command_timeout: Duration,
+    /// The most recent reply, kept so the envelope stays reachable.
+    last: Option<Response>,
 }
 
-impl<V: ContentVersion> Game<V> {
+impl<V: ContentVersion> Oracle<V> {
     /// Launches the game and waits for it to connect back.
     ///
     /// The game dials out. This binds an ephemeral port first and passes it to
@@ -60,9 +71,8 @@ impl<V: ContentVersion> Game<V> {
             // Always. The digest-only mode saves bandwidth and log size, not
             // time -- H7 measures the two within 5% of each other, because a
             // decision costs frame-boundary latency rather than serialisation.
-            // Paying ~200KB/s to make `state` unconditional is the better trade,
-            // and it is what lets Observation and Pending carry a Value rather
-            // than an Option nobody can reason about.
+            // Paying ~200KB/s to make `state` unconditional is the better
+            // trade, and keeps Observation and Pending off an Option.
             .env("STS2_HEADLESS_OBS", "full")
             // Harmony patching does not work without this, and fails in a way
             // that looks like something else. MonoMod writes a native helper to
@@ -91,6 +101,7 @@ impl<V: ContentVersion> Game<V> {
                     reader,
                     greeting,
                     command_timeout: config.command_timeout,
+                    last: None,
                 }),
                 Err(e) => {
                     reap(&mut child);
@@ -132,14 +143,9 @@ impl<V: ContentVersion> Game<V> {
         let line = read_line(&mut reader)?;
         let greeting = parse_greeting(&line)?;
 
-        if greeting.protocol != PROTOCOL_VERSION {
-            return Err(Error::ProtocolMismatch {
-                expected: PROTOCOL_VERSION,
-                found: greeting.protocol,
-            });
-        }
+        greeting.built_from_our_source()?;
 
-        // The startup deadline was for a game that had not booted yet. Commands
+        // The startup deadline was for a game that had not booted yet; commands
         // get the shorter one.
         reader
             .get_ref()
@@ -155,27 +161,56 @@ impl<V: ContentVersion> Game<V> {
         &self.greeting
     }
 
-    /// Sends one command and returns what it produced.
+    /// What the game logged while running the most recent command.
     ///
-    /// The outer `Result` is whether the exchange happened at all. The inner one is whether the game accepted the command. See [`Reply`].
-    pub fn send(&mut self, command: &Command<V>) -> Result<Reply, Error> {
-        let line =
-            serde_json::to_string(command).map_err(|e| Error::Encode(format!("{command:?}"), e))?;
+    /// Oracle-specific, and so not on [`Play`], because a simulator has no
+    /// engine log to report. Never an error on its own. The command can have
+    /// half-happened, and only the caller decides whether to trust the state it
+    /// produced.
+    pub fn logged(&self) -> &[String] {
+        self.last.as_ref().map_or(&[], Response::game_errors)
+    }
 
-        parse_reply(&self.send_line(&line)?)
+    /// The most recent reply, as the protocol sent it.
+    ///
+    /// The envelope [`Play`] drops, none of which is a fact about the run.
+    ///
+    /// The digest is the reason this exists. The mod computes one over the
+    /// state it built, and [`sts2_core::Observation::digest`] over what
+    /// survived. Two runs the game calls different while this crate calls them
+    /// the same is an observation missing a field.
+    ///
+    /// `None` before the first command.
+    pub fn reported(&self) -> Option<&Response> {
+        self.last.as_ref()
+    }
+
+    /// Puts one domain value on the wire in the protocol's own spelling.
+    ///
+    /// The conversion is the point of the boundary. Nothing in `sts2-core`
+    /// knows how to serialize itself, so the mod's shape cannot leak out of
+    /// this crate by accident.
+    fn dispatch<'a>(&mut self, command: impl Into<Command<V>> + 'a) -> Result<Reply<V>, Error> {
+        let wire: Command<V> = command.into();
+        let line =
+            serde_json::to_string(&wire).map_err(|e| Error::Encode(format!("{wire:?}"), e))?;
+
+        parse_reply::<V>(&self.send_line(&line)?)
     }
 
     /// Sends a command this crate's types cannot vouch for.
     ///
-    /// The typed API covers names in the tables. Tests need this path to send
-    /// nonexistent encounters and dropped room types that the game must refuse.
-    /// A command absent from the typed API that the game accepts instead exposes
-    /// a content-table gap.
-    pub fn send_raw(&mut self, command: &Value) -> Result<Reply, Error> {
+    /// The typed API is exhaustive over what the tables know, which is why it
+    /// cannot express a request the game refuses. Testing the refusal path needs
+    /// to send one anyway.
+    ///
+    /// Nothing else reaches for this. A command the typed API cannot build and
+    /// the game accepts is a gap in the content tables.
+    pub fn send_raw(&mut self, command: &Value) -> Result<Reply<V>, Error> {
         let line =
             serde_json::to_string(command).map_err(|e| Error::Encode(format!("{command}"), e))?;
 
-        parse_reply(&self.send_line(&line)?)
+        parse_reply::<V>(&self.send_line(&line)?)
     }
 
     /// Sends one already-encoded line and returns the game's answer unparsed.
@@ -209,7 +244,31 @@ impl<V: ContentVersion> Game<V> {
     }
 }
 
-impl<V: ContentVersion> Drop for Game<V> {
+impl<V: ContentVersion> Play<V> for Oracle<V> {
+    type Error = Error;
+
+    fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
+        let reply = self.dispatch(decision)?;
+        super::receive(reply, &mut self.last)
+    }
+
+    /// Straight down the socket rather than through `dispatch`: there
+    /// is no [`Decision`] that spells this, which is the point of it being its
+    /// own method.
+    fn observe(&mut self) -> Result<Answered<V>, Error> {
+        let reply = parse_reply::<V>(&self.send_line(r#"{"cmd":"observe"}"#)?)?;
+        super::receive(reply, &mut self.last)
+    }
+}
+
+impl<V: ContentVersion> Construct<V> for Oracle<V> {
+    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
+        let reply = self.dispatch(step)?;
+        super::receive(reply, &mut self.last)
+    }
+}
+
+impl<V: ContentVersion> Drop for Oracle<V> {
     fn drop(&mut self) {
         // Closing the socket is the documented shutdown: the game sees EOF and
         // exits. Shutting down explicitly rather than relying on field drop
@@ -219,12 +278,12 @@ impl<V: ContentVersion> Drop for Game<V> {
     }
 }
 
-impl<V: ContentVersion> fmt::Debug for Game<V> {
+impl<V: ContentVersion> fmt::Debug for Oracle<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Game")
+        f.debug_struct("Oracle")
             .field("pid", &self.child.id())
             .field("game", &self.greeting.game)
-            .field("protocol", &self.greeting.protocol)
+            .field("mod", &self.greeting.identity)
             .finish_non_exhaustive()
     }
 }
@@ -293,18 +352,32 @@ fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, Error> {
 
 /// Splits a reply into "the game refused" and "the game answered".
 ///
-/// Reads the discriminator before deserialization, then routes the declared
-/// response type. Public because a relay using [`Game::send_line`] must make the
-/// same response-or-refusal decision. Serde alone expects an externally tagged
-/// `Result`, which the protocol does not send.
-pub fn parse_reply(line: &str) -> Result<Reply, Error> {
+/// The discriminator is read before deserializing. Each kind of message is
+/// routed by what it says it is, not by which struct accepts it.
+///
+/// Public because [`Oracle::send_line`] hands a relay the raw line, and whatever
+/// reads it must decide response-or-refusal the same way.
+///
+/// A `fault` is neither half of the pair, and comes back as an [`Error`].
+pub fn parse_reply<V: ContentVersion>(line: &str) -> Result<Reply<V>, Error> {
     let decode = |e| Error::Decode(line.to_string(), e);
     let value: Value = serde_json::from_str(line).map_err(decode)?;
 
-    if value.get("type").and_then(Value::as_str) == Some("error") {
-        return Ok(Err(serde_json::from_value(value).map_err(decode)?));
+    match value.get("type").and_then(Value::as_str) {
+        Some("error") => {
+            let wire: WireRefusal = serde_json::from_value(value).map_err(decode)?;
+            Ok(Err(wire.into_domain::<V>()?))
+        }
+        Some("fault") => {
+            let fault: WireFault = serde_json::from_value(value).map_err(decode)?;
+            Err(Error::Faulted {
+                cmd: fault.cmd,
+                error: fault.error,
+                message: fault.message,
+            })
+        }
+        _ => Ok(Ok(serde_json::from_value(value).map_err(decode)?)),
     }
-    Ok(Ok(serde_json::from_value(value).map_err(decode)?))
 }
 
 /// Ends the game process, politely if it will go on its own.
@@ -350,13 +423,23 @@ fn fresh_token() -> String {
 #[cfg(test)]
 mod handshake {
     use super::*;
+    use crate::wire::greeting::MOD_IDENTITY;
     use sts2_content::v0_107_1::V0_107_1;
 
     type V = V0_107_1;
 
-    const HELLO: &str = r#"{"type":"hello","protocol":1,"game":"v0.107.1",
-        "commit":"abc1234","assemblyHash":1692500715,"contentHash":42,
-            "commands":["start","quit"]}"#;
+    /// A greeting from the mod this client was built against.
+    ///
+    /// Built rather than written out, because the identity is a hash of the
+    /// mod's source and so is only known at build time. A literal here is a
+    /// constant validating itself.
+    fn hello() -> String {
+        format!(
+            r#"{{"type":"hello","mod":"{MOD_IDENTITY}","game":"v0.107.1",
+            "commit":"abc1234","assemblyHash":1692500715,"contentHash":42,
+            "commands":["start","quit"]}}"#
+        )
+    }
 
     /// A stand-in for the game: a process that stays alive long enough to be
     /// reaped, so [`accept_before`] does not mistake it for a crashed launch.
@@ -393,7 +476,7 @@ mod handshake {
 
         let mut child = idle_child();
         let result =
-            Game::<V>::connect(&listener, &mut child, token, &quick(Duration::from_secs(5)))
+            Oracle::<V>::connect(&listener, &mut child, token, &quick(Duration::from_secs(5)))
                 .map(|(_, _, hello)| hello);
         reap(&mut child);
         result
@@ -401,8 +484,8 @@ mod handshake {
 
     #[test]
     fn a_matching_token_and_greeting_get_through() {
-        let greeting = against("tok", &["tok", HELLO]).expect("handshake should succeed");
-        assert_eq!(greeting.protocol, PROTOCOL_VERSION);
+        let greeting = against("tok", &["tok", &hello()]).expect("handshake should succeed");
+        assert_eq!(greeting.identity.as_deref(), Some(MOD_IDENTITY));
         assert_eq!(greeting.game, "v0.107.1");
         assert_eq!(greeting.assembly_hash, 1_692_500_715);
         assert_eq!(greeting.commands, ["start", "quit"]);
@@ -410,7 +493,7 @@ mod handshake {
 
     #[test]
     fn a_stranger_on_our_port_is_refused() {
-        let err = against("tok", &["not-our-token", HELLO]).expect_err("should refuse");
+        let err = against("tok", &["not-our-token", &hello()]).expect_err("should refuse");
         assert!(matches!(err, Error::WrongPeer), "got {err:?}");
     }
 
@@ -420,19 +503,30 @@ mod handshake {
         assert!(matches!(err, Error::NoGreeting(_)), "got {err:?}");
     }
 
+    /// The check this whole mechanism exists for. A mod that was edited and
+    /// never redeployed is caught at the handshake, rather than as a decode
+    /// failure deep in a run.
     #[test]
-    fn a_protocol_we_do_not_speak_is_refused_up_front() {
-        let future = r#"{"type":"hello","protocol":2,"game":"v9","commit":"c","assemblyHash":1,
-            "contentHash":1,"commands":[]}"#;
-        let err = against("tok", &["tok", future]).expect_err("should refuse");
+    fn a_mod_we_were_not_built_against_is_refused() {
+        let stale = r#"{"type":"hello","mod":"0000000000000000","game":"v0.107.1",
+            "commit":"c","assemblyHash":1,"contentHash":1,"commands":[]}"#;
+        let err = against("tok", &["tok", stale]).expect_err("should refuse");
+        let Error::WrongMod { expected, found } = err else {
+            panic!("expected a mod mismatch, got {err:?}");
+        };
+        assert_eq!(expected, MOD_IDENTITY);
+        assert_eq!(found, "0000000000000000");
+    }
+
+    /// A mod from before the greeting carried an identity cannot be ours. It
+    /// says so, rather than failing as a greeting missing a field.
+    #[test]
+    fn a_mod_that_does_not_identify_itself_is_refused_by_name() {
+        let old = r#"{"type":"hello","protocol":1,"game":"v0.107.1","commit":"c",
+            "assemblyHash":1,"contentHash":1,"commands":[]}"#;
+        let err = against("tok", &["tok", old]).expect_err("should refuse");
         assert!(
-            matches!(
-                err,
-                Error::ProtocolMismatch {
-                    expected: 1,
-                    found: 2
-                }
-            ),
+            matches!(&err, Error::WrongMod { found, .. } if found == "a mod too old to say"),
             "got {err:?}"
         );
     }
@@ -456,9 +550,10 @@ mod handshake {
         drop(peer);
 
         let mut child = idle_child();
-        let err = Game::<V>::connect(&listener, &mut child, "tok", &quick(Duration::from_secs(5)))
-            .map(|_| ())
-            .expect_err("should fail");
+        let err =
+            Oracle::<V>::connect(&listener, &mut child, "tok", &quick(Duration::from_secs(5)))
+                .map(|_| ())
+                .expect_err("should fail");
         reap(&mut child);
         assert!(matches!(err, Error::GameGone), "got {err:?}");
     }
@@ -502,7 +597,7 @@ mod handshake {
     #[test]
     fn a_missing_game_is_caught_before_anything_is_spawned() {
         let config = Config::new("/nonexistent/game/dir");
-        let err = Game::<V>::launch(config)
+        let err = Oracle::<V>::launch(config)
             .map(|_| ())
             .expect_err("should fail");
         assert!(matches!(err, Error::GameNotFound(_)), "got {err:?}");
@@ -519,13 +614,13 @@ mod handshake {
         assert_eq!(missing.to_string(), "no game binary at /nope/SlayTheSpire2");
         assert!(missing.source().is_none());
 
-        let mismatch = Error::ProtocolMismatch {
-            expected: 1,
-            found: 2,
+        let mismatch = Error::WrongMod {
+            expected: "aaaa".into(),
+            found: "bbbb".into(),
         };
         assert_eq!(
             mismatch.to_string(),
-            "the game speaks protocol v2, this client speaks v1"
+            "the game is running mod bbbb, this client was built against aaaa; redeploy the mod"
         );
 
         // The cause has to survive, or `{:#}` and anyhow's chain lose the

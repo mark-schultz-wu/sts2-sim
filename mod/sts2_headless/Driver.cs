@@ -432,6 +432,36 @@ public static class Driver
         return null;
     }
 
+    /// <summary>Jumps the run to a named event, off the map.</summary>
+    /// <remarks>
+    /// The same shape as <see cref="EnterFight"/>, and through the game's own
+    /// <c>EventConsoleCmd</c> for the same reason: it is what
+    /// <c>AppendToMapPointHistory</c> and <c>EnterRoom(new EventRoom(...))</c>
+    /// are called from, so the room the run lands in is the one the game builds
+    /// rather than one assembled here.
+    ///
+    /// It exists because one event cannot be reached any other way worth
+    /// testing. <c>enter_room</c> takes a <c>RoomType</c>, so `Event` rolls
+    /// whichever event the seed offers, and reaching the Crystal Sphere that way
+    /// meant 515 recorded steps to floor 29.
+    /// </remarks>
+    public static async Task<string?> EnterEvent(RunState state, string entry)
+    {
+        Stage = "entering event";
+        CmdResult result = new EventConsoleCmd().Process(state.Players[0], new[] { entry });
+        if (!result.success)
+        {
+            return result.msg;
+        }
+
+        if (result.task != null)
+        {
+            await result.task;
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Plays one card through the real action queue, for tests that need a
     /// card to have been played this turn.

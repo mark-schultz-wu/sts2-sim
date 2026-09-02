@@ -412,7 +412,6 @@ dependencies = [
  "serial_test",
  "sts2-content",
  "sts2-core",
- "sts2-rng",
  "thiserror",
 ]
 
