@@ -6,29 +6,29 @@
 //!
 //! # What this front end knows about the game
 //!
-//! That it implements [`Construct`]. Nothing else.
+//! That it implements [`sts2_core::Construct`]. Nothing else.
 //!
 //! It does not know that the oracle boots in seconds, that something holds it
-//! between two invocations, or that a unix socket is involved. Those
-//! are facts about *that* implementation, and `sts2-headless` keeps them behind
-//! [`Session`]. A simulator is a struct in this process with none of those
-//! problems. Pointing this binary at one is meant to be the line below that
-//! names the type.
+//! between two invocations, or that a unix socket is involved. Those are facts
+//! about *that* implementation, and [`sts2_cli::oracle`] keeps them behind
+//! [`Held`].
+//!
+//! # What is left in the binary
+//!
+//! The command line itself: what clap accepts, which group each subcommand
+//! belongs to, and how an answer is printed. [`sts2_cli::control`] performs the
+//! commands, against anything that plays the game.
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use sts2_cli::Readable;
-use sts2_cli::cli::{Play, choose};
+use sts2_cli::cli::Play;
+use sts2_cli::control::{self, Outcome};
+use sts2_cli::oracle::{self, Held};
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Answered, Applied, Construct, Step};
-// Anonymously, because this crate's own `Play` is the clap subcommand group and
-// the two would otherwise collide. Only its methods are wanted here.
-use sts2_core::Play as _;
-use sts2_headless::daemon::{self, DEFAULT_IDLE_TIMEOUT};
-use sts2_headless::{Config, Session, recording};
+use sts2_headless::Session;
+use sts2_headless::daemon::DEFAULT_IDLE_TIMEOUT;
 
 /// The build this drives.
 ///
@@ -38,11 +38,17 @@ type V = V0_107_1;
 
 /// The implementation this drives, named once for the same reason.
 ///
-/// Everything below reaches it through [`Construct`], so the day there is a
-/// simulator this line is what changes. `Session` is the oracle held open by a
-/// daemon. `sts2_headless::Oracle` is one this process owns and kills on the
-/// way out.
+/// Everything below reaches it through [`sts2_core::Construct`], so the day
+/// there is a simulator this line is what changes. `Session` is the oracle held
+/// open by a daemon. `sts2_headless::Oracle` is one this process owns and kills
+/// on the way out.
 type Game = Session<V>;
+
+/// What holds the game, named once beside it.
+///
+/// The oracle's daemon and socket live behind this. A simulator needs no such
+/// line, because there is nothing to hold.
+type Host = Held<V>;
 
 #[derive(Debug, Parser)]
 #[command(name = "sts2", about = "Drive a headless Slay the Spire 2.", version)]
@@ -196,15 +202,22 @@ enum DaemonCommand {
     },
 }
 
+/// One invocation, in the two halves a front end has.
+///
+/// A [`control::Command`] is answered by any implementation. The rest is about
+/// the machinery that holds one, and only the oracle has any.
 #[derive(Debug)]
 enum Command {
-    Play(Play),
+    Run(control::Command),
+    Held(Machinery),
+}
+
+/// A command about what holds the game, rather than about the run.
+#[derive(Debug)]
+enum Machinery {
     Serve {
         detach: bool,
         idle_timeout: u64,
-    },
-    Choose {
-        indices: Vec<sts2_cli::cli::Taking>,
     },
     Record {
         file: Option<PathBuf>,
@@ -214,49 +227,47 @@ enum Command {
         steps: Option<usize>,
         record: Option<PathBuf>,
     },
-    Map,
     Status,
     Stop,
 }
 
+/// Puts a subcommand into the half that answers it.
 fn grouped(top: Top) -> Command {
+    let run = |play| Command::Run(control::Command::Step(play));
+
     match top {
         Top::Run { command } => match command {
-            RunCommand::Start(args) => Command::Play(Play::Start(args)),
-            RunCommand::Record { file } => Command::Record { file },
+            RunCommand::Start(args) => run(Play::Start(args)),
+            RunCommand::Record { file } => Command::Held(Machinery::Record { file }),
             RunCommand::Replay {
                 file,
                 steps,
                 record,
-            } => Command::Replay {
+            } => Command::Held(Machinery::Replay {
                 file,
                 steps,
                 record,
-            },
-            RunCommand::Status => Command::Status,
-            RunCommand::Stop => Command::Stop,
+            }),
+            RunCommand::Status => Command::Held(Machinery::Status),
+            RunCommand::Stop => Command::Held(Machinery::Stop),
         },
         Top::Show { command } => match command {
-            ShowCommand::State => Command::Play(Play::Observe),
-            ShowCommand::Map => Command::Map,
+            ShowCommand::State => run(Play::Observe),
+            ShowCommand::Map => Command::Run(control::Command::Map),
         },
         Top::Act { command } => match command {
-            ActCommand::Choose { indices } => Command::Choose { indices },
-            ActCommand::Travel { col, row } => Command::Play(Play::Travel { col, row }),
-            ActCommand::EnterRoom { room } => Command::Play(Play::EnterRoom { room }),
-            ActCommand::PlayCard { index, target } => {
-                Command::Play(Play::PlayCard { index, target })
-            }
-            ActCommand::EndTurn => Command::Play(Play::EndTurn),
-            ActCommand::UsePotion { index, target } => {
-                Command::Play(Play::UsePotion { index, target })
-            }
-            ActCommand::Proceed => Command::Play(Play::Proceed),
-            ActCommand::ChooseOption { index } => Command::Play(Play::ChooseOption { index }),
-            ActCommand::Buy { index } => Command::Play(Play::Buy { index }),
-            ActCommand::Answer(answer) => Command::Play(Play::Answer(answer)),
+            ActCommand::Choose { indices } => Command::Run(control::Command::Choose(indices)),
+            ActCommand::Travel { col, row } => run(Play::Travel { col, row }),
+            ActCommand::EnterRoom { room } => run(Play::EnterRoom { room }),
+            ActCommand::PlayCard { index, target } => run(Play::PlayCard { index, target }),
+            ActCommand::EndTurn => run(Play::EndTurn),
+            ActCommand::UsePotion { index, target } => run(Play::UsePotion { index, target }),
+            ActCommand::Proceed => run(Play::Proceed),
+            ActCommand::ChooseOption { index } => run(Play::ChooseOption { index }),
+            ActCommand::Buy { index } => run(Play::Buy { index }),
+            ActCommand::Answer(answer) => run(Play::Answer(answer)),
         },
-        Top::Setup { command } => Command::Play(match command {
+        Top::Setup { command } => run(match command {
             SetupCommand::Fight { encounter } => Play::Fight { encounter },
             SetupCommand::Event { event } => Play::Event { event },
             SetupCommand::Grant {
@@ -273,10 +284,10 @@ fn grouped(top: Top) -> Command {
             DaemonCommand::Serve {
                 detach,
                 idle_timeout,
-            } => Command::Serve {
+            } => Command::Held(Machinery::Serve {
                 detach,
                 idle_timeout,
-            },
+            }),
         },
     }
 }
@@ -284,139 +295,73 @@ fn grouped(top: Top) -> Command {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let show = Show { rng: cli.rng };
+    let held: Host = Held::new(serving);
 
     let Some(top) = cli.command else {
-        return play(show);
+        return play(&held, show);
     };
 
-    let command = grouped(top);
-
-    match command {
-        Command::Serve {
+    match grouped(top) {
+        Command::Held(Machinery::Serve {
             detach,
             idle_timeout,
-        } => {
-            let idle = Duration::from_secs(idle_timeout);
-            if detach {
-                daemon::spawn(serving(idle)?)?;
-                println!("serving at {}", daemon::socket_path().display());
-                return Ok(());
-            }
-            Ok(daemon::serve::<V>(game_config()?, idle)?)
-        }
+        }) => held.serve(detach, Duration::from_secs(idle_timeout)),
 
-        Command::Choose { indices } => {
-            let mut game = Game::new();
+        Command::Held(Machinery::Record { file }) => said(held.record(file)?),
+        Command::Held(Machinery::Status) => said(held.status()?),
+        Command::Held(Machinery::Stop) => said(held.stop()?),
 
-            // One extra look before acting, because which mechanism the game is
-            // asking through is its state rather than the caller's intent.
-            // Observing advances nothing, which is what makes looking safe.
-            let looked = look(&mut game)?;
-            let awaiting = choose::awaiting(&looked)?;
-            let decision = choose::command::<V>(&awaiting, &indices)?;
-
-            eprintln!("({})", choose::describe(&awaiting));
-            let seen = send(&mut game, &decision.into())?;
-            report(&game, seen, show)
-        }
-
-        Command::Record { file } => match Game::new().record(file, false)? {
-            sts2_headless::Recorded { path: Some(p), .. } => {
-                println!("recording to {}", p.display());
-                Ok(())
-            }
-            sts2_headless::Recorded { steps, .. } => {
-                println!("stopped recording after {steps} step(s)");
-                Ok(())
-            }
-        },
-
-        Command::Replay {
+        Command::Held(Machinery::Replay {
             file,
             steps,
             record,
-        } => replay(&file, steps, record, show),
+        }) => replay(&held, &file, steps, record, show),
 
-        Command::Map => {
-            let seen = look(&mut Game::new())?;
-            let map = sts2_cli::render::map::drawn(&seen.observation.map)
-                .context("this observation carried no map")?;
-            print!("{map}");
-            Ok(())
-        }
-
-        Command::Status => {
-            let status = Game::new().status()?;
-            println!(
-                "running  pid {}\ngame     {}\nidle     {}s of {}s",
-                status.pid,
-                status.game,
-                status.idle.as_secs(),
-                status.idle_timeout.as_secs()
-            );
-            if let Some(path) = status.recording {
-                println!("record   {}", path.display());
-            }
-            Ok(())
-        }
-
-        Command::Stop => {
-            if !daemon::running() {
-                println!("nothing running");
-                return Ok(());
-            }
-            Game::new().stop()?;
-            println!("stopped");
-            Ok(())
-        }
-
-        Command::Play(play) => {
-            let Some(step) = play.step::<V>()? else {
-                // `observe` reads as a command and is not a step in the run.
-                let mut game = Game::new();
-                let seen = look(&mut game)?;
-                return report(&game, seen, show);
-            };
-
-            let mut game = Game::new();
-
-            // Only `start` may bring a game up. Any other command against no
-            // game is a mistake worth naming, not a twenty-second pause
-            // followed by a refusal.
-            if let Play::Start(args) = &play {
-                if !daemon::running() {
-                    daemon::spawn(serving(DEFAULT_IDLE_TIMEOUT)?)?;
-                }
-                // Before the `start` itself, so the recording opens with it. A
-                // recording that does not begin at a `start` is not a run.
-                if let Some(path) = args.recording()? {
-                    begin_recording(&game, path, false)?;
-                }
-            }
-
-            let seen = send(&mut game, &step)?;
-            report(&game, seen, show)
+        Command::Run(command) => {
+            let mut game = for_command(&held, &command)?;
+            let outcome = control::perform(&mut game, &command)?;
+            report(&game, outcome, show)
         }
     }
 }
 
+/// The game this command goes to.
+///
+/// Only `start` brings one up. Any other command against no game is a mistake
+/// worth naming, not a twenty-second pause followed by a refusal.
+fn for_command(held: &Host, command: &control::Command) -> Result<Game> {
+    let control::Command::Step(start @ Play::Start(args)) = command else {
+        return Ok(held.attached());
+    };
+
+    // Read before anything is brought up, so a mistyped seed or character
+    // leaves behind neither a daemon nor an empty recording.
+    start.step::<V>()?;
+
+    held.wake(DEFAULT_IDLE_TIMEOUT)?;
+    let game = held.attached();
+
+    // Before the `start` itself, so the recording opens with it. A recording
+    // that does not begin at a `start` is not a run.
+    if let Some(path) = args.recording()? {
+        oracle::begin_recording(&game, path, false)?;
+    }
+    Ok(game)
+}
+
 /// Opens the game on the screen.
 ///
-/// The daemon is not started for this. A run is begun with `sts2 run start`,
+/// The game is not started for this. A run is begun with `sts2 run start`,
 /// which is one line and says what it does. Bringing the game up on a bare
 /// `sts2` means twenty seconds of nothing, followed by a screen with no run in
 /// it. It also gives the player no way to say which seed they wanted.
-fn play(show: Show) -> Result<()> {
-    // The daemon comes up; the *game* does not. Launching the game is what
-    // costs twenty seconds, and the daemon only does that when a command needs
-    // one — so a bare `sts2` opens on the setup screen straight away and the
-    // game boots while the player is picking a character.
-    let fresh = !daemon::running();
-    if fresh {
-        daemon::spawn(serving(DEFAULT_IDLE_TIMEOUT)?)?;
-    }
+fn play(held: &Host, show: Show) -> Result<()> {
+    // The daemon comes up. The *game* does not, so a bare `sts2` opens on the
+    // setup screen straight away and the game boots while the player is picking
+    // a character.
+    let fresh = held.wake(DEFAULT_IDLE_TIMEOUT)?;
 
-    let game = Game::new();
+    let game = held.attached();
     let recording = game.status().ok().and_then(|status| status.recording);
     sts2_cli::tui::run::<V, _>(
         game,
@@ -426,37 +371,6 @@ fn play(show: Show) -> Result<()> {
             fresh,
         },
     )
-}
-
-/// Sends one step and returns what any implementation says, refusals as errors.
-///
-/// Uses only [`Construct`]. A refusal is a trait value because the game answered,
-/// but becomes an error here because a shell needs a non-zero exit status.
-///
-/// `send` is the quiet path: a replay step, or the look `choose` takes before
-/// it acts. A warning is worth saying once, and [`report`] says it.
-fn send(game: &mut Game, step: &Step<V>) -> Result<Applied<V>> {
-    answering(game.step(step)?)
-}
-
-/// Asks where the run is standing, without moving it.
-///
-/// What a front end does when it has nothing in hand, which is every time. This
-/// is one process per command, so the last answer went out with the last
-/// process.
-fn look(game: &mut Game) -> Result<Applied<V>> {
-    answering(game.observe()?)
-}
-
-/// A refusal, turned into an error.
-///
-/// It is the game answering rather than this failing, which is why it is a
-/// value at the trait. But a shell wants a non-zero exit status for a move that
-/// did not happen, and that is what an `Err` is here.
-fn answering(answered: Answered<V>) -> Result<Applied<V>> {
-    // Rendered here rather than through `Display`: `sts2-core` carries the
-    // refusal as data and does not name a card, which is this crate's job.
-    answered.map_err(|refused| anyhow::anyhow!("{}", sts2_cli::render::refusal::refusal(&refused)))
 }
 
 /// What the caller asked to be shown beyond the game itself.
@@ -469,45 +383,25 @@ struct Show {
     rng: bool,
 }
 
-/// Everything the oracle adds to what a simulator says.
-///
-/// The rule line and the game's log are the protocol's and not the run's. So
-/// they are handed to the renderer rather than reached for by it. A front end
-/// driving something else prints the same page without them.
-fn readable(game: &Game, applied: &Applied<V>, show: Show) -> String {
-    let mut view = Readable::new(applied).logging(game.logged());
-    if let Some((seq, cmd, digest)) = game.reported().and_then(envelope) {
-        view = view.in_reply(seq, cmd, digest);
-    }
-    if show.rng {
-        view = view.with_rng();
-    }
-    format!("{view}")
+/// Prints a whole answer that is words rather than a state.
+fn said(words: String) -> Result<()> {
+    println!("{words}");
+    Ok(())
 }
 
-/// The three scalars the protocol wraps a reply in.
-fn envelope(reported: &sts2_headless::Response) -> Option<(u64, &str, &str)> {
-    match reported {
-        sts2_headless::Response::Observation {
-            seq, cmd, digest, ..
-        }
-        | sts2_headless::Response::Pending {
-            seq, cmd, digest, ..
-        } => Some((*seq, cmd, digest)),
-        sts2_headless::Response::Bye => None,
-    }
-}
-
-/// Prints what one step produced, and anything that went wrong beside it.
+/// Prints what one command produced, and anything that went wrong beside it.
 ///
 /// The warning is the session failing rather than the game. A recording that
 /// stopped means the move happened and the file did not. Saying nothing about
 /// that is how a run gets played out under the belief it was being kept.
-fn report(game: &Game, applied: Applied<V>, show: Show) -> Result<()> {
+fn report(game: &Game, outcome: Outcome<V>, show: Show) -> Result<()> {
     if let Some(warning) = game.warned() {
         eprintln!("(warning: {warning})");
     }
-    println!("{}", readable(game, &applied, show));
+    match outcome {
+        Outcome::Seen(applied) => println!("{}", oracle::readable(game, &applied, show.rng)),
+        Outcome::Said(words) => print!("{words}"),
+    }
     Ok(())
 }
 
@@ -515,37 +409,20 @@ fn report(game: &Game, applied: Applied<V>, show: Show) -> Result<()> {
 ///
 /// Built here because *which binary serves* is this front end's fact, not
 /// `sts2-headless`'s. The crate owns the socket and the loop, and this owns the
-/// knowledge that it has a `serve` subcommand to come back through.
+/// knowledge of the subcommand to come back through.
+///
+/// The subcommand is spelled the way [`Top`] groups it. It is a command line
+/// like any other, and a test below parses it rather than trusting it.
 fn serving(idle: Duration) -> Result<std::process::Command> {
     let exe = std::env::current_exe().context("finding this binary")?;
     let mut command = std::process::Command::new(exe);
     command
-        .arg("serve")
+        .args(["daemon", "serve"])
         .arg("--idle-timeout")
         .arg(idle.as_secs().to_string());
     Ok(command)
 }
 
-/// Tells the session where to write the run, and fails loudly if it cannot.
-///
-/// Loudly because the alternative is a run played to the end under the belief
-/// that it was being kept.
-fn begin_recording(game: &Game, path: PathBuf, append: bool) -> Result<()> {
-    game.record(Some(path.clone()), append)?;
-
-    let verb = if append {
-        "still recording"
-    } else {
-        "recording"
-    };
-    eprintln!("({verb} to {})", path.display());
-    Ok(())
-}
-
-/// Sends a recorded run's steps into a fresh game.
-///
-/// Replays the run and prints only the final state. The caller wants to
-/// stand where the recording ended.
 /// Whether two paths name the same existing file.
 ///
 /// The file being replayed always exists, having just been read. A `--record`
@@ -558,45 +435,25 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// Sends a recorded run's steps into a fresh game, and prints where it ended.
 fn replay(
-    file: &PathBuf,
+    held: &Host,
+    file: &Path,
     stop_after: Option<usize>,
     record: Option<PathBuf>,
     show: Show,
 ) -> Result<()> {
-    let opened =
-        std::fs::File::open(file).with_context(|| format!("opening {}", file.display()))?;
-    let recording = recording::read::<V>(BufReader::new(opened))
-        .with_context(|| format!("reading {}", file.display()))?;
-
+    let recording = oracle::recorded::<V>(file)?;
     let steps = match stop_after {
         Some(n) if n < recording.len() => &recording.steps()[..n],
         _ => recording.steps(),
     };
 
-    let Some(first) = steps.first() else {
-        bail!("{} has no steps in it", file.display());
-    };
-    if !matches!(first, Step::Decision(sts2_core::Decision::Start { .. })) {
-        // A recording begun mid-run replays into a different run, silently: the
-        // seed is unset, so every shuffle differs from the first step on.
-        bail!(
-            "{} does not begin with a `start`, so it is a fragment rather than a run",
-            file.display()
-        );
+    if steps.is_empty() {
+        bail!("--steps 0 stops before the first step, which replays nothing");
     }
 
-    // A replay is a new run, so it needs a game with nothing in it. Stopping
-    // rather than reusing: a daemon holding a half-played run would apply these
-    // steps on top of it.
-    if daemon::running() {
-        Game::new().stop()?;
-        while daemon::running() {
-            std::thread::sleep(Duration::from_millis(25));
-        }
-    }
-    daemon::spawn(serving(DEFAULT_IDLE_TIMEOUT)?)?;
-    let mut game = Game::new();
+    let mut game = held.empty()?;
 
     // Carrying the replayed file on means appending to it: the steps about to
     // be sent are already there, so it starts *after* the replay. Anything else
@@ -612,49 +469,74 @@ fn replay(
     if let Some(path) = &record
         && !carry_on
     {
-        begin_recording(&game, path.clone(), false)?;
+        oracle::begin_recording(&game, path.clone(), false)?;
     }
 
-    let total = steps.len();
-    let mut last = None;
-    for (at, step) in steps.iter().enumerate() {
-        eprint!("\rreplaying {}/{total}", at + 1);
-        // Line-buffered output would hold the counter until the newline below,
-        // so a long replay would show nothing until it had finished.
-        let _ = std::io::Write::flush(&mut std::io::stderr());
-        // Through `send` rather than `report`, so a step the game refuses stops
-        // the replay at the step that broke rather than at whatever came after.
-        last = Some(send(&mut game, step).with_context(|| format!("step {} of {total}", at + 1))?);
-    }
-    eprintln!();
+    let last = control::replay(&mut game, steps)?;
 
     // The source file is resumed *after*, because it already holds every step
-    // just sent. Appending rather than rewriting is also what keeps a replay
-    // that failed halfway from truncating the very run somebody opened it to
-    // look at.
+    // just sent.
     //
     // `--steps` is a branch: writing into the source from there would drop the
     // steps that were not replayed. So a branch records only where it is told
-    // to, and says it is not recording otherwise — silently stopping is how a
+    // to, and says it is not recording otherwise. Silently stopping is how a
     // session gets played out under the belief it was being kept.
     if carry_on {
-        begin_recording(&game, file.clone(), true)?;
+        oracle::begin_recording(&game, file.to_path_buf(), true)?;
     } else if record.is_none() {
         eprintln!("(not recording — pass --record FILE to play on into one)");
     }
 
     match last {
-        Some(response) => {
-            println!("{}", readable(&game, &response, show));
-            Ok(())
-        }
+        Some(applied) => report(&game, Outcome::Seen(Box::new(applied)), show),
         None => Ok(()),
     }
 }
 
-fn game_config() -> Result<Config> {
-    let dir =
-        sts2_headless::game_dir_from_env().context("set STS2_GAME_DIR to the game's directory")?;
+#[cfg(test)]
+mod tests {
+    use super::{Cli, Command, Machinery, Top, grouped, serving};
+    use clap::Parser;
+    use std::ffi::OsStr;
+    use sts2_headless::daemon::DEFAULT_IDLE_TIMEOUT;
 
-    Ok(Config::new(dir))
+    /// The daemon re-enters this binary, so what it is spawned with has to be a
+    /// command line this binary accepts.
+    ///
+    /// Nothing else checks the loop. A subcommand that moves under a group
+    /// leaves the spawn parsing nothing. The socket stays unbound, and every
+    /// `run start` reports a daemon that did not come up.
+    #[test]
+    fn the_daemon_is_spawned_with_a_command_line_this_binary_accepts() {
+        let spawned = serving(DEFAULT_IDLE_TIMEOUT).unwrap();
+        let argv = std::iter::once(OsStr::new("sts2")).chain(spawned.get_args());
+
+        let parsed = Cli::try_parse_from(argv).expect("a command line sts2 accepts");
+
+        let Some(Top::Daemon { .. }) = &parsed.command else {
+            panic!("the daemon is spawned into something other than `daemon`");
+        };
+        assert!(matches!(
+            grouped(parsed.command.unwrap()),
+            Command::Held(Machinery::Serve { detach: false, .. })
+        ));
+    }
+
+    /// The seconds the daemon is told to wait are the seconds it is spawned
+    /// with, rather than the default it picks for itself.
+    #[test]
+    fn the_idle_timeout_survives_the_spawn() {
+        let spawned = serving(std::time::Duration::from_secs(42)).unwrap();
+        let argv = std::iter::once(OsStr::new("sts2")).chain(spawned.get_args());
+
+        let parsed = Cli::try_parse_from(argv).unwrap();
+
+        assert!(matches!(
+            grouped(parsed.command.unwrap()),
+            Command::Held(Machinery::Serve {
+                idle_timeout: 42,
+                ..
+            })
+        ));
+    }
 }

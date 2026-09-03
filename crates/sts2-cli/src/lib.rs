@@ -5,11 +5,13 @@
 //! end can hold different ones.
 
 pub mod cli;
+pub mod control;
 pub mod coverage;
 #[cfg(test)]
 pub(crate) mod fixture;
 pub mod id;
 pub mod map_point;
+pub mod oracle;
 pub mod render;
 pub mod runs;
 pub mod tui;
