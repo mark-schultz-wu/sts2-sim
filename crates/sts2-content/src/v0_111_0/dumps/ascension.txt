@@ -1,0 +1,15 @@
+# ascension data
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
+# level <value> <name>
+level 0 None
+level 1 SwarmingElites
+level 2 WearyTraveler
+level 3 Poverty
+level 4 TightBelt
+level 5 AscendersBane
+level 6 Inflation
+level 7 Scarcity
+level 8 ToughEnemies
+level 9 DeadlyEnemies
+level 10 DoubleBoss
+# 11 levels

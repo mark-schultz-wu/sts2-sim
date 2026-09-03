@@ -1,0 +1,26 @@
+# orb data
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
+# orb <id> <trigger> <randomIndex> <listed>
+# value <orb> <which> <amount> <hooked> <stored>
+orb DARK_ORB turnEnd 2 1
+value DARK_ORB passive 6 1 0
+value DARK_ORB evoke 6 0 1
+orb FROST_ORB turnEnd 1 1
+value FROST_ORB passive 2 1 0
+value FROST_ORB evoke 5 1 0
+orb GLASS_ORB turnEnd 4 0
+value GLASS_ORB passive 4 1 1
+value GLASS_ORB evoke dynamic 0 0
+orb LIGHTNING_ORB turnEnd 0 1
+value LIGHTNING_ORB passive 3 1 0
+value LIGHTNING_ORB evoke 8 1 0
+orb MOCK_COMBAT_CLEANUP_ORB none -1 0
+value MOCK_COMBAT_CLEANUP_ORB passive 0 0 0
+value MOCK_COMBAT_CLEANUP_ORB evoke 0 0 0
+orb MOCK_TURN_END_SUSPEND_ORB turnEnd -1 0
+value MOCK_TURN_END_SUSPEND_ORB passive 0 0 0
+value MOCK_TURN_END_SUSPEND_ORB evoke 0 0 0
+orb PLASMA_ORB turnStart 3 1
+value PLASMA_ORB passive 1 0 0
+value PLASMA_ORB evoke 2 0 0
+# 7 orbs, 5 rollable, 4 listed

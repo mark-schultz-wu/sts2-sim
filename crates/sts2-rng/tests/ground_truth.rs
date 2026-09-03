@@ -1,12 +1,18 @@
-//! Replays `rng/v0_107_1.txt`, dumped from the game, and requires an exact match.
+//! Replays each build's dump, and requires an exact match.
 //!
 //! Generic over [`GameRng`], so a replacement implementation has to pass the
 //! same fixture. Each block reseeds and draws in index order, so index `0`
 //! means reseed.
+//!
+//! Two fixtures, one for each pinned build. The draw rows are identical in both
+//! and the test still replays both, because that is the claim: the generator
+//! did not move between them. The `hash` rows are where they part, and each is
+//! replayed through its own [`Seeding`].
 
-use sts2_rng::{Bound, GameRng, Interval, MegaRng, Span};
+use sts2_rng::{Bound, GameRng, Interleaved, Interval, MegaRng, Seeding, Span, XxHash};
 
-const FIXTURE: &str = include_str!("rng/v0_107_1.txt");
+const V0_107_1: &str = include_str!("rng/v0_107_1.txt");
+const V0_111_0: &str = include_str!("rng/v0_111_0.txt");
 
 fn num<T: std::str::FromStr>(field: &str) -> T
 where
@@ -19,24 +25,37 @@ fn bound(field: &str) -> Bound {
     Bound::new(num(field)).expect("fixture bounds are positive")
 }
 
-fn rows(prefix: &str) -> impl Iterator<Item = (usize, Vec<&'static str>)> {
-    FIXTURE.lines().enumerate().filter_map(move |(n, line)| {
+fn rows(fixture: &'static str, prefix: &str) -> impl Iterator<Item = (usize, Vec<&'static str>)> {
+    fixture.lines().enumerate().filter_map(move |(n, line)| {
         let fields: Vec<&str> = line.split_whitespace().collect();
         (fields.first() == Some(&prefix)).then_some((n, fields))
     })
 }
 
-fn draws<G: GameRng>() -> usize {
+/// The name a `hash` row carries, as hex UTF-16 code units.
+fn name(field: &str) -> String {
+    if field == "-" {
+        return String::new();
+    }
+    let units: Vec<u16> = field
+        .as_bytes()
+        .chunks(4)
+        .map(|c| u16::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap())
+        .collect();
+    String::from_utf16(&units).unwrap()
+}
+
+fn draws<G: GameRng>(fixture: &'static str) -> usize {
     let mut rng = G::new(0);
     let mut checked = 0usize;
 
-    for (lineno, f) in FIXTURE.lines().enumerate().filter_map(|(n, line)| {
+    for (lineno, f) in fixture.lines().enumerate().filter_map(|(n, line)| {
         let f: Vec<&str> = line.split_whitespace().collect();
         let head = *f.first()?;
         (head != "hash" && head != "forward" && !head.starts_with('#')).then_some((n, f))
     }) {
         let method = f[0];
-        let seed: u32 = f[1].parse().unwrap();
+        let seed: u64 = f[1].parse().unwrap();
 
         // `int` carries one bound, `range` two, `raw` has no counter column.
         let (index, expected, counter) = match method {
@@ -109,19 +128,41 @@ fn draws<G: GameRng>() -> usize {
 
 #[test]
 fn every_draw_matches_the_game() {
-    // An emptied fixture would pass while proving nothing.
-    assert_eq!(
-        draws::<MegaRng>(),
-        1024,
-        "the fixture should carry 1024 draws"
-    );
+    // An emptied fixture passes while proving nothing, so the count is pinned.
+    for fixture in [V0_107_1, V0_111_0] {
+        assert_eq!(
+            draws::<MegaRng>(fixture),
+            1024,
+            "the fixture should carry 1024 draws"
+        );
+    }
+}
+
+/// The generator did not move between the two builds.
+///
+/// Stated here as well as replayed above, because it is the reason one
+/// `MegaRng` serves both. v0.111.0 changed how a stream is seeded and named,
+/// and the stream itself came through untouched.
+#[test]
+fn the_two_builds_draw_the_same_numbers() {
+    let rows = |fixture: &'static str| -> Vec<String> {
+        fixture
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.starts_with("hash ") && !l.trim().is_empty())
+            .map(str::to_owned)
+            .collect()
+    };
+
+    let (old, new) = (rows(V0_107_1), rows(V0_111_0));
+    assert_eq!(old.len(), 1028, "the fixture should carry 1028 draw rows");
+    assert_eq!(old, new, "a build moved the draw stream");
 }
 
 /// A stream rebuilt from `(seed, counter)` must equal one drawn to that point.
 #[test]
 fn fast_forwarding_lands_where_drawing_would_have() {
     let mut checked = 0;
-    for (lineno, f) in rows("forward") {
+    for (lineno, f) in rows(V0_107_1, "forward") {
         let (seed, target) = (f[1].parse().unwrap(), f[2].parse().unwrap());
         let mut forwarded = MegaRng::with_counter(seed, target).unwrap();
         assert_eq!(
@@ -138,26 +179,40 @@ fn fast_forwarding_lands_where_drawing_would_have() {
 /// Stream identity: a wrong mix lands on a real stream that is the wrong one.
 #[test]
 fn named_streams_land_on_the_right_seed() {
-    let mut checked = 0;
-    for (lineno, f) in rows("hash") {
-        let expected_seed: u32 = f[2].parse().unwrap();
-        let units: Vec<u16> = if f[3] == "-" {
-            Vec::new()
-        } else {
-            f[3].as_bytes()
-                .chunks(4)
-                .map(|c| u16::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap())
-                .collect()
-        };
-        let name = String::from_utf16(&units).unwrap();
-        assert_eq!(
-            MegaRng::named(1000, &name).seed(),
-            expected_seed,
-            "line {lineno}: {name:?}"
-        );
-        checked += 1;
+    /// A row is `hash <hash of name> <seed of Rng(1000, name)> <name>`.
+    ///
+    /// `read_hash` is per build, because the hash column is the game's own
+    /// return type printed. v0.107.1 returns `int` and prints a negative one as
+    /// negative. v0.111.0 returns `ulong`. The seed column beside it is
+    /// unsigned in both.
+    fn against<S: Seeding>(fixture: &'static str, read_hash: fn(&str) -> u64) {
+        let mut checked = 0;
+        for (lineno, f) in rows(fixture, "hash") {
+            let name = name(f[3]);
+
+            assert_eq!(
+                S::hash(&name).into(),
+                read_hash(f[1]),
+                "line {lineno}: {name:?} hashed wrongly"
+            );
+
+            // The seed the game would draw from, not just the hash. On
+            // v0.107.1 that sum wraps at 2**32 and on v0.111.0 it does not, so
+            // this is where a width mistake shows.
+            assert_eq!(
+                MegaRng::named::<S>(1000u32.into(), &name).seed(),
+                f[2].parse::<u64>().unwrap(),
+                "line {lineno}: {name:?} named the wrong stream"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, 15);
     }
-    assert_eq!(checked, 15);
+
+    against::<Interleaved>(V0_107_1, |field| {
+        field.parse::<i32>().expect("an int") as u32 as u64
+    });
+    against::<XxHash>(V0_111_0, |field| field.parse().expect("a ulong"));
 }
 
 /// A modulo implementation passes a weaker version of the fixture test, so pin

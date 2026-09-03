@@ -35,13 +35,18 @@ computed costs one method, and the reverse costs a divergence nobody can see.
 Built:
 
 ```
+sts2-core       the shared vocabulary: decisions, observations, refusals, and
+                the traits an implementation of the game satisfies. Both the
+                oracle and the engine implement them. See STS2-CORE.md.
 sts2-rng        the game's draw stream, verified against 1024 draws per seed
-sts2-content    v0_107_1/generated/   xtask writes this, never hand-edited
-                v0_107_1/dumps/       what the game printed
+sts2-content    <build>/generated/    xtask writes this, never hand-edited
+                <build>/dumps/        what the game printed
 sts2-headless   a client for the headless mod, the oracle's transport
                 recording.rs          a run, as the decisions that made it
-sts2-cli        `sts2`: a daemon holding one game, and one command per invocation
-xtask           cargo xtask codegen
+sts2-cli        `sts2`: a daemon holding one game, and one command per
+                invocation. `sts2-fuzz`: random legal play until something
+                breaks
+xtask           cargo xtask dump, cargo xtask codegen
 ```
 
 `sts2-cli` is a front end, and the parts of it that are opinions say so. How an
@@ -51,10 +56,7 @@ none of that lives in `sts2-headless`.
 Planned, and the subject of most of this document:
 
 ```
-sts2-core       the shared vocabulary: decisions, observations, refusals, and
-                the traits an implementation of the game satisfies. Both the
-                oracle and the engine implement them. See STS2-CORE.md.
-sts2-content    v0_107_1/behaviour/   hand-ported, never generated
+sts2-content    <build>/behaviour/    hand-ported, never generated
 sts2-sim-core   the nouns and the traits. Combat state, creature, piles, and the
                 hook trait content implements. No content, no engine.
 sts2-sim        the engine. Turn loop, map generation, rewards, shops, run
@@ -311,8 +313,13 @@ than measurement.
 
 ## Sharing behaviour across versions
 
-Not yet built, and deliberately: it needs a second build to test against. The
-mechanism is name resolution rather than macros, because the compiler checks it.
+Not yet built. The mechanism is name resolution rather than macros, because the
+compiler checks it.
+
+The second build to test against now exists. v0.111.0 moved 19 cards in and 1
+out, 12 powers in and 2 out, and 13 encounters in and 3 out. Its hook surface
+went from 181 to 182, and the two that moved are renames of the same shape. The
+monster set did not move at all.
 
 Behaviour is written against *unqualified* names (`Power::Vulnerable`,
 `Card::Wound`). Each version module includes it under its own prelude:
@@ -327,7 +334,7 @@ mod bash;                                              // 108 rewrote it
 Sharing is one line, and divergence is a real file. If v108 removed
 `Power::Vulnerable`, the include fails to compile. The reuse is verified, not
 assumed. How far it gets depends on how much behaviour names other content
-items. That is a number to measure against a second dump, not to design around
+items. That is a number to measure against the second dump, not to design around
 now.
 
 ## How a table is known to be right

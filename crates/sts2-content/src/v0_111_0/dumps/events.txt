@@ -1,0 +1,146 @@
+# event data
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
+# act <act> <event>
+# sharedpool <event>
+# event <id> <ancient> <isShared> <isDeterministic> <layout> <canonicalEncounter> <gated>
+act OVERGROWTH AROMA_OF_CHAOS
+act OVERGROWTH BYRDONIS_NEST
+act OVERGROWTH DENSE_VEGETATION
+act OVERGROWTH JUNGLE_MAZE_ADVENTURE
+act OVERGROWTH LUMINOUS_CHOIR
+act OVERGROWTH MORPHIC_GROVE
+act OVERGROWTH NEOW
+act OVERGROWTH SAPPHIRE_SEED
+act OVERGROWTH SUNKEN_STATUE
+act OVERGROWTH TABLET_OF_TRUTH
+act OVERGROWTH UNREST_SITE
+act OVERGROWTH WELLSPRING
+act OVERGROWTH WHISPERING_HOLLOW
+act OVERGROWTH WOOD_CARVINGS
+act UNDERDOCKS ABYSSAL_BATHS
+act UNDERDOCKS DOORS_OF_LIGHT_AND_DARK
+act UNDERDOCKS DROWNING_BEACON
+act UNDERDOCKS ENDLESS_CONVEYOR
+act UNDERDOCKS NEOW
+act UNDERDOCKS PUNCH_OFF
+act UNDERDOCKS SPIRALING_WHIRLPOOL
+act UNDERDOCKS SUNKEN_STATUE
+act UNDERDOCKS SUNKEN_TREASURY
+act UNDERDOCKS TRASH_HEAP
+act UNDERDOCKS WATERLOGGED_SCRIPTORIUM
+act HIVE AMALGAMATOR
+act HIVE BUGSLAYER
+act HIVE COLORFUL_PHILOSOPHERS
+act HIVE COLOSSAL_FLOWER
+act HIVE FIELD_OF_MAN_SIZED_HOLES
+act HIVE INFESTED_AUTOMATON
+act HIVE LOST_WISP
+act HIVE OROBAS
+act HIVE PAEL
+act HIVE SPIRIT_GRAFTER
+act HIVE TEZCATARA
+act HIVE THE_LANTERN_KEY
+act HIVE ZEN_WEAVER
+act GLORY BATTLEWORN_DUMMY
+act GLORY GRAVE_OF_THE_FORGOTTEN
+act GLORY HUNGRY_FOR_MUSHROOMS
+act GLORY NONUPEIPE
+act GLORY REFLECTIONS
+act GLORY ROUND_TEA_PARTY
+act GLORY TANX
+act GLORY TINKER_TIME
+act GLORY TRIAL
+act GLORY VAKUU
+sharedpool BRAIN_LEECH
+sharedpool CRYSTAL_SPHERE
+sharedpool DARV
+sharedpool DOLL_ROOM
+sharedpool FAKE_MERCHANT
+sharedpool POTION_COURIER
+sharedpool RANWID_THE_ELDER
+sharedpool RELIC_TRADER
+sharedpool ROOM_FULL_OF_CHEESE
+sharedpool SELF_HELP_BOOK
+sharedpool SLIPPERY_BRIDGE
+sharedpool STONE_OF_ALL_TIME
+sharedpool SYMBIOTE
+sharedpool TEA_MASTER
+sharedpool THE_FUTURE_OF_POTIONS
+sharedpool THE_LEGENDS_WERE_TRUE
+sharedpool THIS_OR_THAT
+sharedpool WAR_HISTORIAN_REPY
+sharedpool WELCOME_TO_WONGOS
+event ABYSSAL_BATHS 0 0 1 Default - 0
+event AMALGAMATOR 0 0 1 Default - 1
+event AROMA_OF_CHAOS 0 0 1 Default - 0
+event BATTLEWORN_DUMMY 0 1 0 Default - 0
+event BRAIN_LEECH 0 0 1 Default - 1
+event BUGSLAYER 0 0 1 Default - 0
+event BYRDONIS_NEST 0 0 1 Default - 1
+event COLORFUL_PHILOSOPHERS 0 0 1 Default - 1
+event COLOSSAL_FLOWER 0 0 1 Default - 1
+event CRYSTAL_SPHERE 0 0 0 Default - 1
+event DARV 1 0 1 Ancient - 0
+event DENSE_VEGETATION 0 1 0 Default - 1
+event DEPRECATED_ANCIENT_EVENT 1 0 1 Ancient - 0
+event DEPRECATED_EVENT 0 0 1 Default - 0
+event DOLL_ROOM 0 0 1 Default - 1
+event DOORS_OF_LIGHT_AND_DARK 0 0 1 Default - 0
+event DROWNING_BEACON 0 0 1 Default - 0
+event ENDLESS_CONVEYOR 0 0 1 Default - 1
+event FAKE_MERCHANT 0 1 0 Custom - 1
+event FIELD_OF_MAN_SIZED_HOLES 0 0 1 Default - 1
+event GRAVE_OF_THE_FORGOTTEN 0 0 1 Default - 1
+event HUNGRY_FOR_MUSHROOMS 0 0 1 Default - 0
+event INFESTED_AUTOMATON 0 0 1 Default - 0
+event JUNGLE_MAZE_ADVENTURE 0 1 0 Default - 1
+event LOST_WISP 0 0 1 Default - 0
+event LUMINOUS_CHOIR 0 0 1 Default - 1
+event MOCK_EVENT_MODEL 0 0 1 Default - 0
+event MORPHIC_GROVE 0 1 0 Default - 1
+event NEOW 1 0 1 Ancient - 0
+event NONUPEIPE 1 0 1 Ancient - 0
+event OROBAS 1 0 1 Ancient - 0
+event PAEL 1 0 1 Ancient - 0
+event POTION_COURIER 0 0 1 Default - 1
+event PUNCH_OFF 0 1 0 Combat PUNCH_OFF_EVENT_ENCOUNTER 1
+event RANWID_THE_ELDER 0 0 1 Default - 1
+event REFLECTIONS 0 0 1 Default - 0
+event RELIC_TRADER 0 0 1 Default - 1
+event ROOM_FULL_OF_CHEESE 0 0 1 Default - 1
+event ROUND_TEA_PARTY 0 0 1 Default - 1
+event SAPPHIRE_SEED 0 0 1 Default - 0
+event SELF_HELP_BOOK 0 0 1 Default - 0
+event SLIPPERY_BRIDGE 0 0 1 Default - 1
+event SPIRALING_WHIRLPOOL 0 0 1 Default - 1
+event SPIRIT_GRAFTER 0 0 1 Default - 0
+event STONE_OF_ALL_TIME 0 0 1 Default - 1
+event SUNKEN_STATUE 0 0 1 Default - 0
+event SUNKEN_TREASURY 0 0 1 Default - 0
+event SYMBIOTE 0 0 1 Default - 1
+event TABLET_OF_TRUTH 0 0 1 Default - 0
+event TANX 1 0 1 Ancient - 0
+event TEA_MASTER 0 0 1 Default - 1
+event TEZCATARA 1 0 1 Ancient - 0
+event THE_ARCHITECT 0 0 1 Combat THE_ARCHITECT_EVENT_ENCOUNTER 0
+event THE_FUTURE_OF_POTIONS 0 0 1 Default - 1
+event THE_LANTERN_KEY 0 1 0 Combat MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER 0
+event THE_LEGENDS_WERE_TRUE 0 0 1 Default - 1
+event THIS_OR_THAT 0 0 1 Default - 0
+event TINKER_TIME 0 0 1 Default - 0
+event TRASH_HEAP 0 0 1 Default - 1
+event TRIAL 0 0 1 Default - 0
+event UNREST_SITE 0 0 1 Default - 1
+event VAKUU 1 0 1 Ancient - 0
+event WAR_HISTORIAN_REPY 0 1 0 Default - 1
+event WATERLOGGED_SCRIPTORIUM 0 0 1 Default - 1
+event WELCOME_TO_WONGOS 0 0 1 Default - 1
+event WELLSPRING 0 0 1 Default - 0
+event WHISPERING_HOLLOW 0 0 1 Default - 1
+event WOOD_CARVINGS 0 0 1 Default - 1
+event ZEN_WEAVER 0 0 1 Default - 1
+# 69 events
+enum EventLayoutType 0 Default
+enum EventLayoutType 1 Combat
+enum EventLayoutType 2 Ancient
+enum EventLayoutType 3 Custom

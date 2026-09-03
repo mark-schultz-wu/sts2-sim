@@ -29,8 +29,18 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           "$HOME/.cargo/bin/cargo" --version
 
+      # `just test`: the workspace, then every pinned build's tables by name.
+      # The workspace run compiles them all only because `sts2-cli` asks for
+      # them and cargo unifies features. This does not rely on that.
       - name: Test
-        run: cargo test --workspace
+        run: |
+          set -euo pipefail
+          cargo test --workspace
+          features=""
+          for lock in mod/games/*.lock; do
+            features="$features,$(basename "$lock" .lock | tr . _)"
+          done
+          cargo test -p sts2-content --features "${features#,}"
 
       - name: Lint prose
         run: ./tools/prose-lint.py

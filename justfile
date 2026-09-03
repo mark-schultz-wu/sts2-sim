@@ -27,7 +27,18 @@ check: test lint mods
 
 [doc("The Rust suite, minus the tests that need the game")]
 test:
+    #!/usr/bin/env bash
+    set -euo pipefail
     cargo test --workspace
+    # Every pinned build's tables, named rather than inherited. The workspace
+    # run above happens to compile them all, because `sts2-cli` asks for them
+    # and cargo unifies features. That is a coincidence of one crate's
+    # dependencies, and this does not depend on it holding.
+    features=""
+    for lock in mod/games/*.lock; do
+        features="$features,$(basename "$lock" .lock | tr . _)"
+    done
+    cargo test -p sts2-content --features "${features#,}"
 
 [doc("Clippy, rustfmt, and the prose rules")]
 lint: prose

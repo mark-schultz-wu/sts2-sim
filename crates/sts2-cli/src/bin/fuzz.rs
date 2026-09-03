@@ -19,7 +19,7 @@ use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
 use sts2_core::{Applied, Construct, Decision, Gift, Setup, Step};
 use sts2_headless::{Config, Oracle, recording};
-use sts2_rng::Seed;
+use sts2_rng::{Seed, Seeding};
 
 type V = V0_107_1;
 type Character = <V as ContentVersion>::Character;
@@ -95,10 +95,14 @@ fn main() -> Result<()> {
     config.inherit_game_output = cli.game_output;
     let mut game = Oracle::<V>::launch(config).context("launching the game")?;
 
-    // The seed decides the run; this decides which of the legal moves gets
+    // The seed decides the run. This decides which of the legal moves gets
     // taken. Derived from it so a session is reproducible from its name alone,
     // even before the recording is read back.
-    let mut dice = Dice::from(sts2_rng::stream_seed(&seed));
+    //
+    // One build's seeding, named rather than inherited. These dice are the
+    // fuzzer's own and never the game's, so fidelity is not the point, and the
+    // same name has to pick the same moves whichever build is being driven.
+    let mut dice = Dice::from(sts2_rng::Interleaved::stream_seed(&seed));
 
     let mut cover = Coverage::default();
     cover.started::<V>(character);

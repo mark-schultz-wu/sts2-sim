@@ -52,7 +52,7 @@ does not match the version module it generates into:
 
 ```
 # act data
-# build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
 ```
 
 Two hashes, because one is not enough. `content` is

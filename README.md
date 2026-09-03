@@ -33,10 +33,12 @@ prefix names the file it lives in.
 
 | crate | what it is |
 |---|---|
+| `sts2-core` | the vocabulary both a game and a simulator answer in |
 | `sts2-content` | the game's content as Rust tables, generated from the dumps |
 | `sts2-headless` | a client for the headless mod: launch, handshake, one typed call per decision |
 | `sts2-rng` | the game's draw stream, checked against 1024 draws per seed of the real one |
-| `xtask` | `cargo xtask codegen`, which turns the dumps into `sts2-content` |
+| [`sts2-cli`](crates/sts2-cli/README.md) | `sts2`, which plays a run at a terminal, and `sts2-fuzz`, which plays one at random |
+| `xtask` | `cargo xtask dump` asks the game for its tables, and `codegen` turns them into `sts2-content` |
 
 Content is thirteen domains: acts, afflictions, cards, characters, enchantments,
 encounters, events, modifiers, monsters, orbs, potions, powers and relics. The
@@ -50,6 +52,21 @@ content patch reads as a diff.
 
 Every dump names the build it came from, with two hashes. The content hash covers
 the set of model ids. The assembly hash moves on any code change at all.
+
+## More than one build
+
+STS2 churns 20-50 cards on a minor version, so a pin is what stops a result
+changing because the game did. Each pinned build has a lock under `mod/games/`.
+`STS2_GAME_VERSION` picks which one everything uses. The mods compile against
+it, and the dumps and tables land under it.
+
+Two builds are pinned: v0.107.1 and v0.111.0. Both compile the whole mod set
+from the same sources, with one adapter for each build under every mod's
+`Compat/`. Both have generated tables. `just check` builds every lock, so a
+change that only works against the build you have deployed fails.
+
+v0.107.1 is the floor. It is the build that replaced the game's PRNG with
+xoshiro256\*\*, and `sts2-rng` ports that generator alone.
 
 One hash alone is not enough. A rebalance that adds no content leaves the content
 hash equal and every generated number wrong. Codegen refuses to generate when two
