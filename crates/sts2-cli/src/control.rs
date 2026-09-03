@@ -181,58 +181,15 @@ where
 mod tests {
     use super::{Command, Outcome, perform, replay};
     use crate::fixture;
+    use crate::scripted::Scripted;
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
-    use sts2_core::{Answered, Applied, Construct, Decision, Play, Reason, Refusal, Setup, Step};
+    use sts2_core::{Answered, Applied, Decision, Reason, Refusal, Step};
 
     type V = V0_107_1;
 
-    /// A game that answers from a script, and writes down what it was sent.
-    ///
-    /// Enough to prove what the controller does with an answer. What the real
-    /// game says to the same step is the oracle's business, and the live tests'.
-    struct Scripted {
-        answers: Vec<Answered<V>>,
-        sent: Vec<Step<V>>,
-        looked: usize,
-    }
-
-    impl Scripted {
-        fn saying(answers: Vec<Answered<V>>) -> Scripted {
-            Scripted {
-                answers,
-                sent: Vec::new(),
-                looked: 0,
-            }
-        }
-
-        fn next(&mut self) -> Answered<V> {
-            match self.answers.is_empty() {
-                true => Ok(fixture::applied(json!({}))),
-                false => self.answers.remove(0),
-            }
-        }
-    }
-
-    impl Play<V> for Scripted {
-        type Error = std::io::Error;
-
-        fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-            self.sent.push(Step::Decision(decision.clone()));
-            Ok(self.next())
-        }
-
-        fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
-            self.looked += 1;
-            Ok(self.next())
-        }
-    }
-
-    impl Construct<V> for Scripted {
-        fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Self::Error> {
-            self.sent.push(Step::Setup(step.clone()));
-            Ok(self.next())
-        }
+    fn plain() -> Applied<V> {
+        fixture::applied(json!({}))
     }
 
     fn refused() -> Answered<V> {
@@ -245,13 +202,14 @@ mod tests {
     /// `observe` reads the run without adding a step to it.
     #[test]
     fn observing_sends_nothing() {
-        let mut game = Scripted::saying(Vec::new());
+        let mut game = Scripted::saying(plain());
+        let sent = game.sent();
 
         let outcome = perform(&mut game, &Command::Step(crate::cli::Play::Observe)).unwrap();
 
         assert!(matches!(outcome, Outcome::Seen(_)));
-        assert_eq!(game.looked, 1);
-        assert!(game.sent.is_empty(), "{:?}", game.sent);
+        assert_eq!(game.looked(), 1);
+        assert_eq!(sent.count(), 0, "{:?}", sent.all());
     }
 
     /// The look `choose` takes first is what tells it which answer to send.
@@ -264,18 +222,19 @@ mod tests {
             "rewards": [{"index": 0, "type": "GoldReward", "populated": true,
                          "taken": false, "amount": 25}]
         }));
-        let mut game = Scripted::saying(vec![Ok(asking), Ok(fixture::applied(json!({})))]);
+        let mut game = Scripted::saying_in_turn(vec![Ok(asking), Ok(plain())]);
+        let sent = game.sent();
 
         perform(&mut game, &Command::Choose(vec!["0".parse().unwrap()])).unwrap();
 
-        assert_eq!(game.looked, 1);
-        assert_eq!(game.sent.len(), 1, "{:?}", game.sent);
+        assert_eq!(game.looked(), 1);
+        assert_eq!(sent.count(), 1, "{:?}", sent.all());
     }
 
     /// A refusal is the game answering, and a non-zero exit status here.
     #[test]
     fn a_refusal_is_an_error_at_a_command_line() {
-        let mut game = Scripted::saying(vec![refused()]);
+        let mut game = Scripted::saying_in_turn(vec![refused()]);
 
         let outcome = perform(&mut game, &Command::Step(crate::cli::Play::EndTurn));
 
@@ -290,16 +249,13 @@ mod tests {
             Step::Decision(Decision::Proceed),
             Step::Decision(Decision::EndTurn),
         ];
-        let mut game = Scripted::saying(vec![
-            Ok(fixture::applied(json!({}))),
-            refused(),
-            Ok(fixture::applied(json!({}))),
-        ]);
+        let mut game = Scripted::saying_in_turn(vec![Ok(plain()), refused(), Ok(plain())]);
+        let sent = game.sent();
 
         let outcome = replay(&mut game, &steps);
 
         assert!(outcome.is_err());
-        assert_eq!(game.sent.len(), 2, "the third step went out anyway");
+        assert_eq!(sent.count(), 2, "the third step went out anyway");
         assert!(format!("{:#}", outcome.unwrap_err()).contains("step 2 of 3"));
     }
 
@@ -310,18 +266,37 @@ mod tests {
             Step::Decision(Decision::EndTurn),
             Step::Decision(Decision::Proceed),
         ];
-        let mut game = Scripted::saying(Vec::new());
+        let mut game = Scripted::saying(plain());
+        let sent = game.sent();
 
         let last = replay(&mut game, &steps).unwrap();
 
         assert!(last.is_some());
-        assert_eq!(game.sent, steps);
+        assert_eq!(sent.all(), vec![Decision::EndTurn, Decision::Proceed]);
+    }
+
+    /// A setup step is not a move in the run, and goes the other way.
+    #[test]
+    fn constructing_a_position_is_not_a_decision() {
+        let mut game = Scripted::saying(plain());
+        let sent = game.sent();
+
+        perform(
+            &mut game,
+            &Command::Step(crate::cli::Play::Event {
+                event: "CRYSTAL_SPHERE".into(),
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(sent.count(), 0, "a setup was sent as a decision");
+        assert_eq!(game.constructed().len(), 1);
     }
 
     /// Nothing to fold is nothing to report, rather than a failure.
     #[test]
     fn an_empty_replay_reports_nothing() {
-        let mut game = Scripted::saying(Vec::new());
+        let mut game = Scripted::saying(plain());
 
         let last: Option<Applied<V>> = replay(&mut game, &[]).unwrap();
 

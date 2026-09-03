@@ -982,44 +982,30 @@ fn stage_of<V: ContentVersion>(applied: &Applied<V>) -> Stage {
 mod tests {
     use super::{App, Intent, Stage};
     use crate::fixture::{self, playable, unplayable};
+    use crate::scripted::Scripted;
     use crate::tui::keys::Action;
     use crate::tui::state::{Aim, Options};
     use ratatui::crossterm::event::{KeyCode, KeyEvent};
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
-    use sts2_core::{Answered, Applied, Decision, Play};
+    use sts2_core::{Applied, Decision};
 
     type V = V0_107_1;
 
-    /// A game that fails the test if it is asked anything at all.
-    ///
-    /// Deciding what a key press means must not reach the game. That is the
-    /// whole of the separation, and this is what holds it to it.
-    struct Untouched;
-
-    impl Play<V> for Untouched {
-        type Error = std::io::Error;
-
-        fn play(&mut self, _: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-            panic!("deciding a key press asked the game to play a decision")
-        }
-
-        fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
-            panic!("deciding a key press asked the game where it is")
-        }
-    }
-
     /// The front end, standing at what the game last said.
-    fn showing(applied: Applied<V>) -> App<V, Untouched> {
-        let mut app = App::new(Untouched, Options::default());
+    ///
+    /// The game under it fails the test if it is asked anything. Deciding what
+    /// a key press means must not reach it, and that is what holds it to that.
+    fn showing(applied: Applied<V>) -> App<V, Scripted<V>> {
+        let mut app = App::new(Scripted::untouchable(), Options::default());
         app.accept(Ok(applied), None);
         app
     }
 
     /// The front end with no run behind it, on the setup screen.
-    fn setting_up() -> App<V, Untouched> {
+    fn setting_up() -> App<V, Scripted<V>> {
         App::new(
-            Untouched,
+            Scripted::untouchable(),
             Options {
                 fresh: true,
                 ..Options::default()
@@ -1028,7 +1014,7 @@ mod tests {
     }
 
     /// A room with one numbered option in it.
-    fn in_an_event() -> App<V, Untouched> {
+    fn in_an_event() -> App<V, Scripted<V>> {
         showing(fixture::applied(json!({
             "room": {"type": "Event", "id": "WELLSPRING",
                      "options": [{"index": 6, "key": "DRINK"}]}
@@ -1036,7 +1022,7 @@ mod tests {
     }
 
     /// A fight, with one card that needs aiming and one that cannot be played.
-    fn in_a_fight() -> App<V, Untouched> {
+    fn in_a_fight() -> App<V, Scripted<V>> {
         showing(fixture::applied(json!({
             "inCombat": true,
             "combat": fixture::combat(json!({
@@ -1163,35 +1149,19 @@ mod tests {
         assert_eq!(seed.as_str(), "0RACLE1", "the seed travelled unfolded");
     }
 
-    /// A game that refuses the first thing it is asked, and accepts the next.
-    struct Refusing(bool);
-
-    impl Play<V> for Refusing {
-        type Error = std::io::Error;
-
-        fn play(&mut self, _: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-            let refuse = !self.0;
-            self.0 = true;
-            Ok(match refuse {
-                true => Err(sts2_core::Refusal {
-                    what: "start".into(),
-                    reason: sts2_core::Reason::InCombat,
-                }),
-                false => Ok(fixture::applied(json!({}))),
-            })
-        }
-
-        fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
-            Ok(Ok(fixture::applied(json!({}))))
-        }
-    }
-
     /// The setup screen stays up until the game has the run, and carries the
     /// reason it did not in the meantime. There is no log to put it in yet.
     #[test]
     fn a_refused_start_leaves_the_setup_screen_up() {
+        let refusing = Scripted::saying_in_turn(vec![
+            Err(sts2_core::Refusal {
+                what: "start".into(),
+                reason: sts2_core::Reason::InCombat,
+            }),
+            Ok(fixture::applied(json!({}))),
+        ]);
         let mut app = App::new(
-            Refusing(false),
+            refusing,
             Options {
                 fresh: true,
                 ..Options::default()

@@ -14,6 +14,8 @@ pub mod map_point;
 pub mod oracle;
 pub mod render;
 pub mod runs;
+#[cfg(test)]
+pub(crate) mod scripted;
 pub mod tui;
 
 pub use render::Readable;

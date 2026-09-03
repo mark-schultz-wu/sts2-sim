@@ -13,30 +13,13 @@
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::KeyCode;
-use sts2_core::{Applied, Decision, Play};
+use sts2_core::{Applied, Decision};
 
 use super::app::App;
 use super::state::Options;
+use crate::scripted::Scripted;
 
 type V = sts2_content::v0_107_1::V0_107_1;
-
-/// A game that says one thing, forever.
-///
-/// Enough to draw against, and deliberately not more: a screen is a function of
-/// the last observation, so a fixed observation is the whole input.
-struct Canned(Applied<V>);
-
-impl Play<V> for Canned {
-    type Error = std::convert::Infallible;
-
-    fn play(&mut self, _decision: &Decision<V>) -> Result<sts2_core::Answered<V>, Self::Error> {
-        Ok(Ok(self.0.clone()))
-    }
-
-    fn observe(&mut self) -> Result<sts2_core::Answered<V>, Self::Error> {
-        Ok(Ok(self.0.clone()))
-    }
-}
 
 /// Draws one frame and gives back the buffer, for a claim about colour.
 ///
@@ -50,10 +33,10 @@ fn typing(
     w: u16,
     h: u16,
     keys: &str,
-    before: impl FnOnce(&mut App<V, Noting>),
+    before: impl FnOnce(&mut App<V, Scripted<V>>),
 ) -> (String, Vec<Decision<V>>) {
-    let sent = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-    let game = Noting(std::rc::Rc::clone(&sent));
+    let game = Scripted::saying(crate::fixture::applied(serde_json::json!({})));
+    let sent = game.sent();
 
     let mut app = App::new(
         game,
@@ -88,11 +71,10 @@ fn typing(
         })
         .collect::<Vec<_>>()
         .join("\n");
-    let decisions = sent.borrow().clone();
-    (text, decisions)
+    (text, sent.all())
 }
 
-fn press(app: &mut App<V, Noting>, code: KeyCode) {
+fn press(app: &mut App<V, Scripted<V>>, code: KeyCode) {
     app.key(ratatui::crossterm::event::KeyEvent {
         code,
         modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
@@ -102,29 +84,13 @@ fn press(app: &mut App<V, Noting>, code: KeyCode) {
     .expect("the game answers");
 }
 
-/// A game that says one thing and notes what it was told.
-struct Noting(std::rc::Rc<std::cell::RefCell<Vec<Decision<V>>>>);
-
-impl Play<V> for Noting {
-    type Error = std::convert::Infallible;
-
-    fn play(&mut self, decision: &Decision<V>) -> Result<sts2_core::Answered<V>, Self::Error> {
-        self.0.borrow_mut().push(decision.clone());
-        Ok(Ok(crate::fixture::applied(serde_json::json!({}))))
-    }
-
-    fn observe(&mut self) -> Result<sts2_core::Answered<V>, Self::Error> {
-        Ok(Ok(crate::fixture::applied(serde_json::json!({}))))
-    }
-}
-
 fn painted(
     applied: Applied<V>,
     w: u16,
     h: u16,
-    before: impl FnOnce(&mut App<V, Canned>),
+    before: impl FnOnce(&mut App<V, Scripted<V>>),
 ) -> ratatui::buffer::Buffer {
-    let mut app = App::new(Canned(applied), Options::default());
+    let mut app = App::new(Scripted::saying(applied), Options::default());
     let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
     terminal
         .draw(|frame| super::screen::draw(frame, &app))
@@ -138,8 +104,13 @@ fn painted(
 }
 
 /// Draws one frame at `w` by `h` and gives back what is on it.
-fn shot(applied: Applied<V>, w: u16, h: u16, before: impl FnOnce(&mut App<V, Canned>)) -> String {
-    let mut app = App::new(Canned(applied), Options::default());
+fn shot(
+    applied: Applied<V>,
+    w: u16,
+    h: u16,
+    before: impl FnOnce(&mut App<V, Scripted<V>>),
+) -> String {
+    let mut app = App::new(Scripted::saying(applied), Options::default());
     // The app looks once on the way in, which is what puts the fixture in it.
     let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
     terminal
