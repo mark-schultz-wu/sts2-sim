@@ -339,7 +339,7 @@ public static class Observation
             return "Queued";
         }
 
-        if (!me.CanRemovePotions)
+        if (!GameApi.CanUseOrRemovePotions(me))
         {
             return "Stuck";
         }
@@ -948,11 +948,11 @@ public static class Observation
     private static Dictionary<string, int> Counters(RunState state, Player me)
     {
         var counters = new Dictionary<string, int>();
-        foreach (KeyValuePair<RunRngType, int> c in state.Rng.ToSerializable().Counters)
+        foreach (KeyValuePair<RunRngType, int> c in GameApi.RunRngCounters(state))
         {
             counters[c.Key.ToString()] = c.Value;
         }
-        foreach (KeyValuePair<PlayerRngType, int> c in me.PlayerRng.ToSerializable().Counters)
+        foreach (KeyValuePair<PlayerRngType, int> c in GameApi.PlayerRngCounters(me))
         {
             counters["player." + c.Key] = c.Value;
         }

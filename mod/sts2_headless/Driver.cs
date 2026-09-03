@@ -102,6 +102,12 @@ public static class Driver
                 return;
             }
 
+            // Here rather than in the determinism mod's own initializer: from
+            // v0.111.0 the loader skips a mod's DLL while TestMode is on, so
+            // arming it any earlier costs every mod that loads after it. The
+            // wait above is what guarantees the loader has finished.
+            Determinism.Arm();
+
             // Everything below can throw, and all of it belongs inside this try.
             // UseSelector throws outright if a selector is already installed, and
             // PatchAll throws when Harmony cannot patch -- and Run is started
@@ -801,9 +807,8 @@ public static class Driver
             + $"hp={me.Creature.CurrentHp}/{me.Creature.MaxHp} gold={me.Gold} "
             + $"relics=[{string.Join(",", me.Relics.Select(r => r.Id.Entry))}] "
             + $"deck={me.Deck.Cards.Count} combat={CombatManager.Instance.IsInProgress}");
-        // ToSerializable is the only public way to read every stream at once;
-        // RunRngSet exposes the individual streams but no indexer.
-        var counters = state.Rng.ToSerializable().Counters;
+        // The adapter is the only place the build's RNG representation leaks.
+        var counters = GameApi.RunRngCounters(state);
         Log.Info($"[headless] counters: {string.Join(" ", counters.OrderBy(c => c.Key).Select(c => $"{c.Key}={c.Value}"))}");
         Log.Info($"[headless] actions={_actions} checksums={_checksums} elapsed={Clock.Elapsed.TotalSeconds:F1}s");
     }

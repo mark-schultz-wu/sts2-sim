@@ -8,7 +8,7 @@
     Sts2PinDir is the three assemblies the mods compile against, which is all CI
     needs; Sts2GameDir is the full vendored install, which is what a machine
     that runs the game unpacks. Both come from `mod/game.sh`, pinned by hash in
-    mod/game.lock. Neither points at Steam: that copy is world-writable and
+    mod/games/&lt;version&gt;.lock. Neither points at Steam: that copy is world-writable and
     updates when it likes, and compiling against a build we did not choose is
     how a simulator quietly stops matching the game.
 
@@ -18,8 +18,9 @@
   <PropertyGroup>
     <Sts2DataHome Condition="'$(XDG_DATA_HOME)' != ''">$(XDG_DATA_HOME)</Sts2DataHome>
     <Sts2DataHome Condition="'$(Sts2DataHome)' == ''">$(HOME)/.local/share</Sts2DataHome>
-    <Sts2GameDir Condition="'$(Sts2GameDir)' == ''">$(Sts2DataHome)/sts2/game/data_sts2_linuxbsd_x86_64</Sts2GameDir>
-    <Sts2PinDir Condition="'$(Sts2PinDir)' == ''">$(Sts2GameDir)</Sts2PinDir>
+    <Sts2GameVersion Condition="'$(Sts2GameVersion)' == ''">v0.107.1</Sts2GameVersion>
+    <Sts2PinDir Condition="'$(Sts2PinDir)' == ''">$(Sts2DataHome)/sts2/pins/$(Sts2GameVersion)</Sts2PinDir>
+    <Sts2GameDir Condition="'$(Sts2GameDir)' == ''">$(Sts2PinDir)</Sts2GameDir>
   </PropertyGroup>
 
 </Project>

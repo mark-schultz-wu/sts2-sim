@@ -32,6 +32,12 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- One coherent upstream-assembly adapter, selected by the game lock. -->
+    <Compile Remove="Compat/**/*.cs" />
+    <Compile Include="Compat/$(Sts2GameAbi).cs" />
+  </ItemGroup>
+
   <!--
     The mod's identity, compiled in. `identity.sh` hashes this directory's
     sources; the Rust client hashes them the same way at its own build time and

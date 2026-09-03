@@ -95,7 +95,7 @@ public static class EncounterDump
                 encounter.RoomType.ToString(),
                 Flag(encounter.IsWeak),
                 Flag(encounter.ShouldGiveRewards),
-                Flag(encounter.IsDebugEncounter),
+                Flag(GameApi.IsDebugEncounter(encounter)),
                 gold[0][i].Min.ToString(CultureInfo.InvariantCulture),
                 gold[0][i].Max.ToString(CultureInfo.InvariantCulture),
                 spawns,
@@ -246,14 +246,14 @@ public static class EncounterDump
                 first = spelled;
                 spawned = got;
             }
-            else if (spelled != first && draw.Counter == 0)
+            else if (spelled != first && GameApi.Counter(draw) == 0)
             {
                 throw new InvalidOperationException(
                     $"{encounter.Id.Entry}: generates a different fight without drawing any randomness "
                     + $"({first} then {spelled}); something unordered is leaking into the roster");
             }
 
-            drew |= draw.Counter != 0;
+            drew |= GameApi.Counter(draw) != 0;
         }
 
         if (drew)

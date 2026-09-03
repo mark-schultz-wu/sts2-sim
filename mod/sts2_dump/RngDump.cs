@@ -77,9 +77,9 @@ public static class RngDump
             // Tight bounds, so the rejection loop actually rejects.
             Block(output, "gaussint", seed, r => r.NextGaussianInt(10, 3, 9, 11).ToString(CultureInfo.InvariantCulture));
 
-            // A stream rebuilt from (seed, counter) must equal one drawn there.
-            var forwarded = new Rng(seed, counter: 8);
-            output.Append($"forward {seed} 8 0 {forwarded.NextInt(1000)} {forwarded.Counter}\n");
+            // Advancing eight primitive draws must land on the ninth.
+            Rng forwarded = GameApi.NewRngAtDraw(seed, 8);
+            output.Append($"forward {seed} 8 0 {forwarded.NextInt(1000)} {GameApi.Counter(forwarded)}\n");
         }
 
         Hashes(output);
@@ -107,8 +107,8 @@ public static class RngDump
 
         foreach (string s in samples)
         {
-            var named = new Rng(1000u, s);
-            output.Append($"hash {StringHelper.GetDeterministicHashCode(s)} {named.Seed} {Escape(s)}\n");
+            output.Append($"hash {StringHelper.GetDeterministicHashCode(s)} "
+                + $"{GameApi.NamedSeed(1000u, s)} {Escape(s)}\n");
         }
     }
 
@@ -117,7 +117,7 @@ public static class RngDump
         var rng = new Rng(seed);
         for (int i = 0; i < Draws; i++)
         {
-            output.Append($"{method} {seed} {i} {draw(rng)} {rng.Counter}\n");
+            output.Append($"{method} {seed} {i} {draw(rng)} {GameApi.Counter(rng)}\n");
         }
     }
 
@@ -126,7 +126,7 @@ public static class RngDump
         var rng = new Rng(seed);
         for (int i = 0; i < Draws; i++)
         {
-            output.Append($"int {seed} {bound} {i} {rng.NextInt(bound)} {rng.Counter}\n");
+            output.Append($"int {seed} {bound} {i} {rng.NextInt(bound)} {GameApi.Counter(rng)}\n");
         }
     }
 
@@ -135,7 +135,7 @@ public static class RngDump
         var rng = new Rng(seed);
         for (int i = 0; i < Draws; i++)
         {
-            output.Append($"range {seed} {min} {max} {i} {rng.NextInt(min, max)} {rng.Counter}\n");
+            output.Append($"range {seed} {min} {max} {i} {rng.NextInt(min, max)} {GameApi.Counter(rng)}\n");
         }
     }
 

@@ -66,14 +66,28 @@ jobs:
           "$HOME/.dotnet/dotnet" --version
 
       # The three assemblies, not the 2.0G install: CI compiles the mods, it
-      # does not run the game.
+      # does not run the game. One set per lock under mod/games/, into the
+      # per-version directory `mod/build.sh` reads by default -- which is why
+      # nothing here overrides Sts2PinDir or Sts2GameDir.
       - name: Fetch the pinned assemblies
         env:
           STS2_FORGE_TOKEN: ${{ secrets.STS2_FORGE_TOKEN }}
           STS2_FORGE_URL: ${{ github.server_url }}
-        run: ./mod/game.sh fetch
+        run: |
+          set -euo pipefail
+          for lock in mod/games/*.lock; do
+            ./mod/game.sh fetch "$(basename "$lock" .lock)"
+          done
 
-      # Sts2PinDir follows Sts2GameDir, so overriding the one points both at
-      # what was fetched.
+      # Every build with a lock, which is `just mods`. One adapter under each
+      # mod's Compat/ is selected by that lock, so a change that compiles only
+      # against the build you happen to have pinned is a change that breaks the
+      # other, and this is where that is caught.
       - name: Build the mods
-        run: ./mod/build.sh -p:Sts2GameDir="$HOME/.local/share/sts2/pin"
+        run: |
+          set -euo pipefail
+          for lock in mod/games/*.lock; do
+            version="$(basename "$lock" .lock)"
+            echo "==> $version"
+            STS2_GAME_VERSION="$version" ./mod/build.sh
+          done

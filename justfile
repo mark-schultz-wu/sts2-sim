@@ -40,11 +40,24 @@ prose:
     ./tools/prose-lint.py
 
 # Needs the game's own assemblies, which are not in the repository. A machine
-# with the vendored game already has them; otherwise `mod/game.sh fetch` brings
-# down just the three. mod/game.lock says which build.
-[doc("Compile the C# mods, with no game to install them into")]
+# with the vendored game already has them; otherwise `mod/game.sh fetch
+# <version>` brings down just the three. The selected lock under mod/games/ says
+# which build.
+#
+# Every lock under mod/games/, not just the default build: a lock there is the
+# claim that the mods compile against that build, and this is what makes the
+# claim true. Each mod compiles one adapter out of its Compat/ directory, so a
+# change that only compiles against the build you happen to have deployed is a
+# change that breaks the other.
+[doc("Compile the C# mods against every supported build")]
 mods:
-    ./mod/build.sh
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for lock in mod/games/*.lock; do
+        version="$(basename "$lock" .lock)"
+        echo "==> $version"
+        STS2_GAME_VERSION="$version" ./mod/build.sh
+    done
 
 # Ask the game for its own tables, one launch per mode, about 30s for all 16.
 #
@@ -65,21 +78,28 @@ codegen:
 
 # Unpacked where .envrc points. What a fresh machine runs before anything that touches the game. 1.2G over the
 # wire, 2.0G unpacked, and a no-op once the unpacked copy says it is already at
-# the version in mod/game.lock. A machine that only compiles the mods can take
+# the selected version. A machine that only compiles the mods can take
 # the 17M of assemblies alone with `mod/game.sh fetch`.
 [doc("Bring the pinned game down and unpack it (1.2G)")]
-vendor-game:
-    ./mod/game.sh fetch-game
+vendor-game version="v0.107.1":
+    ./mod/game.sh fetch-game {{version}}
 
-# Half of re-pinning: this publishes, then mod/game.lock takes the version and
-# hashes it prints, then `just vendor-game` brings the new build back down.
+# Steam is only an acquisition source. This places a historical manifest in a
+# versioned staging directory; `publish-game` promotes it to the private forge.
+[doc("Acquire one exact Steam manifest for later publishing")]
+acquire-game version manifest branch="public":
+    ./mod/game.sh acquire {{version}} {{manifest}} {{branch}}
+
+# Half of re-pinning: this publishes from an acquired install after a lock under
+# mod/games/ names its package version. Put the hashes it prints in that lock;
+# then `just vendor-game <version>` proves Forgejo can reproduce the install.
 #
 # Straight to Forgejo rather than through nginx, which caps a request body at
 # 512M and would refuse the 1.2G archive after uploading all of it. An explicit
 # STS2_FORGE_URL still wins, for a forge that is not this one.
 [doc("Publish the Steam-installed build as the new pin")]
-publish-game:
-    STS2_FORGE_URL="${STS2_FORGE_URL:-http://127.0.0.1:3001}" ./mod/game.sh publish
+publish-game version="v0.107.1" source="/etc/wolf/profile-data/user/WolfSteam/.steam/steam/steamapps/common/Slay the Spire 2":
+    STS2_FORGE_URL="${STS2_FORGE_URL:-http://127.0.0.1:3001}" STS2_STEAM_DIR="{{source}}" ./mod/game.sh publish {{version}}
 
 # Every recipe below depends on this, so its check for STS2_GAME_DIR is the one
 # that catches an unloaded .envrc for all of them.
@@ -116,3 +136,4 @@ determinism-test: deploy
 [doc("The Rust tests that launch the game")]
 live: deploy
     cargo test --workspace -- --ignored
+

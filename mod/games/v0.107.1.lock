@@ -18,11 +18,18 @@
 # The archive is the whole install minus `mods/` and `crates/`, which are ours
 # rather than the game's. It unpacks to the directory .envrc names.
 #
-# To move the pin: install the new build, run `mod/game.sh publish`, and write
-# the version and hashes it prints here.
+# To add a pin: add `mod/games/<version>.lock`, install that build, run
+# `mod/game.sh publish <version>`, and write the hashes it prints in its lock.
+#
+# Not a build older than this one. v0.107.1 is where the game replaced its PRNG
+# with xoshiro256**, and sts2-rng ports that generator alone. Older builds drew
+# from C# System.Random, so their mods can compile and still agree on no number.
+# crates/sts2-rng/README.md says what porting one would take.
 #
 # package: sts2-game
 # version: 0.107.1-59260271
+# assembly: 1692500715
+# abi: counter-rng
 
 ef1898322c9f5c86dc1b0758b272a9c440823b4a41ca9a0b82a3aa6b3d206387  0Harmony.dll
 0e4897ecdfb31456a97c7d8028dfb8d7dbdc632e2f73fc9b438d7b266a139289  GodotSharp.dll
