@@ -117,7 +117,7 @@ impl<V: ContentVersion> Session<V> {
     /// command. Any invocation that forgot the path leaves a gap in the file
     /// that nothing detects.
     pub fn record(&self, path: Option<PathBuf>, append: bool) -> Result<Recorded, Error> {
-        match ask(&Request::Record { path, append })? {
+        match ask::<V>(&Request::Record { path, append })? {
             Answer::Recording { path, steps } => Ok(Recorded { path, steps }),
             other => Err(unexpected("record", &other)),
         }
@@ -125,7 +125,7 @@ impl<V: ContentVersion> Session<V> {
 
     /// What the session is doing, as opposed to what the run is.
     pub fn status(&self) -> Result<Status, Error> {
-        match ask(&Request::Status)? {
+        match ask::<V>(&Request::Status)? {
             Answer::Status {
                 pid,
                 game,
@@ -145,7 +145,7 @@ impl<V: ContentVersion> Session<V> {
 
     /// Ends the game and the daemon holding it.
     pub fn stop(&self) -> Result<(), Error> {
-        match ask(&Request::Stop)? {
+        match ask::<V>(&Request::Stop)? {
             Answer::Stopping => Ok(()),
             other => Err(unexpected("stop", &other)),
         }
@@ -157,7 +157,7 @@ impl<V: ContentVersion> Session<V> {
         let encoded =
             serde_json::to_value(&wire).map_err(|e| Error::Encode(format!("{wire:?}"), e))?;
 
-        let (line, warning) = match ask(&Request::Game { command: encoded })? {
+        let (line, warning) = match ask::<V>(&Request::Game { command: encoded })? {
             Answer::Reply { line, warning } => (line, warning),
             other => return Err(unexpected("a command", &other)),
         };
@@ -194,8 +194,8 @@ impl<V: ContentVersion> Construct<V> for Session<V> {
 /// the daemon saying it did not do the thing, which is what an `Err` means.
 /// Leaving it as a value gives every call site a second failure shape to forget
 /// about.
-fn ask(request: &Request) -> Result<Answer, Error> {
-    let path = daemon::socket_path();
+fn ask<V: ContentVersion>(request: &Request) -> Result<Answer, Error> {
+    let path = daemon::socket_path(&V::VERSION);
     let stream = UnixStream::connect(&path).map_err(|_| Error::NoDaemon(path))?;
 
     let mut writer = stream

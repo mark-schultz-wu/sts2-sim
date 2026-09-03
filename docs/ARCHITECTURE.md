@@ -116,6 +116,10 @@ random until the run ends or something breaks. It drives its own game process
 rather than the daemon, and records every move, so a finding is a file rather
 than a story.
 
+It fuzzes whichever build `STS2_GAME_VERSION` names. That makes it the cheapest
+check on a newly pinned build: thousands of states an afternoon, each one read
+through that build's own tables.
+
 Three things count as a finding. The game refuses a move the oracle offered, the
 game logs an error while running one, or the game dies. The first is the useful
 one. It means the legality the oracle reports and the legality the game enforces
@@ -260,6 +264,44 @@ must refuse. An encounter that does not exist is one, and a `RoomType` codegen
 drops is another. Testing the refusal path needs those. That is a different
 operation from driving the game, so it says so at the call site rather than in
 the type of every field.
+
+## Driving more than one build
+
+The parameter above is a compile-time seam. Choosing a build is a runtime one,
+because a person at a terminal has to be able to say which game they mean.
+
+`STS2_GAME_VERSION` is that setting. `.envrc` exports it, `mod/build.sh`
+compiles the mods against it, `cargo xtask` dumps and generates under it, and
+`sts2` and `sts2-fuzz` drive it. Each binary turns the name into a type in one
+`match`, and everything below that is generic. Adding a build is adding an arm.
+
+A lock under `mod/games/` is the list. `just check` builds every lock, so a
+change that only compiles against the build you have deployed fails. A name with
+no lock is refused rather than assumed.
+
+### One daemon for each build
+
+`sts2` holds the game open between invocations, and the daemon relays commands
+the client already encoded against its own tables. A client that reached a
+daemon holding another build reads that game through the wrong ids.
+
+So the socket carries the build: `sts2-v0_107_1.sock` beside
+`sts2-v0_111_0.sock`. The wrong daemon is unreachable rather than wrong, and two
+builds can be held open at once. That last part is what comparing them takes.
+
+**Rejected: a build check in the daemon protocol.** It works, and it costs a
+round trip on every invocation to learn something the path already says. It also
+leaves one socket, so the second build waits for the first to time out.
+
+### The same problem in C#
+
+The mods have it too, and solve it differently, because there is no type
+parameter to reach for. Each mod carries one file for each ABI family under
+`Compat/`, and the lock names which family a build uses.
+
+A family names the shape of MegaCrit's assembly, and nothing else. It says
+nothing about the numbers. v0.107.1 and every build before it serialize an `Rng`
+the same way, and only the later one draws from xoshiro256\*\*.
 
 ## Two things called hooks
 

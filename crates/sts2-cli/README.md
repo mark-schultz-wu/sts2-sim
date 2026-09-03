@@ -21,6 +21,20 @@ itself after a quiet period, so a forgotten game does not hold memory.
 
 `sts2 run status` shows what runs, and `sts2 run stop` ends it.
 
+## One daemon for each build
+
+`--game-version` picks which pinned build to drive, and defaults to
+`STS2_GAME_VERSION`. Each build gets a daemon and a socket of its own. Two
+builds can be open at the same time, and a command cannot reach the wrong one.
+
+The daemon relays commands the client already encoded against its own tables. A
+client that reaches a daemon holding another build reads that game through the
+wrong ids, and reports the answer as fact. Separate sockets make that
+unreachable rather than wrong.
+
+`STS2_GAME_DIR` must point at the same build. When it does not, the game says
+which build it is at the handshake and the command stops.
+
 ## The tool writes down each run
 
 By default the tool records each run to a file, as the list of decisions that

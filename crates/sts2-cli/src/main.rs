@@ -26,29 +26,23 @@ use std::time::Duration;
 use sts2_cli::cli::Play;
 use sts2_cli::control::{self, Outcome};
 use sts2_cli::oracle::{self, Held};
-use sts2_content::v0_107_1::V0_107_1;
+use sts2_core::ContentVersion;
 use sts2_headless::Session;
 use sts2_headless::daemon::DEFAULT_IDLE_TIMEOUT;
 
-/// The build this drives.
-///
-/// Named once. Every id follows from it through `ContentVersion`, so pointing
-/// the tool at another build is a one-line change.
-type V = V0_107_1;
-
-/// The implementation this drives, named once for the same reason.
+/// The implementation this drives, named once.
 ///
 /// Everything below reaches it through [`sts2_core::Construct`], so the day
 /// there is a simulator this line is what changes. `Session` is the oracle held
 /// open by a daemon. `sts2_headless::Oracle` is one this process owns and kills
 /// on the way out.
-type Game = Session<V>;
+type Game<V> = Session<V>;
 
 /// What holds the game, named once beside it.
 ///
 /// The oracle's daemon and socket live behind this. A simulator needs no such
 /// line, because there is nothing to hold.
-type Host = Held<V>;
+type Host<V> = Held<V>;
 
 #[derive(Debug, Parser)]
 #[command(name = "sts2", about = "Drive a headless Slay the Spire 2.", version)]
@@ -60,6 +54,14 @@ struct Cli {
     /// evidence.
     #[arg(long, global = true)]
     rng: bool,
+
+    /// Which pinned build to drive, as its lock under `mod/games/` names it.
+    ///
+    /// Defaults to `STS2_GAME_VERSION`, which is what `.envrc` exports and what
+    /// picks the game directory. One daemon per build, so two can be held open
+    /// at once and a command cannot reach the wrong one.
+    #[arg(long, global = true, value_name = "VERSION")]
+    game_version: Option<String>,
 
     /// Nothing at all opens the game, held on the screen and played with the
     /// keyboard. Subcommands form the non-interactive surface a script or agent drives:
@@ -294,8 +296,25 @@ fn grouped(top: Top) -> Command {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    let version = cli
+        .game_version
+        .clone()
+        .or_else(|| std::env::var("STS2_GAME_VERSION").ok())
+        .unwrap_or_else(|| "v0.107.1".to_string());
+
+    // One arm per build `sts2-content` compiles. Everything below is generic
+    // over it, so this is the only place that names one.
+    match version.as_str() {
+        "v0.107.1" => drive::<sts2_content::v0_107_1::V0_107_1>(cli),
+        "v0.111.0" => drive::<sts2_content::v0_111_0::V0_111_0>(cli),
+        other => bail!("no tables for game version {other:?}; try v0.107.1 or v0.111.0"),
+    }
+}
+
+fn drive<V: ContentVersion>(cli: Cli) -> Result<()> {
     let show = Show { rng: cli.rng };
-    let held: Host = Held::new(serving);
+    let held: Host<V> = Held::new(serving);
 
     let Some(top) = cli.command else {
         return play(&held, show);
@@ -329,7 +348,7 @@ fn main() -> Result<()> {
 ///
 /// Only `start` brings one up. Any other command against no game is a mistake
 /// worth naming, not a twenty-second pause followed by a refusal.
-fn for_command(held: &Host, command: &control::Command) -> Result<Game> {
+fn for_command<V: ContentVersion>(held: &Host<V>, command: &control::Command) -> Result<Game<V>> {
     let control::Command::Step(start @ Play::Start(args)) = command else {
         return Ok(held.attached());
     };
@@ -355,7 +374,7 @@ fn for_command(held: &Host, command: &control::Command) -> Result<Game> {
 /// which is one line and says what it does. Bringing the game up on a bare
 /// `sts2` means twenty seconds of nothing, followed by a screen with no run in
 /// it. It also gives the player no way to say which seed they wanted.
-fn play(held: &Host, show: Show) -> Result<()> {
+fn play<V: ContentVersion>(held: &Host<V>, show: Show) -> Result<()> {
     // The daemon comes up. The *game* does not, so a bare `sts2` opens on the
     // setup screen straight away and the game boots while the player is picking
     // a character.
@@ -394,7 +413,7 @@ fn said(words: String) -> Result<()> {
 /// The warning is the session failing rather than the game. A recording that
 /// stopped means the move happened and the file did not. Saying nothing about
 /// that is how a run gets played out under the belief it was being kept.
-fn report(game: &Game, outcome: Outcome<V>, show: Show) -> Result<()> {
+fn report<V: ContentVersion>(game: &Game<V>, outcome: Outcome<V>, show: Show) -> Result<()> {
     if let Some(warning) = game.warned() {
         eprintln!("(warning: {warning})");
     }
@@ -413,13 +432,19 @@ fn report(game: &Game, outcome: Outcome<V>, show: Show) -> Result<()> {
 ///
 /// The subcommand is spelled the way [`Top`] groups it. It is a command line
 /// like any other, and a test below parses it rather than trusting it.
-fn serving(idle: Duration) -> Result<std::process::Command> {
+fn serving(idle: Duration, version: &str) -> Result<std::process::Command> {
     let exe = std::env::current_exe().context("finding this binary")?;
     let mut command = std::process::Command::new(exe);
     command
         .args(["daemon", "serve"])
         .arg("--idle-timeout")
-        .arg(idle.as_secs().to_string());
+        .arg(idle.as_secs().to_string())
+        // The daemon serves one build, and it has to be the one asked for. Not
+        // inherited from the environment: the client may have been pointed at
+        // another build with `--game-version`, and the daemon it starts must
+        // agree with the client that started it.
+        .arg("--game-version")
+        .arg(version);
     Ok(command)
 }
 
@@ -436,8 +461,8 @@ fn same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// Sends a recorded run's steps into a fresh game, and prints where it ended.
-fn replay(
-    held: &Host,
+fn replay<V: ContentVersion>(
+    held: &Host<V>,
     file: &Path,
     stop_after: Option<usize>,
     record: Option<PathBuf>,
@@ -508,7 +533,7 @@ mod tests {
     /// `run start` reports a daemon that did not come up.
     #[test]
     fn the_daemon_is_spawned_with_a_command_line_this_binary_accepts() {
-        let spawned = serving(DEFAULT_IDLE_TIMEOUT).unwrap();
+        let spawned = serving(DEFAULT_IDLE_TIMEOUT, "v0.107.1").unwrap();
         let argv = std::iter::once(OsStr::new("sts2")).chain(spawned.get_args());
 
         let parsed = Cli::try_parse_from(argv).expect("a command line sts2 accepts");
@@ -522,11 +547,27 @@ mod tests {
         ));
     }
 
+    /// The daemon serves the build the client asked for.
+    ///
+    /// It cannot be inherited from the environment. A client run with
+    /// `--game-version` then starts a daemon holding a different build. The
+    /// socket is one for each build, so the two never meet: every command
+    /// starts a second daemon and reports no game.
+    #[test]
+    fn the_build_survives_the_spawn() {
+        let spawned = serving(DEFAULT_IDLE_TIMEOUT, "v0.111.0").unwrap();
+        let argv = std::iter::once(OsStr::new("sts2")).chain(spawned.get_args());
+
+        let parsed = Cli::try_parse_from(argv).expect("a command line sts2 accepts");
+
+        assert_eq!(parsed.game_version.as_deref(), Some("v0.111.0"));
+    }
+
     /// The seconds the daemon is told to wait are the seconds it is spawned
     /// with, rather than the default it picks for itself.
     #[test]
     fn the_idle_timeout_survives_the_spawn() {
-        let spawned = serving(std::time::Duration::from_secs(42)).unwrap();
+        let spawned = serving(std::time::Duration::from_secs(42), "v0.107.1").unwrap();
         let argv = std::iter::once(OsStr::new("sts2")).chain(spawned.get_args());
 
         let parsed = Cli::try_parse_from(argv).unwrap();
