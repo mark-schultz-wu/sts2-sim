@@ -400,9 +400,8 @@ pub enum Undrinkable {
     /// taking its turn, a card select screen is up, or the game has actions
     /// disabled while something resolves.
     NotYourTurn,
-    /// Something stops potions leaving the belt at all, through
-    /// `Player.CanRemovePotions`. Distinct from the rest because it also stops
-    /// the potion being thrown away.
+    /// Something stops potions being used or removed. Distinct from the rest
+    /// because it also stops the potion being thrown away.
     Stuck,
     /// The potion's own `PassesCustomUsabilityCheck` says no.
     ItsOwnCheck,

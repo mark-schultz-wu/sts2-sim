@@ -99,22 +99,20 @@ public static class DeterminismTest
             return;
         }
 
-        // The formula in EncounterModel.GenerateMonstersWithSlots.
-        uint expected = (uint)((int)state.Rng.Seed
-            + state.TotalFloor
-            + StringHelper.GetDeterministicHashCode(encounter.Id.Entry));
+        ulong expected = GameApi.ExpectedEncounterSeed(state, encounter.Id.Entry);
 
+        // This used to be two checks. The second one said the seed was not a
+        // recent unix timestamp, because the number makes a clock seed obvious
+        // in a way a mismatch does not.
+        //
+        // It is gone rather than adapted. `expected` is derived from the run,
+        // so a clock seed already fails the check below, and v0.111.0's Rng
+        // exposes no seed for a second check to read. A check that runs for one
+        // ABI family and not the other is worse than this comment.
         Check(
-            $"the rng is seeded from the run, not the clock (got {seeded.Seed}, expected {expected})",
-            seeded.Seed == expected);
-
-        // A wall-clock seed is seconds since the epoch: about 1.7 billion, and
-        // climbing. Worth stating separately, because it is the failure this
-        // exists to catch and the number makes it unmistakable.
-        uint now = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        Check(
-            $"the rng is not a recent wall-clock value ({seeded.Seed} vs ~{now})",
-            seeded.Seed < now - 86400 || seeded.Seed > now + 86400);
+            $"the rng is seeded from the run, not the clock "
+                + $"({GameApi.Describe(seeded)}, expected seed {expected})",
+            GameApi.BowlbugsRngMatchesSeed(seeded, expected));
     }
 
     /// <summary>

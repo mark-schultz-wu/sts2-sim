@@ -165,10 +165,27 @@ rely on. It can take the machine with it.
 
 ## The version pin
 
-`Oracle.Init` refuses to run unless `release_info.json` reports
-`main_assembly_hash: 1692500715` (v0.107.1). Steam can update the install
-underneath us. An oracle answering for a different build than the one we reason
-about is worse than no oracle, so a mismatch is a hard stop.
+`sts2_determinism` refuses to activate unless `release_info.json` reports the
+assembly hash of the build it was compiled against, and this mod refuses to
+start without it. Steam can update the install underneath us. An oracle
+answering for a different build than the one we reason about is worse than no
+oracle, so a mismatch is a hard stop.
+
+## Building against more than one build
+
+This repository pins more than one game build, and the same sources compile
+against each. Where MegaCrit moved something, one file under `Compat/` names the
+game rule and each ABI family spells it its own way. `mod/build.sh` picks the
+file from the lock.
+
+`GameApi.CanUseOrRemovePotions` is the pattern. v0.107.1 spells the property
+`CanRemovePotions` and v0.111.0 spells it `CanUseOrRemovePotions`. Both mean the
+same rule, so the rest of the mod deals in the rule and never in either
+spelling.
+
+A family names the shape of the assembly, and nothing else. Two builds in one
+family present the same surface to us. They are not the same game, and they do
+not have to agree on a single number.
 
 ## Why a mod rather than a standalone harness
 

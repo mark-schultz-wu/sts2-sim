@@ -26,4 +26,10 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The test asks one semantic question through the selected game ABI. -->
+    <Compile Remove="Compat/**/*.cs" />
+    <Compile Include="Compat/$(Sts2GameAbi).cs" />
+  </ItemGroup>
+
 </Project>

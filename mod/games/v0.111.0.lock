@@ -1,0 +1,16 @@
+# Slay the Spire 2 public-beta build v0.111.0.
+#
+# Game commit 41cef1ea, Steam build 24724944, Linux depot 2868843, manifest
+# 1506251310063253032. The shipped release_info.json reports assembly hash
+# 1579942752. Downloaded once with DepotDownloader; Forgejo is the source used
+# by every build, dump, and test after this lock is published.
+#
+# package: sts2-game
+# version: 0.111.0-41cef1ea
+# assembly: 1579942752
+# abi: stateful-rng
+
+ef1898322c9f5c86dc1b0758b272a9c440823b4a41ca9a0b82a3aa6b3d206387  0Harmony.dll
+0e4897ecdfb31456a97c7d8028dfb8d7dbdc632e2f73fc9b438d7b266a139289  GodotSharp.dll
+2b40d2df538db1ceb5fa48d958c80ab730ada1e07db88a870aff01a661768b9f  sts2.dll
+588db8eade335d594689d098b3d85e095afb66488719acf5407982567fb73197  sts2-game.tar.zst

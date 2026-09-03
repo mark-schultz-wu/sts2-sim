@@ -1,9 +1,13 @@
 
 /target/
+/spikes/*/target/
 __pycache__/
 
 # direnv keeps its cache here.
 /.direnv/
+
+# Machine-local account names and path overrides; never credentials in source.
+/.envrc.local
 
 # cargo-mutants scratch output.
 mutants.out/

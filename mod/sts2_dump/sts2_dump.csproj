@@ -25,4 +25,10 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Dumps keep one schema while this adapter absorbs assembly churn. -->
+    <Compile Remove="Compat/**/*.cs" />
+    <Compile Include="Compat/$(Sts2GameAbi).cs" />
+  </ItemGroup>
+
 </Project>

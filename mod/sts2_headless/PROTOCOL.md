@@ -224,8 +224,9 @@ there is no other player to throw it at.
 `Stuck`, `ItsOwnCheck`, reported in that order, the first that holds. There is
 no game enum for this. `NPotionPopup` decides it by enabling and disabling a
 button, in `_Ready`'s switch over `PotionUsage` and then in `RefreshButtons`.
-`Stuck` is `Player.CanRemovePotions`, which also stops the potion being thrown
-away. `ItsOwnCheck` is the potion's own `PassesCustomUsabilityCheck`.
+`Stuck` is the player's use-or-remove-potions gate, which also stops the potion
+being thrown away. `ItsOwnCheck` is the potion's own
+`PassesCustomUsabilityCheck`.
 
 `relics` is a list of objects for the same reason a potion is, minus the
 legality:

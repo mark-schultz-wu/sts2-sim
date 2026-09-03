@@ -33,7 +33,8 @@ configuration than the thing it was testing.
 
 | what | how |
 |---|---|
-| verifies the build pin, then `TestMode.IsOn = true` | at load |
+| verifies the build pin, and patches the game | at load |
+| `TestMode.IsOn = true` | `Determinism.Arm`, called once the loader has finished |
 | encounter RNG stays seeded from the run, not the clock | patches `EncounterModel.DebugRandomizeRng` to do nothing |
 | first-time-user tutorials never appear | patches `ProgressSaveManager.SeenFtue` to return `true` |
 | a canonical monster's RNG being read is reported | patches `MonsterModel.Rng` to warn, once per monster id |
@@ -45,6 +46,14 @@ one. A wait that depends on frame timing has an outcome that depends on the
 machine. It was verified to gate presentation only. `MapCmd` applies its
 model change unconditionally and skips just the icon refresh, and nothing calls
 `TestMode.AssertOff`.
+
+It is turned on after the mod loader has finished, not at load. From v0.111.0
+the loader reads a mod's DLL only while `TestMode.IsOff`. This mod loads first,
+so turning the seam on any earlier costs every mod behind it its assembly. The
+loader reports that as one warning per mod and carries on.
+
+`Driver.Run` is the single caller, because it is the one point every driver
+passes through, and it already checks that this mod activated.
 
 First-time-user prompts do two unwanted things. They gate progress, so a driver
 waits forever on a prompt nothing answers. Once dismissed, they write to the
@@ -174,19 +183,23 @@ rewrote every reference in the source of four mods and the Rust client.
 
 ## The version pin
 
-`Init` refuses to run unless `release_info.json` reports
-`main_assembly_hash: 1692500715` (v0.107.1). Every claim this mod makes is a
-claim about one build's behaviour, so a mismatch is a hard stop.
+`Init` refuses to run unless `release_info.json` reports the assembly hash of the
+build this was compiled against. Every claim this mod makes is a claim about one
+build's behaviour, so a mismatch is a hard stop.
+
+The hash is not written here. `mod/build.sh` reads it from the lock it was given,
+and the csproj generates the constant. A literal beside the thing it describes is
+a constant that agrees with whatever it was last edited to say.
 
 ## How much of it is actually verified
 
 **Verified automatically**, by
-[`sts2_determinism_test`](../sts2_determinism_test/README.md), six assertions,
-all mutation-tested:
+[`sts2_determinism_test`](../sts2_determinism_test/README.md), five assertions,
+all mutation-tested, and run against every pinned build:
 
 - The encounter RNG patch. The seed actually used is exactly
   `runState.Rng.Seed + TotalFloor + hash(Id.Entry)`. Reverting the patch fails
-  three of the four RNG checks, with the seed coming back as the current Unix
+  two of the three RNG checks, with the seed coming back as the current Unix
   timestamp.
 - The FTUE patch. An unseen tutorial reports as seen *with the profile flag
   left on*, and asking does not turn it off.
