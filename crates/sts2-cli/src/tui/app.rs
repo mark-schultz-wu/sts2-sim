@@ -19,21 +19,7 @@ use sts2_core::{
 use super::keys::{self, Action};
 use super::screen;
 use super::state::{Aim, NewRun, Options, Overlay, Pile, SEED_MAX, Tone, Ui};
-use crate::cli::choose;
-
-/// One thing the player can do on a screen that is a list.
-///
-/// Unifies the numbered choices from rooms, shops, and the map. A finished event
-/// still reports a room but is left by travelling, so leaving must share the
-/// list with room actions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Move {
-    Choose(u8),
-    Buy(u8),
-    Travel(sts2_core::Coord),
-    /// Leave a finished act. The one move the map graph cannot express.
-    Proceed,
-}
+use crate::cli::{choose, moves};
 
 /// What kind of thing the game is showing.
 ///
@@ -596,26 +582,17 @@ where
             // cursor, because a card still has to be aimed.
             Action::Nth(n) if n < moves.len() => {
                 self.ui.at = n;
-                return self.perform(moves[n]);
+                return self.send(moves[n].clone());
             }
             Action::Confirm => {
                 return match moves.get(self.ui.at) {
-                    Some(one) => self.perform(*one),
+                    Some(one) => self.send(one.clone()),
                     None => Ok(()),
                 };
             }
             _ => {}
         }
         Ok(())
-    }
-
-    fn perform(&mut self, one: Move) -> Result<()> {
-        match one {
-            Move::Choose(index) => self.send(Decision::ChooseOption { index }),
-            Move::Buy(index) => self.send(Decision::Buy { index }),
-            Move::Travel(to) => self.send(Decision::Travel { to }),
-            Move::Proceed => self.send(Decision::Proceed),
-        }
     }
 
     // -----------------------------------------------------------------------
@@ -731,30 +708,11 @@ where
     /// Asked of `cli::choose` for the room's own half, which is what the
     /// subcommand runs. So the TUI cannot offer an option the other front end
     /// refuses.
-    pub fn moves(&self) -> Vec<Move> {
-        let Some(observed) = self.observation() else {
-            return Vec::new();
-        };
-
-        let mut moves = Vec::new();
-        let mut shop = false;
-        if let Some(room) = &observed.room {
-            shop = matches!(room, Room::Shop { .. });
-            moves.extend(choose::choosable(room).into_iter().map(Move::Choose));
-            moves.extend(choose::buyable(room).into_iter().map(Move::Buy));
-        }
-
-        // Travelling is offered when the room has nothing left to answer — and
-        // in a shop, which is left whenever you like rather than when it is
-        // done with you. Not while an event is still asking: the game refuses
-        // that, and a list that offers refusable moves is a list that lies.
-        if moves.is_empty() || shop {
-            match observed.map.proceed {
-                true => moves.push(Move::Proceed),
-                false => moves.extend(observed.map.travelable.iter().map(|r| Move::Travel(r.at))),
-            }
-        }
-        moves
+    pub fn moves(&self) -> Vec<Decision<V>> {
+        self.seen
+            .as_ref()
+            .map(crate::cli::moves::navigation)
+            .unwrap_or_default()
     }
 
     /// Every individual thing a reward screen will still hand over.
@@ -763,18 +721,10 @@ where
     /// Sharing one list keeps displayed digits aligned after each taken reward.
     /// Entries already taken are omitted.
     pub fn takeable(&self) -> Vec<TakeReward> {
-        let Some(Question::Rewards { rewards, .. }) =
-            self.seen.as_ref().and_then(|a| a.asking.as_ref())
-        else {
+        let Some(question) = self.seen.as_ref().and_then(|a| a.asking.as_ref()) else {
             return Vec::new();
         };
-
-        rewards
-            .iter()
-            .enumerate()
-            .filter(|(_, detail)| !detail.taken)
-            .flat_map(|(reward, detail)| flatten(reward, detail))
-            .collect()
+        moves::takeable(question)
     }
 
     /// Whether the room still has anything to answer.
@@ -784,7 +734,7 @@ where
     pub fn room_has_moves(&self) -> bool {
         self.moves()
             .iter()
-            .any(|m| matches!(m, Move::Choose(_) | Move::Buy(_)))
+            .any(|m| matches!(m, Decision::ChooseOption { .. } | Decision::Buy { .. }))
     }
 
     /// Which creature the thing being aimed is currently pointed at.
@@ -839,7 +789,7 @@ where
     }
 
     fn send(&mut self, decision: Decision<V>) -> Result<()> {
-        let said = describe(&decision);
+        let said = moves::describe(&decision);
         let answered = self
             .game
             .play(&decision)
@@ -926,22 +876,6 @@ where
     }
 }
 
-/// Every individual thing a reward set offers, as the answer spells it.
-fn flatten<V: ContentVersion>(
-    reward: usize,
-    detail: &sts2_core::RewardDetail<V>,
-) -> Vec<TakeReward> {
-    match &detail.reward {
-        sts2_core::RewardKind::Card { cards } => (0..cards.len())
-            .map(|card| TakeReward::Card {
-                index: reward,
-                card,
-            })
-            .collect(),
-        _ => vec![TakeReward::NonCard { index: reward }],
-    }
-}
-
 /// A seed for a player who did not want to pick one.
 ///
 /// Off the clock rather than a PRNG, because this crate has no random number
@@ -963,40 +897,6 @@ fn made_up() -> String {
             alphabet[at]
         })
         .collect()
-}
-
-/// What the log says a move was.
-///
-/// The move as the player made it, not the command that carries it. "Played
-/// card 3 at 1" is what happened. `sts2 act play-card 3 --target 1` is a way of
-/// saying it that only matters at a shell.
-fn describe<V: ContentVersion>(decision: &Decision<V>) -> String {
-    match decision {
-        Decision::PlayCard { index, target } => match target {
-            Some(t) => format!("played card {index} at {t}"),
-            None => format!("played card {index}"),
-        },
-        Decision::EndTurn => "ended the turn".into(),
-        Decision::UsePotion { index, target } => match target {
-            Some(t) => format!("drank potion {index} at {t}"),
-            None => format!("drank potion {index}"),
-        },
-        Decision::Travel { to } => format!("travelled to {},{}", to.col, to.row),
-        Decision::Proceed => "left the act".into(),
-        Decision::ChooseOption { index } => format!("chose option {index}"),
-        Decision::Buy { index } => format!("bought entry {index}"),
-        Decision::Answer(Answer::Skip) => "skipped".into(),
-        Decision::Answer(Answer::Cards(cards)) if cards.is_empty() => "chose no cards".into(),
-        Decision::Answer(Answer::Cards(cards)) => format!("chose cards {cards:?}"),
-        Decision::Answer(Answer::Take(taken)) => match taken.first() {
-            Some(TakeReward::Card { index, card }) => format!("took {index}.{card}"),
-            Some(TakeReward::NonCard { index }) => format!("took {index}"),
-            None => "took nothing".into(),
-        },
-        Decision::Answer(Answer::Divine { x, y, .. }) => format!("divined {x},{y}"),
-        Decision::Start { seed, .. } => format!("started {}", seed.as_str()),
-        Decision::EnterRoom { room } => format!("entered {}", crate::render::spelling(room)),
-    }
 }
 
 /// Which kind of screen this is.
