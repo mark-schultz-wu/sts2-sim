@@ -379,6 +379,11 @@ a command the typed API cannot spell, which is how a refusal gets tested at all.
 no longer plumbing wearing the oracle's clothes. `Recording` and the whole
 command vocabulary already left.
 
+`socket_path` takes the build, so there is one daemon for each. The relay hands
+on a command the client encoded against its own tables. A client that reached
+the wrong daemon reads that game through the wrong ids. The path is where that
+is made unreachable.
+
 ## Dispatch in sts2-cli
 
 Not written, and the reason has changed. There are two implementations now,
@@ -388,11 +393,15 @@ names its implementation once, in a type alias, and everything below that line
 goes through `Construct`:
 
 ```rust
-type V    = V0_107_1;      // which build
-type Game = Session<V>;    // which implementation
+type Game<V> = Session<V>;    // which implementation
 ```
 
-Pointing the binary at a simulator is that second line. The enum earns its place
+Pointing the binary at a simulator is that line.
+
+The *build* is no longer an alias beside it. A person at a terminal has to be
+able to say which game they mean. So `main` turns `--game-version` into a type
+in one `match`, and calls a generic `drive<V>`. Everything under it is generic
+over `V`, and adding a build is adding an arm. The enum earns its place
 when a caller has to hold *both at once*. That caller is the differential test,
 driving a decision into each and comparing what came back, and it is the next
 thing to be written. What it will be then:

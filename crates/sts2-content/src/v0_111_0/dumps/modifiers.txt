@@ -1,0 +1,25 @@
+# modifier data
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
+# modifier <id> <kind> <clearsDeck> <offersNeowOption> <takesParameter>
+# exclusive <group> <modifier>
+modifier ALL_STAR good 0 1 0
+modifier BIG_GAME_HUNTER bad 0 0 0
+modifier CHARACTER_CARDS good 0 0 1
+modifier CURSED_RUN bad 0 0 0
+modifier DEADLY_EVENTS bad 0 0 0
+modifier DEPRECATED_MODIFIER unused 0 0 0
+modifier DRAFT good 1 1 0
+modifier FLIGHT good 0 0 0
+modifier HOARDER good 0 0 0
+modifier INSANITY good 1 1 0
+modifier MIDAS bad 0 0 0
+modifier MURDEROUS bad 0 0 0
+modifier NIGHT_TERRORS bad 0 0 0
+modifier SEALED_DECK good 1 1 0
+modifier SPECIALIZED good 0 1 0
+modifier TERMINAL bad 0 0 0
+modifier VINTAGE good 0 0 0
+exclusive 0 DRAFT
+exclusive 0 INSANITY
+exclusive 0 SEALED_DECK
+# 17 modifiers, 9 good, 7 bad, 1 exclusive groups

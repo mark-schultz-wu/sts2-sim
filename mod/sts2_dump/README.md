@@ -17,8 +17,11 @@ cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=carddump \
     ./SlayTheSpire2 --headless --force-steam=off
 ```
 
-Every mode but `rngdump` lands in `crates/sts2-content/src/v0_107_1/dumps/`,
-under the name in the last column.
+Every mode but `rngdump` lands in `crates/sts2-content/src/<build>/dumps/`,
+under the name in the last column. `rngdump` lands in
+`crates/sts2-rng/tests/rng/<build>.txt`, because rng ground truth is not
+content. `cargo xtask dump` runs every mode and files what each prints, for the
+build `STS2_GAME_VERSION` names.
 
 | Mode | What it prints | Lands in |
 | --- | --- | --- |
@@ -49,7 +52,7 @@ does not match the version module it generates into:
 
 ```
 # act data
-# build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
 ```
 
 Two hashes, because one is not enough. `content` is

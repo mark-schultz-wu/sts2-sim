@@ -39,7 +39,34 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const VERSION_DIR: &str = "crates/sts2-content/src/v0_107_1";
+/// The build to read dumps from and generate tables for.
+///
+/// `.envrc` exports `STS2_GAME_VERSION` and `mod/build.sh` reads the same name,
+/// so one setting points the mods, the dumps and the tables at one build.
+///
+/// A name with no lock under `mod/games/` is a typo. Catching it here stops a
+/// dump landing in a directory nobody meant to create.
+pub(crate) fn version() -> Result<String, String> {
+    let name = std::env::var("STS2_GAME_VERSION").unwrap_or_else(|_| "v0.107.1".to_string());
+    let lock = Path::new("mod/games").join(format!("{name}.lock"));
+    if !lock.is_file() {
+        return Err(format!(
+            "unknown game version '{name}': no {}",
+            lock.display()
+        ));
+    }
+    Ok(name)
+}
+
+/// The build as a Rust module name. `v0.107.1` is `v0_107_1`.
+pub(crate) fn version_module() -> Result<String, String> {
+    Ok(version()?.replace('.', "_"))
+}
+
+/// Where one build's dumps and generated tables live.
+pub(crate) fn version_dir() -> Result<PathBuf, String> {
+    Ok(Path::new("crates/sts2-content/src").join(version_module()?))
+}
 
 /// The domains generated so far. Relics, potions and encounters each get a
 /// dump, a submodule, and an entry here.
@@ -139,7 +166,7 @@ struct Dump {
 
 impl Dump {
     fn read(name: &str) -> Result<Dump, String> {
-        let path = Path::new(VERSION_DIR).join("dumps").join(name);
+        let path = version_dir()?.join("dumps").join(name);
         let text =
             fs::read_to_string(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
 
@@ -201,7 +228,8 @@ impl Dump {
 }
 
 pub fn run() -> Result<String, String> {
-    let root = Path::new(VERSION_DIR).join("generated");
+    let dir = version_dir()?;
+    let root = dir.join("generated");
     fs::create_dir_all(&root).map_err(|e| format!("creating {}: {e}", root.display()))?;
 
     let builds = [
@@ -256,7 +284,8 @@ pub fn run() -> Result<String, String> {
     format(&root)?;
 
     Ok(format!(
-        "generated {VERSION_DIR}/generated/ — {} domains: {}\n  build {build}",
+        "generated {}/generated/ — {} domains: {}\n  build {build}",
+        dir.display(),
         DOMAINS.len(),
         DOMAINS.join(", ")
     ))

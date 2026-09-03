@@ -1,0 +1,163 @@
+# enchantment data
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
+# enchantment <id> <hasExtraCardText> <showAmount> <shouldStartAtBottomOfDrawPile> <isStackable> <refusesSomeCards>
+# enchants <enchantment> <cardType>
+enchantment ADROIT 1 1 0 0 0
+enchants ADROIT None
+enchants ADROIT Attack
+enchants ADROIT Skill
+enchants ADROIT Power
+enchants ADROIT Status
+enchants ADROIT Curse
+enchants ADROIT Quest
+enchantment CLONE 0 0 0 0 0
+enchants CLONE None
+enchants CLONE Attack
+enchants CLONE Skill
+enchants CLONE Power
+enchants CLONE Status
+enchants CLONE Curse
+enchants CLONE Quest
+enchantment CORRUPTED 1 0 0 0 0
+enchants CORRUPTED Attack
+enchantment DEPRECATED_ENCHANTMENT 0 0 0 0 0
+enchants DEPRECATED_ENCHANTMENT None
+enchants DEPRECATED_ENCHANTMENT Attack
+enchants DEPRECATED_ENCHANTMENT Skill
+enchants DEPRECATED_ENCHANTMENT Power
+enchants DEPRECATED_ENCHANTMENT Status
+enchants DEPRECATED_ENCHANTMENT Curse
+enchants DEPRECATED_ENCHANTMENT Quest
+enchantment GLAM 0 0 0 0 0
+enchants GLAM None
+enchants GLAM Attack
+enchants GLAM Skill
+enchants GLAM Power
+enchants GLAM Status
+enchants GLAM Curse
+enchants GLAM Quest
+enchantment GOOPY 1 0 0 0 1
+enchants GOOPY None
+enchants GOOPY Attack
+enchants GOOPY Skill
+enchants GOOPY Power
+enchants GOOPY Status
+enchants GOOPY Curse
+enchants GOOPY Quest
+enchantment IMBUED 0 0 1 0 0
+enchants IMBUED Skill
+enchantment INKY 1 0 0 0 0
+enchants INKY None
+enchants INKY Attack
+enchants INKY Skill
+enchants INKY Power
+enchants INKY Status
+enchants INKY Curse
+enchants INKY Quest
+enchantment INSTINCT 0 0 0 0 0
+enchants INSTINCT Attack
+enchantment MOCK_FREE_ENCHANTMENT 0 0 0 0 0
+enchants MOCK_FREE_ENCHANTMENT None
+enchants MOCK_FREE_ENCHANTMENT Attack
+enchants MOCK_FREE_ENCHANTMENT Skill
+enchants MOCK_FREE_ENCHANTMENT Power
+enchants MOCK_FREE_ENCHANTMENT Status
+enchants MOCK_FREE_ENCHANTMENT Curse
+enchants MOCK_FREE_ENCHANTMENT Quest
+enchantment MOMENTUM 1 1 0 0 0
+enchants MOMENTUM Attack
+enchantment NIMBLE 0 1 0 0 1
+enchants NIMBLE None
+enchants NIMBLE Attack
+enchants NIMBLE Skill
+enchants NIMBLE Power
+enchants NIMBLE Status
+enchants NIMBLE Curse
+enchants NIMBLE Quest
+enchantment PERFECT_FIT 1 0 0 0 0
+enchants PERFECT_FIT None
+enchants PERFECT_FIT Attack
+enchants PERFECT_FIT Skill
+enchants PERFECT_FIT Power
+enchants PERFECT_FIT Status
+enchants PERFECT_FIT Curse
+enchants PERFECT_FIT Quest
+enchantment ROYALLY_APPROVED 0 0 0 0 0
+enchants ROYALLY_APPROVED Attack
+enchants ROYALLY_APPROVED Skill
+enchantment SHARP 0 1 0 0 0
+enchants SHARP Attack
+enchantment SLITHER 0 0 0 0 1
+enchants SLITHER None
+enchants SLITHER Attack
+enchants SLITHER Skill
+enchants SLITHER Power
+enchants SLITHER Status
+enchants SLITHER Curse
+enchants SLITHER Quest
+enchantment SLUMBERING_ESSENCE 0 0 0 0 0
+enchants SLUMBERING_ESSENCE None
+enchants SLUMBERING_ESSENCE Attack
+enchants SLUMBERING_ESSENCE Skill
+enchants SLUMBERING_ESSENCE Power
+enchants SLUMBERING_ESSENCE Status
+enchants SLUMBERING_ESSENCE Curse
+enchants SLUMBERING_ESSENCE Quest
+enchantment SOULS_POWER 0 0 0 0 1
+enchants SOULS_POWER None
+enchants SOULS_POWER Attack
+enchants SOULS_POWER Skill
+enchants SOULS_POWER Power
+enchants SOULS_POWER Status
+enchants SOULS_POWER Curse
+enchants SOULS_POWER Quest
+enchantment SOWN 1 0 0 0 0
+enchants SOWN None
+enchants SOWN Attack
+enchants SOWN Skill
+enchants SOWN Power
+enchants SOWN Status
+enchants SOWN Curse
+enchants SOWN Quest
+enchantment SPIRAL 0 0 0 0 1
+enchants SPIRAL None
+enchants SPIRAL Attack
+enchants SPIRAL Skill
+enchants SPIRAL Power
+enchants SPIRAL Status
+enchants SPIRAL Curse
+enchants SPIRAL Quest
+enchantment STEADY 0 0 0 0 0
+enchants STEADY None
+enchants STEADY Attack
+enchants STEADY Skill
+enchants STEADY Power
+enchants STEADY Status
+enchants STEADY Curse
+enchants STEADY Quest
+enchantment SWIFT 1 1 0 0 0
+enchants SWIFT None
+enchants SWIFT Attack
+enchants SWIFT Skill
+enchants SWIFT Power
+enchants SWIFT Status
+enchants SWIFT Curse
+enchants SWIFT Quest
+enchantment TEZCATARAS_EMBER 0 0 0 0 0
+enchants TEZCATARAS_EMBER None
+enchants TEZCATARAS_EMBER Attack
+enchants TEZCATARAS_EMBER Skill
+enchants TEZCATARAS_EMBER Power
+enchants TEZCATARAS_EMBER Status
+enchants TEZCATARAS_EMBER Curse
+enchants TEZCATARAS_EMBER Quest
+enchantment VIGOROUS 0 1 0 0 0
+enchants VIGOROUS Attack
+# 24 enchantments
+enum CardType 0 None
+enum CardType 1 Attack
+enum CardType 2 Skill
+enum CardType 3 Power
+enum CardType 4 Status
+enum CardType 5 Curse
+enum CardType 6 Quest

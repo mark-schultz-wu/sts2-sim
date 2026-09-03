@@ -20,12 +20,18 @@
 //! is a draw that is valid, and the only fallible operations are building an
 //! argument and seeking a stream forward.
 //!
-//! Checked against `tests/megarandom.txt`, dumped from the game. Regenerate
+//! Checked against `tests/rng/<build>.txt`, dumped from the game. Regenerate
 //! with `STS2_HEADLESS_MODE=rngdump`. See `mod/sts2_dump/RngDump.cs`.
+//!
+//! The draw stream is one implementation for every build this repository pins.
+//! What a build changes is [`Seeding`]: how a name becomes the number a stream
+//! starts from, and how wide that number is.
 
 mod bounds;
+mod hash;
 
 pub use bounds::{Bound, Error, Interval, Span};
+pub use hash::{interleaved, xxhash64};
 pub use sts2_core::Seed;
 
 /// `next_bool` draws over two outcomes. Checked at compile time.
@@ -37,9 +43,13 @@ const TWO: Bound = match Bound::new(2) {
 /// A counted stream producing the game's sequence.
 pub trait GameRng: Sized {
     /// Seeded, at counter zero.
-    fn new(seed: u32) -> Self;
+    ///
+    /// A `u64`, because v0.111.0 widened a stream seed from `uint`. A narrower
+    /// seed reaches the same state through it: the game's own `uint`
+    /// constructor widens before seeding, and so does this.
+    fn new(seed: u64) -> Self;
 
-    fn seed(&self) -> u32;
+    fn seed(&self) -> u64;
 
     /// How many draws this stream has taken. Observations report it, and it is
     /// the position [`GameRng::with_counter`] rebuilds from.
@@ -49,14 +59,16 @@ pub trait GameRng: Sized {
     /// plus arithmetic.
     fn next_u64(&mut self) -> u64;
 
-    /// Seeded by mixing in a name, the way the game names its streams. Getting
-    /// the mix wrong draws from a real stream that is the wrong one.
-    fn named(seed: u32, name: &str) -> Self {
-        Self::new(seed.wrapping_add(deterministic_hash(name) as u32))
+    /// Seeded by mixing in a name, the way the build names its streams.
+    ///
+    /// The mix belongs to [`Seeding`], because it is the part a build changes.
+    /// Getting it wrong draws from a real stream that is the wrong one.
+    fn named<S: Seeding>(seed: S::Seed, name: &str) -> Self {
+        Self::new(S::named(seed, name).into())
     }
 
     /// A stream already advanced to `counter`, equal to one drawn there.
-    fn with_counter(seed: u32, counter: i32) -> Result<Self, Error> {
+    fn with_counter(seed: u64, counter: i32) -> Result<Self, Error> {
         let mut stream = Self::new(seed);
         stream.fast_forward(counter)?;
         Ok(stream)
@@ -174,13 +186,13 @@ const INCR_DOUBLE: f64 = 1.110_223_024_625_156_5e-16;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MegaRng {
     s: [u64; 4],
-    seed: u32,
+    seed: u64,
     counter: i32,
 }
 
 impl GameRng for MegaRng {
-    fn new(seed: u32) -> Self {
-        let mut x = seed as u64;
+    fn new(seed: u64) -> Self {
+        let mut x = seed;
         MegaRng {
             s: [
                 splitmix64(&mut x),
@@ -193,7 +205,7 @@ impl GameRng for MegaRng {
         }
     }
 
-    fn seed(&self) -> u32 {
+    fn seed(&self) -> u64 {
         self.seed
     }
 
@@ -232,34 +244,72 @@ fn splitmix64(x: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// `StringHelper.GetDeterministicHashCode`: two interleaved lanes over UTF-16
-/// code units, in wrapping `i32`. Reached through [`GameRng::named`].
-fn deterministic_hash(s: &str) -> i32 {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    let mut a: i32 = 352654597;
-    let mut b: i32 = a;
+/// How a build turns text into the number a stream starts from.
+///
+/// The draw stream is the same on every build this repository pins. This is
+/// what a build changes. It changes two things at once: which hash names a
+/// stream, and how wide the resulting seed is.
+///
+/// Width is not a detail. On [`Interleaved`] the sum wraps at 2³², and on
+/// [`XxHash`] it does not.
+pub trait Seeding {
+    /// A stream seed on this build.
+    ///
+    /// `From<u32>` because the game seeds some streams from a small literal,
+    /// and `Into<u64>` because the widest of them holds every other.
+    type Seed: Copy + std::fmt::Debug + Eq + From<u32> + Into<u64>;
 
-    let mut i = 0;
-    while i < units.len() {
-        a = ((a << 5).wrapping_add(a)) ^ units[i] as i32;
-        if i == units.len() - 1 {
-            break;
-        }
-        b = ((b << 5).wrapping_add(b)) ^ units[i + 1] as i32;
-        i += 2;
-    }
+    /// The hash a name goes through, as this build's seed.
+    fn hash(name: &str) -> Self::Seed;
 
-    a.wrapping_add(b.wrapping_mul(1566083941))
+    /// A named stream's seed: the run's number, plus the name's.
+    fn named(seed: Self::Seed, name: &str) -> Self::Seed;
+
+    /// The number a run's streams are seeded from.
+    ///
+    /// `RunRngSet` takes it from the seed the player typed, so this is where a
+    /// typed seed stops being text.
+    fn stream_seed(seed: &Seed) -> Self::Seed;
 }
 
-/// The number a run's streams are seeded from.
-///
-/// `RunRngSet` is `Seed = (uint)StringHelper.GetDeterministicHashCode(seed)`, so
-/// this is where a typed seed stops being text. A free function rather than a
-/// method, because [`Seed`] belongs to `sts2-core`. A client that only drives a
-/// game can have it there, without compiling a PRNG to get it.
-pub fn stream_seed(seed: &Seed) -> u32 {
-    deterministic_hash(seed.as_str()) as u32
+/// v0.107.1 and earlier: the two-lane hash, and `uint` seeds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Interleaved;
+
+impl Seeding for Interleaved {
+    type Seed = u32;
+
+    fn hash(name: &str) -> u32 {
+        interleaved(name) as u32
+    }
+
+    fn named(seed: u32, name: &str) -> u32 {
+        seed.wrapping_add(Self::hash(name))
+    }
+
+    fn stream_seed(seed: &Seed) -> u32 {
+        Self::hash(seed.as_str())
+    }
+}
+
+/// v0.111.0 and later: XXH64, and `ulong` seeds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct XxHash;
+
+impl Seeding for XxHash {
+    type Seed = u64;
+
+    fn hash(name: &str) -> u64 {
+        xxhash64(name.as_bytes())
+    }
+
+    fn named(seed: u64, name: &str) -> u64 {
+        seed.wrapping_add(Self::hash(name))
+    }
+
+    fn stream_seed(seed: &Seed) -> u64 {
+        Self::hash(seed.as_str())
+    }
 }
 
 #[cfg(test)]
@@ -267,16 +317,31 @@ mod seeding {
     use super::*;
 
     /// Folding happens before the hash, so two spellings of one seed reach the
-    /// same streams.
+    /// same streams. True of every build, because folding is not the hash.
     #[test]
     fn the_stream_seed_is_taken_from_the_folded_spelling() {
-        assert_eq!(
-            stream_seed(&Seed::fold("abcdef").unwrap()),
-            stream_seed(&Seed::new("ABCDEF").unwrap())
-        );
+        fn folds_the_same<S: Seeding>() {
+            assert_eq!(
+                S::stream_seed(&Seed::fold("abcdef").unwrap()),
+                S::stream_seed(&Seed::new("ABCDEF").unwrap())
+            );
+            assert_ne!(
+                S::stream_seed(&Seed::new("ABCDEF").unwrap()),
+                S::stream_seed(&Seed::new("ABCDEG").unwrap())
+            );
+        }
+
+        folds_the_same::<Interleaved>();
+        folds_the_same::<XxHash>();
+    }
+
+    /// The two builds do not agree, which is the whole reason both are here.
+    #[test]
+    fn the_builds_seed_a_run_differently() {
+        let seed = Seed::new("ABCDEF").unwrap();
         assert_ne!(
-            stream_seed(&Seed::new("ABCDEF").unwrap()),
-            stream_seed(&Seed::new("ABCDEG").unwrap())
+            u64::from(Interleaved::stream_seed(&seed)),
+            XxHash::stream_seed(&seed)
         );
     }
 }

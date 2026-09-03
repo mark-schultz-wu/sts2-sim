@@ -22,6 +22,17 @@ is never the place to correct it.
 A build is `v0_107_1`. Each build is a cargo feature, so two builds can be
 present together and can be compared.
 
+Two builds are here now:
+
+| module | feature | build |
+|---|---|---|
+| `v0_107_1` | `v0_107_1` | v0.107.1, the default |
+| `v0_111_0` | `v0_111_0` | v0.111.0, the beta line |
+
+`v0_107_1` is the oldest build this repository can model. v0.107.1 replaced the
+game's PRNG with xoshiro256\*\*, and `sts2-rng` ports that generator alone.
+`crates/sts2-rng/README.md` says what it takes to pin an older one.
+
 A build is known by its hashes, not by its name. The same name can appear in more
 than one build, and a name says nothing about whether the ids still agree. There are two
 hashes:
@@ -102,6 +113,10 @@ Four layers check a table, and each one finds what the layer before it cannot:
 2. A test walks the dump row by row against the table.
 3. Tests pin the claims that a dump cannot make alone.
 4. The oracle plays the real game, one decision at a time.
+
+Both builds have all four. Layers two and three are a `tests` module, ported
+between builds rather than copied. Twenty-five of its assertions are counts and
+sets that moved from v0.107.1 to v0.111.0.
 
 `ContentVersion` and the `Table` traits are in `sts2-core`. This crate
 implements them.

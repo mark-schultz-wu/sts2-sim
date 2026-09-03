@@ -35,13 +35,18 @@ computed costs one method, and the reverse costs a divergence nobody can see.
 Built:
 
 ```
+sts2-core       the shared vocabulary: decisions, observations, refusals, and
+                the traits an implementation of the game satisfies. Both the
+                oracle and the engine implement them. See STS2-CORE.md.
 sts2-rng        the game's draw stream, verified against 1024 draws per seed
-sts2-content    v0_107_1/generated/   xtask writes this, never hand-edited
-                v0_107_1/dumps/       what the game printed
+sts2-content    <build>/generated/    xtask writes this, never hand-edited
+                <build>/dumps/        what the game printed
 sts2-headless   a client for the headless mod, the oracle's transport
                 recording.rs          a run, as the decisions that made it
-sts2-cli        `sts2`: a daemon holding one game, and one command per invocation
-xtask           cargo xtask codegen
+sts2-cli        `sts2`: a daemon holding one game, and one command per
+                invocation. `sts2-fuzz`: random legal play until something
+                breaks
+xtask           cargo xtask dump, cargo xtask codegen
 ```
 
 `sts2-cli` is a front end, and the parts of it that are opinions say so. How an
@@ -51,10 +56,7 @@ none of that lives in `sts2-headless`.
 Planned, and the subject of most of this document:
 
 ```
-sts2-core       the shared vocabulary: decisions, observations, refusals, and
-                the traits an implementation of the game satisfies. Both the
-                oracle and the engine implement them. See STS2-CORE.md.
-sts2-content    v0_107_1/behaviour/   hand-ported, never generated
+sts2-content    <build>/behaviour/    hand-ported, never generated
 sts2-sim-core   the nouns and the traits. Combat state, creature, piles, and the
                 hook trait content implements. No content, no engine.
 sts2-sim        the engine. Turn loop, map generation, rewards, shops, run
@@ -113,6 +115,10 @@ walked. It draws the edges the game itself draws.
 random until the run ends or something breaks. It drives its own game process
 rather than the daemon, and records every move, so a finding is a file rather
 than a story.
+
+It fuzzes whichever build `STS2_GAME_VERSION` names. That makes it the cheapest
+check on a newly pinned build: thousands of states an afternoon, each one read
+through that build's own tables.
 
 Three things count as a finding. The game refuses a move the oracle offered, the
 game logs an error while running one, or the game dies. The first is the useful
@@ -259,6 +265,44 @@ drops is another. Testing the refusal path needs those. That is a different
 operation from driving the game, so it says so at the call site rather than in
 the type of every field.
 
+## Driving more than one build
+
+The parameter above is a compile-time seam. Choosing a build is a runtime one,
+because a person at a terminal has to be able to say which game they mean.
+
+`STS2_GAME_VERSION` is that setting. `.envrc` exports it, `mod/build.sh`
+compiles the mods against it, `cargo xtask` dumps and generates under it, and
+`sts2` and `sts2-fuzz` drive it. Each binary turns the name into a type in one
+`match`, and everything below that is generic. Adding a build is adding an arm.
+
+A lock under `mod/games/` is the list. `just check` builds every lock, so a
+change that only compiles against the build you have deployed fails. A name with
+no lock is refused rather than assumed.
+
+### One daemon for each build
+
+`sts2` holds the game open between invocations, and the daemon relays commands
+the client already encoded against its own tables. A client that reached a
+daemon holding another build reads that game through the wrong ids.
+
+So the socket carries the build: `sts2-v0_107_1.sock` beside
+`sts2-v0_111_0.sock`. The wrong daemon is unreachable rather than wrong, and two
+builds can be held open at once. That last part is what comparing them takes.
+
+**Rejected: a build check in the daemon protocol.** It works, and it costs a
+round trip on every invocation to learn something the path already says. It also
+leaves one socket, so the second build waits for the first to time out.
+
+### The same problem in C#
+
+The mods have it too, and solve it differently, because there is no type
+parameter to reach for. Each mod carries one file for each ABI family under
+`Compat/`, and the lock names which family a build uses.
+
+A family names the shape of MegaCrit's assembly, and nothing else. It says
+nothing about the numbers. v0.107.1 and every build before it serialize an `Rng`
+the same way, and only the later one draws from xoshiro256\*\*.
+
 ## Two things called hooks
 
 Worth separating, because they point in opposite directions and only one of
@@ -311,8 +355,13 @@ than measurement.
 
 ## Sharing behaviour across versions
 
-Not yet built, and deliberately: it needs a second build to test against. The
-mechanism is name resolution rather than macros, because the compiler checks it.
+Not yet built. The mechanism is name resolution rather than macros, because the
+compiler checks it.
+
+The second build to test against now exists. v0.111.0 moved 19 cards in and 1
+out, 12 powers in and 2 out, and 13 encounters in and 3 out. Its hook surface
+went from 181 to 182, and the two that moved are renames of the same shape. The
+monster set did not move at all.
 
 Behaviour is written against *unqualified* names (`Power::Vulnerable`,
 `Card::Wound`). Each version module includes it under its own prelude:
@@ -327,7 +376,7 @@ mod bash;                                              // 108 rewrote it
 Sharing is one line, and divergence is a real file. If v108 removed
 `Power::Vulnerable`, the include fails to compile. The reuse is verified, not
 assumed. How far it gets depends on how much behaviour names other content
-items. That is a number to measure against a second dump, not to design around
+items. That is a number to measure against the second dump, not to design around
 now.
 
 ## How a table is known to be right

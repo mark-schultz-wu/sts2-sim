@@ -10,6 +10,7 @@ readme = "README.md"
 [features]
 default = ["v0_107_1"]
 v0_107_1 = []
+v0_111_0 = []
 
 [dependencies]
 # The traits these tables implement. See docs/STS2-CORE.md.

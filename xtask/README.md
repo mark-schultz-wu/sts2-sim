@@ -2,9 +2,26 @@
 
 Repo chores with real logic in them. `cargo xtask <command>`.
 
-Currently one command: `codegen`. It turns the dumps in
-`crates/sts2-content/src/<version>/dumps/` into that crate's tables, one domain
-per dump, and fails the build if two dumps came from different builds.
+Two commands.
+
+`dump` runs the game's dump modes and files what each one prints. Sixteen modes
+describe content and land under `crates/sts2-content/src/<version>/dumps/`. The
+seventeenth is rng ground truth, which is not content, and lands in
+`crates/sts2-rng/tests/rng/<version>.txt`.
+
+`codegen` turns those dumps into `sts2-content`'s tables, one domain per dump,
+and fails the build if two dumps came from different builds.
+
+## Which build
+
+Both commands work on the build `STS2_GAME_VERSION` names, and default to
+`v0.107.1`. That is the same setting `.envrc` exports, `mod/build.sh` compiles
+the mods against, and the `sts2` front end drives. A name with no lock under
+`mod/games/` is refused, so a typo cannot create a directory nobody meant.
+
+`dump` also needs `STS2_GAME_DIR` pointing at that build's install. The mods
+refuse to start against a build they were not compiled for. So a mismatch stops
+rather than producing a dump from the wrong game.
 
 The generated tree is committed rather than produced by a `build.rs`, so that a
 content change reads as a diff. The whole point of this project is noticing when

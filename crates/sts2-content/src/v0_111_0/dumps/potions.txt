@@ -1,0 +1,157 @@
+# potion data
+# build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
+# pool <pool> <potion>
+# potion <id> <rarity> <usage> <target> <canBeGeneratedInCombat> <passesCustomUsabilityCheck>
+pool DEFECT_POTION_POOL ESSENCE_OF_DARKNESS
+pool DEFECT_POTION_POOL FOCUS_POTION
+pool DEFECT_POTION_POOL POTION_OF_CAPACITY
+pool DEPRECATED_POTION_POOL DEPRECATED_POTION
+pool EVENT_POTION_POOL AMBERGRIS
+pool EVENT_POTION_POOL FOUL_POTION
+pool EVENT_POTION_POOL GLOWWATER_POTION
+pool IRONCLAD_POTION_POOL ASHWATER
+pool IRONCLAD_POTION_POOL BLOOD_POTION
+pool IRONCLAD_POTION_POOL SOLDIERS_STEW
+pool MOCK_POTION_POOL MOCK_DISCARD_AND_ADD_SHIVS_POTION
+pool NECROBINDER_POTION_POOL BONE_BREW
+pool NECROBINDER_POTION_POOL POTION_OF_DOOM
+pool NECROBINDER_POTION_POOL POT_OF_GHOULS
+pool REGENT_POTION_POOL COSMIC_CONCOCTION
+pool REGENT_POTION_POOL KINGS_COURAGE
+pool REGENT_POTION_POOL STAR_POTION
+pool SHARED_POTION_POOL ATTACK_POTION
+pool SHARED_POTION_POOL BEETLE_JUICE
+pool SHARED_POTION_POOL BLESSING_OF_THE_FORGE
+pool SHARED_POTION_POOL BLOCK_POTION
+pool SHARED_POTION_POOL BOTTLED_POTENTIAL
+pool SHARED_POTION_POOL CLARITY
+pool SHARED_POTION_POOL COLORLESS_POTION
+pool SHARED_POTION_POOL CURE_ALL
+pool SHARED_POTION_POOL DEXTERITY_POTION
+pool SHARED_POTION_POOL DISTILLED_CHAOS
+pool SHARED_POTION_POOL DROPLET_OF_PRECOGNITION
+pool SHARED_POTION_POOL DUPLICATOR
+pool SHARED_POTION_POOL ENERGY_POTION
+pool SHARED_POTION_POOL ENTROPIC_BREW
+pool SHARED_POTION_POOL EXPLOSIVE_AMPOULE
+pool SHARED_POTION_POOL FAIRY_IN_A_BOTTLE
+pool SHARED_POTION_POOL FIRE_POTION
+pool SHARED_POTION_POOL FLEX_POTION
+pool SHARED_POTION_POOL FORTIFIER
+pool SHARED_POTION_POOL FRUIT_JUICE
+pool SHARED_POTION_POOL FYSH_OIL
+pool SHARED_POTION_POOL GAMBLERS_BREW
+pool SHARED_POTION_POOL GIGANTIFICATION_POTION
+pool SHARED_POTION_POOL HEART_OF_IRON
+pool SHARED_POTION_POOL LIQUID_BRONZE
+pool SHARED_POTION_POOL LIQUID_MEMORIES
+pool SHARED_POTION_POOL LUCKY_TONIC
+pool SHARED_POTION_POOL MAZALETHS_GIFT
+pool SHARED_POTION_POOL OROBIC_ACID
+pool SHARED_POTION_POOL POTION_OF_BINDING
+pool SHARED_POTION_POOL POWDERED_DEMISE
+pool SHARED_POTION_POOL POWER_POTION
+pool SHARED_POTION_POOL RADIANT_TINCTURE
+pool SHARED_POTION_POOL REGEN_POTION
+pool SHARED_POTION_POOL SHACKLING_POTION
+pool SHARED_POTION_POOL SHIP_IN_A_BOTTLE
+pool SHARED_POTION_POOL SKILL_POTION
+pool SHARED_POTION_POOL SNECKO_OIL
+pool SHARED_POTION_POOL SPEED_POTION
+pool SHARED_POTION_POOL STABLE_SERUM
+pool SHARED_POTION_POOL STRENGTH_POTION
+pool SHARED_POTION_POOL SWIFT_POTION
+pool SHARED_POTION_POOL TOUCH_OF_INSANITY
+pool SHARED_POTION_POOL VULNERABLE_POTION
+pool SHARED_POTION_POOL WEAK_POTION
+pool SILENT_POTION_POOL CUNNING_POTION
+pool SILENT_POTION_POOL GHOST_IN_A_JAR
+pool SILENT_POTION_POOL POISON_POTION
+pool TOKEN_POTION_POOL POTION_SHAPED_ROCK
+potion AMBERGRIS Event AnyTime AnyPlayer 1 1
+potion ASHWATER Uncommon CombatOnly AnyPlayer 1 1
+potion ATTACK_POTION Common CombatOnly AnyPlayer 1 1
+potion BEETLE_JUICE Rare CombatOnly AnyEnemy 1 1
+potion BLESSING_OF_THE_FORGE Uncommon CombatOnly AnyPlayer 1 1
+potion BLOCK_POTION Common CombatOnly AnyPlayer 1 1
+potion BLOOD_POTION Common AnyTime AnyPlayer 1 1
+potion BONE_BREW Uncommon CombatOnly AnyPlayer 1 1
+potion BOTTLED_POTENTIAL Rare CombatOnly AnyPlayer 1 1
+potion CLARITY Uncommon CombatOnly AnyPlayer 1 1
+potion COLORLESS_POTION Common CombatOnly AnyPlayer 1 1
+potion COSMIC_CONCOCTION Rare CombatOnly AnyPlayer 1 1
+potion CUNNING_POTION Uncommon CombatOnly AnyPlayer 1 1
+potion CURE_ALL Uncommon CombatOnly AnyPlayer 1 1
+potion DEPRECATED_POTION None CombatOnly AnyEnemy 1 1
+potion DEXTERITY_POTION Common CombatOnly AnyPlayer 1 1
+potion DISTILLED_CHAOS Rare CombatOnly AnyPlayer 1 1
+potion DROPLET_OF_PRECOGNITION Rare CombatOnly AnyPlayer 1 1
+potion DUPLICATOR Uncommon CombatOnly AnyPlayer 1 1
+potion ENERGY_POTION Common CombatOnly AnyPlayer 1 1
+potion ENTROPIC_BREW Rare AnyTime AnyPlayer 1 1
+potion ESSENCE_OF_DARKNESS Rare CombatOnly AnyPlayer 1 1
+potion EXPLOSIVE_AMPOULE Common CombatOnly AllEnemies 1 1
+potion FAIRY_IN_A_BOTTLE Rare Automatic Self 0 1
+potion FIRE_POTION Common CombatOnly AnyEnemy 1 1
+potion FLEX_POTION Common CombatOnly AnyPlayer 1 1
+potion FOCUS_POTION Common CombatOnly AnyPlayer 1 1
+potion FORTIFIER Uncommon CombatOnly AnyPlayer 1 1
+potion FOUL_POTION Event AnyTime dynamic 1 dynamic
+potion FRUIT_JUICE Rare AnyTime AnyPlayer 0 1
+potion FYSH_OIL Uncommon CombatOnly AnyPlayer 1 1
+potion GAMBLERS_BREW Uncommon CombatOnly AnyPlayer 1 1
+potion GHOST_IN_A_JAR Rare CombatOnly AnyPlayer 1 1
+potion GIGANTIFICATION_POTION Rare CombatOnly AnyPlayer 1 1
+potion GLOWWATER_POTION Event CombatOnly AnyPlayer 1 1
+potion HEART_OF_IRON Uncommon CombatOnly AnyPlayer 1 1
+potion KINGS_COURAGE Uncommon CombatOnly AnyPlayer 1 1
+potion LIQUID_BRONZE Uncommon CombatOnly AnyPlayer 1 1
+potion LIQUID_MEMORIES Rare CombatOnly AnyPlayer 1 1
+potion LUCKY_TONIC Rare CombatOnly AnyPlayer 1 1
+potion MAZALETHS_GIFT Rare CombatOnly AnyPlayer 1 1
+potion MOCK_DISCARD_AND_ADD_SHIVS_POTION None CombatOnly Self 1 1
+potion OROBIC_ACID Rare CombatOnly AnyPlayer 1 1
+potion POISON_POTION Common CombatOnly AnyEnemy 1 1
+potion POTION_OF_BINDING Uncommon CombatOnly AllEnemies 1 1
+potion POTION_OF_CAPACITY Uncommon CombatOnly AnyPlayer 1 1
+potion POTION_OF_DOOM Common CombatOnly AnyEnemy 1 1
+potion POTION_SHAPED_ROCK Token CombatOnly AnyEnemy 1 1
+potion POT_OF_GHOULS Rare CombatOnly AnyPlayer 1 1
+potion POWDERED_DEMISE Uncommon CombatOnly AnyEnemy 1 1
+potion POWER_POTION Common CombatOnly AnyPlayer 1 1
+potion RADIANT_TINCTURE Uncommon CombatOnly AnyPlayer 1 1
+potion REGEN_POTION Uncommon CombatOnly AnyPlayer 0 1
+potion SHACKLING_POTION Rare CombatOnly AllEnemies 1 1
+potion SHIP_IN_A_BOTTLE Rare CombatOnly AnyPlayer 1 1
+potion SKILL_POTION Common CombatOnly AnyPlayer 1 1
+potion SNECKO_OIL Rare CombatOnly AnyPlayer 1 1
+potion SOLDIERS_STEW Rare CombatOnly AnyPlayer 1 1
+potion SPEED_POTION Common CombatOnly AnyPlayer 1 1
+potion STABLE_SERUM Uncommon CombatOnly AnyPlayer 1 1
+potion STAR_POTION Common CombatOnly AnyPlayer 1 1
+potion STRENGTH_POTION Common CombatOnly AnyPlayer 1 1
+potion SWIFT_POTION Common CombatOnly AnyPlayer 1 1
+potion TOUCH_OF_INSANITY Uncommon CombatOnly AnyPlayer 1 1
+potion VULNERABLE_POTION Common CombatOnly AnyEnemy 1 1
+potion WEAK_POTION Common CombatOnly AnyEnemy 1 1
+# 66 potions
+enum PotionRarity 0 None
+enum PotionRarity 1 Common
+enum PotionRarity 2 Uncommon
+enum PotionRarity 3 Rare
+enum PotionRarity 4 Event
+enum PotionRarity 5 Token
+enum PotionUsage 0 None
+enum PotionUsage 1 CombatOnly
+enum PotionUsage 2 AnyTime
+enum PotionUsage 3 Automatic
+enum TargetType 0 None
+enum TargetType 1 Self
+enum TargetType 2 AnyEnemy
+enum TargetType 3 AllEnemies
+enum TargetType 4 RandomEnemy
+enum TargetType 5 AnyPlayer
+enum TargetType 6 AnyAlly
+enum TargetType 7 AllAllies
+enum TargetType 8 TargetedNoCreature
+enum TargetType 9 Osty

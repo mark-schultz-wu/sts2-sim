@@ -199,3 +199,9 @@ One connection per command, not one held open. The daemon serves one client at a
 time, because the game is a single state machine. A held connection is a client
 with no command in flight, keeping every other client out. Connecting costs a
 syscall, and the command that follows costs a decision in a game engine.
+
+The socket carries the build: `sts2-v0_107_1.sock` beside `sts2-v0_111_0.sock`.
+The daemon relays a command the client already encoded against its own tables.
+A client reaching a daemon that holds another build reads that game through the
+wrong ids. Separate paths make that unreachable, and let two builds be held open
+at once.

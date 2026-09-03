@@ -22,7 +22,11 @@ use crate::Readable;
 ///
 /// A `std::process::Command` that serves when it is run. Handed in because the
 /// subcommand that serves is the binary's, not this module's.
-pub type Serving = fn(Duration) -> Result<std::process::Command>;
+///
+/// The build's name goes with it, because a daemon serves one build and it must
+/// be the one the client asked for. A name rather than a flag: how to spell it
+/// is the binary's business.
+pub type Serving = fn(Duration, &str) -> Result<std::process::Command>;
 
 /// The daemon-held oracle, and every command about the machinery.
 pub struct Held<V: ContentVersion> {
@@ -36,6 +40,18 @@ impl<V: ContentVersion> Held<V> {
             serving,
             version: PhantomData,
         }
+    }
+
+    /// Starts the daemon for this build, and waits for its socket.
+    ///
+    /// # Errors
+    ///
+    /// The daemon failed to start or did not bind in time.
+    fn spawn(&self, idle: Duration) -> Result<()> {
+        Ok(daemon::spawn(
+            (self.serving)(idle, V::VERSION.name)?,
+            &daemon::socket_path(&V::VERSION),
+        )?)
     }
 
     /// A handle to whatever the daemon is holding, without starting anything.
@@ -56,9 +72,9 @@ impl<V: ContentVersion> Held<V> {
     ///
     /// The daemon failed to start.
     pub fn wake(&self, idle: Duration) -> Result<bool> {
-        let fresh = !daemon::running();
+        let fresh = !daemon::running(&V::VERSION);
         if fresh {
-            daemon::spawn((self.serving)(idle)?)?;
+            self.spawn(idle)?;
         }
         Ok(fresh)
     }
@@ -73,13 +89,13 @@ impl<V: ContentVersion> Held<V> {
     ///
     /// The running daemon refused to stop, or a fresh one failed to start.
     pub fn empty(&self) -> Result<Session<V>> {
-        if daemon::running() {
+        if daemon::running(&V::VERSION) {
             self.attached().stop()?;
-            while daemon::running() {
+            while daemon::running(&V::VERSION) {
                 std::thread::sleep(Duration::from_millis(25));
             }
         }
-        daemon::spawn((self.serving)(DEFAULT_IDLE_TIMEOUT)?)?;
+        self.spawn(DEFAULT_IDLE_TIMEOUT)?;
         Ok(self.attached())
     }
 
@@ -90,8 +106,8 @@ impl<V: ContentVersion> Held<V> {
     /// The game directory is unset, or the socket is already taken.
     pub fn serve(&self, detach: bool, idle: Duration) -> Result<()> {
         if detach {
-            daemon::spawn((self.serving)(idle)?)?;
-            println!("serving at {}", daemon::socket_path().display());
+            self.spawn(idle)?;
+            println!("serving at {}", daemon::socket_path(&V::VERSION).display());
             return Ok(());
         }
         Ok(daemon::serve::<V>(config()?, idle)?)
@@ -123,7 +139,7 @@ impl<V: ContentVersion> Held<V> {
     ///
     /// The daemon was up and refused to stop.
     pub fn stop(&self) -> Result<String> {
-        if !daemon::running() {
+        if !daemon::running(&V::VERSION) {
             return Ok("nothing running".into());
         }
         self.attached().stop()?;

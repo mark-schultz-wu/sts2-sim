@@ -15,16 +15,10 @@ use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use sts2_cli::cli::moves;
 use sts2_cli::coverage::Coverage;
-use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
 use sts2_core::{Applied, Construct, Decision, Gift, Setup, Step};
 use sts2_headless::{Config, Oracle, recording};
-use sts2_rng::Seed;
-
-type V = V0_107_1;
-type Character = <V as ContentVersion>::Character;
-type AscensionLevel = <V as ContentVersion>::AscensionLevel;
-type Relic = <V as ContentVersion>::Relic;
+use sts2_rng::{Seed, Seeding};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -35,9 +29,22 @@ struct Cli {
     /// The run's seed. One is made up when this is absent.
     #[arg(long)]
     seed: Option<String>,
+    /// Which pinned build to fuzz, as its lock under `mod/games/` names it.
+    ///
+    /// It has to be the build `STS2_GAME_DIR` points at. The tables decide how
+    /// an observation is read, and reading one build's game with another's is
+    /// how a fuzzer reports faults that are its own.
+    ///
+    /// Defaults to `STS2_GAME_VERSION`, which is what `.envrc` exports and what
+    /// picks the game directory, so the two cannot drift apart by default.
+    #[arg(long)]
+    game_version: Option<String>,
     /// A character id, such as `IRONCLAD`.
     #[arg(long, default_value = "IRONCLAD")]
     character: String,
+    /// An ascension id, such as `Poverty`. `None` is the bottom of the ladder.
+    #[arg(long, default_value = "None")]
+    ascension: String,
     /// The relic to lean on, granted `--stack` times before play starts.
     #[arg(long, default_value = "GORGET")]
     relic: String,
@@ -63,14 +70,32 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // One arm per build `sts2-content` compiles. The whole fuzzer is generic
+    // over the version, so this is the only place that names one, and adding a
+    // build is adding a line.
+    let version = cli
+        .game_version
+        .clone()
+        .or_else(|| std::env::var("STS2_GAME_VERSION").ok())
+        .unwrap_or_else(|| "v0.107.1".to_string());
+
+    match version.as_str() {
+        "v0.107.1" => fuzz::<sts2_content::v0_107_1::V0_107_1>(cli),
+        "v0.111.0" => fuzz::<sts2_content::v0_111_0::V0_111_0>(cli),
+        other => bail!("no tables for game version {other:?}; try v0.107.1 or v0.111.0"),
+    }
+}
+
+fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
     let seed = match &cli.seed {
         Some(typed) => Seed::fold(typed).map_err(|e| anyhow::anyhow!("{e}"))?,
         None => made_up_seed()?,
     };
-    let character: Character = id("a character", &cli.character)?;
-    let relic: Relic = id("a relic", &cli.relic)?;
+    let character: V::Character = id("a character", &cli.character)?;
+    let relic: V::Relic = id("a relic", &cli.relic)?;
+    let ascension: V::AscensionLevel = id("an ascension level", &cli.ascension)?;
 
-    let path = match cli.record {
+    let path = match cli.record.clone() {
         Some(path) => path,
         None => {
             let dir = sts2_cli::runs::runs_dir();
@@ -95,10 +120,15 @@ fn main() -> Result<()> {
     config.inherit_game_output = cli.game_output;
     let mut game = Oracle::<V>::launch(config).context("launching the game")?;
 
-    // The seed decides the run; this decides which of the legal moves gets
+    // The seed decides the run. This decides which of the legal moves gets
     // taken. Derived from it so a session is reproducible from its name alone,
     // even before the recording is read back.
-    let mut dice = Dice::from(sts2_rng::stream_seed(&seed));
+    //
+    // One build's seeding, whichever build is being fuzzed. These dice are the
+    // fuzzer's own and never the game's, so fidelity is not the point, and the
+    // same name has to pick the same moves on both builds for two runs to be
+    // worth putting side by side.
+    let mut dice = Dice::from(sts2_rng::Interleaved::stream_seed(&seed));
 
     let mut cover = Coverage::default();
     cover.started::<V>(character);
@@ -109,7 +139,7 @@ fn main() -> Result<()> {
         &Decision::Start {
             seed,
             character,
-            ascension: AscensionLevel::None,
+            ascension,
             modifiers: vec![],
         }
         .into(),
@@ -201,7 +231,11 @@ fn keep(recording: &Path, cover: &Coverage) -> Result<()> {
 /// Written before it is sent, so a move that kills the game is in the file that
 /// reproduces it. A move the game refuses is in there too, which is what makes
 /// the file replay to the state the refusal was found in.
-fn send(game: &mut Oracle<V>, tape: &mut BufWriter<File>, step: &Step<V>) -> Result<Applied<V>> {
+fn send<V: ContentVersion>(
+    game: &mut Oracle<V>,
+    tape: &mut BufWriter<File>,
+    step: &Step<V>,
+) -> Result<Applied<V>> {
     recording::append(&mut *tape, step)?;
 
     // `Construct::step` reads the state on the way through, so every state a
@@ -244,7 +278,7 @@ fn note(recording: &Path, what: &str) {
 ///
 /// `victory` is only meaningful once the run is over, because winning kills
 /// every player too. The order of these two tests is the whole of it.
-fn finished(applied: &Applied<V>) -> Option<&'static str> {
+fn finished<V: ContentVersion>(applied: &Applied<V>) -> Option<&'static str> {
     if !applied.observation.run_over {
         return None;
     }
@@ -255,7 +289,7 @@ fn finished(applied: &Applied<V>) -> Option<&'static str> {
 }
 
 /// Enough of the state to watch progress without printing the whole thing.
-fn where_it_is(applied: &Applied<V>) -> String {
+fn where_it_is<V: ContentVersion>(applied: &Applied<V>) -> String {
     let o = &applied.observation;
     format!(
         "floor {} · act {} · hp {}/{}",

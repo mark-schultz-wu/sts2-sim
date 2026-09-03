@@ -27,7 +27,18 @@ check: test lint mods
 
 [doc("The Rust suite, minus the tests that need the game")]
 test:
+    #!/usr/bin/env bash
+    set -euo pipefail
     cargo test --workspace
+    # Every pinned build's tables, named rather than inherited. The workspace
+    # run above happens to compile them all, because `sts2-cli` asks for them
+    # and cargo unifies features. That is a coincidence of one crate's
+    # dependencies, and this does not depend on it holding.
+    features=""
+    for lock in mod/games/*.lock; do
+        features="$features,$(basename "$lock" .lock | tr . _)"
+    done
+    cargo test -p sts2-content --features "${features#,}"
 
 [doc("Clippy, rustfmt, and the prose rules")]
 lint: prose
@@ -137,3 +148,16 @@ determinism-test: deploy
 live: deploy
     cargo test --workspace -- --ignored
 
+# Owns its own game process rather than the daemon, so a run that kills the game
+# kills nothing else. Every move is recorded beside the run, which is what makes
+# a finding a file rather than a story. `docs/ARCHITECTURE.md` says what counts
+# as one.
+#
+# Release, because a fuzz run is thousands of round trips and the debug build
+# spends longer converting observations than the game spends producing them.
+#
+# Arguments go through: `just fuzz --seed ABCDEFGH --steps 200`. The build comes
+# from STS2_GAME_VERSION, the same setting that chose STS2_GAME_DIR.
+[doc("Random legal play until the run ends or something breaks")]
+fuzz *args: deploy
+    cargo run --release --bin sts2-fuzz -- {{args}}
