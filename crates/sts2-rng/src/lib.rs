@@ -20,7 +20,7 @@
 //! is a draw that is valid, and the only fallible operations are building an
 //! argument and seeking a stream forward.
 //!
-//! Checked against `tests/megarandom.txt`, dumped from the game. Regenerate
+//! Checked against `tests/rng/v0_107_1.txt`, dumped from the game. Regenerate
 //! with `STS2_HEADLESS_MODE=rngdump`. See `mod/sts2_dump/RngDump.cs`.
 
 mod bounds;

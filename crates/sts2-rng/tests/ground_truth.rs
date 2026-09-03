@@ -1,4 +1,4 @@
-//! Replays `megarandom.txt`, dumped from the game, and requires an exact match.
+//! Replays `rng/v0_107_1.txt`, dumped from the game, and requires an exact match.
 //!
 //! Generic over [`GameRng`], so a replacement implementation has to pass the
 //! same fixture. Each block reseeds and draws in index order, so index `0`
@@ -6,7 +6,7 @@
 
 use sts2_rng::{Bound, GameRng, Interval, MegaRng, Span};
 
-const FIXTURE: &str = include_str!("megarandom.txt");
+const FIXTURE: &str = include_str!("rng/v0_107_1.txt");
 
 fn num<T: std::str::FromStr>(field: &str) -> T
 where
