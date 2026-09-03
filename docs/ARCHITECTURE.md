@@ -59,6 +59,8 @@ sts2-sim-core   the nouns and the traits. Combat state, creature, piles, and the
                 hook trait content implements. No content, no engine.
 sts2-sim        the engine. Turn loop, map generation, rewards, shops, run
                 progression. Generic over a content version.
+sts2-net        optional retail multiplayer adapter. Version-specific message
+                and model-id tables outside; ordered actions into sts2-sim.
 ```
 
 Dependencies run `sts2-content → sts2-sim-core` and `sts2-sim → sts2-sim-core`.
@@ -88,6 +90,65 @@ is cheaper than that rule.
 It also kept the dependency honest in a small way. `sts2-core` takes
 `sts2-content` for the `ContentVersion` trait alone. The alternative compiles
 engine declarations it never uses, in `sts2-headless` too.
+
+## Retail multiplayer is a compatibility target
+
+The simulator is meant eventually to join a run hosted by an actual copy of
+the game, not merely imitate multiplayer for other simulator processes. This is
+an architectural constraint now and an implementation project later. The first
+engine does not wait for a network client, and ENet types do not enter its
+state.
+
+The target is possible because the retail game's non-Steam transport is ordinary
+ENet. A local interoperability spike connected to the pinned game running
+headlessly and received a successful transport handshake. The transport is not
+the hard boundary.
+
+The hard boundary is the game's execution model. Multiplayer is deterministic
+lockstep: a client requests an action, the host assigns its order and broadcasts
+it, and every peer executes the full simulation locally. Peers compare
+full-state checksums after actions. A simulator that is approximately right is
+therefore not a multiplayer peer. One extra RNG draw, a hook on the wrong side
+of an action, or a collection visited in a different order is a divergence.
+
+That gives the engine five rules from its first line:
+
+1. **A run has players, plural.** Singleplayer is one element, not a different
+   state shape. Ownership of creatures, cards, piles, potions, relics, energy,
+   choices and turn readiness is explicit.
+2. **A decision is not a mutation.** A player's `Decision<V>` becomes an
+   ordered action carrying its actor and host-assigned identity. Only the action
+   executor mutates state. Local play, replay, the oracle and a future network
+   adapter all feed that same executor.
+3. **Resolution order is state.** The action queue, nested resolution stack,
+   suspended choices and hooks are represented explicitly. Rust call-stack
+   accidents cannot decide game order.
+4. **Every random draw is owned and observable.** RNG streams and counters live
+   in run/player state. Iteration order, wall time and process-local hash seeds
+   must never influence a transition.
+5. **The state has one canonical projection.** After an action the engine can
+   produce the complete versioned state used for differential comparison and,
+   eventually, the retail checksum. A terminal observation is only a view of
+   that state and cannot prove lockstep compatibility.
+
+The future `sts2-net` adapter owns ENet, bit packing, message ids, model-id
+indices, lobby negotiation and retail action envelopes. Those are all
+version-specific. It translates a packet into the engine's ordinary ordered
+action. It translates engine state back into checksums. The engine neither sends
+packets nor knows that a peer is remote.
+
+Supporting one build means supporting its exact assembly and content table.
+Supporting modded retail games additionally means generating the same sorted
+model/type tables for the same gameplay-affecting mod set. A semver string does
+not establish either match. The existing assembly stamp and content hash are
+the admission check. A mismatch is a refusal rather than a best effort.
+
+This target does not require networking in the first milestone. It does rule
+out three tempting shortcuts: a single implicit player, direct state mutation
+from front-end commands, and comparison only at decision boundaries. The
+milestone before networking is stricter and independently useful. Replay a
+retail trace through the simulator, then agree with the game's complete state
+after every action.
 
 ## Seeing the map
 
@@ -377,6 +438,14 @@ Four layers, each catching what the one before cannot.
    That is what catches an observation that dropped a field the game's state
    has. `just live` still runs a second game where the simulator will go,
    because the simulator does not exist yet.
+
+5. **The lockstep oracle.** Before retail multiplayer is claimed,
+   `sts2-headless` exposes the game's `NetFullCombatState` and checksum after
+   each executed action, including RNG state. The simulator replays the same
+   ordered actions and compares that complete projection at the same cadence.
+   Matching observations at player decisions remains useful, but is too coarse:
+   two implementations can arrive at the same visible prompt with different
+   hidden state and desynchronise on the next action.
 
 ## Dumping technique
 
