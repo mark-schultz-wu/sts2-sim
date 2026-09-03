@@ -98,6 +98,11 @@ impl<V: ContentVersion> Sent<V> {
         self.0.borrow().len()
     }
 
+    /// Writes one decision down, for whatever is watching the game.
+    pub fn note(&self, decision: Decision<V>) {
+        self.0.borrow_mut().push(decision);
+    }
+
     /// What was sent after the first `from` decisions, which is what a check
     /// cares about. A stage usually had to send some to reach its position.
     pub fn since(&self, from: usize) -> Vec<Decision<V>> {
@@ -132,7 +137,7 @@ impl<V: ContentVersion, G: Play<V>> Play<V> for Spy<V, G> {
     type Error = G::Error;
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-        self.sent.0.borrow_mut().push(decision.clone());
+        self.sent.note(decision.clone());
         self.game.play(decision)
     }
 
@@ -718,39 +723,23 @@ where
 mod tests {
     use super::*;
     use crate::fixture;
+    use crate::scripted::Scripted;
     use serde_json::json;
     use sts2_core::Applied;
 
     type Version = sts2_content::v0_107_1::V0_107_1;
 
-    /// A game that says one thing, forever.
+    /// A stage that stands anywhere, by saying it is standing there.
     ///
     /// Every claim here is about what the front end *sends*, and nothing it
     /// sends depends on what comes back. So a fixed reply is the whole input.
-    struct Canned(Applied<Version>);
+    struct Standing;
 
-    impl Play<Version> for Canned {
-        type Error = std::convert::Infallible;
+    impl Stage<Version> for Standing {
+        type Game = Scripted<Version>;
 
-        fn play(
-            &mut self,
-            _decision: &Decision<Version>,
-        ) -> Result<Answered<Version>, Self::Error> {
-            Ok(Ok(self.0.clone()))
-        }
-
-        fn observe(&mut self) -> Result<Answered<Version>, Self::Error> {
-            Ok(Ok(self.0.clone()))
-        }
-    }
-
-    struct Scripted;
-
-    impl Stage<Version> for Scripted {
-        type Game = Canned;
-
-        fn reach(&mut self, position: Position) -> Result<Canned, String> {
-            Ok(Canned(match position {
+        fn reach(&mut self, position: Position) -> Result<Scripted<Version>, String> {
+            Ok(Scripted::saying(match position {
                 Position::AFight | Position::AFightWithADeadCard => a_fight(),
                 Position::ARoom => an_event(),
                 Position::ASpentRoom => a_spent_room(),
@@ -864,7 +853,7 @@ mod tests {
     /// Every promise, against a state the mod can send.
     #[test]
     fn the_front_end_keeps_its_promises() {
-        let checks = run::<Version, _>(&mut Scripted);
+        let checks = run::<Version, _>(&mut Standing);
         assert_eq!(checks.len(), claims_count(), "every claim ran");
 
         let broken: Vec<String> = checks
@@ -882,7 +871,7 @@ mod tests {
     /// being run.
     #[test]
     fn every_claim_actually_runs() {
-        for check in run::<Version, _>(&mut Scripted) {
+        for check in run::<Version, _>(&mut Standing) {
             if let Outcome::Unreachable(why) = check.outcome {
                 panic!("{} never ran: {why}", check.name);
             }
@@ -890,6 +879,6 @@ mod tests {
     }
 
     fn claims_count() -> usize {
-        claims::<Version, Scripted>().len()
+        claims::<Version, Standing>().len()
     }
 }
