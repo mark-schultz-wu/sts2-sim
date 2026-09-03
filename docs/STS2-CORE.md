@@ -142,6 +142,14 @@ attributes.
 | `Question<V>` | `SelectCards`, `Rewards`, `Divine` | Core semantics: both implementations stop mid-action to ask. `Divine` is the Crystal Sphere, the one event with a screen of its own. |
 | `Recording<V>` | stamp, then one `Step` per line | Moves here. A list of decisions is implementation-independent by construction, so replaying one into either implementation is the same fold. That fold *is* the divergence test. |
 
+`Decision<V>` deliberately does not carry a player id. It describes a choice,
+which is also what a single-player caller supplies. The simulator wraps it in
+an ordered action with an explicit actor before mutation. A future multiplayer
+adapter gets that actor and order from the retail host. Local singleplayer uses
+its sole player and local sequencer. The network envelope does not belong in
+every front-end decision. An actor also cannot remain implicit inside engine
+state, because that makes multiplayer a rewrite.
+
 ## Typed refusals
 
 All forty `Error(...)` sites in `Protocol.cs` were walked. **About half cannot
