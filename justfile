@@ -148,3 +148,16 @@ determinism-test: deploy
 live: deploy
     cargo test --workspace -- --ignored
 
+# Owns its own game process rather than the daemon, so a run that kills the game
+# kills nothing else. Every move is recorded beside the run, which is what makes
+# a finding a file rather than a story. `docs/ARCHITECTURE.md` says what counts
+# as one.
+#
+# Release, because a fuzz run is thousands of round trips and the debug build
+# spends longer converting observations than the game spends producing them.
+#
+# Arguments go through: `just fuzz --seed ABCDEFGH --steps 200`. The build comes
+# from STS2_GAME_VERSION, the same setting that chose STS2_GAME_DIR.
+[doc("Random legal play until the run ends or something breaks")]
+fuzz *args: deploy
+    cargo run --release --bin sts2-fuzz -- {{args}}

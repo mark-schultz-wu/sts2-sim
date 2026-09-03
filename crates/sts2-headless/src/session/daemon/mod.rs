@@ -32,8 +32,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use sts2_core::ContentVersion;
 use sts2_core::Step;
+use sts2_core::{ContentVersion, Version};
 
 /// The crate's error, not `anyhow`'s.
 ///
@@ -56,11 +56,23 @@ pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 /// `XDG_RUNTIME_DIR` when there is one, because it is per-user, cleaned up at
 /// logout, and not world-writable. `/tmp` otherwise, with the uid in the name so
 /// two users on one machine do not collide.
-pub fn socket_path() -> PathBuf {
+///
+/// One socket for each build. The daemon relays commands the client encoded
+/// against its own tables, so reaching the wrong daemon reads a game through
+/// the wrong ids.
+pub fn socket_path(version: &Version) -> PathBuf {
+    let name = format!("sts2-{}.sock", tag(version.name));
     match std::env::var_os("XDG_RUNTIME_DIR") {
-        Some(dir) => PathBuf::from(dir).join("sts2.sock"),
-        None => PathBuf::from(format!("/tmp/sts2-{}.sock", uid())),
+        Some(dir) => PathBuf::from(dir).join(name),
+        None => PathBuf::from(format!("/tmp/sts2-{}-{}", uid(), name)),
     }
+}
+
+/// A build's name as one path component. `v0.107.1` is `v0_107_1`.
+fn tag(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
 }
 
 /// The user, for keeping two people's sockets apart under `/tmp`.
@@ -78,8 +90,16 @@ fn uid() -> String {
 ///
 /// Connecting rather than checking for the file. A socket left behind by a
 /// daemon that died is a file with nobody on the other end.
-pub fn running() -> bool {
-    UnixStream::connect(socket_path()).is_ok()
+pub fn running(version: &Version) -> bool {
+    alive(&socket_path(version))
+}
+
+/// Whether anyone answers on one socket.
+///
+/// By path rather than by build. Two callers already hold a path: the bind that
+/// lost a race, and the wait for a daemon just spawned.
+fn alive(path: &Path) -> bool {
+    UnixStream::connect(path).is_ok()
 }
 
 /// A run being written down as it is played.
@@ -189,7 +209,7 @@ fn is_decision(command: &serde_json::Value) -> bool {
 /// that crashed. Without it, a forgotten game sits holding memory until the
 /// machine reboots.
 pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Result<()> {
-    let path = socket_path();
+    let path = socket_path(&V::VERSION);
 
     // Bind first, and only clear the path once nobody has answered on it.
     //
@@ -201,7 +221,7 @@ pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Resul
     let listener = match UnixListener::bind(&path) {
         Ok(listener) => listener,
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            if running() {
+            if alive(&path) {
                 return Err(failed_to(format!(
                     "a game is already running at {}; stop it first",
                     path.display()
@@ -450,7 +470,7 @@ fn refused(line: &str) -> bool {
 /// owns the socket and the loop, and a front end owns the fact that it has a
 /// `serve` subcommand to re-enter itself through. Whatever is handed in must
 /// end up calling [`serve`].
-pub fn spawn(mut command: std::process::Command) -> Result<()> {
+pub fn spawn(mut command: std::process::Command, socket: &Path) -> Result<()> {
     let child = command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -462,14 +482,15 @@ pub fn spawn(mut command: std::process::Command) -> Result<()> {
     // bound yet is one a client would fail to reach.
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
-        if running() {
+        if alive(socket) {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(25));
     }
 
     Err(failed_to(format!(
-        "the daemon (pid {}) did not bind a socket within ten seconds",
-        child.id()
+        "the daemon (pid {}) did not bind {} within ten seconds",
+        child.id(),
+        socket.display()
     )))
 }

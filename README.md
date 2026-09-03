@@ -58,7 +58,7 @@ the set of model ids. The assembly hash moves on any code change at all.
 STS2 churns 20-50 cards on a minor version, so a pin is what stops a result
 changing because the game did. Each pinned build has a lock under `mod/games/`.
 `STS2_GAME_VERSION` picks which one everything uses. The mods compile against
-it, and the dumps and tables land under it.
+it, the dumps land under it, and `sts2` drives it.
 
 Two builds are pinned: v0.107.1 and v0.111.0. Both compile the whole mod set
 from the same sources, with one adapter for each build under every mod's
