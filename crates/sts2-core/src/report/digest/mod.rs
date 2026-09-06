@@ -54,8 +54,8 @@ use xxhash::XxHash64;
 
 use crate::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Counters, Creature, Entry, EventOption, FlagSet, Held, Intent, Map, ModelId, NextMove, Node,
-    Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, Stack, Stock, Take,
+    Cost, Counters, Creature, Entry, EventOption, FlagSet, Held, Intent, Map, ModelId, NextMove,
+    Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, Stack, Stock, Take,
 };
 
 /// One observation, as eight bytes.
@@ -85,8 +85,27 @@ impl std::fmt::Display for Digest {
 
 impl<V: ContentVersion> Observation<V> {
     /// This observation, as eight bytes.
+    ///
+    /// Everything, prose included. What two copies of the *game* are compared
+    /// on, where a changed description is a difference worth seeing.
     pub fn digest(&self) -> Digest {
         let mut sink = Sink::new();
+        sink.observation(self);
+        Digest(sink.finish())
+    }
+
+    /// The same, without the strings a person reads.
+    ///
+    /// What the simulator is held to.
+    ///
+    /// The game formats its descriptions from localised templates. An
+    /// implementation without those tables cannot produce them, and holding it
+    /// to them tests a text formatter, not the rules.
+    ///
+    /// Everything a rule can observe stays, down to the RNG draw counts. A
+    /// card's numbers stay through `Preview::vars`. Only sentences go.
+    pub fn rules_digest(&self) -> Digest {
+        let mut sink = Sink::rules();
         sink.observation(self);
         Digest(sink.finish())
     }
@@ -134,6 +153,11 @@ const SOME: u8 = 1;
 /// never wanted as bytes, only as its hash.
 struct Sink {
     hash: XxHash64,
+    /// Whether strings a person reads are part of the answer.
+    ///
+    /// See [`Observation::rules_digest`]. The nested sinks this crate takes are
+    /// over ids and counts, so they carry no prose either way.
+    prose: bool,
 }
 
 /// So a value can hash *itself* into the encoding.
@@ -196,9 +220,37 @@ impl std::hash::Hasher for Sink {
 }
 
 impl Sink {
+    /// Everything the observation carries, prose included.
     fn new() -> Sink {
         Sink {
             hash: XxHash64::new(),
+            prose: true,
+        }
+    }
+
+    /// Everything except what a person reads.
+    fn rules() -> Sink {
+        Sink {
+            hash: XxHash64::new(),
+            prose: false,
+        }
+    }
+
+    /// A string written for a person rather than for a rule.
+    ///
+    /// Skipped entirely rather than replaced with a placeholder, in both the
+    /// present and absent cases, so two observations that differ only in their
+    /// wording collide. That is the point.
+    fn prose(&mut self, value: &str) {
+        if self.prose {
+            self.str(value);
+        }
+    }
+
+    /// The same, for prose the game does not always have.
+    fn prose_option(&mut self, value: &Option<String>) {
+        if self.prose {
+            self.option(value, |sink, said| sink.str(said));
         }
     }
 
@@ -224,6 +276,22 @@ impl Sink {
 
     fn bool(&mut self, value: bool) {
         self.u8(u8::from(value));
+    }
+
+    /// A discriminant then the number, so a card that costs nothing and one
+    /// that is not priced at all do not digest the same.
+    ///
+    /// They are different states of the game, and a digest that cannot tell
+    /// them apart cannot notice one turning into the other.
+    fn cost(&mut self, value: Cost) {
+        match value {
+            Cost::X => self.u8(0),
+            Cost::Fixed(n) => {
+                self.u8(1);
+                self.u8(n);
+            }
+            Cost::None => self.u8(2),
+        }
     }
 
     /// A count, always eight bytes, so a `usize` of another width digests the
@@ -499,8 +567,8 @@ impl Sink {
                 self.u8(ROOM_EVENT);
                 self.id(event);
                 self.bool(*finished);
-                self.option(title, |sink, title| sink.str(title));
-                self.option(text, |sink, text| sink.str(text));
+                self.prose_option(title);
+                self.prose_option(text);
                 self.list(options, |sink, option| {
                     let EventOption {
                         index,
@@ -513,9 +581,11 @@ impl Sink {
                         relic,
                     } = option;
                     sink.u8(*index);
+                    // The key is an id, not prose: it names the option without
+                    // saying anything about it, and two options never share one.
                     sink.str(key);
-                    sink.option(title, |sink, title| sink.str(title));
-                    sink.option(text, |sink, text| sink.str(text));
+                    sink.prose_option(title);
+                    sink.prose_option(text);
                     sink.bool(*locked);
                     sink.bool(*proceed);
                     sink.bool(*chosen);
@@ -530,6 +600,8 @@ impl Sink {
                         index,
                         stock,
                         cost,
+                        title,
+                        text,
                         stocked,
                         affordable,
                         blocked,
@@ -538,7 +610,11 @@ impl Sink {
                     match stock {
                         Stock::Card(card) => {
                             sink.u8(STOCK_CARD);
-                            sink.option(card, |sink, card| sink.card(card));
+                            sink.option(card, |sink, on_sale| {
+                                sink.card(&on_sale.card);
+                                sink.cost(on_sale.cost);
+                                sink.cost(on_sale.star_cost);
+                            });
                         }
                         Stock::Relic(relic) => {
                             sink.u8(STOCK_RELIC);
@@ -551,6 +627,8 @@ impl Sink {
                         Stock::CardRemoval => sink.u8(STOCK_CARD_REMOVAL),
                     }
                     sink.i32(*cost);
+                    sink.prose_option(title);
+                    sink.prose_option(text);
                     sink.bool(*stocked);
                     sink.bool(*affordable);
                     sink.option(blocked, |sink, blocked| match blocked {
@@ -566,6 +644,7 @@ impl Sink {
             turn,
             phase,
             energy,
+            stars,
             round,
             encounter,
             hand,
@@ -580,6 +659,7 @@ impl Sink {
         self.i32(*turn);
         self.id(phase);
         self.i32(*energy);
+        self.i32(*stars);
         self.i32(*round);
         self.option(encounter, |sink, encounter| sink.id(encounter));
         for pile in [hand, draw, discard, exhaust] {
@@ -646,8 +726,8 @@ impl Sink {
     fn carried<V: ContentVersion>(&mut self, carried: &Carried<V>) {
         let Carried { relic, title, text } = carried;
         self.id(relic);
-        self.option(title, |sink, title| sink.str(title));
-        self.option(text, |sink, text| sink.str(text));
+        self.prose_option(title);
+        self.prose_option(text);
     }
 
     fn held<V: ContentVersion>(&mut self, held: &Held<V>) {
@@ -659,8 +739,8 @@ impl Sink {
             targets,
         } = held;
         self.id(potion);
-        self.option(title, |sink, title| sink.str(title));
-        self.option(text, |sink, text| sink.str(text));
+        self.prose_option(title);
+        self.prose_option(text);
         self.option(reason, |sink, why| sink.id(why));
         self.list(targets, |sink, id| sink.u32(*id));
     }
@@ -669,6 +749,7 @@ impl Sink {
         let Playable {
             card,
             cost,
+            star_cost,
             target,
             reason,
             preventer,
@@ -677,7 +758,8 @@ impl Sink {
         } = playable;
 
         self.card(card);
-        self.i32(*cost);
+        self.cost(*cost);
+        self.cost(*star_cost);
         self.id(target);
         self.option(reason, |sink, reasons| sink.flags(reasons));
         self.option(preventer, |sink, model| sink.model(model));
@@ -690,7 +772,9 @@ impl Sink {
                 base,
             } = preview;
             sink.option(target, |sink, id| sink.u32(*id));
-            sink.str(text);
+            // The numbers this sentence has in it are `vars` and `base`, which
+            // are digested either way. This is the sentence.
+            sink.prose(text);
             sink.vars(vars);
             sink.vars(base);
         });

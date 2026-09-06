@@ -21,9 +21,9 @@ use std::collections::{BTreeMap, HashMap};
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Counters, Creature, Digest, Entry, EventOption, FlagSet, Held, Intent, Map, ModelId, NextMove,
-    Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, Stack, Stock, Table,
-    Take, Undrinkable,
+    Cost, Counters, Creature, Digest, Entry, EventOption, FlagSet, Held, Intent, Map, ModelId,
+    NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, ShopCard,
+    Stack, Stock, Table, Take, Undrinkable,
 };
 
 type V = V0_107_1;
@@ -125,6 +125,7 @@ fn full() -> Observation<V> {
             turn: 2,
             phase: PlayerTurnPhase::Play,
             energy: 3,
+            stars: 0,
             round: 2,
             encounter: Some(nth::<Encounter>(0)),
             hand: vec![card(2), card(3)],
@@ -156,7 +157,8 @@ fn full() -> Observation<V> {
             }],
             legal: vec![Playable {
                 card: card(2),
-                cost: 1,
+                cost: Cost::Fixed(1),
+                star_cost: Cost::None,
                 target: TargetType::AnyEnemy,
                 reason: Some(UnplayableReasons::from_members(&[
                     UnplayableReason::EnergyCostTooHigh,
@@ -203,10 +205,17 @@ fn rooms() -> Vec<Room<V>> {
         chosen: false,
         relic: Some(nth::<Relic>(0)),
     };
+    let on_sale = |n| ShopCard {
+        card: card(n),
+        cost: Cost::Fixed(1),
+        star_cost: Cost::None,
+    };
     let entry = |index, stock, cost| Entry {
         index,
         stock,
         cost,
+        title: None,
+        text: None,
         stocked: true,
         affordable: true,
         blocked: None,
@@ -214,13 +223,13 @@ fn rooms() -> Vec<Room<V>> {
 
     vec![
         Room::Shop {
-            entries: vec![entry(0, Stock::Card(Some(card(0))), 50)],
+            entries: vec![entry(0, Stock::Card(Some(on_sale(0))), 50)],
         },
         Room::Shop {
-            entries: vec![entry(1, Stock::Card(Some(card(0))), 50)],
+            entries: vec![entry(1, Stock::Card(Some(on_sale(0))), 50)],
         },
         Room::Shop {
-            entries: vec![entry(0, Stock::Card(Some(card(1))), 50)],
+            entries: vec![entry(0, Stock::Card(Some(on_sale(1))), 50)],
         },
         Room::Shop {
             entries: vec![entry(0, Stock::Card(None), 50)],
@@ -589,7 +598,16 @@ fn mutations() -> Vec<Nudge> {
                 });
         }),
         ("playable.card", |o| playable(o).card = card(10)),
-        ("playable.cost", |o| playable(o).cost += 1),
+        ("playable.cost", |o| playable(o).cost = Cost::Fixed(2)),
+        // A card that costs nothing and one that is not priced at all are
+        // different states of the game, so they must digest differently.
+        ("playable.cost: none vs zero", |o| {
+            playable(o).cost = Cost::None;
+        }),
+        ("playable.cost: X", |o| playable(o).cost = Cost::X),
+        ("playable.star_cost", |o| {
+            playable(o).star_cost = Cost::Fixed(0);
+        }),
         ("playable.target", |o| {
             playable(o).target = TargetType::AllEnemies;
         }),
@@ -658,6 +676,55 @@ fn mutations() -> Vec<Nudge> {
     ]
 }
 
+/// The simulator is measured on the rules, not on the wording.
+///
+/// Two things must hold. Prose alone must not move the rules digest, and
+/// anything a rule sees must move it. The second is the one easy to lose.
+#[test]
+fn the_rules_digest_ignores_prose_and_nothing_else() {
+    let plain = full();
+
+    // Every prose field the observation has, reworded.
+    let mut reworded = full();
+    for relic in &mut reworded.relics {
+        relic.title = Some("Something Else".into());
+        relic.text = Some("It does something else.".into());
+    }
+    for potion in &mut reworded.potions {
+        potion.title = Some("Another Flask".into());
+        potion.text = Some("It does another thing.".into());
+    }
+
+    assert_ne!(
+        plain.digest(),
+        reworded.digest(),
+        "the full digest is what two copies of the game are compared on, and \
+         a description that changed is a difference"
+    );
+    assert_eq!(
+        plain.rules_digest(),
+        reworded.rules_digest(),
+        "the same run, said differently, is the same run"
+    );
+
+    // And the exclusion is narrow: the ids beside the prose still count.
+    let mut other_relic = full();
+    other_relic.relics[0].relic = other_relic.relics[1].relic;
+    assert_ne!(
+        plain.rules_digest(),
+        other_relic.rules_digest(),
+        "a different relic is a different run, however it is described"
+    );
+
+    let mut poorer = full();
+    poorer.gold -= 1;
+    assert_ne!(
+        plain.rules_digest(),
+        poorer.rules_digest(),
+        "dropping prose must not drop anything else"
+    );
+}
+
 /// Every field of an observation reaches the digest.
 ///
 /// Each nudge is checked twice. First, that it changed the observation at all,
@@ -676,6 +743,52 @@ fn every_field_reaches_the_digest() {
 
         if let Some(other) = seen.insert(moved.digest(), what) {
             panic!("{what} digests the same as {other}");
+        }
+    }
+}
+
+/// The nudges that move only wording, and so are invisible to the rules.
+///
+/// Checked both ways below: each must vanish from the rules digest, and
+/// everything else must survive it.
+const PROSE_ONLY: &[&str] = &[
+    "relics: renamed",
+    "relics: a nameless one",
+    // A relic's counter is shown only in its description, so the rules digest
+    // cannot see one change. The simulator's own counters are therefore not
+    // compared by this route.
+    "relics: a different count",
+    "potions: renamed",
+    "potions: reworded",
+    "preview.text",
+];
+
+/// Everything the full digest sees, the rules digest sees too, bar the wording.
+#[test]
+fn every_field_but_prose_reaches_the_rules_digest() {
+    let base = full();
+    let mut seen: BTreeMap<Digest, &'static str> = BTreeMap::new();
+    seen.insert(base.rules_digest(), "the fixture itself");
+
+    for (what, nudge) in mutations() {
+        let mut moved = base.clone();
+        nudge(&mut moved);
+
+        if PROSE_ONLY.contains(&what) {
+            assert_eq!(
+                moved.rules_digest(),
+                base.rules_digest(),
+                "{what} is listed as wording, but the rules digest saw it"
+            );
+            continue;
+        }
+
+        if let Some(other) = seen.insert(moved.rules_digest(), what) {
+            panic!(
+                "{what} digests the same as {other} once prose is dropped. \
+                 Either it is wording, and belongs in PROSE_ONLY, or the rules \
+                 digest is dropping something a rule can see."
+            );
         }
     }
 }

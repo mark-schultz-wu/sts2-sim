@@ -1440,6 +1440,7 @@ dependencies = [
 name = "sts2-core"
 version = "0.1.0"
 dependencies = [
+ "libm",
  "nonmax",
  "serde",
  "serde_json",

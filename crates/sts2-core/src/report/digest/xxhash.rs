@@ -1,6 +1,6 @@
 //! xxHash64, seed zero.
 //!
-//! Written out rather than depended on, the way `sts2-rng` writes out the
+//! Written out rather than depended on, the way `rng` writes out the
 //! game's generator. The digest's value is part of this crate's definition, and
 //! a dependency is not allowed to move it. A published algorithm rather than
 //! something invented here, so the test below can hold it against the reference

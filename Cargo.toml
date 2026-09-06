@@ -15,6 +15,9 @@ members = [
 [workspace.dependencies]
 anyhow = "1.0.104"
 clap = { version = "4", features = ["derive"] }
+# The transcendentals the gaussian draws need, compiled in rather than taken
+# from whatever libm the target has. See `sts2-core/src/rng`.
+libm = "0.2"
 nonmax = { version = "0.5.5", features = ["serde"] }
 # The TUI. It reaches its `crossterm` backend through `ratatui::crossterm`
 # rather than as a second dependency. So the key and resize events that the

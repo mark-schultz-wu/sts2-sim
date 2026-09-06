@@ -8,6 +8,11 @@ readme = "README.md"
 # The spelling on a socket or in a file belongs to whatever does the
 # spelling. `serde` appears below as a trait bound only. See docs/STS2-CORE.md.
 [dependencies]
+# `ln`, `sin` and `cos`, compiled in rather than taken from the target's own
+# libm. Two libms differ by an ulp on a few inputs in a hundred. A run that
+# comes out one way on wasm and another way here is not a bug anyone can find.
+# See `src/rng`.
+libm = { workspace = true }
 nonmax = { workspace = true }
 # Bounds only: `ContentVersion`'s associated types require `Serialize` so that a
 # build's ids can be spelled by whatever does the spelling. Nothing in this
