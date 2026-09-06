@@ -47,6 +47,18 @@ impl MapPointType {
     ];
 }
 
+impl sts2_core::MapPoints for MapPointType {
+    const UNASSIGNED: MapPointType = MapPointType::Unassigned;
+    const UNKNOWN: MapPointType = MapPointType::Unknown;
+    const SHOP: MapPointType = MapPointType::Shop;
+    const TREASURE: MapPointType = MapPointType::Treasure;
+    const REST_SITE: MapPointType = MapPointType::RestSite;
+    const MONSTER: MapPointType = MapPointType::Monster;
+    const ELITE: MapPointType = MapPointType::Elite;
+    const BOSS: MapPointType = MapPointType::Boss;
+    const ANCIENT: MapPointType = MapPointType::Ancient;
+}
+
 /// Which side of a fight a creature is on.
 ///
 /// Not the same question as whether it is a monster. A charmed monster

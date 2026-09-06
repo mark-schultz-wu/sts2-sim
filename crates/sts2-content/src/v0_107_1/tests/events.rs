@@ -69,12 +69,22 @@ fn the_generated_table_matches_the_dump() {
 /// both is offered twice by the same map.
 #[test]
 fn an_event_comes_from_an_act_or_from_the_pool_but_not_both() {
+    // An act's own events and its ancients are two ordered lists, so both
+    // kinds of row say the act offers an event. `acts` is the union.
     let mut dumped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    for row in rows(EVENTS, "act") {
-        dumped.entry(row[2]).or_default().push(row[1]);
+    for kind in ["act", "ancient"] {
+        for row in rows(EVENTS, kind) {
+            let of = dumped.entry(row[3]).or_default();
+            if !of.contains(&row[1]) {
+                of.push(row[1]);
+            }
+        }
     }
 
-    let pooled: BTreeSet<&str> = rows(EVENTS, "sharedpool").map(|r| r[1]).collect();
+    let pooled: BTreeSet<&str> = ["sharedpool", "sharedancient"]
+        .into_iter()
+        .flat_map(|kind| rows(EVENTS, kind).map(|r| r[2]))
+        .collect();
     assert_eq!(pooled.len(), 19, "the any-act pool has 19 events");
 
     let mut unlisted: Vec<String> = Vec::new();

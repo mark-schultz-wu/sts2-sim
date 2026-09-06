@@ -249,14 +249,43 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // for the mocks — the same shape as a monster no encounter can roll.
     let mut acts: Vec<String> = Vec::new();
     let mut act_of: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    // The other direction, and the one that has to keep its order: an act's
+    // own list, which is what a grab bag is filled by walking.
+    let mut roster: Vec<(String, Vec<String>)> = Vec::new();
     for row in dump.of("act") {
+        if row.len() != 4 {
+            return Err(format!("{}: {} columns, not 3", row[1], row.len() - 1));
+        }
         if !acts.contains(&row[1]) {
             acts.push(row[1].clone());
         }
         act_of
-            .entry(row[2].clone())
+            .entry(row[3].clone())
             .or_default()
             .push(row[1].clone());
+
+        let at: usize = row[2]
+            .parse()
+            .map_err(|e| format!("{} {}: index {}: {e}", row[1], row[3], row[2]))?;
+        let listed = match roster.iter_mut().find(|(act, _)| *act == row[1]) {
+            Some((_, listed)) => listed,
+            None => {
+                roster.push((row[1].clone(), Vec::new()));
+                &mut roster.last_mut().expect("just pushed").1
+            }
+        };
+        // Dense and ascending. A gap would mean the dump dropped one, and an
+        // order recovered from rows that arrived out of order is not an order.
+        if at != listed.len() {
+            return Err(format!(
+                "{} lists {} at index {at}, which is not the {} it is at — the \
+                 act rows are out of order",
+                row[1],
+                row[3],
+                listed.len()
+            ));
+        }
+        listed.push(row[3].clone());
     }
 
     let mut out = banner(
@@ -334,7 +363,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     emit_sets(&mut out, &enums)?;
     emit_shape(&mut out);
-    emit_encounters(&mut out, &encounters, &act_of)?;
+    emit_encounters(&mut out, &encounters, &act_of, &enums)?;
 
     let mut split = Split::new(root, "encounters", "encounters.txt", &build)?;
     for (id, encounter) in &encounters {
@@ -351,6 +380,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         writeln!(out, "mod {name};").unwrap();
     }
     writeln!(out).unwrap();
+
+    emit_roster(&mut out, &roster);
 
     split.finish(
         &out,
@@ -656,6 +687,7 @@ fn emit_encounters(
     out: &mut String,
     encounters: &BTreeMap<String, Encounter>,
     act_of: &BTreeMap<String, Vec<String>>,
+    enums: &BTreeMap<String, Vec<(u8, String)>>,
 ) -> Result<(), String> {
     writeln!(
         out,
@@ -747,11 +779,90 @@ fn emit_encounters(
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
 
+    // Both read the generated row rather than a second table, so a build that
+    // reflags an encounter moves them without touching this.
+    writeln!(
+        extras,
+        "\n    /// One of the first fights of an act.\n\
+         \x20   fn weak(self) -> bool {{\n\
+         \x20       self.data().flags.contains(EncounterFlag::Weak)\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// Whether the two field a creature family in common.\n\
+         \x20   fn shares_family_with(self, other: Encounter) -> bool {{\n\
+         \x20       self.data().families.intersects(other.data().families)\n\
+         \x20   }}"
+    )
+    .unwrap();
+
     writeln!(out, "impl sts2_core::EncounterTable for Encounter {{").unwrap();
     writeln!(out, "    type Act = Act;").unwrap();
     writeln!(out, "    type Room = RoomType;\n").unwrap();
     out.push_str(&extras);
-    writeln!(out, "}}").unwrap();
+    writeln!(out, "}}\n").unwrap();
 
+    emit_rooms(out, enums)?;
     Ok(())
+}
+
+/// The three room kinds run setup sorts a roster on.
+fn emit_rooms(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), String> {
+    const NAMED: [(&str, &str); 3] = [("MONSTER", "Monster"), ("ELITE", "Elite"), ("BOSS", "Boss")];
+    let rooms = enums
+        .get("RoomType")
+        .ok_or_else(|| "the dump reflects no RoomType".to_string())?;
+    for (_, room) in &NAMED {
+        if !rooms.iter().any(|(_, have)| have == room) {
+            return Err(format!(
+                "the dump reflects no RoomType::{room}, which run setup names — \
+                 see what this build calls it"
+            ));
+        }
+    }
+
+    writeln!(out, "impl sts2_core::Rooms for RoomType {{").unwrap();
+    for (name, room) in NAMED {
+        writeln!(out, "    const {name}: RoomType = RoomType::{room};").unwrap();
+    }
+    writeln!(out, "}}").unwrap();
+    Ok(())
+}
+
+/// An act's own encounter list, in the act's own order.
+///
+/// Not the sorted set [`EncounterTable::acts`] projects. `GenerateRooms` fills
+/// its grab bags by walking this. An entry's weight lands at the index it was
+/// added at, so the order decides what a draw picks.
+fn emit_roster(out: &mut String, roster: &[(String, Vec<String>)]) {
+    writeln!(
+        out,
+        "/// Every encounter an act fields, in the act's own order.\n\
+         ///\n\
+         /// Not sorted, and not the same question as\n\
+         /// [`Encounter::acts`](sts2_core::EncounterTable::acts). Room generation\n\
+         /// fills its grab bags by walking this list, so the order is a rule: an\n\
+         /// entry's weight lands at the index it was added at, and that is what a\n\
+         /// draw indexes into.\n\
+         ///\n\
+         /// Empty for an act with no encounters of its own."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn encounters_of(act: Act) -> &'static [Encounter] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match act {{").unwrap();
+    for (act, listed) in roster {
+        let list = listed
+            .iter()
+            .map(|id| format!("Encounter::{}", camel(id)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(out, "        Act::{} => &[{list}],", camel(act)).unwrap();
+    }
+    writeln!(out, "        #[allow(unreachable_patterns)]").unwrap();
+    writeln!(out, "        _ => &[],").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
 }

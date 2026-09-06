@@ -22,7 +22,7 @@ impl DeprecatedCard {
                 kind: Field::Constant(CardType::Status),
                 rarity: CardRarity::Status,
                 target: Field::Constant(TargetType::None),
-                cost: Cost::Energy(0),
+                cost: Cost::Fixed(0),
                 max_upgrade: 0,
                 keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
             },

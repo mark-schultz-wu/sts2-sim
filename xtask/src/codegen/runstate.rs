@@ -198,6 +198,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             "UnplayableReason" => emit_reasons(&mut out, doc, members)?,
             _ => emit_enum(&mut out, name, doc, members),
         }
+
+        if name == "MapPointType" {
+            emit_map_points(&mut out, members)?;
+        }
     }
 
     let path = root.join("runstate.rs");
@@ -339,4 +343,53 @@ fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result
             extras: &[sets::Extra::IsEmpty],
         },
     )
+}
+
+/// The nine map point kinds, as the consts map generation names them by.
+///
+/// A generated enum is per build, so the simulator's map rules cannot write
+/// `MapPointType::Elite`. This is the bridge, spelled out member by member
+/// rather than derived from the order. A build that renames one stops here,
+/// where the answer is to look at what it renamed.
+fn emit_map_points(out: &mut String, members: &[(u8, String)]) -> Result<(), String> {
+    // `(const, member)`, in the trait's own order.
+    const NAMED: [(&str, &str); 9] = [
+        ("UNASSIGNED", "Unassigned"),
+        ("UNKNOWN", "Unknown"),
+        ("SHOP", "Shop"),
+        ("TREASURE", "Treasure"),
+        ("REST_SITE", "RestSite"),
+        ("MONSTER", "Monster"),
+        ("ELITE", "Elite"),
+        ("BOSS", "Boss"),
+        ("ANCIENT", "Ancient"),
+    ];
+
+    for (_, member) in &NAMED {
+        if !members.iter().any(|(_, have)| have == member) {
+            return Err(format!(
+                "the dump reflects no MapPointType::{member}, which map generation \
+                 names — see what this build calls it"
+            ));
+        }
+    }
+    if members.len() != NAMED.len() {
+        return Err(format!(
+            "MapPointType has {} members and the map rules name {} — the new one \
+             needs a const on sts2_core::MapPoints",
+            members.len(),
+            NAMED.len()
+        ));
+    }
+
+    writeln!(out, "impl sts2_core::MapPoints for MapPointType {{").unwrap();
+    for (name, member) in NAMED {
+        writeln!(
+            out,
+            "    const {name}: MapPointType = MapPointType::{member};"
+        )
+        .unwrap();
+    }
+    writeln!(out, "}}\n").unwrap();
+    Ok(())
 }

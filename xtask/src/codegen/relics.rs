@@ -206,6 +206,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_relics(&mut out, &relics, &pools_of)?;
+    emit_bridges(&mut out, &pools, &enums)?;
 
     let mut split = Split::new(root, "relics", "relics.txt", &build)?;
     for row in &relics {
@@ -485,5 +486,49 @@ fn emit_relics(
     out.push_str(&extras);
     writeln!(out, "}}").unwrap();
 
+    Ok(())
+}
+
+/// The pool and the rarities run setup names, as the consts it names them by.
+///
+/// A generated enum is per build, so a rule holding only a `ContentVersion`
+/// cannot write `RelicPool::Shared`. A build that renamed either stops here.
+fn emit_bridges(
+    out: &mut String,
+    pools: &[String],
+    enums: &BTreeMap<String, Vec<(u8, String)>>,
+) -> Result<(), String> {
+    if !pools.iter().any(|pool| pool == "SHARED_RELIC_POOL") {
+        return Err(format!(
+            "the dump reflects no SHARED_RELIC_POOL, which run setup names — the \
+             pools it does have are {pools:?}"
+        ));
+    }
+
+    // `RelicGrabBag._rarities`, which is what a bag is allowed to hold.
+    const DRAFTED: [&str; 4] = ["Common", "Uncommon", "Rare", "Shop"];
+    let rarities = enums
+        .get("RelicRarity")
+        .ok_or_else(|| "the dump reflects no RelicRarity".to_string())?;
+    for rarity in DRAFTED {
+        if !rarities.iter().any(|(_, have)| have == rarity) {
+            return Err(format!(
+                "the dump reflects no RelicRarity::{rarity}, which a relic bag \
+                 deals from — see what this build calls it"
+            ));
+        }
+    }
+
+    writeln!(out, "\nimpl sts2_core::RelicPools for RelicPool {{").unwrap();
+    writeln!(out, "    const SHARED: RelicPool = RelicPool::Shared;").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl sts2_core::Rarities for RelicRarity {{").unwrap();
+    writeln!(out, "    const DRAFTED: [RelicRarity; 4] = [").unwrap();
+    for rarity in DRAFTED {
+        writeln!(out, "        RelicRarity::{rarity},").unwrap();
+    }
+    writeln!(out, "    ];").unwrap();
+    writeln!(out, "}}").unwrap();
     Ok(())
 }

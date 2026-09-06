@@ -5,6 +5,7 @@
 
 use super::acts::Act;
 use super::encounters::Encounter;
+use super::relics::Relic;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -501,7 +502,6 @@ impl sts2_core::EventTable for Event {
             self,
             Self::BrainLeech
                 | Self::CrystalSphere
-                | Self::Darv
                 | Self::DollRoom
                 | Self::FakeMerchant
                 | Self::PotionCourier
@@ -518,9 +518,180 @@ impl sts2_core::EventTable for Event {
                 | Self::ThisOrThat
                 | Self::WarHistorianRepy
                 | Self::WelcomeToWongos
+                | Self::Darv
         )
     }
+
+    /// One of the nine ancients, which an act draws separately.
+    fn ancient(self) -> bool {
+        <Self as sts2_core::Table>::data(self).layout == EventLayoutType::Ancient
+    }
 }
+/// Every event in an act's own events, in the act's own order.
+///
+/// Not sorted. Room generation shuffles this list, and a shuffle
+/// permutes what it was handed, so the order decides the result.
+///
+/// Empty for an act with none.
+pub fn events_of(act: Act) -> &'static [Event] {
+    match act {
+        Act::Overgrowth => &[
+            Event::AromaOfChaos,
+            Event::ByrdonisNest,
+            Event::DenseVegetation,
+            Event::JungleMazeAdventure,
+            Event::LuminousChoir,
+            Event::MorphicGrove,
+            Event::SapphireSeed,
+            Event::SunkenStatue,
+            Event::TabletOfTruth,
+            Event::UnrestSite,
+            Event::Wellspring,
+            Event::WhisperingHollow,
+            Event::WoodCarvings,
+        ],
+        Act::Underdocks => &[
+            Event::AbyssalBaths,
+            Event::DrowningBeacon,
+            Event::EndlessConveyor,
+            Event::PunchOff,
+            Event::SpiralingWhirlpool,
+            Event::SunkenStatue,
+            Event::SunkenTreasury,
+            Event::DoorsOfLightAndDark,
+            Event::TrashHeap,
+            Event::WaterloggedScriptorium,
+        ],
+        Act::Hive => &[
+            Event::Amalgamator,
+            Event::Bugslayer,
+            Event::ColorfulPhilosophers,
+            Event::ColossalFlower,
+            Event::FieldOfManSizedHoles,
+            Event::InfestedAutomaton,
+            Event::LostWisp,
+            Event::SpiritGrafter,
+            Event::TheLanternKey,
+            Event::ZenWeaver,
+        ],
+        Act::Glory => &[
+            Event::BattlewornDummy,
+            Event::GraveOfTheForgotten,
+            Event::HungryForMushrooms,
+            Event::Reflections,
+            Event::RoundTeaParty,
+            Event::Trial,
+            Event::TinkerTime,
+        ],
+        #[allow(unreachable_patterns)]
+        _ => &[],
+    }
+}
+
+/// Every event in an act's own ancients, in the act's own order.
+///
+/// Not sorted. Room generation shuffles this list, and a shuffle
+/// permutes what it was handed, so the order decides the result.
+///
+/// Empty for an act with none.
+pub fn ancients_of(act: Act) -> &'static [Event] {
+    match act {
+        Act::Overgrowth => &[Event::Neow],
+        Act::Underdocks => &[Event::Neow],
+        Act::Hive => &[Event::Orobas, Event::Pael, Event::Tezcatara],
+        Act::Glory => &[Event::Nonupeipe, Event::Tanx, Event::Vakuu],
+        #[allow(unreachable_patterns)]
+        _ => &[],
+    }
+}
+
+/// The events concatenated onto every act's own list.
+///
+/// In the game's own order, which is not sorted.
+pub const SHARED_EVENTS: [Event; 18] = [
+    Event::BrainLeech,
+    Event::CrystalSphere,
+    Event::DollRoom,
+    Event::FakeMerchant,
+    Event::PotionCourier,
+    Event::RanwidTheElder,
+    Event::RelicTrader,
+    Event::RoomFullOfCheese,
+    Event::SelfHelpBook,
+    Event::SlipperyBridge,
+    Event::StoneOfAllTime,
+    Event::Symbiote,
+    Event::TeaMaster,
+    Event::TheFutureOfPotions,
+    Event::TheLegendsWereTrue,
+    Event::ThisOrThat,
+    Event::WarHistorianRepy,
+    Event::WelcomeToWongos,
+];
+
+/// The events concatenated onto the run, dealt out to the later acts.
+///
+/// In the game's own order, which is not sorted.
+pub const SHARED_ANCIENTS: [Event; 1] = [Event::Darv];
+
+/// The curses Neow offers, one of which every blessing comes with.
+///
+/// In the game's own order, which one draw indexes into.
+pub const NEOW_CURSES: [Relic; 8] = [
+    Relic::CursedPearl,
+    Relic::HeftyTablet,
+    Relic::LargeCapsule,
+    Relic::LeafyPoultice,
+    Relic::NeowsBones,
+    Relic::PrecariousShears,
+    Relic::SilkenTress,
+    Relic::SilverCrucible,
+];
+
+/// The blessings Neow offers, before the three coin flips add to them.
+///
+/// In the game's own order, which is what the shuffle permutes.
+pub const NEOW_POSITIVES: [Relic; 14] = [
+    Relic::ArcaneScroll,
+    Relic::BoomingConch,
+    Relic::FishingRod,
+    Relic::GoldenPearl,
+    Relic::Kaleidoscope,
+    Relic::LeadPaperweight,
+    Relic::LostCoffer,
+    Relic::MassiveScroll,
+    Relic::NeowsTorment,
+    Relic::NewLeaf,
+    Relic::PhialHolster,
+    Relic::PreciseScissors,
+    Relic::ScrollBoxes,
+    Relic::WingedBoots,
+];
+
+/// The three pairs a coin flip adds one of, in the order they are
+/// added.
+///
+/// Heads takes the first. The first pair is skipped when the curse
+/// drawn is [`NEOW_SUPPRESSES_FLIP`].
+pub const NEOW_FLIPS: [(Relic, Relic); 3] = [
+    (Relic::LavaRock, Relic::SmallCapsule),
+    (Relic::NutritiousOyster, Relic::StoneHumidifier),
+    (Relic::NeowsTalisman, Relic::Pomander),
+];
+
+/// A curse that takes a blessing off the table with it.
+///
+/// The two do the same thing, so Neow does not offer both.
+pub const NEOW_PAIRS: [(Relic, Relic); 4] = [
+    (Relic::CursedPearl, Relic::GoldenPearl),
+    (Relic::HeftyTablet, Relic::ArcaneScroll),
+    (Relic::LeafyPoultice, Relic::NewLeaf),
+    (Relic::PrecariousShears, Relic::PreciseScissors),
+];
+
+/// The curse that suppresses the first of [`NEOW_FLIPS`].
+pub const NEOW_SUPPRESSES_FLIP: Relic = Relic::LargeCapsule;
+
 mod anyact;
 mod crossover;
 mod glory;

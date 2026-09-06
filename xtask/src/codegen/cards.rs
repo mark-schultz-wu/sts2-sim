@@ -112,7 +112,7 @@ fn cost(card: &Card) -> Result<String, String> {
         )),
         (false, n) => n
             .parse::<u8>()
-            .map(|n| format!("Cost::Energy({n})"))
+            .map(|n| format!("Cost::Fixed({n})"))
             .map_err(|e| format!("{}: cost {n}: {e}", card.id)),
     }
 }

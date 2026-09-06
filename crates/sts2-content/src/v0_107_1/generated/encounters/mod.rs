@@ -832,7 +832,127 @@ impl sts2_core::EncounterTable for Encounter {
     fn room(self) -> RoomType {
         self.data().room
     }
+
+    /// One of the first fights of an act.
+    fn weak(self) -> bool {
+        self.data().flags.contains(EncounterFlag::Weak)
+    }
+
+    /// Whether the two field a creature family in common.
+    fn shares_family_with(self, other: Encounter) -> bool {
+        self.data().families.intersects(other.data().families)
+    }
+}
+
+impl sts2_core::Rooms for RoomType {
+    const MONSTER: RoomType = RoomType::Monster;
+    const ELITE: RoomType = RoomType::Elite;
+    const BOSS: RoomType = RoomType::Boss;
 }
 mod boss;
 mod elite;
 mod normal;
+
+/// Every encounter an act fields, in the act's own order.
+///
+/// Not sorted, and not the same question as
+/// [`Encounter::acts`](sts2_core::EncounterTable::acts). Room generation
+/// fills its grab bags by walking this list, so the order is a rule: an
+/// entry's weight lands at the index it was added at, and that is what a
+/// draw indexes into.
+///
+/// Empty for an act with no encounters of its own.
+pub fn encounters_of(act: Act) -> &'static [Encounter] {
+    match act {
+        Act::Overgrowth => &[
+            Encounter::BygoneEffigyElite,
+            Encounter::ByrdonisElite,
+            Encounter::CeremonialBeastBoss,
+            Encounter::CubexConstructNormal,
+            Encounter::FlyconidNormal,
+            Encounter::FogmogNormal,
+            Encounter::FuzzyWurmCrawlerWeak,
+            Encounter::InkletsNormal,
+            Encounter::MawlerNormal,
+            Encounter::NibbitsNormal,
+            Encounter::NibbitsWeak,
+            Encounter::OvergrowthCrawlers,
+            Encounter::PhrogParasiteElite,
+            Encounter::RubyRaidersNormal,
+            Encounter::ShrinkerBeetleWeak,
+            Encounter::SlimesNormal,
+            Encounter::SlimesWeak,
+            Encounter::SlitheringStranglerNormal,
+            Encounter::SnappingJaxfruitNormal,
+            Encounter::TheKinBoss,
+            Encounter::VantomBoss,
+            Encounter::VineShamblerNormal,
+        ],
+        Act::Underdocks => &[
+            Encounter::CorpseSlugsNormal,
+            Encounter::CorpseSlugsWeak,
+            Encounter::CultistsNormal,
+            Encounter::FossilStalkerNormal,
+            Encounter::GremlinMercNormal,
+            Encounter::HauntedShipNormal,
+            Encounter::LagavulinMatriarchBoss,
+            Encounter::LivingFogNormal,
+            Encounter::PhantasmalGardenersElite,
+            Encounter::PunchConstructNormal,
+            Encounter::SeapunkNormal,
+            Encounter::SeapunkWeak,
+            Encounter::SewerClamNormal,
+            Encounter::SkulkingColonyElite,
+            Encounter::SludgeSpinnerWeak,
+            Encounter::SoulFyshBoss,
+            Encounter::TerrorEelElite,
+            Encounter::ToadpolesWeak,
+            Encounter::TwoTailedRatsNormal,
+            Encounter::WaterfallGiantBoss,
+        ],
+        Act::Hive => &[
+            Encounter::BowlbugsNormal,
+            Encounter::BowlbugsWeak,
+            Encounter::ChompersNormal,
+            Encounter::DecimillipedeElite,
+            Encounter::EntomancerElite,
+            Encounter::ExoskeletonsNormal,
+            Encounter::ExoskeletonsWeak,
+            Encounter::HunterKillerNormal,
+            Encounter::KaiserCrabBoss,
+            Encounter::InfestedPrismsElite,
+            Encounter::KnowledgeDemonBoss,
+            Encounter::LouseProgenitorNormal,
+            Encounter::MytesNormal,
+            Encounter::OvicopterNormal,
+            Encounter::SlumberingBeetleNormal,
+            Encounter::SpinyToadNormal,
+            Encounter::TheInsatiableBoss,
+            Encounter::TheObscuraNormal,
+            Encounter::ThievingHopperWeak,
+            Encounter::TunnelerWeak,
+        ],
+        Act::Glory => &[
+            Encounter::AxebotsNormal,
+            Encounter::ConstructMenagerieNormal,
+            Encounter::DevotedSculptorWeak,
+            Encounter::AeonglassBoss,
+            Encounter::FabricatorNormal,
+            Encounter::FrogKnightNormal,
+            Encounter::GlobeHeadNormal,
+            Encounter::KnightsElite,
+            Encounter::MechaKnightElite,
+            Encounter::OwlMagistrateNormal,
+            Encounter::QueenBoss,
+            Encounter::ScrollsOfBitingNormal,
+            Encounter::ScrollsOfBitingWeak,
+            Encounter::SlimedBerserkerNormal,
+            Encounter::SoulNexusElite,
+            Encounter::TestSubjectBoss,
+            Encounter::TheLostAndForgottenNormal,
+            Encounter::TurretOperatorWeak,
+        ],
+        #[allow(unreachable_patterns)]
+        _ => &[],
+    }
+}

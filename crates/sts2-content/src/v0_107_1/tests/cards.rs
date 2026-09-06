@@ -22,7 +22,7 @@ fn cost(canonical: &str, costs_x: &str) -> Cost {
             Cost::X
         }
         (_, "-1") => Cost::None,
-        (_, n) => Cost::Energy(n.parse().expect("a non-negative energy cost")),
+        (_, n) => Cost::Fixed(n.parse().expect("a non-negative energy cost")),
     }
 }
 

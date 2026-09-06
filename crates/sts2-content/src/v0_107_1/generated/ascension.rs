@@ -65,3 +65,12 @@ impl AscensionLevel {
         self as u8 >= level as u8
     }
 }
+
+impl sts2_core::Ladder for AscensionLevel {
+    const NONE: AscensionLevel = AscensionLevel::None;
+    const SWARMING_ELITES: AscensionLevel = AscensionLevel::SwarmingElites;
+
+    fn has(self, rung: AscensionLevel) -> bool {
+        AscensionLevel::has(self, rung)
+    }
+}

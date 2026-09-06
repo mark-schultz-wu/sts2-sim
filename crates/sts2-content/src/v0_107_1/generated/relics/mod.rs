@@ -1730,6 +1730,19 @@ impl sts2_core::RelicTable for Relic {
         self.data().rarity
     }
 }
+
+impl sts2_core::RelicPools for RelicPool {
+    const SHARED: RelicPool = RelicPool::Shared;
+}
+
+impl sts2_core::Rarities for RelicRarity {
+    const DRAFTED: [RelicRarity; 4] = [
+        RelicRarity::Common,
+        RelicRarity::Uncommon,
+        RelicRarity::Rare,
+        RelicRarity::Shop,
+    ];
+}
 mod crossover;
 mod defect;
 mod deprecated;

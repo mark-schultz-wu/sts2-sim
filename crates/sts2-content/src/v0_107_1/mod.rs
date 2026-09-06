@@ -52,6 +52,135 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Relic = generated::relics::Relic;
     type RoomType = generated::encounters::RoomType;
 
+    fn relic_pool(character: Self::Character) -> generated::relics::RelicPool {
+        sts2_core::Table::data(character).relic_pool
+    }
+
+    fn starting_deck(character: Self::Character) -> Vec<Self::Card> {
+        sts2_core::Table::data(character).deck.iter().collect()
+    }
+
+    fn starting_relics(character: Self::Character) -> Vec<Self::Relic> {
+        sts2_core::Table::data(character)
+            .starting_relics
+            .iter()
+            .collect()
+    }
+
+    fn starting_hp(character: Self::Character) -> u16 {
+        sts2_core::Table::data(character).starting_hp
+    }
+
+    fn starting_gold(character: Self::Character) -> u16 {
+        sts2_core::Table::data(character).starting_gold
+    }
+
+    fn starting_potion_slots() -> usize {
+        3
+    }
+
+    fn neow_event() -> Self::Event {
+        generated::events::Event::Neow
+    }
+
+    fn colorless_cards() -> Vec<Self::Card> {
+        use generated::cards::{Cards, ColorlessCard};
+        let mut cards: Vec<Self::Card> = <Cards as sts2_core::Table>::ALL
+            .iter()
+            .copied()
+            .filter(|card| matches!(card, Cards::Colorless(_)))
+            .collect();
+        // The generated outer table is id-sorted. The game pool has this one
+        // cross-rarity inversion, which changes the index within the uncommon
+        // subpool after a rarity is rolled.
+        let jack = cards
+            .iter()
+            .position(|card| *card == Cards::Colorless(ColorlessCard::JackOfAllTrades))
+            .expect("the colorless pool has Jack of All Trades");
+        let jackpot = cards
+            .iter()
+            .position(|card| *card == Cards::Colorless(ColorlessCard::Jackpot))
+            .expect("the colorless pool has Jackpot");
+        cards.swap(jack, jackpot);
+        cards
+    }
+
+    fn reward_rarity(card: Self::Card) -> sts2_core::CardRewardRarity {
+        use generated::cards::CardRarity;
+        match sts2_core::CardTable::rarity(card) {
+            CardRarity::Common => sts2_core::CardRewardRarity::Common,
+            CardRarity::Uncommon => sts2_core::CardRewardRarity::Uncommon,
+            CardRarity::Rare => sts2_core::CardRewardRarity::Rare,
+            _ => sts2_core::CardRewardRarity::Other,
+        }
+    }
+
+    fn lead_paperweight() -> Self::Relic {
+        generated::relics::Relic::LeadPaperweight
+    }
+
+    fn encounters(act: Self::Act) -> &'static [Self::Encounter] {
+        generated::encounters::encounters_of(act)
+    }
+
+    fn events(act: Self::Act) -> &'static [Self::Event] {
+        generated::events::events_of(act)
+    }
+
+    fn ancients(act: Self::Act) -> &'static [Self::Event] {
+        generated::events::ancients_of(act)
+    }
+
+    fn shared_events() -> &'static [Self::Event] {
+        &generated::events::SHARED_EVENTS
+    }
+
+    fn shared_ancients() -> &'static [Self::Event] {
+        &generated::events::SHARED_ANCIENTS
+    }
+
+    fn neow_curses() -> &'static [Self::Relic] {
+        &generated::events::NEOW_CURSES
+    }
+
+    fn neow_positives() -> &'static [Self::Relic] {
+        &generated::events::NEOW_POSITIVES
+    }
+
+    fn neow_flips() -> &'static [(Self::Relic, Self::Relic)] {
+        &generated::events::NEOW_FLIPS
+    }
+
+    fn neow_pairs() -> &'static [(Self::Relic, Self::Relic)] {
+        &generated::events::NEOW_PAIRS
+    }
+
+    fn neow_suppresses_flip() -> Self::Relic {
+        generated::events::NEOW_SUPPRESSES_FLIP
+    }
+
+    /// The four relics whose Neow gate is code rather than a flag.
+    ///
+    /// `relics.txt` marks them `gatedAtNeow` or `gatedInRun`, which is the cue
+    /// to ask rather than look up. The conditions themselves are one line each
+    /// and are ported here, beside the build they belong to.
+    ///
+    /// Both unlock questions are true for a run, which is set up with
+    /// everything unlocked so that no scenario depends on a save file.
+    fn allowed_at_neow(relic: Self::Relic, players: usize) -> bool {
+        use generated::relics::Relic;
+        match relic {
+            // `runState.Players.Count == 1`.
+            Relic::SilverCrucible => players == 1,
+            // `runState.Players.Count > 1`.
+            Relic::MassiveScroll => players > 1,
+            // Every character's card pool unlocked, and every card pool has
+            // enough commons to build a bundle from.
+            Relic::Kaleidoscope | Relic::ScrollBoxes => true,
+            _ => true,
+        }
+    }
+
     // The vocabulary a run's position is described in. `runstate` is one dump
     // of its own because none of these is a property of a content item; the two
     // below it belong to the domains whose content has them.
@@ -62,6 +191,23 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type UnplayableReasons = generated::runstate::UnplayableReasons;
     type RunRngType = generated::runstate::RunRngType;
     type PlayerRngType = generated::runstate::PlayerRngType;
+
+    fn run_rng_types() -> &'static [Self::RunRngType] {
+        &generated::runstate::RunRngType::ALL
+    }
+
+    fn up_front_rng() -> Self::RunRngType {
+        generated::runstate::RunRngType::UpFront
+    }
+
+    fn player_rng_types() -> &'static [Self::PlayerRngType] {
+        &generated::runstate::PlayerRngType::ALL
+    }
+
+    fn rewards_rng() -> Self::PlayerRngType {
+        generated::runstate::PlayerRngType::Rewards
+    }
+
     type IntentKind = generated::monsters::IntentKind;
     type MoveId = generated::monsters::MoveId;
     type RestSiteOption = generated::restsite::RestSiteOption;

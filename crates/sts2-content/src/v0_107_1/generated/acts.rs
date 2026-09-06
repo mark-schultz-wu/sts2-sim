@@ -124,3 +124,20 @@ impl sts2_core::Table for Act {
         }
     }
 }
+
+impl sts2_core::ActTable for Act {
+    /// How many rooms an act's map holds.
+    fn rooms(self) -> u8 {
+        <Self as sts2_core::Table>::data(self).rooms
+    }
+
+    /// How many of those open the act, dealt from the weak fights.
+    fn weak_encounters(self) -> u8 {
+        <Self as sts2_core::Table>::data(self).weak_encounters
+    }
+
+    /// Whether an ordinary run is played through this act.
+    fn played(self) -> bool {
+        <Self as sts2_core::Table>::data(self).is_default
+    }
+}

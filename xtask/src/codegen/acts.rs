@@ -198,7 +198,31 @@ fn emit_acts(
     }
     writeln!(out, "        }}").unwrap();
     writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    // The two room generation deals by, off the same row. A method rather than
+    // a reach into `data`, because a caller holding only a `ContentVersion`
+    // cannot see what `Table::Data` is.
+    writeln!(
+        out,
+        "impl sts2_core::ActTable for Act {{\n\
+         \x20   /// How many rooms an act's map holds.\n\
+         \x20   fn rooms(self) -> u8 {{\n\
+         \x20       <Self as sts2_core::Table>::data(self).rooms\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// How many of those open the act, dealt from the weak fights.\n\
+         \x20   fn weak_encounters(self) -> u8 {{\n\
+         \x20       <Self as sts2_core::Table>::data(self).weak_encounters\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// Whether an ordinary run is played through this act.\n\
+         \x20   fn played(self) -> bool {{\n\
+         \x20       <Self as sts2_core::Table>::data(self).is_default\n\
+         \x20   }}\n\
+         }}"
+    )
+    .unwrap();
 
     Ok(())
 }
