@@ -6,9 +6,9 @@
 # comment on how the install can fail silently. None of that is about this
 # repository. It is about a machine, so it lives in one.
 #
-# Built by `build.sh` beside this file and reached through the runner's `sts2`
-# label, not pulled: there is no registry in the loop. `force_pull` is off in
-# the runner config, so the local tag is what runs.
+# Built by `build.sh` beside this file, tagged with `digest.sh`'s immutable
+# value, and selected by the runner's `sts2` label. There is no mutable tag for
+# the runner to cache accidentally.
 FROM ghcr.io/catthehacker/ubuntu:act-22.04
 
 # Passed by `build.sh` from versions.env, which is the only place they are

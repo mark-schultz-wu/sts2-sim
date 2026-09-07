@@ -48,7 +48,8 @@ cp "$repo/mod/game.sh" "$ctx/mod/"
 cp "$repo"/mod/games/*.lock "$ctx/mod/games/"
 
 digest="$("$here/digest.sh")"
-tag="${STS2_CI_IMAGE:-sts2-ci:latest}"
+repository="${STS2_CI_IMAGE_REPOSITORY:-sts2-ci}"
+tag="$repository:$digest"
 
 DOCKER_BUILDKIT=1 docker build \
   --secret "id=forge_token,src=$token_file" \
