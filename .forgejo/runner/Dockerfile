@@ -16,6 +16,8 @@ FROM ghcr.io/catthehacker/ubuntu:act-22.04
 # them must fail rather than bake a surprise.
 ARG RUST_VERSION
 ARG DOTNET_CHANNEL
+ARG GAME_VERSION
+ARG STS2_CI_DIGEST
 
 # Under /usr/local rather than a home directory. The job can run as anyone,
 # and a toolchain in ~root is a toolchain the job cannot see.
@@ -25,7 +27,8 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     PATH=/usr/local/cargo/bin:/usr/local/dotnet:$PATH \
     DOTNET_NOLOGO=1 \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
+    XDG_DATA_HOME=/opt/sts2/share
 
 # The Rust toolchain, its two lints, and the browser target the simulator is
 # checked against.
@@ -61,6 +64,26 @@ RUN set -euo pipefail; \
       https://just.systems/install.sh \
       | bash -s -- --to /usr/local/bin
 
+# `golden` needs a complete game installation. Fetch it once while building
+# the machine-local image rather than spending roughly four minutes per job.
+# The package token is a BuildKit secret and never enters an image layer.
+# Each job receives an isolated overlay, so installing mods cannot race with
+# another container or mutate the base image.
+COPY mod /opt/sts2/mod
+RUN --mount=type=secret,id=forge_token \
+    set -euo pipefail; \
+    test -n "$GAME_VERSION"; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends zstd; \
+    rm -rf /var/lib/apt/lists/*; \
+    export STS2_FORGE_TOKEN="$(cat /run/secrets/forge_token)"; \
+    for lock in /opt/sts2/mod/games/*.lock; do \
+      /opt/sts2/mod/game.sh fetch "$(basename "$lock" .lock)"; \
+    done; \
+    /opt/sts2/mod/game.sh fetch-game "$GAME_VERSION"; \
+    test -x "$XDG_DATA_HOME/sts2/games/$GAME_VERSION/SlayTheSpire2"; \
+    rm -rf /opt/sts2/mod
+
 # The first `dotnet` of an install unpacks bundles and writes a sentinel, which
 # took thirty-two seconds of a fifty-seven second job. Paying it here means no
 # job pays it.
@@ -75,4 +98,6 @@ RUN set -euo pipefail; \
     rustup target list --installed | grep -qx wasm32-unknown-unknown; \
     case "$(dotnet --version)" in "$DOTNET_CHANNEL".*) ;; *) exit 1 ;; esac; \
     just --version; \
-    python3 --version
+    python3 --version; \
+    test -n "$STS2_CI_DIGEST"; \
+    echo "$STS2_CI_DIGEST" > /etc/sts2-ci.digest

@@ -30,21 +30,45 @@ done
 # Mods stay Disabled until the player accepts the mod warning. Headless never
 # shows that popup, so set the flag that the popup sets.
 SETTINGS="$PROFILE_DIR/settings.save"
-if [ -f "$SETTINGS" ]; then
-  [ -f "$SETTINGS.pre-oracle" ] || cp "$SETTINGS" "$SETTINGS.pre-oracle"
-  python3 - "$SETTINGS" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p))
-ms = d.get("mod_settings") or {}
-if ms.get("mods_enabled") is True:
-    print("mods already enabled")
+mkdir -p "$PROFILE_DIR"
+[ ! -f "$SETTINGS" ] || [ -f "$SETTINGS.pre-oracle" ] \
+  || cp "$SETTINGS" "$SETTINGS.pre-oracle"
+python3 - "$SETTINGS" "$HERE" <<'PY'
+import glob
+import json
+import os
+import sys
+
+path, mod_dir = sys.argv[1:]
+if os.path.exists(path):
+    with open(path) as f:
+        settings = json.load(f)
 else:
-    ms["mods_enabled"] = True
-    d["mod_settings"] = ms
-    json.dump(d, open(p, "w"), indent=2)
-    print("enabled mods in", p)
+    # SettingsSave currently uses schema 8. Without the schema marker the game
+    # treats this as a legacy or invalid save. It then rewrites the save with
+    # defaults, and reports that nobody acknowledged the mod warning.
+    settings = {"schema_version": 8}
+
+mod_settings = settings.get("mod_settings") or {}
+mods = {
+    entry["id"]: entry
+    for entry in mod_settings.get("mod_list") or []
+    if entry.get("id")
+}
+for manifest_path in glob.glob(os.path.join(mod_dir, "*", "manifest.json")):
+    with open(manifest_path) as f:
+        mod_id = json.load(f)["id"]
+    mods[mod_id] = {
+        "id": mod_id,
+        "is_enabled": True,
+        "source": "mods_directory",
+    }
+
+mod_settings["mod_list"] = list(mods.values())
+mod_settings["mods_enabled"] = True
+settings["mod_settings"] = mod_settings
+with open(path, "w") as f:
+    json.dump(settings, f, indent=2)
+    f.write("\n")
+print("enabled mods in", path)
 PY
-else
-  echo "note: no settings.save at $SETTINGS yet; run the game once, then re-run this" >&2
-fi

@@ -35,6 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           . .forgejo/runner/versions.env
+          test "$(cat /etc/sts2-ci.digest)" = "$(.forgejo/runner/digest.sh)"
           test "$(cargo --version | cut -d' ' -f2)" = "$RUST_VERSION"
           rustup component list --installed | grep -q '^clippy'
           rustup component list --installed | grep -q '^rustfmt'
@@ -75,6 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           . .forgejo/runner/versions.env
+          test "$(cat /etc/sts2-ci.digest)" = "$(.forgejo/runner/digest.sh)"
           case "$(dotnet --version)" in "$DOTNET_CHANNEL".*) ;; *) exit 1 ;; esac
 
       # The three assemblies, not the 2.0G install: CI compiles the mods, it
