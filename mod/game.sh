@@ -154,7 +154,12 @@ manifest_for() {
 }
 
 download() {
+  # The one fetch CI still makes over the network, so it retries.
+  # --retry-all-errors because the default --retry covers a transient HTTP
+  # status and not a connection that never opened, which is what we saw.
   curl --fail --silent --show-error --location \
+    --retry 8 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 15 \
     --header "Authorization: token $STS2_FORGE_TOKEN" --output "$2" "$BASE/$1"
 }
 
