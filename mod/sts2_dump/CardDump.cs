@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
@@ -35,6 +36,14 @@ namespace Sts2Dump;
 /// Keywords come from <c>KeywordSources.Local</c>, not <c>All</c>. <c>All</c>
 /// folds in run-level modifiers, so dumping it would bake one run's state into
 /// the table.
+///
+/// A card's variables are the numbers printed on its face: Strike's 6, Falling
+/// Star's 8 damage and its two 1s. <c>BaseValue</c> and not
+/// <c>PreviewValue</c> — the preview is what the numbers become once
+/// Strength, Vulnerable and every other hook has had its say, which is a fact
+/// about a fight rather than about a card. A <c>CalculatedVar</c> is marked,
+/// because its printed number is a base plus a count taken off live combat
+/// state, and a simulator has to run that rule rather than read this.
 /// </remarks>
 public static class CardDump
 {
@@ -45,7 +54,8 @@ public static class CardDump
         // Stamped, so regenerating against a different build fails visibly
         // rather than quietly replacing the table.
         output.Append(Stamp.Header("card"));
-        output.Append("# id pool type rarity target cost costsX maxUpgrade keywords\n");
+        output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords>\n");
+        output.Append("# var <card> <name> <base> <calculated>\n");
 
         List<CardModel> cards = ModelDb.AllCards
             .OrderBy(c => c.Id.Entry, StringComparer.Ordinal)
@@ -75,10 +85,26 @@ public static class CardDump
                 target,
                 card.EnergyCost.Canonical.ToString(CultureInfo.InvariantCulture),
                 card.EnergyCost.CostsX ? "1" : "0",
+                card.CanonicalStarCost.ToString(CultureInfo.InvariantCulture),
+                card.HasStarCostX ? "1" : "0",
                 card.MaxUpgradeLevel.ToString(CultureInfo.InvariantCulture),
                 keywordList,
             }));
             output.Append('\n');
+
+            foreach (KeyValuePair<string, DynamicVar> entry in card.DynamicVars
+                .OrderBy(v => v.Key, StringComparer.Ordinal))
+            {
+                output.Append(string.Join(" ", new[]
+                {
+                    "var",
+                    card.Id.Entry,
+                    entry.Key,
+                    entry.Value.BaseValue.ToString(CultureInfo.InvariantCulture),
+                    entry.Value is CalculatedVar ? "1" : "0",
+                }));
+                output.Append('\n');
+            }
         }
 
         output.Append($"# {cards.Count} cards\n");
