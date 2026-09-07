@@ -35,8 +35,11 @@ pub(crate) struct State<V: Rules> {
 /// act is played, so every branch and every report reads one copy.
 #[derive(Debug)]
 struct RunData<V: Rules> {
-    _opening: Opening<V>,
+    opening: Opening<V>,
     map: ActMap<V>,
+    raw_seed: u32,
+    character: V::Character,
+    ascension: V::AscensionLevel,
 }
 
 /// The small, mutable part of one player's run state.
@@ -104,8 +107,11 @@ impl<V: Rules> State<V> {
 
         Self {
             shared: Arc::new(RunData {
-                _opening: opening,
+                opening,
                 map,
+                raw_seed,
+                character,
+                ascension,
             }),
             at,
             player: Player {
@@ -133,6 +139,23 @@ impl<V: Rules> State<V> {
                 selection: None,
             },
         }
+    }
+
+    pub(crate) fn raw_seed(&self) -> u32 {
+        self.shared.raw_seed
+    }
+
+    pub(crate) fn ascension(&self) -> V::AscensionLevel {
+        self.shared.ascension
+    }
+
+    pub(super) fn normal_encounter(&self, act: usize) -> Option<V::Encounter> {
+        self.shared
+            .opening
+            .acts
+            .get(act)
+            .and_then(|(_, rooms)| rooms.normal.first())
+            .copied()
     }
 
     pub(crate) fn choose(&mut self, index: u8) -> Result<Applied<V>, Error> {
@@ -349,5 +372,10 @@ mod tests {
             .choose(0)
             .expect("the simulator implements this option");
         assert_eq!(run.player.relics.len() + 1, branch.player.relics.len());
+    }
+
+    /// The run's ascension level, which every roll that scales reads.
+    pub(crate) fn ascension(&self) -> V::AscensionLevel {
+        self.ascension
     }
 }

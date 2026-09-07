@@ -1,6 +1,6 @@
-use sts2_core::{Answered, Construct, Decision, Play, Rules, Setup, Snapshot, Start};
+use sts2_core::{Answered, Construct, Decision, Play, Refusal, Rules, Setup, Snapshot, Start};
 
-use crate::run::State;
+use crate::run::{Destination, State};
 
 use super::Error;
 
@@ -30,6 +30,30 @@ impl<V: Rules> Play<V> for Sim<V> {
         match decision {
             Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
             Decision::Answer(answer) => self.state.answer(answer).map(Ok),
+            Decision::Travel { to } => {
+                match self.state.destination(*to) {
+                    Err(reason) => Ok(Err(Refusal {
+                        what: "travel".into(),
+                        reason,
+                    })),
+                    Ok(Destination::Monster(encounter)) => {
+                        let monsters = crate::combat::opening::<V>(
+                            self.state.raw_seed(),
+                            self.state.report().observation.floor,
+                            encounter,
+                        )?;
+                        let mut counters = self.state.report().observation.rng;
+                        let _enemies = crate::combat::initialize::<V>(
+                            self.state.raw_seed(),
+                            self.state.ascension(),
+                            &mut counters,
+                            &monsters,
+                        )?;
+                        Err(Error::NotImplemented("combat"))
+                    }
+                    Ok(Destination::Other(_)) => Err(Error::NotImplemented("this room")),
+                }
+            }
             _ => Err(Error::NotImplemented(name(decision))),
         }
     }

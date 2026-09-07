@@ -1002,6 +1002,27 @@ pub trait Rules: ContentVersion {
     /// The relic whose pickup opens the two-card colorless choice.
     fn lead_paperweight() -> Self::Relic;
 
+    /// Resolve a monster’s unmodified HP range at this ascension.
+    fn monster_hp_bounds(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+    ) -> crate::rng::Interval<u16>;
+
+    /// Roll the monster’s first visible move from its dumped state graph.
+    /// A combat-dependent graph returns a typed error.
+    fn initial_monster_move<R: crate::rng::GameRng>(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+        rng: &mut R,
+    ) -> Result<crate::NextMove<Self>, ContentError>;
+
+    /// Generate an encounter whose roster is code rather than table data.
+    /// An unported build-specific rule returns a typed error.
+    fn random_encounter_monsters<R: crate::rng::GameRng>(
+        encounter: Self::Encounter,
+        rng: &mut R,
+    ) -> Result<Vec<Self::Monster>, ContentError>;
+
     /// Every encounter an act fields, in the act's own order.
     ///
     /// Not the sorted set [`EncounterTable::acts`] projects. Room generation
@@ -1062,6 +1083,15 @@ pub trait Rules: ContentVersion {
 
     /// The per-player stream card rewards draw from.
     fn rewards_rng() -> Self::PlayerRngType;
+
+    /// The side a monster fights on.
+    fn enemy_side() -> Self::CombatSide;
+
+    /// The stream that rolls monster health.
+    fn niche_rng() -> Self::RunRngType;
+
+    /// The stream that chooses monster moves.
+    fn monster_ai_rng() -> Self::RunRngType;
 }
 
 /// Which build a content module came from.

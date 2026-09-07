@@ -62,25 +62,23 @@ fn draws<G: GameRng>() -> usize {
             "uint" => rng.next_uint_range(Span::new(3, 99).unwrap()).to_string(),
             "float" => format!(
                 "{:08x}",
-                rng.next_f32_range(Interval::new(2.0, 5.0).unwrap())
-                    .to_bits()
+                rng.next_f32_range(Interval::new(2.0, 5.0)).to_bits()
             ),
             "dblrange" => format!(
                 "{:016x}",
-                rng.next_double_range(Interval::new(-3.5, 7.25).unwrap())
-                    .to_bits()
+                rng.next_double_range(Interval::new(-3.5, 7.25)).to_bits()
             ),
             // Non-degenerate on purpose: with mean 0, stddev 1 and a 0..1 range
             // every scaling step is an identity and the fixture cannot tell
             // `mean + x` from `mean - x`.
             "gauss" => format!(
                 "{:016x}",
-                rng.next_gaussian_double(0.4, 0.3, Interval::new(10.0, 20.0).unwrap())
+                rng.next_gaussian_double(0.4, 0.3, Interval::new(10.0, 20.0))
                     .to_bits()
             ),
             // Tight bounds, so the rejection loop actually rejects.
             "gaussint" => rng
-                .next_gaussian_int(10, 3, Interval::new(9, 11).unwrap())
+                .next_gaussian_int(10, 3, Interval::new(9, 11))
                 .to_string(),
             other => panic!("line {lineno}: unknown method {other}"),
         };
@@ -192,13 +190,13 @@ fn every_method_consumes_exactly_one_draw() {
             r.next_uint_range(Span::new(1, 9).unwrap());
         },
         &|r| {
-            r.next_f32_range(Interval::new(0.0, 1.0).unwrap());
+            r.next_f32_range(Interval::new(0.0, 1.0));
         },
         &|r| {
             r.next_double();
         },
         &|r| {
-            r.next_double_range(Interval::new(-1.0, 1.0).unwrap());
+            r.next_double_range(Interval::new(-1.0, 1.0));
         },
     ];
 
