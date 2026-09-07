@@ -98,6 +98,10 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(character).starting_gold
     }
 
+    fn max_energy(character: Self::Character) -> u8 {
+        sts2_core::Table::data(character).max_energy
+    }
+
     fn starting_potion_slots() -> usize {
         3
     }
@@ -122,6 +126,10 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn lead_paperweight() -> Self::Relic {
         generated::relics::Relic::LeadPaperweight
+    }
+
+    fn divine_right() -> Self::Relic {
+        generated::relics::Relic::DivineRight
     }
 
     fn monster_hp_bounds(
@@ -236,6 +244,10 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn monster_ai_rng() -> Self::RunRngType {
         generated::runstate::RunRngType::MonsterAi
+    }
+
+    fn shuffle_rng() -> Self::RunRngType {
+        generated::runstate::RunRngType::Shuffle
     }
 
     fn up_front_rng() -> Self::RunRngType {

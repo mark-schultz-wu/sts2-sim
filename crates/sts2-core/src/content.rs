@@ -221,7 +221,12 @@ pub trait CardTable: Table {
     /// Which of the build's printed numbers one of its rows is.
     type Var: CardVars;
     /// The exact numeric representation used by this build's card variables.
-    type Number: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static;
+    ///
+    /// Not a live game number. This is what the card's face prints, which one
+    /// build spells as an exact decimal. [`num_traits::ToPrimitive`] is how a
+    /// printed number reaches the run: it yields nothing for one no integer
+    /// can hold.
+    type Number: std::fmt::Debug + Copy + Eq + std::hash::Hash + num_traits::ToPrimitive + 'static;
 
     /// The character whose pool holds it, or `None` for one held by no
     /// character: colourless, curses, statuses, tokens, quest and event cards.
@@ -301,6 +306,41 @@ impl Fixed {
     }
     pub const fn scale(self) -> u8 {
         self.scale
+    }
+}
+
+/// A whole number, and nothing at all for one with a fraction.
+///
+/// The live game holds integers. This build prints `1.5` on a card, and no
+/// build's game number holds that. It reads as absent here, rather than as a
+/// rounded lie. `num_traits::NumCast` then carries the whole ones into
+/// whichever width a build chose.
+impl num_traits::ToPrimitive for Fixed {
+    fn to_i64(&self) -> Option<i64> {
+        let divisor = 10_i32.checked_pow(u32::from(self.scale))?;
+        (self.coefficient % divisor == 0).then_some(i64::from(self.coefficient / divisor))
+    }
+
+    fn to_u64(&self) -> Option<u64> {
+        self.to_i64().and_then(|whole| u64::try_from(whole).ok())
+    }
+}
+
+#[cfg(test)]
+mod card_number_tests {
+    use super::Fixed;
+
+    #[test]
+    fn exact_decimals_are_whole_only_when_their_fraction_is_zero() {
+        use num_traits::NumCast;
+
+        assert_eq!(<i32 as NumCast>::from(Fixed::new(120, 1)), Some(12));
+        assert_eq!(<i32 as NumCast>::from(Fixed::new(125, 1)), None);
+
+        // A whole number a narrower build could not hold is absent too, rather
+        // than the wrap an `as` would have made of it.
+        assert_eq!(<i8 as NumCast>::from(Fixed::new(1280, 1)), None);
+        assert_eq!(<u8 as NumCast>::from(Fixed::new(-10, 1)), None);
     }
 }
 
@@ -990,6 +1030,9 @@ pub trait Rules: ContentVersion {
     /// How many potion slots an ordinary run opens with.
     fn starting_potion_slots() -> usize;
 
+    /// The energy a character's turn begins with, before a relic moves it.
+    fn max_energy(character: Self::Character) -> u8;
+
     /// Neow's event id, which the opening room reports.
     fn neow_event() -> Self::Event;
 
@@ -1001,6 +1044,9 @@ pub trait Rules: ContentVersion {
 
     /// The relic whose pickup opens the two-card colorless choice.
     fn lead_paperweight() -> Self::Relic;
+
+    /// The Regent's starting relic, which opens every fight with three stars.
+    fn divine_right() -> Self::Relic;
 
     /// Resolve a monster’s unmodified HP range at this ascension.
     fn monster_hp_bounds(
@@ -1092,6 +1138,9 @@ pub trait Rules: ContentVersion {
 
     /// The stream that chooses monster moves.
     fn monster_ai_rng() -> Self::RunRngType;
+
+    /// The stream that shuffles a combat's draw pile.
+    fn shuffle_rng() -> Self::RunRngType;
 }
 
 /// Which build a content module came from.

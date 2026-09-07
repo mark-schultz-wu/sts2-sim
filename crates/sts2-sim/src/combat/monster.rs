@@ -1,7 +1,7 @@
 //! Creating the enemy creatures that begin a combat.
 
-use sts2_core::rng::{Bound, GameRng, MegaRng};
-use sts2_core::{Counters, Creature, ModelId, Rules};
+use sts2_core::rng::{Bound, GameRng};
+use sts2_core::{Counters, Creature, ModelId, Rules, SideKinds};
 
 use super::Error;
 
@@ -13,18 +13,8 @@ pub(crate) fn initialize<V: Rules>(
     counters: &mut Counters<V>,
     monsters: &[V::Monster],
 ) -> Result<Vec<Creature<V>>, Error> {
-    let niche_at = counter(counters, V::niche_rng(), "niche")?;
-    let ai_at = counter(counters, V::monster_ai_rng(), "monster_ai")?;
-    let mut niche = MegaRng::named(raw_seed, "niche");
-    let mut ai = MegaRng::named(raw_seed, "monster_ai");
-    niche.fast_forward(niche_at).map_err(|source| Error::Seek {
-        stream: "niche",
-        source,
-    })?;
-    ai.fast_forward(ai_at).map_err(|source| Error::Seek {
-        stream: "monster_ai",
-        source,
-    })?;
+    let mut niche = super::stream::seek(raw_seed, counters, V::niche_rng(), "niche")?;
+    let mut ai = super::stream::seek(raw_seed, counters, V::monster_ai_rng(), "monster_ai")?;
 
     let mut health = Vec::with_capacity(monsters.len());
     let mut creatures = Vec::with_capacity(monsters.len());
@@ -49,37 +39,19 @@ pub(crate) fn initialize<V: Rules>(
         creatures.push(Creature {
             id,
             model: Some(ModelId::Monster(monster)),
-            side: V::enemy_side(),
-            hp: i32::from(hp),
-            max_hp: i32::from(hp),
-            block: 0,
+            side: <V::CombatSide as SideKinds>::ENEMY,
+            hp: num_traits::cast(hp).expect("monster HP fits the build's game-number type"),
+            max_hp: num_traits::cast(hp).expect("monster HP fits the build's game-number type"),
+            block: num_traits::zero(),
             alive: true,
             powers: Vec::new(),
             next_move: Some(V::initial_monster_move(monster, ascension, &mut ai)?),
         });
     }
 
-    let niche_counter =
-        u32::try_from(niche.counter()).map_err(|_| Error::CounterOutOfRange { stream: "niche" })?;
-    let ai_counter = u32::try_from(ai.counter()).map_err(|_| Error::CounterOutOfRange {
-        stream: "monster_ai",
-    })?;
-    counters.run.insert(V::niche_rng(), niche_counter);
-    counters.run.insert(V::monster_ai_rng(), ai_counter);
+    super::stream::record(counters, V::niche_rng(), "niche", &niche)?;
+    super::stream::record(counters, V::monster_ai_rng(), "monster_ai", &ai)?;
     Ok(creatures)
-}
-
-fn counter<V: Rules>(
-    counters: &Counters<V>,
-    kind: V::RunRngType,
-    stream: &'static str,
-) -> Result<i32, Error> {
-    let counter = counters
-        .run
-        .get(&kind)
-        .copied()
-        .ok_or(Error::MissingCounter { stream })?;
-    i32::try_from(counter).map_err(|_| Error::CounterOutOfRange { stream })
 }
 
 #[cfg(test)]

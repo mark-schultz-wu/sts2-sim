@@ -5,8 +5,8 @@ use smallvec::SmallVec;
 use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
-    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Coord, Counters, EventOption, Map,
-    Observation, Question, Reachable, Room, Rules, Seed, Table,
+    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
+    EventOption, Map, Observation, Question, Reachable, Room, Rules, Seed, Table,
 };
 
 use crate::engine::Error;
@@ -22,6 +22,8 @@ use crate::run::Opening;
 pub(crate) struct State<V: Rules> {
     shared: Arc<RunData<V>>,
     at: Coord,
+    floor: V::Count,
+    visited: Vec<Coord>,
     player: Player<V>,
     rngs: Rngs,
     phase: Phase<V>,
@@ -69,6 +71,7 @@ enum Phase<V: Rules> {
         finished: bool,
         selection: Option<SmallVec<[V::Card; 4]>>,
     },
+    Combat(Combat<V>),
 }
 
 impl<V: Rules> State<V> {
@@ -114,6 +117,8 @@ impl<V: Rules> State<V> {
                 ascension,
             }),
             at,
+            floor: num_traits::one(),
+            visited: vec![at],
             player: Player {
                 relics: V::starting_relics(character).into_iter().collect(),
                 deck: V::starting_deck(character)
@@ -149,6 +154,34 @@ impl<V: Rules> State<V> {
         self.shared.ascension
     }
 
+    pub(crate) fn character(&self) -> V::Character {
+        self.shared.character
+    }
+
+    pub(super) fn enter_combat(&mut self, to: Coord, counters: Counters<V>, combat: Combat<V>) {
+        self.floor = self.floor + num_traits::one();
+        self.at = to;
+        self.visited.push(to);
+        for (kind, counter) in counters.run {
+            let at = V::run_rng_types()
+                .iter()
+                .position(|candidate| *candidate == kind)
+                .expect("a reported run stream belongs to the run");
+            self.rngs.run[at] = counter;
+        }
+        for (kind, counter) in counters.player {
+            if kind == V::rewards_rng() {
+                continue;
+            }
+            let at = V::player_rng_types()
+                .iter()
+                .position(|candidate| *candidate == kind)
+                .expect("a reported player stream belongs to the player");
+            self.rngs.player[at] = counter;
+        }
+        self.phase = Phase::Combat(combat);
+    }
+
     pub(super) fn normal_encounter(&self, act: usize) -> Option<V::Encounter> {
         self.shared
             .opening
@@ -164,7 +197,10 @@ impl<V: Rules> State<V> {
             chosen,
             selection,
             ..
-        } = &mut self.phase;
+        } = &mut self.phase
+        else {
+            return Err(Error::NotImplemented("choose_option in combat"));
+        };
         let option = options
             .get(index as usize)
             .ok_or(Error::NotImplemented("choose_option"))?;
@@ -189,7 +225,10 @@ impl<V: Rules> State<V> {
             finished,
             selection,
             ..
-        } = &mut self.phase;
+        } = &mut self.phase
+        else {
+            return Err(Error::NotImplemented("answer in combat"));
+        };
         let cards = selection
             .as_ref()
             .ok_or(Error::NotImplemented("this answer"))?;
@@ -226,46 +265,58 @@ impl<V: Rules> State<V> {
                 kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect();
-        let Phase::Neow {
-            options: neow_options,
-            chosen: neow_chosen,
-            finished: neow_finished,
-            selection: card_selection,
-        } = &self.phase;
-        let options = neow_options
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(index, relic)| {
-                let value = serde_json::to_value(relic).expect("a relic id serializes");
-                let id = value.as_str().expect("a relic id is a string");
-                EventOption {
-                    index: index as u8,
-                    key: format!("NEOW.pages.INITIAL.options.{id}"),
+        let (asking, room, combat) = match &self.phase {
+            Phase::Neow {
+                options: neow_options,
+                chosen: neow_chosen,
+                finished: neow_finished,
+                selection: card_selection,
+            } => {
+                let options = neow_options
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(index, relic)| {
+                        let value = serde_json::to_value(relic).expect("a relic id serializes");
+                        let id = value.as_str().expect("a relic id is a string");
+                        EventOption {
+                            index: index as u8,
+                            key: format!("NEOW.pages.INITIAL.options.{id}"),
+                            title: None,
+                            text: None,
+                            locked: false,
+                            proceed: false,
+                            chosen: *neow_chosen == Some(index as u8),
+                            relic: Some(relic),
+                        }
+                    })
+                    .collect();
+                let asking = card_selection.as_ref().map(|cards| Question::SelectCards {
+                    min: 0,
+                    max: 1,
+                    asker: None,
+                    options: cards
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .map(|(index, card)| CardOption {
+                            index,
+                            card: CardIdent::new(card),
+                            text: None,
+                        })
+                        .collect(),
+                });
+                let room = Room::Event {
+                    event: V::neow_event(),
+                    finished: *neow_finished,
                     title: None,
                     text: None,
-                    locked: false,
-                    proceed: false,
-                    chosen: *neow_chosen == Some(index as u8),
-                    relic: Some(relic),
-                }
-            })
-            .collect();
-        let asking = card_selection.as_ref().map(|cards| Question::SelectCards {
-            min: 0,
-            max: 1,
-            asker: None,
-            options: cards
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(index, card)| CardOption {
-                    index,
-                    card: CardIdent::new(card),
-                    text: None,
-                })
-                .collect(),
-        });
+                    options: if *neow_finished { Vec::new() } else { options },
+                };
+                (asking, Some(room), None)
+            }
+            Phase::Combat(combat) => (None, None, Some(combat.clone())),
+        };
         let run: HashMap<_, _> = V::run_rng_types()
             .iter()
             .copied()
@@ -281,7 +332,7 @@ impl<V: Rules> State<V> {
         Applied {
             observation: Observation {
                 act: num_traits::zero(),
-                floor: num_traits::one(),
+                floor: self.floor,
                 hp: self.player.hp,
                 max_hp: self.player.hp,
                 alive: true,
@@ -302,23 +353,17 @@ impl<V: Rules> State<V> {
                 potions: Vec::new(),
                 potion_slots: self.player.potion_slots,
                 deck: self.player.deck.clone(),
-                in_combat: false,
+                in_combat: combat.is_some(),
                 map: Map {
                     at: Some(self.at),
-                    visited: vec![self.at],
+                    visited: self.visited.clone(),
                     travelable,
                     points: map.shared(),
                     proceed: false,
                 },
                 rng: Counters { run, player },
-                room: Some(Room::Event {
-                    event: V::neow_event(),
-                    finished: *neow_finished,
-                    title: None,
-                    text: None,
-                    options: if *neow_finished { Vec::new() } else { options },
-                }),
-                combat: None,
+                room,
+                combat,
             },
             asking,
             resolved: true,
@@ -372,10 +417,5 @@ mod tests {
             .choose(0)
             .expect("the simulator implements this option");
         assert_eq!(run.player.relics.len() + 1, branch.player.relics.len());
-    }
-
-    /// The run's ascension level, which every roll that scales reads.
-    pub(crate) fn ascension(&self) -> V::AscensionLevel {
-        self.ascension
     }
 }

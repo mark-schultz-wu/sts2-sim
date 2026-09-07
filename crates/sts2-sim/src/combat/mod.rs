@@ -3,7 +3,9 @@ mod error;
 pub use error::Error;
 
 mod encounter;
+mod legal;
 mod monster;
-pub(crate) use encounter::opening;
-pub(crate) use monster::initialize;
+mod start;
+mod stream;
+pub(crate) use start::enter;
 pub mod pile;

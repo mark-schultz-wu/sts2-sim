@@ -6,4 +6,3 @@ mod travel;
 
 pub use setup::{Opening, RelicBag};
 pub(crate) use state::State;
-pub(crate) use travel::Destination;
