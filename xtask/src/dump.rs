@@ -21,7 +21,6 @@ enum Destination {
 use Destination::{At, Content};
 
 /// Every mode the dump mod answers to. The marker it prints is its own name, so only the destination is worth writing down.
-/// [`At`] is spelled with `{version}`, which the selected build's module name replaces. Rng ground truth is not content, but it is still one build's numbers.
 const DUMPS: &[(&str, Destination)] = &[
     ("actdump", Content("acts.txt")),
     ("afflictiondump", Content("afflictions.txt")),
@@ -40,7 +39,8 @@ const DUMPS: &[(&str, Destination)] = &[
     ("relicdump", Content("relics.txt")),
     ("restsitedump", Content("restsite.txt")),
     ("runstatedump", Content("runstate.txt")),
-    ("rngdump", At("crates/sts2-rng/tests/rng/{version}.txt")),
+    ("rngdump", At("crates/sts2-core/tests/megarandom.txt")),
+    ("setupdump", At("crates/sts2-golden/tests/setup.txt")),
 ];
 
 /// Run every mode named, or all of them when none is.
@@ -62,14 +62,6 @@ pub fn run(modes: &[String]) -> Result<String, String> {
             Content(name) => version_dir()?.join("dumps").join(name),
             At(path) => PathBuf::from(path.replace("{version}", &version_module()?)),
         };
-
-        // A build dumped for the first time has no directory yet. Making it
-        // here keeps adding a build to one step, rather than a step and a
-        // mkdir nobody wrote down.
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("creating {}: {e}", parent.display()))?;
-        }
         fs::write(&path, &table).map_err(|e| format!("writing {}: {e}", path.display()))?;
         println!("{mode} -> {}", path.display());
         done.push(mode);

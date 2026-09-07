@@ -394,28 +394,24 @@ fn emit_events(
 
     writeln!(
         out,
-        "    /// The layout, the flags and the fight it starts.\n\
-         \x20   ///\n\
-         \x20   /// One arm per event, naming the file its row lives in."
+        "    /// The layout, the flags and the fight it starts."
     )
     .unwrap();
-    writeln!(out, "    fn data(self) -> EventData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for row in events {
         let empty = Vec::new();
         let of = acts_of.get(&row[1]).unwrap_or(&empty);
-        writeln!(
-            out,
-            "            Self::{} => {}::{},",
-            camel(&row[1]),
+        table.push(format!(
+            "{}::{}",
             bucket(of, pooled.contains(&row[1].as_str())),
             row[1]
-        )
-        .unwrap();
+        ));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    fn data(self) -> &'static EventData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "EventData", &table);
 
     writeln!(out, "impl sts2_core::EventTable for Event {{").unwrap();
     writeln!(out, "    type Act = Act;\n").unwrap();

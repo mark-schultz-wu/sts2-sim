@@ -40,6 +40,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Act = generated::acts::Act;
     type Affliction = generated::afflictions::Affliction;
     type Card = generated::cards::Cards;
+    type CardVar = generated::cards::CardVar;
     type Character = generated::characters::Character;
     type Enchantment = generated::enchantments::Enchantment;
     type Encounter = generated::encounters::Encounter;
@@ -52,6 +53,25 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Relic = generated::relics::Relic;
     type RoomType = generated::encounters::RoomType;
 
+    // The vocabulary a run's position is described in. `runstate` is one dump
+    // of its own because none of these is a property of a content item; the two
+    // below it belong to the domains whose content has them.
+    type MapPointType = generated::runstate::MapPointType;
+    type CombatSide = generated::runstate::CombatSide;
+    type PlayerTurnPhase = generated::runstate::PlayerTurnPhase;
+    type UnplayableReason = generated::runstate::UnplayableReason;
+    type UnplayableReasons = generated::runstate::UnplayableReasons;
+    type RunRngType = generated::runstate::RunRngType;
+    type PlayerRngType = generated::runstate::PlayerRngType;
+    type IntentKind = generated::monsters::IntentKind;
+    type MoveId = generated::monsters::MoveId;
+    type RestSiteOption = generated::restsite::RestSiteOption;
+    type TargetType = generated::cards::TargetType;
+}
+
+/// Nothing yet. The rules land here as they are ported, one pool at a time.
+/// Until then this build is its tables and no more.
+impl sts2_core::Rules for V0_107_1 {
     fn relic_pool(character: Self::Character) -> generated::relics::RelicPool {
         sts2_core::Table::data(character).relic_pool
     }
@@ -105,13 +125,13 @@ impl sts2_core::ContentVersion for V0_107_1 {
         cards
     }
 
-    fn reward_rarity(card: Self::Card) -> sts2_core::CardRewardRarity {
+    fn reward_rarity(card: Self::Card) -> sts2_core::RewardRarity {
         use generated::cards::CardRarity;
         match sts2_core::CardTable::rarity(card) {
-            CardRarity::Common => sts2_core::CardRewardRarity::Common,
-            CardRarity::Uncommon => sts2_core::CardRewardRarity::Uncommon,
-            CardRarity::Rare => sts2_core::CardRewardRarity::Rare,
-            _ => sts2_core::CardRewardRarity::Other,
+            CardRarity::Common => sts2_core::RewardRarity::Common,
+            CardRarity::Uncommon => sts2_core::RewardRarity::Uncommon,
+            CardRarity::Rare => sts2_core::RewardRarity::Rare,
+            _ => sts2_core::RewardRarity::Other,
         }
     }
 
@@ -181,17 +201,6 @@ impl sts2_core::ContentVersion for V0_107_1 {
         }
     }
 
-    // The vocabulary a run's position is described in. `runstate` is one dump
-    // of its own because none of these is a property of a content item; the two
-    // below it belong to the domains whose content has them.
-    type MapPointType = generated::runstate::MapPointType;
-    type CombatSide = generated::runstate::CombatSide;
-    type PlayerTurnPhase = generated::runstate::PlayerTurnPhase;
-    type UnplayableReason = generated::runstate::UnplayableReason;
-    type UnplayableReasons = generated::runstate::UnplayableReasons;
-    type RunRngType = generated::runstate::RunRngType;
-    type PlayerRngType = generated::runstate::PlayerRngType;
-
     fn run_rng_types() -> &'static [Self::RunRngType] {
         &generated::runstate::RunRngType::ALL
     }
@@ -207,11 +216,6 @@ impl sts2_core::ContentVersion for V0_107_1 {
     fn rewards_rng() -> Self::PlayerRngType {
         generated::runstate::PlayerRngType::Rewards
     }
-
-    type IntentKind = generated::monsters::IntentKind;
-    type MoveId = generated::monsters::MoveId;
-    type RestSiteOption = generated::restsite::RestSiteOption;
-    type TargetType = generated::cards::TargetType;
 }
 
 pub const VERSION: Version = Version {

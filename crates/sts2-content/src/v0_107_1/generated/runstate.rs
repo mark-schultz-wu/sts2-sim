@@ -78,6 +78,11 @@ impl CombatSide {
     pub const ALL: [CombatSide; 3] = [CombatSide::None, CombatSide::Player, CombatSide::Enemy];
 }
 
+impl sts2_core::Sides for CombatSide {
+    const PLAYER: CombatSide = CombatSide::Player;
+    const ENEMY: CombatSide = CombatSide::Enemy;
+}
+
 /// Where in their turn a player is.
 ///
 /// The two `Auto` phases are when cards play themselves, before and after
@@ -105,6 +110,15 @@ impl PlayerTurnPhase {
         PlayerTurnPhase::AutoPostPlay,
         PlayerTurnPhase::End,
     ];
+}
+
+impl sts2_core::TurnPhases for PlayerTurnPhase {
+    const NONE: PlayerTurnPhase = PlayerTurnPhase::None;
+    const START: PlayerTurnPhase = PlayerTurnPhase::Start;
+    const AUTO_PRE_PLAY: PlayerTurnPhase = PlayerTurnPhase::AutoPrePlay;
+    const PLAY: PlayerTurnPhase = PlayerTurnPhase::Play;
+    const AUTO_POST_PLAY: PlayerTurnPhase = PlayerTurnPhase::AutoPostPlay;
+    const END: PlayerTurnPhase = PlayerTurnPhase::End;
 }
 
 /// One rule a card in hand fails.
@@ -214,6 +228,15 @@ impl sts2_core::FlagSet for UnplayableReasons {
     }
 }
 
+impl sts2_core::Unplayable for UnplayableReason {
+    const HAS_UNPLAYABLE_KEYWORD: UnplayableReason = UnplayableReason::HasUnplayableKeyword;
+    const BLOCKED_BY_HOOK: UnplayableReason = UnplayableReason::BlockedByHook;
+    const BLOCKED_BY_CARD_LOGIC: UnplayableReason = UnplayableReason::BlockedByCardLogic;
+    const ENERGY_COST_TOO_HIGH: UnplayableReason = UnplayableReason::EnergyCostTooHigh;
+    const STAR_COST_TOO_HIGH: UnplayableReason = UnplayableReason::StarCostTooHigh;
+    const NO_LIVING_ALLIES: UnplayableReason = UnplayableReason::NoLivingAllies;
+}
+
 /// One of the twelve random streams a run keeps.
 ///
 /// Every stream is seeded from the run's seed and drawn from
@@ -262,6 +285,25 @@ impl RunRngType {
     ];
 }
 
+impl sts2_core::Streams for RunRngType {
+    fn name(self) -> &'static str {
+        match self {
+            Self::UpFront => "up_front",
+            Self::Shuffle => "shuffle",
+            Self::UnknownMapPoint => "unknown_map_point",
+            Self::CombatCardGeneration => "combat_card_generation",
+            Self::CombatPotionGeneration => "combat_potion_generation",
+            Self::CombatCardSelection => "combat_card_selection",
+            Self::CombatEnergyCosts => "combat_energy_costs",
+            Self::CombatTargets => "combat_targets",
+            Self::MonsterAi => "monster_ai",
+            Self::Niche => "niche",
+            Self::CombatOrbs => "combat_orbs",
+            Self::TreasureRoomRelics => "treasure_room_relics",
+        }
+    }
+}
+
 /// One of the three random streams each player keeps.
 ///
 /// Beside the run's twelve, not among them: these are per-player, so a
@@ -282,4 +324,14 @@ impl PlayerRngType {
         PlayerRngType::Shops,
         PlayerRngType::Transformations,
     ];
+}
+
+impl sts2_core::Streams for PlayerRngType {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Rewards => "rewards",
+            Self::Shops => "shops",
+            Self::Transformations => "transformations",
+        }
+    }
 }

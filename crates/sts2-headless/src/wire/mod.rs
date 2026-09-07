@@ -9,6 +9,7 @@
 //! that happens to speak it over a socket.
 
 pub(crate) mod command;
+pub(crate) mod cost;
 pub(crate) mod greeting;
 pub(crate) mod ident;
 pub(crate) mod observation;

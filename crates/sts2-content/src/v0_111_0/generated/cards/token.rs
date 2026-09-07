@@ -3,9 +3,12 @@
 //! Cards in `TOKEN_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::{CardData, CardKeyword, CardRarity, CardType, KeywordSet, TargetType};
+use super::{
+    CardData, CardKeyword, CardNumber, CardRarity, CardType, CardVar, KeywordSet, TargetType,
+};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
+use sts2_core::Printed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -42,120 +45,248 @@ pub enum TokenCard {
 
 impl TokenCard {
     /// What is true of the card with no run in progress.
-    pub const fn data(self) -> CardData {
-        match self {
-            Self::Disintegration => CardData {
-                kind: Field::Constant(CardType::Status),
-                rarity: CardRarity::Status,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[]),
-            },
-            Self::Fuel => CardData {
-                kind: Field::Constant(CardType::Skill),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::SelfTarget),
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-            Self::GiantRock => CardData {
-                kind: Field::Constant(CardType::Attack),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::AnyEnemy),
-                cost: Cost::Energy(1),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[]),
-            },
-            Self::Luminesce => CardData {
-                kind: Field::Constant(CardType::Skill),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::SelfTarget),
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust, CardKeyword::Retain]),
-            },
-            Self::MindRot => CardData {
-                kind: Field::Constant(CardType::Status),
-                rarity: CardRarity::Status,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[]),
-            },
-            Self::MinionDiveBomb => CardData {
-                kind: Field::Constant(CardType::Attack),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::AnyEnemy),
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-            Self::MinionSacrifice => CardData {
-                kind: Field::Constant(CardType::Skill),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::SelfTarget),
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-            Self::MinionStrike => CardData {
-                kind: Field::Constant(CardType::Attack),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::AnyEnemy),
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-            Self::Shiv => CardData {
-                kind: Field::Constant(CardType::Attack),
-                rarity: CardRarity::Token,
-                target: Field::Computed,
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-            Self::Sloth => CardData {
-                kind: Field::Constant(CardType::Status),
-                rarity: CardRarity::Status,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[]),
-            },
-            Self::Soul => CardData {
-                kind: Field::Constant(CardType::Skill),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::SelfTarget),
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-            Self::SovereignBlade => CardData {
-                kind: Field::Constant(CardType::Attack),
-                rarity: CardRarity::Token,
-                target: Field::Computed,
-                cost: Cost::Energy(2),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Retain]),
-            },
-            Self::SweepingGaze => CardData {
-                kind: Field::Constant(CardType::Attack),
-                rarity: CardRarity::Token,
-                target: Field::Constant(TargetType::RandomEnemy),
-                cost: Cost::Energy(0),
-                max_upgrade: 1,
-                keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Exhaust]),
-            },
-            Self::WasteAway => CardData {
-                kind: Field::Constant(CardType::Status),
-                rarity: CardRarity::Status,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[]),
-            },
-        }
+    pub fn data(self) -> &'static CardData {
+        &ROWS[self as usize]
+    }
+
+    /// Where this card sorts against every card in the build.
+    pub fn order(self) -> u16 {
+        ORDER[self as usize]
     }
 }
+
+/// Every member's place in the build's own id order, which is
+/// ordinal over the id the wire spells.
+static ORDER: [u16; 14] = [
+    163, 230, 238, 317, 337, 338, 339, 340, 467, 479, 486, 489, 527, 583,
+];
+
+/// Every row, in the order the enum declares its variants, which is
+/// the index a value casts to.
+static ROWS: [CardData; 14] = [
+    CardData {
+        kind: Field::Constant(CardType::Status),
+        rarity: CardRarity::Status,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::DisintegrationPower,
+            base: CardNumber::new(6, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Skill),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::SelfTarget),
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Energy,
+            base: CardNumber::new(1, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Attack),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::AnyEnemy),
+        cost: Cost::Fixed(1),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Damage,
+            base: CardNumber::new(20, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Skill),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::SelfTarget),
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Energy,
+            base: CardNumber::new(2, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust, CardKeyword::Retain]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Status),
+        rarity: CardRarity::Status,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::MindRotPower,
+            base: CardNumber::new(1, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Attack),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::AnyEnemy),
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Damage,
+            base: CardNumber::new(13, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Skill),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::SelfTarget),
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Block,
+            base: CardNumber::new(7, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Attack),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::AnyEnemy),
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[
+            Printed {
+                id: CardVar::Cards,
+                base: CardNumber::new(1, 0),
+                calculated: false,
+            },
+            Printed {
+                id: CardVar::Damage,
+                base: CardNumber::new(6, 0),
+                calculated: false,
+            },
+        ],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Attack),
+        rarity: CardRarity::Token,
+        target: Field::Computed,
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Damage,
+            base: CardNumber::new(4, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Status),
+        rarity: CardRarity::Status,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::SlothPower,
+            base: CardNumber::new(3, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Skill),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::SelfTarget),
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Cards,
+            base: CardNumber::new(2, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Attack),
+        rarity: CardRarity::Token,
+        target: Field::Computed,
+        cost: Cost::Fixed(2),
+        star_cost: Cost::None,
+        vars: &[
+            Printed {
+                id: CardVar::CalculatedBlock,
+                base: CardNumber::new(0, 0),
+                calculated: true,
+            },
+            Printed {
+                id: CardVar::CalculationBase,
+                base: CardNumber::new(0, 0),
+                calculated: false,
+            },
+            Printed {
+                id: CardVar::CalculationExtra,
+                base: CardNumber::new(1, 0),
+                calculated: false,
+            },
+            Printed {
+                id: CardVar::Damage,
+                base: CardNumber::new(10, 0),
+                calculated: false,
+            },
+            Printed {
+                id: CardVar::Repeat,
+                base: CardNumber::new(1, 0),
+                calculated: false,
+            },
+        ],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Retain]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Attack),
+        rarity: CardRarity::Token,
+        target: Field::Constant(TargetType::RandomEnemy),
+        cost: Cost::Fixed(0),
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::OstyDamage,
+            base: CardNumber::new(10, 0),
+            calculated: false,
+        }],
+        max_upgrade: 1,
+        keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Status),
+        rarity: CardRarity::Status,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::WasteAwayPower,
+            base: CardNumber::new(1, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[]),
+    },
+];

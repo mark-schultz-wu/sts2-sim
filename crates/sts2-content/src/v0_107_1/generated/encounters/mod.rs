@@ -284,6 +284,7 @@ pub enum Roster {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EncounterData {
     pub room: RoomType,
+    pub seed_salt: u32,
     pub flags: FlagSet,
     pub families: FamilySet,
     pub gold: Gold,
@@ -617,113 +618,116 @@ impl sts2_core::Table for Encounter {
     ];
 
     /// The room, the roster and the rewards.
-    ///
-    /// One arm per encounter, naming the file its row lives in.
-    fn data(self) -> EncounterData {
-        match self {
-            Self::AeonglassBoss => boss::AEONGLASS_BOSS,
-            Self::AxebotsNormal => normal::AXEBOTS_NORMAL,
-            Self::BattlewornDummyEventEncounter => normal::BATTLEWORN_DUMMY_EVENT_ENCOUNTER,
-            Self::BowlbugsNormal => normal::BOWLBUGS_NORMAL,
-            Self::BowlbugsWeak => normal::BOWLBUGS_WEAK,
-            Self::BygoneEffigyElite => elite::BYGONE_EFFIGY_ELITE,
-            Self::ByrdonisElite => elite::BYRDONIS_ELITE,
-            Self::CeremonialBeastBoss => boss::CEREMONIAL_BEAST_BOSS,
-            Self::ChompersNormal => normal::CHOMPERS_NORMAL,
-            Self::ConstructMenagerieNormal => normal::CONSTRUCT_MENAGERIE_NORMAL,
-            Self::CorpseSlugsNormal => normal::CORPSE_SLUGS_NORMAL,
-            Self::CorpseSlugsWeak => normal::CORPSE_SLUGS_WEAK,
-            Self::CubexConstructNormal => normal::CUBEX_CONSTRUCT_NORMAL,
-            Self::CultistsNormal => normal::CULTISTS_NORMAL,
-            Self::DecimillipedeElite => elite::DECIMILLIPEDE_ELITE,
-            Self::DenseVegetationEventEncounter => normal::DENSE_VEGETATION_EVENT_ENCOUNTER,
-            Self::DeprecatedEncounter => normal::DEPRECATED_ENCOUNTER,
-            Self::DevotedSculptorWeak => normal::DEVOTED_SCULPTOR_WEAK,
-            Self::EntomancerElite => elite::ENTOMANCER_ELITE,
-            Self::ExoskeletonsNormal => normal::EXOSKELETONS_NORMAL,
-            Self::ExoskeletonsWeak => normal::EXOSKELETONS_WEAK,
-            Self::FabricatorNormal => normal::FABRICATOR_NORMAL,
-            Self::FakeMerchantEventEncounter => normal::FAKE_MERCHANT_EVENT_ENCOUNTER,
-            Self::FlyconidNormal => normal::FLYCONID_NORMAL,
-            Self::FogmogNormal => normal::FOGMOG_NORMAL,
-            Self::FossilStalkerNormal => normal::FOSSIL_STALKER_NORMAL,
-            Self::FrogKnightNormal => normal::FROG_KNIGHT_NORMAL,
-            Self::FuzzyWurmCrawlerWeak => normal::FUZZY_WURM_CRAWLER_WEAK,
-            Self::GlobeHeadNormal => normal::GLOBE_HEAD_NORMAL,
-            Self::GremlinMercNormal => normal::GREMLIN_MERC_NORMAL,
-            Self::HauntedShipNormal => normal::HAUNTED_SHIP_NORMAL,
-            Self::HunterKillerNormal => normal::HUNTER_KILLER_NORMAL,
-            Self::InfestedPrismsElite => elite::INFESTED_PRISMS_ELITE,
-            Self::InkletsNormal => normal::INKLETS_NORMAL,
-            Self::KaiserCrabBoss => boss::KAISER_CRAB_BOSS,
-            Self::KnightsElite => elite::KNIGHTS_ELITE,
-            Self::KnowledgeDemonBoss => boss::KNOWLEDGE_DEMON_BOSS,
-            Self::LagavulinMatriarchBoss => boss::LAGAVULIN_MATRIARCH_BOSS,
-            Self::LivingFogNormal => normal::LIVING_FOG_NORMAL,
-            Self::LouseProgenitorNormal => normal::LOUSE_PROGENITOR_NORMAL,
-            Self::MawlerNormal => normal::MAWLER_NORMAL,
-            Self::MechaKnightElite => elite::MECHA_KNIGHT_ELITE,
-            Self::MockArtifactEncounter => normal::MOCK_ARTIFACT_ENCOUNTER,
-            Self::MockAttackAndSummonEncounter => normal::MOCK_ATTACK_AND_SUMMON_ENCOUNTER,
-            Self::MockBossEncounter => boss::MOCK_BOSS_ENCOUNTER,
-            Self::MockEliteEncounter => elite::MOCK_ELITE_ENCOUNTER,
-            Self::MockMonsterEncounter => normal::MOCK_MONSTER_ENCOUNTER,
-            Self::MockNoRewardsEncounter => normal::MOCK_NO_REWARDS_ENCOUNTER,
-            Self::MockPlatingEncounter => normal::MOCK_PLATING_ENCOUNTER,
-            Self::MockTwoMonsterEncounter => normal::MOCK_TWO_MONSTER_ENCOUNTER,
-            Self::MysteriousKnightEventEncounter => normal::MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER,
-            Self::MytesNormal => normal::MYTES_NORMAL,
-            Self::NibbitsNormal => normal::NIBBITS_NORMAL,
-            Self::NibbitsWeak => normal::NIBBITS_WEAK,
-            Self::OvergrowthCrawlers => normal::OVERGROWTH_CRAWLERS,
-            Self::OvicopterNormal => normal::OVICOPTER_NORMAL,
-            Self::OwlMagistrateNormal => normal::OWL_MAGISTRATE_NORMAL,
-            Self::PhantasmalGardenersElite => elite::PHANTASMAL_GARDENERS_ELITE,
-            Self::PhrogParasiteElite => elite::PHROG_PARASITE_ELITE,
-            Self::PunchConstructNormal => normal::PUNCH_CONSTRUCT_NORMAL,
-            Self::PunchOffEventEncounter => normal::PUNCH_OFF_EVENT_ENCOUNTER,
-            Self::QueenBoss => boss::QUEEN_BOSS,
-            Self::RubyRaidersNormal => normal::RUBY_RAIDERS_NORMAL,
-            Self::ScrollsOfBitingNormal => normal::SCROLLS_OF_BITING_NORMAL,
-            Self::ScrollsOfBitingWeak => normal::SCROLLS_OF_BITING_WEAK,
-            Self::SeapunkNormal => normal::SEAPUNK_NORMAL,
-            Self::SeapunkWeak => normal::SEAPUNK_WEAK,
-            Self::SewerClamNormal => normal::SEWER_CLAM_NORMAL,
-            Self::ShrinkerBeetleWeak => normal::SHRINKER_BEETLE_WEAK,
-            Self::SkulkingColonyElite => elite::SKULKING_COLONY_ELITE,
-            Self::SlimedBerserkerNormal => normal::SLIMED_BERSERKER_NORMAL,
-            Self::SlimesNormal => normal::SLIMES_NORMAL,
-            Self::SlimesWeak => normal::SLIMES_WEAK,
-            Self::SlitheringStranglerNormal => normal::SLITHERING_STRANGLER_NORMAL,
-            Self::SludgeSpinnerWeak => normal::SLUDGE_SPINNER_WEAK,
-            Self::SlumberingBeetleNormal => normal::SLUMBERING_BEETLE_NORMAL,
-            Self::SnappingJaxfruitNormal => normal::SNAPPING_JAXFRUIT_NORMAL,
-            Self::SoulFyshBoss => boss::SOUL_FYSH_BOSS,
-            Self::SoulNexusElite => elite::SOUL_NEXUS_ELITE,
-            Self::SpinyToadNormal => normal::SPINY_TOAD_NORMAL,
-            Self::TerrorEelElite => elite::TERROR_EEL_ELITE,
-            Self::TestSubjectBoss => boss::TEST_SUBJECT_BOSS,
-            Self::TheArchitectEventEncounter => normal::THE_ARCHITECT_EVENT_ENCOUNTER,
-            Self::TheInsatiableBoss => boss::THE_INSATIABLE_BOSS,
-            Self::TheKinBoss => boss::THE_KIN_BOSS,
-            Self::TheLostAndForgottenNormal => normal::THE_LOST_AND_FORGOTTEN_NORMAL,
-            Self::TheObscuraNormal => normal::THE_OBSCURA_NORMAL,
-            Self::ThievingHopperWeak => normal::THIEVING_HOPPER_WEAK,
-            Self::ToadpolesWeak => normal::TOADPOLES_WEAK,
-            Self::TunnelerNormal => normal::TUNNELER_NORMAL,
-            Self::TunnelerWeak => normal::TUNNELER_WEAK,
-            Self::TurretOperatorWeak => normal::TURRET_OPERATOR_WEAK,
-            Self::TwoTailedRatsNormal => normal::TWO_TAILED_RATS_NORMAL,
-            Self::VantomBoss => boss::VANTOM_BOSS,
-            Self::VineShamblerNormal => normal::VINE_SHAMBLER_NORMAL,
-            Self::WaterfallGiantBoss => boss::WATERFALL_GIANT_BOSS,
-        }
+    fn data(self) -> &'static EncounterData {
+        &ROWS[self as usize]
     }
 }
+
+/// Every row, in the order the enum declares its variants, which is
+/// the index a value casts to.
+static ROWS: [EncounterData; 96] = [
+    boss::AEONGLASS_BOSS,
+    normal::AXEBOTS_NORMAL,
+    normal::BATTLEWORN_DUMMY_EVENT_ENCOUNTER,
+    normal::BOWLBUGS_NORMAL,
+    normal::BOWLBUGS_WEAK,
+    elite::BYGONE_EFFIGY_ELITE,
+    elite::BYRDONIS_ELITE,
+    boss::CEREMONIAL_BEAST_BOSS,
+    normal::CHOMPERS_NORMAL,
+    normal::CONSTRUCT_MENAGERIE_NORMAL,
+    normal::CORPSE_SLUGS_NORMAL,
+    normal::CORPSE_SLUGS_WEAK,
+    normal::CUBEX_CONSTRUCT_NORMAL,
+    normal::CULTISTS_NORMAL,
+    elite::DECIMILLIPEDE_ELITE,
+    normal::DENSE_VEGETATION_EVENT_ENCOUNTER,
+    normal::DEPRECATED_ENCOUNTER,
+    normal::DEVOTED_SCULPTOR_WEAK,
+    elite::ENTOMANCER_ELITE,
+    normal::EXOSKELETONS_NORMAL,
+    normal::EXOSKELETONS_WEAK,
+    normal::FABRICATOR_NORMAL,
+    normal::FAKE_MERCHANT_EVENT_ENCOUNTER,
+    normal::FLYCONID_NORMAL,
+    normal::FOGMOG_NORMAL,
+    normal::FOSSIL_STALKER_NORMAL,
+    normal::FROG_KNIGHT_NORMAL,
+    normal::FUZZY_WURM_CRAWLER_WEAK,
+    normal::GLOBE_HEAD_NORMAL,
+    normal::GREMLIN_MERC_NORMAL,
+    normal::HAUNTED_SHIP_NORMAL,
+    normal::HUNTER_KILLER_NORMAL,
+    elite::INFESTED_PRISMS_ELITE,
+    normal::INKLETS_NORMAL,
+    boss::KAISER_CRAB_BOSS,
+    elite::KNIGHTS_ELITE,
+    boss::KNOWLEDGE_DEMON_BOSS,
+    boss::LAGAVULIN_MATRIARCH_BOSS,
+    normal::LIVING_FOG_NORMAL,
+    normal::LOUSE_PROGENITOR_NORMAL,
+    normal::MAWLER_NORMAL,
+    elite::MECHA_KNIGHT_ELITE,
+    normal::MOCK_ARTIFACT_ENCOUNTER,
+    normal::MOCK_ATTACK_AND_SUMMON_ENCOUNTER,
+    boss::MOCK_BOSS_ENCOUNTER,
+    elite::MOCK_ELITE_ENCOUNTER,
+    normal::MOCK_MONSTER_ENCOUNTER,
+    normal::MOCK_NO_REWARDS_ENCOUNTER,
+    normal::MOCK_PLATING_ENCOUNTER,
+    normal::MOCK_TWO_MONSTER_ENCOUNTER,
+    normal::MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER,
+    normal::MYTES_NORMAL,
+    normal::NIBBITS_NORMAL,
+    normal::NIBBITS_WEAK,
+    normal::OVERGROWTH_CRAWLERS,
+    normal::OVICOPTER_NORMAL,
+    normal::OWL_MAGISTRATE_NORMAL,
+    elite::PHANTASMAL_GARDENERS_ELITE,
+    elite::PHROG_PARASITE_ELITE,
+    normal::PUNCH_CONSTRUCT_NORMAL,
+    normal::PUNCH_OFF_EVENT_ENCOUNTER,
+    boss::QUEEN_BOSS,
+    normal::RUBY_RAIDERS_NORMAL,
+    normal::SCROLLS_OF_BITING_NORMAL,
+    normal::SCROLLS_OF_BITING_WEAK,
+    normal::SEAPUNK_NORMAL,
+    normal::SEAPUNK_WEAK,
+    normal::SEWER_CLAM_NORMAL,
+    normal::SHRINKER_BEETLE_WEAK,
+    elite::SKULKING_COLONY_ELITE,
+    normal::SLIMED_BERSERKER_NORMAL,
+    normal::SLIMES_NORMAL,
+    normal::SLIMES_WEAK,
+    normal::SLITHERING_STRANGLER_NORMAL,
+    normal::SLUDGE_SPINNER_WEAK,
+    normal::SLUMBERING_BEETLE_NORMAL,
+    normal::SNAPPING_JAXFRUIT_NORMAL,
+    boss::SOUL_FYSH_BOSS,
+    elite::SOUL_NEXUS_ELITE,
+    normal::SPINY_TOAD_NORMAL,
+    elite::TERROR_EEL_ELITE,
+    boss::TEST_SUBJECT_BOSS,
+    normal::THE_ARCHITECT_EVENT_ENCOUNTER,
+    boss::THE_INSATIABLE_BOSS,
+    boss::THE_KIN_BOSS,
+    normal::THE_LOST_AND_FORGOTTEN_NORMAL,
+    normal::THE_OBSCURA_NORMAL,
+    normal::THIEVING_HOPPER_WEAK,
+    normal::TOADPOLES_WEAK,
+    normal::TUNNELER_NORMAL,
+    normal::TUNNELER_WEAK,
+    normal::TURRET_OPERATOR_WEAK,
+    normal::TWO_TAILED_RATS_NORMAL,
+    boss::VANTOM_BOSS,
+    normal::VINE_SHAMBLER_NORMAL,
+    boss::WATERFALL_GIANT_BOSS,
+];
 
 impl sts2_core::EncounterTable for Encounter {
     type Act = Act;
     type Room = RoomType;
+    type Monster = Monster;
 
     /// The acts whose map can roll this encounter. Empty for one an
     /// event starts instead, and for the mocks.
@@ -842,12 +846,37 @@ impl sts2_core::EncounterTable for Encounter {
     fn shares_family_with(self, other: Encounter) -> bool {
         self.data().families.intersects(other.data().families)
     }
+
+    /// Every monster this encounter can field, in table order.
+    fn possible_monsters(self) -> impl Iterator<Item = Monster> {
+        self.data().possible.iter()
+    }
+
+    /// How the encounter chooses its opening roster.
+    fn roster(self) -> sts2_core::EncounterRoster<impl Iterator<Item = Monster>> {
+        match self.data().roster {
+            Roster::Fixed(spawns) => {
+                sts2_core::EncounterRoster::Fixed(spawns.iter().map(|spawn| spawn.monster))
+            }
+            Roster::Random => sts2_core::EncounterRoster::Random,
+            Roster::Configured => sts2_core::EncounterRoster::Configured,
+        }
+    }
+
+    /// The encounter entry hash used by its private RNG.
+    fn seed_salt(self) -> u32 {
+        self.data().seed_salt
+    }
 }
 
 impl sts2_core::Rooms for RoomType {
     const MONSTER: RoomType = RoomType::Monster;
     const ELITE: RoomType = RoomType::Elite;
     const BOSS: RoomType = RoomType::Boss;
+    const TREASURE: RoomType = RoomType::Treasure;
+    const SHOP: RoomType = RoomType::Shop;
+    const EVENT: RoomType = RoomType::Event;
+    const REST_SITE: RoomType = RoomType::RestSite;
 }
 mod boss;
 mod elite;

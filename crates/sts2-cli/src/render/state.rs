@@ -203,7 +203,10 @@ fn shop<V: ContentVersion>(f: &mut fmt::Formatter<'_>, entries: &[Entry<V>]) -> 
         // name. The kind beside it already says what it is, and a `?` would
         // read as a field the oracle failed to report.
         let (sells, what) = match &e.stock {
-            Stock::Card(card) => ("card", card.as_ref().map(ident).unwrap_or_default()),
+            Stock::Card(card) => (
+                "card",
+                card.as_ref().map(|c| ident(&c.card)).unwrap_or_default(),
+            ),
             Stock::Relic(relic) => ("relic", relic.as_ref().map(spelling).unwrap_or_default()),
             Stock::Potion(potion) => ("potion", potion.as_ref().map(spelling).unwrap_or_default()),
             Stock::CardRemoval => ("card removal", String::new()),

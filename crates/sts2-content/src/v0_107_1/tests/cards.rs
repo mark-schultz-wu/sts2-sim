@@ -4,7 +4,8 @@ use super::super::cards::*;
 use super::super::{CARDS, VERSION};
 use super::{build, rows, wire};
 use crate::{Cost, Field};
-use sts2_core::Table;
+use sts2_core::CardVars;
+use sts2_core::{CardTable, Table};
 
 /// The dump's `cost` and `costsX` columns as the `Cost` they generate.
 ///
@@ -26,6 +27,20 @@ fn cost(canonical: &str, costs_x: &str) -> Cost {
     }
 }
 
+/// The same, for stars.
+///
+/// A separate reading, because the two pools are not spelled the same.
+/// `CanonicalStarCost` is a plain virtual returning `-1`. Nothing zeroes it
+/// for an X-star card, so the pairing the energy pool asserts does not hold
+/// here.
+fn star_cost(canonical: &str, costs_x: &str) -> Cost {
+    match (costs_x, canonical) {
+        ("1", _) => Cost::X,
+        (_, "-1") => Cost::None,
+        (_, n) => Cost::Fixed(n.parse().expect("a non-negative star cost")),
+    }
+}
+
 /// The generated table has to agree with the dump it was generated from. If it
 /// does not, `cargo xtask codegen` was not re-run, and the table describes a
 /// build nobody is talking to.
@@ -40,7 +55,18 @@ fn the_generated_table_matches_the_dump() {
 
         let d = card.data();
         assert_eq!(d.cost, cost(row[6], row[7]), "{}: cost", row[1]);
-        assert_eq!(d.max_upgrade.to_string(), row[8], "{}: max_upgrade", row[1]);
+        assert_eq!(
+            d.star_cost,
+            star_cost(row[8], row[9]),
+            "{}: star_cost",
+            row[1]
+        );
+        assert_eq!(
+            d.max_upgrade.to_string(),
+            row[10],
+            "{}: max_upgrade",
+            row[1]
+        );
         assert_eq!(format!("{:?}", d.rarity), row[4], "{}: rarity", row[1]);
 
         // Matched, not converted to an Option: `Constant(TargetType::None)`
@@ -66,10 +92,10 @@ fn the_generated_table_matches_the_dump() {
         // game itself stores a `HashSet`.
         let mut keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
         keywords.sort();
-        let expected = if row[9] == "-" {
+        let expected = if row[11] == "-" {
             Vec::new()
         } else {
-            row[9].split(',').map(String::from).collect()
+            row[11].split(',').map(String::from).collect()
         };
         assert_eq!(keywords, expected, "{}: keywords", row[1]);
 
@@ -96,7 +122,7 @@ fn every_card_is_present_and_well_formed() {
     assert_eq!(cards.len(), 578, "the build has 578 cards");
 
     for row in &cards {
-        assert_eq!(row.len(), 10, "a card row has ten fields: {row:?}");
+        assert_eq!(row.len(), 12, "a card row has twelve fields: {row:?}");
         assert_eq!(row[0], "card");
     }
 }
@@ -194,7 +220,7 @@ fn card_ids_are_unique() {
 /// flag, and this is the check that it stays small.
 #[test]
 fn upgrade_levels_stay_in_a_byte() {
-    let mut seen: Vec<&str> = rows(CARDS, "card").map(|r| r[8]).collect();
+    let mut seen: Vec<&str> = rows(CARDS, "card").map(|r| r[10]).collect();
     seen.sort_unstable();
     seen.dedup();
     assert_eq!(seen, ["0", "1"], "max upgrade levels changed");
@@ -215,4 +241,73 @@ fn only_the_known_cards_are_dynamic() {
         ["MAD_SCIENCE", "MALAISE", "SHIV", "SOVEREIGN_BLADE"],
         "the set of cards computing Type or TargetType has changed"
     );
+}
+
+/// The numbers on a card's face, against the dump they came from.
+///
+/// A card's own rows, matched by id rather than by position, because the
+/// generated table sorts by pool and the dump does not.
+#[test]
+fn every_printed_number_matches_the_dump() {
+    let mut dumped: std::collections::HashMap<&str, Vec<(&str, i32, bool)>> =
+        std::collections::HashMap::new();
+    for row in rows(CARDS, "var") {
+        assert_eq!(row.len(), 5, "a var row has five fields: {row:?}");
+        dumped.entry(row[1]).or_default().push((
+            row[2],
+            row[3].parse().expect("a printed number is an integer"),
+            row[4] == "1",
+        ));
+    }
+    assert_eq!(dumped.values().map(Vec::len).sum::<usize>(), 775);
+
+    for card in Cards::ALL {
+        let want = dumped.remove(wire(&card).as_str()).unwrap_or_default();
+        let got: Vec<(&str, i32, bool)> = card
+            .vars()
+            .iter()
+            .map(|v| (v.id.name(), v.base, v.calculated))
+            .collect();
+        assert_eq!(got, want, "{}: printed numbers", wire(&card));
+    }
+
+    assert!(
+        dumped.is_empty(),
+        "the dump has numbers for cards that are not generated: {:?}",
+        dumped.keys().collect::<Vec<_>>()
+    );
+}
+
+/// The one card priced in stars with an X, and the 21 with a number.
+///
+/// `Cost::X` is reached through a different column from the energy pool's.
+/// Stardust carries the `-1` sentinel beside it, where an X-energy card
+/// carries a zero. A build that stops overriding `HasStarCostX` generates
+/// `Cost::None` for it, and nothing else here says so.
+#[test]
+fn only_the_regent_is_priced_in_stars() {
+    let priced: Vec<&str> = rows(CARDS, "card")
+        .filter(|r| r[8] != "-1" || r[9] == "1")
+        .map(|r| r[1])
+        .collect();
+    assert_eq!(priced.len(), 22, "cards with a star cost: {priced:?}");
+    assert!(
+        priced
+            .iter()
+            .all(|id| rows(CARDS, "card").any(|r| r[1] == *id && r[2] == "REGENT_CARD_POOL")),
+        "a card outside the Regent's pool is priced in stars: {priced:?}"
+    );
+
+    let x: Vec<&str> = rows(CARDS, "card")
+        .filter(|r| r[9] == "1")
+        .map(|r| r[1])
+        .collect();
+    assert_eq!(x, ["STARDUST"]);
+    for id in x {
+        let card = Cards::ALL
+            .iter()
+            .find(|c| wire(c) == id)
+            .expect("an X-star card is generated");
+        assert_eq!(card.star_cost(), Cost::X, "{id}: star cost");
+    }
 }

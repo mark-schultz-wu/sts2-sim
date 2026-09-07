@@ -3,9 +3,12 @@
 //! Cards in `CURSE_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::{CardData, CardKeyword, CardRarity, CardType, KeywordSet, TargetType};
+use super::{
+    CardData, CardKeyword, CardNumber, CardRarity, CardType, CardVar, KeywordSet, TargetType,
+};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
+use sts2_core::Printed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -50,161 +53,252 @@ pub enum CurseCard {
 
 impl CurseCard {
     /// What is true of the card with no run in progress.
-    pub const fn data(self) -> CardData {
-        match self {
-            Self::AscendersBane => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[
-                    CardKeyword::Eternal,
-                    CardKeyword::Ethereal,
-                    CardKeyword::Unplayable,
-                ]),
-            },
-            Self::BadLuck => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
-            },
-            Self::Clumsy => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Unplayable]),
-            },
-            Self::CurseOfTheBell => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
-            },
-            Self::Debt => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::Decay => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::Doubt => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::Enthralled => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::Energy(2),
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Eternal]),
-            },
-            Self::Folly => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[
-                    CardKeyword::Eternal,
-                    CardKeyword::Ethereal,
-                    CardKeyword::Innate,
-                    CardKeyword::Unplayable,
-                ]),
-            },
-            Self::Greed => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
-            },
-            Self::Guilty => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::Injury => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::Normality => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::PoorSleep => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Retain, CardKeyword::Unplayable]),
-            },
-            Self::Regret => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::Shame => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::SporeMind => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::Energy(1),
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-            Self::Writhe => CardData {
-                kind: Field::Constant(CardType::Curse),
-                rarity: CardRarity::Curse,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Innate, CardKeyword::Unplayable]),
-            },
-        }
+    pub fn data(self) -> &'static CardData {
+        &ROWS[self as usize]
+    }
+
+    /// Where this card sorts against every card in the build.
+    pub fn order(self) -> u16 {
+        ORDER[self as usize]
     }
 }
+
+/// Every member's place in the build's own id order, which is
+/// ordinal over the id the wire spells.
+static ORDER: [u16; 18] = [
+    20, 27, 101, 127, 142, 143, 169, 185, 222, 250, 253, 291, 357, 394, 429, 463, 499, 593,
+];
+
+/// Every row, in the order the enum declares its variants, which is
+/// the index a value casts to.
+static ROWS: [CardData; 18] = [
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[
+            CardKeyword::Eternal,
+            CardKeyword::Ethereal,
+            CardKeyword::Unplayable,
+        ]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::HpLoss,
+            base: CardNumber::new(13, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Gold,
+            base: CardNumber::new(10, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Damage,
+            base: CardNumber::new(2, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::WeakPower,
+            base: CardNumber::new(1, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::Fixed(2),
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Eternal]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[
+            CardKeyword::Eternal,
+            CardKeyword::Ethereal,
+            CardKeyword::Innate,
+            CardKeyword::Unplayable,
+        ]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Combats,
+            base: CardNumber::new(5, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[
+            Printed {
+                id: CardVar::CalculatedCards,
+                base: CardNumber::new(3, 0),
+                calculated: true,
+            },
+            Printed {
+                id: CardVar::CalculationBase,
+                base: CardNumber::new(3, 0),
+                calculated: false,
+            },
+            Printed {
+                id: CardVar::CalculationExtra,
+                base: CardNumber::new(-1, 0),
+                calculated: false,
+            },
+        ],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Retain, CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Frail,
+            base: CardNumber::new(1, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::Fixed(1),
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Curse),
+        rarity: CardRarity::Curse,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Innate, CardKeyword::Unplayable]),
+    },
+];

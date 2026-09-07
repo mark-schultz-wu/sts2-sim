@@ -18,6 +18,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
+use super::bridge::{Bridge, emit_bridge};
 use super::{Build, DERIVES, Dump, banner, sets};
 
 /// Every enum the dump carries, in the order the generated file declares them,
@@ -199,8 +200,11 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             _ => emit_enum(&mut out, name, doc, members),
         }
 
-        if name == "MapPointType" {
-            emit_map_points(&mut out, members)?;
+        if let Some(bridge) = BRIDGES.iter().find(|b| b.enum_name == name) {
+            emit_bridge(&mut out, bridge, members)?;
+        }
+        if name.ends_with("RngType") {
+            emit_stream_names(&mut out, name, members)?;
         }
     }
 
@@ -345,51 +349,106 @@ fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result
     )
 }
 
-/// The nine map point kinds, as the consts map generation names them by.
+/// The three enums here the simulator names members of.
+const BRIDGES: [Bridge; 4] = [
+    Bridge {
+        enum_name: "MapPointType",
+        trait_name: "MapPoints",
+        named: &[
+            ("UNASSIGNED", "Unassigned"),
+            ("UNKNOWN", "Unknown"),
+            ("SHOP", "Shop"),
+            ("TREASURE", "Treasure"),
+            ("REST_SITE", "RestSite"),
+            ("MONSTER", "Monster"),
+            ("ELITE", "Elite"),
+            ("BOSS", "Boss"),
+            ("ANCIENT", "Ancient"),
+        ],
+        unnamed: &[],
+    },
+    Bridge {
+        enum_name: "CombatSide",
+        trait_name: "Sides",
+        named: &[("PLAYER", "Player"), ("ENEMY", "Enemy")],
+        unnamed: &["None"],
+    },
+    Bridge {
+        enum_name: "PlayerTurnPhase",
+        trait_name: "TurnPhases",
+        named: &[
+            ("NONE", "None"),
+            ("START", "Start"),
+            ("AUTO_PRE_PLAY", "AutoPrePlay"),
+            ("PLAY", "Play"),
+            ("AUTO_POST_PLAY", "AutoPostPlay"),
+            ("END", "End"),
+        ],
+        unnamed: &[],
+    },
+    Bridge {
+        enum_name: "UnplayableReason",
+        trait_name: "Unplayable",
+        named: &[
+            ("HAS_UNPLAYABLE_KEYWORD", "HasUnplayableKeyword"),
+            ("BLOCKED_BY_HOOK", "BlockedByHook"),
+            ("BLOCKED_BY_CARD_LOGIC", "BlockedByCardLogic"),
+            ("ENERGY_COST_TOO_HIGH", "EnergyCostTooHigh"),
+            ("STAR_COST_TOO_HIGH", "StarCostTooHigh"),
+            ("NO_LIVING_ALLIES", "NoLivingAllies"),
+        ],
+        // The zero is dropped on the way in: an empty set is how a playable
+        // card is spelled here, so there is no const for it.
+        unnamed: &["None"],
+    },
+];
+
+/// A stream's name, which is its member's in snake case.
 ///
-/// A generated enum is per build, so the simulator's map rules cannot write
-/// `MapPointType::Elite`. This is the bridge, spelled out member by member
-/// rather than derived from the order. A build that renames one stops here,
-/// where the answer is to look at what it renamed.
-fn emit_map_points(out: &mut String, members: &[(u8, String)]) -> Result<(), String> {
-    // `(const, member)`, in the trait's own order.
-    const NAMED: [(&str, &str); 9] = [
-        ("UNASSIGNED", "Unassigned"),
-        ("UNKNOWN", "Unknown"),
-        ("SHOP", "Shop"),
-        ("TREASURE", "Treasure"),
-        ("REST_SITE", "RestSite"),
-        ("MONSTER", "Monster"),
-        ("ELITE", "Elite"),
-        ("BOSS", "Boss"),
-        ("ANCIENT", "Ancient"),
-    ];
-
-    for (_, member) in &NAMED {
-        if !members.iter().any(|(_, have)| have == member) {
-            return Err(format!(
-                "the dump reflects no MapPointType::{member}, which map generation \
-                 names — see what this build calls it"
-            ));
-        }
-    }
-    if members.len() != NAMED.len() {
-        return Err(format!(
-            "MapPointType has {} members and the map rules name {} — the new one \
-             needs a const on sts2_core::MapPoints",
-            members.len(),
-            NAMED.len()
-        ));
-    }
-
-    writeln!(out, "impl sts2_core::MapPoints for MapPointType {{").unwrap();
-    for (name, member) in NAMED {
+/// `RunRngSet.CreateRng` seeds a stream with `SnakeCase(rngType.ToString())`.
+/// So this is that call, made once at generation, and not a table to keep in
+/// step with one.
+///
+/// The game's snake case has a second rule for runs of capitals, which no
+/// member here has. A member that grows one stops generation.
+fn emit_stream_names(out: &mut String, name: &str, members: &[(u8, String)]) -> Result<(), String> {
+    writeln!(out, "impl sts2_core::Streams for {name} {{").unwrap();
+    writeln!(out, "    fn name(self) -> &'static str {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for (_, member) in members {
         writeln!(
             out,
-            "    const {name}: MapPointType = MapPointType::{member};"
+            "            Self::{member} => \"{}\",",
+            snake_case(name, member)?
         )
         .unwrap();
     }
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
     Ok(())
+}
+
+/// `MonsterAi` as `monster_ai`, the way the game spells it.
+fn snake_case(enum_name: &str, member: &str) -> Result<String, String> {
+    let mut out = String::with_capacity(member.len() + 4);
+    let mut previous_upper = false;
+    for (at, letter) in member.char_indices() {
+        if letter.is_ascii_uppercase() {
+            if previous_upper {
+                return Err(format!(
+                    "{enum_name}::{member} has two capitals in a row, which the \
+                     game's own snake case splits by a rule this does not have"
+                ));
+            }
+            if at > 0 {
+                out.push('_');
+            }
+            previous_upper = true;
+        } else {
+            previous_upper = false;
+        }
+        out.push(letter.to_ascii_lowercase());
+    }
+    Ok(out)
 }

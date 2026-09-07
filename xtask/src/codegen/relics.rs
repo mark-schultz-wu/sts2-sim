@@ -411,26 +411,28 @@ fn emit_relics(
     )
     .unwrap();
     writeln!(extras, "    fn pools(self) -> &'static [RelicPool] {{").unwrap();
-    writeln!(extras, "        match self {{").unwrap();
-    for row in relics {
-        let list = pools_of
-            .get(&row[1])
-            .map(|ps| {
-                ps.iter()
-                    .map(|p| {
-                        format!(
-                            "RelicPool::{}",
-                            camel(p.strip_suffix("_RELIC_POOL").unwrap_or(p))
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            })
-            .unwrap_or_default();
-        writeln!(extras, "            Self::{} => &[{list}],", camel(&row[1])).unwrap();
-    }
-    writeln!(extras, "        }}").unwrap();
+    writeln!(extras, "        POOLS[self as usize]").unwrap();
     writeln!(extras, "    }}\n").unwrap();
+
+    let mut pool_lists: Vec<String> = Vec::new();
+    for row in relics {
+        pool_lists.push(
+            pools_of
+                .get(&row[1])
+                .map(|ps| {
+                    ps.iter()
+                        .map(|p| {
+                            format!(
+                                "RelicPool::{}",
+                                camel(p.strip_suffix("_RELIC_POOL").unwrap_or(p))
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
+        );
+    }
 
     writeln!(
         extras,
@@ -439,6 +441,36 @@ fn emit_relics(
     .unwrap();
     writeln!(extras, "    fn rarity(self) -> RelicRarity {{").unwrap();
     writeln!(extras, "        self.data().rarity").unwrap();
+    writeln!(extras, "    }}\n").unwrap();
+
+    writeln!(
+        extras,
+        "    /// Whether taking it does something there and then."
+    )
+    .unwrap();
+    writeln!(extras, "    fn has_pickup_effect(self) -> bool {{").unwrap();
+    writeln!(
+        extras,
+        "        self.data().flags.get(RelicFlag::UponPickup) == Field::Constant(true)"
+    )
+    .unwrap();
+    writeln!(extras, "    }}\n").unwrap();
+
+    writeln!(extras, "    /// What a merchant charges before the haggle.").unwrap();
+    writeln!(extras, "    fn merchant_price(self) -> Option<u16> {{").unwrap();
+    writeln!(extras, "        match self.data().price {{").unwrap();
+    writeln!(extras, "            Price::Gold(gold) => Some(gold),").unwrap();
+    writeln!(extras, "            Price::NotSold => None,").unwrap();
+    writeln!(extras, "        }}").unwrap();
+    writeln!(extras, "    }}\n").unwrap();
+
+    writeln!(extras, "    /// Whether a merchant is allowed to stock it.").unwrap();
+    writeln!(extras, "    fn allowed_in_shops(self) -> bool {{").unwrap();
+    writeln!(
+        extras,
+        "        self.data().flags.get(RelicFlag::AllowedInShops) == Field::Constant(true)"
+    )
+    .unwrap();
     writeln!(extras, "    }}").unwrap();
 
     writeln!(out, "impl sts2_core::Table for Relic {{").unwrap();
@@ -455,36 +487,25 @@ fn emit_relics(
     }
     writeln!(out, "    ];\n").unwrap();
 
-    writeln!(
-        out,
-        "    /// The rarity, the price and the flags.\n\
-         \x20   ///\n\
-         \x20   /// One arm per relic, naming the file its row lives in."
-    )
-    .unwrap();
-    writeln!(out, "    fn data(self) -> RelicData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    writeln!(out, "    /// The rarity, the price and the flags.").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for row in relics {
         let empty = Vec::new();
         let of = pools_of.get(&row[1]).unwrap_or(&empty);
-        writeln!(
-            out,
-            "            Self::{} => {}::{},",
-            camel(&row[1]),
-            bucket(of)?,
-            row[1]
-        )
-        .unwrap();
+        table.push(format!("{}::{}", bucket(of)?, row[1]));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    fn data(self) -> &'static RelicData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "RelicData", &table);
 
     writeln!(out, "impl sts2_core::RelicTable for Relic {{").unwrap();
     writeln!(out, "    type Pool = RelicPool;").unwrap();
     writeln!(out, "    type Rarity = RelicRarity;\n").unwrap();
     out.push_str(&extras);
-    writeln!(out, "}}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+    super::lists(out, "POOLS", "RelicPool", &pool_lists);
 
     Ok(())
 }
@@ -510,7 +531,9 @@ fn emit_bridges(
     let rarities = enums
         .get("RelicRarity")
         .ok_or_else(|| "the dump reflects no RelicRarity".to_string())?;
-    for rarity in DRAFTED {
+    // `RelicRarity.None` under the name the rename gives it, which a reward
+    // slot carries when it picks no rarity of its own.
+    for rarity in DRAFTED.iter().copied().chain(["None"]) {
         if !rarities.iter().any(|(_, have)| have == rarity) {
             return Err(format!(
                 "the dump reflects no RelicRarity::{rarity}, which a relic bag \
@@ -529,6 +552,19 @@ fn emit_bridges(
         writeln!(out, "        RelicRarity::{rarity},").unwrap();
     }
     writeln!(out, "    ];").unwrap();
+    for rarity in DRAFTED {
+        writeln!(
+            out,
+            "    const {}: RelicRarity = RelicRarity::{rarity};",
+            rarity.to_uppercase()
+        )
+        .unwrap();
+    }
+    writeln!(
+        out,
+        "    const UNDRAFTED: RelicRarity = RelicRarity::Undrafted;"
+    )
+    .unwrap();
     writeln!(out, "}}").unwrap();
     Ok(())
 }

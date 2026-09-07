@@ -34,9 +34,11 @@ mod step;
 pub use play::recording;
 
 pub use content::{
-    ActTable, CardRewardRarity, CardTable, CharacterTable, ContentVersion, Cost, EncounterTable,
-    EventTable, FlagSet, Ladder, MapPoints, MonsterTable, PotionTable, PowerTable, Rarities,
-    RelicPools, RelicTable, Rooms, Table, Version,
+    ActTable, CardTable, CardVars, CharacterTable, ContentError, ContentVersion, Cost, Drafted,
+    EncounterRoster, EncounterTable, EventTable, Fixed, FlagSet, Ladder, Layout, MapPoints,
+    MonsterTable, PotionTable, PotionUsage, PowerAmount, PowerTable, Printed, Rarities, RelicPools,
+    RelicTable, Rests, RewardRarity, Rooms, Rules, Sides, Streams, Table, Targets, Temporary,
+    TurnPhases, Unplayable, Version,
 };
 pub use ident::{CardIdent, Coord, ModelId};
 pub use seed::Seed;

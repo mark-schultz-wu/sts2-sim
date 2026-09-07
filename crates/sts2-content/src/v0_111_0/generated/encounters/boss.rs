@@ -12,6 +12,7 @@ use crate::Scaled;
 
 pub(super) const AEONGLASS_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 2699690409u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -34,6 +35,7 @@ pub(super) const AEONGLASS_BOSS: EncounterData = EncounterData {
 
 pub(super) const CEREMONIAL_BEAST_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 2456412937u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -56,6 +58,7 @@ pub(super) const CEREMONIAL_BEAST_BOSS: EncounterData = EncounterData {
 
 pub(super) const KAISER_CRAB_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 213243472u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -84,6 +87,7 @@ pub(super) const KAISER_CRAB_BOSS: EncounterData = EncounterData {
 
 pub(super) const KNOWLEDGE_DEMON_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 317758946u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -106,6 +110,7 @@ pub(super) const KNOWLEDGE_DEMON_BOSS: EncounterData = EncounterData {
 
 pub(super) const LAGAVULIN_MATRIARCH_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 3650857541u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -128,6 +133,7 @@ pub(super) const LAGAVULIN_MATRIARCH_BOSS: EncounterData = EncounterData {
 
 pub(super) const MOCK_BOSS_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 239578742u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -150,6 +156,7 @@ pub(super) const MOCK_BOSS_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const QUEEN_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 4186226460u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -178,6 +185,7 @@ pub(super) const QUEEN_BOSS: EncounterData = EncounterData {
 
 pub(super) const SOUL_FYSH_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 782230316u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -200,6 +208,7 @@ pub(super) const SOUL_FYSH_BOSS: EncounterData = EncounterData {
 
 pub(super) const TEST_SUBJECT_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 2035019259u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -222,6 +231,7 @@ pub(super) const TEST_SUBJECT_BOSS: EncounterData = EncounterData {
 
 pub(super) const THE_INSATIABLE_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 1767723902u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -244,6 +254,7 @@ pub(super) const THE_INSATIABLE_BOSS: EncounterData = EncounterData {
 
 pub(super) const THE_KIN_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 1328709208u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -276,6 +287,7 @@ pub(super) const THE_KIN_BOSS: EncounterData = EncounterData {
 
 pub(super) const VANTOM_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 3029974893u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -298,6 +310,7 @@ pub(super) const VANTOM_BOSS: EncounterData = EncounterData {
 
 pub(super) const WATERFALL_GIANT_BOSS: EncounterData = EncounterData {
     room: RoomType::Boss,
+    seed_salt: 1353955274u32,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {

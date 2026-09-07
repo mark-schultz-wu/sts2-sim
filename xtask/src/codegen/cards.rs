@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::bridge::{Bridge, emit_bridge};
 use super::sets;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sanitize};
@@ -41,6 +42,25 @@ pub(super) const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
     ("DEPRECATED_CARD_POOL", "deprecated", "DeprecatedCard", None),
 ];
 
+/// The one enum here the simulator names members of.
+const BRIDGES: [Bridge; 1] = [Bridge {
+    enum_name: "TargetType",
+    trait_name: "Targets",
+    named: &[
+        ("NONE", "None"),
+        ("SELF", "Self"),
+        ("ANY_ENEMY", "AnyEnemy"),
+        ("ALL_ENEMIES", "AllEnemies"),
+        ("RANDOM_ENEMY", "RandomEnemy"),
+        ("ANY_PLAYER", "AnyPlayer"),
+        ("ANY_ALLY", "AnyAlly"),
+        ("ALL_ALLIES", "AllAllies"),
+        ("TARGETED_NO_CREATURE", "TargetedNoCreature"),
+        ("OSTY", "Osty"),
+    ],
+    unnamed: &[],
+}];
+
 #[derive(Default)]
 struct Card {
     id: String,
@@ -50,9 +70,16 @@ struct Card {
     target: String,
     cost: String,
     costs_x: bool,
+    star_cost: String,
+    star_costs_x: bool,
     max_upgrade: String,
     keywords: Vec<String>,
+    /// Name, printed value, and whether the game recomputes it in a fight.
+    vars: Vec<(String, String, bool)>,
 }
+
+/// The pool one relic draws from, which is held by no character.
+const COLORLESS: &str = "COLORLESS_CARD_POOL";
 
 /// Members the game declares that are not values of the field they name.
 ///
@@ -102,18 +129,29 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 /// cost". An X card with a number, or a negative other than -1, means the game
 /// changed under us. The mapping below is then no longer faithful.
 fn cost(card: &Card) -> Result<String, String> {
-    match (card.costs_x, card.cost.as_str()) {
-        (true, "0") => Ok("Cost::X".into()),
-        (true, n) => Err(format!("{}: costs X but canonical cost is {n}", card.id)),
+    priced(&card.id, "energy", card.costs_x, &card.cost)
+}
+
+/// The star pool, read the same way and checked the same way.
+///
+/// `CanonicalStarCost` defaults to the same `-1` and `HasStarCostX` to false,
+/// so the two pools encode a cost identically. Two cards cost X stars.
+fn star_cost(card: &Card) -> Result<String, String> {
+    priced(&card.id, "star", card.star_costs_x, &card.star_cost)
+}
+
+fn priced(id: &str, pool: &str, costs_x: bool, canonical: &str) -> Result<String, String> {
+    match (costs_x, canonical) {
+        (true, "0" | "-1") => Ok("Cost::X".into()),
+        (true, n) => Err(format!("{id}: costs X {pool} but canonical cost is {n}")),
         (false, "-1") => Ok("Cost::None".into()),
         (false, n) if n.starts_with('-') => Err(format!(
-            "{}: negative cost {n} is not the -1 sentinel",
-            card.id
+            "{id}: negative {pool} cost {n} is not the -1 sentinel"
         )),
         (false, n) => n
             .parse::<u8>()
             .map(|n| format!("Cost::Fixed({n})"))
-            .map_err(|e| format!("{}: cost {n}: {e}", card.id)),
+            .map_err(|e| format!("{id}: {pool} cost {n}: {e}")),
     }
 }
 
@@ -170,14 +208,91 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             target: f[5].clone(),
             cost: f[6].clone(),
             costs_x: f[7] == "1",
-            max_upgrade: f[8].clone(),
-            keywords: if f[9] == "-" {
+            star_cost: f[8].clone(),
+            star_costs_x: f[9] == "1",
+            max_upgrade: f[10].clone(),
+            keywords: if f[11] == "-" {
                 Vec::new()
             } else {
-                f[9].split(',').map(String::from).collect()
+                f[11].split(',').map(String::from).collect()
             },
+            vars: Vec::new(),
         })
         .collect();
+
+    // A card's own lines follow it in the dump, and are attached by id rather
+    // than by position, so a reordered dump generates the same table.
+    let mut by_id: BTreeMap<String, Vec<(String, String, bool)>> = BTreeMap::new();
+    for f in dump.of("var") {
+        by_id
+            .entry(f[1].clone())
+            .or_default()
+            .push((f[2].clone(), f[3].clone(), f[4] == "1"));
+    }
+    let mut cards = cards;
+    for card in &mut cards {
+        card.vars = by_id.remove(&card.id).unwrap_or_default();
+    }
+    if let Some((id, _)) = by_id.into_iter().next() {
+        return Err(format!("{id} has variables but is not a card"));
+    }
+    let cards = cards;
+    let fixed_numbers = cards
+        .iter()
+        .flat_map(|card| &card.vars)
+        .any(|(_, base, _)| base.contains('.'));
+
+    // Runtime order inside each CardPoolModel. Reward generation filters this
+    // list by rarity and indexes it with RNG, so the table's id order is not a
+    // substitute.
+    let mut pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
+    for f in dump.of("pool") {
+        let index = f[2]
+            .parse::<usize>()
+            .map_err(|e| format!("{}: pool index {}: {e}", f[1], f[2]))?;
+        pools
+            .entry(f[1].clone())
+            .or_default()
+            .push((index, f[3].clone()));
+    }
+    for (pool, entries) in &mut pools {
+        entries.sort_by_key(|(index, _)| *index);
+        for (expected, (index, card)) in entries.iter().enumerate() {
+            if *index != expected {
+                return Err(format!("{pool}: pool index {index}, expected {expected}"));
+            }
+            let Some(row) = cards.iter().find(|row| row.id == *card) else {
+                return Err(format!("{pool}: unknown card {card}"));
+            };
+            if row.pool != *pool {
+                return Err(format!("{pool}: {card} declares pool {}", row.pool));
+            }
+        }
+    }
+
+    let mut reward_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
+    for f in dump.of("rewardpool") {
+        let index = f[2]
+            .parse::<usize>()
+            .map_err(|e| format!("{}: reward pool index {}: {e}", f[1], f[2]))?;
+        reward_pools
+            .entry(f[1].clone())
+            .or_default()
+            .push((index, f[3].clone()));
+    }
+    for (character, entries) in &mut reward_pools {
+        entries.sort_by_key(|(index, _)| *index);
+        for (expected, (index, card)) in entries.iter().enumerate() {
+            if *index != expected {
+                return Err(format!(
+                    "{character}: reward pool index {index}, expected {expected}"
+                ));
+            }
+            if !cards.iter().any(|row| row.id == *card) {
+                return Err(format!("{character}: unknown reward card {card}"));
+            }
+        }
+    }
 
     // Discriminant and name, because a dropped member leaves a hole that the
     // rest must not slide into.
@@ -196,6 +311,22 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     let mut total = 0usize;
     let mut stripped = 0usize;
+
+    // Every card's place in the build's own id order. `ModelId.CompareTo` is
+    // ordinal over the id, and shuffling a pile sorts by it.
+    let ranks: BTreeMap<&str, u16> = {
+        let mut ids: Vec<&str> = cards.iter().map(|card| card.id.as_str()).collect();
+        ids.sort_unstable();
+        ids.into_iter()
+            .enumerate()
+            .map(|(rank, id)| {
+                (
+                    id,
+                    u16::try_from(rank).expect("a build has fewer than 65536 cards"),
+                )
+            })
+            .collect()
+    };
 
     // One file per pool: the enum, its members, and its data table.
     for (pool_id, module, enum_name, suffix) in POOLS {
@@ -217,17 +348,38 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
         writeln!(out, "impl {enum_name} {{").unwrap();
 
-        // By value: `CardData` fits in a register now, so a reference would be
-        // strictly larger than the thing it points at — and returning one would
-        // force the rows back into a static, since a `const fn` call is not a
-        // promotable expression.
         writeln!(
             out,
             "    /// What is true of the card with no run in progress."
         )
         .unwrap();
-        writeln!(out, "    pub const fn data(self) -> CardData {{").unwrap();
-        writeln!(out, "        match self {{").unwrap();
+        writeln!(out, "    pub fn data(self) -> &'static CardData {{").unwrap();
+        writeln!(out, "        &ROWS[self as usize]").unwrap();
+        writeln!(out, "    }}").unwrap();
+        writeln!(out).unwrap();
+        writeln!(
+            out,
+            "    /// Where this card sorts against every card in the build."
+        )
+        .unwrap();
+        writeln!(out, "    pub fn order(self) -> u16 {{").unwrap();
+        writeln!(out, "        ORDER[self as usize]").unwrap();
+        writeln!(out, "    }}").unwrap();
+        writeln!(out, "}}\n").unwrap();
+
+        writeln!(
+            out,
+            "/// Every member's place in the build's own id order, which is\n\
+             /// ordinal over the id the wire spells."
+        )
+        .unwrap();
+        writeln!(out, "static ORDER: [u16; {}] = [", members.len()).unwrap();
+        for card in &members {
+            writeln!(out, "    {},", ranks[card.id.as_str()]).unwrap();
+        }
+        writeln!(out, "];\n").unwrap();
+
+        let mut table: Vec<String> = Vec::new();
         for card in &members {
             let kind = if card.kind == "dynamic" {
                 "Field::Computed".into()
@@ -246,32 +398,48 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 .collect::<Vec<_>>()
                 .join(", ");
 
+            let mut row = String::new();
+            writeln!(row, "CardData {{").unwrap();
+            writeln!(row, "        kind: {kind},").unwrap();
             writeln!(
-                out,
-                "            Self::{} => CardData {{",
-                variant(card, suffix)
-            )
-            .unwrap();
-            writeln!(out, "                kind: {kind},").unwrap();
-            writeln!(
-                out,
-                "                rarity: CardRarity::{},",
+                row,
+                "        rarity: CardRarity::{},",
                 sanitize(&card.rarity)
             )
             .unwrap();
-            writeln!(out, "                target: {target},").unwrap();
-            writeln!(out, "                cost: {},", cost(card)?).unwrap();
-            writeln!(out, "                max_upgrade: {},", card.max_upgrade).unwrap();
-            writeln!(
-                out,
-                "                keywords: KeywordSet::new(&[{keywords}]),"
-            )
-            .unwrap();
-            writeln!(out, "            }},").unwrap();
+            writeln!(row, "        target: {target},").unwrap();
+            writeln!(row, "        cost: {},", cost(card)?).unwrap();
+            writeln!(row, "        star_cost: {},", star_cost(card)?).unwrap();
+            writeln!(row, "        vars: &[").unwrap();
+            for (name, base, calculated) in &card.vars {
+                let base = if fixed_numbers {
+                    let (whole, fraction) = base.split_once('.').unwrap_or((base, ""));
+                    let scale = u8::try_from(fraction.len())
+                        .map_err(|_| format!("{}: {name} has too many decimal places", card.id))?;
+                    let digits = format!("{whole}{fraction}");
+                    let coefficient = digits
+                        .parse::<i32>()
+                        .map_err(|e| format!("{}: {name} is {base}: {e}", card.id))?;
+                    format!("CardNumber::new({coefficient}, {scale})")
+                } else {
+                    base.parse::<i32>()
+                        .map(|base| base.to_string())
+                        .map_err(|e| format!("{}: {name} is {base}: {e}", card.id))?
+                };
+                writeln!(
+                    row,
+                    "            Printed {{ id: CardVar::{}, base: {base}, calculated: {calculated} }},",
+                    sanitize(name)
+                )
+                .unwrap();
+            }
+            writeln!(row, "        ],").unwrap();
+            writeln!(row, "        max_upgrade: {},", card.max_upgrade).unwrap();
+            writeln!(row, "        keywords: KeywordSet::new(&[{keywords}]),").unwrap();
+            write!(row, "    }}").unwrap();
+            table.push(row);
         }
-        writeln!(out, "        }}").unwrap();
-        writeln!(out, "    }}").unwrap();
-        writeln!(out, "}}").unwrap();
+        super::rows(out, "CardData", &table);
     }
 
     // The shared half: the field enums, the data shape, and the outer enum.
@@ -280,8 +448,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         "cards.txt",
         &build,
     );
-    writeln!(out, "\nuse super::characters::CardPool;").unwrap();
-    writeln!(out, "use crate::{{Cost, Field}};\nuse sts2_core::Table;").unwrap();
+    writeln!(out, "\nuse super::characters::{{CardPool, Character}};").unwrap();
+    writeln!(
+        out,
+        "use crate::{{Cost, Field}};\nuse sts2_core::{{Drafted, Printed, Table}};"
+    )
+    .unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
     for (_, module, _, _) in POOLS {
@@ -316,7 +488,56 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             writeln!(out, "    {ident} = {discriminant},").unwrap();
         }
         writeln!(out, "}}\n").unwrap();
+
+        if let Some(bridge) = BRIDGES.iter().find(|b| b.enum_name == name) {
+            emit_bridge(&mut out, bridge, members)?;
+        }
     }
+
+    // The printed-number keys, as a set of their own. The game keys these by
+    // string, and every card's row and every observation's preview names one.
+    // A build prints its own set, so the set is generated rather than shared,
+    // and the string stays at the edges that spell it.
+    let mut keys: Vec<&str> = cards
+        .iter()
+        .flat_map(|card| card.vars.iter().map(|(name, _, _)| name.as_str()))
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+
+    writeln!(out, "/// Every number a card on this build prints.").unwrap();
+    writeln!(
+        out,
+        "///\n/// Ordered by the game's own key, which is the order a card's row prints\n         /// them in. No discriminant is the game's: this is a set the dump gathers\n         /// rather than a C# enum reflected out of it."
+    )
+    .unwrap();
+    writeln!(out, "{DERIVES}").unwrap();
+    writeln!(out, "#[repr({})]", repr(keys.len())?).unwrap();
+    writeln!(out, "pub enum CardVar {{").unwrap();
+    for key in &keys {
+        let ident = sanitize(key);
+        if ident != *key {
+            writeln!(out, "    #[serde(rename = \"{key}\")]").unwrap();
+        }
+        writeln!(out, "    {ident},").unwrap();
+    }
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl sts2_core::CardVars for CardVar {{").unwrap();
+    writeln!(out, "    const DAMAGE: CardVar = CardVar::Damage;\n").unwrap();
+    writeln!(out, "    const ALL: &'static [CardVar] = &[").unwrap();
+    for key in &keys {
+        writeln!(out, "        CardVar::{},", sanitize(key)).unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
+    writeln!(out, "    fn name(self) -> &'static str {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for key in &keys {
+        writeln!(out, "            CardVar::{} => \"{key}\",", sanitize(key)).unwrap();
+    }
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
 
     // A bitset rather than a slice. The game keeps keywords in a
     // `HashSet<CardKeyword>` and asks `.Contains(…)` almost exclusively, so a
@@ -385,6 +606,11 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         },
     )?;
 
+    if fixed_numbers {
+        writeln!(out, "pub type CardNumber = sts2_core::Fixed;\n").unwrap();
+    } else {
+        writeln!(out, "pub type CardNumber = i32;\n").unwrap();
+    }
     writeln!(out, "/// What is true of a card with no run in progress.").unwrap();
     writeln!(out, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]").unwrap();
     writeln!(out, "pub struct CardData {{").unwrap();
@@ -397,6 +623,22 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "    pub rarity: CardRarity,").unwrap();
     writeln!(out, "    pub target: Field<TargetType>,").unwrap();
     writeln!(out, "    pub cost: Cost,").unwrap();
+    writeln!(
+        out,
+        "    /// The star pool, which only the Regent's cards are priced in."
+    )
+    .unwrap();
+    writeln!(out, "    pub star_cost: Cost,").unwrap();
+    writeln!(
+        out,
+        "    /// The numbers printed on its face, in name order."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    pub vars: &'static [Printed<CardVar, CardNumber>],"
+    )
+    .unwrap();
     writeln!(
         out,
         "    /// How many times the card can be upgraded. 0 or 1 on this build,\n\
@@ -425,7 +667,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     writeln!(out, "impl sts2_core::Table for Cards {{").unwrap();
     writeln!(out, "    type Data = CardData;\n").unwrap();
-    writeln!(out, "    fn data(self) -> CardData {{").unwrap();
+    writeln!(out, "    fn data(self) -> &'static CardData {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for (_, _, enum_name, _) in POOLS {
         writeln!(
@@ -454,13 +696,174 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "    ];").unwrap();
     writeln!(out, "}}\n").unwrap();
 
+    writeln!(
+        out,
+        "/// A character pool in the order its model generates it."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn pool_cards(pool: CardPool) -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match pool {{").unwrap();
+    for (pool_id, _, enum_name, suffix) in POOLS
+        .iter()
+        .copied()
+        .filter(|(_, _, _, suffix)| suffix.is_some())
+    {
+        let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
+        writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
+        let entries = pools
+            .get(pool_id)
+            .ok_or_else(|| format!("{pool_id}: dump has no runtime pool order"))?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "            Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, suffix)
+            )
+            .unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "        _ => &[],").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// Cards eligible for an ordinary room reward, split by rarity.\n\
+         ///\n\
+         /// Each slice keeps the game's pool order, so an index into one means\n\
+         /// what the same index into the filtered pool meant. A card at no\n\
+         /// drafted rarity is in none of them, which is what the game's own\n\
+         /// rarity filter does with it."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn reward_cards(character: Character) -> Drafted<'static, Cards> {{"
+    )
+    .unwrap();
+    writeln!(out, "    match character {{").unwrap();
+    for (character, entries) in &reward_pools {
+        writeln!(out, "        Character::{} => Drafted {{", camel(character)).unwrap();
+        for (field, rarity) in [
+            ("common", "Common"),
+            ("uncommon", "Uncommon"),
+            ("rare", "Rare"),
+        ] {
+            writeln!(out, "            {field}: &[").unwrap();
+            for (_, id) in entries {
+                let card = cards
+                    .iter()
+                    .find(|card| card.id == *id)
+                    .expect("validated above");
+                if sanitize(&card.rarity) != rarity {
+                    continue;
+                }
+                let (_, _, enum_name, suffix) = POOLS
+                    .iter()
+                    .find(|(pool, ..)| *pool == card.pool)
+                    .expect("a card has a generated pool");
+                writeln!(
+                    out,
+                    "                Cards::{}({enum_name}::{}),",
+                    enum_name.trim_end_matches("Card"),
+                    variant(card, *suffix)
+                )
+                .unwrap();
+            }
+            writeln!(out, "            ],").unwrap();
+        }
+        writeln!(out, "        }},").unwrap();
+    }
+    writeln!(out, "        _ => EMPTY_DRAFT,").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// The colourless pool, split by rarity.\n\
+         ///\n\
+         /// `ColorlessCardPool.GenerateAllCards`, which no character holds and\n\
+         /// so no reward pool covers. One relic draws from it. The pool's own\n\
+         /// order is not the id order: it deals Jack of All Trades before\n\
+         /// Jackpot, and the two are the same rarity, so the draw lands\n\
+         /// differently."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn colorless_cards() -> Drafted<'static, Cards> {{"
+    )
+    .unwrap();
+    let colorless = pools
+        .get(COLORLESS)
+        .ok_or_else(|| format!("the dump has no {COLORLESS} rows"))?;
+    writeln!(out, "    Drafted {{").unwrap();
+    for (field, rarity) in [
+        ("common", "Common"),
+        ("uncommon", "Uncommon"),
+        ("rare", "Rare"),
+    ] {
+        writeln!(out, "        {field}: &[").unwrap();
+        for (_, id) in colorless {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            if sanitize(&card.rarity) != rarity {
+                continue;
+            }
+            let (_, _, enum_name, suffix) = POOLS
+                .iter()
+                .find(|(pool, ..)| *pool == card.pool)
+                .expect("a card has a generated pool");
+            writeln!(
+                out,
+                "            Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, *suffix)
+            )
+            .unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// A character no run is played as, which drafts from nothing."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "const EMPTY_DRAFT: Drafted<'static, Cards> = Drafted {{\n\
+         \x20   common: &[],\n\
+         \x20   uncommon: &[],\n\
+         \x20   rare: &[],\n\
+         }};\n"
+    )
+    .unwrap();
+
     // The variant is the pool, and the five that name a character are the
     // five a run can draw from. The rest — colourless, curses, statuses,
     // tokens, quest and event cards — are held by no character, which is not
     // the same as being held by a pool nobody plays.
     writeln!(out, "impl sts2_core::CardTable for Cards {{").unwrap();
     writeln!(out, "    type Pool = CardPool;").unwrap();
-    writeln!(out, "    type Rarity = CardRarity;\n").unwrap();
+    writeln!(out, "    type Rarity = CardRarity;").unwrap();
+    writeln!(out, "    type Target = TargetType;").unwrap();
+    writeln!(out, "    type Var = CardVar;\n").unwrap();
+    writeln!(out, "    type Number = CardNumber;").unwrap();
     writeln!(out, "    fn pool(self) -> Option<CardPool> {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for (pool_id, _, enum_name, suffix) in POOLS {
@@ -481,6 +884,94 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "    fn rarity(self) -> CardRarity {{").unwrap();
     writeln!(out, "        self.data().rarity").unwrap();
     writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn cost(self) -> Cost {{").unwrap();
+    writeln!(out, "        self.data().cost").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn star_cost(self) -> Cost {{").unwrap();
+    writeln!(out, "        self.data().star_cost").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn target(self) -> Option<TargetType> {{").unwrap();
+    writeln!(out, "        match self.data().target {{").unwrap();
+    writeln!(out, "            Field::Constant(target) => Some(target),").unwrap();
+    writeln!(out, "            Field::Computed => None,").unwrap();
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn unplayable(self) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "        self.data().keywords.contains(CardKeyword::Unplayable)"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn exhausts(self) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "        self.data().keywords.contains(CardKeyword::Exhaust)"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn ethereal(self) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "        self.data().keywords.contains(CardKeyword::Ethereal)"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn retains(self) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "        self.data().keywords.contains(CardKeyword::Retain)"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn max_upgrade(self) -> u8 {{").unwrap();
+    writeln!(out, "        self.data().max_upgrade").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn power(self) -> Option<bool> {{").unwrap();
+    writeln!(out, "        match self.data().kind {{").unwrap();
+    writeln!(
+        out,
+        "            Field::Constant(kind) => Some(kind == CardType::Power),"
+    )
+    .unwrap();
+    writeln!(out, "            Field::Computed => None,").unwrap();
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(
+        out,
+        "    /// Ordinal over the id, which is what `ModelId.CompareTo` is."
+    )
+    .unwrap();
+    writeln!(out, "    fn order(self) -> u16 {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for (_, _, enum_name, _) in POOLS {
+        writeln!(
+            out,
+            "            Cards::{}(c) => c.order(),",
+            enum_name.trim_end_matches("Card")
+        )
+        .unwrap();
+    }
+    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(
+        out,
+        "    fn vars(self) -> &'static [Printed<CardVar, CardNumber>] {{"
+    )
+    .unwrap();
+    writeln!(out, "        self.data().vars").unwrap();
+    writeln!(out, "    }}").unwrap();
     writeln!(out, "}}").unwrap();
 
     split.finish(
@@ -497,14 +988,17 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 "super",
                 &[
                     "CardData",
+                    "CardNumber",
                     "CardKeyword",
                     "CardRarity",
                     "CardType",
+                    "CardVar",
                     "KeywordSet",
                     "TargetType",
                 ],
             ),
             ("crate", &["Cost", "Field"]),
+            ("sts2_core", &["Printed"]),
             ("serde", &["Deserialize", "Serialize"]),
         ],
     )?;

@@ -183,7 +183,7 @@ fn check_rows(
     kind: &'static str,
     ordered: bool,
     value: impl Fn(&[&'static str]) -> String,
-    read: impl Fn(EncounterData) -> Vec<String>,
+    read: impl Fn(&EncounterData) -> Vec<String>,
 ) {
     let mut dumped: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for row in rows(ENCOUNTERS, kind) {

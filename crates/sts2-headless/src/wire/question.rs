@@ -13,6 +13,8 @@
 //! converted immediately, so nothing downstream can hold a `GoldReward` with a
 //! relic in it.
 
+use super::cost::WireCost;
+use super::observation;
 use serde::Deserialize;
 use sts2_core::{
     CardOption, Cell, ContentVersion, FoundItem, Question, RelicTable, RewardCard, RewardDetail,
@@ -79,6 +81,9 @@ pub(crate) struct WireFoundItem {
 #[serde(deny_unknown_fields)]
 pub(crate) struct WireRewardCard {
     card: String,
+    cost: WireCost,
+    #[serde(rename = "starCost")]
+    star_cost: WireCost,
     #[serde(default)]
     text: Option<String>,
 }
@@ -202,22 +207,18 @@ impl WireRewardDetail {
             },
 
             "CardReward" => RewardKind::Card {
-                cards: self
-                    .cards
-                    .ok_or_else(|| missing("cards"))?
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, c)| {
-                        Ok(RewardCard {
-                            card: read_ident(
-                                &format!("{path}.cards[{i}]"),
-                                &c.card,
-                                ident::card_ident::<V>,
-                            )?,
-                            text: c.text,
-                        })
-                    })
-                    .collect::<Result<_, Error>>()?,
+                cards: read_cards(path, self.cards.ok_or_else(|| missing("cards"))?)?,
+            },
+
+            // The one card the game hands back, sent through the card
+            // reward's own shape. `cards` is absent, rather than empty, when
+            // the reward holds no card: the game populates the field only once
+            // it has one.
+            "SpecialCardReward" => RewardKind::SpecialCard {
+                card: match self.cards {
+                    Some(cards) => read_cards::<V>(path, cards)?.into_iter().next(),
+                    None => None,
+                },
             },
 
             "RelicReward" => {
@@ -282,11 +283,34 @@ impl WireRewardDetail {
     }
 }
 
+/// The cards inside a reward, in the order they are addressed.
+fn read_cards<V: ContentVersion>(
+    path: &str,
+    cards: Vec<WireRewardCard>,
+) -> Result<Vec<RewardCard<V>>, Error> {
+    cards
+        .into_iter()
+        .enumerate()
+        .map(|(i, c)| {
+            Ok(RewardCard {
+                card: read_ident(
+                    &format!("{path}.cards[{i}]"),
+                    &c.card,
+                    ident::card_ident::<V>,
+                )?,
+                cost: observation::cost(&format!("{path}.cards[{i}].cost"), c.cost)?,
+                star_cost: observation::cost(&format!("{path}.cards[{i}].starCost"), c.star_cost)?,
+                text: c.text,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use sts2_content::v0_107_1::V0_107_1;
-    use sts2_core::{Applied, Table, Tool};
+    use sts2_core::{Applied, Cost, Table, Tool};
 
     type V = V0_107_1;
     type Relic = <V as ContentVersion>::Relic;
@@ -389,8 +413,9 @@ mod tests {
             "rewards": [
                 {"index": 5, "type": "GoldReward", "populated": true, "amount": 25},
                 {"index": 6, "type": "CardReward", "populated": true, "taken": true,
-                 "cards": [{"card": "STRIKE_IRONCLAD", "text": "Deal 6 damage."},
-                           {"card": "BASH+1"}]},
+                 "cards": [{"card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null,
+                            "text": "Deal 6 damage."},
+                           {"card": "BASH+1", "cost": 2, "starCost": null}]},
                 {"index": 9, "type": "RelicReward", "populated": false,
                  "relic": null, "rarity": "Common"}
             ]
@@ -410,6 +435,18 @@ mod tests {
         assert_eq!(cards[0].text.as_deref(), Some("Deal 6 damage."));
         assert_eq!(cards[1].text, None);
         assert_eq!(cards[1].card.upgrade, 1);
+
+        // The costs the screen prints, sent with the card rather than looked
+        // up: a reward screen shows the modified cost, and the table holds the
+        // printed one.
+        assert_eq!(
+            (cards[0].cost, cards[0].star_cost),
+            (Cost::Fixed(1), Cost::None)
+        );
+        assert_eq!(
+            (cards[1].cost, cards[1].star_cost),
+            (Cost::Fixed(2), Cost::None)
+        );
 
         // A screen asked twice reports which of its rewards are already gone,
         // and the ones still on offer keep the numbers they were first offered
@@ -431,6 +468,41 @@ mod tests {
                 relic: None,
                 rarity: rarity("Common"),
             }
+        );
+    }
+
+    #[test]
+    fn a_returned_card_is_named_rather_than_chosen_between() {
+        let q = asked(serde_json::json!({
+            "kind": "rewards", "skippable": false,
+            "rewards": [
+                {"index": 0, "type": "SpecialCardReward", "populated": true,
+                 "cards": [{"card": "BASH", "cost": 2, "starCost": 1,
+                            "text": "Deal 8 damage."}]},
+                // Populated is a fact about the slot, and the game sends no
+                // card list until it has one to send.
+                {"index": 1, "type": "SpecialCardReward", "populated": false}
+            ]
+        }))
+        .expect("should parse");
+
+        let Question::Rewards { rewards, .. } = q else {
+            panic!("expected rewards");
+        };
+
+        let RewardKind::SpecialCard { card: Some(card) } = &rewards[0].reward else {
+            panic!("expected a returned card");
+        };
+        assert_eq!(card.text.as_deref(), Some("Deal 8 damage."));
+        assert_eq!(
+            (card.cost, card.star_cost),
+            (Cost::Fixed(2), Cost::Fixed(1))
+        );
+
+        assert_eq!(
+            rewards[1].reward,
+            RewardKind::SpecialCard { card: None },
+            "an unpopulated slot is a reward with no card, not a reward absent"
         );
     }
 

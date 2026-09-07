@@ -18,6 +18,7 @@
 mod acts;
 mod afflictions;
 mod ascension;
+mod bridge;
 mod cards;
 mod characters;
 mod enchantments;
@@ -116,6 +117,44 @@ fn camel(id: &str) -> String {
             }
         })
         .collect()
+}
+
+/// Every row of a table, as one array `data` indexes.
+///
+/// The alternative is a match with an arm per value, which copies a whole row
+/// to read one field of it.
+///
+/// No variant carries an explicit discriminant. So a value numbers itself by
+/// where it is declared, and that is the order the rows are written in.
+fn rows(out: &mut String, data_ty: &str, rows: &[String]) {
+    writeln!(
+        out,
+        "/// Every row, in the order the enum declares its variants, which is\n\
+         /// the index a value casts to."
+    )
+    .unwrap();
+    writeln!(out, "static ROWS: [{data_ty}; {}] = [", rows.len()).unwrap();
+    for row in rows {
+        writeln!(out, "    {row},").unwrap();
+    }
+    writeln!(out, "];\n").unwrap();
+}
+
+/// One list per value, as one array the accessor indexes.
+///
+/// The same shape as [`rows`], for an accessor that answers with a slice
+/// rather than a row.
+fn lists(out: &mut String, name: &str, elem_ty: &str, lists: &[String]) {
+    writeln!(
+        out,
+        "/// One entry per value, in the order the enum declares its variants."
+    )
+    .unwrap();
+    writeln!(out, "static {name}: [&[{elem_ty}]; {}] = [", lists.len()).unwrap();
+    for list in lists {
+        writeln!(out, "    &[{list}],").unwrap();
+    }
+    writeln!(out, "];\n").unwrap();
 }
 
 /// The narrowest discriminant that holds this many variants.

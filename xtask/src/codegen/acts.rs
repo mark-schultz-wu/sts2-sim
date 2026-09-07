@@ -159,9 +159,7 @@ fn emit_acts(
     }
     writeln!(out, "    ];\n").unwrap();
 
-    writeln!(out, "    /// The act's shape and its bosses.").unwrap();
-    writeln!(out, "    fn data(self) -> ActData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for row in acts {
         let id = &row[1];
         let number = |what: &str, v: &str| {
@@ -183,22 +181,25 @@ fn emit_acts(
             })
             .unwrap_or_default();
 
-        writeln!(out, "            Self::{} => ActData {{", camel(id)).unwrap();
-        writeln!(out, "                index: {index},").unwrap();
-        writeln!(out, "                is_default: {},", row[3] == "1").unwrap();
-        writeln!(out, "                rooms: {},", number("rooms", &row[4])?).unwrap();
-        writeln!(
-            out,
-            "                weak_encounters: {},",
-            number("weak encounters", &row[5])?
-        )
-        .unwrap();
-        writeln!(out, "                bosses: Bosses::new(&[{list}]),").unwrap();
-        writeln!(out, "            }},").unwrap();
+        table.push(format!(
+            "ActData {{\n\
+             \x20       index: {index},\n\
+             \x20       is_default: {},\n\
+             \x20       rooms: {},\n\
+             \x20       weak_encounters: {},\n\
+             \x20       bosses: Bosses::new(&[{list}]),\n\
+             \x20   }}",
+            row[3] == "1",
+            number("rooms", &row[4])?,
+            number("weak encounters", &row[5])?,
+        ));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    /// The act's shape and its bosses.").unwrap();
+    writeln!(out, "    fn data(self) -> &'static ActData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "ActData", &table);
 
     // The two room generation deals by, off the same row. A method rather than
     // a reach into `data`, because a caller holding only a `ContentVersion`

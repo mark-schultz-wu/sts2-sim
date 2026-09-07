@@ -552,6 +552,7 @@ fn emit_shape(out: &mut String) {
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub struct EncounterData {{\n\
          \x20   pub room: RoomType,\n\
+         \x20   pub seed_salt: u32,\n\
          \x20   pub flags: FlagSet,\n\
          \x20   pub families: FamilySet,\n\
          \x20   pub gold: Gold,\n\
@@ -604,6 +605,12 @@ fn literal(id: &str, e: &Encounter) -> Result<String, String> {
     let mut out = String::new();
     writeln!(out, "EncounterData {{").unwrap();
     writeln!(out, "    room: RoomType::{},", e.room).unwrap();
+    writeln!(
+        out,
+        "    seed_salt: {}u32,",
+        sts2_core::rng::name_hash(id) as u32
+    )
+    .unwrap();
     writeln!(
         out,
         "    flags: FlagSet::new(&[{}]),",
@@ -757,27 +764,16 @@ fn emit_encounters(
     }
     writeln!(out, "    ];\n").unwrap();
 
-    writeln!(
-        out,
-        "    /// The room, the roster and the rewards.\n\
-         \x20   ///\n\
-         \x20   /// One arm per encounter, naming the file its row lives in."
-    )
-    .unwrap();
-    writeln!(out, "    fn data(self) -> EncounterData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for (id, e) in encounters {
-        writeln!(
-            out,
-            "            Self::{} => {}::{id},",
-            camel(id),
-            bucket(&e.room)?
-        )
-        .unwrap();
+        table.push(format!("{}::{id}", bucket(&e.room)?));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    /// The room, the roster and the rewards.").unwrap();
+    writeln!(out, "    fn data(self) -> &'static EncounterData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "EncounterData", &table);
 
     // Both read the generated row rather than a second table, so a build that
     // reflags an encounter moves them without touching this.
@@ -791,13 +787,34 @@ fn emit_encounters(
          \x20   /// Whether the two field a creature family in common.\n\
          \x20   fn shares_family_with(self, other: Encounter) -> bool {{\n\
          \x20       self.data().families.intersects(other.data().families)\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// Every monster this encounter can field, in table order.\n\
+         \x20   fn possible_monsters(self) -> impl Iterator<Item = Monster> {{\n\
+         \x20       self.data().possible.iter()\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// How the encounter chooses its opening roster.\n\
+         \x20   fn roster(self) -> sts2_core::EncounterRoster<impl Iterator<Item = Monster>> {{\n\
+         \x20       match self.data().roster {{\n\
+         \x20           Roster::Fixed(spawns) => sts2_core::EncounterRoster::Fixed(spawns.iter().map(|spawn| spawn.monster)),\n\
+         \x20           Roster::Random => sts2_core::EncounterRoster::Random,\n\
+         \x20           Roster::Configured => sts2_core::EncounterRoster::Configured,\n\
+         \x20       }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// The encounter entry hash used by its private RNG.\n\
+         \x20   fn seed_salt(self) -> u32 {{\n\
+         \x20       self.data().seed_salt\n\
          \x20   }}"
     )
     .unwrap();
 
     writeln!(out, "impl sts2_core::EncounterTable for Encounter {{").unwrap();
     writeln!(out, "    type Act = Act;").unwrap();
-    writeln!(out, "    type Room = RoomType;\n").unwrap();
+    writeln!(out, "    type Room = RoomType;")
+        .and_then(|_| writeln!(out, "    type Monster = Monster;\n"))
+        .unwrap();
     out.push_str(&extras);
     writeln!(out, "}}\n").unwrap();
 
@@ -807,7 +824,15 @@ fn emit_encounters(
 
 /// The three room kinds run setup sorts a roster on.
 fn emit_rooms(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), String> {
-    const NAMED: [(&str, &str); 3] = [("MONSTER", "Monster"), ("ELITE", "Elite"), ("BOSS", "Boss")];
+    const NAMED: [(&str, &str); 7] = [
+        ("MONSTER", "Monster"),
+        ("ELITE", "Elite"),
+        ("BOSS", "Boss"),
+        ("TREASURE", "Treasure"),
+        ("SHOP", "Shop"),
+        ("EVENT", "Event"),
+        ("REST_SITE", "RestSite"),
+    ];
     let rooms = enums
         .get("RoomType")
         .ok_or_else(|| "the dump reflects no RoomType".to_string())?;

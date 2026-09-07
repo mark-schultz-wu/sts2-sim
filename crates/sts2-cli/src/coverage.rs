@@ -154,6 +154,9 @@ impl Coverage {
                         RewardKind::Card { cards: offer } => {
                             self.cards_seen.extend(cards(offer.iter().map(|c| &c.card)));
                         }
+                        RewardKind::SpecialCard { card: Some(one) } => {
+                            self.cards_seen.extend(cards(std::iter::once(&one.card)));
+                        }
                         RewardKind::Relic {
                             relic: Some(id), ..
                         } => {
@@ -208,7 +211,10 @@ impl Coverage {
             Room::Shop { entries } => {
                 for entry in entries {
                     match &entry.stock {
-                        Stock::Card(Some(ident)) => self.cards_seen.extend(spelling(&ident.card)),
+                        Stock::Card(Some(on_sale)) => {
+                            self.cards_seen
+                                .extend(cards(std::iter::once(&on_sale.card)));
+                        }
                         Stock::Relic(Some(relic)) => self.relics_offered.extend(spelling(relic)),
                         Stock::Potion(Some(potion)) => self.potions.extend(spelling(potion)),
                         _ => {}

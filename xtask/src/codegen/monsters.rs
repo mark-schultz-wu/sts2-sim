@@ -1067,29 +1067,16 @@ fn emit_monsters(
     }
     writeln!(out, "    ];\n").unwrap();
 
-    writeln!(
-        out,
-        "    /// The HP range and the move graph.\n\
-         \x20   ///\n\
-         \x20   /// One arm per monster, naming the file its data lives in — the\n\
-         \x20   /// graphs themselves are far too long to read in the middle of\n\
-         \x20   /// this."
-    )
-    .unwrap();
-    writeln!(out, "    fn data(self) -> MonsterData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    writeln!(out, "    /// The HP range and the move graph.").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for id in machines.keys() {
-        writeln!(
-            out,
-            "            Self::{} => {}::{id},",
-            camel(id),
-            bucket(act_of.get(id))
-        )
-        .unwrap();
+        table.push(format!("{}::{id}", bucket(act_of.get(id))));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    fn data(self) -> &'static MonsterData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "MonsterData", &table);
 
     writeln!(out, "impl sts2_core::MonsterTable for Monster {{").unwrap();
     writeln!(out, "    type Act = Act;\n").unwrap();

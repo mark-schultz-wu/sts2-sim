@@ -37,7 +37,11 @@ pub(super) fn combat_of<V: ContentVersion>(
     // one moment anybody wants it is while looking down this list deciding what
     // is affordable.
     if !combat.hand.is_empty() {
-        writeln!(f, "hand    {} energy", combat.energy)?;
+        writeln!(
+            f,
+            "hand    {} energy · {} stars",
+            combat.energy, combat.stars
+        )?;
 
         // Four Strikes are four indices and one decision. Printed a card at a
         // time they were four identical rows, each carrying its own copy of the
@@ -195,7 +199,7 @@ fn same_cards<V: ContentVersion>(hand: &[CardIdent<V>], legal: &[Playable<V>]) -
 
 /// The cost and what it can be aimed at, or why it cannot be played.
 fn playing<V: ContentVersion>(l: &Playable<V>) -> String {
-    let mut line = format!(" {}e", l.cost);
+    let mut line = format!(" {}", super::costs(l.cost, l.star_cost));
 
     // `reason` present is the whole of "unplayable" — `CardModel.CanPlay`
     // returns `reason == None` for a card that can be played — so there is no

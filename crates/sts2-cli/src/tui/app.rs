@@ -13,13 +13,14 @@ use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use sts2_core::{
-    Answer, Applied, ContentVersion, Decision, Observation, Play, Question, Room, TakeReward,
+    Answer, Applied, ContentVersion, Cost, Decision, Observation, Play, Question, Room, TakeReward,
 };
 
 use super::keys::{self, Action};
 use super::screen;
 use super::state::{Aim, NewRun, Options, Overlay, Pile, SEED_MAX, Tone, Ui};
 use crate::cli::{choose, moves};
+use crate::render::{self, Amount, Pool};
 
 /// What kind of thing the game is showing.
 ///
@@ -66,8 +67,39 @@ pub enum Intent<V: ContentVersion> {
     Begin(Decision<V>),
 }
 
+type BeforeBegin<V> = dyn FnMut(&Decision<V>) -> Result<()>;
+
+/// What a card costs, spelled out for a panel with room for words.
+///
+/// The compact form belongs on a card box, where the position says which pool
+/// is meant. This is read on its own, so it names them.
+fn priced(energy: Cost, stars: Cost) -> String {
+    let words: Vec<String> = render::pools(energy, stars)
+        .map(|(amount, pool)| {
+            // Each pool carries both forms. Energy is uncountable and stars are
+            // not, so one name with an `s` on the end reads as "3 energys".
+            let (one, many) = match pool {
+                Pool::Energy => ("energy", "energy"),
+                Pool::Stars => ("star", "stars"),
+            };
+            match amount {
+                Amount::All => format!("all your {many}"),
+                Amount::Of(1) => format!("1 {one}"),
+                Amount::Of(n) => format!("{n} {many}"),
+            }
+        })
+        .collect();
+
+    if words.is_empty() {
+        "costs nothing".to_string()
+    } else {
+        format!("costs {}", words.join(" and "))
+    }
+}
+
 pub struct App<V: ContentVersion, G: Play<V>> {
     game: G,
+    before_begin: Option<Box<BeforeBegin<V>>>,
     /// The most recent thing the game said. `None` only before the first look.
     seen: Option<Applied<V>>,
     stage: Stage,
@@ -89,12 +121,24 @@ where
     pub fn new(game: G, options: Options) -> App<V, G> {
         App {
             game,
+            before_begin: None,
             seen: None,
             stage: Stage::Nothing,
             starting: options.fresh.then(NewRun::default),
             ui: Ui::default(),
             options,
         }
+    }
+
+    /// Adds work that must succeed before a new run is sent to the game.
+    ///
+    /// The daemon opens its recording here, so `Start` is the first step.
+    pub fn before_begin(
+        mut self,
+        before: impl FnMut(&Decision<V>) -> Result<()> + 'static,
+    ) -> Self {
+        self.before_begin = Some(Box::new(before));
+        self
     }
 
     /// What the game last said, for the screens to draw.
@@ -157,6 +201,9 @@ where
             Intent::Look => self.look(),
             Intent::Send(decision) => self.send(decision).map(drop),
             Intent::Begin(decision) => {
+                if let Some(before) = self.before_begin.as_mut() {
+                    before(&decision)?;
+                }
                 // The setup screen closes once the game has the run. A refused
                 // start leaves it up, with the reason `accept` put on it.
                 if self.send(decision)? {
@@ -188,6 +235,9 @@ where
                 .draw(|frame| screen::draw(frame, &self))
                 .context("drawing the screen")?;
 
+            // Blocked on, not polled. A player thinking about a card sends
+            // nothing, and nothing is what should happen: the daemon keeps the
+            // game alive on its own, so the screen has no clock to answer to.
             match event::read().context("reading a key")? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => self.key(key)?,
                 // A resize repaints on the next pass round the loop, which is
@@ -887,7 +937,7 @@ where
         let mut lines = vec![
             crate::render::ident(&card.card),
             String::new(),
-            format!("costs {}", card.cost),
+            priced(card.cost, card.star_cost),
             format!("targets {}", crate::render::spelling(&card.target)),
         ];
         if let Some(reason) = &card.reason {
@@ -980,7 +1030,7 @@ fn stage_of<V: ContentVersion>(applied: &Applied<V>) -> Stage {
 
 #[cfg(test)]
 mod tests {
-    use super::{App, Intent, Stage};
+    use super::{App, Intent, Stage, priced};
     use crate::fixture::{self, playable, unplayable};
     use crate::scripted::Scripted;
     use crate::tui::keys::Action;
@@ -991,6 +1041,35 @@ mod tests {
     use sts2_core::{Applied, Decision};
 
     type V = V0_107_1;
+
+    /// Each pool is named in the number it is in, and a pool the card is not
+    /// priced in is not named at all.
+    ///
+    /// Energy is uncountable and stars are not. One name with an `s` appended
+    /// covered both for a while, which read as "3 energys".
+    #[test]
+    fn a_price_is_spelled_in_the_pools_it_is_paid_from() {
+        use sts2_core::Cost::{Fixed, None as Unpriced, X};
+
+        assert_eq!(priced(Unpriced, Unpriced), "costs nothing");
+        assert_eq!(priced(Fixed(1), Unpriced), "costs 1 energy");
+        assert_eq!(priced(Fixed(3), Unpriced), "costs 3 energy");
+        assert_eq!(priced(X, Unpriced), "costs all your energy");
+        assert_eq!(priced(Unpriced, Fixed(1)), "costs 1 star");
+        assert_eq!(priced(Unpriced, Fixed(2)), "costs 2 stars");
+        assert_eq!(priced(Unpriced, X), "costs all your stars");
+        assert_eq!(priced(Fixed(1), Fixed(2)), "costs 1 energy and 2 stars");
+    }
+
+    /// A pool priced at zero is priced, and says so. `Cost::None` is the pool
+    /// the card is not priced in, and the two must not read alike.
+    #[test]
+    fn a_zero_price_is_not_the_same_as_no_price() {
+        use sts2_core::Cost::{Fixed, None as Unpriced};
+
+        assert_eq!(priced(Fixed(0), Unpriced), "costs 0 energy");
+        assert_eq!(priced(Unpriced, Unpriced), "costs nothing");
+    }
 
     /// The front end, standing at what the game last said.
     ///
@@ -1130,6 +1209,30 @@ mod tests {
         }
 
         assert_eq!(app.starting().map(|s| s.seed.as_str()), Some("AB"));
+    }
+
+    /// Recording is opened before the start is sent, so the file begins with it.
+    #[test]
+    fn starting_runs_the_preflight() {
+        let called = std::rc::Rc::new(std::cell::Cell::new(false));
+        let witness = called.clone();
+        let mut app = App::new(
+            Scripted::saying(fixture::applied(json!({}))),
+            Options {
+                fresh: true,
+                ..Options::default()
+            },
+        )
+        .before_begin(move |decision| {
+            assert!(matches!(decision, Decision::Start { .. }));
+            witness.set(true);
+            Ok(())
+        });
+
+        let intent = app.decide(KeyEvent::from(KeyCode::Enter));
+        app.perform(intent).unwrap();
+
+        assert!(called.get(), "the preflight runs before the start is sent");
     }
 
     /// A typed seed is folded before it travels, and starting is its own

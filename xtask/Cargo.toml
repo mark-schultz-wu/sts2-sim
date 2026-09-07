@@ -5,3 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+# Reading the dumps and generating tables from them. Nothing here launches a
+# game: `dump` drives one through a shell, and everything that needs the game as
+# a library lives in `sts2-golden`.
+sts2-content = { workspace = true, features = ["v0_107_1"] }
+sts2-core = { workspace = true }

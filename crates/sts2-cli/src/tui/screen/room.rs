@@ -14,7 +14,7 @@ use sts2_core::{
     ContentVersion, Decision, Play, Question, RewardKind, Room, Stock, Take, TakeReward,
 };
 
-use crate::render::spelling;
+use crate::render::{self, spelling};
 use crate::tui::app::App;
 use crate::tui::names;
 use crate::tui::theme;
@@ -50,7 +50,10 @@ where
                 .iter()
                 .map(|entry| {
                     let what = match &entry.stock {
-                        Stock::Card(Some(c)) => card::ident(c),
+                        // A card by its id, because that is what `buy` and the
+                        // deck list call it. Everything else by the game's own
+                        // title, which is what the shelf says.
+                        Stock::Card(Some(c)) => card::ident(&c.card),
                         Stock::Card(None) => "a card".into(),
                         Stock::Relic(Some(r)) => names::pretty(&spelling(r)),
                         Stock::Relic(None) => "a relic".into(),
@@ -58,6 +61,19 @@ where
                         Stock::Potion(None) => "a potion".into(),
                         Stock::CardRemoval => "remove a card".into(),
                     };
+
+                    // What it does, and for a card what playing it will cost.
+                    // A shop is the one screen where not knowing costs gold.
+                    let mut words = entry.text.as_deref().map(widget::words).unwrap_or_default();
+                    if let Stock::Card(Some(c)) = &entry.stock {
+                        words.insert(
+                            0,
+                            Line::styled(
+                                format!("costs {} to play", render::costs(c.cost, c.star_cost)),
+                                theme::dim(),
+                            ),
+                        );
+                    }
                     let note = if !entry.stocked {
                         Some(("sold".to_string(), theme::dim()))
                     } else if let Some(blocked) = &entry.blocked {
@@ -71,7 +87,7 @@ where
                         key: offered(entry.index),
                         what,
                         note,
-                        words: Vec::new(),
+                        words,
                         faded: offered(entry.index).is_none(),
                     }
                 })
@@ -281,7 +297,11 @@ where
                 match &detail.reward {
                     RewardKind::Card { cards } => {
                         for (card_at, offered) in cards.iter().enumerate() {
-                            let mut face = card::Face::plain(&offered.card);
+                            let mut face = card::Face::plain_with_cost(
+                                &offered.card,
+                                offered.cost,
+                                offered.star_cost,
+                            );
                             face.rules = offered
                                 .text
                                 .as_deref()
@@ -296,6 +316,29 @@ where
                             });
                             faces.push(face);
                         }
+                    }
+                    // One card, not a choice between cards, so it is taken
+                    // whole like a relic — but it is still a card, and is
+                    // drawn as one so its cost and its words are readable.
+                    RewardKind::SpecialCard {
+                        card: Some(offered),
+                    } => {
+                        let mut face = card::Face::plain_with_cost(
+                            &offered.card,
+                            offered.cost,
+                            offered.star_cost,
+                        );
+                        face.note = Some(("returned to you".into(), theme::dim()));
+                        face.rules = offered
+                            .text
+                            .as_deref()
+                            .map(widget::words)
+                            .unwrap_or_default();
+                        face.faded = detail.taken;
+                        face.key = takeable
+                            .iter()
+                            .position(|t| *t == TakeReward::NonCard { index });
+                        faces.push(face);
                     }
                     other => {
                         let mut face = card::Face::named(reward_name(other));
@@ -343,6 +386,8 @@ fn reward_name<V: ContentVersion>(reward: &RewardKind<V>) -> String {
             potion: Some(potion),
         } => names::pretty(&spelling(potion)),
         RewardKind::Potion { potion: None } => "a potion".into(),
+        RewardKind::SpecialCard { card: Some(card) } => names::pretty(&card::ident(&card.card)),
+        RewardKind::SpecialCard { card: None } => "a returned card".into(),
         RewardKind::Other { kind } => names::pretty(kind),
     }
 }
