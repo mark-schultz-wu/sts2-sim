@@ -97,14 +97,22 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // file nothing would ever land in.
     let mut pools: Vec<String> = Vec::new();
     let mut pool_of: BTreeMap<String, String> = BTreeMap::new();
+    // The dump's own order, which is the pool's. A reward indexes into a pool
+    // after filtering by rarity, so this is not the id order the flat table is
+    // in: the Regent's three potions are dealt Star, Cosmic, King's.
+    let mut stocked: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for row in dump.of("pool") {
         if !pools.contains(&row[1]) {
             pools.push(row[1].clone());
         }
-        if let Some(first) = pool_of.insert(row[2].clone(), row[1].clone()) {
+        stocked
+            .entry(row[1].clone())
+            .or_default()
+            .push(row[3].clone());
+        if let Some(first) = pool_of.insert(row[3].clone(), row[1].clone()) {
             return Err(format!(
                 "{} is stocked by both {first} and {}, which the table has no shape for",
-                row[2], row[1]
+                row[3], row[1]
             ));
         }
     }
@@ -120,6 +128,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         &build,
     );
     writeln!(out, "\nuse super::cards::TargetType;").unwrap();
+    writeln!(out, "use super::characters::Character;").unwrap();
+    writeln!(out, "use sts2_core::Drafted;").unwrap();
     writeln!(out, "use crate::Field;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
@@ -177,6 +187,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     emit_shape(&mut out);
     emit_potions(&mut out, &potions, &pool_of)?;
+    emit_stock(&mut out, &pools, &stocked);
+    emit_rewards(&mut out, &stocked, &potions)?;
 
     let mut split = Split::new(root, "potions", "potions.txt", &build)?;
     for row in &potions {
@@ -306,6 +318,43 @@ fn literal(row: &[String]) -> Result<String, String> {
     Ok(out)
 }
 
+/// The three questions a potion answers straight off its own row.
+///
+/// One body each rather than a match per potion, because every answer is a
+/// field the table already holds. The generated `PotionUsage` is the game's
+/// enum and the trait's is the reduction a rule asks for, so the two are
+/// spelled apart.
+const READS_ITS_ROW: &str = r#"
+    /// When it can be drunk at all.
+    fn usage(self) -> sts2_core::PotionUsage {
+        match sts2_core::Table::data(self).usage {
+            PotionUsage::CombatOnly => sts2_core::PotionUsage::CombatOnly,
+            PotionUsage::AnyTime => sts2_core::PotionUsage::AnyTime,
+            PotionUsage::Automatic => sts2_core::PotionUsage::Automatic,
+        }
+    }
+
+    /// What it can be pointed at, for one that prints a target type.
+    fn target(self) -> Option<TargetType> {
+        match sts2_core::Table::data(self).target {
+            Field::Constant(target) => Some(target),
+            Field::Computed => None,
+        }
+    }
+
+    /// Whether its own check lets it be drunk, for one that does not work
+    /// that out from a live fight.
+    fn passes_own_check(self) -> Option<bool> {
+        match sts2_core::Table::data(self)
+            .flags
+            .get(PotionFlag::PassesUsabilityCheck)
+        {
+            Field::Constant(passes) => Some(passes),
+            Field::Computed => None,
+        }
+    }
+"#;
+
 fn emit_potions(
     out: &mut String,
     potions: &[&Vec<String>],
@@ -370,31 +419,141 @@ fn emit_potions(
 
     writeln!(
         out,
-        "    /// The rarity, the usage, the target and the flags.\n\
-         \x20   ///\n\
-         \x20   /// One arm per potion, naming the file its row lives in."
+        "    /// The rarity, the usage, the target and the flags."
     )
     .unwrap();
-    writeln!(out, "    fn data(self) -> PotionData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for row in potions {
-        writeln!(
-            out,
-            "            Self::{} => {}::{},",
-            camel(&row[1]),
-            bucket(&pool_of[&row[1]]),
-            row[1]
-        )
-        .unwrap();
+        table.push(format!("{}::{}", bucket(&pool_of[&row[1]]), row[1]));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    fn data(self) -> &'static PotionData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "PotionData", &table);
 
     writeln!(out, "impl sts2_core::PotionTable for Potion {{").unwrap();
-    writeln!(out, "    type Pool = PotionPool;\n").unwrap();
+    writeln!(out, "    type Pool = PotionPool;").unwrap();
+    writeln!(out, "    type Target = TargetType;\n").unwrap();
     out.push_str(&extras);
+    out.push_str(READS_ITS_ROW);
     writeln!(out, "}}").unwrap();
 
+    Ok(())
+}
+
+/// What a pool stocks, in the order the game enumerates it.
+///
+/// A potion reward filters a pool by rarity and then indexes into what is
+/// left. So this order is observable, and the flat table's id order is not.
+fn emit_stock(out: &mut String, pools: &[String], stocked: &BTreeMap<String, Vec<String>>) {
+    writeln!(
+        out,
+        "/// The potions a pool stocks, in the order the game enumerates them.\n\
+         ///\n\
+         /// `PotionPoolModel.AllPotions`, which a reward indexes into after\n\
+         /// filtering by rarity. Not the id order [`Potion`] is in."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn pool_potions(pool: PotionPool) -> &'static [Potion] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match pool {{").unwrap();
+    for pool in pools {
+        writeln!(
+            out,
+            "        PotionPool::{} => &[",
+            camel(pool.strip_suffix("_POTION_POOL").unwrap_or(pool))
+        )
+        .unwrap();
+        for potion in &stocked[pool] {
+            writeln!(out, "            Potion::{},", camel(potion)).unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+}
+
+/// The potions a reward can roll for each playable character.
+///
+/// `GetPotionOptions`: the character's own pool and then the shared one, each
+/// in its own order. Joined here rather than in the simulator, so a fight ends
+/// by reading a slice instead of building a list.
+///
+/// The character's pool comes from the characters dump, which is the same
+/// place the character's row gets it.
+fn emit_rewards(
+    out: &mut String,
+    stocked: &BTreeMap<String, Vec<String>>,
+    potions: &[&Vec<String>],
+) -> Result<(), String> {
+    let characters = Dump::read("characters.txt")?;
+    let shared = stocked
+        .get("SHARED_POTION_POOL")
+        .ok_or("no shared potion pool")?;
+
+    let rarity_of: BTreeMap<&str, &str> = potions
+        .iter()
+        .map(|row| (row[1].as_str(), row[2].as_str()))
+        .collect();
+
+    writeln!(
+        out,
+        "/// The potions a reward can roll, split by rarity.\n\
+         ///\n\
+         /// `GetPotionOptions`: the character's own pool and then the shared\n\
+         /// one, each slice keeping that order so an index means what it meant\n\
+         /// before the split. Empty for a character no run is played as."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn reward_potions(character: Character) -> Drafted<'static, Potion> {{"
+    )
+    .unwrap();
+    writeln!(out, "    match character {{").unwrap();
+    let mut named = 0;
+    for row in characters.of("character") {
+        if row[2] != "1" {
+            continue;
+        }
+        named += 1;
+        let own = stocked
+            .get(&row[11])
+            .ok_or_else(|| format!("{} is stocked from {}, which has no rows", row[1], row[11]))?;
+        writeln!(out, "        Character::{} => Drafted {{", camel(&row[1])).unwrap();
+        for (field, rarity) in [
+            ("common", "Common"),
+            ("uncommon", "Uncommon"),
+            ("rare", "Rare"),
+        ] {
+            writeln!(out, "            {field}: &[").unwrap();
+            for potion in own.iter().chain(shared) {
+                if rarity_of.get(potion.as_str()).copied() != Some(rarity) {
+                    continue;
+                }
+                writeln!(out, "                Potion::{},", camel(potion)).unwrap();
+            }
+            writeln!(out, "            ],").unwrap();
+        }
+        writeln!(out, "        }},").unwrap();
+    }
+    if named == 0 {
+        return Err("no playable character to stock a reward for".into());
+    }
+    writeln!(
+        out,
+        "        _ => Drafted {{\n\
+         \x20           common: &[],\n\
+         \x20           uncommon: &[],\n\
+         \x20           rare: &[],\n\
+         \x20       }},"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
     Ok(())
 }

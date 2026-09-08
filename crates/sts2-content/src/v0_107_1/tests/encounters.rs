@@ -17,7 +17,7 @@ use super::super::monsters::Monster;
 use super::super::{ENCOUNTERS, MONSTERS, VERSION};
 use super::{build, rows, wire};
 use std::collections::{BTreeMap, BTreeSet};
-use sts2_core::{EncounterTable, MonsterTable, Table};
+use sts2_core::{EncounterRoster, EncounterTable, MonsterTable, Table};
 
 fn encounter(id: &str) -> Encounter {
     *Encounter::ALL
@@ -183,7 +183,7 @@ fn check_rows(
     kind: &'static str,
     ordered: bool,
     value: impl Fn(&[&'static str]) -> String,
-    read: impl Fn(EncounterData) -> Vec<String>,
+    read: impl Fn(&EncounterData) -> Vec<String>,
 ) {
     let mut dumped: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for row in rows(ENCOUNTERS, kind) {
@@ -481,4 +481,32 @@ fn sharing_a_family_is_what_keeps_two_encounters_apart() {
     let untagged = encounter("MYTES_NORMAL").data().families;
     assert_eq!(untagged.iter().count(), 0);
     assert!(!untagged.intersects(untagged));
+}
+
+#[test]
+fn encounter_seed_salts_are_the_cast_entry_hashes() {
+    for encounter in Encounter::ALL {
+        assert_eq!(
+            encounter.seed_salt(),
+            sts2_core::rng::name_hash(&wire(encounter)) as u32,
+            "{}",
+            wire(encounter)
+        );
+    }
+}
+
+#[test]
+fn roster_kind_is_not_an_option() {
+    let EncounterRoster::Fixed(monsters) = Encounter::MockMonsterEncounter.roster() else {
+        panic!("the mock encounter has a fixed roster");
+    };
+    assert_eq!(monsters.collect::<Vec<_>>(), [Monster::BigDummy]);
+    assert!(matches!(
+        Encounter::SlimesWeak.roster(),
+        EncounterRoster::Random
+    ));
+    assert!(matches!(
+        Encounter::BattlewornDummyEventEncounter.roster(),
+        EncounterRoster::Configured
+    ));
 }

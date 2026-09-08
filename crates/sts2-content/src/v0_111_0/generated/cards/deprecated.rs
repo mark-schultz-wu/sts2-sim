@@ -16,16 +16,29 @@ pub enum DeprecatedCard {
 
 impl DeprecatedCard {
     /// What is true of the card with no run in progress.
-    pub const fn data(self) -> CardData {
-        match self {
-            Self::DeprecatedCard => CardData {
-                kind: Field::Constant(CardType::Status),
-                rarity: CardRarity::Status,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::Energy(0),
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
-            },
-        }
+    pub fn data(self) -> &'static CardData {
+        &ROWS[self as usize]
+    }
+
+    /// Where this card sorts against every card in the build.
+    pub fn order(self) -> u16 {
+        ORDER[self as usize]
     }
 }
+
+/// Every member's place in the build's own id order, which is
+/// ordinal over the id the wire spells.
+static ORDER: [u16; 1] = [158];
+
+/// Every row, in the order the enum declares its variants, which is
+/// the index a value casts to.
+static ROWS: [CardData; 1] = [CardData {
+    kind: Field::Constant(CardType::Status),
+    rarity: CardRarity::Status,
+    target: Field::Constant(TargetType::None),
+    cost: Cost::Fixed(0),
+    star_cost: Cost::None,
+    vars: &[],
+    max_upgrade: 0,
+    keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+}];

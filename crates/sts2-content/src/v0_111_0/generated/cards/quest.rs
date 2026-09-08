@@ -3,9 +3,12 @@
 //! Cards in `QUEST_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::{CardData, CardKeyword, CardRarity, CardType, KeywordSet, TargetType};
+use super::{
+    CardData, CardKeyword, CardNumber, CardRarity, CardType, CardVar, KeywordSet, TargetType,
+};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
+use sts2_core::Printed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -22,40 +25,69 @@ pub enum QuestCard {
 
 impl QuestCard {
     /// What is true of the card with no run in progress.
-    pub const fn data(self) -> CardData {
-        match self {
-            Self::ByrdonisEgg => CardData {
-                kind: Field::Constant(CardType::Quest),
-                rarity: CardRarity::Quest,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::Dowsing => CardData {
-                kind: Field::Constant(CardType::Quest),
-                rarity: CardRarity::Quest,
-                target: Field::Constant(TargetType::None),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::LanternKey => CardData {
-                kind: Field::Constant(CardType::Quest),
-                rarity: CardRarity::Quest,
-                target: Field::Constant(TargetType::SelfTarget),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-            Self::SpoilsMap => CardData {
-                kind: Field::Constant(CardType::Quest),
-                rarity: CardRarity::Quest,
-                target: Field::Constant(TargetType::SelfTarget),
-                cost: Cost::None,
-                max_upgrade: 0,
-                keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
-            },
-        }
+    pub fn data(self) -> &'static CardData {
+        &ROWS[self as usize]
+    }
+
+    /// Where this card sorts against every card in the build.
+    pub fn order(self) -> u16 {
+        ORDER[self as usize]
     }
 }
+
+/// Every member's place in the build's own id order, which is
+/// ordinal over the id the wire spells.
+static ORDER: [u16; 4] = [77, 170, 307, 497];
+
+/// Every row, in the order the enum declares its variants, which is
+/// the index a value casts to.
+static ROWS: [CardData; 4] = [
+    CardData {
+        kind: Field::Constant(CardType::Quest),
+        rarity: CardRarity::Quest,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Quest),
+        rarity: CardRarity::Quest,
+        target: Field::Constant(TargetType::None),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Rooms,
+            base: CardNumber::new(5, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Quest),
+        rarity: CardRarity::Quest,
+        target: Field::Constant(TargetType::SelfTarget),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+    CardData {
+        kind: Field::Constant(CardType::Quest),
+        rarity: CardRarity::Quest,
+        target: Field::Constant(TargetType::SelfTarget),
+        cost: Cost::None,
+        star_cost: Cost::None,
+        vars: &[Printed {
+            id: CardVar::Gold,
+            base: CardNumber::new(600, 0),
+            calculated: false,
+        }],
+        max_upgrade: 0,
+        keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+    },
+];

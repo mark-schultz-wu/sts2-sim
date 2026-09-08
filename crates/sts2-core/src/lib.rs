@@ -25,6 +25,7 @@ pub mod content;
 mod ident;
 mod play;
 mod report;
+pub mod rng;
 pub mod seed;
 mod step;
 
@@ -33,8 +34,11 @@ mod step;
 pub use play::recording;
 
 pub use content::{
-    CardTable, CharacterTable, ContentVersion, EncounterTable, EventTable, FlagSet, MonsterTable,
-    PotionTable, PowerTable, RelicTable, Table, Version,
+    ActTable, CardTable, CardVars, CharacterTable, ContentError, ContentVersion, Cost, Drafted,
+    EncounterRoster, EncounterTable, EventTable, Fixed, FlagSet, Ladder, Layout, MapPoints,
+    MonsterTable, PotionTable, PotionUsage, PowerAmount, PowerTable, Printed, Rarities, RelicPools,
+    RelicTable, Rests, RewardRarity, Rooms, Rules, Sides, Streams, Table, Targets, Temporary,
+    TurnPhases, Unplayable, Version,
 };
 pub use ident::{CardIdent, Coord, ModelId};
 pub use seed::Seed;
@@ -43,7 +47,7 @@ pub use report::digest::Digest;
 pub use report::observation::{
     Attack, Blocked, Carried, Channelled, ChestOption, Combat, Counters, Creature, Entry,
     EventOption, Held, Intent, Map, NextMove, Node, Observation, Orbs, Playable, Preview,
-    Reachable, RestOption, Room, Stack, Stock, Take, Undrinkable,
+    Reachable, RestOption, Room, ShopCard, Stack, Stock, Take, Undrinkable,
 };
 pub use report::question::{
     CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail, RewardKind,

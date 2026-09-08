@@ -36,6 +36,10 @@ pub mod v0_111_0;
 ///
 /// Every domain has a few. [`Field::Computed`] is the simulator's cue to ask
 /// rather than look up, and the dumps err towards it. The crate README says
+/// What a card costs to play. Defined in `sts2-core`, because a cost is a fact
+/// about the game rather than about one build's tables.
+pub use sts2_core::Cost;
+
 /// what each way of being wrong costs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Field<T> {
@@ -135,27 +139,4 @@ impl<T: Copy + std::fmt::Debug, const N: usize> std::fmt::Debug for Few<T, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
-}
-
-/// What a card costs to play, before anything in a run touches it.
-///
-/// Three states rather than a number and a flag, because the game's own
-/// `CardEnergyCost` only lets one of the three carry a number.
-/// `Canonical = CostsX ? 0 : canonicalCost` throws the number away for X-cost
-/// cards, and `GetWithModifiers` skips every modifier when the card costs X or
-/// the base is negative. So only [`Cost::Energy`] takes arithmetic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Cost {
-    /// Spends all remaining energy. Ten cards on this build.
-    X,
-    /// A fixed cost, and the only variant cost modifiers act on.
-    Energy(u8),
-    /// No cost. The default for statuses, curses and quests, which the dump
-    /// spells `-1`.
-    ///
-    /// Not the same as `Energy(0)`, and the difference is load-bearing. A
-    /// negative base makes `GetWithModifiers` return early, `SetThisTurn(0)`
-    /// a no-op, and Confused skip the card entirely. It still resolves to
-    /// spending zero, because `GetAmountToSpend` clamps at zero.
-    None,
 }

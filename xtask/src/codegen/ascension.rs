@@ -101,9 +101,53 @@ fn emit(out: &mut String, levels: &[(u8, String)]) -> Result<(), String> {
          \x20   pub const fn has(self, level: AscensionLevel) -> bool {{\n\
          \x20       self as u8 >= level as u8\n\
          \x20   }}\n\
-         }}"
+         }}\n"
     )
     .unwrap();
 
+    emit_ladder(out, levels)?;
+    Ok(())
+}
+
+/// The rungs a ported rule names, as the consts it names them by.
+///
+/// A generated enum is per build, so a rule holding only a `ContentVersion`
+/// cannot write `AscensionLevel::SwarmingElites`. This is the bridge, and a
+/// build that renames a rung stops here rather than reading as no ascension.
+fn emit_ladder(out: &mut String, levels: &[(u8, String)]) -> Result<(), String> {
+    // `(const, rung)`, in the trait's own order.
+    const NAMED: [(&str, &str); 5] = [
+        ("INFLATION", "Inflation"),
+        ("NONE", "None"),
+        ("SCARCITY", "Scarcity"),
+        ("SWARMING_ELITES", "SwarmingElites"),
+        ("WEARY_TRAVELER", "WearyTraveler"),
+    ];
+
+    for (_, rung) in &NAMED {
+        if !levels.iter().any(|(_, have)| have == rung) {
+            return Err(format!(
+                "the dump reflects no AscensionLevel::{rung}, which a ported rule \
+                 names — see what this build calls it"
+            ));
+        }
+    }
+
+    writeln!(out, "\nimpl sts2_core::Ladder for AscensionLevel {{").unwrap();
+    for (name, rung) in NAMED {
+        writeln!(
+            out,
+            "    const {name}: AscensionLevel = AscensionLevel::{rung};"
+        )
+        .unwrap();
+    }
+    writeln!(
+        out,
+        "\n    fn has(self, rung: AscensionLevel) -> bool {{\n\
+         \x20       AscensionLevel::has(self, rung)\n\
+         \x20   }}\n\
+         }}"
+    )
+    .unwrap();
     Ok(())
 }

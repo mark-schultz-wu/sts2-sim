@@ -18,8 +18,8 @@ pub enum Error {
 /// [`Seed::new`] refuses any other spelling, and [`Seed::fold`] converts what a
 /// person typed.
 ///
-/// The number a run's streams are seeded from is `sts2_rng::Seeding`. It lives
-/// there, so a client driving a game need not compile a PRNG.
+/// The number a run's streams are seeded from is the RNG's `stream_seed`. It is
+/// a free function there, so a client driving a game need not compile a PRNG.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seed(String);
 

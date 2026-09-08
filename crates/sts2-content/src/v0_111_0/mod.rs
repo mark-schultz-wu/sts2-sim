@@ -43,6 +43,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type Act = generated::acts::Act;
     type Affliction = generated::afflictions::Affliction;
     type Card = generated::cards::Cards;
+    type CardVar = generated::cards::CardVar;
     type Character = generated::characters::Character;
     type Enchantment = generated::enchantments::Enchantment;
     type Encounter = generated::encounters::Encounter;

@@ -79,7 +79,7 @@ fn the_generated_table_matches_the_dump() {
 fn every_potion_is_in_exactly_one_pool() {
     let mut dumped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for row in rows(POTIONS, "pool") {
-        dumped.entry(row[2]).or_default().push(row[1]);
+        dumped.entry(row[3]).or_default().push(row[1]);
     }
 
     let mut per_pool: BTreeMap<String, usize> = BTreeMap::new();

@@ -96,19 +96,65 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             .push((discriminant, f[3].clone()));
     }
 
+    // Four kinds of row, two shapes. An act's own events and its ancients are
+    // separate lists the game rolls from separately, and each is ordered: room
+    // generation shuffles the event list, and a shuffle permutes what it was
+    // handed, so the order is a rule.
     let mut acts: Vec<String> = Vec::new();
     let mut acts_of: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for row in dump.of("act") {
-        if !acts.contains(&row[1]) {
-            acts.push(row[1].clone());
+    let mut offered: Vec<(String, Vec<String>)> = Vec::new();
+    let mut ancients: Vec<(String, Vec<String>)> = Vec::new();
+    for kind in ["act", "ancient"] {
+        let listed = if kind == "act" {
+            &mut offered
+        } else {
+            &mut ancients
+        };
+        for row in dump.of(kind) {
+            if row.len() != 4 {
+                return Err(format!(
+                    "{kind} {}: {} columns, not 3",
+                    row[1],
+                    row.len() - 1
+                ));
+            }
+            if !acts.contains(&row[1]) {
+                acts.push(row[1].clone());
+            }
+            let of = acts_of.entry(row[3].clone()).or_default();
+            if !of.contains(&row[1]) {
+                of.push(row[1].clone());
+            }
+            ordered(listed, &row[1], &row[2], &row[3])?;
         }
-        acts_of
-            .entry(row[2].clone())
-            .or_default()
-            .push(row[1].clone());
     }
 
-    let pooled: Vec<&str> = dump.of("sharedpool").map(|r| r[1].as_str()).collect();
+    // Neow's own lists, which are code in the event rather than a table.
+    let mut neow: Vec<(String, Vec<String>)> = Vec::new();
+    for row in dump.of("neow") {
+        if row.len() != 4 {
+            return Err(format!("neow {}: {} columns, not 3", row[1], row.len() - 1));
+        }
+        ordered(&mut neow, &row[1], &row[2], &row[3])?;
+    }
+
+    let mut shared: Vec<(String, Vec<String>)> = Vec::new();
+    for kind in ["sharedpool", "sharedancient"] {
+        for row in dump.of(kind) {
+            if row.len() != 3 {
+                return Err(format!(
+                    "{kind} {}: {} columns, not 2",
+                    row[2],
+                    row.len() - 1
+                ));
+            }
+            ordered(&mut shared, kind, &row[1], &row[2])?;
+        }
+    }
+    let pooled: Vec<&str> = shared
+        .iter()
+        .flat_map(|(_, listed)| listed.iter().map(String::as_str))
+        .collect();
 
     // The two memberships are meant to be disjoint: an event either belongs to
     // an act's list or to the pool every act draws from. Checked rather than
@@ -123,6 +169,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     let mut out = banner("Every event's acts and its shell.", "events.txt", &build);
     writeln!(out, "\nuse super::encounters::Encounter;").unwrap();
+    writeln!(out, "use super::relics::Relic;").unwrap();
     writeln!(out, "use super::acts::Act;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
@@ -139,6 +186,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_events(&mut out, &events, &acts_of, &pooled)?;
+    emit_lists(&mut out, "events_of", "an act's own events", &offered);
+    emit_lists(&mut out, "ancients_of", "an act's own ancients", &ancients);
+    emit_shared(&mut out, &shared);
+    emit_neow(&mut out, &neow)?;
 
     let mut split = Split::new(root, "events", "events.txt", &build)?;
     for row in &events {
@@ -316,6 +367,17 @@ fn emit_events(
     writeln!(extras, "        )").unwrap();
     writeln!(extras, "    }}").unwrap();
 
+    // From the layout rather than from a second list. `AncientEventModel` is
+    // the type, and `EventLayoutType::Ancient` is how the dump reports it.
+    writeln!(
+        extras,
+        "\n    /// One of the nine ancients, which an act draws separately.\n\
+         \x20   fn ancient(self) -> bool {{\n\
+         \x20       <Self as sts2_core::Table>::data(self).layout == EventLayoutType::Ancient\n\
+         \x20   }}"
+    )
+    .unwrap();
+
     writeln!(out, "impl sts2_core::Table for Event {{").unwrap();
     writeln!(out, "    type Data = EventData;\n").unwrap();
     writeln!(
@@ -332,28 +394,24 @@ fn emit_events(
 
     writeln!(
         out,
-        "    /// The layout, the flags and the fight it starts.\n\
-         \x20   ///\n\
-         \x20   /// One arm per event, naming the file its row lives in."
+        "    /// The layout, the flags and the fight it starts."
     )
     .unwrap();
-    writeln!(out, "    fn data(self) -> EventData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for row in events {
         let empty = Vec::new();
         let of = acts_of.get(&row[1]).unwrap_or(&empty);
-        writeln!(
-            out,
-            "            Self::{} => {}::{},",
-            camel(&row[1]),
+        table.push(format!(
+            "{}::{}",
             bucket(of, pooled.contains(&row[1].as_str())),
             row[1]
-        )
-        .unwrap();
+        ));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    fn data(self) -> &'static EventData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "EventData", &table);
 
     writeln!(out, "impl sts2_core::EventTable for Event {{").unwrap();
     writeln!(out, "    type Act = Act;\n").unwrap();
@@ -361,4 +419,222 @@ fn emit_events(
     writeln!(out, "}}").unwrap();
 
     Ok(())
+}
+
+/// One id appended to the list it belongs to, at the index it claims.
+///
+/// Dense and ascending. A gap means the dump dropped one, and an order
+/// recovered from rows that arrived out of order is not an order.
+fn ordered(
+    listed: &mut Vec<(String, Vec<String>)>,
+    key: &str,
+    index: &str,
+    id: &str,
+) -> Result<(), String> {
+    let at: usize = index
+        .parse()
+        .map_err(|e| format!("{key} {id}: index {index}: {e}"))?;
+    let list = match listed.iter_mut().find(|(held, _)| held == key) {
+        Some((_, list)) => list,
+        None => {
+            listed.push((key.to_string(), Vec::new()));
+            &mut listed.last_mut().expect("just pushed").1
+        }
+    };
+    if at != list.len() {
+        return Err(format!(
+            "{key} lists {id} at index {at}, which is not the {} it is at — the \
+             rows are out of order",
+            list.len()
+        ));
+    }
+    list.push(id.to_string());
+    Ok(())
+}
+
+/// A per-act ordered list, as a function over acts.
+fn emit_lists(out: &mut String, name: &str, what: &str, listed: &[(String, Vec<String>)]) {
+    writeln!(out, "/// Every event in {what}, in the act's own order.").unwrap();
+    writeln!(
+        out,
+        "///\n\
+         /// Not sorted. Room generation shuffles this list, and a shuffle\n\
+         /// permutes what it was handed, so the order decides the result.\n\
+         ///\n\
+         /// Empty for an act with none."
+    )
+    .unwrap();
+    writeln!(out, "pub fn {name}(act: Act) -> &'static [Event] {{").unwrap();
+    writeln!(out, "    match act {{").unwrap();
+    for (act, list) in listed {
+        let ids = list
+            .iter()
+            .map(|id| format!("Event::{}", camel(id)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(out, "        Act::{} => &[{ids}],", camel(act)).unwrap();
+    }
+    writeln!(out, "        #[allow(unreachable_patterns)]").unwrap();
+    writeln!(out, "        _ => &[],").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+}
+
+/// The two lists every act draws from, in the game's own order.
+fn emit_shared(out: &mut String, shared: &[(String, Vec<String>)]) {
+    for (kind, name, what) in [
+        ("sharedpool", "SHARED_EVENTS", "every act's own list"),
+        (
+            "sharedancient",
+            "SHARED_ANCIENTS",
+            "the run, dealt out to the later acts",
+        ),
+    ] {
+        let empty = Vec::new();
+        let list = shared
+            .iter()
+            .find(|(held, _)| held == kind)
+            .map(|(_, list)| list)
+            .unwrap_or(&empty);
+        writeln!(out, "/// The events concatenated onto {what}.").unwrap();
+        writeln!(
+            out,
+            "///\n/// In the game's own order, which is not sorted."
+        )
+        .unwrap();
+        writeln!(out, "pub const {name}: [Event; {}] = [", list.len()).unwrap();
+        for id in list {
+            writeln!(out, "    Event::{},", camel(id)).unwrap();
+        }
+        writeln!(out, "];\n").unwrap();
+    }
+}
+
+/// Neow's option lists, and the pairings its own body spells out.
+///
+/// The lists are reflected. The pairings are not reachable that way: they are
+/// `is` checks inside `GenerateInitialOptions`, so they are named here and
+/// checked against the lists. A build that renames one stops generation.
+fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), String> {
+    let list = |name: &str| -> Result<&Vec<String>, String> {
+        neow.iter()
+            .find(|(held, _)| held == name)
+            .map(|(_, list)| list)
+            .ok_or_else(|| format!("the dump reflects no Neow {name}"))
+    };
+
+    // A curse that takes a positive off the table with it, because the two do
+    // the same thing. `GenerateInitialOptions` spells these four out.
+    const PAIRS: [(&str, &str); 4] = [
+        ("CURSED_PEARL", "GOLDEN_PEARL"),
+        ("HEFTY_TABLET", "ARCANE_SCROLL"),
+        ("LEAFY_POULTICE", "NEW_LEAF"),
+        ("PRECARIOUS_SHEARS", "PRECISE_SCISSORS"),
+    ];
+    // The curse that suppresses the first coin flip.
+    const SUPPRESSES: &str = "LARGE_CAPSULE";
+
+    let curses = list("CurseOptions")?;
+    let positives = list("PositiveOptions")?;
+    for (curse, positive) in PAIRS {
+        if !curses.contains(&curse.to_string()) {
+            return Err(format!("{curse} is not one of Neow's curses any more"));
+        }
+        if !positives.contains(&positive.to_string()) {
+            return Err(format!(
+                "{positive} is not one of Neow's positives any more"
+            ));
+        }
+    }
+    if !curses.contains(&SUPPRESSES.to_string()) {
+        return Err(format!("{SUPPRESSES} is not one of Neow's curses any more"));
+    }
+
+    writeln!(
+        out,
+        "/// The curses Neow offers, one of which every blessing comes with.\n\
+         ///\n\
+         /// In the game's own order, which one draw indexes into."
+    )
+    .unwrap();
+    emit_relics(out, "NEOW_CURSES", curses);
+
+    writeln!(
+        out,
+        "/// The blessings Neow offers, before the three coin flips add to them.\n\
+         ///\n\
+         /// In the game's own order, which is what the shuffle permutes."
+    )
+    .unwrap();
+    emit_relics(out, "NEOW_POSITIVES", positives);
+
+    // One of each pair is added, on a coin flip, in this order. The first is
+    // skipped when the curse drawn is the one that suppresses it.
+    const FLIPS: [(&str, &str); 3] = [
+        ("LavaRockOption", "SmallCapsuleOption"),
+        ("NutritiousOysterOption", "StoneHumidifierOption"),
+        ("NeowsTalismanOption", "PomanderOption"),
+    ];
+    writeln!(
+        out,
+        "/// The three pairs a coin flip adds one of, in the order they are\n\
+         /// added.\n\
+         ///\n\
+         /// Heads takes the first. The first pair is skipped when the curse\n\
+         /// drawn is [`NEOW_SUPPRESSES_FLIP`]."
+    )
+    .unwrap();
+    writeln!(out, "pub const NEOW_FLIPS: [(Relic, Relic); 3] = [").unwrap();
+    for (heads, tails) in FLIPS {
+        let one = |name: &str| -> Result<String, String> {
+            let held = list(name)?;
+            match held.as_slice() {
+                [only] => Ok(format!("Relic::{}", camel(only))),
+                _ => Err(format!("Neow's {name} is not one option")),
+            }
+        };
+        writeln!(out, "    ({}, {}),", one(heads)?, one(tails)?).unwrap();
+    }
+    writeln!(out, "];\n").unwrap();
+
+    writeln!(
+        out,
+        "/// A curse that takes a blessing off the table with it.\n\
+         ///\n\
+         /// The two do the same thing, so Neow does not offer both."
+    )
+    .unwrap();
+    writeln!(out, "pub const NEOW_PAIRS: [(Relic, Relic); 4] = [").unwrap();
+    for (curse, positive) in PAIRS {
+        writeln!(
+            out,
+            "    (Relic::{}, Relic::{}),",
+            camel(curse),
+            camel(positive)
+        )
+        .unwrap();
+    }
+    writeln!(out, "];\n").unwrap();
+
+    writeln!(
+        out,
+        "/// The curse that suppresses the first of [`NEOW_FLIPS`]."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub const NEOW_SUPPRESSES_FLIP: Relic = Relic::{};\n",
+        camel(SUPPRESSES)
+    )
+    .unwrap();
+    Ok(())
+}
+
+/// One named list of relics.
+fn emit_relics(out: &mut String, name: &str, relics: &[String]) {
+    writeln!(out, "pub const {name}: [Relic; {}] = [", relics.len()).unwrap();
+    for id in relics {
+        writeln!(out, "    Relic::{},", camel(id)).unwrap();
+    }
+    writeln!(out, "];\n").unwrap();
 }

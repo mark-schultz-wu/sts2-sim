@@ -68,59 +68,80 @@ impl sts2_core::Table for Act {
     ];
 
     /// The act's shape and its bosses.
-    fn data(self) -> ActData {
-        match self {
-            Self::DeprecatedAct => ActData {
-                index: -1,
-                is_default: false,
-                rooms: 0,
-                weak_encounters: 0,
-                bosses: Bosses::new(&[]),
-            },
-            Self::Overgrowth => ActData {
-                index: 0,
-                is_default: true,
-                rooms: 15,
-                weak_encounters: 3,
-                bosses: Bosses::new(&[
-                    Encounter::VantomBoss,
-                    Encounter::CeremonialBeastBoss,
-                    Encounter::TheKinBoss,
-                ]),
-            },
-            Self::Underdocks => ActData {
-                index: 0,
-                is_default: false,
-                rooms: 15,
-                weak_encounters: 3,
-                bosses: Bosses::new(&[
-                    Encounter::WaterfallGiantBoss,
-                    Encounter::SoulFyshBoss,
-                    Encounter::LagavulinMatriarchBoss,
-                ]),
-            },
-            Self::Hive => ActData {
-                index: 1,
-                is_default: true,
-                rooms: 14,
-                weak_encounters: 2,
-                bosses: Bosses::new(&[
-                    Encounter::TheInsatiableBoss,
-                    Encounter::KnowledgeDemonBoss,
-                    Encounter::KaiserCrabBoss,
-                ]),
-            },
-            Self::Glory => ActData {
-                index: 2,
-                is_default: true,
-                rooms: 13,
-                weak_encounters: 2,
-                bosses: Bosses::new(&[
-                    Encounter::QueenBoss,
-                    Encounter::TestSubjectBoss,
-                    Encounter::AeonglassBoss,
-                ]),
-            },
-        }
+    fn data(self) -> &'static ActData {
+        &ROWS[self as usize]
+    }
+}
+
+/// Every row, in the order the enum declares its variants, which is
+/// the index a value casts to.
+static ROWS: [ActData; 5] = [
+    ActData {
+        index: -1,
+        is_default: false,
+        rooms: 0,
+        weak_encounters: 0,
+        bosses: Bosses::new(&[]),
+    },
+    ActData {
+        index: 0,
+        is_default: true,
+        rooms: 15,
+        weak_encounters: 3,
+        bosses: Bosses::new(&[
+            Encounter::VantomBoss,
+            Encounter::CeremonialBeastBoss,
+            Encounter::TheKinBoss,
+        ]),
+    },
+    ActData {
+        index: 0,
+        is_default: false,
+        rooms: 15,
+        weak_encounters: 3,
+        bosses: Bosses::new(&[
+            Encounter::WaterfallGiantBoss,
+            Encounter::SoulFyshBoss,
+            Encounter::LagavulinMatriarchBoss,
+        ]),
+    },
+    ActData {
+        index: 1,
+        is_default: true,
+        rooms: 14,
+        weak_encounters: 2,
+        bosses: Bosses::new(&[
+            Encounter::TheInsatiableBoss,
+            Encounter::KnowledgeDemonBoss,
+            Encounter::KaiserCrabBoss,
+        ]),
+    },
+    ActData {
+        index: 2,
+        is_default: true,
+        rooms: 13,
+        weak_encounters: 2,
+        bosses: Bosses::new(&[
+            Encounter::QueenBoss,
+            Encounter::TestSubjectBoss,
+            Encounter::AeonglassBoss,
+        ]),
+    },
+];
+
+impl sts2_core::ActTable for Act {
+    /// How many rooms an act's map holds.
+    fn rooms(self) -> u8 {
+        <Self as sts2_core::Table>::data(self).rooms
+    }
+
+    /// How many of those open the act, dealt from the weak fights.
+    fn weak_encounters(self) -> u8 {
+        <Self as sts2_core::Table>::data(self).weak_encounters
+    }
+
+    /// Whether an ordinary run is played through this act.
+    fn played(self) -> bool {
+        <Self as sts2_core::Table>::data(self).is_default
     }
 }

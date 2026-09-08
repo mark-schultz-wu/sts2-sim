@@ -65,3 +65,15 @@ impl AscensionLevel {
         self as u8 >= level as u8
     }
 }
+
+impl sts2_core::Ladder for AscensionLevel {
+    const INFLATION: AscensionLevel = AscensionLevel::Inflation;
+    const NONE: AscensionLevel = AscensionLevel::None;
+    const SCARCITY: AscensionLevel = AscensionLevel::Scarcity;
+    const SWARMING_ELITES: AscensionLevel = AscensionLevel::SwarmingElites;
+    const WEARY_TRAVELER: AscensionLevel = AscensionLevel::WearyTraveler;
+
+    fn has(self, rung: AscensionLevel) -> bool {
+        AscensionLevel::has(self, rung)
+    }
+}

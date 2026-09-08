@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{CardIdent, ContentVersion, Coord, ModelId};
+use crate::{CardIdent, ContentVersion, Coord, Cost, ModelId};
 
 /// Everything the simulator is compared against after a decision.
 #[derive(Debug, Clone, PartialEq)]
@@ -187,12 +187,32 @@ pub struct EventOption<V: ContentVersion> {
     pub relic: Option<V::Relic>,
 }
 
+/// A card on a shop's shelf, priced in both senses.
+///
+/// A shop entry used to carry the identity alone, which let a client name the
+/// card and say nothing about it. Playing it is the reason to buy it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ShopCard<V: ContentVersion> {
+    pub card: CardIdent<V>,
+    /// See [`Playable::cost`](crate::report::observation::Playable::cost).
+    pub cost: Cost,
+    pub star_cost: Cost,
+}
+
 /// One thing a shop has for sale.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entry<V: ContentVersion> {
     pub index: u8,
     pub stock: Stock<V>,
+    /// The price in gold. What a card on the shelf costs to *play* is in
+    /// [`Stock::Card`].
     pub cost: i32,
+    /// What the shop calls it, and what it does, in the game's own words.
+    ///
+    /// The same descriptions the belt and the relic panel show for things
+    /// already owned. Absent where the shop generated no item for the slot.
+    pub title: Option<String>,
+    pub text: Option<String>,
     pub stocked: bool,
     pub affordable: bool,
     /// Why it cannot be bought, beyond stock and gold.
@@ -205,7 +225,9 @@ pub struct Entry<V: ContentVersion> {
 /// holds a `CreationResult`, which does not always produce one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Stock<V: ContentVersion> {
-    Card(Option<CardIdent<V>>),
+    /// The card and what it costs to play, which is a different question from
+    /// what it costs to buy.
+    Card(Option<ShopCard<V>>),
     Relic(Option<V::Relic>),
     Potion(Option<V::Potion>),
     /// The one entry that sells a service rather than a thing.
@@ -230,6 +252,7 @@ pub struct Combat<V: ContentVersion> {
     pub turn: i32,
     pub phase: V::PlayerTurnPhase,
     pub energy: i32,
+    pub stars: i32,
     pub round: i32,
     /// Which fight this is, which nothing else says: two encounters can field
     /// the same monsters at different counts. Absent for a combat with no
@@ -411,7 +434,14 @@ pub enum Undrinkable {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Playable<V: ContentVersion> {
     pub card: CardIdent<V>,
-    pub cost: i32,
+    /// What playing it costs now, with every modifier already applied.
+    ///
+    /// [`Cost::None`] rather than a number for a card not priced in that pool
+    /// at all. Every card outside the Regent's has no star cost, and a curse
+    /// has no energy cost. The game spells both `-1`. The wire is where that
+    /// stops.
+    pub cost: Cost,
+    pub star_cost: Cost,
     pub target: V::TargetType,
     /// Every rule this card fails, or nothing for a card that can be played.
     ///

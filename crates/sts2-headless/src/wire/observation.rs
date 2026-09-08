@@ -12,7 +12,9 @@
 //! The crate README says what this mirror does that a derive cannot, and why
 //! every failure carries a path.
 
+use super::cost::WireCost;
 use std::collections::{BTreeMap, HashMap};
+use sts2_core::{Cost, ShopCard};
 
 use serde::Deserialize;
 use sts2_core::{
@@ -232,7 +234,18 @@ struct WireEntry {
     /// The C# class name, which is what says how to read `id`.
     kind: String,
     id: Option<String>,
+    /// The price in gold, which is a plain number rather than a card cost.
     cost: i32,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    text: Option<String>,
+    /// What a card on the shelf costs to play. Absent for every other kind,
+    /// which is what `kind` already says.
+    #[serde(rename = "cardCost", default)]
+    card_cost: WireCost,
+    #[serde(rename = "cardStarCost", default)]
+    card_star_cost: WireCost,
     stocked: bool,
     affordable: bool,
     blocked: Option<String>,
@@ -265,6 +278,7 @@ struct WireCombat<V: ContentVersion> {
     turn: i32,
     phase: V::PlayerTurnPhase,
     energy: i32,
+    stars: i32,
     round: i32,
     encounter: Option<V::Encounter>,
     hand: Vec<String>,
@@ -331,7 +345,9 @@ struct WireIntent<V: ContentVersion> {
 #[serde(deny_unknown_fields, bound = "")]
 struct WirePlayable<V: ContentVersion> {
     card: String,
-    cost: i32,
+    cost: WireCost,
+    #[serde(rename = "starCost")]
+    star_cost: WireCost,
     target: V::TargetType,
     /// The same fact as `reason` being absent. Read to be checked against it.
     playable: bool,
@@ -572,9 +588,11 @@ impl WireEntry {
             .as_deref()
             .map(|text| -> Result<Stock<V>, Error> {
                 Ok(match self.kind.as_str() {
-                    "MerchantCardEntry" => {
-                        Stock::Card(Some(ident(&path, text, ident::card_ident::<V>)?))
-                    }
+                    "MerchantCardEntry" => Stock::Card(Some(ShopCard {
+                        card: ident(&path, text, ident::card_ident::<V>)?,
+                        cost: cost(&format!("{path}.cardCost"), self.card_cost)?,
+                        star_cost: cost(&format!("{path}.cardStarCost"), self.card_star_cost)?,
+                    })),
                     "MerchantRelicEntry" => Stock::Relic(Some(name(&path, "relic", text)?)),
                     "MerchantPotionEntry" => Stock::Potion(Some(name(&path, "potion", text)?)),
                     _ => return Err(unknown(&path, "shop entry", &self.kind)),
@@ -597,6 +615,8 @@ impl WireEntry {
             index: self.index,
             stock,
             cost: self.cost,
+            title: self.title,
+            text: self.text,
             stocked: self.stocked,
             affordable: self.affordable,
             blocked: blocked(&path, self.blocked.as_deref())?,
@@ -610,6 +630,7 @@ impl<V: ContentVersion> WireCombat<V> {
             turn: self.turn,
             phase: self.phase,
             energy: self.energy,
+            stars: self.stars,
             round: self.round,
             encounter: self.encounter,
             hand: cards("combat.hand", &self.hand)?,
@@ -759,7 +780,8 @@ impl<V: ContentVersion> WirePlayable<V> {
 
         Ok(Playable {
             card: ident(&format!("{path}.card"), &self.card, ident::card_ident::<V>)?,
-            cost: self.cost,
+            cost: cost(&format!("{path}.cost"), self.cost)?,
+            star_cost: cost(&format!("{path}.starCost"), self.star_cost)?,
             target: self.target,
             reason,
             preventer: self
@@ -826,6 +848,19 @@ pub(crate) fn name<T: serde::de::DeserializeOwned>(
     text: &str,
 ) -> Result<T, Error> {
     named(text).ok_or_else(|| unknown(path, what, text))
+}
+
+/// A cost, or the path that carried something that is not one.
+pub(crate) fn cost(path: &str, wire: WireCost) -> Result<Cost, Error> {
+    wire.cost().map_err(|value| {
+        at(
+            path,
+            Why::Unknown {
+                what: "cost",
+                value,
+            },
+        )
+    })
 }
 
 pub(crate) fn unknown(path: &str, what: &'static str, value: &str) -> Error {
@@ -1029,11 +1064,11 @@ mod tests {
         let legal = |playable: bool, reason: Value| {
             let mut state = base();
             state["combat"] = json!({
-                "turn": 1, "phase": "Play", "energy": 3, "round": 1,
+                "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
                 "encounter": null, "hand": [], "draw": [], "discard": [],
                 "exhaust": [], "creatures": [], "orbs": null,
                 "legal": [{
-                    "card": "STRIKE_IRONCLAD", "cost": 1, "target": "AnyEnemy",
+                    "card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null, "target": "AnyEnemy",
                     "playable": playable, "reason": reason, "preventer": null,
                     "targets": [], "effect": []
                 }]
@@ -1058,11 +1093,11 @@ mod tests {
 
         let mut state = base();
         state["combat"] = json!({
-            "turn": 1, "phase": "Play", "energy": 0, "round": 1,
+            "turn": 1, "phase": "Play", "energy": 0, "stars": 0, "round": 1,
             "encounter": null, "hand": [], "draw": [], "discard": [],
             "exhaust": [], "creatures": [], "orbs": null,
             "legal": [{
-                "card": "STRIKE_IRONCLAD", "cost": 1, "target": "AnyAlly",
+                "card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null, "target": "AnyAlly",
                 "playable": false,
                 "reason": "EnergyCostTooHigh, NoLivingAllies",
                 "preventer": null, "targets": [], "effect": []
@@ -1070,7 +1105,10 @@ mod tests {
         });
 
         let obs = parse(&state).unwrap();
-        let reason = obs.combat.unwrap().legal[0].reason.unwrap();
+        let combat = obs.combat.unwrap();
+        assert_eq!(combat.stars, 0);
+        assert_eq!(combat.legal[0].star_cost, Cost::None);
+        let reason = combat.legal[0].reason.unwrap();
         assert!(reason.contains(UnplayableReason::EnergyCostTooHigh));
         assert!(reason.contains(UnplayableReason::NoLivingAllies));
         assert!(!reason.contains(UnplayableReason::BlockedByHook));
@@ -1114,7 +1152,7 @@ mod tests {
         let creature = |intent: Value, intents: Value| {
             let mut state = base();
             state["combat"] = json!({
-                "turn": 1, "phase": "Play", "energy": 3, "round": 1,
+                "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
                 "encounter": null, "hand": [], "draw": [], "discard": [],
                 "exhaust": [], "legal": [], "orbs": null,
                 "creatures": [{
@@ -1170,7 +1208,7 @@ mod tests {
     fn an_intent_that_is_not_an_attack_carries_no_numbers() {
         let mut state = base();
         state["combat"] = json!({
-            "turn": 1, "phase": "Play", "energy": 3, "round": 1,
+            "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
             "encounter": null, "hand": [], "draw": [], "discard": [],
             "exhaust": [], "legal": [], "orbs": null,
             "creatures": [{
@@ -1197,7 +1235,7 @@ mod tests {
     fn a_creature_with_no_combat_id_is_refused() {
         let mut state = base();
         state["combat"] = json!({
-            "turn": 1, "phase": "Play", "energy": 3, "round": 1,
+            "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
             "encounter": null, "hand": [], "draw": [], "discard": [],
             "exhaust": [], "legal": [], "orbs": null,
             "creatures": [{

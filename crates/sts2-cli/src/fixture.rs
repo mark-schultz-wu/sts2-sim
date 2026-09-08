@@ -133,7 +133,7 @@ pub fn answered(mut value: Value) -> Applied<V> {
 /// A combat block, with `overlay` merged into it.
 pub fn combat(overlay: Value) -> Value {
     let mut base = json!({
-        "turn": 1, "phase": "Play", "energy": 3, "round": 1,
+        "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
         "encounter": null, "hand": [], "draw": [], "discard": [], "exhaust": [],
         "creatures": [], "legal": [], "orbs": null
     });
@@ -144,7 +144,7 @@ pub fn combat(overlay: Value) -> Value {
 /// One card in hand, playable, against these targets.
 pub fn playable(card: &str, targets: &[u32]) -> Value {
     json!({
-        "card": card, "cost": 1, "target": "AnyEnemy", "playable": true,
+        "card": card, "cost": 1, "starCost": null, "target": "AnyEnemy", "playable": true,
         "reason": null, "preventer": null, "targets": targets, "effect": []
     })
 }
@@ -152,7 +152,7 @@ pub fn playable(card: &str, targets: &[u32]) -> Value {
 /// One card in hand that cannot be played, for that reason.
 pub fn unplayable(card: &str, reason: &str) -> Value {
     json!({
-        "card": card, "cost": 1, "target": "None", "playable": false,
+        "card": card, "cost": 1, "starCost": null, "target": "None", "playable": false,
         "reason": reason, "preventer": null, "targets": [], "effect": []
     })
 }

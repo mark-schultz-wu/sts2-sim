@@ -259,21 +259,16 @@ fn emit_characters(
     }
     writeln!(out, "    ];\n").unwrap();
 
-    writeln!(out, "    /// What a run as this character starts with.").unwrap();
-    writeln!(out, "    fn data(self) -> CharacterData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for row in characters {
-        writeln!(
-            out,
-            "            Self::{} => {},",
-            camel(&row[1]),
-            literal(row, deck, relics)?
-        )
-        .unwrap();
+        table.push(literal(row, deck, relics)?);
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    /// What a run as this character starts with.").unwrap();
+    writeln!(out, "    fn data(self) -> &'static CharacterData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "CharacterData", &table);
 
     // The one fact a caller that does not know what a character is still has
     // to know: whether a run can be started as one.

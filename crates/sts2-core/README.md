@@ -56,7 +56,6 @@ spell the ids of a build.
 ```
 sts2-core       depends on nothing
 sts2-content    implements ContentVersion for one build
-sts2-rng        adds stream_seed for a Seed
 sts2-headless   implements the game, for real
 sts2-sim        will implement the game, later
 ```
@@ -171,6 +170,27 @@ this crate's types cannot build. That is a missing field, a command that is not
 a command, or a number where a name belongs. A `Decision` cannot spell any of
 them, so a caller driving a game through `Play` never sees one. Only `send_raw`
 reaches them, and it exists to test exactly that.
+
+## The random numbers
+
+`rng` is the game's stream, ported. Slay the Spire 2 draws each card, rolls each
+reward, and picks each monster move from one seeded stream. Replaying a run
+therefore means producing the same numbers in the same order.
+
+`GameRng` is the trait: an implementation supplies seeding and one raw draw, and
+every gameplay method defaults to the game's own arithmetic. So a replacement
+can get the core wrong, never the semantics. `Bound`, `Span` and `Interval` are
+the shapes a draw asks for. A bad range fails where it is built, rather than
+where it is drawn from.
+
+Nobody trusts the port because it reads correctly. `tests/ground_truth.rs`
+replays `megarandom.txt`, dumped from the game, and requires an exact match on
+every draw. That test is the only reason to trust anything here.
+
+It lived in a crate of its own until nothing outside this one used it. `Seed` is
+here, and so is the machine that uses a seed. The fuzzer that once borrowed
+`stream_seed` folds its own dice instead. Those dice pick between the oracle's
+legal moves, and must never touch a stream that the run draws from.
 
 ## The digest
 

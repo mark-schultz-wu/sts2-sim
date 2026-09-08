@@ -18,9 +18,10 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
+use sts2_core::Cost;
 use sts2_core::{CardIdent, ContentVersion, Playable};
 
-use crate::render::spelling;
+use crate::render::{self, Pool, spelling};
 use crate::tui::names;
 use crate::tui::theme;
 
@@ -65,7 +66,7 @@ pub fn ident<V: ContentVersion>(card: &CardIdent<V>) -> String {
 
 /// What to draw in one box.
 pub struct Face {
-    pub cost: Option<i32>,
+    pub cost: Option<String>,
     pub name: String,
     /// The line under the name: a refusal, a price, a count. Empty for none.
     pub note: Option<(String, ratatui::style::Style)>,
@@ -77,6 +78,23 @@ pub struct Face {
     pub picked: bool,
     /// Chosen, in a selection that takes several.
     pub marked: bool,
+}
+
+/// The two pools a card is priced in, or nothing when it is priced in neither.
+///
+/// Two values rather than a sum. Energy and stars are separate pools, spent
+/// separately and refused separately, and `1+2★` read as arithmetic on one of
+/// them. A card priced in only one shows only that one.
+/// No mark on the energy amount. Its position on the box says which pool it is.
+fn cost(energy: Cost, stars: Cost) -> Option<String> {
+    let spelled: Vec<String> = render::pools(energy, stars)
+        .map(|(amount, pool)| match pool {
+            Pool::Energy => amount.to_string(),
+            Pool::Stars => format!("{amount}★"),
+        })
+        .collect();
+
+    (!spelled.is_empty()).then(|| spelled.join(" "))
 }
 
 impl Face {
@@ -99,7 +117,7 @@ impl Face {
         });
 
         Face {
-            cost: Some(card.cost),
+            cost: cost(card.cost, card.star_cost),
             name: ident(&card.card),
             note: unplayable,
             // While a creature is being aimed at, that creature's own preview:
@@ -141,6 +159,17 @@ impl Face {
         }
     }
 
+    /// A card with the printed cost shown by a reward screen.
+    pub fn plain_with_cost<V: ContentVersion>(
+        card: &CardIdent<V>,
+        energy: Cost,
+        stars: Cost,
+    ) -> Face {
+        let mut face = Self::plain(card);
+        face.cost = cost(energy, stars);
+        face
+    }
+
     /// A card with nothing computed about it: a pile listing, a reward.
     pub fn plain<V: ContentVersion>(card: &CardIdent<V>) -> Face {
         Face {
@@ -169,7 +198,7 @@ pub fn draw(frame: &mut Frame, area: Rect, face: &Face) {
     };
 
     let mut block = Block::bordered().border_style(border);
-    if let Some(cost) = face.cost {
+    if let Some(cost) = &face.cost {
         block = block.title(Span::styled(format!("({cost})"), theme::gold()));
     }
     // One-based, so the number in the border is the digit that presses it —
@@ -223,6 +252,33 @@ pub fn draw(frame: &mut Frame, area: Rect, face: &Face) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A card box says what the card is priced at, in whichever pools it is
+    /// priced in.
+    #[test]
+    fn each_pool_is_shown_only_when_the_card_is_priced_in_it() {
+        // The ordinary case: energy alone. Every card outside the Regent's has
+        // no star cost at all, so a bare number is what almost every box says.
+        assert_eq!(cost(Cost::Fixed(1), Cost::None).as_deref(), Some("1"));
+        assert_eq!(cost(Cost::Fixed(0), Cost::None).as_deref(), Some("0"));
+
+        // Stars alone, and both. Separated by a space rather than a `+`,
+        // because they are two pools and not one sum.
+        assert_eq!(cost(Cost::None, Cost::Fixed(2)).as_deref(), Some("2★"));
+        assert_eq!(
+            cost(Cost::Fixed(1), Cost::Fixed(2)).as_deref(),
+            Some("1 2★")
+        );
+
+        // X spends the pool rather than a number of it, and the number the
+        // wire carries for such a card is zero. `(0)` would be a lie.
+        assert_eq!(cost(Cost::X, Cost::None).as_deref(), Some("X"));
+        assert_eq!(cost(Cost::None, Cost::X).as_deref(), Some("X★"));
+
+        // A curse is priced in neither, and gets no title at all rather than
+        // the `-1` the game spells that with.
+        assert_eq!(cost(Cost::None, Cost::None), None);
+    }
 
     #[test]
     fn boxes_shrink_to_fit_and_stop() {

@@ -1,602 +1,2423 @@
 # card data
 # build v0.111.0 commit 41cef1ea assembly 1579942752 content 1568834832
-# id pool type rarity target cost costsX maxUpgrade keywords
-card ABRASIVE SILENT_CARD_POOL Power Rare Self 3 0 1 Sly
-card ABUNDANCE EVENT_CARD_POOL Skill Ancient Self 1 0 1 Exhaust
-card ACCELERANT SILENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card ACCURACY SILENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card ACROBATICS SILENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card ADAPTIVE_STRIKE DEFECT_CARD_POOL Attack Rare AnyEnemy 2 0 1 -
-card ADRENALINE SILENT_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card AFTERIMAGE SILENT_CARD_POOL Power Rare Self 1 0 1 -
-card AFTERLIFE NECROBINDER_CARD_POOL Skill Common Self 1 0 1 Exhaust
-card AGGRESSION IRONCLAD_CARD_POOL Power Rare Self 1 0 1 -
-card ALCHEMIZE COLORLESS_CARD_POOL Skill Rare Self 1 0 1 Exhaust
-card ALIGNMENT REGENT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card ALL_FOR_ONE DEFECT_CARD_POOL Attack Rare AnyEnemy 2 0 1 -
-card ANGER IRONCLAD_CARD_POOL Attack Common AnyEnemy 0 0 1 -
-card ANOINTED COLORLESS_CARD_POOL Skill Rare Self 1 0 1 Exhaust
-card ANTICIPATE SILENT_CARD_POOL Skill Common Self 0 0 1 -
-card APOTHEOSIS EVENT_CARD_POOL Skill Ancient Self 2 0 1 Exhaust,Innate
-card APPARITION EVENT_CARD_POOL Skill Ancient Self 1 0 1 Ethereal,Exhaust
-card ARMAMENTS IRONCLAD_CARD_POOL Skill Common Self 1 0 1 -
-card ARSENAL REGENT_CARD_POOL Power Rare Self 1 0 1 -
-card ASCENDERS_BANE CURSE_CARD_POOL Curse Curse None -1 0 0 Eternal,Ethereal,Unplayable
-card ASHEN_STRIKE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card ASSASSINATE SILENT_CARD_POOL Attack Rare AnyEnemy 0 0 1 Exhaust,Innate
-card ASTRAL_PULSE REGENT_CARD_POOL Attack Common AllEnemies 0 0 1 -
-card AUTOMATION COLORLESS_CARD_POOL Power Uncommon Self 1 0 1 -
-card BACKFLIP SILENT_CARD_POOL Skill Common Self 1 0 1 -
-card BACKSTAB SILENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 Exhaust,Innate
-card BAD_LUCK CURSE_CARD_POOL Curse Curse None -1 0 0 Eternal,Unplayable
-card BALL_LIGHTNING DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card BANSHEES_CRY NECROBINDER_CARD_POOL Attack Rare AllEnemies 9 0 1 -
-card BARRAGE DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card BARRICADE IRONCLAD_CARD_POOL Power Rare Self 3 0 1 -
-card BASH IRONCLAD_CARD_POOL Attack Basic AnyEnemy 2 0 1 -
-card BATTLE_TRANCE IRONCLAD_CARD_POOL Skill Uncommon Self 0 0 1 -
-card BEACON_OF_HOPE COLORLESS_CARD_POOL Power Rare Self 2 0 1 -
-card BEAM_CELL DEFECT_CARD_POOL Attack Common AnyEnemy 0 0 1 -
-card BEAT_DOWN COLORLESS_CARD_POOL Skill Rare RandomEnemy 3 0 1 -
-card BEAT_INTO_SHAPE REGENT_CARD_POOL Attack Rare AnyEnemy 1 0 1 -
-card BECKON STATUS_CARD_POOL Status Status None 1 0 0 -
-card BEGONE REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card BELIEVE_IN_YOU COLORLESS_CARD_POOL Skill Uncommon AnyAlly 0 0 1 -
-card BIASED_COGNITION DEFECT_CARD_POOL Power Ancient Self 1 0 1 -
-card BIG_BANG REGENT_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card BLACK_HOLE REGENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card BLADE_DANCE SILENT_CARD_POOL Skill Common Self 1 0 1 Exhaust
-card BLADE_OF_INK SILENT_CARD_POOL Skill Rare Self 1 0 1 -
-card BLADE_SYMPHONY SILENT_CARD_POOL Skill Uncommon AllAllies 2 0 1 -
-card BLAZE IRONCLAD_CARD_POOL Skill Uncommon AnyAlly 2 0 1 -
-card BLIGHT_STRIKE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card BLOODLETTING IRONCLAD_CARD_POOL Skill Uncommon Self 0 0 1 -
-card BLOOD_WALL IRONCLAD_CARD_POOL Skill Common Self 2 0 1 -
-card BLUDGEON IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 3 0 1 -
-card BLUR SILENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card BODYGUARD NECROBINDER_CARD_POOL Skill Basic Self 1 0 1 -
-card BODY_SLAM IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card BOLAS COLORLESS_CARD_POOL Attack Rare AnyEnemy 0 0 1 -
-card BOMBARDMENT REGENT_CARD_POOL Attack Rare AnyEnemy 3 0 1 Exhaust
-card BONE_SHARDS NECROBINDER_CARD_POOL Attack Uncommon AllEnemies 1 0 1 -
-card BOOST_AWAY DEFECT_CARD_POOL Skill Common Self 0 0 1 -
-card BOOT_SEQUENCE DEFECT_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust,Innate
-card BORROWED_TIME NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 1 -
-card BOUNCING_FLASK SILENT_CARD_POOL Skill Uncommon RandomEnemy 2 0 1 -
-card BRAND IRONCLAD_CARD_POOL Skill Rare Self 0 0 1 -
-card BREAK IRONCLAD_CARD_POOL Attack Ancient AnyEnemy 1 0 1 -
-card BREAKTHROUGH IRONCLAD_CARD_POOL Attack Common AllEnemies 1 0 1 -
-card BRIGHTEST_FLAME EVENT_CARD_POOL Skill Ancient Self 0 0 1 -
-card BUBBLE_BUBBLE SILENT_CARD_POOL Skill Uncommon AnyEnemy 1 0 1 -
-card BUFFER DEFECT_CARD_POOL Power Rare Self 2 0 1 -
-card BULK_UP DEFECT_CARD_POOL Power Uncommon Self 2 0 1 -
-card BULLET_TIME SILENT_CARD_POOL Skill Rare Self 3 0 1 -
-card BULLY IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card BULWARK REGENT_CARD_POOL Skill Uncommon Self 2 0 1 -
-card BUNDLE_OF_JOY REGENT_CARD_POOL Skill Rare Self 1 0 1 Exhaust
-card BURN STATUS_CARD_POOL Status Status None -1 0 0 Unplayable
-card BURNING_PACT IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 1 -
-card BURST SILENT_CARD_POOL Skill Rare Self 1 0 1 -
-card BURY NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 4 0 1 -
-card BYRDONIS_EGG QUEST_CARD_POOL Quest Quest None -1 0 0 Unplayable
-card BYRD_SWOOP EVENT_CARD_POOL Attack Event AnyEnemy 0 0 1 -
-card CACOPHONY NECROBINDER_CARD_POOL Power Rare Self 2 0 1 -
-card CALAMITY COLORLESS_CARD_POOL Power Rare Self 3 0 1 -
-card CALCIFY NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 -
-card CALCULATED_GAMBLE SILENT_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card CALL_OF_THE_VOID NECROBINDER_CARD_POOL Power Rare Self 1 0 1 -
-card CALTROPS EVENT_CARD_POOL Power Event Self 1 0 1 -
-card CAPACITOR DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card CAPTURE_SPIRIT NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 1 -
-card CASCADE IRONCLAD_CARD_POOL Skill Rare Self 0 1 1 -
-card CATASTROPHE COLORLESS_CARD_POOL Skill Uncommon Self 2 0 1 -
-card CELESTIAL_MIGHT REGENT_CARD_POOL Attack Common AnyEnemy 2 0 1 -
-card CHAOS DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card CHARGE REGENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card CHARGE_BATTERY DEFECT_CARD_POOL Skill Common Self 1 0 1 -
-card CHILD_OF_THE_STARS REGENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card CHILL DEFECT_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card CINDER IRONCLAD_CARD_POOL Attack Common AnyEnemy 2 0 1 -
-card CLASH EVENT_CARD_POOL Attack Event AnyEnemy 0 0 1 -
-card CLAW DEFECT_CARD_POOL Attack Common AnyEnemy 0 0 1 -
-card CLEANSE NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 1 -
-card CLOAK_AND_DAGGER SILENT_CARD_POOL Skill Common Self 1 0 1 -
-card CLOAK_OF_STARS REGENT_CARD_POOL Skill Common Self 0 0 1 -
-card CLUMSY CURSE_CARD_POOL Curse Curse None -1 0 0 Ethereal,Unplayable
-card COLD_SNAP DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card COLLISION_COURSE REGENT_CARD_POOL Attack Common AnyEnemy 0 0 1 -
-card COLOSSUS IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 1 -
-card COMET REGENT_CARD_POOL Attack Rare AnyEnemy 0 0 1 -
-card COMPACT DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card COMPILE_DRIVER DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card CONCOCT SILENT_CARD_POOL Skill Uncommon AnyAlly 0 0 1 -
-card CONFLAGRATION IRONCLAD_CARD_POOL Attack Rare AllEnemies 1 0 1 -
-card CONQUEROR REGENT_CARD_POOL Skill Uncommon AnyEnemy 1 0 1 -
-card CONSTELLATION REGENT_CARD_POOL Skill Uncommon AnyAlly 0 0 1 -
-card CONSUMING_SHADOW DEFECT_CARD_POOL Power Rare Self 2 0 1 -
-card CONVERGENCE REGENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card COOLANT DEFECT_CARD_POOL Power Rare Self 1 0 1 -
-card COOLHEADED DEFECT_CARD_POOL Skill Common Self 1 0 1 -
-card COORDINATE COLORLESS_CARD_POOL Skill Uncommon AnyAlly 1 0 1 -
-card CORROSIVE_WAVE SILENT_CARD_POOL Skill Rare Self 1 0 1 -
-card CORRUPTION IRONCLAD_CARD_POOL Power Ancient Self 3 0 1 -
-card COSMIC_INDIFFERENCE REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card COUNTDOWN NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 -
-card CRASH_LANDING REGENT_CARD_POOL Attack Rare AllEnemies 1 0 1 -
-card CREATIVE_AI DEFECT_CARD_POOL Power Rare Self 3 0 1 -
-card CRESCENT_SPEAR REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card CRIMSON_MANTLE IRONCLAD_CARD_POOL Power Rare Self 1 0 1 -
-card CRUELTY IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card CRUSH_UNDER REGENT_CARD_POOL Attack Common AllEnemies 1 0 1 -
-card CURSE_OF_THE_BELL CURSE_CARD_POOL Curse Curse None -1 0 0 Eternal,Unplayable
-card DAGGER_SPRAY SILENT_CARD_POOL Attack Common AllEnemies 1 0 1 -
-card DAGGER_THROW SILENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card DANSE_MACABRE NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 -
-card DARKNESS DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card DARK_EMBRACE IRONCLAD_CARD_POOL Power Rare Self 2 0 1 -
-card DARK_SHACKLES COLORLESS_CARD_POOL Skill Uncommon AnyEnemy 0 0 1 Exhaust
-card DASH SILENT_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card DAZED STATUS_CARD_POOL Status Status None -1 0 0 Ethereal,Unplayable
-card DEADLY_POISON SILENT_CARD_POOL Skill Common AnyEnemy 1 0 1 -
-card DEATHBRINGER NECROBINDER_CARD_POOL Skill Uncommon AllEnemies 2 0 1 -
-card DEATHS_DOOR NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 1 -
-card DEATH_MARCH NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card DEBILITATE NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card DEBRIS STATUS_CARD_POOL Status Status None 1 0 0 Exhaust
-card DEBT CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card DECAY CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card DECISIONS_DECISIONS REGENT_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card DEFEND_DEFECT DEFECT_CARD_POOL Skill Basic Self 1 0 1 -
-card DEFEND_IRONCLAD IRONCLAD_CARD_POOL Skill Basic Self 1 0 1 -
-card DEFEND_NECROBINDER NECROBINDER_CARD_POOL Skill Basic Self 1 0 1 -
-card DEFEND_REGENT REGENT_CARD_POOL Skill Basic Self 1 0 1 -
-card DEFEND_SILENT SILENT_CARD_POOL Skill Basic Self 1 0 1 -
-card DEFILE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 Ethereal
-card DEFLECT SILENT_CARD_POOL Skill Common Self 0 0 1 -
-card DEFRAGMENT DEFECT_CARD_POOL Power Rare Self 1 0 1 -
-card DEFY NECROBINDER_CARD_POOL Skill Common AnyEnemy 1 0 1 Ethereal
-card DELAY NECROBINDER_CARD_POOL Skill Uncommon Self 2 0 1 -
-card DEMESNE NECROBINDER_CARD_POOL Power Rare Self 3 0 1 Ethereal
-card DEMONIC_SHIELD IRONCLAD_CARD_POOL Skill Uncommon AnyAlly 0 0 1 Exhaust
-card DEMON_FORM IRONCLAD_CARD_POOL Power Rare Self 3 0 1 -
-card DEPRECATED_CARD DEPRECATED_CARD_POOL Status Status None 0 0 0 Exhaust
-card DEVASTATE REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card DEVOUR_LIFE NECROBINDER_CARD_POOL Power Rare Self 1 0 1 -
-card DIRGE NECROBINDER_CARD_POOL Skill Uncommon Self 0 1 1 Exhaust
-card DISCOVERY COLORLESS_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card DISINTEGRATION TOKEN_CARD_POOL Status Status None -1 0 0 -
-card DISMANTLE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card DISTRACTION EVENT_CARD_POOL Skill Event Self 1 0 1 Exhaust
-card DODGE_AND_ROLL SILENT_CARD_POOL Skill Common Self 1 0 1 -
-card DOMINATE IRONCLAD_CARD_POOL Skill Rare AnyEnemy 1 0 1 Exhaust
-card DOUBLE_ENERGY DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card DOUBT CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card DOWSING QUEST_CARD_POOL Quest Quest None -1 0 0 Unplayable
-card DRAIN_POWER NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card DRAMATIC_ENTRANCE COLORLESS_CARD_POOL Attack Uncommon AllEnemies 0 0 1 Exhaust,Innate
-card DREDGE NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card DRUM_OF_BATTLE IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 1 -
-card DUALCAST DEFECT_CARD_POOL Skill Basic Self 1 0 1 -
-card DUAL_WIELD EVENT_CARD_POOL Skill Event Self 1 0 1 -
-card DYING_STAR REGENT_CARD_POOL Attack Rare AllEnemies 1 0 1 Ethereal
-card ECHOING_SLASH SILENT_CARD_POOL Attack Uncommon AllEnemies 1 0 1 -
-card ECHO_FORM DEFECT_CARD_POOL Power Rare Self 3 0 1 Ethereal
-card EIDOLON NECROBINDER_CARD_POOL Skill Rare Self 2 0 1 Exhaust
-card END_OF_DAYS NECROBINDER_CARD_POOL Skill Rare AllEnemies 3 0 1 -
-card ENERGY_SURGE DEFECT_CARD_POOL Skill Uncommon AllAllies 1 0 1 Exhaust
-card ENFEEBLING_TOUCH NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 1 Ethereal
-card ENLIGHTENMENT EVENT_CARD_POOL Skill Event Self 0 0 1 Exhaust
-card ENTHRALLED CURSE_CARD_POOL Curse Curse None 2 0 0 Eternal
-card ENTRENCH EVENT_CARD_POOL Skill Event Self 2 0 1 -
-card ENTROPY COLORLESS_CARD_POOL Power Rare Self 1 0 1 -
-card ENVENOM SILENT_CARD_POOL Power Rare Self 2 0 1 -
-card EQUILIBRIUM COLORLESS_CARD_POOL Skill Uncommon Self 2 0 1 -
-card ERADICATE NECROBINDER_CARD_POOL Attack Rare AnyEnemy 0 1 1 Retain
-card ESCAPE_PLAN SILENT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card ETERNAL_ARMOR COLORLESS_CARD_POOL Power Rare Self 3 0 1 -
-card EVIL_EYE IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 1 -
-card EXPECT_A_FIGHT IRONCLAD_CARD_POOL Skill Uncommon Self 3 0 1 -
-card EXPERTISE SILENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card EXPOSE SILENT_CARD_POOL Skill Uncommon AnyEnemy 0 0 1 Exhaust
-card EXTERMINATE EVENT_CARD_POOL Attack Event AllEnemies 1 0 1 -
-card FADE SILENT_CARD_POOL Skill Uncommon AnyAlly 0 0 1 Retain
-card FALLING_STAR REGENT_CARD_POOL Attack Basic AnyEnemy 0 0 1 -
-card FAN_OF_KNIVES SILENT_CARD_POOL Power Rare Self 2 0 1 -
-card FASTEN COLORLESS_CARD_POOL Power Uncommon Self 1 0 1 -
-card FEAR NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 Ethereal
-card FEED IRONCLAD_CARD_POOL Attack Rare AnyEnemy 1 0 1 Exhaust
-card FEEDING_FRENZY EVENT_CARD_POOL Skill Event Self 0 0 1 -
-card FEEL_NO_PAIN IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card FERAL DEFECT_CARD_POOL Power Uncommon Self 2 0 1 -
-card FETCH NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card FIEND_FIRE IRONCLAD_CARD_POOL Attack Rare AnyEnemy 2 0 1 Exhaust
-card FIGHT_ME IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card FIGHT_THROUGH DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card FINESSE COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 -
-card FINISHER SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card FISTICUFFS COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card FLAK_CANNON DEFECT_CARD_POOL Attack Rare RandomEnemy 2 0 1 -
-card FLAME_BARRIER IRONCLAD_CARD_POOL Skill Uncommon Self 2 0 1 -
-card FLANKING SILENT_CARD_POOL Skill Rare AnyEnemy 2 0 1 -
-card FLASH_OF_STEEL COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card FLATTEN NECROBINDER_CARD_POOL Attack Common AnyEnemy 2 0 1 -
-card FLECHETTES SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card FLICK_FLACK SILENT_CARD_POOL Attack Common AllEnemies 1 0 1 Sly
-card FOCUSED_STRIKE DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card FOLLY CURSE_CARD_POOL Curse Curse None -1 0 0 Eternal,Ethereal,Innate,Unplayable
-card FOOTWORK SILENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card FORBIDDEN_GRIMOIRE NECROBINDER_CARD_POOL Power Ancient Self 2 0 1 Eternal
-card FOREGONE_CONCLUSION REGENT_CARD_POOL Skill Rare Self 1 0 1 -
-card FORGOTTEN_RITUAL IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card FRANTIC_ESCAPE STATUS_CARD_POOL Status Status Self 1 0 0 -
-card FRIENDSHIP NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 -
-card FTL DEFECT_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card FUEL TOKEN_CARD_POOL Skill Token Self 0 0 1 Exhaust
-card FURNACE REGENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card FUSION DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card GAMMA_BLAST REGENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card GANG_UP COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card GATHER_LIGHT REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card GENESIS REGENT_CARD_POOL Power Rare Self 2 0 1 -
-card GENETIC_ALGORITHM DEFECT_CARD_POOL Skill Rare Self 1 0 1 Exhaust
-card GIANT_ROCK TOKEN_CARD_POOL Attack Token AnyEnemy 1 0 1 -
-card GLACIER DEFECT_CARD_POOL Skill Uncommon Self 2 0 1 -
-card GLASSWORK DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card GLIMMER REGENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card GLIMPSE_BEYOND NECROBINDER_CARD_POOL Skill Rare AllAllies 1 0 1 Exhaust
-card GLITTERSTREAM REGENT_CARD_POOL Skill Common Self 2 0 1 -
-card GLOW REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card GOLD_AXE COLORLESS_CARD_POOL Attack Rare AnyEnemy 1 0 1 -
-card GO_FOR_THE_EYES DEFECT_CARD_POOL Attack Common AnyEnemy 0 0 1 -
-card GRAND_FINALE SILENT_CARD_POOL Attack Rare AllEnemies 0 0 1 -
-card GRAVEBLAST NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 Exhaust
-card GRAVE_WARDEN NECROBINDER_CARD_POOL Skill Common Self 1 0 1 -
-card GREED CURSE_CARD_POOL Curse Curse None -1 0 0 Eternal,Unplayable
-card GUARDS REGENT_CARD_POOL Skill Rare Self 2 0 1 Exhaust
-card GUIDING_STAR REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card GUILTY CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card GUNK_UP DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card HAILSTORM DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card HAMMER_TIME REGENT_CARD_POOL Power Rare Self 2 0 1 -
-card HAND_OF_GREED COLORLESS_CARD_POOL Attack Rare AnyEnemy 2 0 1 -
-card HAND_TRICK SILENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card HANG NECROBINDER_CARD_POOL Attack Rare AnyEnemy 1 0 1 -
-card HAUNT NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 -
-card HAVOC IRONCLAD_CARD_POOL Skill Common Self 1 0 1 -
-card HAZE SILENT_CARD_POOL Skill Uncommon AllEnemies 2 0 1 -
-card HEADBUTT IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card HEAVENLY_DRILL REGENT_CARD_POOL Attack Rare AnyEnemy 0 1 1 -
-card HEGEMONY REGENT_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card HEIRLOOM_HAMMER REGENT_CARD_POOL Attack Rare AnyEnemy 2 0 1 -
-card HELIX_DRILL DEFECT_CARD_POOL Attack Rare AnyEnemy 0 0 1 -
-card HELLO_WORLD EVENT_CARD_POOL Power Event Self 1 0 1 -
-card HELLRAISER IRONCLAD_CARD_POOL Power Rare Self 2 0 1 -
-card HEMOKINESIS IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card HIBERNATE DEFECT_CARD_POOL Skill Uncommon Self 2 0 1 -
-card HIDDEN_CACHE REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card HIDDEN_DAGGERS SILENT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card HIDDEN_GEM COLORLESS_CARD_POOL Skill Rare Self 1 0 1 -
-card HIGH_FIVE NECROBINDER_CARD_POOL Attack Uncommon AllEnemies 2 0 1 -
-card HOLOGRAM DEFECT_CARD_POOL Skill Common Self 1 0 1 Exhaust
-card HOTFIX DEFECT_CARD_POOL Skill Common Self 0 0 1 Exhaust
-card HOWL_FROM_BEYOND IRONCLAD_CARD_POOL Attack Uncommon AllEnemies 3 0 1 -
-card HUDDLE_UP COLORLESS_CARD_POOL Skill Uncommon AllAllies 1 0 1 Exhaust
-card HYPERBEAM DEFECT_CARD_POOL Attack Rare AllEnemies 2 0 1 -
-card ICE_LANCE DEFECT_CARD_POOL Attack Rare AnyEnemy 3 0 1 -
-card IGNITION DEFECT_CARD_POOL Skill Uncommon AnyAlly 1 0 1 Exhaust
-card IMITATION_LEARNING DEFECT_CARD_POOL Skill Rare AnyAlly 1 0 1 Exhaust
-card IMPATIENCE COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 -
-card IMPERVIOUS IRONCLAD_CARD_POOL Skill Rare Self 2 0 1 Exhaust
-card INFECTION STATUS_CARD_POOL Status Status None -1 0 0 Unplayable
-card INFERNAL_BLADE IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card INFERNO IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card INFINITE_BLADES SILENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card INFLAME IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card INJURY CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card INTERCEPT COLORLESS_CARD_POOL Skill Uncommon AnyAlly 1 0 1 -
-card INVOKE NECROBINDER_CARD_POOL Skill Common Self 1 0 1 -
-card IRON_WAVE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card ITERATION DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card I_AM_INVINCIBLE REGENT_CARD_POOL Skill Rare Self 1 0 1 -
-card JACKPOT COLORLESS_CARD_POOL Attack Rare AnyEnemy 3 0 1 -
-card JACK_OF_ALL_TRADES COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card JUGGERNAUT IRONCLAD_CARD_POOL Power Rare Self 2 0 1 -
-card JUGGLING IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card KINGLY_KICK REGENT_CARD_POOL Attack Uncommon AnyEnemy 4 0 1 -
-card KINGLY_PUNCH REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card KNIFE_TRAP SILENT_CARD_POOL Skill Rare AnyEnemy 2 0 1 -
-card KNOCKDOWN COLORLESS_CARD_POOL Attack Rare AnyEnemy 3 0 1 -
-card KNOCKOUT_BLOW REGENT_CARD_POOL Attack Uncommon AnyEnemy 3 0 1 -
-card KNOW_THY_PLACE REGENT_CARD_POOL Skill Common AnyEnemy 0 0 1 Exhaust
-card LANTERN_KEY QUEST_CARD_POOL Quest Quest Self -1 0 0 Unplayable
-card LARGESSE REGENT_CARD_POOL Skill Uncommon AnyAlly 0 0 1 -
-card LEADING_STRIKE SILENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card LEAP DEFECT_CARD_POOL Skill Common Self 1 0 1 -
-card LEGION_OF_BONE NECROBINDER_CARD_POOL Skill Uncommon AllAllies 2 0 1 -
-card LEG_SWEEP SILENT_CARD_POOL Skill Uncommon AnyEnemy 2 0 1 -
-card LETHALITY NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 Ethereal
-card LIFT COLORLESS_CARD_POOL Skill Uncommon AnyAlly 1 0 1 -
-card LIGHTNING_ROD DEFECT_CARD_POOL Skill Common Self 1 0 1 -
-card LOOP DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card LUMINESCE TOKEN_CARD_POOL Skill Token Self 0 0 1 Exhaust,Retain
-card LUNAR_BLAST REGENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card MACHINE_LEARNING DEFECT_CARD_POOL Power Rare Self 1 0 1 -
-card MAD_SCIENCE EVENT_CARD_POOL dynamic Event dynamic 1 0 1 -
-card MAKE_IT_SO REGENT_CARD_POOL Attack Rare AnyEnemy 0 0 1 -
-card MALAISE SILENT_CARD_POOL Skill Rare dynamic 0 1 1 Exhaust
-card MANGLE IRONCLAD_CARD_POOL Attack Rare AnyEnemy 3 0 1 -
-card MANIFEST_AUTHORITY REGENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card MASTER_OF_STRATEGY COLORLESS_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card MASTER_PLANNER SILENT_CARD_POOL Power Rare Self 2 0 1 -
-card MAUL EVENT_CARD_POOL Attack Ancient AnyEnemy 1 0 1 -
-card MAYHEM COLORLESS_CARD_POOL Power Rare Self 2 0 1 -
-card MELANCHOLY NECROBINDER_CARD_POOL Skill Uncommon Self 3 0 1 -
-card MEMENTO_MORI SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card METAMORPHOSIS EVENT_CARD_POOL Skill Event Self 2 0 1 Exhaust
-card METEOR_SHOWER REGENT_CARD_POOL Attack Ancient AllEnemies 0 0 1 -
-card METEOR_STRIKE DEFECT_CARD_POOL Attack Rare AnyEnemy 5 0 1 -
-card MIDNIGHT IRONCLAD_CARD_POOL Attack Rare AnyEnemy 12 0 1 -
-card MIMIC COLORLESS_CARD_POOL Skill Rare AnyAlly 1 0 1 Exhaust
-card MIND_BLAST COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 Innate
-card MIND_ROT TOKEN_CARD_POOL Status Status None -1 0 0 -
-card MINION_DIVE_BOMB TOKEN_CARD_POOL Attack Token AnyEnemy 0 0 1 Exhaust
-card MINION_SACRIFICE TOKEN_CARD_POOL Skill Token Self 0 0 1 Exhaust
-card MINION_STRIKE TOKEN_CARD_POOL Attack Token AnyEnemy 0 0 1 Exhaust
-card MIRAGE SILENT_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card MISERY NECROBINDER_CARD_POOL Attack Rare AnyEnemy 0 0 1 -
-card MODDED DEFECT_CARD_POOL Skill Rare Self 0 0 1 -
-card MOLTEN_FIST IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 1 Exhaust
-card MOMENTUM_STRIKE DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card MONARCHS_GAZE REGENT_CARD_POOL Power Rare Self 2 0 1 -
-card MONOLOGUE REGENT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card MULTI_CAST DEFECT_CARD_POOL Skill Rare Self 0 1 1 -
-card MURDER SILENT_CARD_POOL Attack Rare AnyEnemy 3 0 1 -
-card NECRO_MASTERY NECROBINDER_CARD_POOL Power Rare Self 2 0 1 -
-card NEGATIVE_PULSE NECROBINDER_CARD_POOL Skill Common AllEnemies 1 0 1 -
-card NEOWS_FURY EVENT_CARD_POOL Attack Ancient AnyEnemy 1 0 1 Exhaust
-card NEUROSURGE NECROBINDER_CARD_POOL Power Rare Self 0 0 1 -
-card NEUTRALIZE SILENT_CARD_POOL Attack Basic AnyEnemy 0 0 1 -
-card NEUTRON_AEGIS REGENT_CARD_POOL Power Rare Self 1 0 1 -
-card NIGHTMARE SILENT_CARD_POOL Skill Rare Self 3 0 1 Exhaust
-card NORMALITY CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card NOSTALGIA COLORLESS_CARD_POOL Power Rare Self 1 0 1 -
-card NOT_YET IRONCLAD_CARD_POOL Skill Rare Self 2 0 1 Exhaust
-card NOXIOUS_FUMES SILENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card NO_ESCAPE NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 1 -
-card NULL DEFECT_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card OBLIVION NECROBINDER_CARD_POOL Skill Rare AnyEnemy 0 0 1 -
-card OFFERING IRONCLAD_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card OMNISLICE COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card ONE_FOR_ALL DEFECT_CARD_POOL Power Rare AllAllies 1 0 1 -
-card ONE_TWO_PUNCH IRONCLAD_CARD_POOL Skill Rare Self 1 0 1 -
-card ORBIT REGENT_CARD_POOL Power Uncommon Self 2 0 1 -
-card OUTBREAK SILENT_CARD_POOL Skill Rare AllEnemies 3 0 1 -
-card OUTMANEUVER EVENT_CARD_POOL Skill Event Self 1 0 1 -
-card OUTRAGE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card OVERCLOCK DEFECT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card PACTS_END IRONCLAD_CARD_POOL Attack Rare AllEnemies 0 0 1 -
-card PAGESTORM NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 -
-card PALE_BLUE_DOT REGENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card PANACHE COLORLESS_CARD_POOL Power Uncommon Self 0 0 1 -
-card PANIC_BUTTON COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card PARRY REGENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card PARSE NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 1 Ethereal
-card PARTICLE_WALL REGENT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card PATTER REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card PECK EVENT_CARD_POOL Attack Event AnyEnemy 1 0 1 -
-card PERFECTED_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 2 0 1 -
-card PHANTOM_BLADES SILENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card PHOTON_CUT REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card PIERCING_WAIL SILENT_CARD_POOL Skill Common AllEnemies 1 0 1 Exhaust
-card PILLAGE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card PILLAR_OF_CREATION REGENT_CARD_POOL Power Uncommon Self 1 0 1 -
-card PINPOINT SILENT_CARD_POOL Attack Uncommon AnyEnemy 3 0 1 -
-card PLOT REGENT_CARD_POOL Skill Uncommon AllAllies 1 0 1 -
-card POISONED_STAB SILENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card POKE NECROBINDER_CARD_POOL Attack Common AnyEnemy 0 0 1 -
-card POMMEL_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card POOR_SLEEP CURSE_CARD_POOL Curse Curse None -1 0 0 Retain,Unplayable
-card POUNCE SILENT_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card PRECISE_CUT SILENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card PREDATOR SILENT_CARD_POOL Attack Common AnyEnemy 2 0 1 -
-card PREPARED SILENT_CARD_POOL Skill Common Self 0 0 1 -
-card PREP_TIME COLORLESS_CARD_POOL Power Uncommon Self 1 0 1 -
-card PRIMAL_FORCE IRONCLAD_CARD_POOL Skill Rare Self 0 0 1 -
-card PRODUCTION COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card PROLONG COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card PROPHESIZE REGENT_CARD_POOL Skill Uncommon Self 2 0 1 -
-card PROTECTOR NECROBINDER_CARD_POOL Attack Ancient AnyEnemy 1 0 1 -
-card PROWESS COLORLESS_CARD_POOL Power Uncommon Self 1 0 1 -
-card PULL_AGGRO NECROBINDER_CARD_POOL Skill Common Self 2 0 1 -
-card PULL_FROM_BELOW NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card PURITY COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust,Retain
-card PUTREFY NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 1 Exhaust
-card PYRE IRONCLAD_CARD_POOL Power Rare Self 2 0 1 -
-card QUADCAST DEFECT_CARD_POOL Skill Ancient Self 1 0 1 -
-card QUASAR REGENT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card RADIATE REGENT_CARD_POOL Attack Uncommon AllEnemies 0 0 1 -
-card RAGE IRONCLAD_CARD_POOL Skill Uncommon Self 0 0 1 -
-card RAINBOW DEFECT_CARD_POOL Skill Rare Self 2 0 1 Exhaust
-card RALLY COLORLESS_CARD_POOL Skill Rare AllAllies 2 0 1 -
-card RAMPAGE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card RATTLE NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card REANIMATE NECROBINDER_CARD_POOL Skill Rare Self 3 0 1 Exhaust
-card REAP NECROBINDER_CARD_POOL Attack Common AnyEnemy 3 0 1 Retain
-card REAPER_FORM NECROBINDER_CARD_POOL Power Rare Self 3 0 1 -
-card REAVE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card REBOOT DEFECT_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card REBOUND EVENT_CARD_POOL Attack Event AnyEnemy 1 0 1 -
-card REFINE_BLADE REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card REFLECT REGENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card REFLEX SILENT_CARD_POOL Skill Uncommon Self 3 0 1 Sly
-card REFRACT DEFECT_CARD_POOL Attack Uncommon AnyEnemy 3 0 1 -
-card REGRET CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card RELAX EVENT_CARD_POOL Skill Ancient Self 3 0 1 Exhaust
-card REND COLORLESS_CARD_POOL Attack Rare AnyEnemy 1 0 1 -
-card RESONANCE REGENT_CARD_POOL Skill Uncommon AllEnemies 1 0 1 -
-card RESTLESSNESS COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 Retain
-card RICOCHET SILENT_CARD_POOL Attack Common RandomEnemy 2 0 1 Sly
-card RIGHT_HAND_HAND NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card RIP_AND_TEAR EVENT_CARD_POOL Attack Event RandomEnemy 1 0 1 -
-card ROCKET_PUNCH DEFECT_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card ROLLING_BOULDER COLORLESS_CARD_POOL Power Rare Self 3 0 1 -
-card ROYALTIES REGENT_CARD_POOL Power Rare Self 1 0 1 -
-card ROYAL_GAMBLE REGENT_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card RUPTURE IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card SACRIFICE NECROBINDER_CARD_POOL Skill Rare Self 1 0 1 Retain
-card SALVO COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card SCAVENGE DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card SCOURGE NECROBINDER_CARD_POOL Skill Common AnyEnemy 1 0 1 -
-card SCRAPE DEFECT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card SCRAWL COLORLESS_CARD_POOL Skill Rare Self 1 0 1 Exhaust
-card SCULPTING_STRIKE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card SEANCE NECROBINDER_CARD_POOL Skill Rare Self 1 0 1 Ethereal
-card SECOND_WIND IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 1 -
-card SECRET_TECHNIQUE COLORLESS_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card SECRET_WEAPON COLORLESS_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card SEEKER_STRIKE COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card SEEKING_EDGE REGENT_CARD_POOL Power Rare Self 1 0 1 -
-card SENTRY_MODE NECROBINDER_CARD_POOL Power Rare Self 2 0 1 -
-card SERPENT_FORM SILENT_CARD_POOL Power Rare Self 3 0 1 -
-card SETUP_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card SEVEN_STARS REGENT_CARD_POOL Attack Rare AllEnemies 2 0 1 -
-card SEVERANCE NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card SHADOWMELD SILENT_CARD_POOL Skill Rare Self 1 0 1 -
-card SHADOW_SHIELD DEFECT_CARD_POOL Skill Uncommon Self 2 0 1 -
-card SHADOW_STEP SILENT_CARD_POOL Skill Rare Self 1 0 1 -
-card SHAME CURSE_CARD_POOL Curse Curse None -1 0 0 Unplayable
-card SHARED_FATE NECROBINDER_CARD_POOL Skill Rare AnyEnemy 0 0 1 Exhaust
-card SHATTER DEFECT_CARD_POOL Attack Rare AllEnemies 1 0 1 Exhaust
-card SHINING_STRIKE REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card SHIV TOKEN_CARD_POOL Attack Token dynamic 0 0 1 Exhaust
-card SHOCKWAVE COLORLESS_CARD_POOL Skill Uncommon AllEnemies 2 0 1 Exhaust
-card SHROUD NECROBINDER_CARD_POOL Power Uncommon Self 1 0 1 -
-card SHRUG_IT_OFF IRONCLAD_CARD_POOL Skill Common Self 1 0 1 -
-card SIC_EM NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card SIDESTEP SILENT_CARD_POOL Skill Uncommon Self 0 0 1 -
-card SIGNAL_BOOST DEFECT_CARD_POOL Skill Rare Self 1 0 1 Exhaust
-card SKEWER SILENT_CARD_POOL Attack Uncommon AnyEnemy 0 1 1 -
-card SKIM DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card SLEIGHT_OF_FLESH NECROBINDER_CARD_POOL Power Uncommon Self 2 0 1 -
-card SLICE SILENT_CARD_POOL Attack Common AnyEnemy 0 0 1 -
-card SLIMED STATUS_CARD_POOL Status Status None 1 0 0 Exhaust
-card SLOTH TOKEN_CARD_POOL Status Status None -1 0 0 -
-card SMOKESTACK DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card SNAKEBITE SILENT_CARD_POOL Skill Common AnyEnemy 2 0 1 Retain
-card SNAP NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card SNEAKY SILENT_CARD_POOL Power Rare Self 2 0 1 Sly
-card SOLAR_STRIKE REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card SOOT STATUS_CARD_POOL Status Status None -1 0 0 Unplayable
-card SOUL TOKEN_CARD_POOL Skill Token Self 0 0 1 Exhaust
-card SOULBOUND NECROBINDER_CARD_POOL Power Uncommon AnyAlly 1 0 1 -
-card SOUL_STORM NECROBINDER_CARD_POOL Attack Rare AnyEnemy 1 0 1 -
-card SOVEREIGN_BLADE TOKEN_CARD_POOL Attack Token dynamic 2 0 1 Retain
-card SOW NECROBINDER_CARD_POOL Attack Common AllEnemies 1 0 1 Retain
-card SPECTRUM_SHIFT REGENT_CARD_POOL Power Uncommon Self 2 0 1 -
-card SPEEDSTER SILENT_CARD_POOL Power Uncommon Self 2 0 1 -
-card SPINNER DEFECT_CARD_POOL Power Rare Self 1 0 1 -
-card SPIRIT_OF_ASH NECROBINDER_CARD_POOL Power Rare Self 1 0 1 -
-card SPITE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card SPLASH COLORLESS_CARD_POOL Skill Rare Self 1 0 1 -
-card SPOILS_MAP QUEST_CARD_POOL Quest Quest Self -1 0 0 Unplayable
-card SPOILS_OF_BATTLE REGENT_CARD_POOL Skill Common Self 1 0 1 -
-card SPORE_MIND CURSE_CARD_POOL Curse Curse None 1 0 0 Exhaust
-card SPUR NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 1 Retain
-card SQUASH EVENT_CARD_POOL Attack Event AnyEnemy 1 0 1 -
-card SQUEEZE NECROBINDER_CARD_POOL Attack Rare AnyEnemy 3 0 1 -
-card STACK EVENT_CARD_POOL Skill Event Self 1 0 1 -
-card STAMPEDE IRONCLAD_CARD_POOL Power Uncommon Self 2 0 1 -
-card STARDUST REGENT_CARD_POOL Attack Uncommon RandomEnemy 0 0 1 -
-card STOKE IRONCLAD_CARD_POOL Skill Rare Self 1 0 1 -
-card STOMP IRONCLAD_CARD_POOL Attack Uncommon AllEnemies 3 0 1 -
-card STONE_ARMOR IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card STORM DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card STORM_OF_STEEL SILENT_CARD_POOL Skill Rare Self 1 0 1 -
-card STRANGLE SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card STRATAGEM COLORLESS_CARD_POOL Power Uncommon Self 1 0 1 -
-card STRIKE_DEFECT DEFECT_CARD_POOL Attack Basic AnyEnemy 1 0 1 -
-card STRIKE_IRONCLAD IRONCLAD_CARD_POOL Attack Basic AnyEnemy 1 0 1 -
-card STRIKE_NECROBINDER NECROBINDER_CARD_POOL Attack Basic AnyEnemy 1 0 1 -
-card STRIKE_REGENT REGENT_CARD_POOL Attack Basic AnyEnemy 1 0 1 -
-card STRIKE_SILENT SILENT_CARD_POOL Attack Basic AnyEnemy 1 0 1 -
-card SUBROUTINE DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card SUCKER_PUNCH SILENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card SUMMON_FORTH REGENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card SUNDER DEFECT_CARD_POOL Attack Uncommon AnyEnemy 3 0 1 -
-card SUPERCRITICAL DEFECT_CARD_POOL Skill Rare Self 0 0 1 Exhaust
-card SUPERMASSIVE REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card SUPPRESS SILENT_CARD_POOL Attack Ancient AnyEnemy 0 0 1 Innate
-card SURVIVOR SILENT_CARD_POOL Skill Basic Self 1 0 1 -
-card SWEEPING_BEAM DEFECT_CARD_POOL Attack Common AllEnemies 1 0 1 -
-card SWEEPING_GAZE TOKEN_CARD_POOL Attack Token RandomEnemy 0 0 1 Ethereal,Exhaust
-card SWORD_BOOMERANG IRONCLAD_CARD_POOL Attack Common RandomEnemy 1 0 1 -
-card SWORD_SAGE REGENT_CARD_POOL Power Rare Self 2 0 1 -
-card SYNCHRONIZE DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card SYNTHESIS DEFECT_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card TACTICIAN SILENT_CARD_POOL Skill Uncommon Self 3 0 1 Sly
-card TAG_TEAM COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card TANK IRONCLAD_CARD_POOL Power Rare Self 1 0 1 -
-card TAUNT IRONCLAD_CARD_POOL Skill Common AnyEnemy 1 0 1 -
-card TEAR_ASUNDER IRONCLAD_CARD_POOL Attack Rare AnyEnemy 2 0 1 -
-card TEMPEST DEFECT_CARD_POOL Skill Uncommon Self 0 1 1 -
-card TERRAFORMING REGENT_CARD_POOL Skill Uncommon Self 1 0 1 -
-card TESLA_COIL DEFECT_CARD_POOL Attack Uncommon AnyEnemy 0 0 1 -
-card THE_BALL COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card THE_BOMB COLORLESS_CARD_POOL Skill Uncommon Self 2 0 1 -
-card THE_GAMBIT COLORLESS_CARD_POOL Skill Rare Self 0 0 1 -
-card THE_HUNT SILENT_CARD_POOL Attack Rare AnyEnemy 1 0 1 Exhaust
-card THE_SCYTHE NECROBINDER_CARD_POOL Attack Rare AnyEnemy 2 0 1 Exhaust
-card THE_SEALED_THRONE REGENT_CARD_POOL Power Ancient Self 1 0 1 -
-card THE_SMITH REGENT_CARD_POOL Skill Rare Self 1 0 1 -
-card THINKING_AHEAD COLORLESS_CARD_POOL Skill Uncommon Self 0 0 1 Exhaust
-card THRASH IRONCLAD_CARD_POOL Attack Rare AnyEnemy 1 0 1 -
-card THRUMMING_HATCHET COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card THUNDER DEFECT_CARD_POOL Power Uncommon Self 1 0 1 -
-card THUNDERCLAP IRONCLAD_CARD_POOL Attack Common AllEnemies 1 0 1 -
-card TIMES_UP NECROBINDER_CARD_POOL Attack Rare AnyEnemy 2 0 1 -
-card TOOLS_OF_THE_TRADE SILENT_CARD_POOL Power Rare Self 1 0 1 -
-card TORIC_TOUGHNESS EVENT_CARD_POOL Skill Event Self 2 0 1 -
-card TOXIC STATUS_CARD_POOL Status Status None 1 0 0 Exhaust
-card TRACKING SILENT_CARD_POOL Power Rare Self 2 0 1 -
-card TRANSFIGURE NECROBINDER_CARD_POOL Skill Rare Self 1 0 1 Exhaust
-card TRASH_TO_TREASURE DEFECT_CARD_POOL Power Rare Self 1 0 1 -
-card TREMBLE IRONCLAD_CARD_POOL Skill Common AnyEnemy 1 0 1 Exhaust
-card TRUE_GRIT IRONCLAD_CARD_POOL Skill Common Self 1 0 1 -
-card TURBO DEFECT_CARD_POOL Skill Common Self 0 0 1 -
-card TUTOR REGENT_CARD_POOL Skill Rare AnyAlly 1 0 1 -
-card TWIN_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card TYRANNY REGENT_CARD_POOL Power Rare Self 1 0 1 -
-card ULTIMATE_DEFEND COLORLESS_CARD_POOL Skill Uncommon Self 1 0 1 -
-card ULTIMATE_STRIKE COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card UNDEATH NECROBINDER_CARD_POOL Skill Rare Self 0 0 1 -
-card UNDERWORLD NECROBINDER_CARD_POOL Skill Uncommon Self 2 0 1 Exhaust
-card UNLEASH NECROBINDER_CARD_POOL Attack Basic AnyEnemy 1 0 1 -
-card UNMOVABLE IRONCLAD_CARD_POOL Power Rare Self 2 0 1 -
-card UNRELENTING IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card UNTOUCHABLE SILENT_CARD_POOL Skill Common Self 2 0 1 Sly
-card UPPERCUT IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 2 0 1 -
-card UPROAR DEFECT_CARD_POOL Attack Common AnyEnemy 2 0 1 -
-card UP_MY_SLEEVE SILENT_CARD_POOL Skill Uncommon Self 2 0 1 -
-card VEILPIERCER NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 1 -
-card VENERATE REGENT_CARD_POOL Skill Basic Self 1 0 1 -
-card VICIOUS IRONCLAD_CARD_POOL Power Uncommon Self 1 0 1 -
-card VOID STATUS_CARD_POOL Status Status None -1 0 0 Ethereal,Unplayable
-card VOID_FORM REGENT_CARD_POOL Power Rare Self 3 0 1 Ethereal
-card VOLLEY COLORLESS_CARD_POOL Attack Uncommon RandomEnemy 0 1 1 -
-card VOLTAIC DEFECT_CARD_POOL Skill Rare Self 3 0 1 Exhaust
-card WASTE_AWAY TOKEN_CARD_POOL Status Status None -1 0 0 -
-card WELL_LAID_PLANS SILENT_CARD_POOL Power Rare Self 2 0 1 -
-card WHIRLWIND IRONCLAD_CARD_POOL Attack Uncommon AllEnemies 0 1 1 -
-card WHISTLE EVENT_CARD_POOL Attack Ancient AnyEnemy 2 0 1 Exhaust
-card WHITE_NOISE DEFECT_CARD_POOL Skill Uncommon Self 1 0 1 Exhaust
-card WISH EVENT_CARD_POOL Skill Ancient Self 0 0 1 Exhaust
-card WISP NECROBINDER_CARD_POOL Skill Common Self 0 0 1 Exhaust
-card WITHER STATUS_CARD_POOL Status Status None -1 0 0 Unplayable
-card WOUND STATUS_CARD_POOL Status Status None -1 0 0 Unplayable
-card WRAITH_FORM SILENT_CARD_POOL Power Ancient Self 3 0 1 -
-card WRITHE CURSE_CARD_POOL Curse Curse None -1 0 0 Innate,Unplayable
-card WROUGHT_IN_WAR REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 -
-card ZAP DEFECT_CARD_POOL Skill Basic Self 1 0 1 -
+# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords>
+# var <card> <name> <base> <calculated>
+# pool <pool> <index> <card>
+# rewardpool <character> <index> <card>
+pool COLORLESS_CARD_POOL 0 ALCHEMIZE
+pool COLORLESS_CARD_POOL 1 ANOINTED
+pool COLORLESS_CARD_POOL 2 AUTOMATION
+pool COLORLESS_CARD_POOL 3 BEACON_OF_HOPE
+pool COLORLESS_CARD_POOL 4 BEAT_DOWN
+pool COLORLESS_CARD_POOL 5 BELIEVE_IN_YOU
+pool COLORLESS_CARD_POOL 6 BOLAS
+pool COLORLESS_CARD_POOL 7 CALAMITY
+pool COLORLESS_CARD_POOL 8 CATASTROPHE
+pool COLORLESS_CARD_POOL 9 COORDINATE
+pool COLORLESS_CARD_POOL 10 DARK_SHACKLES
+pool COLORLESS_CARD_POOL 11 DISCOVERY
+pool COLORLESS_CARD_POOL 12 DRAMATIC_ENTRANCE
+pool COLORLESS_CARD_POOL 13 ENTROPY
+pool COLORLESS_CARD_POOL 14 EQUILIBRIUM
+pool COLORLESS_CARD_POOL 15 ETERNAL_ARMOR
+pool COLORLESS_CARD_POOL 16 FASTEN
+pool COLORLESS_CARD_POOL 17 FINESSE
+pool COLORLESS_CARD_POOL 18 FISTICUFFS
+pool COLORLESS_CARD_POOL 19 FLASH_OF_STEEL
+pool COLORLESS_CARD_POOL 20 GANG_UP
+pool COLORLESS_CARD_POOL 21 GOLD_AXE
+pool COLORLESS_CARD_POOL 22 HAND_OF_GREED
+pool COLORLESS_CARD_POOL 23 HIDDEN_GEM
+pool COLORLESS_CARD_POOL 24 HUDDLE_UP
+pool COLORLESS_CARD_POOL 25 IMPATIENCE
+pool COLORLESS_CARD_POOL 26 INTERCEPT
+pool COLORLESS_CARD_POOL 27 JACK_OF_ALL_TRADES
+pool COLORLESS_CARD_POOL 28 JACKPOT
+pool COLORLESS_CARD_POOL 29 KNOCKDOWN
+pool COLORLESS_CARD_POOL 30 LIFT
+pool COLORLESS_CARD_POOL 31 MASTER_OF_STRATEGY
+pool COLORLESS_CARD_POOL 32 MAYHEM
+pool COLORLESS_CARD_POOL 33 MIMIC
+pool COLORLESS_CARD_POOL 34 MIND_BLAST
+pool COLORLESS_CARD_POOL 35 NOSTALGIA
+pool COLORLESS_CARD_POOL 36 OMNISLICE
+pool COLORLESS_CARD_POOL 37 PANACHE
+pool COLORLESS_CARD_POOL 38 PANIC_BUTTON
+pool COLORLESS_CARD_POOL 39 PREP_TIME
+pool COLORLESS_CARD_POOL 40 PRODUCTION
+pool COLORLESS_CARD_POOL 41 PROLONG
+pool COLORLESS_CARD_POOL 42 PROWESS
+pool COLORLESS_CARD_POOL 43 PURITY
+pool COLORLESS_CARD_POOL 44 RALLY
+pool COLORLESS_CARD_POOL 45 REND
+pool COLORLESS_CARD_POOL 46 RESTLESSNESS
+pool COLORLESS_CARD_POOL 47 ROLLING_BOULDER
+pool COLORLESS_CARD_POOL 48 SALVO
+pool COLORLESS_CARD_POOL 49 SCRAWL
+pool COLORLESS_CARD_POOL 50 SECRET_TECHNIQUE
+pool COLORLESS_CARD_POOL 51 SECRET_WEAPON
+pool COLORLESS_CARD_POOL 52 SEEKER_STRIKE
+pool COLORLESS_CARD_POOL 53 SHOCKWAVE
+pool COLORLESS_CARD_POOL 54 SPLASH
+pool COLORLESS_CARD_POOL 55 STRATAGEM
+pool COLORLESS_CARD_POOL 56 TAG_TEAM
+pool COLORLESS_CARD_POOL 57 THE_BALL
+pool COLORLESS_CARD_POOL 58 THE_BOMB
+pool COLORLESS_CARD_POOL 59 THE_GAMBIT
+pool COLORLESS_CARD_POOL 60 THINKING_AHEAD
+pool COLORLESS_CARD_POOL 61 THRUMMING_HATCHET
+pool COLORLESS_CARD_POOL 62 ULTIMATE_DEFEND
+pool COLORLESS_CARD_POOL 63 ULTIMATE_STRIKE
+pool COLORLESS_CARD_POOL 64 VOLLEY
+pool CURSE_CARD_POOL 0 ASCENDERS_BANE
+pool CURSE_CARD_POOL 1 BAD_LUCK
+pool CURSE_CARD_POOL 2 CLUMSY
+pool CURSE_CARD_POOL 3 CURSE_OF_THE_BELL
+pool CURSE_CARD_POOL 4 DEBT
+pool CURSE_CARD_POOL 5 DECAY
+pool CURSE_CARD_POOL 6 DOUBT
+pool CURSE_CARD_POOL 7 ENTHRALLED
+pool CURSE_CARD_POOL 8 FOLLY
+pool CURSE_CARD_POOL 9 GREED
+pool CURSE_CARD_POOL 10 GUILTY
+pool CURSE_CARD_POOL 11 INJURY
+pool CURSE_CARD_POOL 12 NORMALITY
+pool CURSE_CARD_POOL 13 POOR_SLEEP
+pool CURSE_CARD_POOL 14 REGRET
+pool CURSE_CARD_POOL 15 SHAME
+pool CURSE_CARD_POOL 16 SPORE_MIND
+pool CURSE_CARD_POOL 17 WRITHE
+pool DEFECT_CARD_POOL 0 ADAPTIVE_STRIKE
+pool DEFECT_CARD_POOL 1 ALL_FOR_ONE
+pool DEFECT_CARD_POOL 2 BALL_LIGHTNING
+pool DEFECT_CARD_POOL 3 BARRAGE
+pool DEFECT_CARD_POOL 4 BEAM_CELL
+pool DEFECT_CARD_POOL 5 BIASED_COGNITION
+pool DEFECT_CARD_POOL 6 BOOST_AWAY
+pool DEFECT_CARD_POOL 7 BOOT_SEQUENCE
+pool DEFECT_CARD_POOL 8 BUFFER
+pool DEFECT_CARD_POOL 9 BULK_UP
+pool DEFECT_CARD_POOL 10 CAPACITOR
+pool DEFECT_CARD_POOL 11 CHAOS
+pool DEFECT_CARD_POOL 12 CHARGE_BATTERY
+pool DEFECT_CARD_POOL 13 CHILL
+pool DEFECT_CARD_POOL 14 CLAW
+pool DEFECT_CARD_POOL 15 COLD_SNAP
+pool DEFECT_CARD_POOL 16 COMPACT
+pool DEFECT_CARD_POOL 17 COMPILE_DRIVER
+pool DEFECT_CARD_POOL 18 CONSUMING_SHADOW
+pool DEFECT_CARD_POOL 19 COOLANT
+pool DEFECT_CARD_POOL 20 COOLHEADED
+pool DEFECT_CARD_POOL 21 CREATIVE_AI
+pool DEFECT_CARD_POOL 22 DARKNESS
+pool DEFECT_CARD_POOL 23 DEFEND_DEFECT
+pool DEFECT_CARD_POOL 24 DEFRAGMENT
+pool DEFECT_CARD_POOL 25 DOUBLE_ENERGY
+pool DEFECT_CARD_POOL 26 DUALCAST
+pool DEFECT_CARD_POOL 27 ECHO_FORM
+pool DEFECT_CARD_POOL 28 ENERGY_SURGE
+pool DEFECT_CARD_POOL 29 FERAL
+pool DEFECT_CARD_POOL 30 FIGHT_THROUGH
+pool DEFECT_CARD_POOL 31 FLAK_CANNON
+pool DEFECT_CARD_POOL 32 FOCUSED_STRIKE
+pool DEFECT_CARD_POOL 33 FTL
+pool DEFECT_CARD_POOL 34 FUSION
+pool DEFECT_CARD_POOL 35 GENETIC_ALGORITHM
+pool DEFECT_CARD_POOL 36 GLACIER
+pool DEFECT_CARD_POOL 37 GLASSWORK
+pool DEFECT_CARD_POOL 38 GO_FOR_THE_EYES
+pool DEFECT_CARD_POOL 39 GUNK_UP
+pool DEFECT_CARD_POOL 40 HAILSTORM
+pool DEFECT_CARD_POOL 41 HELIX_DRILL
+pool DEFECT_CARD_POOL 42 HIBERNATE
+pool DEFECT_CARD_POOL 43 HOLOGRAM
+pool DEFECT_CARD_POOL 44 HOTFIX
+pool DEFECT_CARD_POOL 45 HYPERBEAM
+pool DEFECT_CARD_POOL 46 ICE_LANCE
+pool DEFECT_CARD_POOL 47 IGNITION
+pool DEFECT_CARD_POOL 48 IMITATION_LEARNING
+pool DEFECT_CARD_POOL 49 ITERATION
+pool DEFECT_CARD_POOL 50 LEAP
+pool DEFECT_CARD_POOL 51 LIGHTNING_ROD
+pool DEFECT_CARD_POOL 52 LOOP
+pool DEFECT_CARD_POOL 53 MACHINE_LEARNING
+pool DEFECT_CARD_POOL 54 METEOR_STRIKE
+pool DEFECT_CARD_POOL 55 MODDED
+pool DEFECT_CARD_POOL 56 MOMENTUM_STRIKE
+pool DEFECT_CARD_POOL 57 MULTI_CAST
+pool DEFECT_CARD_POOL 58 NULL
+pool DEFECT_CARD_POOL 59 ONE_FOR_ALL
+pool DEFECT_CARD_POOL 60 OVERCLOCK
+pool DEFECT_CARD_POOL 61 QUADCAST
+pool DEFECT_CARD_POOL 62 RAINBOW
+pool DEFECT_CARD_POOL 63 REBOOT
+pool DEFECT_CARD_POOL 64 REFRACT
+pool DEFECT_CARD_POOL 65 ROCKET_PUNCH
+pool DEFECT_CARD_POOL 66 SCAVENGE
+pool DEFECT_CARD_POOL 67 SCRAPE
+pool DEFECT_CARD_POOL 68 SHADOW_SHIELD
+pool DEFECT_CARD_POOL 69 SHATTER
+pool DEFECT_CARD_POOL 70 SIGNAL_BOOST
+pool DEFECT_CARD_POOL 71 SKIM
+pool DEFECT_CARD_POOL 72 SMOKESTACK
+pool DEFECT_CARD_POOL 73 SPINNER
+pool DEFECT_CARD_POOL 74 STORM
+pool DEFECT_CARD_POOL 75 STRIKE_DEFECT
+pool DEFECT_CARD_POOL 76 SUBROUTINE
+pool DEFECT_CARD_POOL 77 SUNDER
+pool DEFECT_CARD_POOL 78 SUPERCRITICAL
+pool DEFECT_CARD_POOL 79 SWEEPING_BEAM
+pool DEFECT_CARD_POOL 80 SYNCHRONIZE
+pool DEFECT_CARD_POOL 81 SYNTHESIS
+pool DEFECT_CARD_POOL 82 TEMPEST
+pool DEFECT_CARD_POOL 83 TESLA_COIL
+pool DEFECT_CARD_POOL 84 THUNDER
+pool DEFECT_CARD_POOL 85 TRASH_TO_TREASURE
+pool DEFECT_CARD_POOL 86 TURBO
+pool DEFECT_CARD_POOL 87 UPROAR
+pool DEFECT_CARD_POOL 88 VOLTAIC
+pool DEFECT_CARD_POOL 89 WHITE_NOISE
+pool DEFECT_CARD_POOL 90 ZAP
+pool DEPRECATED_CARD_POOL 0 DEPRECATED_CARD
+pool EVENT_CARD_POOL 0 ABUNDANCE
+pool EVENT_CARD_POOL 1 APOTHEOSIS
+pool EVENT_CARD_POOL 2 APPARITION
+pool EVENT_CARD_POOL 3 BRIGHTEST_FLAME
+pool EVENT_CARD_POOL 4 BYRD_SWOOP
+pool EVENT_CARD_POOL 5 CALTROPS
+pool EVENT_CARD_POOL 6 CLASH
+pool EVENT_CARD_POOL 7 DISTRACTION
+pool EVENT_CARD_POOL 8 DUAL_WIELD
+pool EVENT_CARD_POOL 9 ENLIGHTENMENT
+pool EVENT_CARD_POOL 10 ENTRENCH
+pool EVENT_CARD_POOL 11 EXTERMINATE
+pool EVENT_CARD_POOL 12 FEEDING_FRENZY
+pool EVENT_CARD_POOL 13 HELLO_WORLD
+pool EVENT_CARD_POOL 14 MAD_SCIENCE
+pool EVENT_CARD_POOL 15 MAUL
+pool EVENT_CARD_POOL 16 METAMORPHOSIS
+pool EVENT_CARD_POOL 17 NEOWS_FURY
+pool EVENT_CARD_POOL 18 OUTMANEUVER
+pool EVENT_CARD_POOL 19 PECK
+pool EVENT_CARD_POOL 20 REBOUND
+pool EVENT_CARD_POOL 21 RELAX
+pool EVENT_CARD_POOL 22 RIP_AND_TEAR
+pool EVENT_CARD_POOL 23 SQUASH
+pool EVENT_CARD_POOL 24 STACK
+pool EVENT_CARD_POOL 25 TORIC_TOUGHNESS
+pool EVENT_CARD_POOL 26 WISH
+pool EVENT_CARD_POOL 27 WHISTLE
+pool IRONCLAD_CARD_POOL 0 AGGRESSION
+pool IRONCLAD_CARD_POOL 1 ANGER
+pool IRONCLAD_CARD_POOL 2 ARMAMENTS
+pool IRONCLAD_CARD_POOL 3 ASHEN_STRIKE
+pool IRONCLAD_CARD_POOL 4 BARRICADE
+pool IRONCLAD_CARD_POOL 5 BASH
+pool IRONCLAD_CARD_POOL 6 BATTLE_TRANCE
+pool IRONCLAD_CARD_POOL 7 BLAZE
+pool IRONCLAD_CARD_POOL 8 BLOOD_WALL
+pool IRONCLAD_CARD_POOL 9 BLOODLETTING
+pool IRONCLAD_CARD_POOL 10 BLUDGEON
+pool IRONCLAD_CARD_POOL 11 BODY_SLAM
+pool IRONCLAD_CARD_POOL 12 BRAND
+pool IRONCLAD_CARD_POOL 13 BREAK
+pool IRONCLAD_CARD_POOL 14 BREAKTHROUGH
+pool IRONCLAD_CARD_POOL 15 BULLY
+pool IRONCLAD_CARD_POOL 16 BURNING_PACT
+pool IRONCLAD_CARD_POOL 17 CASCADE
+pool IRONCLAD_CARD_POOL 18 CINDER
+pool IRONCLAD_CARD_POOL 19 COLOSSUS
+pool IRONCLAD_CARD_POOL 20 CONFLAGRATION
+pool IRONCLAD_CARD_POOL 21 CORRUPTION
+pool IRONCLAD_CARD_POOL 22 CRIMSON_MANTLE
+pool IRONCLAD_CARD_POOL 23 CRUELTY
+pool IRONCLAD_CARD_POOL 24 DARK_EMBRACE
+pool IRONCLAD_CARD_POOL 25 DEFEND_IRONCLAD
+pool IRONCLAD_CARD_POOL 26 DEMON_FORM
+pool IRONCLAD_CARD_POOL 27 DEMONIC_SHIELD
+pool IRONCLAD_CARD_POOL 28 DISMANTLE
+pool IRONCLAD_CARD_POOL 29 DOMINATE
+pool IRONCLAD_CARD_POOL 30 DRUM_OF_BATTLE
+pool IRONCLAD_CARD_POOL 31 EVIL_EYE
+pool IRONCLAD_CARD_POOL 32 EXPECT_A_FIGHT
+pool IRONCLAD_CARD_POOL 33 FEED
+pool IRONCLAD_CARD_POOL 34 FEEL_NO_PAIN
+pool IRONCLAD_CARD_POOL 35 FIEND_FIRE
+pool IRONCLAD_CARD_POOL 36 FIGHT_ME
+pool IRONCLAD_CARD_POOL 37 FLAME_BARRIER
+pool IRONCLAD_CARD_POOL 38 FORGOTTEN_RITUAL
+pool IRONCLAD_CARD_POOL 39 HAVOC
+pool IRONCLAD_CARD_POOL 40 HEADBUTT
+pool IRONCLAD_CARD_POOL 41 HELLRAISER
+pool IRONCLAD_CARD_POOL 42 HEMOKINESIS
+pool IRONCLAD_CARD_POOL 43 HOWL_FROM_BEYOND
+pool IRONCLAD_CARD_POOL 44 IMPERVIOUS
+pool IRONCLAD_CARD_POOL 45 INFERNAL_BLADE
+pool IRONCLAD_CARD_POOL 46 INFERNO
+pool IRONCLAD_CARD_POOL 47 INFLAME
+pool IRONCLAD_CARD_POOL 48 IRON_WAVE
+pool IRONCLAD_CARD_POOL 49 JUGGERNAUT
+pool IRONCLAD_CARD_POOL 50 JUGGLING
+pool IRONCLAD_CARD_POOL 51 MANGLE
+pool IRONCLAD_CARD_POOL 52 MIDNIGHT
+pool IRONCLAD_CARD_POOL 53 MOLTEN_FIST
+pool IRONCLAD_CARD_POOL 54 NOT_YET
+pool IRONCLAD_CARD_POOL 55 OFFERING
+pool IRONCLAD_CARD_POOL 56 ONE_TWO_PUNCH
+pool IRONCLAD_CARD_POOL 57 OUTRAGE
+pool IRONCLAD_CARD_POOL 58 PACTS_END
+pool IRONCLAD_CARD_POOL 59 PERFECTED_STRIKE
+pool IRONCLAD_CARD_POOL 60 PILLAGE
+pool IRONCLAD_CARD_POOL 61 POMMEL_STRIKE
+pool IRONCLAD_CARD_POOL 62 PRIMAL_FORCE
+pool IRONCLAD_CARD_POOL 63 PYRE
+pool IRONCLAD_CARD_POOL 64 RAGE
+pool IRONCLAD_CARD_POOL 65 RAMPAGE
+pool IRONCLAD_CARD_POOL 66 RUPTURE
+pool IRONCLAD_CARD_POOL 67 SECOND_WIND
+pool IRONCLAD_CARD_POOL 68 SETUP_STRIKE
+pool IRONCLAD_CARD_POOL 69 SHRUG_IT_OFF
+pool IRONCLAD_CARD_POOL 70 SPITE
+pool IRONCLAD_CARD_POOL 71 STAMPEDE
+pool IRONCLAD_CARD_POOL 72 STOKE
+pool IRONCLAD_CARD_POOL 73 STOMP
+pool IRONCLAD_CARD_POOL 74 STONE_ARMOR
+pool IRONCLAD_CARD_POOL 75 STRIKE_IRONCLAD
+pool IRONCLAD_CARD_POOL 76 SWORD_BOOMERANG
+pool IRONCLAD_CARD_POOL 77 TANK
+pool IRONCLAD_CARD_POOL 78 TAUNT
+pool IRONCLAD_CARD_POOL 79 TEAR_ASUNDER
+pool IRONCLAD_CARD_POOL 80 THRASH
+pool IRONCLAD_CARD_POOL 81 THUNDERCLAP
+pool IRONCLAD_CARD_POOL 82 TREMBLE
+pool IRONCLAD_CARD_POOL 83 TRUE_GRIT
+pool IRONCLAD_CARD_POOL 84 TWIN_STRIKE
+pool IRONCLAD_CARD_POOL 85 UNMOVABLE
+pool IRONCLAD_CARD_POOL 86 UNRELENTING
+pool IRONCLAD_CARD_POOL 87 UPPERCUT
+pool IRONCLAD_CARD_POOL 88 VICIOUS
+pool IRONCLAD_CARD_POOL 89 WHIRLWIND
+pool NECROBINDER_CARD_POOL 0 AFTERLIFE
+pool NECROBINDER_CARD_POOL 1 BANSHEES_CRY
+pool NECROBINDER_CARD_POOL 2 BLIGHT_STRIKE
+pool NECROBINDER_CARD_POOL 3 BODYGUARD
+pool NECROBINDER_CARD_POOL 4 BONE_SHARDS
+pool NECROBINDER_CARD_POOL 5 BORROWED_TIME
+pool NECROBINDER_CARD_POOL 6 BURY
+pool NECROBINDER_CARD_POOL 7 CACOPHONY
+pool NECROBINDER_CARD_POOL 8 CALCIFY
+pool NECROBINDER_CARD_POOL 9 CALL_OF_THE_VOID
+pool NECROBINDER_CARD_POOL 10 CAPTURE_SPIRIT
+pool NECROBINDER_CARD_POOL 11 CLEANSE
+pool NECROBINDER_CARD_POOL 12 COUNTDOWN
+pool NECROBINDER_CARD_POOL 13 DANSE_MACABRE
+pool NECROBINDER_CARD_POOL 14 DEATH_MARCH
+pool NECROBINDER_CARD_POOL 15 DEATHBRINGER
+pool NECROBINDER_CARD_POOL 16 DEATHS_DOOR
+pool NECROBINDER_CARD_POOL 17 DEBILITATE
+pool NECROBINDER_CARD_POOL 18 DEFEND_NECROBINDER
+pool NECROBINDER_CARD_POOL 19 DEFILE
+pool NECROBINDER_CARD_POOL 20 DEFY
+pool NECROBINDER_CARD_POOL 21 DELAY
+pool NECROBINDER_CARD_POOL 22 DEMESNE
+pool NECROBINDER_CARD_POOL 23 DEVOUR_LIFE
+pool NECROBINDER_CARD_POOL 24 DIRGE
+pool NECROBINDER_CARD_POOL 25 DRAIN_POWER
+pool NECROBINDER_CARD_POOL 26 DREDGE
+pool NECROBINDER_CARD_POOL 27 EIDOLON
+pool NECROBINDER_CARD_POOL 28 END_OF_DAYS
+pool NECROBINDER_CARD_POOL 29 ENFEEBLING_TOUCH
+pool NECROBINDER_CARD_POOL 30 ERADICATE
+pool NECROBINDER_CARD_POOL 31 FEAR
+pool NECROBINDER_CARD_POOL 32 FETCH
+pool NECROBINDER_CARD_POOL 33 FLATTEN
+pool NECROBINDER_CARD_POOL 34 FORBIDDEN_GRIMOIRE
+pool NECROBINDER_CARD_POOL 35 FRIENDSHIP
+pool NECROBINDER_CARD_POOL 36 GLIMPSE_BEYOND
+pool NECROBINDER_CARD_POOL 37 GRAVE_WARDEN
+pool NECROBINDER_CARD_POOL 38 GRAVEBLAST
+pool NECROBINDER_CARD_POOL 39 HANG
+pool NECROBINDER_CARD_POOL 40 HAUNT
+pool NECROBINDER_CARD_POOL 41 HIGH_FIVE
+pool NECROBINDER_CARD_POOL 42 INVOKE
+pool NECROBINDER_CARD_POOL 43 LEGION_OF_BONE
+pool NECROBINDER_CARD_POOL 44 LETHALITY
+pool NECROBINDER_CARD_POOL 45 MELANCHOLY
+pool NECROBINDER_CARD_POOL 46 MISERY
+pool NECROBINDER_CARD_POOL 47 NECRO_MASTERY
+pool NECROBINDER_CARD_POOL 48 NEGATIVE_PULSE
+pool NECROBINDER_CARD_POOL 49 NEUROSURGE
+pool NECROBINDER_CARD_POOL 50 NO_ESCAPE
+pool NECROBINDER_CARD_POOL 51 OBLIVION
+pool NECROBINDER_CARD_POOL 52 PAGESTORM
+pool NECROBINDER_CARD_POOL 53 PARSE
+pool NECROBINDER_CARD_POOL 54 POKE
+pool NECROBINDER_CARD_POOL 55 PROTECTOR
+pool NECROBINDER_CARD_POOL 56 PULL_AGGRO
+pool NECROBINDER_CARD_POOL 57 PULL_FROM_BELOW
+pool NECROBINDER_CARD_POOL 58 PUTREFY
+pool NECROBINDER_CARD_POOL 59 RATTLE
+pool NECROBINDER_CARD_POOL 60 REANIMATE
+pool NECROBINDER_CARD_POOL 61 REAP
+pool NECROBINDER_CARD_POOL 62 REAPER_FORM
+pool NECROBINDER_CARD_POOL 63 REAVE
+pool NECROBINDER_CARD_POOL 64 RIGHT_HAND_HAND
+pool NECROBINDER_CARD_POOL 65 SACRIFICE
+pool NECROBINDER_CARD_POOL 66 SCOURGE
+pool NECROBINDER_CARD_POOL 67 SCULPTING_STRIKE
+pool NECROBINDER_CARD_POOL 68 SEANCE
+pool NECROBINDER_CARD_POOL 69 SENTRY_MODE
+pool NECROBINDER_CARD_POOL 70 SEVERANCE
+pool NECROBINDER_CARD_POOL 71 SHARED_FATE
+pool NECROBINDER_CARD_POOL 72 SHROUD
+pool NECROBINDER_CARD_POOL 73 SIC_EM
+pool NECROBINDER_CARD_POOL 74 SLEIGHT_OF_FLESH
+pool NECROBINDER_CARD_POOL 75 SNAP
+pool NECROBINDER_CARD_POOL 76 SOUL_STORM
+pool NECROBINDER_CARD_POOL 77 SOULBOUND
+pool NECROBINDER_CARD_POOL 78 SOW
+pool NECROBINDER_CARD_POOL 79 SPIRIT_OF_ASH
+pool NECROBINDER_CARD_POOL 80 SPUR
+pool NECROBINDER_CARD_POOL 81 SQUEEZE
+pool NECROBINDER_CARD_POOL 82 STRIKE_NECROBINDER
+pool NECROBINDER_CARD_POOL 83 THE_SCYTHE
+pool NECROBINDER_CARD_POOL 84 TIMES_UP
+pool NECROBINDER_CARD_POOL 85 TRANSFIGURE
+pool NECROBINDER_CARD_POOL 86 UNDEATH
+pool NECROBINDER_CARD_POOL 87 UNDERWORLD
+pool NECROBINDER_CARD_POOL 88 UNLEASH
+pool NECROBINDER_CARD_POOL 89 VEILPIERCER
+pool NECROBINDER_CARD_POOL 90 WISP
+pool QUEST_CARD_POOL 0 BYRDONIS_EGG
+pool QUEST_CARD_POOL 1 DOWSING
+pool QUEST_CARD_POOL 2 LANTERN_KEY
+pool QUEST_CARD_POOL 3 SPOILS_MAP
+pool REGENT_CARD_POOL 0 ALIGNMENT
+pool REGENT_CARD_POOL 1 ARSENAL
+pool REGENT_CARD_POOL 2 ASTRAL_PULSE
+pool REGENT_CARD_POOL 3 BEAT_INTO_SHAPE
+pool REGENT_CARD_POOL 4 BEGONE
+pool REGENT_CARD_POOL 5 BIG_BANG
+pool REGENT_CARD_POOL 6 BLACK_HOLE
+pool REGENT_CARD_POOL 7 BOMBARDMENT
+pool REGENT_CARD_POOL 8 BULWARK
+pool REGENT_CARD_POOL 9 BUNDLE_OF_JOY
+pool REGENT_CARD_POOL 10 CELESTIAL_MIGHT
+pool REGENT_CARD_POOL 11 CHARGE
+pool REGENT_CARD_POOL 12 CHILD_OF_THE_STARS
+pool REGENT_CARD_POOL 13 CLOAK_OF_STARS
+pool REGENT_CARD_POOL 14 COLLISION_COURSE
+pool REGENT_CARD_POOL 15 COMET
+pool REGENT_CARD_POOL 16 CONQUEROR
+pool REGENT_CARD_POOL 17 CONSTELLATION
+pool REGENT_CARD_POOL 18 CONVERGENCE
+pool REGENT_CARD_POOL 19 COSMIC_INDIFFERENCE
+pool REGENT_CARD_POOL 20 CRASH_LANDING
+pool REGENT_CARD_POOL 21 CRESCENT_SPEAR
+pool REGENT_CARD_POOL 22 CRUSH_UNDER
+pool REGENT_CARD_POOL 23 DECISIONS_DECISIONS
+pool REGENT_CARD_POOL 24 DEFEND_REGENT
+pool REGENT_CARD_POOL 25 DEVASTATE
+pool REGENT_CARD_POOL 26 DYING_STAR
+pool REGENT_CARD_POOL 27 FALLING_STAR
+pool REGENT_CARD_POOL 28 FOREGONE_CONCLUSION
+pool REGENT_CARD_POOL 29 FURNACE
+pool REGENT_CARD_POOL 30 GAMMA_BLAST
+pool REGENT_CARD_POOL 31 GATHER_LIGHT
+pool REGENT_CARD_POOL 32 GENESIS
+pool REGENT_CARD_POOL 33 GLIMMER
+pool REGENT_CARD_POOL 34 GLITTERSTREAM
+pool REGENT_CARD_POOL 35 GLOW
+pool REGENT_CARD_POOL 36 GUARDS
+pool REGENT_CARD_POOL 37 GUIDING_STAR
+pool REGENT_CARD_POOL 38 HAMMER_TIME
+pool REGENT_CARD_POOL 39 HEAVENLY_DRILL
+pool REGENT_CARD_POOL 40 HEGEMONY
+pool REGENT_CARD_POOL 41 HEIRLOOM_HAMMER
+pool REGENT_CARD_POOL 42 HIDDEN_CACHE
+pool REGENT_CARD_POOL 43 I_AM_INVINCIBLE
+pool REGENT_CARD_POOL 44 KINGLY_KICK
+pool REGENT_CARD_POOL 45 KINGLY_PUNCH
+pool REGENT_CARD_POOL 46 KNOCKOUT_BLOW
+pool REGENT_CARD_POOL 47 KNOW_THY_PLACE
+pool REGENT_CARD_POOL 48 LARGESSE
+pool REGENT_CARD_POOL 49 LUNAR_BLAST
+pool REGENT_CARD_POOL 50 MAKE_IT_SO
+pool REGENT_CARD_POOL 51 MANIFEST_AUTHORITY
+pool REGENT_CARD_POOL 52 METEOR_SHOWER
+pool REGENT_CARD_POOL 53 MONARCHS_GAZE
+pool REGENT_CARD_POOL 54 MONOLOGUE
+pool REGENT_CARD_POOL 55 NEUTRON_AEGIS
+pool REGENT_CARD_POOL 56 ORBIT
+pool REGENT_CARD_POOL 57 PALE_BLUE_DOT
+pool REGENT_CARD_POOL 58 PARRY
+pool REGENT_CARD_POOL 59 PARTICLE_WALL
+pool REGENT_CARD_POOL 60 PATTER
+pool REGENT_CARD_POOL 61 PHOTON_CUT
+pool REGENT_CARD_POOL 62 PLOT
+pool REGENT_CARD_POOL 63 PILLAR_OF_CREATION
+pool REGENT_CARD_POOL 64 PROPHESIZE
+pool REGENT_CARD_POOL 65 QUASAR
+pool REGENT_CARD_POOL 66 RADIATE
+pool REGENT_CARD_POOL 67 REFINE_BLADE
+pool REGENT_CARD_POOL 68 REFLECT
+pool REGENT_CARD_POOL 69 RESONANCE
+pool REGENT_CARD_POOL 70 ROYAL_GAMBLE
+pool REGENT_CARD_POOL 71 ROYALTIES
+pool REGENT_CARD_POOL 72 SEEKING_EDGE
+pool REGENT_CARD_POOL 73 SEVEN_STARS
+pool REGENT_CARD_POOL 74 SHINING_STRIKE
+pool REGENT_CARD_POOL 75 SOLAR_STRIKE
+pool REGENT_CARD_POOL 76 SPECTRUM_SHIFT
+pool REGENT_CARD_POOL 77 SPOILS_OF_BATTLE
+pool REGENT_CARD_POOL 78 STARDUST
+pool REGENT_CARD_POOL 79 STRIKE_REGENT
+pool REGENT_CARD_POOL 80 SUMMON_FORTH
+pool REGENT_CARD_POOL 81 SUPERMASSIVE
+pool REGENT_CARD_POOL 82 SWORD_SAGE
+pool REGENT_CARD_POOL 83 TERRAFORMING
+pool REGENT_CARD_POOL 84 THE_SEALED_THRONE
+pool REGENT_CARD_POOL 85 THE_SMITH
+pool REGENT_CARD_POOL 86 TUTOR
+pool REGENT_CARD_POOL 87 TYRANNY
+pool REGENT_CARD_POOL 88 VENERATE
+pool REGENT_CARD_POOL 89 VOID_FORM
+pool REGENT_CARD_POOL 90 WROUGHT_IN_WAR
+pool SILENT_CARD_POOL 0 ABRASIVE
+pool SILENT_CARD_POOL 1 ACCELERANT
+pool SILENT_CARD_POOL 2 ACCURACY
+pool SILENT_CARD_POOL 3 ACROBATICS
+pool SILENT_CARD_POOL 4 ADRENALINE
+pool SILENT_CARD_POOL 5 AFTERIMAGE
+pool SILENT_CARD_POOL 6 ANTICIPATE
+pool SILENT_CARD_POOL 7 ASSASSINATE
+pool SILENT_CARD_POOL 8 BACKFLIP
+pool SILENT_CARD_POOL 9 BACKSTAB
+pool SILENT_CARD_POOL 10 BLADE_OF_INK
+pool SILENT_CARD_POOL 11 BLADE_DANCE
+pool SILENT_CARD_POOL 12 BLADE_SYMPHONY
+pool SILENT_CARD_POOL 13 BLUR
+pool SILENT_CARD_POOL 14 BOUNCING_FLASK
+pool SILENT_CARD_POOL 15 BUBBLE_BUBBLE
+pool SILENT_CARD_POOL 16 BULLET_TIME
+pool SILENT_CARD_POOL 17 BURST
+pool SILENT_CARD_POOL 18 CALCULATED_GAMBLE
+pool SILENT_CARD_POOL 19 CLOAK_AND_DAGGER
+pool SILENT_CARD_POOL 20 CORROSIVE_WAVE
+pool SILENT_CARD_POOL 21 CONCOCT
+pool SILENT_CARD_POOL 22 DAGGER_SPRAY
+pool SILENT_CARD_POOL 23 DAGGER_THROW
+pool SILENT_CARD_POOL 24 DASH
+pool SILENT_CARD_POOL 25 DEADLY_POISON
+pool SILENT_CARD_POOL 26 DEFEND_SILENT
+pool SILENT_CARD_POOL 27 DEFLECT
+pool SILENT_CARD_POOL 28 DODGE_AND_ROLL
+pool SILENT_CARD_POOL 29 ECHOING_SLASH
+pool SILENT_CARD_POOL 30 ENVENOM
+pool SILENT_CARD_POOL 31 ESCAPE_PLAN
+pool SILENT_CARD_POOL 32 EXPERTISE
+pool SILENT_CARD_POOL 33 EXPOSE
+pool SILENT_CARD_POOL 34 FADE
+pool SILENT_CARD_POOL 35 FAN_OF_KNIVES
+pool SILENT_CARD_POOL 36 FINISHER
+pool SILENT_CARD_POOL 37 FLANKING
+pool SILENT_CARD_POOL 38 FLECHETTES
+pool SILENT_CARD_POOL 39 FLICK_FLACK
+pool SILENT_CARD_POOL 40 SIDESTEP
+pool SILENT_CARD_POOL 41 FOOTWORK
+pool SILENT_CARD_POOL 42 GRAND_FINALE
+pool SILENT_CARD_POOL 43 HAND_TRICK
+pool SILENT_CARD_POOL 44 HAZE
+pool SILENT_CARD_POOL 45 HIDDEN_DAGGERS
+pool SILENT_CARD_POOL 46 INFINITE_BLADES
+pool SILENT_CARD_POOL 47 KNIFE_TRAP
+pool SILENT_CARD_POOL 48 LEADING_STRIKE
+pool SILENT_CARD_POOL 49 LEG_SWEEP
+pool SILENT_CARD_POOL 50 MALAISE
+pool SILENT_CARD_POOL 51 MASTER_PLANNER
+pool SILENT_CARD_POOL 52 MEMENTO_MORI
+pool SILENT_CARD_POOL 53 MIRAGE
+pool SILENT_CARD_POOL 54 MURDER
+pool SILENT_CARD_POOL 55 NEUTRALIZE
+pool SILENT_CARD_POOL 56 NIGHTMARE
+pool SILENT_CARD_POOL 57 NOXIOUS_FUMES
+pool SILENT_CARD_POOL 58 OUTBREAK
+pool SILENT_CARD_POOL 59 PHANTOM_BLADES
+pool SILENT_CARD_POOL 60 PIERCING_WAIL
+pool SILENT_CARD_POOL 61 PINPOINT
+pool SILENT_CARD_POOL 62 POISONED_STAB
+pool SILENT_CARD_POOL 63 POUNCE
+pool SILENT_CARD_POOL 64 PRECISE_CUT
+pool SILENT_CARD_POOL 65 PREDATOR
+pool SILENT_CARD_POOL 66 PREPARED
+pool SILENT_CARD_POOL 67 REFLEX
+pool SILENT_CARD_POOL 68 RICOCHET
+pool SILENT_CARD_POOL 69 SERPENT_FORM
+pool SILENT_CARD_POOL 70 SHADOW_STEP
+pool SILENT_CARD_POOL 71 SHADOWMELD
+pool SILENT_CARD_POOL 72 SKEWER
+pool SILENT_CARD_POOL 73 SLICE
+pool SILENT_CARD_POOL 74 SNAKEBITE
+pool SILENT_CARD_POOL 75 SNEAKY
+pool SILENT_CARD_POOL 76 SPEEDSTER
+pool SILENT_CARD_POOL 77 STORM_OF_STEEL
+pool SILENT_CARD_POOL 78 STRANGLE
+pool SILENT_CARD_POOL 79 STRIKE_SILENT
+pool SILENT_CARD_POOL 80 SUCKER_PUNCH
+pool SILENT_CARD_POOL 81 SUPPRESS
+pool SILENT_CARD_POOL 82 SURVIVOR
+pool SILENT_CARD_POOL 83 TACTICIAN
+pool SILENT_CARD_POOL 84 THE_HUNT
+pool SILENT_CARD_POOL 85 TOOLS_OF_THE_TRADE
+pool SILENT_CARD_POOL 86 TRACKING
+pool SILENT_CARD_POOL 87 UNTOUCHABLE
+pool SILENT_CARD_POOL 88 UP_MY_SLEEVE
+pool SILENT_CARD_POOL 89 WELL_LAID_PLANS
+pool SILENT_CARD_POOL 90 WRAITH_FORM
+pool STATUS_CARD_POOL 0 BECKON
+pool STATUS_CARD_POOL 1 BURN
+pool STATUS_CARD_POOL 2 DAZED
+pool STATUS_CARD_POOL 3 DEBRIS
+pool STATUS_CARD_POOL 4 FRANTIC_ESCAPE
+pool STATUS_CARD_POOL 5 INFECTION
+pool STATUS_CARD_POOL 6 WITHER
+pool STATUS_CARD_POOL 7 SLIMED
+pool STATUS_CARD_POOL 8 SOOT
+pool STATUS_CARD_POOL 9 TOXIC
+pool STATUS_CARD_POOL 10 VOID
+pool STATUS_CARD_POOL 11 WOUND
+pool TOKEN_CARD_POOL 0 DISINTEGRATION
+pool TOKEN_CARD_POOL 1 FUEL
+pool TOKEN_CARD_POOL 2 GIANT_ROCK
+pool TOKEN_CARD_POOL 3 LUMINESCE
+pool TOKEN_CARD_POOL 4 MIND_ROT
+pool TOKEN_CARD_POOL 5 MINION_DIVE_BOMB
+pool TOKEN_CARD_POOL 6 MINION_SACRIFICE
+pool TOKEN_CARD_POOL 7 MINION_STRIKE
+pool TOKEN_CARD_POOL 8 SHIV
+pool TOKEN_CARD_POOL 9 SLOTH
+pool TOKEN_CARD_POOL 10 SOUL
+pool TOKEN_CARD_POOL 11 SOVEREIGN_BLADE
+pool TOKEN_CARD_POOL 12 SWEEPING_GAZE
+pool TOKEN_CARD_POOL 13 WASTE_AWAY
+rewardpool IRONCLAD 0 AGGRESSION
+rewardpool IRONCLAD 1 ANGER
+rewardpool IRONCLAD 2 ARMAMENTS
+rewardpool IRONCLAD 3 ASHEN_STRIKE
+rewardpool IRONCLAD 4 BARRICADE
+rewardpool IRONCLAD 5 BASH
+rewardpool IRONCLAD 6 BATTLE_TRANCE
+rewardpool IRONCLAD 7 BLOOD_WALL
+rewardpool IRONCLAD 8 BLOODLETTING
+rewardpool IRONCLAD 9 BLUDGEON
+rewardpool IRONCLAD 10 BODY_SLAM
+rewardpool IRONCLAD 11 BRAND
+rewardpool IRONCLAD 12 BREAK
+rewardpool IRONCLAD 13 BREAKTHROUGH
+rewardpool IRONCLAD 14 BULLY
+rewardpool IRONCLAD 15 BURNING_PACT
+rewardpool IRONCLAD 16 CASCADE
+rewardpool IRONCLAD 17 CINDER
+rewardpool IRONCLAD 18 COLOSSUS
+rewardpool IRONCLAD 19 CONFLAGRATION
+rewardpool IRONCLAD 20 CORRUPTION
+rewardpool IRONCLAD 21 CRIMSON_MANTLE
+rewardpool IRONCLAD 22 CRUELTY
+rewardpool IRONCLAD 23 DARK_EMBRACE
+rewardpool IRONCLAD 24 DEFEND_IRONCLAD
+rewardpool IRONCLAD 25 DEMON_FORM
+rewardpool IRONCLAD 26 DISMANTLE
+rewardpool IRONCLAD 27 DOMINATE
+rewardpool IRONCLAD 28 DRUM_OF_BATTLE
+rewardpool IRONCLAD 29 EVIL_EYE
+rewardpool IRONCLAD 30 EXPECT_A_FIGHT
+rewardpool IRONCLAD 31 FEED
+rewardpool IRONCLAD 32 FEEL_NO_PAIN
+rewardpool IRONCLAD 33 FIEND_FIRE
+rewardpool IRONCLAD 34 FIGHT_ME
+rewardpool IRONCLAD 35 FLAME_BARRIER
+rewardpool IRONCLAD 36 FORGOTTEN_RITUAL
+rewardpool IRONCLAD 37 HAVOC
+rewardpool IRONCLAD 38 HEADBUTT
+rewardpool IRONCLAD 39 HELLRAISER
+rewardpool IRONCLAD 40 HEMOKINESIS
+rewardpool IRONCLAD 41 HOWL_FROM_BEYOND
+rewardpool IRONCLAD 42 IMPERVIOUS
+rewardpool IRONCLAD 43 INFERNAL_BLADE
+rewardpool IRONCLAD 44 INFERNO
+rewardpool IRONCLAD 45 INFLAME
+rewardpool IRONCLAD 46 IRON_WAVE
+rewardpool IRONCLAD 47 JUGGERNAUT
+rewardpool IRONCLAD 48 JUGGLING
+rewardpool IRONCLAD 49 MANGLE
+rewardpool IRONCLAD 50 MOLTEN_FIST
+rewardpool IRONCLAD 51 NOT_YET
+rewardpool IRONCLAD 52 OFFERING
+rewardpool IRONCLAD 53 ONE_TWO_PUNCH
+rewardpool IRONCLAD 54 PACTS_END
+rewardpool IRONCLAD 55 PERFECTED_STRIKE
+rewardpool IRONCLAD 56 PILLAGE
+rewardpool IRONCLAD 57 POMMEL_STRIKE
+rewardpool IRONCLAD 58 PRIMAL_FORCE
+rewardpool IRONCLAD 59 PYRE
+rewardpool IRONCLAD 60 RAGE
+rewardpool IRONCLAD 61 RAMPAGE
+rewardpool IRONCLAD 62 RUPTURE
+rewardpool IRONCLAD 63 SECOND_WIND
+rewardpool IRONCLAD 64 SETUP_STRIKE
+rewardpool IRONCLAD 65 SHRUG_IT_OFF
+rewardpool IRONCLAD 66 SPITE
+rewardpool IRONCLAD 67 STAMPEDE
+rewardpool IRONCLAD 68 STOKE
+rewardpool IRONCLAD 69 STOMP
+rewardpool IRONCLAD 70 STONE_ARMOR
+rewardpool IRONCLAD 71 STRIKE_IRONCLAD
+rewardpool IRONCLAD 72 SWORD_BOOMERANG
+rewardpool IRONCLAD 73 TAUNT
+rewardpool IRONCLAD 74 TEAR_ASUNDER
+rewardpool IRONCLAD 75 THRASH
+rewardpool IRONCLAD 76 THUNDERCLAP
+rewardpool IRONCLAD 77 TREMBLE
+rewardpool IRONCLAD 78 TRUE_GRIT
+rewardpool IRONCLAD 79 TWIN_STRIKE
+rewardpool IRONCLAD 80 UNMOVABLE
+rewardpool IRONCLAD 81 UNRELENTING
+rewardpool IRONCLAD 82 UPPERCUT
+rewardpool IRONCLAD 83 VICIOUS
+rewardpool IRONCLAD 84 WHIRLWIND
+rewardpool SILENT 0 ABRASIVE
+rewardpool SILENT 1 ACCELERANT
+rewardpool SILENT 2 ACCURACY
+rewardpool SILENT 3 ACROBATICS
+rewardpool SILENT 4 ADRENALINE
+rewardpool SILENT 5 AFTERIMAGE
+rewardpool SILENT 6 ANTICIPATE
+rewardpool SILENT 7 ASSASSINATE
+rewardpool SILENT 8 BACKFLIP
+rewardpool SILENT 9 BACKSTAB
+rewardpool SILENT 10 BLADE_OF_INK
+rewardpool SILENT 11 BLADE_DANCE
+rewardpool SILENT 12 BLUR
+rewardpool SILENT 13 BOUNCING_FLASK
+rewardpool SILENT 14 BUBBLE_BUBBLE
+rewardpool SILENT 15 BULLET_TIME
+rewardpool SILENT 16 BURST
+rewardpool SILENT 17 CALCULATED_GAMBLE
+rewardpool SILENT 18 CLOAK_AND_DAGGER
+rewardpool SILENT 19 CORROSIVE_WAVE
+rewardpool SILENT 20 DAGGER_SPRAY
+rewardpool SILENT 21 DAGGER_THROW
+rewardpool SILENT 22 DASH
+rewardpool SILENT 23 DEADLY_POISON
+rewardpool SILENT 24 DEFEND_SILENT
+rewardpool SILENT 25 DEFLECT
+rewardpool SILENT 26 DODGE_AND_ROLL
+rewardpool SILENT 27 ECHOING_SLASH
+rewardpool SILENT 28 ENVENOM
+rewardpool SILENT 29 ESCAPE_PLAN
+rewardpool SILENT 30 EXPERTISE
+rewardpool SILENT 31 EXPOSE
+rewardpool SILENT 32 FAN_OF_KNIVES
+rewardpool SILENT 33 FINISHER
+rewardpool SILENT 34 FLECHETTES
+rewardpool SILENT 35 FLICK_FLACK
+rewardpool SILENT 36 SIDESTEP
+rewardpool SILENT 37 FOOTWORK
+rewardpool SILENT 38 GRAND_FINALE
+rewardpool SILENT 39 HAND_TRICK
+rewardpool SILENT 40 HAZE
+rewardpool SILENT 41 HIDDEN_DAGGERS
+rewardpool SILENT 42 INFINITE_BLADES
+rewardpool SILENT 43 KNIFE_TRAP
+rewardpool SILENT 44 LEADING_STRIKE
+rewardpool SILENT 45 LEG_SWEEP
+rewardpool SILENT 46 MALAISE
+rewardpool SILENT 47 MASTER_PLANNER
+rewardpool SILENT 48 MEMENTO_MORI
+rewardpool SILENT 49 MIRAGE
+rewardpool SILENT 50 MURDER
+rewardpool SILENT 51 NEUTRALIZE
+rewardpool SILENT 52 NIGHTMARE
+rewardpool SILENT 53 NOXIOUS_FUMES
+rewardpool SILENT 54 OUTBREAK
+rewardpool SILENT 55 PHANTOM_BLADES
+rewardpool SILENT 56 PIERCING_WAIL
+rewardpool SILENT 57 PINPOINT
+rewardpool SILENT 58 POISONED_STAB
+rewardpool SILENT 59 POUNCE
+rewardpool SILENT 60 PRECISE_CUT
+rewardpool SILENT 61 PREDATOR
+rewardpool SILENT 62 PREPARED
+rewardpool SILENT 63 REFLEX
+rewardpool SILENT 64 RICOCHET
+rewardpool SILENT 65 SERPENT_FORM
+rewardpool SILENT 66 SHADOW_STEP
+rewardpool SILENT 67 SHADOWMELD
+rewardpool SILENT 68 SKEWER
+rewardpool SILENT 69 SLICE
+rewardpool SILENT 70 SNAKEBITE
+rewardpool SILENT 71 SPEEDSTER
+rewardpool SILENT 72 STORM_OF_STEEL
+rewardpool SILENT 73 STRANGLE
+rewardpool SILENT 74 STRIKE_SILENT
+rewardpool SILENT 75 SUCKER_PUNCH
+rewardpool SILENT 76 SUPPRESS
+rewardpool SILENT 77 SURVIVOR
+rewardpool SILENT 78 TACTICIAN
+rewardpool SILENT 79 THE_HUNT
+rewardpool SILENT 80 TOOLS_OF_THE_TRADE
+rewardpool SILENT 81 TRACKING
+rewardpool SILENT 82 UNTOUCHABLE
+rewardpool SILENT 83 UP_MY_SLEEVE
+rewardpool SILENT 84 WELL_LAID_PLANS
+rewardpool SILENT 85 WRAITH_FORM
+rewardpool REGENT 0 ALIGNMENT
+rewardpool REGENT 1 ARSENAL
+rewardpool REGENT 2 ASTRAL_PULSE
+rewardpool REGENT 3 BEAT_INTO_SHAPE
+rewardpool REGENT 4 BEGONE
+rewardpool REGENT 5 BIG_BANG
+rewardpool REGENT 6 BLACK_HOLE
+rewardpool REGENT 7 BOMBARDMENT
+rewardpool REGENT 8 BULWARK
+rewardpool REGENT 9 BUNDLE_OF_JOY
+rewardpool REGENT 10 CELESTIAL_MIGHT
+rewardpool REGENT 11 CHARGE
+rewardpool REGENT 12 CHILD_OF_THE_STARS
+rewardpool REGENT 13 CLOAK_OF_STARS
+rewardpool REGENT 14 COLLISION_COURSE
+rewardpool REGENT 15 COMET
+rewardpool REGENT 16 CONQUEROR
+rewardpool REGENT 17 CONVERGENCE
+rewardpool REGENT 18 COSMIC_INDIFFERENCE
+rewardpool REGENT 19 CRASH_LANDING
+rewardpool REGENT 20 CRESCENT_SPEAR
+rewardpool REGENT 21 CRUSH_UNDER
+rewardpool REGENT 22 DECISIONS_DECISIONS
+rewardpool REGENT 23 DEFEND_REGENT
+rewardpool REGENT 24 DEVASTATE
+rewardpool REGENT 25 DYING_STAR
+rewardpool REGENT 26 FALLING_STAR
+rewardpool REGENT 27 FOREGONE_CONCLUSION
+rewardpool REGENT 28 FURNACE
+rewardpool REGENT 29 GAMMA_BLAST
+rewardpool REGENT 30 GATHER_LIGHT
+rewardpool REGENT 31 GENESIS
+rewardpool REGENT 32 GLIMMER
+rewardpool REGENT 33 GLITTERSTREAM
+rewardpool REGENT 34 GLOW
+rewardpool REGENT 35 GUARDS
+rewardpool REGENT 36 GUIDING_STAR
+rewardpool REGENT 37 HEAVENLY_DRILL
+rewardpool REGENT 38 HEGEMONY
+rewardpool REGENT 39 HEIRLOOM_HAMMER
+rewardpool REGENT 40 HIDDEN_CACHE
+rewardpool REGENT 41 I_AM_INVINCIBLE
+rewardpool REGENT 42 KINGLY_KICK
+rewardpool REGENT 43 KINGLY_PUNCH
+rewardpool REGENT 44 KNOCKOUT_BLOW
+rewardpool REGENT 45 KNOW_THY_PLACE
+rewardpool REGENT 46 LUNAR_BLAST
+rewardpool REGENT 47 MAKE_IT_SO
+rewardpool REGENT 48 MANIFEST_AUTHORITY
+rewardpool REGENT 49 METEOR_SHOWER
+rewardpool REGENT 50 MONARCHS_GAZE
+rewardpool REGENT 51 MONOLOGUE
+rewardpool REGENT 52 NEUTRON_AEGIS
+rewardpool REGENT 53 ORBIT
+rewardpool REGENT 54 PALE_BLUE_DOT
+rewardpool REGENT 55 PARRY
+rewardpool REGENT 56 PARTICLE_WALL
+rewardpool REGENT 57 PATTER
+rewardpool REGENT 58 PHOTON_CUT
+rewardpool REGENT 59 PILLAR_OF_CREATION
+rewardpool REGENT 60 PROPHESIZE
+rewardpool REGENT 61 QUASAR
+rewardpool REGENT 62 RADIATE
+rewardpool REGENT 63 REFINE_BLADE
+rewardpool REGENT 64 REFLECT
+rewardpool REGENT 65 RESONANCE
+rewardpool REGENT 66 ROYAL_GAMBLE
+rewardpool REGENT 67 ROYALTIES
+rewardpool REGENT 68 SEEKING_EDGE
+rewardpool REGENT 69 SEVEN_STARS
+rewardpool REGENT 70 SHINING_STRIKE
+rewardpool REGENT 71 SOLAR_STRIKE
+rewardpool REGENT 72 SPECTRUM_SHIFT
+rewardpool REGENT 73 SPOILS_OF_BATTLE
+rewardpool REGENT 74 STARDUST
+rewardpool REGENT 75 STRIKE_REGENT
+rewardpool REGENT 76 SUMMON_FORTH
+rewardpool REGENT 77 SUPERMASSIVE
+rewardpool REGENT 78 SWORD_SAGE
+rewardpool REGENT 79 TERRAFORMING
+rewardpool REGENT 80 THE_SEALED_THRONE
+rewardpool REGENT 81 THE_SMITH
+rewardpool REGENT 82 TYRANNY
+rewardpool REGENT 83 VENERATE
+rewardpool REGENT 84 VOID_FORM
+rewardpool REGENT 85 WROUGHT_IN_WAR
+rewardpool NECROBINDER 0 AFTERLIFE
+rewardpool NECROBINDER 1 BANSHEES_CRY
+rewardpool NECROBINDER 2 BLIGHT_STRIKE
+rewardpool NECROBINDER 3 BODYGUARD
+rewardpool NECROBINDER 4 BONE_SHARDS
+rewardpool NECROBINDER 5 BORROWED_TIME
+rewardpool NECROBINDER 6 BURY
+rewardpool NECROBINDER 7 CALCIFY
+rewardpool NECROBINDER 8 CALL_OF_THE_VOID
+rewardpool NECROBINDER 9 CAPTURE_SPIRIT
+rewardpool NECROBINDER 10 CLEANSE
+rewardpool NECROBINDER 11 COUNTDOWN
+rewardpool NECROBINDER 12 DANSE_MACABRE
+rewardpool NECROBINDER 13 DEATH_MARCH
+rewardpool NECROBINDER 14 DEATHBRINGER
+rewardpool NECROBINDER 15 DEATHS_DOOR
+rewardpool NECROBINDER 16 DEBILITATE
+rewardpool NECROBINDER 17 DEFEND_NECROBINDER
+rewardpool NECROBINDER 18 DEFILE
+rewardpool NECROBINDER 19 DEFY
+rewardpool NECROBINDER 20 DELAY
+rewardpool NECROBINDER 21 DEMESNE
+rewardpool NECROBINDER 22 DEVOUR_LIFE
+rewardpool NECROBINDER 23 DIRGE
+rewardpool NECROBINDER 24 DRAIN_POWER
+rewardpool NECROBINDER 25 DREDGE
+rewardpool NECROBINDER 26 EIDOLON
+rewardpool NECROBINDER 27 END_OF_DAYS
+rewardpool NECROBINDER 28 ENFEEBLING_TOUCH
+rewardpool NECROBINDER 29 ERADICATE
+rewardpool NECROBINDER 30 FEAR
+rewardpool NECROBINDER 31 FETCH
+rewardpool NECROBINDER 32 FLATTEN
+rewardpool NECROBINDER 33 FORBIDDEN_GRIMOIRE
+rewardpool NECROBINDER 34 FRIENDSHIP
+rewardpool NECROBINDER 35 GRAVE_WARDEN
+rewardpool NECROBINDER 36 GRAVEBLAST
+rewardpool NECROBINDER 37 HANG
+rewardpool NECROBINDER 38 HAUNT
+rewardpool NECROBINDER 39 HIGH_FIVE
+rewardpool NECROBINDER 40 INVOKE
+rewardpool NECROBINDER 41 LETHALITY
+rewardpool NECROBINDER 42 MELANCHOLY
+rewardpool NECROBINDER 43 MISERY
+rewardpool NECROBINDER 44 NECRO_MASTERY
+rewardpool NECROBINDER 45 NEGATIVE_PULSE
+rewardpool NECROBINDER 46 NEUROSURGE
+rewardpool NECROBINDER 47 NO_ESCAPE
+rewardpool NECROBINDER 48 OBLIVION
+rewardpool NECROBINDER 49 PAGESTORM
+rewardpool NECROBINDER 50 PARSE
+rewardpool NECROBINDER 51 POKE
+rewardpool NECROBINDER 52 PROTECTOR
+rewardpool NECROBINDER 53 PULL_AGGRO
+rewardpool NECROBINDER 54 PULL_FROM_BELOW
+rewardpool NECROBINDER 55 PUTREFY
+rewardpool NECROBINDER 56 RATTLE
+rewardpool NECROBINDER 57 REANIMATE
+rewardpool NECROBINDER 58 REAP
+rewardpool NECROBINDER 59 REAPER_FORM
+rewardpool NECROBINDER 60 REAVE
+rewardpool NECROBINDER 61 RIGHT_HAND_HAND
+rewardpool NECROBINDER 62 SACRIFICE
+rewardpool NECROBINDER 63 SCOURGE
+rewardpool NECROBINDER 64 SCULPTING_STRIKE
+rewardpool NECROBINDER 65 SEANCE
+rewardpool NECROBINDER 66 SENTRY_MODE
+rewardpool NECROBINDER 67 SEVERANCE
+rewardpool NECROBINDER 68 SHARED_FATE
+rewardpool NECROBINDER 69 SHROUD
+rewardpool NECROBINDER 70 SIC_EM
+rewardpool NECROBINDER 71 SLEIGHT_OF_FLESH
+rewardpool NECROBINDER 72 SNAP
+rewardpool NECROBINDER 73 SOUL_STORM
+rewardpool NECROBINDER 74 SOW
+rewardpool NECROBINDER 75 SPIRIT_OF_ASH
+rewardpool NECROBINDER 76 SPUR
+rewardpool NECROBINDER 77 SQUEEZE
+rewardpool NECROBINDER 78 STRIKE_NECROBINDER
+rewardpool NECROBINDER 79 THE_SCYTHE
+rewardpool NECROBINDER 80 TIMES_UP
+rewardpool NECROBINDER 81 TRANSFIGURE
+rewardpool NECROBINDER 82 UNDEATH
+rewardpool NECROBINDER 83 UNLEASH
+rewardpool NECROBINDER 84 VEILPIERCER
+rewardpool NECROBINDER 85 WISP
+rewardpool DEFECT 0 ADAPTIVE_STRIKE
+rewardpool DEFECT 1 ALL_FOR_ONE
+rewardpool DEFECT 2 BALL_LIGHTNING
+rewardpool DEFECT 3 BARRAGE
+rewardpool DEFECT 4 BEAM_CELL
+rewardpool DEFECT 5 BIASED_COGNITION
+rewardpool DEFECT 6 BOOST_AWAY
+rewardpool DEFECT 7 BOOT_SEQUENCE
+rewardpool DEFECT 8 BUFFER
+rewardpool DEFECT 9 BULK_UP
+rewardpool DEFECT 10 CAPACITOR
+rewardpool DEFECT 11 CHAOS
+rewardpool DEFECT 12 CHARGE_BATTERY
+rewardpool DEFECT 13 CHILL
+rewardpool DEFECT 14 CLAW
+rewardpool DEFECT 15 COLD_SNAP
+rewardpool DEFECT 16 COMPACT
+rewardpool DEFECT 17 COMPILE_DRIVER
+rewardpool DEFECT 18 CONSUMING_SHADOW
+rewardpool DEFECT 19 COOLANT
+rewardpool DEFECT 20 COOLHEADED
+rewardpool DEFECT 21 CREATIVE_AI
+rewardpool DEFECT 22 DARKNESS
+rewardpool DEFECT 23 DEFEND_DEFECT
+rewardpool DEFECT 24 DEFRAGMENT
+rewardpool DEFECT 25 DOUBLE_ENERGY
+rewardpool DEFECT 26 DUALCAST
+rewardpool DEFECT 27 ECHO_FORM
+rewardpool DEFECT 28 FERAL
+rewardpool DEFECT 29 FIGHT_THROUGH
+rewardpool DEFECT 30 FLAK_CANNON
+rewardpool DEFECT 31 FOCUSED_STRIKE
+rewardpool DEFECT 32 FTL
+rewardpool DEFECT 33 FUSION
+rewardpool DEFECT 34 GENETIC_ALGORITHM
+rewardpool DEFECT 35 GLACIER
+rewardpool DEFECT 36 GLASSWORK
+rewardpool DEFECT 37 GO_FOR_THE_EYES
+rewardpool DEFECT 38 GUNK_UP
+rewardpool DEFECT 39 HAILSTORM
+rewardpool DEFECT 40 HELIX_DRILL
+rewardpool DEFECT 41 HOLOGRAM
+rewardpool DEFECT 42 HOTFIX
+rewardpool DEFECT 43 HYPERBEAM
+rewardpool DEFECT 44 ICE_LANCE
+rewardpool DEFECT 45 ITERATION
+rewardpool DEFECT 46 LEAP
+rewardpool DEFECT 47 LIGHTNING_ROD
+rewardpool DEFECT 48 LOOP
+rewardpool DEFECT 49 MACHINE_LEARNING
+rewardpool DEFECT 50 METEOR_STRIKE
+rewardpool DEFECT 51 MODDED
+rewardpool DEFECT 52 MOMENTUM_STRIKE
+rewardpool DEFECT 53 MULTI_CAST
+rewardpool DEFECT 54 NULL
+rewardpool DEFECT 55 OVERCLOCK
+rewardpool DEFECT 56 QUADCAST
+rewardpool DEFECT 57 RAINBOW
+rewardpool DEFECT 58 REBOOT
+rewardpool DEFECT 59 REFRACT
+rewardpool DEFECT 60 ROCKET_PUNCH
+rewardpool DEFECT 61 SCAVENGE
+rewardpool DEFECT 62 SCRAPE
+rewardpool DEFECT 63 SHADOW_SHIELD
+rewardpool DEFECT 64 SHATTER
+rewardpool DEFECT 65 SIGNAL_BOOST
+rewardpool DEFECT 66 SKIM
+rewardpool DEFECT 67 SMOKESTACK
+rewardpool DEFECT 68 SPINNER
+rewardpool DEFECT 69 STORM
+rewardpool DEFECT 70 STRIKE_DEFECT
+rewardpool DEFECT 71 SUBROUTINE
+rewardpool DEFECT 72 SUNDER
+rewardpool DEFECT 73 SUPERCRITICAL
+rewardpool DEFECT 74 SWEEPING_BEAM
+rewardpool DEFECT 75 SYNCHRONIZE
+rewardpool DEFECT 76 SYNTHESIS
+rewardpool DEFECT 77 TEMPEST
+rewardpool DEFECT 78 TESLA_COIL
+rewardpool DEFECT 79 THUNDER
+rewardpool DEFECT 80 TRASH_TO_TREASURE
+rewardpool DEFECT 81 TURBO
+rewardpool DEFECT 82 UPROAR
+rewardpool DEFECT 83 VOLTAIC
+rewardpool DEFECT 84 WHITE_NOISE
+rewardpool DEFECT 85 ZAP
+card ABRASIVE SILENT_CARD_POOL Power Rare Self 3 0 -1 0 1 Sly
+var ABRASIVE DexterityPower 1 0
+var ABRASIVE ThornsPower 4 0
+card ABUNDANCE EVENT_CARD_POOL Skill Ancient Self 1 0 -1 0 1 Exhaust
+card ACCELERANT SILENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var ACCELERANT Accelerant 1 0
+card ACCURACY SILENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var ACCURACY AccuracyPower 4 0
+card ACROBATICS SILENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var ACROBATICS Cards 3 0
+card ADAPTIVE_STRIKE DEFECT_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 -
+var ADAPTIVE_STRIKE Damage 18 0
+card ADRENALINE SILENT_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+var ADRENALINE Cards 2 0
+var ADRENALINE Energy 1 0
+card AFTERIMAGE SILENT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var AFTERIMAGE AfterimagePower 1 0
+card AFTERLIFE NECROBINDER_CARD_POOL Skill Common Self 1 0 -1 0 1 Exhaust
+var AFTERLIFE Summon 6 0
+card AGGRESSION IRONCLAD_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+card ALCHEMIZE COLORLESS_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust
+card ALIGNMENT REGENT_CARD_POOL Skill Uncommon Self 0 0 2 0 1 -
+var ALIGNMENT Energy 2 0
+card ALL_FOR_ONE DEFECT_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 -
+var ALL_FOR_ONE Damage 10 0
+card ANGER IRONCLAD_CARD_POOL Attack Common AnyEnemy 0 0 -1 0 1 -
+var ANGER Damage 6 0
+card ANOINTED COLORLESS_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust
+card ANTICIPATE SILENT_CARD_POOL Skill Common Self 0 0 -1 0 1 -
+var ANTICIPATE DexterityPower 2 0
+card APOTHEOSIS EVENT_CARD_POOL Skill Ancient Self 2 0 -1 0 1 Exhaust,Innate
+card APPARITION EVENT_CARD_POOL Skill Ancient Self 1 0 -1 0 1 Ethereal,Exhaust
+var APPARITION IntangiblePower 1 0
+card ARMAMENTS IRONCLAD_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var ARMAMENTS Block 5 0
+card ARSENAL REGENT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var ARSENAL ArsenalPower 1 0
+card ASCENDERS_BANE CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Eternal,Ethereal,Unplayable
+card ASHEN_STRIKE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var ASHEN_STRIKE CalculatedDamage 6 1
+var ASHEN_STRIKE CalculationBase 6 0
+var ASHEN_STRIKE ExtraDamage 3 0
+card ASSASSINATE SILENT_CARD_POOL Attack Rare AnyEnemy 0 0 -1 0 1 Exhaust,Innate
+var ASSASSINATE Damage 10 0
+var ASSASSINATE VulnerablePower 1 0
+card ASTRAL_PULSE REGENT_CARD_POOL Attack Common AllEnemies 0 0 3 0 1 -
+var ASTRAL_PULSE Damage 6 0
+card AUTOMATION COLORLESS_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var AUTOMATION Energy 1 0
+card BACKFLIP SILENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var BACKFLIP Block 5 0
+var BACKFLIP Cards 2 0
+card BACKSTAB SILENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 Exhaust,Innate
+var BACKSTAB Damage 11 0
+card BAD_LUCK CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Eternal,Unplayable
+var BAD_LUCK HpLoss 13 0
+card BALL_LIGHTNING DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var BALL_LIGHTNING Damage 7 0
+card BANSHEES_CRY NECROBINDER_CARD_POOL Attack Rare AllEnemies 9 0 -1 0 1 -
+var BANSHEES_CRY Damage 33 0
+var BANSHEES_CRY Energy 2 0
+card BARRAGE DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var BARRAGE CalculatedHits 0 1
+var BARRAGE CalculationBase 0 0
+var BARRAGE CalculationExtra 1 0
+var BARRAGE Damage 5 0
+card BARRICADE IRONCLAD_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+card BASH IRONCLAD_CARD_POOL Attack Basic AnyEnemy 2 0 -1 0 1 -
+var BASH Damage 8 0
+var BASH VulnerablePower 2 0
+card BATTLE_TRANCE IRONCLAD_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var BATTLE_TRANCE Cards 3 0
+card BEACON_OF_HOPE COLORLESS_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card BEAM_CELL DEFECT_CARD_POOL Attack Common AnyEnemy 0 0 -1 0 1 -
+var BEAM_CELL Damage 3 0
+var BEAM_CELL VulnerablePower 1 0
+card BEAT_DOWN COLORLESS_CARD_POOL Skill Rare RandomEnemy 3 0 -1 0 1 -
+var BEAT_DOWN Cards 3 0
+card BEAT_INTO_SHAPE REGENT_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 -
+var BEAT_INTO_SHAPE CalculatedForge 5 1
+var BEAT_INTO_SHAPE CalculationBase 5 0
+var BEAT_INTO_SHAPE CalculationExtra 5 0
+var BEAT_INTO_SHAPE Damage 5 0
+card BECKON STATUS_CARD_POOL Status Status None 1 0 -1 0 0 -
+var BECKON HpLoss 6 0
+card BEGONE REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+card BELIEVE_IN_YOU COLORLESS_CARD_POOL Skill Uncommon AnyAlly 0 0 -1 0 1 -
+var BELIEVE_IN_YOU Energy 2 0
+card BIASED_COGNITION DEFECT_CARD_POOL Power Ancient Self 1 0 -1 0 1 -
+var BIASED_COGNITION BiasedCognitionPower 1 0
+var BIASED_COGNITION FocusPower 5 0
+card BIG_BANG REGENT_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+var BIG_BANG Cards 1 0
+var BIG_BANG Energy 1 0
+var BIG_BANG Forge 5 0
+var BIG_BANG Stars 1 0
+card BLACK_HOLE REGENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var BLACK_HOLE BlackHolePower 3 0
+card BLADE_DANCE SILENT_CARD_POOL Skill Common Self 1 0 -1 0 1 Exhaust
+var BLADE_DANCE Cards 3 0
+card BLADE_OF_INK SILENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var BLADE_OF_INK Cards 2 0
+card BLADE_SYMPHONY SILENT_CARD_POOL Skill Uncommon AllAllies 2 0 -1 0 1 -
+var BLADE_SYMPHONY Cards 2 0
+card BLAZE IRONCLAD_CARD_POOL Skill Uncommon AnyAlly 2 0 -1 0 1 -
+var BLAZE StrengthPower 5 0
+card BLIGHT_STRIKE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var BLIGHT_STRIKE Damage 8 0
+card BLOODLETTING IRONCLAD_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var BLOODLETTING Energy 2 0
+var BLOODLETTING HpLoss 3 0
+card BLOOD_WALL IRONCLAD_CARD_POOL Skill Common Self 2 0 -1 0 1 -
+var BLOOD_WALL Block 16 0
+var BLOOD_WALL HpLoss 2 0
+card BLUDGEON IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 3 0 -1 0 1 -
+var BLUDGEON Damage 32 0
+card BLUR SILENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var BLUR Block 5 0
+var BLUR Blur 1 0
+card BODYGUARD NECROBINDER_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var BODYGUARD Summon 5 0
+card BODY_SLAM IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var BODY_SLAM CalculatedDamage 0 1
+var BODY_SLAM CalculationBase 0 0
+var BODY_SLAM ExtraDamage 1 0
+card BOLAS COLORLESS_CARD_POOL Attack Rare AnyEnemy 0 0 -1 0 1 -
+var BOLAS Damage 3 0
+card BOMBARDMENT REGENT_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 Exhaust
+var BOMBARDMENT Damage 18 0
+card BONE_SHARDS NECROBINDER_CARD_POOL Attack Uncommon AllEnemies 1 0 -1 0 1 -
+var BONE_SHARDS Block 9 0
+var BONE_SHARDS OstyDamage 9 0
+card BOOST_AWAY DEFECT_CARD_POOL Skill Common Self 0 0 -1 0 1 -
+var BOOST_AWAY Block 6 0
+card BOOT_SEQUENCE DEFECT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust,Innate
+var BOOT_SEQUENCE Block 10 0
+card BORROWED_TIME NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var BORROWED_TIME Energy 4 0
+var BORROWED_TIME ExtraCost 1 0
+card BOUNCING_FLASK SILENT_CARD_POOL Skill Uncommon RandomEnemy 2 0 -1 0 1 -
+var BOUNCING_FLASK PoisonPower 3 0
+var BOUNCING_FLASK Repeat 3 0
+card BRAND IRONCLAD_CARD_POOL Skill Rare Self 0 0 -1 0 1 -
+var BRAND HpLoss 1 0
+var BRAND StrengthPower 1 0
+card BREAK IRONCLAD_CARD_POOL Attack Ancient AnyEnemy 1 0 -1 0 1 -
+var BREAK Damage 20 0
+var BREAK VulnerablePower 5 0
+card BREAKTHROUGH IRONCLAD_CARD_POOL Attack Common AllEnemies 1 0 -1 0 1 -
+var BREAKTHROUGH Damage 9 0
+var BREAKTHROUGH HpLoss 1 0
+card BRIGHTEST_FLAME EVENT_CARD_POOL Skill Ancient Self 0 0 -1 0 1 -
+var BRIGHTEST_FLAME Cards 2 0
+var BRIGHTEST_FLAME Energy 2 0
+var BRIGHTEST_FLAME MaxHp 2 0
+card BUBBLE_BUBBLE SILENT_CARD_POOL Skill Uncommon AnyEnemy 1 0 -1 0 1 -
+var BUBBLE_BUBBLE PoisonPower 9 0
+card BUFFER DEFECT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var BUFFER BufferPower 1 0
+card BULK_UP DEFECT_CARD_POOL Power Uncommon Self 2 0 -1 0 1 -
+var BULK_UP DexterityPower 2 0
+var BULK_UP OrbSlots 1 0
+var BULK_UP StrengthPower 2 0
+card BULLET_TIME SILENT_CARD_POOL Skill Rare Self 3 0 -1 0 1 -
+card BULLY IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var BULLY CalculatedDamage 4 1
+var BULLY CalculationBase 4 0
+var BULLY ExtraDamage 2 0
+card BULWARK REGENT_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var BULWARK Block 12 0
+var BULWARK Forge 10 0
+card BUNDLE_OF_JOY REGENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust
+var BUNDLE_OF_JOY Cards 3 0
+card BURN STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable
+var BURN Damage 2 0
+card BURNING_PACT IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var BURNING_PACT Cards 2 0
+card BURST SILENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var BURST Skills 1 0
+card BURY NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 4 0 -1 0 1 -
+var BURY Damage 52 0
+card BYRDONIS_EGG QUEST_CARD_POOL Quest Quest None -1 0 -1 0 0 Unplayable
+card BYRD_SWOOP EVENT_CARD_POOL Attack Event AnyEnemy 0 0 -1 0 1 -
+var BYRD_SWOOP Damage 14 0
+card CACOPHONY NECROBINDER_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var CACOPHONY Cards 33 0
+var CACOPHONY Damage 66 0
+card CALAMITY COLORLESS_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+card CALCIFY NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var CALCIFY CalcifyPower 4 0
+card CALCULATED_GAMBLE SILENT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
+card CALL_OF_THE_VOID NECROBINDER_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var CALL_OF_THE_VOID Cards 1 0
+card CALTROPS EVENT_CARD_POOL Power Event Self 1 0 -1 0 1 -
+var CALTROPS ThornsPower 3 0
+card CAPACITOR DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var CAPACITOR Repeat 2 0
+card CAPTURE_SPIRIT NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 -1 0 1 -
+var CAPTURE_SPIRIT Cards 3 0
+var CAPTURE_SPIRIT Damage 3 0
+card CASCADE IRONCLAD_CARD_POOL Skill Rare Self 0 1 -1 0 1 -
+card CATASTROPHE COLORLESS_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var CATASTROPHE Cards 2 0
+card CELESTIAL_MIGHT REGENT_CARD_POOL Attack Common AnyEnemy 2 0 -1 0 1 -
+var CELESTIAL_MIGHT Damage 6 0
+var CELESTIAL_MIGHT Repeat 3 0
+card CHAOS DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var CHAOS Repeat 1 0
+card CHARGE REGENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var CHARGE Cards 2 0
+card CHARGE_BATTERY DEFECT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var CHARGE_BATTERY Block 7 0
+var CHARGE_BATTERY Energy 1 0
+card CHILD_OF_THE_STARS REGENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var CHILD_OF_THE_STARS BlockForStars 2 0
+card CHILL DEFECT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
+card CINDER IRONCLAD_CARD_POOL Attack Common AnyEnemy 2 0 -1 0 1 -
+var CINDER Damage 18 0
+card CLASH EVENT_CARD_POOL Attack Event AnyEnemy 0 0 -1 0 1 -
+var CLASH Damage 14 0
+card CLAW DEFECT_CARD_POOL Attack Common AnyEnemy 0 0 -1 0 1 -
+var CLAW Damage 3 0
+var CLAW Increase 2 0
+card CLEANSE NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var CLEANSE Summon 3 0
+card CLOAK_AND_DAGGER SILENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var CLOAK_AND_DAGGER Block 6 0
+var CLOAK_AND_DAGGER Cards 1 0
+card CLOAK_OF_STARS REGENT_CARD_POOL Skill Common Self 0 0 1 0 1 -
+var CLOAK_OF_STARS Block 7 0
+card CLUMSY CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Ethereal,Unplayable
+card COLD_SNAP DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var COLD_SNAP Damage 6 0
+card COLLISION_COURSE REGENT_CARD_POOL Attack Common AnyEnemy 0 0 -1 0 1 -
+var COLLISION_COURSE Damage 10 0
+card COLOSSUS IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var COLOSSUS Block 4 0
+var COLOSSUS Colossus 1 0
+card COMET REGENT_CARD_POOL Attack Rare AnyEnemy 0 0 5 0 1 -
+var COMET Damage 33 0
+var COMET VulnerablePower 3 0
+var COMET WeakPower 3 0
+card COMPACT DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var COMPACT Block 6 0
+card COMPILE_DRIVER DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var COMPILE_DRIVER CalculatedCards 0 1
+var COMPILE_DRIVER CalculationBase 0 0
+var COMPILE_DRIVER CalculationExtra 1 0
+var COMPILE_DRIVER Damage 7 0
+card CONCOCT SILENT_CARD_POOL Skill Uncommon AnyAlly 0 0 -1 0 1 -
+var CONCOCT ConcoctPower 3 0
+card CONFLAGRATION IRONCLAD_CARD_POOL Attack Rare AllEnemies 1 0 -1 0 1 -
+var CONFLAGRATION Damage 2 0
+var CONFLAGRATION Repeat 4 0
+card CONQUEROR REGENT_CARD_POOL Skill Uncommon AnyEnemy 1 0 -1 0 1 -
+var CONQUEROR Forge 3 0
+card CONSTELLATION REGENT_CARD_POOL Skill Uncommon AnyAlly 0 0 2 0 1 -
+var CONSTELLATION Block 9 0
+var CONSTELLATION Cards 1 0
+var CONSTELLATION Energy 1 0
+card CONSUMING_SHADOW DEFECT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var CONSUMING_SHADOW ConsumingShadowPower 1 0
+var CONSUMING_SHADOW Repeat 2 0
+card CONVERGENCE REGENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var CONVERGENCE Energy 1 0
+var CONVERGENCE Stars 1 0
+card COOLANT DEFECT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var COOLANT CoolantPower 2 0
+card COOLHEADED DEFECT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var COOLHEADED Cards 1 0
+card COORDINATE COLORLESS_CARD_POOL Skill Uncommon AnyAlly 1 0 -1 0 1 -
+var COORDINATE StrengthPower 5 0
+card CORROSIVE_WAVE SILENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var CORROSIVE_WAVE CorrosiveWave 2 0
+card CORRUPTION IRONCLAD_CARD_POOL Power Ancient Self 3 0 -1 0 1 -
+var CORRUPTION Power 1 0
+card COSMIC_INDIFFERENCE REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var COSMIC_INDIFFERENCE Block 6 0
+card COUNTDOWN NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var COUNTDOWN CountdownPower 6 0
+card CRASH_LANDING REGENT_CARD_POOL Attack Rare AllEnemies 1 0 -1 0 1 -
+var CRASH_LANDING Damage 21 0
+card CREATIVE_AI DEFECT_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+var CREATIVE_AI CreativeAi 1 0
+card CRESCENT_SPEAR REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 0 1 -
+var CRESCENT_SPEAR CalculatedDamage 8 1
+var CRESCENT_SPEAR CalculationBase 8 0
+var CRESCENT_SPEAR ExtraDamage 2 0
+card CRIMSON_MANTLE IRONCLAD_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var CRIMSON_MANTLE CrimsonMantlePower 7 0
+card CRUELTY IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var CRUELTY CrueltyPower 25 0
+card CRUSH_UNDER REGENT_CARD_POOL Attack Common AllEnemies 1 0 -1 0 1 -
+var CRUSH_UNDER Damage 8 0
+var CRUSH_UNDER StrengthLoss 1 0
+card CURSE_OF_THE_BELL CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Eternal,Unplayable
+card DAGGER_SPRAY SILENT_CARD_POOL Attack Common AllEnemies 1 0 -1 0 1 -
+var DAGGER_SPRAY Damage 4 0
+card DAGGER_THROW SILENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var DAGGER_THROW Damage 9 0
+card DANSE_MACABRE NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var DANSE_MACABRE DanseMacabrePower 4 0
+var DANSE_MACABRE Energy 2 0
+card DARKNESS DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+card DARK_EMBRACE IRONCLAD_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card DARK_SHACKLES COLORLESS_CARD_POOL Skill Uncommon AnyEnemy 0 0 -1 0 1 Exhaust
+var DARK_SHACKLES StrengthLoss 9 0
+card DASH SILENT_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var DASH Block 10 0
+var DASH Damage 10 0
+card DAZED STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Ethereal,Unplayable
+card DEADLY_POISON SILENT_CARD_POOL Skill Common AnyEnemy 1 0 -1 0 1 -
+var DEADLY_POISON PoisonPower 5 0
+card DEATHBRINGER NECROBINDER_CARD_POOL Skill Uncommon AllEnemies 2 0 -1 0 1 -
+var DEATHBRINGER DoomPower 21 0
+var DEATHBRINGER WeakPower 1 0
+card DEATHS_DOOR NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var DEATHS_DOOR Block 6 0
+var DEATHS_DOOR Repeat 2 0
+card DEATH_MARCH NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var DEATH_MARCH CalculatedDamage 8 1
+var DEATH_MARCH CalculationBase 8 0
+var DEATH_MARCH ExtraDamage 4 0
+card DEBILITATE NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var DEBILITATE Damage 10 0
+var DEBILITATE DebilitatePower 2 0
+card DEBRIS STATUS_CARD_POOL Status Status None 1 0 -1 0 0 Exhaust
+card DEBT CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+var DEBT Gold 10 0
+card DECAY CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+var DECAY Damage 2 0
+card DECISIONS_DECISIONS REGENT_CARD_POOL Skill Rare Self 0 0 6 0 1 Exhaust
+var DECISIONS_DECISIONS Cards 3 0
+var DECISIONS_DECISIONS Repeat 3 0
+card DEFEND_DEFECT DEFECT_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var DEFEND_DEFECT Block 5 0
+card DEFEND_IRONCLAD IRONCLAD_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var DEFEND_IRONCLAD Block 5 0
+card DEFEND_NECROBINDER NECROBINDER_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var DEFEND_NECROBINDER Block 5 0
+card DEFEND_REGENT REGENT_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var DEFEND_REGENT Block 5 0
+card DEFEND_SILENT SILENT_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var DEFEND_SILENT Block 5 0
+card DEFILE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 Ethereal
+var DEFILE Damage 13 0
+card DEFLECT SILENT_CARD_POOL Skill Common Self 0 0 -1 0 1 -
+var DEFLECT Block 4 0
+card DEFRAGMENT DEFECT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var DEFRAGMENT FocusPower 1 0
+card DEFY NECROBINDER_CARD_POOL Skill Common AnyEnemy 1 0 -1 0 1 Ethereal
+var DEFY Block 6 0
+var DEFY WeakPower 1 0
+card DELAY NECROBINDER_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var DELAY Block 11 0
+var DELAY Energy 1 0
+card DEMESNE NECROBINDER_CARD_POOL Power Rare Self 3 0 -1 0 1 Ethereal
+var DEMESNE Cards 1 0
+var DEMESNE Energy 1 0
+card DEMONIC_SHIELD IRONCLAD_CARD_POOL Skill Uncommon AnyAlly 0 0 -1 0 1 Exhaust
+var DEMONIC_SHIELD CalculatedBlock 0 1
+var DEMONIC_SHIELD CalculationBase 0 0
+var DEMONIC_SHIELD CalculationExtra 1 0
+var DEMONIC_SHIELD HpLoss 1 0
+card DEMON_FORM IRONCLAD_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+var DEMON_FORM StrengthPower 3 0
+card DEPRECATED_CARD DEPRECATED_CARD_POOL Status Status None 0 0 -1 0 0 Exhaust
+card DEVASTATE REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 4 0 1 -
+var DEVASTATE Damage 35 0
+card DEVOUR_LIFE NECROBINDER_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var DEVOUR_LIFE DevourLifePower 1 0
+card DIRGE NECROBINDER_CARD_POOL Skill Uncommon Self 0 1 -1 0 1 Exhaust
+var DIRGE Summon 3 0
+card DISCOVERY COLORLESS_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+card DISINTEGRATION TOKEN_CARD_POOL Status Status None -1 0 -1 0 0 -
+var DISINTEGRATION DisintegrationPower 6 0
+card DISMANTLE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var DISMANTLE Damage 8 0
+card DISTRACTION EVENT_CARD_POOL Skill Event Self 1 0 -1 0 1 Exhaust
+card DODGE_AND_ROLL SILENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var DODGE_AND_ROLL Block 4 0
+card DOMINATE IRONCLAD_CARD_POOL Skill Rare AnyEnemy 1 0 -1 0 1 Exhaust
+var DOMINATE StrengthPerVulnerable 1 0
+var DOMINATE VulnerablePower 1 0
+card DOUBLE_ENERGY DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+card DOUBT CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+var DOUBT WeakPower 1 0
+card DOWSING QUEST_CARD_POOL Quest Quest None -1 0 -1 0 0 Unplayable
+var DOWSING Rooms 5 0
+card DRAIN_POWER NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var DRAIN_POWER Cards 2 0
+var DRAIN_POWER Damage 10 0
+card DRAMATIC_ENTRANCE COLORLESS_CARD_POOL Attack Uncommon AllEnemies 0 0 -1 0 1 Exhaust,Innate
+var DRAMATIC_ENTRANCE Damage 11 0
+card DREDGE NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+var DREDGE Cards 3 0
+card DRUM_OF_BATTLE IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var DRUM_OF_BATTLE Cards 2 0
+var DRUM_OF_BATTLE Energy 2 0
+card DUALCAST DEFECT_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+card DUAL_WIELD EVENT_CARD_POOL Skill Event Self 1 0 -1 0 1 -
+var DUAL_WIELD Cards 1 0
+card DYING_STAR REGENT_CARD_POOL Attack Rare AllEnemies 1 0 3 0 1 Ethereal
+var DYING_STAR Damage 9 0
+var DYING_STAR StrengthLoss 9 0
+card ECHOING_SLASH SILENT_CARD_POOL Attack Uncommon AllEnemies 1 0 -1 0 1 -
+var ECHOING_SLASH Damage 10 0
+card ECHO_FORM DEFECT_CARD_POOL Power Rare Self 3 0 -1 0 1 Ethereal
+var ECHO_FORM EchoForm 1 0
+card EIDOLON NECROBINDER_CARD_POOL Skill Rare Self 2 0 -1 0 1 Exhaust
+card END_OF_DAYS NECROBINDER_CARD_POOL Skill Rare AllEnemies 3 0 -1 0 1 -
+var END_OF_DAYS DoomPower 29 0
+card ENERGY_SURGE DEFECT_CARD_POOL Skill Uncommon AllAllies 1 0 -1 0 1 Exhaust
+var ENERGY_SURGE Energy 2 0
+card ENFEEBLING_TOUCH NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 -1 0 1 Ethereal
+var ENFEEBLING_TOUCH StrengthLoss 8 0
+card ENLIGHTENMENT EVENT_CARD_POOL Skill Event Self 0 0 -1 0 1 Exhaust
+card ENTHRALLED CURSE_CARD_POOL Curse Curse None 2 0 -1 0 0 Eternal
+card ENTRENCH EVENT_CARD_POOL Skill Event Self 2 0 -1 0 1 -
+card ENTROPY COLORLESS_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var ENTROPY Cards 1 0
+card ENVENOM SILENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var ENVENOM EnvenomPower 1 0
+card EQUILIBRIUM COLORLESS_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var EQUILIBRIUM Block 13 0
+var EQUILIBRIUM Equilibrium 1 0
+card ERADICATE NECROBINDER_CARD_POOL Attack Rare AnyEnemy 0 1 -1 0 1 Retain
+var ERADICATE Damage 11 0
+card ESCAPE_PLAN SILENT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var ESCAPE_PLAN Block 3 0
+card ETERNAL_ARMOR COLORLESS_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+var ETERNAL_ARMOR PlatingPower 9 0
+card EVIL_EYE IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var EVIL_EYE Block 8 0
+card EXPECT_A_FIGHT IRONCLAD_CARD_POOL Skill Uncommon Self 3 0 -1 0 1 -
+var EXPECT_A_FIGHT CalculatedBlock 15 1
+var EXPECT_A_FIGHT CalculationBase 15 0
+var EXPECT_A_FIGHT CalculationExtra 5 0
+card EXPERTISE SILENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var EXPERTISE Cards 2 0
+card EXPOSE SILENT_CARD_POOL Skill Uncommon AnyEnemy 0 0 -1 0 1 Exhaust
+var EXPOSE Power 2 0
+card EXTERMINATE EVENT_CARD_POOL Attack Event AllEnemies 1 0 -1 0 1 -
+var EXTERMINATE Damage 3 0
+var EXTERMINATE Repeat 4 0
+card FADE SILENT_CARD_POOL Skill Uncommon AnyAlly 0 0 -1 0 1 Retain
+var FADE DexterityPower 6 0
+card FALLING_STAR REGENT_CARD_POOL Attack Basic AnyEnemy 0 0 2 0 1 -
+var FALLING_STAR Damage 8 0
+var FALLING_STAR VulnerablePower 1 0
+var FALLING_STAR WeakPower 1 0
+card FAN_OF_KNIVES SILENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var FAN_OF_KNIVES Shivs 4 0
+card FASTEN COLORLESS_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var FASTEN ExtraBlock 4 0
+card FEAR NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 Ethereal
+var FEAR Damage 7 0
+var FEAR VulnerablePower 1 0
+card FEED IRONCLAD_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 Exhaust
+var FEED Damage 10 0
+var FEED MaxHp 3 0
+card FEEDING_FRENZY EVENT_CARD_POOL Skill Event Self 0 0 -1 0 1 -
+var FEEDING_FRENZY StrengthPower 5 0
+card FEEL_NO_PAIN IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var FEEL_NO_PAIN Power 3 0
+card FERAL DEFECT_CARD_POOL Power Uncommon Self 2 0 -1 0 1 -
+var FERAL FeralPower 1 0
+card FETCH NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var FETCH Cards 1 0
+var FETCH OstyDamage 3 0
+card FIEND_FIRE IRONCLAD_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 Exhaust
+var FIEND_FIRE Damage 7 0
+card FIGHT_ME IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var FIGHT_ME Damage 5 0
+var FIGHT_ME EnemyStrength 1 0
+var FIGHT_ME Repeat 2 0
+var FIGHT_ME StrengthPower 3 0
+card FIGHT_THROUGH DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var FIGHT_THROUGH Block 13 0
+card FINESSE COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var FINESSE Block 4 0
+var FINESSE Cards 1 0
+card FINISHER SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var FINISHER CalculatedHits 0 1
+var FINISHER CalculationBase 0 0
+var FINISHER CalculationExtra 1 0
+var FINISHER Damage 6 0
+card FISTICUFFS COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var FISTICUFFS Damage 7 0
+card FLAK_CANNON DEFECT_CARD_POOL Attack Rare RandomEnemy 2 0 -1 0 1 -
+var FLAK_CANNON CalculatedHits 0 1
+var FLAK_CANNON CalculationBase 0 0
+var FLAK_CANNON CalculationExtra 1 0
+var FLAK_CANNON Damage 8 0
+card FLAME_BARRIER IRONCLAD_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var FLAME_BARRIER Block 12 0
+var FLAME_BARRIER DamageBack 4 0
+card FLANKING SILENT_CARD_POOL Skill Rare AnyEnemy 2 0 -1 0 1 -
+card FLASH_OF_STEEL COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var FLASH_OF_STEEL Cards 1 0
+var FLASH_OF_STEEL Damage 5 0
+card FLATTEN NECROBINDER_CARD_POOL Attack Common AnyEnemy 2 0 -1 0 1 -
+var FLATTEN OstyDamage 12 0
+card FLECHETTES SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var FLECHETTES CalculatedHits 0 1
+var FLECHETTES CalculationBase 0 0
+var FLECHETTES CalculationExtra 1 0
+var FLECHETTES Damage 5 0
+card FLICK_FLACK SILENT_CARD_POOL Attack Common AllEnemies 1 0 -1 0 1 Sly
+var FLICK_FLACK Damage 7 0
+card FOCUSED_STRIKE DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var FOCUSED_STRIKE Damage 9 0
+var FOCUSED_STRIKE FocusPower 1 0
+card FOLLY CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Eternal,Ethereal,Innate,Unplayable
+card FOOTWORK SILENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var FOOTWORK DexterityPower 2 0
+card FORBIDDEN_GRIMOIRE NECROBINDER_CARD_POOL Power Ancient Self 2 0 -1 0 1 Eternal
+card FOREGONE_CONCLUSION REGENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var FOREGONE_CONCLUSION Cards 2 0
+card FORGOTTEN_RITUAL IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+var FORGOTTEN_RITUAL Energy 3 0
+card FRANTIC_ESCAPE STATUS_CARD_POOL Status Status Self 1 0 -1 0 0 -
+card FRIENDSHIP NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var FRIENDSHIP Energy 1 0
+var FRIENDSHIP StrengthPower 2 0
+card FTL DEFECT_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var FTL Cards 1 0
+var FTL Damage 5 0
+var FTL PlayMax 3 0
+card FUEL TOKEN_CARD_POOL Skill Token Self 0 0 -1 0 1 Exhaust
+var FUEL Energy 1 0
+card FURNACE REGENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var FURNACE Forge 5 0
+card FUSION DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+card GAMMA_BLAST REGENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 3 0 1 -
+var GAMMA_BLAST Damage 13 0
+var GAMMA_BLAST VulnerablePower 2 0
+var GAMMA_BLAST WeakPower 2 0
+card GANG_UP COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var GANG_UP CalculatedDamage 5 1
+var GANG_UP CalculationBase 5 0
+var GANG_UP ExtraDamage 5 0
+card GATHER_LIGHT REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var GATHER_LIGHT Block 8 0
+var GATHER_LIGHT Stars 1 0
+card GENESIS REGENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var GENESIS StarsPerTurn 2 0
+card GENETIC_ALGORITHM DEFECT_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust
+var GENETIC_ALGORITHM Block 1 0
+var GENETIC_ALGORITHM Increase 3 0
+card GIANT_ROCK TOKEN_CARD_POOL Attack Token AnyEnemy 1 0 -1 0 1 -
+var GIANT_ROCK Damage 20 0
+card GLACIER DEFECT_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var GLACIER Block 6 0
+card GLASSWORK DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var GLASSWORK Block 5 0
+card GLIMMER REGENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var GLIMMER Cards 3 0
+var GLIMMER PutBack 1 0
+card GLIMPSE_BEYOND NECROBINDER_CARD_POOL Skill Rare AllAllies 1 0 -1 0 1 Exhaust
+var GLIMPSE_BEYOND Cards 3 0
+card GLITTERSTREAM REGENT_CARD_POOL Skill Common Self 2 0 -1 0 1 -
+var GLITTERSTREAM Block 11 0
+var GLITTERSTREAM BlockNextTurn 5 0
+card GLOW REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var GLOW Cards 1 0
+var GLOW Stars 1 0
+card GOLD_AXE COLORLESS_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 -
+var GOLD_AXE CalculatedDamage 0 1
+var GOLD_AXE CalculationBase 0 0
+var GOLD_AXE ExtraDamage 1 0
+card GO_FOR_THE_EYES DEFECT_CARD_POOL Attack Common AnyEnemy 0 0 -1 0 1 -
+var GO_FOR_THE_EYES Damage 3 0
+var GO_FOR_THE_EYES WeakPower 1 0
+card GRAND_FINALE SILENT_CARD_POOL Attack Rare AllEnemies 0 0 -1 0 1 -
+var GRAND_FINALE Damage 60 0
+card GRAVEBLAST NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 Exhaust
+var GRAVEBLAST Damage 4 0
+card GRAVE_WARDEN NECROBINDER_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var GRAVE_WARDEN Block 8 0
+var GRAVE_WARDEN Cards 1 0
+card GREED CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Eternal,Unplayable
+card GUARDS REGENT_CARD_POOL Skill Rare Self 2 0 -1 0 1 Exhaust
+card GUIDING_STAR REGENT_CARD_POOL Attack Common AnyEnemy 1 0 1 0 1 -
+var GUIDING_STAR Cards 2 0
+var GUIDING_STAR Damage 12 0
+card GUILTY CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+var GUILTY Combats 5 0
+card GUNK_UP DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var GUNK_UP Damage 4 0
+var GUNK_UP Repeat 3 0
+card HAILSTORM DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var HAILSTORM HailstormPower 6 0
+card HAMMER_TIME REGENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card HAND_OF_GREED COLORLESS_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 -
+var HAND_OF_GREED Damage 20 0
+var HAND_OF_GREED Gold 20 0
+card HAND_TRICK SILENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var HAND_TRICK Block 7 0
+card HANG NECROBINDER_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 -
+var HANG Damage 10 0
+card HAUNT NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var HAUNT HpLoss 7 0
+card HAVOC IRONCLAD_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+card HAZE SILENT_CARD_POOL Skill Uncommon AllEnemies 2 0 -1 0 1 -
+var HAZE PoisonPower 4 0
+var HAZE WeakPower 1 0
+card HEADBUTT IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var HEADBUTT Damage 9 0
+card HEAVENLY_DRILL REGENT_CARD_POOL Attack Rare AnyEnemy 0 1 -1 0 1 -
+var HEAVENLY_DRILL Damage 8 0
+var HEAVENLY_DRILL Energy 4 0
+card HEGEMONY REGENT_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var HEGEMONY Damage 15 0
+var HEGEMONY Energy 2 0
+card HEIRLOOM_HAMMER REGENT_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 -
+var HEIRLOOM_HAMMER Damage 20 0
+var HEIRLOOM_HAMMER Repeat 1 0
+card HELIX_DRILL DEFECT_CARD_POOL Attack Rare AnyEnemy 0 0 -1 0 1 -
+var HELIX_DRILL CalculatedHits 0 1
+var HELIX_DRILL CalculationBase 0 0
+var HELIX_DRILL CalculationExtra 1 0
+var HELIX_DRILL Damage 3 0
+card HELLO_WORLD EVENT_CARD_POOL Power Event Self 1 0 -1 0 1 -
+card HELLRAISER IRONCLAD_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card HEMOKINESIS IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var HEMOKINESIS Damage 15 0
+var HEMOKINESIS HpLoss 2 0
+card HIBERNATE DEFECT_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var HIBERNATE Repeat 2 0
+card HIDDEN_CACHE REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var HIDDEN_CACHE StarNextTurnPower 3 0
+var HIDDEN_CACHE Stars 1 0
+card HIDDEN_DAGGERS SILENT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var HIDDEN_DAGGERS Cards 2 0
+var HIDDEN_DAGGERS Shivs 2 0
+card HIDDEN_GEM COLORLESS_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var HIDDEN_GEM Replay 2 0
+card HIGH_FIVE NECROBINDER_CARD_POOL Attack Uncommon AllEnemies 2 0 -1 0 1 -
+var HIGH_FIVE OstyDamage 11 0
+var HIGH_FIVE VulnerablePower 2 0
+card HOLOGRAM DEFECT_CARD_POOL Skill Common Self 1 0 -1 0 1 Exhaust
+var HOLOGRAM Block 3 0
+card HOTFIX DEFECT_CARD_POOL Skill Common Self 0 0 -1 0 1 Exhaust
+var HOTFIX FocusPower 2 0
+card HOWL_FROM_BEYOND IRONCLAD_CARD_POOL Attack Uncommon AllEnemies 3 0 -1 0 1 -
+var HOWL_FROM_BEYOND Damage 18 0
+card HUDDLE_UP COLORLESS_CARD_POOL Skill Uncommon AllAllies 1 0 -1 0 1 Exhaust
+var HUDDLE_UP Cards 2 0
+card HYPERBEAM DEFECT_CARD_POOL Attack Rare AllEnemies 2 0 -1 0 1 -
+var HYPERBEAM Damage 24 0
+var HYPERBEAM FocusPower 3 0
+card ICE_LANCE DEFECT_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 -
+var ICE_LANCE Damage 19 0
+var ICE_LANCE Repeat 3 0
+card IGNITION DEFECT_CARD_POOL Skill Uncommon AnyAlly 1 0 -1 0 1 Exhaust
+card IMITATION_LEARNING DEFECT_CARD_POOL Skill Rare AnyAlly 1 0 -1 0 1 Exhaust
+var IMITATION_LEARNING ImitationLearningPower 2 0
+card IMPATIENCE COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var IMPATIENCE Cards 2 0
+card IMPERVIOUS IRONCLAD_CARD_POOL Skill Rare Self 2 0 -1 0 1 Exhaust
+var IMPERVIOUS Block 30 0
+card INFECTION STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable
+var INFECTION Damage 3 0
+card INFERNAL_BLADE IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+card INFERNO IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var INFERNO InfernoPower 6 0
+card INFINITE_BLADES SILENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+card INFLAME IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var INFLAME StrengthPower 2 0
+card INJURY CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+card INTERCEPT COLORLESS_CARD_POOL Skill Uncommon AnyAlly 1 0 -1 0 1 -
+var INTERCEPT Block 9 0
+card INVOKE NECROBINDER_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var INVOKE Energy 2 0
+var INVOKE Summon 2 0
+card IRON_WAVE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var IRON_WAVE Block 5 0
+var IRON_WAVE Damage 5 0
+card ITERATION DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var ITERATION IterationPower 2 0
+card I_AM_INVINCIBLE REGENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var I_AM_INVINCIBLE Block 10 0
+card JACKPOT COLORLESS_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 -
+var JACKPOT Cards 3 0
+var JACKPOT Damage 25 0
+card JACK_OF_ALL_TRADES COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
+var JACK_OF_ALL_TRADES Cards 1 0
+card JUGGERNAUT IRONCLAD_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var JUGGERNAUT JuggernautPower 6 0
+card JUGGLING IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+card KINGLY_KICK REGENT_CARD_POOL Attack Uncommon AnyEnemy 4 0 -1 0 1 -
+var KINGLY_KICK Damage 27 0
+card KINGLY_PUNCH REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var KINGLY_PUNCH Damage 8 0
+var KINGLY_PUNCH Increase 4 0
+card KNIFE_TRAP SILENT_CARD_POOL Skill Rare AnyEnemy 2 0 -1 0 1 -
+var KNIFE_TRAP CalculatedShivs 0 1
+var KNIFE_TRAP CalculationBase 0 0
+var KNIFE_TRAP CalculationExtra 1 0
+card KNOCKDOWN COLORLESS_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 -
+var KNOCKDOWN Damage 10 0
+var KNOCKDOWN KnockdownPower 2 0
+card KNOCKOUT_BLOW REGENT_CARD_POOL Attack Uncommon AnyEnemy 3 0 -1 0 1 -
+var KNOCKOUT_BLOW Damage 30 0
+var KNOCKOUT_BLOW Stars 5 0
+card KNOW_THY_PLACE REGENT_CARD_POOL Skill Common AnyEnemy 0 0 -1 0 1 Exhaust
+var KNOW_THY_PLACE VulnerablePower 1 0
+var KNOW_THY_PLACE WeakPower 1 0
+card LANTERN_KEY QUEST_CARD_POOL Quest Quest Self -1 0 -1 0 0 Unplayable
+card LARGESSE REGENT_CARD_POOL Skill Uncommon AnyAlly 0 0 -1 0 1 -
+card LEADING_STRIKE SILENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var LEADING_STRIKE Damage 3 0
+var LEADING_STRIKE Shivs 2 0
+card LEAP DEFECT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var LEAP Block 9 0
+card LEGION_OF_BONE NECROBINDER_CARD_POOL Skill Uncommon AllAllies 2 0 -1 0 1 -
+var LEGION_OF_BONE Summon 6 0
+card LEG_SWEEP SILENT_CARD_POOL Skill Uncommon AnyEnemy 2 0 -1 0 1 -
+var LEG_SWEEP Block 11 0
+var LEG_SWEEP WeakPower 2 0
+card LETHALITY NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 Ethereal
+var LETHALITY LethalityPower 50 0
+card LIFT COLORLESS_CARD_POOL Skill Uncommon AnyAlly 1 0 -1 0 1 -
+var LIFT Block 11 0
+card LIGHTNING_ROD DEFECT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var LIGHTNING_ROD Block 4 0
+var LIGHTNING_ROD LightningRodPower 2 0
+card LOOP DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var LOOP Loop 1 0
+card LUMINESCE TOKEN_CARD_POOL Skill Token Self 0 0 -1 0 1 Exhaust,Retain
+var LUMINESCE Energy 2 0
+card LUNAR_BLAST REGENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var LUNAR_BLAST CalculatedHits 0 1
+var LUNAR_BLAST CalculationBase 0 0
+var LUNAR_BLAST CalculationExtra 1 0
+var LUNAR_BLAST Damage 4 0
+card MACHINE_LEARNING DEFECT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var MACHINE_LEARNING Cards 1 0
+card MAD_SCIENCE EVENT_CARD_POOL dynamic Event dynamic 1 0 -1 0 1 -
+var MAD_SCIENCE Block 8 0
+var MAD_SCIENCE ChokingDamage 6 0
+var MAD_SCIENCE CuriousReduction 1 0
+var MAD_SCIENCE Damage 12 0
+var MAD_SCIENCE EnergizedEnergy 2 0
+var MAD_SCIENCE ExpertiseDexterity 2 0
+var MAD_SCIENCE ExpertiseStrength 2 0
+var MAD_SCIENCE SappingVulnerable 2 0
+var MAD_SCIENCE SappingWeak 2 0
+var MAD_SCIENCE ViolenceHits 3 0
+var MAD_SCIENCE WisdomCards 3 0
+card MAKE_IT_SO REGENT_CARD_POOL Attack Rare AnyEnemy 0 0 -1 0 1 -
+var MAKE_IT_SO Cards 3 0
+var MAKE_IT_SO Damage 6 0
+card MALAISE SILENT_CARD_POOL Skill Rare dynamic 0 1 -1 0 1 Exhaust
+card MANGLE IRONCLAD_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 -
+var MANGLE Damage 20 0
+var MANGLE StrengthLoss 10 0
+card MANIFEST_AUTHORITY REGENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var MANIFEST_AUTHORITY Block 7 0
+card MASTER_OF_STRATEGY COLORLESS_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+var MASTER_OF_STRATEGY Cards 3 0
+card MASTER_PLANNER SILENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card MAUL EVENT_CARD_POOL Attack Ancient AnyEnemy 1 0 -1 0 1 -
+var MAUL Damage 5 0
+var MAUL Increase 2 0
+card MAYHEM COLORLESS_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card MELANCHOLY NECROBINDER_CARD_POOL Skill Uncommon Self 3 0 -1 0 1 -
+var MELANCHOLY Block 13 0
+var MELANCHOLY Energy 1 0
+card MEMENTO_MORI SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var MEMENTO_MORI CalculatedDamage 9 1
+var MEMENTO_MORI CalculationBase 9 0
+var MEMENTO_MORI ExtraDamage 4 0
+card METAMORPHOSIS EVENT_CARD_POOL Skill Event Self 2 0 -1 0 1 Exhaust
+var METAMORPHOSIS Cards 3 0
+card METEOR_SHOWER REGENT_CARD_POOL Attack Ancient AllEnemies 0 0 2 0 1 -
+var METEOR_SHOWER Damage 14 0
+var METEOR_SHOWER VulnerablePower 2 0
+var METEOR_SHOWER WeakPower 2 0
+card METEOR_STRIKE DEFECT_CARD_POOL Attack Rare AnyEnemy 5 0 -1 0 1 -
+var METEOR_STRIKE Damage 24 0
+card MIDNIGHT IRONCLAD_CARD_POOL Attack Rare AnyEnemy 12 0 -1 0 1 -
+var MIDNIGHT Damage 60 0
+card MIMIC COLORLESS_CARD_POOL Skill Rare AnyAlly 1 0 -1 0 1 Exhaust
+var MIMIC CalculatedBlock 0 1
+var MIMIC CalculationBase 0 0
+var MIMIC CalculationExtra 1 0
+card MIND_BLAST COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 Innate
+var MIND_BLAST CalculatedDamage 0 1
+var MIND_BLAST CalculationBase 0 0
+var MIND_BLAST ExtraDamage 1 0
+card MIND_ROT TOKEN_CARD_POOL Status Status None -1 0 -1 0 0 -
+var MIND_ROT MindRotPower 1 0
+card MINION_DIVE_BOMB TOKEN_CARD_POOL Attack Token AnyEnemy 0 0 -1 0 1 Exhaust
+var MINION_DIVE_BOMB Damage 13 0
+card MINION_SACRIFICE TOKEN_CARD_POOL Skill Token Self 0 0 -1 0 1 Exhaust
+var MINION_SACRIFICE Block 7 0
+card MINION_STRIKE TOKEN_CARD_POOL Attack Token AnyEnemy 0 0 -1 0 1 Exhaust
+var MINION_STRIKE Cards 1 0
+var MINION_STRIKE Damage 6 0
+card MIRAGE SILENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+var MIRAGE CalculatedBlock 0 1
+var MIRAGE CalculationBase 0 0
+var MIRAGE CalculationExtra 1 0
+card MISERY NECROBINDER_CARD_POOL Attack Rare AnyEnemy 0 0 -1 0 1 -
+var MISERY Damage 7 0
+card MODDED DEFECT_CARD_POOL Skill Rare Self 0 0 -1 0 1 -
+var MODDED Cards 1 0
+var MODDED Repeat 1 0
+card MOLTEN_FIST IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 Exhaust
+var MOLTEN_FIST Damage 10 0
+card MOMENTUM_STRIKE DEFECT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var MOMENTUM_STRIKE Damage 11 0
+card MONARCHS_GAZE REGENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var MONARCHS_GAZE StrengthLoss 1 0
+card MONOLOGUE REGENT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var MONOLOGUE Power 1 0
+card MULTI_CAST DEFECT_CARD_POOL Skill Rare Self 0 1 -1 0 1 -
+card MURDER SILENT_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 -
+var MURDER CalculatedDamage 1 1
+var MURDER CalculationBase 1 0
+var MURDER ExtraDamage 1 0
+card NECRO_MASTERY NECROBINDER_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var NECRO_MASTERY Summon 5 0
+card NEGATIVE_PULSE NECROBINDER_CARD_POOL Skill Common AllEnemies 1 0 -1 0 1 -
+var NEGATIVE_PULSE Block 5 0
+var NEGATIVE_PULSE DoomPower 7 0
+card NEOWS_FURY EVENT_CARD_POOL Attack Ancient AnyEnemy 1 0 -1 0 1 Exhaust
+var NEOWS_FURY Cards 2 0
+var NEOWS_FURY Damage 10 0
+card NEUROSURGE NECROBINDER_CARD_POOL Power Rare Self 0 0 -1 0 1 -
+var NEUROSURGE Cards 2 0
+var NEUROSURGE Energy 3 0
+var NEUROSURGE NeurosurgePower 3 0
+card NEUTRALIZE SILENT_CARD_POOL Attack Basic AnyEnemy 0 0 -1 0 1 -
+var NEUTRALIZE Damage 3 0
+var NEUTRALIZE WeakPower 1 0
+card NEUTRON_AEGIS REGENT_CARD_POOL Power Rare Self 1 0 5 0 1 -
+var NEUTRON_AEGIS PlatingPower 8 0
+card NIGHTMARE SILENT_CARD_POOL Skill Rare Self 3 0 -1 0 1 Exhaust
+card NORMALITY CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+var NORMALITY CalculatedCards 3 1
+var NORMALITY CalculationBase 3 0
+var NORMALITY CalculationExtra -1 0
+card NOSTALGIA COLORLESS_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+card NOT_YET IRONCLAD_CARD_POOL Skill Rare Self 2 0 -1 0 1 Exhaust
+var NOT_YET Heal 10 0
+card NOXIOUS_FUMES SILENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var NOXIOUS_FUMES PoisonPerTurn 2 0
+card NO_ESCAPE NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 -1 0 1 -
+var NO_ESCAPE CalculatedDoom 10 1
+var NO_ESCAPE CalculationBase 10 0
+var NO_ESCAPE CalculationExtra 5 0
+var NO_ESCAPE DoomThreshold 10 0
+card NULL DEFECT_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var NULL Damage 10 0
+var NULL WeakPower 1 0
+card OBLIVION NECROBINDER_CARD_POOL Skill Rare AnyEnemy 0 0 -1 0 1 -
+var OBLIVION DoomPower 3 0
+card OFFERING IRONCLAD_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+var OFFERING Cards 3 0
+var OFFERING Energy 2 0
+var OFFERING HpLoss 6 0
+card OMNISLICE COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var OMNISLICE Damage 8 0
+card ONE_FOR_ALL DEFECT_CARD_POOL Power Rare AllAllies 1 0 -1 0 1 -
+var ONE_FOR_ALL OneForAllPower 3 0
+card ONE_TWO_PUNCH IRONCLAD_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var ONE_TWO_PUNCH Attacks 1 0
+card ORBIT REGENT_CARD_POOL Power Uncommon Self 2 0 -1 0 1 -
+var ORBIT Energy 1 0
+card OUTBREAK SILENT_CARD_POOL Skill Rare AllEnemies 3 0 -1 0 1 -
+var OUTBREAK PoisonPower 9 0
+card OUTMANEUVER EVENT_CARD_POOL Skill Event Self 1 0 -1 0 1 -
+var OUTMANEUVER Energy 2 0
+card OUTRAGE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var OUTRAGE Damage 9 0
+card OVERCLOCK DEFECT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var OVERCLOCK Cards 2 0
+card PACTS_END IRONCLAD_CARD_POOL Attack Rare AllEnemies 0 0 -1 0 1 -
+var PACTS_END Cards 3 0
+var PACTS_END Damage 18 0
+card PAGESTORM NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var PAGESTORM Cards 1 0
+card PALE_BLUE_DOT REGENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var PALE_BLUE_DOT CardPlay 5 0
+var PALE_BLUE_DOT Cards 1 0
+card PANACHE COLORLESS_CARD_POOL Power Uncommon Self 0 0 -1 0 1 -
+var PANACHE PanacheDamage 10 0
+card PANIC_BUTTON COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
+var PANIC_BUTTON Block 30 0
+var PANIC_BUTTON Turns 2 0
+card PARRY REGENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var PARRY ParryPower 10 0
+card PARSE NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Ethereal
+var PARSE Cards 3 0
+card PARTICLE_WALL REGENT_CARD_POOL Skill Uncommon Self 0 0 2 0 1 -
+var PARTICLE_WALL Block 9 0
+card PATTER REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var PATTER Block 8 0
+var PATTER VigorPower 2 0
+card PECK EVENT_CARD_POOL Attack Event AnyEnemy 1 0 -1 0 1 -
+var PECK Damage 2 0
+var PECK Repeat 3 0
+card PERFECTED_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 2 0 -1 0 1 -
+var PERFECTED_STRIKE CalculatedDamage 6 1
+var PERFECTED_STRIKE CalculationBase 6 0
+var PERFECTED_STRIKE ExtraDamage 2 0
+card PHANTOM_BLADES SILENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var PHANTOM_BLADES PhantomBladesPower 9 0
+card PHOTON_CUT REGENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var PHOTON_CUT Cards 1 0
+var PHOTON_CUT Damage 10 0
+var PHOTON_CUT PutBack 1 0
+card PIERCING_WAIL SILENT_CARD_POOL Skill Common AllEnemies 1 0 -1 0 1 Exhaust
+var PIERCING_WAIL StrengthLoss 6 0
+card PILLAGE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var PILLAGE Damage 6 0
+card PILLAR_OF_CREATION REGENT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var PILLAR_OF_CREATION Block 2 0
+card PINPOINT SILENT_CARD_POOL Attack Uncommon AnyEnemy 3 0 -1 0 1 -
+var PINPOINT Damage 15 0
+card PLOT REGENT_CARD_POOL Skill Uncommon AllAllies 1 0 -1 0 1 -
+var PLOT Cards 2 0
+card POISONED_STAB SILENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var POISONED_STAB Damage 6 0
+var POISONED_STAB PoisonPower 3 0
+card POKE NECROBINDER_CARD_POOL Attack Common AnyEnemy 0 0 -1 0 1 -
+var POKE OstyDamage 6 0
+card POMMEL_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var POMMEL_STRIKE Cards 1 0
+var POMMEL_STRIKE Damage 9 0
+card POOR_SLEEP CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Retain,Unplayable
+card POUNCE SILENT_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var POUNCE Damage 14 0
+card PRECISE_CUT SILENT_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var PRECISE_CUT CalculatedDamage 13 1
+var PRECISE_CUT CalculationBase 13 0
+var PRECISE_CUT ExtraDamage 2 0
+card PREDATOR SILENT_CARD_POOL Attack Common AnyEnemy 2 0 -1 0 1 -
+var PREDATOR Damage 15 0
+card PREPARED SILENT_CARD_POOL Skill Common Self 0 0 -1 0 1 -
+var PREPARED Cards 1 0
+card PREP_TIME COLORLESS_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var PREP_TIME PrepTimePower 4 0
+card PRIMAL_FORCE IRONCLAD_CARD_POOL Skill Rare Self 0 0 -1 0 1 -
+card PRODUCTION COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
+var PRODUCTION Energy 2 0
+card PROLONG COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
+card PROPHESIZE REGENT_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var PROPHESIZE Cards 6 0
+card PROTECTOR NECROBINDER_CARD_POOL Attack Ancient AnyEnemy 1 0 -1 0 1 -
+var PROTECTOR CalculatedDamage 10 1
+var PROTECTOR CalculationBase 10 0
+var PROTECTOR ExtraDamage 1 0
+card PROWESS COLORLESS_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var PROWESS DexterityPower 1 0
+var PROWESS StrengthPower 1 0
+card PULL_AGGRO NECROBINDER_CARD_POOL Skill Common Self 2 0 -1 0 1 -
+var PULL_AGGRO Block 7 0
+var PULL_AGGRO Summon 4 0
+card PULL_FROM_BELOW NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var PULL_FROM_BELOW CalculatedHits 0 1
+var PULL_FROM_BELOW CalculationBase 0 0
+var PULL_FROM_BELOW CalculationExtra 1 0
+var PULL_FROM_BELOW Damage 5 0
+card PURITY COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust,Retain
+var PURITY Cards 3 0
+card PUTREFY NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 -1 0 1 Exhaust
+var PUTREFY Power 2 0
+card PYRE IRONCLAD_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var PYRE Energy 1 0
+card QUADCAST DEFECT_CARD_POOL Skill Ancient Self 1 0 -1 0 1 -
+var QUADCAST Repeat 4 0
+card QUASAR REGENT_CARD_POOL Skill Uncommon Self 0 0 2 0 1 -
+card RADIATE REGENT_CARD_POOL Attack Uncommon AllEnemies 0 0 -1 0 1 -
+var RADIATE CalculatedHits 0 1
+var RADIATE CalculationBase 0 0
+var RADIATE CalculationExtra 1 0
+var RADIATE Damage 3 0
+var RADIATE Stars 1 0
+card RAGE IRONCLAD_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var RAGE Power 3 0
+card RAINBOW DEFECT_CARD_POOL Skill Rare Self 2 0 -1 0 1 Exhaust
+card RALLY COLORLESS_CARD_POOL Skill Rare AllAllies 2 0 -1 0 1 -
+var RALLY Block 12 0
+card RAMPAGE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var RAMPAGE Damage 10 0
+var RAMPAGE Increase 5 0
+card RATTLE NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var RATTLE CalculatedHits 0 1
+var RATTLE CalculationBase 0 0
+var RATTLE CalculationExtra 1 0
+var RATTLE OstyDamage 7 0
+card REANIMATE NECROBINDER_CARD_POOL Skill Rare Self 3 0 -1 0 1 Exhaust
+var REANIMATE Summon 20 0
+card REAP NECROBINDER_CARD_POOL Attack Common AnyEnemy 3 0 -1 0 1 Retain
+var REAP Damage 27 0
+card REAPER_FORM NECROBINDER_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+card REAVE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var REAVE Cards 1 0
+var REAVE Damage 10 0
+card REBOOT DEFECT_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+var REBOOT Cards 4 0
+card REBOUND EVENT_CARD_POOL Attack Event AnyEnemy 1 0 -1 0 1 -
+var REBOUND Damage 9 0
+card REFINE_BLADE REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var REFINE_BLADE Energy 1 0
+var REFINE_BLADE Forge 8 0
+card REFLECT REGENT_CARD_POOL Skill Uncommon Self 1 0 3 0 1 -
+var REFLECT Block 15 0
+card REFLEX SILENT_CARD_POOL Skill Uncommon Self 3 0 -1 0 1 Sly
+var REFLEX Cards 2 0
+card REFRACT DEFECT_CARD_POOL Attack Uncommon AnyEnemy 3 0 -1 0 1 -
+var REFRACT Damage 10 0
+var REFRACT Repeat 2 0
+card REGRET CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+card RELAX EVENT_CARD_POOL Skill Ancient Self 3 0 -1 0 1 Exhaust
+var RELAX Block 16 0
+var RELAX Cards 2 0
+var RELAX Energy 2 0
+card REND COLORLESS_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 -
+var REND CalculatedDamage 10 1
+var REND CalculationBase 10 0
+var REND ExtraDamage 5 0
+card RESONANCE REGENT_CARD_POOL Skill Uncommon AllEnemies 1 0 2 0 1 -
+var RESONANCE StrengthPower 1 0
+card RESTLESSNESS COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Retain
+var RESTLESSNESS Cards 2 0
+var RESTLESSNESS Energy 2 0
+card RICOCHET SILENT_CARD_POOL Attack Common RandomEnemy 2 0 -1 0 1 Sly
+var RICOCHET Damage 3 0
+var RICOCHET Repeat 4 0
+card RIGHT_HAND_HAND NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var RIGHT_HAND_HAND Energy 2 0
+var RIGHT_HAND_HAND OstyDamage 4 0
+card RIP_AND_TEAR EVENT_CARD_POOL Attack Event RandomEnemy 1 0 -1 0 1 -
+var RIP_AND_TEAR Damage 7 0
+card ROCKET_PUNCH DEFECT_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var ROCKET_PUNCH Cards 1 0
+var ROCKET_PUNCH Damage 13 0
+card ROLLING_BOULDER COLORLESS_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+var ROLLING_BOULDER IncrementAmount 5 0
+var ROLLING_BOULDER RollingBoulderPower 5 0
+card ROYALTIES REGENT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var ROYALTIES Gold 30 0
+card ROYAL_GAMBLE REGENT_CARD_POOL Skill Uncommon Self 0 0 5 0 1 Exhaust
+var ROYAL_GAMBLE Stars 9 0
+card RUPTURE IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var RUPTURE StrengthPower 1 0
+card SACRIFICE NECROBINDER_CARD_POOL Skill Rare Self 1 0 -1 0 1 Retain
+var SACRIFICE CalculatedBlock 0 1
+var SACRIFICE CalculationBase 0 0
+var SACRIFICE CalculationExtra 1 0
+card SALVO COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var SALVO Damage 12 0
+card SCAVENGE DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var SCAVENGE Energy 2 0
+card SCOURGE NECROBINDER_CARD_POOL Skill Common AnyEnemy 1 0 -1 0 1 -
+var SCOURGE Cards 1 0
+var SCOURGE DoomPower 13 0
+card SCRAPE DEFECT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var SCRAPE Cards 4 0
+var SCRAPE Damage 7 0
+card SCRAWL COLORLESS_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust
+card SCULPTING_STRIKE NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var SCULPTING_STRIKE Damage 9 0
+card SEANCE NECROBINDER_CARD_POOL Skill Rare Self 1 0 -1 0 1 Ethereal
+var SEANCE Cards 1 0
+card SECOND_WIND IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var SECOND_WIND Block 5 0
+card SECRET_TECHNIQUE COLORLESS_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+card SECRET_WEAPON COLORLESS_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+card SEEKER_STRIKE COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var SEEKER_STRIKE Cards 3 0
+var SEEKER_STRIKE Damage 9 0
+card SEEKING_EDGE REGENT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var SEEKING_EDGE Forge 7 0
+card SENTRY_MODE NECROBINDER_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var SENTRY_MODE SentryModePower 1 0
+card SERPENT_FORM SILENT_CARD_POOL Power Rare Self 3 0 -1 0 1 -
+var SERPENT_FORM SerpentFormPower 4 0
+card SETUP_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var SETUP_STRIKE Damage 7 0
+var SETUP_STRIKE StrengthPower 3 0
+card SEVEN_STARS REGENT_CARD_POOL Attack Rare AllEnemies 2 0 7 0 1 -
+var SEVEN_STARS Damage 7 0
+var SEVEN_STARS Repeat 7 0
+card SEVERANCE NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var SEVERANCE Damage 13 0
+card SHADOWMELD SILENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var SHADOWMELD Power 1 0
+card SHADOW_SHIELD DEFECT_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var SHADOW_SHIELD Block 11 0
+card SHADOW_STEP SILENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+var SHADOW_STEP Cards 3 0
+card SHAME CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable
+var SHAME Frail 1 0
+card SHARED_FATE NECROBINDER_CARD_POOL Skill Rare AnyEnemy 0 0 -1 0 1 Exhaust
+var SHARED_FATE EnemyStrengthLoss 2 0
+var SHARED_FATE PlayerStrengthLoss 2 0
+card SHATTER DEFECT_CARD_POOL Attack Rare AllEnemies 1 0 -1 0 1 Exhaust
+var SHATTER Damage 7 0
+card SHINING_STRIKE REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var SHINING_STRIKE Damage 8 0
+var SHINING_STRIKE Stars 2 0
+card SHIV TOKEN_CARD_POOL Attack Token dynamic 0 0 -1 0 1 Exhaust
+var SHIV Damage 4 0
+card SHOCKWAVE COLORLESS_CARD_POOL Skill Uncommon AllEnemies 2 0 -1 0 1 Exhaust
+var SHOCKWAVE Power 3 0
+card SHROUD NECROBINDER_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var SHROUD Block 3 0
+card SHRUG_IT_OFF IRONCLAD_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var SHRUG_IT_OFF Block 8 0
+var SHRUG_IT_OFF Cards 1 0
+card SIC_EM NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var SIC_EM OstyDamage 5 0
+var SIC_EM SicEmPower 3 0
+card SIDESTEP SILENT_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 -
+var SIDESTEP Energy 1 0
+card SIGNAL_BOOST DEFECT_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust
+var SIGNAL_BOOST SignalBoostPower 1 0
+card SKEWER SILENT_CARD_POOL Attack Uncommon AnyEnemy 0 1 -1 0 1 -
+var SKEWER Damage 8 0
+card SKIM DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var SKIM Cards 3 0
+card SLEIGHT_OF_FLESH NECROBINDER_CARD_POOL Power Uncommon Self 2 0 -1 0 1 -
+var SLEIGHT_OF_FLESH SleightOfFleshPower 9 0
+card SLICE SILENT_CARD_POOL Attack Common AnyEnemy 0 0 -1 0 1 -
+var SLICE Damage 6 0
+card SLIMED STATUS_CARD_POOL Status Status None 1 0 -1 0 0 Exhaust
+var SLIMED Cards 1 0
+card SLOTH TOKEN_CARD_POOL Status Status None -1 0 -1 0 0 -
+var SLOTH SlothPower 3 0
+card SMOKESTACK DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var SMOKESTACK SmokestackPower 5 0
+card SNAKEBITE SILENT_CARD_POOL Skill Common AnyEnemy 2 0 -1 0 1 Retain
+var SNAKEBITE PoisonPower 7 0
+card SNAP NECROBINDER_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var SNAP OstyDamage 7 0
+card SNEAKY SILENT_CARD_POOL Power Rare Self 2 0 -1 0 1 Sly
+var SNEAKY SneakyPower 1 0
+card SOLAR_STRIKE REGENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var SOLAR_STRIKE Damage 9 0
+var SOLAR_STRIKE Stars 1 0
+card SOOT STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable
+card SOUL TOKEN_CARD_POOL Skill Token Self 0 0 -1 0 1 Exhaust
+var SOUL Cards 2 0
+card SOULBOUND NECROBINDER_CARD_POOL Power Uncommon AnyAlly 1 0 -1 0 1 -
+card SOUL_STORM NECROBINDER_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 -
+var SOUL_STORM CalculatedDamage 9 1
+var SOUL_STORM CalculationBase 9 0
+var SOUL_STORM ExtraDamage 4 0
+card SOVEREIGN_BLADE TOKEN_CARD_POOL Attack Token dynamic 2 0 -1 0 1 Retain
+var SOVEREIGN_BLADE CalculatedBlock 0 1
+var SOVEREIGN_BLADE CalculationBase 0 0
+var SOVEREIGN_BLADE CalculationExtra 1 0
+var SOVEREIGN_BLADE Damage 10 0
+var SOVEREIGN_BLADE Repeat 1 0
+card SOW NECROBINDER_CARD_POOL Attack Common AllEnemies 1 0 -1 0 1 Retain
+var SOW Damage 8 0
+card SPECTRUM_SHIFT REGENT_CARD_POOL Power Uncommon Self 2 0 -1 0 1 -
+var SPECTRUM_SHIFT Cards 1 0
+card SPEEDSTER SILENT_CARD_POOL Power Uncommon Self 2 0 -1 0 1 -
+var SPEEDSTER SpeedsterPower 2 0
+card SPINNER DEFECT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var SPINNER SpinnerPower 1 0
+card SPIRIT_OF_ASH NECROBINDER_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var SPIRIT_OF_ASH BlockOnExhaust 4 0
+card SPITE IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var SPITE Damage 5 0
+var SPITE Repeat 2 0
+card SPLASH COLORLESS_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+card SPOILS_MAP QUEST_CARD_POOL Quest Quest Self -1 0 -1 0 0 Unplayable
+var SPOILS_MAP Gold 600 0
+card SPOILS_OF_BATTLE REGENT_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var SPOILS_OF_BATTLE Cards 2 0
+var SPOILS_OF_BATTLE Forge 6 0
+card SPORE_MIND CURSE_CARD_POOL Curse Curse None 1 0 -1 0 0 Exhaust
+card SPUR NECROBINDER_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Retain
+var SPUR Heal 5 0
+var SPUR Summon 3 0
+card SQUASH EVENT_CARD_POOL Attack Event AnyEnemy 1 0 -1 0 1 -
+var SQUASH Damage 10 0
+var SQUASH VulnerablePower 2 0
+card SQUEEZE NECROBINDER_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 -
+var SQUEEZE CalculatedDamage 25 1
+var SQUEEZE CalculationBase 25 0
+var SQUEEZE ExtraDamage 5 0
+card STACK EVENT_CARD_POOL Skill Event Self 1 0 -1 0 1 -
+var STACK CalculatedBlock 0 1
+var STACK CalculationBase 0 0
+var STACK CalculationExtra 1 0
+card STAMPEDE IRONCLAD_CARD_POOL Power Uncommon Self 2 0 -1 0 1 -
+var STAMPEDE Power 1 0
+card STARDUST REGENT_CARD_POOL Attack Uncommon RandomEnemy 0 0 -1 1 1 -
+var STARDUST Damage 5 0
+card STOKE IRONCLAD_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+card STOMP IRONCLAD_CARD_POOL Attack Uncommon AllEnemies 3 0 -1 0 1 -
+var STOMP Damage 12 0
+card STONE_ARMOR IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var STONE_ARMOR PlatingPower 4 0
+card STORM DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var STORM StormPower 1 0
+card STORM_OF_STEEL SILENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 -
+card STRANGLE SILENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var STRANGLE Damage 8 0
+var STRANGLE StranglePower 2 0
+card STRATAGEM COLORLESS_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+card STRIKE_DEFECT DEFECT_CARD_POOL Attack Basic AnyEnemy 1 0 -1 0 1 -
+var STRIKE_DEFECT Damage 6 0
+card STRIKE_IRONCLAD IRONCLAD_CARD_POOL Attack Basic AnyEnemy 1 0 -1 0 1 -
+var STRIKE_IRONCLAD Damage 6 0
+card STRIKE_NECROBINDER NECROBINDER_CARD_POOL Attack Basic AnyEnemy 1 0 -1 0 1 -
+var STRIKE_NECROBINDER Damage 6 0
+card STRIKE_REGENT REGENT_CARD_POOL Attack Basic AnyEnemy 1 0 -1 0 1 -
+var STRIKE_REGENT Damage 6 0
+card STRIKE_SILENT SILENT_CARD_POOL Attack Basic AnyEnemy 1 0 -1 0 1 -
+var STRIKE_SILENT Damage 6 0
+card SUBROUTINE DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+card SUCKER_PUNCH SILENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var SUCKER_PUNCH Damage 8 0
+var SUCKER_PUNCH WeakPower 1 0
+card SUMMON_FORTH REGENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var SUMMON_FORTH Forge 8 0
+card SUNDER DEFECT_CARD_POOL Attack Uncommon AnyEnemy 3 0 -1 0 1 -
+var SUNDER Damage 26 0
+var SUNDER Energy 3 0
+card SUPERCRITICAL DEFECT_CARD_POOL Skill Rare Self 0 0 -1 0 1 Exhaust
+var SUPERCRITICAL Energy 4 0
+card SUPERMASSIVE REGENT_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var SUPERMASSIVE CalculatedDamage 5 1
+var SUPERMASSIVE CalculationBase 5 0
+var SUPERMASSIVE ExtraDamage 3 0
+card SUPPRESS SILENT_CARD_POOL Attack Ancient AnyEnemy 0 0 -1 0 1 Innate
+var SUPPRESS Damage 11 0
+var SUPPRESS WeakPower 3 0
+card SURVIVOR SILENT_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var SURVIVOR Block 8 0
+card SWEEPING_BEAM DEFECT_CARD_POOL Attack Common AllEnemies 1 0 -1 0 1 -
+var SWEEPING_BEAM Cards 1 0
+var SWEEPING_BEAM Damage 6 0
+card SWEEPING_GAZE TOKEN_CARD_POOL Attack Token RandomEnemy 0 0 -1 0 1 Ethereal,Exhaust
+var SWEEPING_GAZE OstyDamage 10 0
+card SWORD_BOOMERANG IRONCLAD_CARD_POOL Attack Common RandomEnemy 1 0 -1 0 1 -
+var SWORD_BOOMERANG Damage 3 0
+var SWORD_BOOMERANG Repeat 3 0
+card SWORD_SAGE REGENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+var SWORD_SAGE SwordSagePower 1 0
+card SYNCHRONIZE DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var SYNCHRONIZE CalculatedFocus 0 1
+var SYNCHRONIZE CalculationBase 0 0
+var SYNCHRONIZE CalculationExtra 1 0
+card SYNTHESIS DEFECT_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var SYNTHESIS Damage 14 0
+card TACTICIAN SILENT_CARD_POOL Skill Uncommon Self 3 0 -1 0 1 Sly
+var TACTICIAN Energy 1 0
+card TAG_TEAM COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var TAG_TEAM Damage 11 0
+card TANK IRONCLAD_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+var TANK DamageDecrease 0.5 0
+var TANK DamageIncrease 1.5 0
+card TAUNT IRONCLAD_CARD_POOL Skill Common AnyEnemy 1 0 -1 0 1 -
+var TAUNT Block 6 0
+var TAUNT VulnerablePower 1 0
+card TEAR_ASUNDER IRONCLAD_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 -
+var TEAR_ASUNDER CalculatedHits 0 1
+var TEAR_ASUNDER CalculationBase 0 0
+var TEAR_ASUNDER CalculationExtra 1 0
+var TEAR_ASUNDER Damage 5 0
+var TEAR_ASUNDER Repeat 1 0
+card TEMPEST DEFECT_CARD_POOL Skill Uncommon Self 0 1 -1 0 1 -
+card TERRAFORMING REGENT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var TERRAFORMING VigorPower 7 0
+card TESLA_COIL DEFECT_CARD_POOL Attack Uncommon AnyEnemy 0 0 -1 0 1 -
+var TESLA_COIL Damage 3 0
+card THE_BALL COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var THE_BALL Damage 10 0
+var THE_BALL Increase 10 0
+card THE_BOMB COLORLESS_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var THE_BOMB BombDamage 40 0
+var THE_BOMB Turns 3 0
+card THE_GAMBIT COLORLESS_CARD_POOL Skill Rare Self 0 0 -1 0 1 -
+var THE_GAMBIT Block 50 0
+card THE_HUNT SILENT_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 Exhaust
+var THE_HUNT Damage 10 0
+card THE_SCYTHE NECROBINDER_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 Exhaust
+var THE_SCYTHE Damage 13 0
+var THE_SCYTHE Increase 5 0
+card THE_SEALED_THRONE REGENT_CARD_POOL Power Ancient Self 1 0 3 0 1 -
+card THE_SMITH REGENT_CARD_POOL Skill Rare Self 1 0 4 0 1 -
+var THE_SMITH Forge 30 0
+card THINKING_AHEAD COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
+var THINKING_AHEAD Cards 2 0
+card THRASH IRONCLAD_CARD_POOL Attack Rare AnyEnemy 1 0 -1 0 1 -
+var THRASH Damage 4 0
+card THRUMMING_HATCHET COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var THRUMMING_HATCHET Damage 11 0
+card THUNDER DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var THUNDER ThunderPower 8 0
+card THUNDERCLAP IRONCLAD_CARD_POOL Attack Common AllEnemies 1 0 -1 0 1 -
+var THUNDERCLAP Damage 4 0
+var THUNDERCLAP VulnerablePower 1 0
+card TIMES_UP NECROBINDER_CARD_POOL Attack Rare AnyEnemy 2 0 -1 0 1 -
+var TIMES_UP CalculatedDamage 0 1
+var TIMES_UP CalculationBase 0 0
+var TIMES_UP ExtraDamage 1 0
+card TOOLS_OF_THE_TRADE SILENT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+card TORIC_TOUGHNESS EVENT_CARD_POOL Skill Event Self 2 0 -1 0 1 -
+var TORIC_TOUGHNESS Block 5 0
+var TORIC_TOUGHNESS Turns 2 0
+card TOXIC STATUS_CARD_POOL Status Status None 1 0 -1 0 0 Exhaust
+var TOXIC Damage 5 0
+card TRACKING SILENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card TRANSFIGURE NECROBINDER_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust
+var TRANSFIGURE Energy 1 0
+card TRASH_TO_TREASURE DEFECT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+card TREMBLE IRONCLAD_CARD_POOL Skill Common AnyEnemy 1 0 -1 0 1 Exhaust
+var TREMBLE VulnerablePower 3 0
+card TRUE_GRIT IRONCLAD_CARD_POOL Skill Common Self 1 0 -1 0 1 -
+var TRUE_GRIT Block 7 0
+card TURBO DEFECT_CARD_POOL Skill Common Self 0 0 -1 0 1 -
+var TURBO Energy 2 0
+card TUTOR REGENT_CARD_POOL Skill Rare AnyAlly 1 0 -1 0 1 -
+card TWIN_STRIKE IRONCLAD_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var TWIN_STRIKE Damage 5 0
+card TYRANNY REGENT_CARD_POOL Power Rare Self 1 0 -1 0 1 -
+card ULTIMATE_DEFEND COLORLESS_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 -
+var ULTIMATE_DEFEND Block 11 0
+card ULTIMATE_STRIKE COLORLESS_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var ULTIMATE_STRIKE Damage 14 0
+card UNDEATH NECROBINDER_CARD_POOL Skill Rare Self 0 0 -1 0 1 -
+var UNDEATH Block 7 0
+card UNDERWORLD NECROBINDER_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 Exhaust
+card UNLEASH NECROBINDER_CARD_POOL Attack Basic AnyEnemy 1 0 -1 0 1 -
+var UNLEASH CalculatedDamage 6 1
+var UNLEASH CalculationBase 6 0
+var UNLEASH ExtraDamage 1 0
+card UNMOVABLE IRONCLAD_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card UNRELENTING IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var UNRELENTING Damage 14 0
+card UNTOUCHABLE SILENT_CARD_POOL Skill Common Self 2 0 -1 0 1 Sly
+var UNTOUCHABLE Block 6 0
+card UPPERCUT IRONCLAD_CARD_POOL Attack Uncommon AnyEnemy 2 0 -1 0 1 -
+var UPPERCUT Damage 13 0
+var UPPERCUT Power 1 0
+card UPROAR DEFECT_CARD_POOL Attack Common AnyEnemy 2 0 -1 0 1 -
+var UPROAR Damage 6 0
+card UP_MY_SLEEVE SILENT_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
+var UP_MY_SLEEVE Cards 3 0
+card VEILPIERCER NECROBINDER_CARD_POOL Attack Uncommon AnyEnemy 1 0 -1 0 1 -
+var VEILPIERCER Damage 10 0
+card VENERATE REGENT_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
+var VENERATE Stars 2 0
+card VICIOUS IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
+var VICIOUS Cards 1 0
+card VOID STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Ethereal,Unplayable
+var VOID Energy 1 0
+card VOID_FORM REGENT_CARD_POOL Power Rare Self 3 0 -1 0 1 Ethereal
+var VOID_FORM VoidFormPower 2 0
+card VOLLEY COLORLESS_CARD_POOL Attack Uncommon RandomEnemy 0 1 -1 0 1 -
+var VOLLEY Damage 10 0
+card VOLTAIC DEFECT_CARD_POOL Skill Rare Self 3 0 -1 0 1 Exhaust
+var VOLTAIC CalculatedChannels 0 1
+var VOLTAIC CalculationBase 0 0
+var VOLTAIC CalculationExtra 1 0
+card WASTE_AWAY TOKEN_CARD_POOL Status Status None -1 0 -1 0 0 -
+var WASTE_AWAY WasteAwayPower 1 0
+card WELL_LAID_PLANS SILENT_CARD_POOL Power Rare Self 2 0 -1 0 1 -
+card WHIRLWIND IRONCLAD_CARD_POOL Attack Uncommon AllEnemies 0 1 -1 0 1 -
+var WHIRLWIND Damage 5 0
+card WHISTLE EVENT_CARD_POOL Attack Ancient AnyEnemy 2 0 -1 0 1 Exhaust
+var WHISTLE Damage 33 0
+card WHITE_NOISE DEFECT_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust
+card WISH EVENT_CARD_POOL Skill Ancient Self 0 0 -1 0 1 Exhaust
+card WISP NECROBINDER_CARD_POOL Skill Common Self 0 0 -1 0 1 Exhaust
+var WISP Energy 1 0
+card WITHER STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable
+var WITHER Damage 3 0
+card WOUND STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable
+card WRAITH_FORM SILENT_CARD_POOL Power Ancient Self 3 0 -1 0 1 -
+var WRAITH_FORM IntangiblePower 2 0
+var WRAITH_FORM WraithFormPower 1 0
+card WRITHE CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Innate,Unplayable
+card WROUGHT_IN_WAR REGENT_CARD_POOL Attack Common AnyEnemy 1 0 -1 0 1 -
+var WROUGHT_IN_WAR Damage 7 0
+var WROUGHT_IN_WAR Forge 7 0
+card ZAP DEFECT_CARD_POOL Skill Basic Self 1 0 -1 0 1 -
 # 596 cards
 enum CardType 0 None
 enum CardType 1 Attack

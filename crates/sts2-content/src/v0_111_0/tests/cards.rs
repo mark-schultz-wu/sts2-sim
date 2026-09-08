@@ -4,7 +4,7 @@ use super::super::cards::*;
 use super::super::{CARDS, VERSION};
 use super::{build, rows, wire};
 use crate::{Cost, Field};
-use sts2_core::Table;
+use sts2_core::{CardTable, Fixed, Table};
 
 /// The dump's `cost` and `costsX` columns as the `Cost` they generate.
 ///
@@ -22,7 +22,7 @@ fn cost(canonical: &str, costs_x: &str) -> Cost {
             Cost::X
         }
         (_, "-1") => Cost::None,
-        (_, n) => Cost::Energy(n.parse().expect("a non-negative energy cost")),
+        (_, n) => Cost::Fixed(n.parse().expect("a non-negative energy cost")),
     }
 }
 
@@ -40,7 +40,12 @@ fn the_generated_table_matches_the_dump() {
 
         let d = card.data();
         assert_eq!(d.cost, cost(row[6], row[7]), "{}: cost", row[1]);
-        assert_eq!(d.max_upgrade.to_string(), row[8], "{}: max_upgrade", row[1]);
+        assert_eq!(
+            d.max_upgrade.to_string(),
+            row[10],
+            "{}: max_upgrade",
+            row[1]
+        );
         assert_eq!(format!("{:?}", d.rarity), row[4], "{}: rarity", row[1]);
 
         // Matched, not converted to an Option: `Constant(TargetType::None)`
@@ -66,10 +71,10 @@ fn the_generated_table_matches_the_dump() {
         // game itself stores a `HashSet`.
         let mut keywords: Vec<String> = d.keywords.iter().map(|k| format!("{k:?}")).collect();
         keywords.sort();
-        let expected = if row[9] == "-" {
+        let expected = if row[11] == "-" {
             Vec::new()
         } else {
-            row[9].split(',').map(String::from).collect()
+            row[11].split(',').map(String::from).collect()
         };
         assert_eq!(keywords, expected, "{}: keywords", row[1]);
 
@@ -96,7 +101,7 @@ fn every_card_is_present_and_well_formed() {
     assert_eq!(cards.len(), 596, "the build has 596 cards");
 
     for row in &cards {
-        assert_eq!(row.len(), 10, "a card row has ten fields: {row:?}");
+        assert_eq!(row.len(), 12, "a card row has twelve fields: {row:?}");
         assert_eq!(row[0], "card");
     }
 }
@@ -194,7 +199,7 @@ fn card_ids_are_unique() {
 /// flag, and this is the check that it stays small.
 #[test]
 fn upgrade_levels_stay_in_a_byte() {
-    let mut seen: Vec<&str> = rows(CARDS, "card").map(|r| r[8]).collect();
+    let mut seen: Vec<&str> = rows(CARDS, "card").map(|r| r[10]).collect();
     seen.sort_unstable();
     seen.dedup();
     assert_eq!(seen, ["0", "1"], "max upgrade levels changed");
@@ -215,4 +220,16 @@ fn only_the_known_cards_are_dynamic() {
         ["MAD_SCIENCE", "MALAISE", "SHIV", "SOVEREIGN_BLADE"],
         "the set of cards computing Type or TargetType has changed"
     );
+}
+
+#[test]
+fn fractional_card_variables_are_exact() {
+    let tank = Cards::Ironclad(IroncladCard::Tank);
+    let vars = tank.vars();
+
+    assert_eq!(vars.len(), 2);
+    assert_eq!(vars[0].id, CardVar::DamageDecrease);
+    assert_eq!(vars[0].base, Fixed::new(5, 1));
+    assert_eq!(vars[1].id, CardVar::DamageIncrease);
+    assert_eq!(vars[1].base, Fixed::new(15, 1));
 }

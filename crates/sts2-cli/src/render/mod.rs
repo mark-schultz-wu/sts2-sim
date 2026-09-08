@@ -25,7 +25,7 @@ use prose::{asker as who_asked, one_line};
 use state::state_of;
 
 use std::fmt;
-use sts2_core::{Applied, CardIdent, ContentVersion, FlagSet, ModelId, Question, RewardKind};
+use sts2_core::{Applied, CardIdent, ContentVersion, Cost, FlagSet, ModelId, Question, RewardKind};
 
 /// What one step produced, rendered for a person.
 ///
@@ -234,6 +234,69 @@ fn question_of<V: ContentVersion>(
     Ok(())
 }
 
+/// A pool a card is priced in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Pool {
+    Energy,
+    Stars,
+}
+
+/// How much of a pool a card spends.
+///
+/// There is no variant for a pool the card is not priced in. `pools` drops that
+/// case, so no screen has to spell it, and none can forget to.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Amount {
+    /// Everything left in the pool.
+    All,
+    Of(u8),
+}
+
+impl fmt::Display for Amount {
+    /// The number, or `X` for a cost that takes the pool.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Amount::All => f.write_str("X"),
+            Amount::Of(n) => write!(f, "{n}"),
+        }
+    }
+}
+
+/// Each pool a card is priced in, and what it spends there.
+///
+/// A pool the card is not priced in is left out rather than reported as a zero.
+/// The two are not the same thing. `Cost::None` makes Confused skip the card,
+/// where `Fixed(0)` does not. Three screens show a cost, and each used to decide
+/// this again. This is the one place that decides it now.
+pub fn pools(energy: Cost, stars: Cost) -> impl Iterator<Item = (Amount, Pool)> {
+    [(energy, Pool::Energy), (stars, Pool::Stars)]
+        .into_iter()
+        .filter_map(|(cost, pool)| match cost {
+            Cost::None => None,
+            Cost::X => Some((Amount::All, pool)),
+            Cost::Fixed(n) => Some((Amount::Of(n), pool)),
+        })
+}
+
+/// What a card costs, in the pools it is actually priced in.
+///
+/// `1e`, `1e 2★`, `Xe`, or `free`. Read in a line of text, so the energy
+/// amount carries a mark. Nothing else there says which pool it means.
+pub fn costs(energy: Cost, stars: Cost) -> String {
+    let spelled: Vec<String> = pools(energy, stars)
+        .map(|(amount, pool)| match pool {
+            Pool::Energy => format!("{amount}e"),
+            Pool::Stars => format!("{amount}★"),
+        })
+        .collect();
+
+    if spelled.is_empty() {
+        "free".to_string()
+    } else {
+        spelled.join(" ")
+    }
+}
+
 /// A card's own words, beside its id, or nothing when the game sent none.
 fn says(text: &Option<String>) -> String {
     match text.as_deref().map(one_line) {
@@ -256,6 +319,10 @@ fn plain<V: ContentVersion>(reward: &RewardKind<V>) -> String {
         RewardKind::Potion { potion } => match potion {
             Some(potion) => format!("potion {}", spelling(potion)),
             None => "a potion".into(),
+        },
+        RewardKind::SpecialCard { card } => match card {
+            Some(card) => format!("card {} returned", ident(&card.card)),
+            None => "a returned card".into(),
         },
         RewardKind::Other { kind } => format!("{kind} (not modelled here)"),
         // Listed with its cards by the caller, which is the only useful way to
@@ -419,9 +486,9 @@ mod tests {
             "rewards": [
                 {"index": 0, "type": "CardReward", "populated": true, "taken": false,
                  "cards": [
-                     {"card": "POISONED_STAB", "text": "Deal 6 damage.\nApply [green]4[/green] Poison."},
-                     {"card": "FTL"},
-                     {"card": "SPOILS_OF_BATTLE"}
+                     {"card": "POISONED_STAB", "cost": 1, "starCost": null, "text": "Deal 6 damage.\nApply [green]4[/green] Poison."},
+                     {"card": "FTL", "cost": 0, "starCost": null},
+                     {"card": "SPOILS_OF_BATTLE", "cost": 1, "starCost": null}
                  ]},
                 {"index": 1, "type": "GoldReward", "populated": true, "amount": 25}
             ],
@@ -483,11 +550,11 @@ mod tests {
                 "turn": 3, "round": 3, "phase": "Play", "energy": 2,
                 "hand": ["STRIKE_IRONCLAD", "DEFEND_IRONCLAD"],
                 "legal": [
-                    {"card": "STRIKE_IRONCLAD", "cost": 1, "target": "AnyEnemy",
+                    {"card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null, "target": "AnyEnemy",
                      "playable": true, "targets": [1],
                      "effect": [{"target": 1, "text": "Deal [red]4[/red] damage.",
                                  "vars": {"Damage": 4}, "base": {"Damage": 6}}]},
-                    {"card": "DEFEND_IRONCLAD", "cost": 1, "target": "Self",
+                    {"card": "DEFEND_IRONCLAD", "cost": 1, "starCost": null, "target": "Self",
                      "playable": true, "targets": [],
                      "effect": [{"target": null, "text": "Gain 5 [gold]Block[/gold].",
                                  "vars": {"Block": 5}, "base": {"Block": 5}}]}
@@ -519,7 +586,7 @@ mod tests {
             "combat": {
                 "turn": 1, "round": 1, "phase": "Play", "energy": 3,
                 "hand": ["BASH"],
-                "legal": [{"card": "BASH", "cost": 2, "target": "AnyEnemy",
+                "legal": [{"card": "BASH", "cost": 2, "starCost": null, "target": "AnyEnemy",
                            "playable": true, "targets": [1, 2],
                            "effect": [
                                {"target": 1, "text": "Deal 8 damage."},
@@ -538,7 +605,7 @@ mod tests {
     /// The indices all have to survive, because playing one needs one of them.
     #[test]
     fn cards_that_would_do_the_same_thing_are_listed_once() {
-        let strike = json!({"card": "STRIKE_IRONCLAD", "cost": 1, "target": "AnyEnemy",
+        let strike = json!({"card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null, "target": "AnyEnemy",
                             "playable": true, "targets": [1],
                             "effect": [{"text": "Deal 6 damage."}]});
         let out = rendered(observation(json!({
@@ -548,7 +615,7 @@ mod tests {
                 "hand": ["STRIKE_IRONCLAD", "BASH", "STRIKE_IRONCLAD", "STRIKE_IRONCLAD"],
                 "legal": [
                     strike,
-                    {"card": "BASH", "cost": 2, "target": "AnyEnemy",
+                    {"card": "BASH", "cost": 2, "starCost": null, "target": "AnyEnemy",
                      "playable": true, "targets": [1],
                      "effect": [{"text": "Deal 8 damage."}]},
                     strike,
@@ -577,15 +644,15 @@ mod tests {
                 "turn": 1, "round": 1, "phase": "Play", "energy": 3,
                 "hand": ["STRIKE_IRONCLAD", "STRIKE_IRONCLAD", "STRIKE_IRONCLAD"],
                 "legal": [
-                    {"card": "STRIKE_IRONCLAD", "cost": 1, "target": "AnyEnemy",
+                    {"card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null, "target": "AnyEnemy",
                      "playable": true, "targets": [1],
                      "effect": [{"text": "Deal 6 damage.", "base": {"Damage": 6},
                                  "vars": {"Damage": 6}}]},
-                    {"card": "STRIKE_IRONCLAD", "cost": 1, "target": "AnyEnemy",
+                    {"card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null, "target": "AnyEnemy",
                      "playable": true, "targets": [1],
                      "effect": [{"text": "Deal 9 damage.", "base": {"Damage": 6},
                                  "vars": {"Damage": 9}}]},
-                    {"card": "STRIKE_IRONCLAD", "cost": 1, "target": "AnyEnemy",
+                    {"card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null, "target": "AnyEnemy",
                      "playable": false, "reason": "EnergyCostTooHigh",
                      "effect": [{"text": "Deal 6 damage."}]}
                 ],

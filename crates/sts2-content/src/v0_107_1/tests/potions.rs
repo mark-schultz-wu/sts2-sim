@@ -79,7 +79,7 @@ fn the_generated_table_matches_the_dump() {
 fn every_potion_is_in_exactly_one_pool() {
     let mut dumped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for row in rows(POTIONS, "pool") {
-        dumped.entry(row[2]).or_default().push(row[1]);
+        dumped.entry(row[3]).or_default().push(row[1]);
     }
 
     let mut per_pool: BTreeMap<String, usize> = BTreeMap::new();
@@ -277,4 +277,41 @@ fn the_generated_enums_drop_only_what_was_declared_dropped() {
             "{name}::{member} parses when it should not, or the reverse"
         );
     }
+}
+
+/// A pool is stocked in the game's own order, not in id order.
+///
+/// What a reward indexes into after it rolls a rarity. The Regent's three show
+/// that the two orders differ. The game deals Star, Cosmic, King's, and the id
+/// order is the other way round.
+#[test]
+fn a_pool_is_stocked_in_the_order_the_game_enumerates_it() {
+    let mut dumped: BTreeMap<&str, Vec<(usize, &str)>> = BTreeMap::new();
+    for row in rows(POTIONS, "pool") {
+        let at = row[2].parse().expect("a pool index is a number");
+        dumped.entry(row[1]).or_default().push((at, row[3]));
+    }
+
+    for (pool, mut stocked) in dumped {
+        stocked.sort_unstable();
+        let want: Vec<&str> = stocked.into_iter().map(|(_, id)| id).collect();
+        // Every potion's own pool, which the partition above already checked,
+        // so one member is enough to name the pool this row belongs to.
+        let named = Potion::ALL
+            .iter()
+            .map(|p| p.pool())
+            .find(|p| wire(p) == pool)
+            .unwrap_or_else(|| panic!("{pool} stocks nothing that names it"));
+        let generated = pool_potions(named);
+        let got: Vec<String> = generated.iter().map(wire).collect();
+        assert_eq!(got, want, "{pool}: stocked in order");
+    }
+
+    assert_eq!(
+        pool_potions(PotionPool::Regent)
+            .iter()
+            .map(wire)
+            .collect::<Vec<_>>(),
+        ["STAR_POTION", "COSMIC_CONCOCTION", "KINGS_COURAGE"],
+    );
 }

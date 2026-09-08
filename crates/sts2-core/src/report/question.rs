@@ -13,7 +13,7 @@
 //! for. None is a content id, and inventing an enum for one without a dump
 //! behind it is a guess wearing a type.
 
-use crate::{CardIdent, ContentVersion, RelicTable, Tool};
+use crate::{CardIdent, ContentVersion, Cost, RelicTable, Tool};
 
 /// A question the game stopped to ask.
 #[derive(Debug, Clone, PartialEq)]
@@ -120,6 +120,11 @@ pub struct CardOption<V: ContentVersion> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RewardCard<V: ContentVersion> {
     pub card: CardIdent<V>,
+    /// The costs shown on the reward screen. See [`Playable::cost`].
+    ///
+    /// [`Playable`]: crate::report::observation::Playable
+    pub cost: Cost,
+    pub star_cost: Cost,
     /// See [`CardOption::text`].
     pub text: Option<String>,
 }
@@ -196,6 +201,17 @@ pub enum RewardKind<V: ContentVersion> {
     Potion {
         /// Absent for the same reason a relic can be.
         potion: Option<V::Potion>,
+    },
+    /// One named card handed back rather than chosen between, as the thief
+    /// boss returns the card it stole.
+    ///
+    /// A [`RewardCard`] rather than a bare ident, so it carries the cost and
+    /// the rules text a card reward carries. The screen shows a card. The only
+    /// difference is that there is nothing to pick.
+    SpecialCard {
+        /// Absent for the same reason a relic can be: the reward exists in the
+        /// set, but the game populated no card into it.
+        card: Option<RewardCard<V>>,
     },
     /// A reward type this crate does not unpack, named rather than anonymous.
     ///

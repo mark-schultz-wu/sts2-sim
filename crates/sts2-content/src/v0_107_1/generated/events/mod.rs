@@ -5,6 +5,7 @@
 
 use super::acts::Act;
 use super::encounters::Encounter;
+use super::relics::Relic;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -332,82 +333,84 @@ impl sts2_core::Table for Event {
     ];
 
     /// The layout, the flags and the fight it starts.
-    ///
-    /// One arm per event, naming the file its row lives in.
-    fn data(self) -> EventData {
-        match self {
-            Self::AbyssalBaths => underdocks::ABYSSAL_BATHS,
-            Self::Amalgamator => hive::AMALGAMATOR,
-            Self::AromaOfChaos => overgrowth::AROMA_OF_CHAOS,
-            Self::BattlewornDummy => glory::BATTLEWORN_DUMMY,
-            Self::BrainLeech => anyact::BRAIN_LEECH,
-            Self::Bugslayer => hive::BUGSLAYER,
-            Self::ByrdonisNest => overgrowth::BYRDONIS_NEST,
-            Self::ColorfulPhilosophers => hive::COLORFUL_PHILOSOPHERS,
-            Self::ColossalFlower => hive::COLOSSAL_FLOWER,
-            Self::CrystalSphere => anyact::CRYSTAL_SPHERE,
-            Self::Darv => anyact::DARV,
-            Self::DenseVegetation => overgrowth::DENSE_VEGETATION,
-            Self::DeprecatedAncientEvent => unlisted::DEPRECATED_ANCIENT_EVENT,
-            Self::DeprecatedEvent => unlisted::DEPRECATED_EVENT,
-            Self::DollRoom => anyact::DOLL_ROOM,
-            Self::DoorsOfLightAndDark => underdocks::DOORS_OF_LIGHT_AND_DARK,
-            Self::DrowningBeacon => underdocks::DROWNING_BEACON,
-            Self::EndlessConveyor => underdocks::ENDLESS_CONVEYOR,
-            Self::FakeMerchant => anyact::FAKE_MERCHANT,
-            Self::FieldOfManSizedHoles => hive::FIELD_OF_MAN_SIZED_HOLES,
-            Self::GraveOfTheForgotten => glory::GRAVE_OF_THE_FORGOTTEN,
-            Self::HungryForMushrooms => glory::HUNGRY_FOR_MUSHROOMS,
-            Self::InfestedAutomaton => hive::INFESTED_AUTOMATON,
-            Self::JungleMazeAdventure => overgrowth::JUNGLE_MAZE_ADVENTURE,
-            Self::LostWisp => hive::LOST_WISP,
-            Self::LuminousChoir => overgrowth::LUMINOUS_CHOIR,
-            Self::MockEventModel => unlisted::MOCK_EVENT_MODEL,
-            Self::MorphicGrove => overgrowth::MORPHIC_GROVE,
-            Self::Neow => crossover::NEOW,
-            Self::Nonupeipe => glory::NONUPEIPE,
-            Self::Orobas => hive::OROBAS,
-            Self::Pael => hive::PAEL,
-            Self::PotionCourier => anyact::POTION_COURIER,
-            Self::PunchOff => underdocks::PUNCH_OFF,
-            Self::RanwidTheElder => anyact::RANWID_THE_ELDER,
-            Self::Reflections => glory::REFLECTIONS,
-            Self::RelicTrader => anyact::RELIC_TRADER,
-            Self::RoomFullOfCheese => anyact::ROOM_FULL_OF_CHEESE,
-            Self::RoundTeaParty => glory::ROUND_TEA_PARTY,
-            Self::SapphireSeed => overgrowth::SAPPHIRE_SEED,
-            Self::SelfHelpBook => anyact::SELF_HELP_BOOK,
-            Self::SlipperyBridge => anyact::SLIPPERY_BRIDGE,
-            Self::SpiralingWhirlpool => underdocks::SPIRALING_WHIRLPOOL,
-            Self::SpiritGrafter => hive::SPIRIT_GRAFTER,
-            Self::StoneOfAllTime => anyact::STONE_OF_ALL_TIME,
-            Self::SunkenStatue => crossover::SUNKEN_STATUE,
-            Self::SunkenTreasury => underdocks::SUNKEN_TREASURY,
-            Self::Symbiote => anyact::SYMBIOTE,
-            Self::TabletOfTruth => overgrowth::TABLET_OF_TRUTH,
-            Self::Tanx => glory::TANX,
-            Self::TeaMaster => anyact::TEA_MASTER,
-            Self::Tezcatara => hive::TEZCATARA,
-            Self::TheArchitect => unlisted::THE_ARCHITECT,
-            Self::TheFutureOfPotions => anyact::THE_FUTURE_OF_POTIONS,
-            Self::TheLanternKey => hive::THE_LANTERN_KEY,
-            Self::TheLegendsWereTrue => anyact::THE_LEGENDS_WERE_TRUE,
-            Self::ThisOrThat => anyact::THIS_OR_THAT,
-            Self::TinkerTime => glory::TINKER_TIME,
-            Self::TrashHeap => underdocks::TRASH_HEAP,
-            Self::Trial => glory::TRIAL,
-            Self::UnrestSite => overgrowth::UNREST_SITE,
-            Self::Vakuu => glory::VAKUU,
-            Self::WarHistorianRepy => anyact::WAR_HISTORIAN_REPY,
-            Self::WaterloggedScriptorium => underdocks::WATERLOGGED_SCRIPTORIUM,
-            Self::WelcomeToWongos => anyact::WELCOME_TO_WONGOS,
-            Self::Wellspring => overgrowth::WELLSPRING,
-            Self::WhisperingHollow => overgrowth::WHISPERING_HOLLOW,
-            Self::WoodCarvings => overgrowth::WOOD_CARVINGS,
-            Self::ZenWeaver => hive::ZEN_WEAVER,
-        }
+    fn data(self) -> &'static EventData {
+        &ROWS[self as usize]
     }
 }
+
+/// Every row, in the order the enum declares its variants, which is
+/// the index a value casts to.
+static ROWS: [EventData; 69] = [
+    underdocks::ABYSSAL_BATHS,
+    hive::AMALGAMATOR,
+    overgrowth::AROMA_OF_CHAOS,
+    glory::BATTLEWORN_DUMMY,
+    anyact::BRAIN_LEECH,
+    hive::BUGSLAYER,
+    overgrowth::BYRDONIS_NEST,
+    hive::COLORFUL_PHILOSOPHERS,
+    hive::COLOSSAL_FLOWER,
+    anyact::CRYSTAL_SPHERE,
+    anyact::DARV,
+    overgrowth::DENSE_VEGETATION,
+    unlisted::DEPRECATED_ANCIENT_EVENT,
+    unlisted::DEPRECATED_EVENT,
+    anyact::DOLL_ROOM,
+    underdocks::DOORS_OF_LIGHT_AND_DARK,
+    underdocks::DROWNING_BEACON,
+    underdocks::ENDLESS_CONVEYOR,
+    anyact::FAKE_MERCHANT,
+    hive::FIELD_OF_MAN_SIZED_HOLES,
+    glory::GRAVE_OF_THE_FORGOTTEN,
+    glory::HUNGRY_FOR_MUSHROOMS,
+    hive::INFESTED_AUTOMATON,
+    overgrowth::JUNGLE_MAZE_ADVENTURE,
+    hive::LOST_WISP,
+    overgrowth::LUMINOUS_CHOIR,
+    unlisted::MOCK_EVENT_MODEL,
+    overgrowth::MORPHIC_GROVE,
+    crossover::NEOW,
+    glory::NONUPEIPE,
+    hive::OROBAS,
+    hive::PAEL,
+    anyact::POTION_COURIER,
+    underdocks::PUNCH_OFF,
+    anyact::RANWID_THE_ELDER,
+    glory::REFLECTIONS,
+    anyact::RELIC_TRADER,
+    anyact::ROOM_FULL_OF_CHEESE,
+    glory::ROUND_TEA_PARTY,
+    overgrowth::SAPPHIRE_SEED,
+    anyact::SELF_HELP_BOOK,
+    anyact::SLIPPERY_BRIDGE,
+    underdocks::SPIRALING_WHIRLPOOL,
+    hive::SPIRIT_GRAFTER,
+    anyact::STONE_OF_ALL_TIME,
+    crossover::SUNKEN_STATUE,
+    underdocks::SUNKEN_TREASURY,
+    anyact::SYMBIOTE,
+    overgrowth::TABLET_OF_TRUTH,
+    glory::TANX,
+    anyact::TEA_MASTER,
+    hive::TEZCATARA,
+    unlisted::THE_ARCHITECT,
+    anyact::THE_FUTURE_OF_POTIONS,
+    hive::THE_LANTERN_KEY,
+    anyact::THE_LEGENDS_WERE_TRUE,
+    anyact::THIS_OR_THAT,
+    glory::TINKER_TIME,
+    underdocks::TRASH_HEAP,
+    glory::TRIAL,
+    overgrowth::UNREST_SITE,
+    glory::VAKUU,
+    anyact::WAR_HISTORIAN_REPY,
+    underdocks::WATERLOGGED_SCRIPTORIUM,
+    anyact::WELCOME_TO_WONGOS,
+    overgrowth::WELLSPRING,
+    overgrowth::WHISPERING_HOLLOW,
+    overgrowth::WOOD_CARVINGS,
+    hive::ZEN_WEAVER,
+];
 
 impl sts2_core::EventTable for Event {
     type Act = Act;
@@ -501,7 +504,6 @@ impl sts2_core::EventTable for Event {
             self,
             Self::BrainLeech
                 | Self::CrystalSphere
-                | Self::Darv
                 | Self::DollRoom
                 | Self::FakeMerchant
                 | Self::PotionCourier
@@ -518,9 +520,180 @@ impl sts2_core::EventTable for Event {
                 | Self::ThisOrThat
                 | Self::WarHistorianRepy
                 | Self::WelcomeToWongos
+                | Self::Darv
         )
     }
+
+    /// One of the nine ancients, which an act draws separately.
+    fn ancient(self) -> bool {
+        <Self as sts2_core::Table>::data(self).layout == EventLayoutType::Ancient
+    }
 }
+/// Every event in an act's own events, in the act's own order.
+///
+/// Not sorted. Room generation shuffles this list, and a shuffle
+/// permutes what it was handed, so the order decides the result.
+///
+/// Empty for an act with none.
+pub fn events_of(act: Act) -> &'static [Event] {
+    match act {
+        Act::Overgrowth => &[
+            Event::AromaOfChaos,
+            Event::ByrdonisNest,
+            Event::DenseVegetation,
+            Event::JungleMazeAdventure,
+            Event::LuminousChoir,
+            Event::MorphicGrove,
+            Event::SapphireSeed,
+            Event::SunkenStatue,
+            Event::TabletOfTruth,
+            Event::UnrestSite,
+            Event::Wellspring,
+            Event::WhisperingHollow,
+            Event::WoodCarvings,
+        ],
+        Act::Underdocks => &[
+            Event::AbyssalBaths,
+            Event::DrowningBeacon,
+            Event::EndlessConveyor,
+            Event::PunchOff,
+            Event::SpiralingWhirlpool,
+            Event::SunkenStatue,
+            Event::SunkenTreasury,
+            Event::DoorsOfLightAndDark,
+            Event::TrashHeap,
+            Event::WaterloggedScriptorium,
+        ],
+        Act::Hive => &[
+            Event::Amalgamator,
+            Event::Bugslayer,
+            Event::ColorfulPhilosophers,
+            Event::ColossalFlower,
+            Event::FieldOfManSizedHoles,
+            Event::InfestedAutomaton,
+            Event::LostWisp,
+            Event::SpiritGrafter,
+            Event::TheLanternKey,
+            Event::ZenWeaver,
+        ],
+        Act::Glory => &[
+            Event::BattlewornDummy,
+            Event::GraveOfTheForgotten,
+            Event::HungryForMushrooms,
+            Event::Reflections,
+            Event::RoundTeaParty,
+            Event::Trial,
+            Event::TinkerTime,
+        ],
+        #[allow(unreachable_patterns)]
+        _ => &[],
+    }
+}
+
+/// Every event in an act's own ancients, in the act's own order.
+///
+/// Not sorted. Room generation shuffles this list, and a shuffle
+/// permutes what it was handed, so the order decides the result.
+///
+/// Empty for an act with none.
+pub fn ancients_of(act: Act) -> &'static [Event] {
+    match act {
+        Act::Overgrowth => &[Event::Neow],
+        Act::Underdocks => &[Event::Neow],
+        Act::Hive => &[Event::Orobas, Event::Pael, Event::Tezcatara],
+        Act::Glory => &[Event::Nonupeipe, Event::Tanx, Event::Vakuu],
+        #[allow(unreachable_patterns)]
+        _ => &[],
+    }
+}
+
+/// The events concatenated onto every act's own list.
+///
+/// In the game's own order, which is not sorted.
+pub const SHARED_EVENTS: [Event; 18] = [
+    Event::BrainLeech,
+    Event::CrystalSphere,
+    Event::DollRoom,
+    Event::FakeMerchant,
+    Event::PotionCourier,
+    Event::RanwidTheElder,
+    Event::RelicTrader,
+    Event::RoomFullOfCheese,
+    Event::SelfHelpBook,
+    Event::SlipperyBridge,
+    Event::StoneOfAllTime,
+    Event::Symbiote,
+    Event::TeaMaster,
+    Event::TheFutureOfPotions,
+    Event::TheLegendsWereTrue,
+    Event::ThisOrThat,
+    Event::WarHistorianRepy,
+    Event::WelcomeToWongos,
+];
+
+/// The events concatenated onto the run, dealt out to the later acts.
+///
+/// In the game's own order, which is not sorted.
+pub const SHARED_ANCIENTS: [Event; 1] = [Event::Darv];
+
+/// The curses Neow offers, one of which every blessing comes with.
+///
+/// In the game's own order, which one draw indexes into.
+pub const NEOW_CURSES: [Relic; 8] = [
+    Relic::CursedPearl,
+    Relic::HeftyTablet,
+    Relic::LargeCapsule,
+    Relic::LeafyPoultice,
+    Relic::NeowsBones,
+    Relic::PrecariousShears,
+    Relic::SilkenTress,
+    Relic::SilverCrucible,
+];
+
+/// The blessings Neow offers, before the three coin flips add to them.
+///
+/// In the game's own order, which is what the shuffle permutes.
+pub const NEOW_POSITIVES: [Relic; 14] = [
+    Relic::ArcaneScroll,
+    Relic::BoomingConch,
+    Relic::FishingRod,
+    Relic::GoldenPearl,
+    Relic::Kaleidoscope,
+    Relic::LeadPaperweight,
+    Relic::LostCoffer,
+    Relic::MassiveScroll,
+    Relic::NeowsTorment,
+    Relic::NewLeaf,
+    Relic::PhialHolster,
+    Relic::PreciseScissors,
+    Relic::ScrollBoxes,
+    Relic::WingedBoots,
+];
+
+/// The three pairs a coin flip adds one of, in the order they are
+/// added.
+///
+/// Heads takes the first. The first pair is skipped when the curse
+/// drawn is [`NEOW_SUPPRESSES_FLIP`].
+pub const NEOW_FLIPS: [(Relic, Relic); 3] = [
+    (Relic::LavaRock, Relic::SmallCapsule),
+    (Relic::NutritiousOyster, Relic::StoneHumidifier),
+    (Relic::NeowsTalisman, Relic::Pomander),
+];
+
+/// A curse that takes a blessing off the table with it.
+///
+/// The two do the same thing, so Neow does not offer both.
+pub const NEOW_PAIRS: [(Relic, Relic); 4] = [
+    (Relic::CursedPearl, Relic::GoldenPearl),
+    (Relic::HeftyTablet, Relic::ArcaneScroll),
+    (Relic::LeafyPoultice, Relic::NewLeaf),
+    (Relic::PrecariousShears, Relic::PreciseScissors),
+];
+
+/// The curse that suppresses the first of [`NEOW_FLIPS`].
+pub const NEOW_SUPPRESSES_FLIP: Relic = Relic::LargeCapsule;
+
 mod anyact;
 mod crossover;
 mod glory;

@@ -474,27 +474,18 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
     // would be larger than the thing it points at.
     writeln!(
         out,
-        "    /// What is true of the power with no combat running.\n\
-         \x20   ///\n\
-         \x20   /// One arm per power, naming the file its row lives in — buffs,\n\
-         \x20   /// debuffs, and the temporary family that decides at the time."
+        "    /// What is true of the power with no combat running."
     )
     .unwrap();
-    writeln!(out, "    fn data(self) -> PowerData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+    let mut table: Vec<String> = Vec::new();
     for row in powers {
-        writeln!(
-            out,
-            "            Self::{} => {}::{},",
-            camel(&row[1]),
-            bucket(&row[2])?,
-            row[1]
-        )
-        .unwrap();
+        table.push(format!("{}::{}", bucket(&row[2])?, row[1]));
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    fn data(self) -> &'static PowerData {{").unwrap();
+    writeln!(out, "        &ROWS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::rows(out, "PowerData", &table);
 
     // Read straight off `data().kind` rather than tabulated a second time: two
     // lists of the same fact drift, and this one is already generated.

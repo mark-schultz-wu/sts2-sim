@@ -70,12 +70,15 @@ fn the_generated_table_matches_the_dump() {
 #[test]
 fn an_event_comes_from_an_act_or_from_the_pool_but_not_both() {
     let mut dumped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    for row in rows(EVENTS, "act") {
-        dumped.entry(row[2]).or_default().push(row[1]);
+    for row in rows(EVENTS, "act").chain(rows(EVENTS, "ancient")) {
+        dumped.entry(row[3]).or_default().push(row[1]);
     }
 
-    let pooled: BTreeSet<&str> = rows(EVENTS, "sharedpool").map(|r| r[1]).collect();
-    assert_eq!(pooled.len(), 19, "the any-act pool has 19 events");
+    let pooled: BTreeSet<&str> = rows(EVENTS, "sharedpool")
+        .chain(rows(EVENTS, "sharedancient"))
+        .map(|r| r[2])
+        .collect();
+    assert_eq!(pooled.len(), 19, "the any-act pools have 19 events");
 
     let mut unlisted: Vec<String> = Vec::new();
     for e in Event::ALL {
