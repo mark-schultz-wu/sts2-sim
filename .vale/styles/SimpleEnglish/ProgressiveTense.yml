@@ -1,0 +1,7 @@
+extends: sequence
+message: "Replace the progressive verb '%s' with a simple tense."
+level: error
+ignorecase: true
+tokens:
+  - pattern: '(?i)\b(?:am|are|is|was|were|be|been|being)\b'
+  - tag: VBG

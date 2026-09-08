@@ -1,0 +1,8 @@
+extends: existence
+message: "Write '%s' in full."
+level: error
+ignorecase: true
+scope: sentence
+tokens:
+  - "\\b[A-Za-z]+n['’]t\\b"
+  - "\\b(?:I['’]m|[A-Za-z]+['’](?:ll|re|ve|d))\\b"

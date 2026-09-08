@@ -1,0 +1,6 @@
+extends: occurrence
+message: "Use 25 words or fewer in a sentence."
+level: error
+scope: sentence
+max: 25
+token: '\b[[:alnum:]][[:alnum:]''’-]*\b'

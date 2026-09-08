@@ -1,0 +1,9 @@
+extends: existence
+message: "Replace '%s' with a full stop or a named relation."
+level: error
+nonword: true
+scope: paragraph
+tokens:
+  - ';'
+  - '—'
+  - '(?<=\s)--(?=\s)'

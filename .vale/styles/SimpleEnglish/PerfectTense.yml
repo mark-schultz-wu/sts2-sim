@@ -1,0 +1,7 @@
+extends: sequence
+message: "Replace the complex verb '%s' with a simple tense."
+level: error
+ignorecase: true
+tokens:
+  - pattern: '(?i)\b(?:has|have|had)\b'
+  - tag: VBN

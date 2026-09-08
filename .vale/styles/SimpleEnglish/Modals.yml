@@ -1,0 +1,7 @@
+extends: existence
+message: "Replace '%s' with can, will, or must."
+level: error
+ignorecase: true
+scope: sentence
+tokens:
+  - '\b(?:should|would|could|may|might)\b'
