@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Move the pinned game between this machine and the forge.
 #
-# Everything here compiles or runs against Slay the Spire 2, and the copy Steam
-# manages is the wrong thing to point at: it is world-writable, it updates when
-# it likes, and STS2 churns 20-50 cards on a minor version. A run whose result
+# Everything here compiles or runs against Slay the Spire 2. Do not point at
+# the copy Steam manages. That copy is world-writable, it updates when it
+# likes, and STS2 churns 20-50 cards on a minor version. A run whose result
 # changed because Steam patched overnight is not a failing test, it is a lie.
 #
 # So each build lives as one version of a private generic package on the forge,
@@ -38,9 +38,10 @@ fi
 FORGE="${STS2_FORGE_URL:-https://code.schultz-wu.com}"
 OWNER="${STS2_FORGE_OWNER:-mark}"
 
-# Under XDG_DATA_HOME, beside the game's own profile directory. It is derived
-# data -- refetchable, and large -- so it does not belong next to source, and
-# it is not a cache either: losing it means a 1.2G download, not a rebuild.
+# Under XDG_DATA_HOME, beside the game's own profile directory. It holds
+# derived data, which the machine can fetch again, and which is large. So it
+# does not belong next to source. It is not a cache either, because a loss
+# means a 1.2G download rather than a rebuild.
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/sts2"
 PIN_DIR="${STS2_PIN_DIR:-$DATA_HOME/pins/$GAME}"
 VENDORED="${STS2_VENDORED_GAME:-$DATA_HOME/games/$GAME}"
@@ -55,9 +56,10 @@ BASE="$FORGE/api/packages/$OWNER/generic/$PACKAGE/$VERSION"
 ASSEMBLIES=(0Harmony.dll GodotSharp.dll sts2.dll)
 ARCHIVE=sts2-game.tar.zst
 
-# Staging lives at file scope, not inside the function that fills it: an EXIT
-# trap runs after the function has returned, so a `local` it names is already
-# out of scope and `set -u` turns the cleanup into the error it reports.
+# Staging lives at file scope rather than inside the function that fills it.
+# An EXIT trap runs after the function returns, so a `local` that it names
+# already went out of scope. Then `set -u` turns the cleanup into the error
+# that it reports.
 STAGED=""
 trap 'if [ -n "$STAGED" ]; then rm -rf "$STAGED"; fi' EXIT
 
@@ -69,8 +71,8 @@ STEAM_DIR="${STS2_STEAM_DIR:-/etc/wolf/profile-data/user/WolfSteam/.steam/steam/
 EXCLUDE=(--exclude=./mods --exclude=./crates)
 
 # Where the token lives when it is not in the environment. Re-pinning is rare
-# enough that nobody remembers the token, and often enough that pasting it onto
-# a command line each time is how it ends up in a shell history.
+# enough that nobody remembers the token. It is also frequent enough that a
+# token pasted onto the command line each time ends up in a shell history.
 TOKEN_FILE="${STS2_FORGE_TOKEN_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/sts2/token}"
 
 acquire() {
@@ -100,11 +102,12 @@ acquire() {
 # 126 and env reports "Permission denied" on ./SlayTheSpire2.
 #
 # Restored here, at the one place that loses it, so the archive `publish` packs
-# is a faithful copy of an install. A repair after unpacking would leave the
-# published bytes wrong and hide it from whoever fetched them.
+# is a faithful copy of an install. A repair after unpacking leaves the
+# published bytes wrong, and hides that from whoever fetched them.
 #
-# ELF magic and a shebang, rather than a list of names: the set of programs in
-# the install is the game's business, and a list is a thing to keep in step.
+# ELF magic and a shebang, rather than a list of names. The set of programs in
+# the install is the game's business, and a list is one more thing to keep in
+# step.
 make_runnable() {
   local fixed=0 f
   while IFS= read -r -d '' f; do
@@ -115,9 +118,9 @@ make_runnable() {
   echo "made $fixed file(s) executable in $1"
 }
 
-# Resolved once, up front, and never inside a command substitution: `${x:?}`
-# there exits only the subshell, so curl would go on to send an empty header
-# and report someone else's 401 instead of this message.
+# Resolved once, up front, and never inside a command substitution. There
+# `${x:?}` exits only the subshell, so curl goes on to send an empty header
+# and reports someone else's 401 instead of this message.
 require_token() {
   [ -n "${STS2_FORGE_TOKEN:-}" ] && return
 
@@ -180,8 +183,8 @@ fetch() {
 
 fetch_game() {
   # A 2.0G tarball is not re-verified on every call, so the unpacked tree keeps
-  # a stamp saying which version produced it. The hash below is still checked
-  # on the way in; the stamp only answers "do I need to do this again".
+  # a stamp saying which version produced it. The code below still checks the
+  # hash on the way in. The stamp only answers "do I need to do this again".
   if [ "$(cat "$VENDORED/.pinned-version" 2>/dev/null)" = "$VERSION" ]; then
     echo "game already unpacked at $VERSION in $VENDORED"
     return
@@ -202,9 +205,9 @@ fetch_game() {
 }
 
 archive_into() {
-  # Sorted names, flattened timestamps and owners, single-threaded zstd: the
-  # same install has to produce the same bytes, or re-publishing a build would
-  # invalidate a lock that nothing actually changed.
+  # Sorted names, flattened timestamps and owners, single-threaded zstd. The
+  # same install has to produce the same bytes. Otherwise a second publish of a
+  # build invalidates a lock that nothing actually changed.
   tar --create --directory "$STEAM_DIR" "${EXCLUDE[@]}" \
       --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner . \
     | zstd -3 -T1 -q -o "$1"
@@ -213,12 +216,12 @@ archive_into() {
 publish() {
   require_token
 
-  # The archive is meant to be a faithful copy of an install, and an install
-  # whose executable is not executable does not start: the game exits 126 and
-  # env reports "Permission denied". DepotDownloader writes 0644 for every file
-  # it fetches, which is how one was published that way. `acquire` restores the
-  # bit now, and this refuses to publish a source where it is still missing,
-  # because the archive is the last place the mistake is cheap to fix.
+  # The archive has to be a faithful copy of an install. An install whose
+  # executable is not executable does not start: the game exits 126 and env
+  # reports "Permission denied". DepotDownloader writes 0644 for every file it
+  # fetches, which is how one publish went out that way. `acquire` restores the
+  # bit now, and this code refuses a source that still lacks it. The archive is
+  # the last place the mistake is cheap to fix.
   if [ ! -x "$STEAM_DIR/SlayTheSpire2" ]; then
     echo "mod/game.sh: $STEAM_DIR/SlayTheSpire2 is not executable." >&2
     echo "An install packed from here cannot start. Re-acquire it, or restore" >&2
@@ -237,10 +240,10 @@ publish() {
   archive_into "$STAGED/$ARCHIVE"
 
   # Forgejo answers 409 rather than overwriting a file a version already has.
-  # That is the right default: a pin is meant to stay the bytes it was, and a
-  # publish that quietly replaced one would invalidate every lock naming it.
-  # Replacing is for correcting an artifact that was wrong when it was made,
-  # which is rare enough to be asked for by name.
+  # That is the right default. A pin has to stay the bytes that it was, and a
+  # publish that quietly replaces one invalidates every lock that names it.
+  # A replacement corrects an artifact that was wrong at the start, which is
+  # rare enough to ask for by name.
   local f status
   for f in "${ASSEMBLIES[@]}" "$ARCHIVE"; do
     if [ -n "${STS2_FORGE_REPLACE:-}" ]; then

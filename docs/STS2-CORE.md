@@ -5,7 +5,7 @@ real game and the future simulator implement. The oracle then stops being a
 transport with a front end bolted to it, and becomes one of two interchangeable
 ways to play.
 
-All of it has landed. This file is the reference the work was written against.
+All of it landed. This file is the reference that the work followed.
 It reverses two things [ARCHITECTURE.md](ARCHITECTURE.md) states, listed under
 *Doc reversals* below. It also reverses several things it said itself, each
 marked *reversed in the doing* where it stands.
@@ -14,7 +14,7 @@ marked *reversed in the doing* where it stands.
 
 The case for the split, as it stood before any of it was built. Kept in the
 present tense it was written in, because it is the argument and not the status.
-Each section below says what has landed.
+Each section below says what landed.
 
 `sts2-headless` calls itself "the transport and nothing above it", and the
 transport half is in good shape. It has launch, token, greeting, build check,
@@ -23,7 +23,7 @@ refuses to own.
 
 **The observation is untyped.** `Response::Observation` carries
 `state: serde_json::Value`, on the grounds that "the right shape depends on what
-the simulator turns out to need". That has expired on three counts:
+the simulator turns out to need". That reason expired on three counts:
 
 * The shape is not unknown. `mod/sts2_headless/Observation.cs` is 778 lines of
   fixed, documented schema.
@@ -117,7 +117,7 @@ Three methods failed the test:
 
 | method | verdict |
 |---|---|
-| `observe` | ***Reversed in the doing.*** The argument held only for a caller that holds the last `Applied`. A front end is one process per command, so the last answer went out with the last process. Without `observe` on the trait, such a caller must reach past the trait for its first look, and is pinned to one implementation from that line on. It is on `Play`, and every implementation can answer it: a simulator holds an observation, and the oracle asks the game for one. |
+| `observe` | ***Reversed in the doing.*** The argument held only for a caller that holds the last `Applied`. A front end is one process per command, so the last answer went out with the last process. Without `observe` on the trait, such a caller must reach past the trait for its first look. One implementation then holds it from that line on. It is on `Play`, and every implementation can answer it: a simulator holds an observation, and the oracle asks the game for one. |
 | `quit` | `Drop`. |
 | `build()`/`stamp()` | `V::VERSION` already says it, statically. |
 
@@ -182,7 +182,7 @@ Consequences:
 
 * **The mod changes.** It emits a tagged reason rather than interpolated prose
   at ~20 call sites.
-* **The prose is not lost, it moves**, twice. It went from C# string
+* **The prose survives, it moves**, twice. It went from C# string
   interpolation to a `Display` on `Reason`, and then out of `sts2-core`
   altogether. That is *reversed in the doing*. Writing *"BASH is not playable"*
   means knowing what a build calls a card, and this crate does not know it. It
@@ -279,8 +279,8 @@ types:
 * `UnplayableReason` is a real `[Flags]` enum in the assembly. It is dumped and
   generated at `v0_107_1/generated/runstate`, numbered by bit index so the set
   over it holds the game's own word.
-* `TargetType` is already generated at `v0_107_1/generated/cards`.
-* `RoomType` is already generated, and already an associated type.
+* Generation already covers `TargetType`, at `v0_107_1/generated/cards`.
+* Generation already covers `RoomType`, and already as an associated type.
 
 **Authored**, staying in `sts2-core`: the variant set itself. Nothing in the
 game dumps "the ways a command can be refused". Making it a `V::Refusal`
@@ -331,7 +331,7 @@ was hashed by name, spelled by serde, so that a codegen renumbering a table left
 the digest where it was. Nothing wanted that property. No digest is persisted,
 no test pins one, and a digest taken against another build is meaningless
 whatever it hashed. Both sides of a comparison are the same `V` compiled into
-the same process. What it cost was reading the name out of a `#[serde(rename)]`
+the same process. It cost one read of the name out of a `#[serde(rename)]`,
 by serializing the value through a 175-line whitelist `Serializer`. That ran per
 id, per observation, after every decision.
 
@@ -346,7 +346,7 @@ than into `Hasher`'s native-endian defaults.
 Every walk destructures its struct exhaustively, so a field added to
 `Observation` and not to the digest does not compile. `tests/digest.rs` nudges
 each field in turn and requires a digest nothing else in the sweep produced.
-That is what says the destructured field was then used.
+That is what proves that the code then used the destructured field.
 
 The mod's C# digest stays, demoted to an internal determinism check for the mod.
 That is all it was ever able to be. `just live` asserts the two agree about
@@ -394,7 +394,7 @@ is made unreachable.
 
 ## Dispatch in sts2-cli
 
-Not written, and the reason has changed. There are two implementations now,
+Not written, and the reason changed. There are two implementations now,
 `Oracle` and `Session`. They are the same game reached two ways, and a front end
 wants one of them at a time rather than a choice between them. So `sts2-cli`
 names its implementation once, in a type alias, and everything below that line
@@ -409,7 +409,7 @@ Pointing the binary at a simulator is that line.
 The *build* is no longer an alias beside it. A person at a terminal has to be
 able to say which game they mean. So `main` turns `--game-version` into a type
 in one `match`, and calls a generic `drive<V>`. Everything under it is generic
-over `V`, and adding a build is adding an arm. The enum earns its place
+over `V`, and a new build adds one arm. The enum earns its place
 when a caller has to hold *both at once*. That caller is the differential test,
 driving a decision into each and comparing what came back, and it is the next
 thing to be written. What it will be then:
@@ -442,8 +442,8 @@ dumped.
 ## Rejected designs
 
 Kept for the reason ARCHITECTURE.md keeps its own: a rejected design is what
-stops the same design being proposed again. Each of these was proposed and
-killed while this was being worked out.
+stops the same design being proposed again. Each of these arrived and
+died during this work.
 
 **The mod's JSON as the canonical encoding.** It commits the simulator's
 vocabulary to five compressions chosen for throughput. See *The wire layer*.
@@ -560,9 +560,9 @@ on the mod side, and every refusal site rewritten. `{"type":"fault"}` is its own
 message, so an adapter crash stops being filed as a game decision. The prose is
 written from the data, in `sts2-cli` rather than here. See phase 6.
 
-Three refusal sites turned out to be throwing where a refusal was the right
+Three refusal sites threw where a refusal was the right
 answer. Those are `grant` with a name the game does not have, and `start` with
-an ascension or a modifier it does not have. The catch-all had been flattening
+an ascension or a modifier it does not have. The catch-all flattened
 them into refusals. That is exactly the conflation the fault type exists to end,
 so separating the two is what made them visible.
 
@@ -595,8 +595,8 @@ calls anything.
 * **The slow path.** `Observation<V>` derives `PartialEq`, and the digest is the
   fast path over it. What is still missing is the `diff` that names the first
   divergent field. Equality says two runs parted ways, and nothing says where.
-  The digest's walk is the shape that `diff` wants, so the two are best written
-  from one description rather than twice.
+  The digest's walk is the shape that `diff` wants, so one description had better
+  drive both, rather than two.
 * **Nothing has a display name.** `CardData` is `{kind, rarity, target, cost,
   max_upgrade, keywords}`, and no table carries what a person calls the thing.
   So `sts2-cli` shows `STRIKE_IRONCLAD`, not because an id is the right thing to

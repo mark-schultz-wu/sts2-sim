@@ -3,11 +3,11 @@
 An STS2 simulator, meant to be fast enough to train agents in.
 
 The real game can be driven programmatically, but only at a few hundred steps/s.
-A training run wants about 10⁹. So the game isn't the environment. It's the
-reference the simulator gets checked against, step by step, on the same seed.
+A training run wants about 10⁹. So the game is not the environment. It is the
+reference that the simulator answers to, step by step, on the same seed.
 
 So far that's five mods, the content they print, and a Rust side that consumes
-both. The simulator itself isn't started.
+both. The simulator itself has not started.
 
 ## The mods
 
@@ -24,7 +24,7 @@ tests. `mod/deploy.sh` builds and installs all five. The game's own manifest
 `dependencies` field orders them.
 
 [The protocol](mod/sts2_headless/PROTOCOL.md) is the wire contract on one page.
-The standard the mods are held to is split between
+The mods answer to a standard, split between
 [determinism](mod/sts2_determinism/REQUIREMENTS.md) (D1–D3) and
 [headless](mod/sts2_headless/REQUIREMENTS.md) (H1–H12), so a requirement's
 prefix names the file it lives in.
@@ -62,16 +62,16 @@ it, the dumps land under it, and `sts2` drives it.
 
 Two builds are pinned: v0.107.1 and v0.111.0. Both compile the whole mod set
 from the same sources, with one adapter for each build under every mod's
-`Compat/`. Both have generated tables. `just check` builds every lock, so a
-change that only works against the build you have deployed fails.
+`Compat/`. Both ship generated tables. `just check` builds every lock, so a
+change that works only against the build you deployed fails.
 
 v0.107.1 is the floor. It is the build that replaced the game's PRNG with
 xoshiro256\*\*, and `sts2-rng` ports that generator alone.
 
 One hash alone is not enough. A rebalance that adds no content leaves the content
 hash equal and every generated number wrong. Codegen refuses to generate when two
-dumps disagree, so a table can never quietly come to describe a game nobody is
-talking to.
+dumps disagree, so a table can never quietly come to describe a game that nobody
+talks to.
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is where things live, and why. It
 covers the content/code dividing rule, and why ported behaviour belongs beside

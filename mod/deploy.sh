@@ -3,9 +3,9 @@
 #
 # The game loads mods from <gamedir>/mods/<dir>/, expecting a *.json manifest
 # and an assembly named exactly <manifest id>.dll. Load order comes from the
-# `dependencies` field in each manifest — the loader topologically sorts on it,
+# `dependencies` field in each manifest. The loader topologically sorts on it,
 # and refuses to load a mod whose dependencies are absent, naming them. So the
-# order here does not matter; only that all of them arrive.
+# order here does not matter. Only their arrival matters.
 set -euo pipefail
 
 GAME_DIR="${STS2_GAME_DIR:?is not set. The repo .envrc exports it: run 'direnv allow' in the repo root, or set it by hand}"
@@ -27,8 +27,8 @@ for manifest in "$HERE"/*/manifest.json; do
   echo "installed -> $DEST"
 done
 
-# Mods stay Disabled until the player has accepted the mod warning. Headless
-# never shows that popup, so set the flag the popup would have set.
+# Mods stay Disabled until the player accepts the mod warning. Headless never
+# shows that popup, so set the flag that the popup sets.
 SETTINGS="$PROFILE_DIR/settings.save"
 if [ -f "$SETTINGS" ]; then
   [ -f "$SETTINGS.pre-oracle" ] || cp "$SETTINGS" "$SETTINGS.pre-oracle"

@@ -131,7 +131,7 @@ as a different run. It is refused again, which is noise, or, worse, accepted by
 the implementation being replayed into, which takes the run somewhere the
 original never went. The tape says what the run *was*.
 
-`Play::observe` is never recorded. It moves nothing, so replaying it only makes
+A recording never holds `Play::observe`. It moves nothing, so replaying it only makes
 a replay slower.
 
 ### A tape that fails stops, and does not fail the move
@@ -183,9 +183,9 @@ It used to hash the name, so that a codegen renumbering a table without renaming
 anything left the digest where it was. Nothing wanted that. A digest is compared
 against another implementation of the *same build*, compiled into the *same
 process*. None is persisted, no test pins one, and one taken against another
-build is meaningless whatever it hashed. The price was reading the name out of a
-`#[serde(rename)]` by serializing the value through a whitelist `Serializer`,
-per id, per observation, after every decision.
+build is meaningless whatever it hashed. It cost one read of the name out of a
+`#[serde(rename)]`. Serializing the value through a whitelist `Serializer` did
+that, per id, per observation, after every decision.
 
 A counter map is digested as the count and then the wrapping sum of a sub-digest
 per entry. A sum, because a `HashMap` has no order to walk in and sorting needs
@@ -278,14 +278,14 @@ carry every method to satisfy one bound.
 
 ### Naming the build
 
-The generated tables are concrete types per build. Anything that works against
-content, such as the oracle client or the simulator, is otherwise pinned to one
-of them. `ContentVersion` is the seam. Name the build once, as a type parameter,
+The generated tables are concrete types per build. Without a seam, anything that works against
+content, such as the oracle client or the simulator, holds one
+of them for good. `ContentVersion` is the seam. Name the build once, as a type parameter,
 and every id follows from it.
 
 Each associated type spells its bounds out. Collapsing them into a
 blanket-implemented alias constrains nothing further. It also makes a missing
-bound report as `V::Card: Id` instead of naming the trait that is missing.
+bound report as `V::Card: Id` rather than name the absent trait.
 
 The supertraits are what a `#[derive]` on a generic holding these asks for.
 `Command<V>` derives `Debug`, `Clone`, `Eq` and `Serialize`, and each of those

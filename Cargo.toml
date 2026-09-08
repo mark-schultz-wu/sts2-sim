@@ -11,20 +11,20 @@ members = [
 
 # Shared dependencies live here and members say `workspace = true`, so a version
 # is chosen once. Before this, `thiserror` was "2.0.20" in one crate and "2" in
-# another — same resolved version, two places to change it.
+# another. That resolved to the same version, with two places to change it.
 [workspace.dependencies]
 anyhow = "1.0.104"
 clap = { version = "4", features = ["derive"] }
 nonmax = { version = "0.5.5", features = ["serde"] }
-# The TUI. Its `crossterm` backend is reached through `ratatui::crossterm`
-# rather than as a second dependency, so the key and resize events the front
-# end matches on cannot drift from the backend's.
+# The TUI. It reaches its `crossterm` backend through `ratatui::crossterm`
+# rather than as a second dependency. So the key and resize events that the
+# front end matches on cannot drift from the backend's.
 ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serial_test = "4.0.1"
-# Default features off here so a dependent takes the trait without a build
-# attached; anything that needs the tables opts in with `features`.
+# Default features off here, so a dependent takes the trait with no build
+# attached. Anything that needs the tables opts in with `features`.
 sts2-content = { path = "crates/sts2-content", default-features = false }
 sts2-core = { path = "crates/sts2-core" }
 sts2-headless = { path = "crates/sts2-headless" }

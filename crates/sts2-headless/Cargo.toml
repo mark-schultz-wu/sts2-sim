@@ -11,9 +11,9 @@ serde_json = { workspace = true }
 # The decisions, the recording format, the build stamp and `ContentVersion`:
 # what this crate is an implementation *of*. See docs/STS2-CORE.md.
 #
-# No dependency on `sts2-content` at all outside the tests. Driving a game is
-# generic over the build, so nothing here needs a build to exist -- only the
-# tests, which have to pick one to spell a decision.
+# No dependency on `sts2-content` at all outside the tests. This code drives a
+# game generically over the build, so nothing here needs a build to exist. Only
+# the tests do, because they must pick one to spell a decision.
 sts2-core = { workspace = true }
 thiserror = { workspace = true }
 

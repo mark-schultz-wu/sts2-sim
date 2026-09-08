@@ -88,7 +88,7 @@ Merc turned up gating its damage on `ToughEnemies`, where every other monster
 gates on `DeadlyEnemies`. It is also how `FAKE_MERCHANT_EVENT_ENCOUNTER` turned
 up paying a flat 300 gold, where every other encounter is cut by Poverty.
 
-## What is not dumped
+## What the dump leaves out
 
 Behaviour. A card's effect, a relic's hook and a monster's move body are code.
 So are the lambdas a monster's branch weights are written in. Code gets ported
@@ -109,7 +109,7 @@ every power overrides them, and the rule marks all 273 dynamic.
 `EncounterDump` cannot read either. `GenerateMonsters` is `abstract` too, and
 its body calls out. So it asks the randomness instead. The method is run against
 a fresh `Rng`, and the `Counter` is read afterwards. An encounter that drew
-nothing cannot have rolled anything, whatever its body looks like. That is exact
+nothing rolled nothing, whatever its body looks like. That is exact
 rather than conservative, and it is only possible because the dump runs inside
 the real game.
 

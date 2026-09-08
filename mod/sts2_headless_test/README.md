@@ -50,7 +50,7 @@ Exits non-zero on failure, so it is usable as a gate.
 is in it, out of combat and in, down to each creature reporting its intent. The
 other assertions here are about legality, and none of them notices the
 observation quietly losing a field. That is the failure this project is least
-able to survive. A simulator defaults what it is not told, the oracle has the
+able to survive. A simulator defaults what nobody tells it, the oracle holds the
 real value, and the two agree because neither knows the field exists. A
 divergence that never appears is worse than one that does.
 
@@ -58,13 +58,13 @@ The key lists are written out rather than derived from the capture. A derived
 list only asserts that the code does what the code does. Written down, removing
 a field fails, and adding one is a deliberate edit.
 
-**That a command answers only when the game has settled (H3).** This is the
+**That a command answers only after the game settles (H3).** This is the
 standing hazard of this codebase, with four recorded bugs where the driver
 answered before the work finished. Asserting `ReadyForInput` proves nothing.
 That is the predicate `Quiesce` waits on, and every one of those bugs *was* that
 predicate returning true too early. So it uses a signal the predicate does not
 consult. Take the digest, let the engine run, take it again. A stable digest is
-evidence the state had settled. An unstable one is proof it had not.
+evidence that the state settled. An unstable one proves that it did not.
 
 Ending a turn is the case that carries this. A card play survives a mutation
 that stops the driver waiting at all, because the action's own completion does
@@ -78,9 +78,9 @@ answer goes through `Pending.Accept` with the JSON a client sends. That includes
 an out-of-range index, which must be refused rather than silently becoming a
 different move.
 
-**That an error-level log reaches the client once.** It is captured, drained,
-and not drained twice. This is plumbing only. See its comment for why a real
-swallowed failure was not provoked.
+**That an error-level log reaches the client once.** The mod captures it, drains it,
+and never drains it twice. This checks plumbing only. See its comment for why the test
+provokes no real swallowed failure.
 
 **That a restart inherits nothing.** Every case here restarts between scenarios
 and assumes the next begins clean, and nothing checked it. The assertion is the
@@ -124,8 +124,8 @@ harness uses.
 
 **That all five characters can be driven.** Everything else here is the
 Ironclad. The Defect matters most. Its orbs were reported as empty for as long
-as nobody had driven a Defect run. The fields existed, and had never been
-written or read. The gap was reachability, not difficulty.
+as nobody drove a Defect run. The fields existed, and nothing ever
+wrote or read them. The gap was reachability, not difficulty.
 
 **It found a driver bug**, which is the argument for driving all five rather
 than one. The Necrobinder played 137 turns and left the enemies on 83 hp, their
@@ -169,9 +169,9 @@ first:
 - The map cases restart the run and assert the same map regenerates, because a
   test that compares two different maps proves nothing.
 
-Several are **mutation-tested.** The driver was deliberately broken to confirm
-the test fails, then fixed to confirm it passes. A test that has never been seen
-to fail is not evidence.
+Several are **mutation-tested.** We deliberately broke the driver to confirm
+that the test fails, then fixed it to confirm that the test passes. A test that
+nobody ever saw fail is not evidence.
 
 ## What it does not cover
 
