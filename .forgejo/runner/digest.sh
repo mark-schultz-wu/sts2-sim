@@ -8,7 +8,7 @@ repo="$(cd "$here/../.." && pwd)"
 
 {
   for file in "$here"/Dockerfile "$here"/versions.env \
-    "$here"/build.sh "$here"/digest.sh; do
+    "$here"/build.sh "$here"/digest.sh "$here"/checkout.sh; do
     sha256sum "$file" | cut -d' ' -f1
   done
   for lock in "$repo"/mod/games/*.lock; do

@@ -44,7 +44,7 @@ cleanup() {
   if $cleanup_token; then rm -f "$token_file"; fi
 }
 trap cleanup EXIT
-cp "$here/Dockerfile" "$ctx/"
+cp "$here/Dockerfile" "$here/checkout.sh" "$ctx/"
 mkdir -p "$ctx/mod/games"
 cp "$repo/mod/game.sh" "$ctx/mod/"
 cp "$repo"/mod/games/*.lock "$ctx/mod/games/"

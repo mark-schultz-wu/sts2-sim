@@ -101,6 +101,13 @@ RUN --mount=type=secret,id=forge_token \
     test -x "$XDG_DATA_HOME/sts2/games/$GAME_VERSION/SlayTheSpire2"; \
     rm -rf /opt/sts2/mod
 
+# Checking out the repository, which is otherwise an action fetched over the
+# network at the start of every job. A name that failed to resolve took down
+# two jobs of a run whose code was fine. Everything else a job needs is in this
+# image, and now so is this.
+COPY checkout.sh /usr/local/bin/sts2-checkout
+RUN chmod +x /usr/local/bin/sts2-checkout
+
 # The first `dotnet` of an install unpacks bundles and writes a sentinel, which
 # took thirty-two seconds of a fifty-seven second job. Paying it here means no
 # job pays it.
@@ -117,5 +124,7 @@ RUN set -euo pipefail; \
     just --version; \
     test "$(vale --version | grep -o '[0-9.]*$')" = "$VALE_VERSION"; \
     python3 --version; \
+    command -v sts2-checkout >/dev/null; \
+    bash -n /usr/local/bin/sts2-checkout; \
     test -n "$STS2_CI_DIGEST"; \
     echo "$STS2_CI_DIGEST" > /etc/sts2-ci.digest

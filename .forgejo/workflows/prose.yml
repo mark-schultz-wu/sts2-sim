@@ -17,7 +17,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out the repository
-        uses: https://data.forgejo.org/actions/checkout@v6
+        # `sts2-checkout` is baked into the runner image. Fetching an action
+        # to do this made every job wait on a name resolving. That is the last
+        # thing outside this image that can fail a run whose code is fine.
+        env:
+          STS2_FORGE_TOKEN: ${{ secrets.STS2_FORGE_TOKEN }}
+        run: sts2-checkout
 
       - name: Check the image digest
         run: |
