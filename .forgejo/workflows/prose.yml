@@ -21,7 +21,10 @@ jobs:
         # to do this made every job wait on a name resolving. That is the last
         # thing outside this image that can fail a run whose code is fine.
         env:
-          STS2_FORGE_TOKEN: ${{ secrets.STS2_FORGE_TOKEN }}
+          # This run's own token, which is what the action it replaces used.
+          # The package token beside it reaches the game's assemblies and not
+          # the repository.
+          GITHUB_TOKEN: ${{ github.token }}
         run: sts2-checkout
 
       - name: Check the image digest

@@ -13,20 +13,21 @@ set -euo pipefail
 : "${GITHUB_SERVER_URL:?the runner sets this}"
 : "${GITHUB_REPOSITORY:?the runner sets this}"
 : "${GITHUB_SHA:?the runner sets this}"
-: "${STS2_FORGE_TOKEN:?the job has to pass the token for this run}"
+: "${GITHUB_TOKEN:?the job has to pass the token for this run}"
 
 # On the command line rather than in `.git/config`. The workspace outlives the
-# job, so a token written into it would outlive the job too.
-auth="Authorization: Basic $(printf 'oauth2:%s' "$STS2_FORGE_TOKEN" | base64 -w0)"
+# job, and a token written into one outlives the job with it.
+auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
 
 git init -q .
 git remote remove origin 2>/dev/null || true
 git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
 
 # Every branch, so the history is whole. `vale-lint --commits` walks from the
-# base branch, and a shallow checkout has nothing to walk. The commit is asked
-# for by name as well, because a pull request's head is what this job is for
-# and the branch it sits on may have moved.
+# base branch, and a shallow checkout has nothing to walk.
+#
+# The commit is asked for by name as well. A pull request head is what the job
+# is for, and the branch it sits on can move under it.
 git -c http.extraheader="$auth" fetch -q --no-tags --prune --force \
   --no-recurse-submodules origin \
   "+refs/heads/*:refs/remotes/origin/*" \
