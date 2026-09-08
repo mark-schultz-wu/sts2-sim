@@ -9,25 +9,40 @@ on:
   pull_request:
   workflow_dispatch:
 
+# `runs-on: sts2` is this repository's own runner image, built from
+# `.forgejo/runner/`, which bakes the Rust and .NET toolchains. Nothing here
+# installs one. See that directory for how the image is built and how the
+# runner is told about it.
+#
+# It is a label of its own rather than `docker`, which stays pointed at the
+# stock image. A branch whose workflow still installs its own toolchain cannot
+# run on this image, because rustup refuses to install over one that is there
+# already. So both labels exist until nothing asks for the stock one.
+#
+# Each job still asserts that the toolchain it found is the one the repository
+# asked for. An image lives on a machine rather than in a commit, so it can go
+# stale. A stale one has to fail the run rather than quietly test the wrong
+# compiler.
 jobs:
   check:
-    runs-on: docker
+    runs-on: sts2
     timeout-minutes: 30
     steps:
       - name: Check out the repository
+        # `vale-lint.py --commits` reads the commits between the base and this
+        # branch, so this job needs the complete history.
         uses: https://data.forgejo.org/actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      # A step's exit status is its last command's, and that last command is an
-      # echo that always succeeds. So `set -e` stops at the first failure. A
-      # version check at the end then asserts that the thing is there, because a
-      # toolchain step that installs nothing must not pass.
-      - name: Install the Rust toolchain
+      - name: Check the toolchain is the one the image should bake
         run: |
           set -euo pipefail
-          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain 1.96.0 --component clippy,rustfmt
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          "$HOME/.cargo/bin/cargo" --version
+          . .forgejo/runner/versions.env
+          test "$(cat /etc/sts2-ci.digest)" = "$(.forgejo/runner/digest.sh)"
+          test "$(cargo --version | cut -d' ' -f2)" = "$RUST_VERSION"
+          rustup component list --installed | grep -q '^clippy'
+          rustup component list --installed | grep -q '^rustfmt'
 
       # `just test`: the workspace, then every pinned build's tables by name.
       # The workspace run compiles them all only because `sts2-cli` asks for
@@ -42,8 +57,18 @@ jobs:
           done
           cargo test -p sts2-content --features "${features#,}"
 
-      - name: Lint prose
+      - name: Lint prose structure
         run: ./tools/prose-lint.py
+
+      # The whole repository, not only the lines this branch changed. The rules
+      # hold everywhere, so a file that no commit here touches still has to
+      # pass. `--self-test` runs first, because a rule that matches nothing
+      # reports a clean repository for the wrong reason.
+      - name: Lint prose style
+        run: |
+          ./tools/vale-lint.py --self-test
+          ./tools/vale-lint.py
+          ./tools/vale-lint.py --commits
 
       - name: Lint Rust
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -55,30 +80,27 @@ jobs:
   # different toolchain, and the game's own assemblies, which have to be
   # fetched before anything will compile.
   mods:
-    runs-on: docker
+    runs-on: sts2
     timeout-minutes: 30
     steps:
       - name: Check out the repository
         uses: https://data.forgejo.org/actions/checkout@v6
 
-      # -L is not optional. dot.net answers 301 to builds.dotnet.microsoft.com,
-      # and a 301 is not an error to `curl -f`. Without it curl writes an empty
-      # file and exits 0. Then bash runs the empty file and exits 0, and the
-      # step goes green having installed nothing. `set -e` and the closing version
-      # check are the same lesson as the Rust step above.
-      - name: Install the .NET SDK
+      - name: Check the toolchain is the one the image should bake
         run: |
           set -euo pipefail
-          curl --proto '=https' --tlsv1.2 -fsSL \
-            -o /tmp/dotnet-install.sh https://dot.net/v1/dotnet-install.sh
-          bash /tmp/dotnet-install.sh --channel 9.0 --install-dir "$HOME/.dotnet"
-          echo "$HOME/.dotnet" >> "$GITHUB_PATH"
-          "$HOME/.dotnet/dotnet" --version
+          . .forgejo/runner/versions.env
+          test "$(cat /etc/sts2-ci.digest)" = "$(.forgejo/runner/digest.sh)"
+          case "$(dotnet --version)" in "$DOTNET_CHANNEL".*) ;; *) exit 1 ;; esac
 
       # The three assemblies, not the 2.0G install: CI compiles the mods, it
       # does not run the game. One set per lock under mod/games/, into the
       # per-version directory `mod/build.sh` reads by default. That is why
       # nothing here overrides Sts2PinDir or Sts2GameDir.
+      #
+      # This is the one fetch left in the workflow. It is the one thing a job
+      # needs that an image cannot hold. The assemblies are the game's, and they
+      # come from the forge with this run's token.
       - name: Fetch the pinned assemblies
         env:
           STS2_FORGE_TOKEN: ${{ secrets.STS2_FORGE_TOKEN }}
