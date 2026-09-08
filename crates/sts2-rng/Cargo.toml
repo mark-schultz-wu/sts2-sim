@@ -6,7 +6,7 @@ readme = "README.md"
 
 [dependencies]
 # For `Seed`, which is vocabulary rather than algorithm: a client that drives a
-# game names one, and should not compile a PRNG to do it.
+# game names one, and must not compile a PRNG to do it.
 sts2-core = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

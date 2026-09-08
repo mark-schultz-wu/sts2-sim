@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 readme = "README.md"
 
-# One module per game build, each behind a feature: distinct types so two
-# versions can be diffed against each other in one binary, without compiling
-# 578 cards per version when only one is wanted.
+# One module per game build, each behind a feature. The types stay distinct, so
+# one binary can compare two versions. A caller that wants one version does not
+# compile 578 cards for the other.
 [features]
 default = ["v0_107_1"]
 v0_107_1 = []

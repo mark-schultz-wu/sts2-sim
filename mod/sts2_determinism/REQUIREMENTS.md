@@ -16,8 +16,8 @@ its own file, so `H6` never has to be looked up to find out where it lives.
 
 This mod makes the game reproducible. It drives nothing and observes nothing.
 [`sts2_headless`](../sts2_headless/REQUIREMENTS.md) does that, and everything it
-claims rests on this one holding. See [README.md](README.md) for what is
-actually implemented and how much of it is verified.
+claims rests on this one holding. See [README.md](README.md) for what the mod
+implements, and how much of that a check proves.
 
 ## The requirements, and where they live
 
@@ -25,7 +25,7 @@ actually implemented and how much of it is verified.
 |---|---|---|
 | **D1** | Identical inputs produce identical outputs | **here** |
 | **D2** | Refuses to answer for the wrong build | **here** |
-| **D3** | The player's own saves are never touched | **here** |
+| **D3** | Never writes to the player's own saves | **here** |
 | **H1** | A run cannot start without an explicit seed | [headless](../sts2_headless/REQUIREMENTS.md) |
 | **H2** | The legal command set is reported | [headless](../sts2_headless/REQUIREMENTS.md) |
 | **H3** | One command advances exactly one decision | [headless](../sts2_headless/REQUIREMENTS.md) |
@@ -82,9 +82,9 @@ less than they appear to.**
 ## D2 — It refuses to answer for the wrong build
 
 *Built.* `Determinism.Init` hard-stops unless `release_info.json` reports
-`main_assembly_hash: 1692500715` (v0.107.1). Every claim in this file is a claim
-about one build's behaviour, so answering for a different one is worse than not
-answering.
+`main_assembly_hash: 1692500715` (v0.107.1). Every claim in this file describes
+one build's behaviour. So an answer for a different build is worse than no
+answer at all.
 
 The check lives here rather than in the driver because the pin exists to protect
 these claims. `sts2_headless` inherits it. It checks `Determinism.Active` before
@@ -93,7 +93,7 @@ loader guarantees this mod ran first, not that it worked.
 
 ---
 
-## D3 — The player's own saves are never touched
+## D3 — It never writes to the player's own saves
 
 The oracle writes to no real profile and no real save. `SetUpTest` defaults
 `shouldSave: false`. Keep it that way, and confirm nothing else writes.

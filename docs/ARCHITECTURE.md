@@ -155,7 +155,7 @@ after every action.
 ## Seeing the map
 
 `sts2 show map` draws the act. It is a command of its own rather than part of
-every reply, because the map does not change while a fight is being played.
+every reply, because the map does not change during a fight.
 Fifteen rows printed after every card bury the fight.
 
 Which room to enter next is the decision above every other one in a run, and it
@@ -184,7 +184,7 @@ through that build's own tables.
 Three things count as a finding. The game refuses a move the oracle offered, the
 game logs an error while running one, or the game dies. The first is the useful
 one. It means the legality the oracle reports and the legality the game enforces
-have come apart. That is precisely the class of bug a simulator inherits.
+came apart. That is precisely the class of bug that a simulator inherits.
 
 The legal set comes from `cli::moves`, which enumerates what `cli::choose`
 accepts. That shared source is deliberate. A fuzzer with its own idea of
@@ -236,16 +236,16 @@ from there.
 
 `sts2 run start` records by default, to
 `<state dir>/sts2/runs/<seed>-<character>.jsonl`. It is named for the run,
-because that is the question anyone opening the directory is asking. It is
+because that is the question anyone who opens the directory asks. It is
 numbered on repeat, because a second attempt at a seed already kept is
-deliberate. Which run turns out to be worth having is recognised afterwards, and
-one that was not written down cannot be shown to anybody. A few kilobytes is the
+deliberate. You learn which run was worth keeping only afterwards, and
+you cannot show anybody a run that nothing wrote down. A few kilobytes is the
 cheaper side of that trade. `--record FILE` overrides the name, and `--no-record`
 declines.
 
-Replaying is the exception, where writing is always asked for. A bare `replay`
-records nothing and does not touch the file. A command that silently appends to
-a file nobody named is one you have to remember not to run. The file it appends
+A replay is the exception, where the caller always asks for the write. A bare
+`replay` records nothing and does not touch the file. A command that quietly
+appends to a file nobody named is one you have to remember not to run. The file it appends
 to is the one being investigated. On a replay, `--record FILE` says
 where the run goes from here. Name the file being replayed and it is carried on,
 appended to, since the steps just sent are already in it. That also means a
@@ -271,8 +271,8 @@ This was decided the other way first. The obvious arrangement is to keep
 `sts2-content` purely generated and put ported behaviour in the engine, next to
 the code that calls it.
 
-That is wrong, and the reason is versioning. `sts2-content` is version-scoped by
-design, with a feature per build, so two versions can coexist and be diffed.
+That is wrong, and the versions are the reason. `sts2-content` is scoped by
+design, with a feature per build, so two versions can coexist and differ.
 Behaviour living in the engine forces the engine to switch on version, as
 `match (version, card)`. Version-specific behaviour belongs beside
 version-specific tables. The engine stays generic over which version it is
@@ -315,8 +315,8 @@ in every signature that can fail, to carry a diagnostic string nobody matches
 on.
 
 The parameter earns more than typing. `ContentVersion::VERSION` lets
-`Oracle::launch` compare the build it is talking to against the build its tables
-describe, and refuse. So a client physically cannot drive the wrong game. Before
+`Oracle::launch` compare the build at the other end against the build its
+tables describe, and refuse. So a client physically cannot drive the wrong game. Before
 this, that check was the caller's to remember.
 
 The one door around it is `Oracle::send_raw`. The typed API is exhaustive over
@@ -334,10 +334,10 @@ because a person at a terminal has to be able to say which game they mean.
 `STS2_GAME_VERSION` is that setting. `.envrc` exports it, `mod/build.sh`
 compiles the mods against it, `cargo xtask` dumps and generates under it, and
 `sts2` and `sts2-fuzz` drive it. Each binary turns the name into a type in one
-`match`, and everything below that is generic. Adding a build is adding an arm.
+`match`, and everything below that is generic. A new build adds one arm.
 
 A lock under `mod/games/` is the list. `just check` builds every lock, so a
-change that only compiles against the build you have deployed fails. A name with
+change that compiles only against the build you deployed fails. A name with
 no lock is refused rather than assumed.
 
 ### One daemon for each build
@@ -467,7 +467,7 @@ Four layers, each catching what the one before cannot.
    had to be remembered.
 
 2. **The replay.** Each domain's test walks its dump row by row against the
-   generated table. This catches a table that was not regenerated.
+   generated table. This catches a table that nobody regenerated.
 
 3. **Claims about the game.** A replay cannot check something the dump measured
    *inside* the running game. Fourteen encounters roll their roster. Gold moves
@@ -492,9 +492,9 @@ Four layers, each catching what the one before cannot.
    `sts2-headless` exposes the game's `NetFullCombatState` and checksum after
    each executed action, including RNG state. The simulator replays the same
    ordered actions and compares that complete projection at the same cadence.
-   Matching observations at player decisions remains useful, but is too coarse:
-   two implementations can arrive at the same visible prompt with different
-   hidden state and desynchronise on the next action.
+   Matching observations at player decisions remains useful, but too coarse.
+   Two implementations can arrive at the same visible prompt with different
+   hidden state, and then desynchronise on the next action.
 
 ## Dumping technique
 

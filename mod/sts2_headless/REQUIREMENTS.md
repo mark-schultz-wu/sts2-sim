@@ -30,7 +30,7 @@ owns D1, D2 and D3, and this mod refuses to start without it.
 |---|---|---|
 | **D1** | Identical inputs produce identical outputs | [determinism](../sts2_determinism/REQUIREMENTS.md) |
 | **D2** | Refuses to answer for the wrong build | [determinism](../sts2_determinism/REQUIREMENTS.md) |
-| **D3** | The player's own saves are never touched | [determinism](../sts2_determinism/REQUIREMENTS.md) |
+| **D3** | Never writes to the player's own saves | [determinism](../sts2_determinism/REQUIREMENTS.md) |
 | **H1** | A run cannot start without an explicit seed | **here** |
 | **H2** | The legal command set is reported | **here** |
 | **H3** | One command advances exactly one decision | **here** |
@@ -50,8 +50,7 @@ owns D1, D2 and D3, and this mod refuses to start without it.
 
 One process runs the real game, headless, with three mods loaded.
 [`sts2_determinism`](../sts2_determinism/README.md) makes it reproducible. This
-one drives and observes it. A test mod for each is installed only when its suite
-is being run.
+one drives and observes it. The build installs a test mod for each only when its suite runs.
 
 It speaks a line-oriented protocol. Given a scenario, it constructs the state
 and reports an observation. Thereafter the simulator sends one decision, and the
@@ -201,7 +200,7 @@ In all four the suite was wrong and the oracle right. That is the expected ratio
 early on, and the reason each failure was diagnosed rather than assumed to be a
 product bug.
 
-`IsAllowed` is deliberately excluded despite having 55 overrides. It decides
+We deliberately exclude `IsAllowed`, despite its 55 overrides. It decides
 whether a relic can appear in a run at all, not what the legal command set is.
 So there is no observation field for it to move.
 
@@ -215,8 +214,8 @@ merely to pass when it is right:
 | `CanPlay` → energy affordability only | FAIL, 5 → 6 playable |
 | `Restart` uses a different seed per scenario | FAIL, same-map guard, before the widening is compared |
 
-The last one is a mutation of the *test*, not the oracle. It confirms the
-`Flight` case's control is load-bearing rather than decorative.
+The last one is a mutation of the *test*, not the oracle. It confirms that the
+`Flight` case's control does real work.
 
 The suite reads the travelable set and the legal set back out of the emitted
 observation, rather than calling `MapTravel` or `CanPlay` again. A test that
@@ -345,7 +344,7 @@ or exhausts, so it is a combat concern too.
 *`OfferRoomEndRewards` does behave when driven by us*, which was the open risk.
 It is fired from a `CombatManager.CombatWon` subscription, once per process.
 `CombatManager` outlives `CleanUp`, so re-subscribing per run offers every set
-as many times as the process has started runs.
+as many times as the process started runs.
 
 **A race worth recording, because it is the third of its kind.** Rewards are
 applied *after* combat ends, and the readiness test treats "not in combat" as
@@ -358,7 +357,7 @@ which the run looks idle. The flag has to be set where the answer is
 
 Together with H3's turn-transition bug and the map's boss row, all three of this
 project's hardest bugs have one shape. **A state that is legitimately reachable,
-briefly, and indistinguishable from the state we were waiting for.**
+briefly, and indistinguishable from the state that the code wants.**
 
 ### Rest sites, events and shops
 
@@ -385,7 +384,7 @@ this project exists to avoid.
 **The event case is the one that validates the design.** `LET_GO` leads to a
 card selection, so an event option parks a `select_cards` *inside* itself. The
 first attempt awaited `EventSynchronizer.AwaitPendingOptionTasks()` directly,
-and **deadlocked**. The handler was blocked inside the very work that was trying
+and **deadlocked**. The handler stopped inside the very work that had
 to ask the client a question it had no way left to send. Registering the work
 with `BackgroundWork` instead, tracked and never awaited, lets the wait loop
 exit on the pending. The run still does not count as quiescent.
@@ -395,7 +394,7 @@ rather than one more each time. The shape, stated once. **Out of combat, every
 readiness test the driver has is trivially true, so work started outside the
 action queue is invisible to it.**
 
-There have been three more since, all the same shape, and all found by driving
+Three more came since, all the same shape, and all found by driving
 the game rather than by reading it. Those are `choose_option` on `SMITH`, `grant`
 of a relic whose `AfterObtained` parks (Royal Stamp), and `Chest.Pick` of one of
 the ten enchant-on-obtain relics. The fourth is `buy` of a shop's card removal
@@ -419,7 +418,7 @@ work.
 The two are not the same question. `RunManager.WinRun` calls
 `GuaranteeKillAllPlayers`, so `IsGameOver` is true for a win as well as a loss.
 `CurrentRoom.IsVictoryRoom` is what separates them. The observation reports
-`alive`, `runOver` and `victory` (the last only once the run has ended).
+`alive`, `runOver` and `victory` (the last only after the run ends).
 
 ---
 
@@ -436,8 +435,8 @@ underneath is reported (H4), but it is not the command boundary.
 
 *Resolved: quiescence is three phases, and an empty queue alone is wrong.*
 `ActionExecutor.IsRunning` is false and `FinishedExecutingActions()` returns
-`Task.CompletedTask` **both** when the queue has drained and when it has not yet
-picked our action up. Waiting on those alone returns immediately, and lets the
+`Task.CompletedTask` **both** when the queue drains and when it did not yet
+pick our action up. Waiting on those alone returns immediately, and lets the
 caller run ahead of the game. The first driver did exactly that. It reported 300
 decisions in 0.07s while only five actions had actually executed.
 
@@ -459,12 +458,12 @@ The queue is genuinely empty in that gap. Phases 1 and 2 both pass, and the
 oracle reports a state the game is about to leave.
 
 The in-process driver never noticed. It re-read the live model on the next
-iteration, and picked up wherever the game had got to. Over the protocol the
+iteration, and picked up wherever the game got to. Over the protocol the
 observation is authoritative, and the failure became loud immediately. A
 client acting on the returned observation was found a full turn behind the
 oracle. It believed turn 2 while the game was on turn 3, with no command in
-between. It then addressed a card by an index that no longer meant what it had
-meant, and the oracle rejected it.
+between. It then addressed a card by an index that no longer meant what it
+meant before, and the oracle rejected it.
 
 **A stale observation is worse than a missing one**, and this is the sharpest
 illustration of H10 so far. Nothing errored, nothing was defaulted, and the
@@ -538,7 +537,7 @@ combat holding nothing" cannot compare equal.
 36KB observation streams, 22 observations each.
 
 *Not yet in it:* the pending decision's identity, and map coordinates, since
-only act and floor are carried. Nor orbs, because no Defect run has been driven
+only act and floor are carried. Nor orbs, because nobody drove a Defect run
 yet. Nor out-of-combat legality, which is H2's remaining gap.
 
 ---
@@ -570,7 +569,7 @@ The original measurement, 36,410 bytes to 374, was taken over a 22-decision
 fight. The same fight is 17 decisions now that H3's quiescence is correct, so
 the totals moved while the per-step ratio did not.
 
-The full observation is available on demand, via `STS2_HEADLESS_OBS=full` or per
+The full observation is available on demand, with `STS2_HEADLESS_OBS=full` or per
 request. That fallback costs nothing precisely **because D1 holds**, since the
 diverging run replays exactly. Compacting the JSON was the alternative, and it
 is worse. It saves perhaps 40%, and it makes the failure path harder to read,
@@ -592,8 +591,8 @@ hands us the full state alongside the hash, not merely the hash.
 
 *Check.* Perturb one card in the deck out of combat. The digest must change.
 Separately, assert `ChecksumTracker.IsEnabled` is true once a run is set up. It
-defaults to true at construction and is then turned off, so a regression here is
-silent.
+defaults to true at construction, and later code turns it off, so a regression
+here is silent.
 
 ---
 
@@ -621,7 +620,7 @@ Two mechanisms cover it, and neither requires the game to gain a save format.
 **Boundary state.** `RunState.FromSerializable(SerializableRun save)` restores
 players, decks, relics, potions, acts, modifiers, visited map coords, events
 seen, and map point history. Through `RunRngSet.FromSave` it also restores exact
-RNG stream positions. A restored run resumes via
+RNG stream positions. A restored run resumes with
 `RunManager.LoadIntoLatestMapCoord`, so it comes back **at the map**, not inside
 a room.
 
@@ -658,8 +657,8 @@ persistent profile residue D1 and D3 work to avoid.
 
 Injecting a relic into `SerializablePlayer.Relics` produces a state the game
 never produces. Load goes `FromSerializable` → `PopulateRelics` →
-`AddRelicInternal`, and **`AfterObtained()` is never called on that path**. It
-is called only from `RelicCmd`, and from `RunManager.FinalizeStartingRelics`.
+`AddRelicInternal`, and **nothing calls `AfterObtained()` on that path**. Only
+`RelicCmd` and `RunManager.FinalizeStartingRelics` call it.
 
 That is right for loading a save, where the save already reflects the effect. It
 is wrong for injection. `Pear` grants max HP in `AfterObtained`. `PunchDagger`,
@@ -802,7 +801,7 @@ which is why none is specified here.
 Handing the simulator the starting state does not weaken the test. The starting
 state is not what is under test. The transitions are. It is in fact safer than
 having both sides interpret a scenario spec independently. If the observation
-format is missing a field, the simulator defaults it while the oracle has the
+format lacks a field, the simulator defaults it while the oracle holds the
 real value. The comparison then diverges at step one, visibly. Under independent
 interpretation both sides default it, agree, and the gap stays invisible.
 
@@ -833,13 +832,13 @@ public interface ICardSelector    // Core.TestSupport
 }
 ```
 
-It is installed via `CardSelectCmd.UseSelector(selector)`, which keeps a stack
+`CardSelectCmd.UseSelector(selector)` installs it. That call keeps a stack
 and returns an `IDisposable` scope. A prefix of queued actions alone stalls the
 first time a card asks the player to choose. The driver serves both push and
 pull decision points from one ordered script, which is the same boundary H3
 defines.
 
-*Priority: low.* Pile order is not expected to matter for the scenarios we care
+*Priority: low.* We do not expect pile order to matter for the scenarios we care
 about. Build this only when a scenario needs it.
 
 ### Scenarios carry their expected digest
@@ -877,9 +876,8 @@ estimate.
 
 **An earlier "~250 decisions/sec" here was wrong and is withdrawn.** It was
 measured against the quiescence bug H3 now records. The driver returned before
-turn transitions had happened. So it counted decisions issued against stale
-state, at 22 rather than 17 for the same fight. It also skipped the wait it was
-meant to be timing. Correcting quiescence roughly halved the number. The honest
+turn transitions happened. So it counted decisions issued against stale
+state, at 22 rather than 17 for the same fight. It also skipped the wait that it had to time. Correcting quiescence roughly halved the number. The honest
 figure is 132/sec in-process.
 
 For comparison, the game's own `AutoSlayer` caps near ten interactions/sec. But
@@ -895,14 +893,15 @@ callback. So each externally-driven decision waits for a frame boundary that an
 in-process loop does not. Raising the headless frame rate is the obvious lead,
 and it is untried.
 
-At 63/s a hundred-decision combat prefix replays in about 1.6s. That still
+A hundred-decision combat prefix replays in about 1.6 seconds at 63 per
+second. That still
 supports H6 leaning on replay, though less comfortably than the withdrawn number
 suggested.
 
 Scenario turnaround is measured from the two restarts the `Flight` case performs
 (H2). Each is 0.3s, against 0.7s of one-time game load. So a batch of scenarios
 in one process costs roughly two fights' worth of time per scenario boundary.
-That is the number H8 was waiting on, and it favours in-process.
+That is the number H8 wanted, and it favours in-process.
 
 *Still to measure.* A full run rather than one fight, and whether the frame-rate
 lead above recovers the protocol's 2×.
@@ -913,7 +912,7 @@ lead above recovers the protocol's 2×.
 
 Whether the simulator hosts the oracle in-process, or talks to it over a pipe,
 is deferred until H7 has a number. The driving code is the same either way, and
-the switch is cheap. What must not happen is picking now, and discovering later
+the switch is cheap. We must not pick now and discover later
 that the choice cost an order of magnitude.
 
 *Resolved.* `RunManager.SetUpTest` throws if `State != null`. But
@@ -1026,7 +1025,7 @@ the game stopped mid-action, waiting on us:
 
 The first is not an out-of-combat concern at all. A card that discards or
 exhausts on play blocks *inside a single `play_card`*. So this mechanism is
-needed regardless of rooms, and combat is where it is first exercised.
+needed regardless of rooms, and combat exercises it first.
 
 **The shape.** Our selector implementations do not choose. They park:
 
@@ -1055,7 +1054,7 @@ pending intact: an out-of-range index, a repeated index, and a count outside
 `min..max`.
 
 Note the `digest`. A pending point is a legitimate comparison point, because
-both implementations are at "the game is asking which card to discard". So D1
+both implementations are at "the game asks which card to discard". So D1
 and H5 apply to it unchanged. It is *mid-cascade*, which means a simulator must
 model the same interleaving. That is a real constraint on the simulator, and it
 is the point of reporting it rather than hiding it.
@@ -1064,7 +1063,7 @@ is the point of reporting it rather than hiding it.
 client cannot be consulted from inside it. But `testSelector` is async and runs
 first. So the reward pending must ask for the whole choice at once: which
 rewards to take, *and*, for a card reward, which card. The sync callback then
-returns what was already decided:
+returns the earlier decision:
 
 ```json
 {"type":"pending","seq":9,"kind":"rewards","skippable":true,"rewards":[
@@ -1102,7 +1101,7 @@ the *offer* is the game's.
 
 **Waiting for the client is not waiting for the game.** Quiescence's timeout
 bounds exist to catch a wedged engine. They must not fire while a human or a
-simulator is thinking. The design keeps these separate for free. The wait loop
+simulator thinks. The design keeps these separate for free. The wait loop
 *returns* as soon as a pending appears, so the unbounded wait is the client's
 own `ReadLine`, never a bounded loop.
 
@@ -1145,7 +1144,7 @@ descriptor, so the peer disappearing is a single detectable event rather than
 two half-failures. A loopback listener accepts from any local process, so the
 client passes a token the oracle presents as its first line.
 
-Every command above was first exercised by hand over the stdio implementation,
+A person first ran every command above by hand over the stdio implementation,
 before that implementation was removed. Nothing but a human was ever able to
 drive it, for the reason stated.
 
@@ -1172,7 +1171,7 @@ own exceptions and logs them rather than letting them escape. So an action can
 fail completely while the driver watches it complete normally. Granting a card
 to hand without registering it with the `CombatState` made
 `CardModel.OnPlayWrapper` throw `"BURNING_PACT must be added to a CombatState
-before playing it"`. The game swallowed it, the energy was still spent, and the
+before playing it"`. The game swallowed it, still spent the energy, and the
 protocol answered `"resolved": true` with a clean observation. **Nothing in the
 driver's own view was wrong**, so no amount of care in the driver catches it.
 
@@ -1224,7 +1223,7 @@ within a wall-clock budget.
 about the driver never finishing, and that is the case that hurts. When a body
 awaits something that never completes, `Driver.Run`'s `finally` is unreachable,
 and every exit path in this mod is behind it. The process then sits at full tilt
-holding whatever the run had allocated.
+holding whatever the run allocated.
 
 This is not hypothetical. On 2026-08-14 a hung `EveryCharacterCanBeDriven` was
 sent SIGTERM by its supervisor's ten-minute timeout, ignored it, and stayed.
@@ -1242,8 +1241,8 @@ through the scene tree, and a clock that does not go through the driver.
 
 The implementation deliberately uses nothing that can block: `write(2)` to
 stderr and `_exit(2)`, off the main loop. `Log`, `Console` and
-`Environment.Exit` are all reachable only through locks the stuck thread can be
-holding. And `Environment.Exit` has already been observed here never to complete
+`Environment.Exit` are all reachable only through locks that the stuck thread can
+hold. And `Environment.Exit` has already been observed here never to complete
 (see H11).
 
 Not armed when `STS2_HEADLESS_MODE` is unset. That process is somebody's actual
@@ -1281,9 +1280,9 @@ assertions pass and it exits 0.
 
 ## Open questions
 
-1. Does `CleanUp` leave cross-scenario state behind? Narrowed, not closed: two
+1. Does `CleanUp` leave cross-scenario state behind? Narrowed, not closed. Two
    restarts after a heavily-driven first run reproduce its start state and map
-   exactly, but that is one process compared against itself, at run start. (H8)
+   exactly. But that is one process compared against itself, at run start. (H8)
 2. Does each dev console command we depend on work headless, and does it report
    failure rather than no-op silently? **Answered for `fight`, the only one
    adopted so far.** `FightConsoleCmd.Process` runs headless. Neither it nor
@@ -1302,8 +1301,8 @@ assertions pass and it exits 0.
   was built for. Reproducing it deliberately in the selftest produces
   `InvalidOperationException: BURNING_PACT has no owner` straight out through
   the driver instead: loud, and a different failure. Either the path changed or
-  the original account is imprecise. `GameErrors` is therefore tested for its
-  plumbing: captured, handed over once, not twice. It is not tested against a
+  the original account is imprecise. The suite therefore tests `GameErrors` for its
+  plumbing: captured, handed over once, not twice. It does not test against a
   real swallowed failure, because we no longer have one to hand.
 
 - **The `Missing screenShake target!` errors are presentation-only, and are now
@@ -1329,9 +1328,9 @@ assertions pass and it exits 0.
   `NetSingleplayerGameService` every method is an empty body and `IsConnected`
   is hardcoded true, so there is no connection to re-establish. (H8)
 - In-combat card legality is exposed on the model. (H2)
-- **Out-of-combat legality is on the model too, for all four.** Map travel via
-  `NMapScreen`'s rule (mirrored in `MapLegality`). Rest sites go via
-  `RestSiteOption.IsEnabled`, events via `EventOption.IsLocked`, and shops via
+- **Out-of-combat legality is on the model too, for all four.** Map travel uses
+  `NMapScreen`'s rule (mirrored in `MapLegality`). Rest sites use
+  `RestSiteOption.IsEnabled`, events use `EventOption.IsLocked`, and shops use
   `MerchantEntry.EnoughGold` and `IsStocked`. Selection is model-layer
   throughout, and `TestMode.IsOn` makes the screens return null at creation
   rather than needing to be bypassed. Only the combat-reward *trigger* is
@@ -1349,10 +1348,10 @@ assertions pass and it exits 0.
   model layer makes inline fail loudly as `Missing screenShake target!` and are
   caught, and combat runs real turns to completion. A full fight was played
   headless with no run UI at all.
-- A run starts at the model layer in **1.6s** from process launch (0.7s of that
-  is game load, paid once per process), reaching floor 1 on the map with a
+- A run starts at the model layer in **1.6s** from process launch, and 0.7s of
+  that is game load, paid once per process. It reaches floor 1 on the map with a
   correct Ironclad state and `UpFront=411` consumed. (H7)
 - Scenario construction has two mechanisms. `RunState.FromSerializable` covers
   boundary state, and the dev console covers everything else. The debug gate
   admits mods without patching. (H6)
-- A combat save format is not needed, so it is not a requirement. (H6)
+- We do not need a combat save format, so it is not a requirement. (H6)

@@ -1,0 +1,20 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: true
+scope: sentence
+swap:
+  'leverage|utilize': use
+  'in order to': to
+  'prior to': before
+  'ensure': make sure that
+  'simply|just simply|easily|seamlessly': remove this word
+  'robust|powerful|comprehensive': state the measurable property
+  'functionality': function
+  'enables you to|allows you to': you can
+  'is designed to|it is worth noting that': remove this phrase
+  'facilitate': help
+  'delve into': read
+  'under the hood': internally
+  'out of the box': by default
+  'plethora|myriad': many

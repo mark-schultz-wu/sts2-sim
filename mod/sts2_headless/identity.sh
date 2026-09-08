@@ -1,19 +1,19 @@
 #!/bin/sh
 # The mod's identity: a hash of its own source.
 #
-# The greeting carries this and the Rust client refuses a mismatch, which makes
-# "I rebuilt the client but forgot to redeploy the mod" fail at the handshake
-# in two seconds instead of as a decode error four hundred decisions into a fuzz
-# run. The game's build stamp cannot catch that -- redeploying a mod does not
-# move the game's assembly or content hash.
+# The greeting carries this, and the Rust client refuses a mismatch. So "I
+# rebuilt the client but forgot to redeploy the mod" fails at the handshake in
+# two seconds. Otherwise it fails as a decode error four hundred decisions into
+# a fuzz run. The game's build stamp cannot catch that, because a redeployed
+# mod does not move the game's assembly or content hash.
 #
-# One script rather than a hasher in MSBuild and a second in build.rs, because
-# two implementations of "the same hash" are two things that can disagree, and
-# the symptom of disagreeing is that every mod looks stale.
+# One script, rather than one hasher in MSBuild and a second in the Rust build
+# script. Two implementations of "the same hash" are two things that can
+# disagree, and the symptom of a disagreement is that every mod looks stale.
 #
 # Deliberately over-strict: any source edit invalidates a deployed build, even a
-# comment. Narrowing it to the files that shape the wire would mean maintaining
-# a list of them, and that list is what would rot.
+# comment. To narrow it to the files that shape the wire, we must keep a list
+# of them, and that list is the part that rots.
 set -eu
 cd "$(dirname "$0")"
 

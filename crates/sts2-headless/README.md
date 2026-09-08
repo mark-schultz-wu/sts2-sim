@@ -186,7 +186,7 @@ half-written JSON array leaves nothing.
 
 `Session` is the second implementation of `Play` in this crate, with the same
 game behind it. `Oracle` owns a child process and dies with it. A `Session`
-reaches one that a daemon is holding, so `sts2 play-card 0` can be a whole
+reaches one that a daemon holds, so `sts2 play-card 0` can be a whole
 process and still land in a run forty decisions deep.
 
 A front end holds that type and not a socket, because the socket is a fact about

@@ -26,7 +26,7 @@ that mode. `sts2_headless` claims `serve`, and `sts2_headless_test` claims
 `selftest`. All three go through `Driver.Run`, so they bring a run up the same
 way, and differ only in what they do with it.
 
-Exits non-zero on failure, via `Driver.ExitCode`.
+Exits non-zero on failure, through `Driver.ExitCode`.
 
 ## What it checks
 
@@ -92,8 +92,8 @@ PASS asking did not turn the profile's FTUE flag off
 3 passed, 2 failed
 ```
 
-`1788463306` was the current Unix time to the second. A test that has never been
-seen to fail is not evidence. This one has failed.
+`1788463306` was the current Unix time to the second. A test that nobody ever saw
+fail is not evidence. This one did fail.
 
 ## What it does not cover
 

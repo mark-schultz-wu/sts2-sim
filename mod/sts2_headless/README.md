@@ -3,7 +3,7 @@
 A Slay the Spire 2 mod that drives the real game with no renderer and no human.
 It reports what it did over a line-delimited JSON protocol.
 
-Nothing here knows what it is being used *for*. Driving a game and observing the
+Nothing here knows its *purpose*. Driving a game and observing the
 result is the whole job. Checking a reimplementation against it is what the
 client on the other end does.
 
@@ -18,17 +18,17 @@ without it.
 
 **Every C# file in this directory was written by Claude, not by a human.** It has
 not been reviewed line by line. Treat it as an unfamiliar dependency from a
-stranger. It is useful, plausibly correct in the ways it has been tested, and
-not to be trusted beyond that.
+stranger. It is useful, and plausibly correct in the ways the tests cover. Trust it no
+further than that.
 
 This README exists because the usual defence, reading the diff, is not available
 here. So it does not ask you to trust the code. It states plainly what the mod
-touches, and what it deliberately does not. It separates **what has been
-verified** from what was merely intended.
+touches, and what it deliberately does not. It separates **what a check
+proves** from what the author merely intended.
 
 Where a claim below is checked by something automatic, it says so. Where it is
 only an argument from reading the decompiled game, it says that too. Those are
-very different levels of confidence, and the difference is not smoothed over.
+very different levels of confidence, and this file keeps them apart.
 
 ---
 
@@ -43,7 +43,7 @@ exposes that run over a line-delimited JSON protocol on a loopback TCP socket:
 ```
 
 One request, one response. The response is either an observation of the whole
-state, a question the game is waiting on, or an error.
+state, a question that the game waits on, or an error.
 
 ## What it deliberately does **not** do
 
@@ -51,7 +51,7 @@ state, a question the game is waiting on, or an error.
   balance changes. It only reads the game and drives it.
 - **It never chooses a move.** Every decision comes from the client. Where the
   game asks the mod to pick a card, the mod refuses and forwards the question.
-  Where a path is not implemented yet, it throws rather than picking for you.
+  Where a path has no implementation yet, it throws rather than picking for you.
 - **It does not touch your saves.** `SetUpTest(shouldSave: false)`, and modded
   runs get their own profile directory (`user://default/1/modded/profile1`).
   Verified by checksumming the profile directory across a driven run.
@@ -59,7 +59,7 @@ state, a question the game is waiting on, or an error.
   backing the file up to `settings.save.pre-oracle` first.
 - **It does not patch `sts2.dll`.** `ModManager` is a supported extension point,
   so there is no patched binary to re-derive when the game updates.
-- **It is not a gameplay mod and should not be loaded while you play.** It takes
+- **It is not a gameplay mod. Do not load it while you play.** It takes
   over the run as soon as it starts, and quits the process when it finishes.
 
 ## What it changes about how the game behaves
@@ -81,7 +81,7 @@ strictly true. All of it is deliberate, and none of it is hidden:
 build pin and the encounter-RNG patch. This mod refuses to start if that one did
 not activate.
 
-## How much of it is actually verified
+## How much of it a check proves
 
 **Verified by an automatic check, re-run every build:**
 
@@ -106,7 +106,7 @@ combat rewards, rest sites, events, shops, protocol error paths, throughput
 numbers.
 
 **Not verified at all:** anything on another machine, or a full run rather than
-a few rooms. All five characters are now driven through a fight, including the
+a few rooms. A test now drives all five characters through a fight, including the
 Defect, whose orbs the observation reports.
 
 ### Bugs this found — in the oracle, not the game
@@ -145,12 +145,12 @@ new code that starts work outside the action queue must register it with
 cd "$STS2_GAME_DIR" && STS2_HEADLESS_MODE=selftest ./SlayTheSpire2 --headless --force-steam=off
 ```
 
-Modes, via `STS2_HEADLESS_MODE`:
+Modes, selected with `STS2_HEADLESS_MODE`:
 
 | mode | what it does |
 |---|---|
 | *(unset)* | mod loads and does nothing |
-| `selftest` | claimed by `sts2_headless_test`, and does nothing if that mod is not installed |
+| `selftest` | claimed by `sts2_headless_test`, and does nothing without that mod |
 | `serve` | speaks the protocol over the TCP port the client passed in |
 
 Other variables: `STS2_HEADLESS_PORT` (required by `serve`) + `STS2_HEADLESS_TOKEN`,
@@ -218,6 +218,6 @@ connect, the four response types, every command and its arguments, the pendings,
 and the rules about what is accepted when. Read it before writing a client.
 
 [REQUIREMENTS.md](REQUIREMENTS.md) is the standard this is held to. It has twelve
-requirements, H1–H12, each written so it can be failed. It records what has been
-measured, what has not, and what is still an open question. It is long, and it is
-the honest record, including the parts that are not done.
+requirements, H1–H12, each written so it can be failed. It records what we
+measured, what we did not, and what is still an open question. It is long, and
+it is the honest record, including the parts that remain undone.

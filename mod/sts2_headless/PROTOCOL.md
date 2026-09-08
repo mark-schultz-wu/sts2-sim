@@ -49,11 +49,11 @@ Sent unprompted on connect, before any request:
 ```
 
 Every field is read from the running build rather than compiled in as a literal,
-so a client that checks them is checking something. `game`, `commit` and
+so a client that checks them checks something real. `game`, `commit` and
 `assemblyHash` come from the game's own `ReleaseInfo`. A build without one
 reports `"UNRELEASED"`, `"UNKNOWN"` and `0`.
 
-**`mod` says which build of *this mod* is answering**, as the first 8 bytes of a
+**`mod` says which build of *this mod* answers**, as the first 8 bytes of a
 SHA-256 over its own sources. That is `identity.sh`, run by the mod's build and
 by the Rust client's `build.rs`. Both derive it from the same files with the same
 script. A client refuses a mismatch at the handshake.
@@ -61,7 +61,7 @@ script. A client refuses a mismatch at the handshake.
 This is what catches a mod that was edited and never redeployed, and nothing else
 can. The three fields below identify the *game*, and redeploying a mod moves
 neither its assembly nor its content hash. Without it that skew surfaces as a
-decode failure deep in a run, blamed on whatever was being played at the time.
+decode failure deep in a run, blamed on whatever the run played at the time.
 
 It replaces a hand-maintained `protocol` integer, which had the same job and
 needed remembering to bump. Deliberately strict: any source edit invalidates a
@@ -79,7 +79,7 @@ valid, and a `game` string can repeat across builds.
 | `type` | when |
 |---|---|
 | `observation` | the command advanced the game and it is now idle |
-| `pending` | the game has stopped to ask something |
+| `pending` | the game stopped to ask something |
 | `error` | the command was refused; the game did not advance |
 | `fault` | the mod threw handling the command; whether the move was legal is unknown |
 | `bye` | reply to `quit`, and the last line sent |
@@ -93,14 +93,14 @@ valid, and a `game` string can repeat across builds.
 - `seq` increments per observation or pending, never per request.
 - `resolved` is `false` when combat ended mid-cascade and the decision was
   abandoned rather than completed. That is not an error. But a simulator that
-  resolved it fully has diverged, even if the resulting state looks agreeable.
+  resolved it fully diverged, even if the resulting state looks agreeable.
 - `digest` is always present.
 - `state` is the full observation, and arrives only when asked. Ask with
   `"full": true` on the request, or `STS2_HEADLESS_OBS=full` for the whole
   session. It is roughly 2.3KB in a fight. It arrives as a nested object, not a
   string of JSON.
 - `gameErrors` is an array, present only when the game logged errors during the
-  command. It is never suppressed. The command can have half-happened, and only
+  command. The mod never suppresses it. The command can half-happen, and only
   the client can decide whether to trust the state.
 
 #### What a card in hand will do
@@ -127,7 +127,7 @@ than a reimplementation of them.
 - `vars` is those numbers, by the game's own variable names (`Damage`, `Block`,
   `Repeat`, …).
 - `base` is the same map at the card's printed value, upgrades and enchantment
-  included. `vars` and `base` differ exactly when something is modifying the card.
+  included. `vars` and `base` differ exactly when something modifies the card.
 
 One entry per **distinct outcome**. A card that names a single creature is
 previewed against each one it can legally hit, since that is where the numbers
@@ -158,7 +158,7 @@ there is one.
  "points":[{"at":"3,0","type":"Ancient","to":["2,1","4,1"]}]}
 ```
 
-- `at` and `visited` are where the run stands and where it has been.
+- `at` and `visited` are where the run stands and where it went.
 - `travelable` is where it can step **now**. This depends on the run, not only on
   the map: free travel (`Winged Boots`) widens it to a whole row.
 - `points` is the shape of the act, which does not change as it is played. Every
@@ -166,7 +166,7 @@ there is one.
 - `proceed` is true when the act is behind the run and the `proceed` command is
   the move. An act's boss has no onward node, so `travelable` is correctly empty
   once it is beaten. Without this field a finished act is indistinguishable from
-  a run that has stopped.
+  a run that stopped.
 
 Edges are `MapPoint.Children` verbatim, the same set `NMapScreen.DrawPaths` draws
 its lines from. So a picture built from `points` is the picture the game shows.
@@ -174,7 +174,7 @@ its lines from. So a picture built from `points` is the picture the game shows.
 The boss, the second boss and the starting node are **not in `Grid`**, so
 `GetAllMapPoints` never yields them. They are added by hand. This is the same
 trap described under map legality, and it bites late. An act reads correctly for
-fifteen floors and then ends at a node that was never reported.
+fifteen floors and then ends at a node that the field never reported.
 
 #### A shop can offer what it will not sell
 
@@ -189,7 +189,7 @@ the state is the belt's size, which `potions` alone cannot imply because relics
 change it.
 
 The remaining way a potion can be refused is `Hook.ShouldProcurePotion`, which
-cannot be answered without running it and so is not reported.
+the mod cannot answer without running it, and so does not report.
 
 #### The belt says what can be drunk, and the collection says what it does
 
@@ -241,8 +241,8 @@ tips format them, through `RelicModel.DynamicDescription` and
 `PotionModel.DynamicDescription`. That formatting is not a nicety. A relic that
 counts prints its count, and rendering the string without the variables throws
 rather than returning the raw text. It also means the prose is genuinely run
-state and not build data. The same relic reads differently once its counter has
-moved, which is why it is reported here rather than dumped into a table.
+state and not build data. The same relic reads differently once its counter
+moves, which is why it is reported here rather than dumped into a table.
 
 `title` and `text` are absent, not defaulted, where the localisation table has no
 key. That is a fault in the build rather than a name a client invents.
@@ -262,8 +262,8 @@ sentence once, and a sentence cannot be compared. Two implementations refusing
 the same move for the same reason had to agree on English before they were seen
 to agree at all. The prose is the client's, written once from these fields.
 
-Every field is a fact the client already has, out of the observation it was
-acting on. That is an index and a count, a coordinate, a card id, or the numbers
+Every field is a fact the client already has, out of the observation that it
+acted on. That is an index and a count, a coordinate, a card id, or the numbers
 a purchase turned on. It is what makes a refusal checkable rather than merely
 informative. It is also why a refusal never restates the legal set. The
 observation already carried it, and a second copy is free to disagree with the
@@ -304,8 +304,8 @@ game.
 | cmd | arguments |
 |---|---|
 | `start` | `seed`, `character`, `ascension` — a level name such as `DeadlyEnemies` or a number, default `0`, matched case-insensitively; `modifiers` — an array of modifier entry names, matched case-insensitively |
-| `fight` | `encounter` — a model entry name, e.g. `BOWLBUGS_WEAK` |
-| `event` | `event` — a model entry name, e.g. `CRYSTAL_SPHERE` |
+| `fight` | `encounter` — a model entry name such as `BOWLBUGS_WEAK` |
+| `event` | `event` — a model entry name such as `CRYSTAL_SPHERE` |
 | `enter_room` | `type` — a `RoomType` name, case-insensitive |
 | `travel` | `col`, `row` — integers |
 | `play_card` | `index` — into the hand; `target` — a creature's `CombatId`, or absent |
@@ -313,7 +313,7 @@ game.
 | `use_potion` | `index` — into the belt as `potions` reports it; `target` — a creature's `CombatId`, or absent |
 | `choose_option` | `index` — into the options the last observation reported |
 | `buy` | `index` — into the shop entries |
-| `grant` | `card`, `relic` or `potion` — one entry name each, and all three may be sent at once. May park a question: see below |
+| `grant` | `card`, `relic` or `potion` — one entry name each, and one command can carry all three. It can park a question: see below |
 | `answer` | see below; shape depends on the pending |
 | `observe` | — |
 | `quit` | — |
@@ -366,7 +366,7 @@ to it. That was 515 recorded steps, in the case that made this necessary.
 
 ## Pendings
 
-A `pending` reports that the game has stopped mid-action to ask something. It
+A `pending` reports that the game stopped mid-action to ask something. It
 replaces the reply to whatever command was issued.
 
 ### select_cards
@@ -383,7 +383,7 @@ receives only options and bounds. So this is the best attribution available, and
 it is labelled as such rather than dressed up.
 
 `text` is the card's rules text with its own numbers in it, straight out of the
-game's localisation tables. Combat hooks are **not** applied. This is what the
+game's localisation tables. The mod does **not** apply combat hooks. This is what the
 card does in general, which is the question a selection prompt asks. It carries
 the game's own markup (`[gold]Block[/gold]`, `[img]…[/img]`), which is a
 display's problem rather than the protocol's.
@@ -410,7 +410,7 @@ screen and sends the clicks here instead.
 
 `cleared` lists the cells already uncovered rather than the hidden ones. Hidden
 is the starting state of all `width * height` of them, so the short list is the
-one that says something. `revealed` is what the divinations have turned up so
+one that says something. `revealed` is what the divinations turned up so
 far, and `good` is false for a curse.
 
 Answer with a cell and a tool: `{"cmd":"answer","divine":{"x":3,"y":7,"tool":"Big"}}`.
@@ -418,7 +418,7 @@ Answer with a cell and a tool: `{"cmd":"answer","divine":{"x":3,"y":7,"tool":"Bi
 divination, so `Big` is a gamble and not a saving. A cell off the grid or already
 uncovered is refused, and the question survives the refusal.
 
-The game's `CrystalSphereToolType` has a third member, `None`. It is not accepted:
+The game's `CrystalSphereToolType` has a third member, `None`. The mod refuses it, because
 `CellClicked` tests only for `Big`, so `None` and `Small` are one move under two
 names.
 

@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 readme = "README.md"
 
-# Tools that drive the game, kept out of the library so that `sts2-headless`
-# stays a transport with no opinion about how it is used — and so a second
-# front end (a TUI, say) is a sibling here rather than a fork of it.
+# Tools that drive the game, kept out of the library. So `sts2-headless` stays
+# a transport with no opinion about its callers. A second front end, such as a
+# TUI, is then a sibling here rather than a fork of it.
 #
 # These are binaries rather than examples because they are used, not read.
 # `sts2-headless/examples/scenario.rs` stays an example: its job is to be read.
