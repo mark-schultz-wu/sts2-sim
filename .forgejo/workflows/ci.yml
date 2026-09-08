@@ -29,7 +29,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check out the repository
+        # `vale-lint.py --commits` reads the commits between the base and this
+        # branch, so this job needs the complete history.
         uses: https://data.forgejo.org/actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Check the toolchain is the one the image should bake
         run: |
@@ -53,8 +57,18 @@ jobs:
           done
           cargo test -p sts2-content --features "${features#,}"
 
-      - name: Lint prose
+      - name: Lint prose structure
         run: ./tools/prose-lint.py
+
+      # The whole repository, not only the lines this branch changed. The rules
+      # hold everywhere, so a file that no commit here touches still has to
+      # pass. `--self-test` runs first, because a rule that matches nothing
+      # reports a clean repository for the wrong reason.
+      - name: Lint prose style
+        run: |
+          ./tools/vale-lint.py --self-test
+          ./tools/vale-lint.py
+          ./tools/vale-lint.py --commits
 
       - name: Lint Rust
         run: cargo clippy --workspace --all-targets -- -D warnings

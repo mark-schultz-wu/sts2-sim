@@ -16,6 +16,8 @@ FROM ghcr.io/catthehacker/ubuntu:act-22.04
 # them must fail rather than bake a surprise.
 ARG RUST_VERSION
 ARG DOTNET_CHANNEL
+ARG VALE_VERSION
+ARG VALE_SHA256
 ARG GAME_VERSION
 ARG STS2_CI_DIGEST
 
@@ -64,6 +66,21 @@ RUN set -euo pipefail; \
       https://just.systems/install.sh \
       | bash -s -- --to /usr/local/bin
 
+# The prose linter. A tag on a release can move, so the build checks the bytes
+# it got against the checksum that `versions.env` names.
+RUN set -euo pipefail; \
+    test -n "$VALE_VERSION"; \
+    test -n "$VALE_SHA256"; \
+    archive=/tmp/vale.tar.gz; \
+    curl --proto '=https' --tlsv1.2 -fsSL \
+      --retry 8 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 15 --max-time 300 \
+      -o "$archive" \
+      "https://github.com/vale-cli/vale/releases/download/v$VALE_VERSION/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"; \
+    echo "$VALE_SHA256  $archive" | sha256sum -c -; \
+    tar -xzf "$archive" -C /usr/local/bin vale; \
+    rm "$archive"
+
 # `golden` needs a complete game installation. Fetch it once while building
 # the machine-local image rather than spending roughly four minutes per job.
 # The package token is a BuildKit secret and never enters an image layer.
@@ -98,6 +115,7 @@ RUN set -euo pipefail; \
     rustup target list --installed | grep -qx wasm32-unknown-unknown; \
     case "$(dotnet --version)" in "$DOTNET_CHANNEL".*) ;; *) exit 1 ;; esac; \
     just --version; \
+    test "$(vale --version | grep -o '[0-9.]*$')" = "$VALE_VERSION"; \
     python3 --version; \
     test -n "$STS2_CI_DIGEST"; \
     echo "$STS2_CI_DIGEST" > /etc/sts2-ci.digest

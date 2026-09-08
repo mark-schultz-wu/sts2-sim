@@ -1,0 +1,49 @@
+name: Prose
+
+# A pull request description is prose that no commit holds, so the linter in
+# the CI workflow never reads it. This workflow reads the description from the
+# event payload and applies the same rules.
+#
+# The `edited` type is why this workflow is separate. A description changes
+# more often than the code, and the jobs in `ci.yml` take minutes. Those jobs
+# must not run again when a person only corrects a word.
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+
+jobs:
+  description:
+    runs-on: sts2
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: https://data.forgejo.org/actions/checkout@v6
+
+      - name: Check the image digest
+        run: |
+          set -euo pipefail
+          test "$(cat /etc/sts2-ci.digest)" = "$(.forgejo/runner/digest.sh)"
+
+      # The payload holds the description. Reading it needs no token, and it
+      # reports the text that the author sees now, not the text at the last
+      # push. The reader fails when the payload holds no description field,
+      # because an empty read must not pass as clean prose.
+      - name: Lint the pull request description
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | ./tools/vale-lint.py --stdin "pull request #${{ github.event.number }}"
+          import json
+          import os
+          import sys
+
+          path = os.environ.get("GITHUB_EVENT_PATH")
+          if not path:
+              sys.exit("the runner set no GITHUB_EVENT_PATH")
+          event = json.load(open(path, encoding="utf-8"))
+          request = event.get("pull_request")
+          if request is None:
+              sys.exit("the event payload holds no pull_request")
+          if "body" not in request:
+              sys.exit("the event payload holds no description field")
+          sys.stdout.write(request["body"] or "")
+          PY

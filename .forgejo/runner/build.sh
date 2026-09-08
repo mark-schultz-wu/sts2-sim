@@ -22,6 +22,8 @@ source "$here/versions.env"
 
 : "${RUST_VERSION:?versions.env must set RUST_VERSION}"
 : "${DOTNET_CHANNEL:?versions.env must set DOTNET_CHANNEL}"
+: "${VALE_VERSION:?versions.env must set VALE_VERSION}"
+: "${VALE_SHA256:?versions.env must set VALE_SHA256}"
 : "${GAME_VERSION:?versions.env must set GAME_VERSION}"
 
 token_file="${STS2_FORGE_TOKEN_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/sts2/token}"
@@ -55,6 +57,8 @@ DOCKER_BUILDKIT=1 docker build \
   --secret "id=forge_token,src=$token_file" \
   --build-arg "RUST_VERSION=$RUST_VERSION" \
   --build-arg "DOTNET_CHANNEL=$DOTNET_CHANNEL" \
+  --build-arg "VALE_VERSION=$VALE_VERSION" \
+  --build-arg "VALE_SHA256=$VALE_SHA256" \
   --build-arg "GAME_VERSION=$GAME_VERSION" \
   --build-arg "STS2_CI_DIGEST=$digest" \
   --tag "$tag" \
@@ -65,6 +69,6 @@ DOCKER_BUILDKIT=1 docker build \
 echo
 echo "built $tag  digest $digest"
 docker run --rm "$tag" bash -lc '
-  cargo --version; rustc --version; dotnet --version; just --version
+  cargo --version; rustc --version; dotnet --version; just --version; vale --version
   echo "game: $(cat "$XDG_DATA_HOME/sts2/games/'"$GAME_VERSION"'/.pinned-version")"
   echo "digest: $(cat /etc/sts2-ci.digest)"'
