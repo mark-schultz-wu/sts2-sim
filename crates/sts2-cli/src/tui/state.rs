@@ -16,11 +16,6 @@ pub struct Options {
     pub recording: Option<PathBuf>,
     /// Show the RNG stream counters, as `--rng` does for the subcommands.
     pub rng: bool,
-    /// Open on the setup screen rather than on whatever the game is holding.
-    ///
-    /// Set when no daemon was running. Asking a newly launched game is too late:
-    /// it already reports a Neow screen for a run nobody configured.
-    pub fresh: bool,
 }
 
 /// Which pile the pile viewer is showing.

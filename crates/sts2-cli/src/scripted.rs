@@ -10,7 +10,7 @@
 
 use std::collections::VecDeque;
 
-use sts2_core::{Answered, Applied, Construct, ContentVersion, Decision, Play, Setup};
+use sts2_core::{Answered, Applied, Construct, ContentVersion, Decision, Play, Setup, Start};
 
 use crate::tui::check::Sent;
 
@@ -100,6 +100,18 @@ impl<V: ContentVersion> Scripted<V> {
 }
 
 impl<V: ContentVersion> Play<V> for Scripted<V> {
+    /// Itself. A script is what it is before a run starts, and starting one
+    /// changes nothing about what it will say.
+    type Host = Scripted<V>;
+
+    fn begin(mut host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
+        host.sent.note_start(start);
+        // The script's answer to starting is consumed, not read: a run that
+        // did not start is a fault, and a scripted game has no socket to lose.
+        let _ = host.next("start a run");
+        Ok(host)
+    }
+
     type Error = std::convert::Infallible;
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {

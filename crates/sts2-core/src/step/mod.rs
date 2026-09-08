@@ -2,6 +2,11 @@
 //!
 //! Split three ways, and the split is the point rather than tidiness.
 //!
+//! A [`Start`] is what a run needs before there is anything to decide. It is
+//! not a `Decision`, because it is not a move a player makes: it is the thing
+//! that makes a run exist. [`Play::begin`](crate::Play::begin) takes it, and
+//! nothing else does.
+//!
 //! A [`Decision`] is something a player does sitting at the game: play a card,
 //! take a rest site option, travel.
 //!
@@ -22,6 +27,7 @@
 pub mod answer;
 pub mod decision;
 pub mod setup;
+pub mod start;
 
 use crate::ContentVersion;
 use crate::{Decision, Setup};

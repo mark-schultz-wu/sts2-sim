@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use crate::{Answered, Construct, ContentVersion, Decision, Play, Recording, Setup, Step};
+use crate::{Answered, Construct, ContentVersion, Decision, Play, Recording, Setup, Start, Step};
 
 /// Somewhere a run is written down, one step at a time.
 ///
@@ -129,6 +129,17 @@ where
     T: Tape<V>,
 {
     type Error = G::Error;
+
+    /// What the game underneath needs, and the tape to write it to.
+    ///
+    /// The tape is built by the caller, who is holding the [`Start`] anyway.
+    /// So a tape that names the run it records needs nothing from here.
+    type Host = (G::Host, T);
+
+    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
+        let (inner, tape) = host;
+        Ok(Recorder::new(G::begin(inner, start)?, tape))
+    }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
         let outcome = self.inner.play(decision);

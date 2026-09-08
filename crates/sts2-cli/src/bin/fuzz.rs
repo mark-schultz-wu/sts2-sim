@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use sts2_cli::cli::moves;
 use sts2_cli::coverage::Coverage;
 use sts2_core::ContentVersion;
-use sts2_core::{Applied, Construct, Decision, Gift, Setup, Step};
+use sts2_core::{Applied, Construct, Gift, Play, Setup, Start, Step};
 use sts2_headless::{Config, Oracle, recording};
 use sts2_rng::{Seed, Seeding};
 
@@ -118,7 +118,15 @@ fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
         .context("set STS2_GAME_DIR to the game directory (`just fuzz` does this)")?;
     let mut config = Config::new(dir);
     config.inherit_game_output = cli.game_output;
-    let mut game = Oracle::<V>::launch(config).context("launching the game")?;
+    let start = Start {
+        seed: seed.clone(),
+        character,
+        ascension,
+        modifiers: vec![],
+    };
+    // The run is begun with the game, because a simulator or an oracle without
+    // one is not something to fuzz.
+    let mut game = Oracle::<V>::begin(config, &start).context("launching the game")?;
 
     // The seed decides the run. This decides which of the legal moves gets
     // taken. Derived from it so a session is reproducible from its name alone,
@@ -133,17 +141,12 @@ fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
     let mut cover = Coverage::default();
     cover.started::<V>(character);
 
-    let mut applied = send(
-        &mut game,
-        &mut tape,
-        &Decision::Start {
-            seed,
-            character,
-            ascension,
-            modifiers: vec![],
-        }
-        .into(),
-    )?;
+    // The start is the recording's first line, and it happened above.
+    recording::began(&mut tape, &start)?;
+    let mut applied = match game.observe().context("the game stopped answering")? {
+        Ok(applied) => applied,
+        Err(refusal) => anyhow::bail!("the game refused to report the run: {refusal}"),
+    };
     cover.saw(&applied);
 
     for _ in 0..cli.stack {

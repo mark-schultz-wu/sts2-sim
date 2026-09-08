@@ -13,7 +13,9 @@ use clap::{Args, Subcommand};
 use nonmax::NonMaxU32;
 use std::path::Path;
 use sts2_core::ContentVersion;
-use sts2_core::{Answer as GameAnswer, Coord, Decision, Gift, Setup, Step, TakeReward, Tool};
+use sts2_core::{
+    Answer as GameAnswer, Coord, Decision, Gift, Setup, Start, Step, TakeReward, Tool,
+};
 use sts2_rng::Seed;
 
 /// An ascension level by the game's own name for it, such as `None`.
@@ -66,6 +68,23 @@ pub struct StartArgs {
 }
 
 impl StartArgs {
+    /// The typed run this command line asks to start.
+    pub fn start<V: ContentVersion>(&self) -> Result<Start<V>> {
+        Ok(Start {
+            seed: Seed::fold(&self.seed).context("that is not a seed")?,
+            character: id("character", &self.character)?,
+            ascension: match &self.ascension {
+                Some(level) => id("ascension level", level)?,
+                None => id("ascension level", "None")?,
+            },
+            modifiers: self
+                .modifiers
+                .iter()
+                .map(|modifier| id("modifier", modifier))
+                .collect::<Result<_>>()?,
+        })
+    }
+
     /// Where this run gets written, if it does.
     ///
     /// Recording is the default because a valuable run is recognized only
@@ -198,8 +217,6 @@ pub enum Answering {
 
 #[derive(Debug, Subcommand)]
 pub enum Play {
-    /// Begins a run, launching the game if it is not already up.
-    Start(StartArgs),
     /// Jumps straight into a named encounter, off the map.
     Fight {
         /// An encounter id, such as `BOWLBUGS_WEAK`.
@@ -265,31 +282,12 @@ pub enum Play {
         #[arg(long)]
         potion: Option<String>,
     },
-    /// Asks for the current state without changing anything.
-    Observe,
 }
 
 impl Play {
-    /// The step this asks for, or `None` for one a run is not made of.
-    ///
-    /// `observe` is the only `None`: it reports state without advancing, so it
-    /// is a command the protocol has and [`sts2_core::Decision`] does not.
-    pub fn step<V: ContentVersion>(&self) -> Result<Option<Step<V>>> {
-        Ok(Some(match self {
-            Play::Start(a) => Decision::Start {
-                seed: Seed::fold(&a.seed).context("that is not a seed")?,
-                character: id("character", &a.character)?,
-                ascension: match &a.ascension {
-                    Some(level) => id("ascension level", level)?,
-                    None => id("ascension level", "None")?,
-                },
-                modifiers: a
-                    .modifiers
-                    .iter()
-                    .map(|m| id("modifier", m))
-                    .collect::<Result<_>>()?,
-            }
-            .into(),
+    /// The step this asks for.
+    pub fn step<V: ContentVersion>(&self) -> Result<Step<V>> {
+        Ok(match self {
             Play::Fight { encounter } => Setup::Fight {
                 encounter: id("encounter", encounter)?,
             }
@@ -354,7 +352,6 @@ impl Play {
                 }
             })
             .into(),
-            Play::Observe => return Ok(None),
-        }))
+        })
     }
 }

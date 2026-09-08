@@ -12,28 +12,18 @@
 use crate::Answer;
 use crate::ContentVersion;
 use crate::Coord;
-use crate::Seed;
 use nonmax::NonMaxU32;
 
 /// One decision in a run.
 ///
-/// Two commands the real game accepts are absent. `observe` reports state
-/// without advancing, and a deterministic game between commands cannot answer
-/// it twice differently. `quit` ends the session, not the run, so it is `Drop`
-/// on an implementation.
+/// Three commands the real game accepts are absent. `start` is not a move
+/// within a run, so it is [`Start`](crate::Start) and reaches an implementation
+/// through [`Play::begin`](crate::Play::begin). `observe` reports state without
+/// advancing, and a deterministic game between commands cannot answer it twice
+/// differently. `quit` ends the session, not the run, so it is `Drop` on an
+/// implementation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decision<V: ContentVersion> {
-    /// Starts a fresh run.
-    ///
-    /// Not a move within a run, which is the honest objection to its being here.
-    /// It stays because it keeps a recording uniform, every line being a
-    /// `Step`, and [`crate::Play`] one method wide.
-    Start {
-        seed: Seed,
-        character: V::Character,
-        ascension: V::AscensionLevel,
-        modifiers: Vec<V::Modifier>,
-    },
     EnterRoom {
         room: V::RoomType,
     },

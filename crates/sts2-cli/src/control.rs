@@ -22,6 +22,8 @@ use crate::cli::{Taking, choose};
 pub enum Command {
     /// One step, as a command line spells it.
     Step(crate::cli::Play),
+    /// The current state, without changing it.
+    Observe,
     /// A numbered option, whichever mechanism the game is asking through.
     Choose(Vec<Taking>),
     /// The act, drawn.
@@ -84,11 +86,8 @@ where
             Ok(Outcome::Seen(Box::new(send(game, &decision.into())?)))
         }
 
-        Command::Step(play) => match play.step::<V>()? {
-            Some(step) => Ok(Outcome::Seen(Box::new(send(game, &step)?))),
-            // `observe` reads as a command and is not a step in the run.
-            None => Ok(Outcome::Seen(Box::new(look(game)?))),
-        },
+        Command::Step(play) => Ok(Outcome::Seen(Box::new(send(game, &play.step::<V>()?)?))),
+        Command::Observe => Ok(Outcome::Seen(Box::new(look(game)?))),
     }
 }
 
@@ -205,7 +204,7 @@ mod tests {
         let mut game = Scripted::saying(plain());
         let sent = game.sent();
 
-        let outcome = perform(&mut game, &Command::Step(crate::cli::Play::Observe)).unwrap();
+        let outcome = perform(&mut game, &Command::Observe).unwrap();
 
         assert!(matches!(outcome, Outcome::Seen(_)));
         assert_eq!(game.looked(), 1);

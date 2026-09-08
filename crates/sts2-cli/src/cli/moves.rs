@@ -277,7 +277,6 @@ pub fn describe<V: ContentVersion>(decision: &Decision<V>) -> String {
             None => "took nothing".into(),
         },
         Decision::Answer(Answer::Divine { x, y, .. }) => format!("divined {x},{y}"),
-        Decision::Start { seed, .. } => format!("started {}", seed.as_str()),
         Decision::EnterRoom { room } => format!("entered {}", crate::render::spelling(room)),
     }
 }

@@ -14,7 +14,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeMap};
 use sts2_core::ContentVersion;
 use sts2_core::Seed;
-use sts2_core::{Answer, Coord, Decision, Gift, Setup, Step, TakeReward, Tool};
+use sts2_core::{Answer, Coord, Decision, Gift, Setup, Start, Step, TakeReward, Tool};
 
 /// One request, in the protocol's own shape.
 ///
@@ -84,20 +84,21 @@ pub enum Command<V: ContentVersion> {
     Quit,
 }
 
+impl<V: ContentVersion> From<&Start<V>> for Command<V> {
+    /// The one command that is not a decision. See [`sts2_core::Start`].
+    fn from(s: &Start<V>) -> Self {
+        Self::Start {
+            seed: s.seed.clone(),
+            character: s.character,
+            ascension: s.ascension,
+            modifiers: s.modifiers.clone(),
+        }
+    }
+}
+
 impl<V: ContentVersion> From<&Decision<V>> for Command<V> {
     fn from(d: &Decision<V>) -> Self {
         match d {
-            Decision::Start {
-                seed,
-                character,
-                ascension,
-                modifiers,
-            } => Self::Start {
-                seed: seed.clone(),
-                character: *character,
-                ascension: *ascension,
-                modifiers: modifiers.clone(),
-            },
             Decision::EnterRoom { room } => Self::EnterRoom { room: *room },
             Decision::Travel { to } => Self::Travel {
                 col: to.col,
@@ -142,25 +143,37 @@ impl<V: ContentVersion> From<&Step<V>> for Command<V> {
 }
 
 impl<V: ContentVersion> Command<V> {
-    /// The step this is, for a command read back off disk.
+    /// The run this starts, for the first line of a recording.
     ///
-    /// `None` for `observe` and `quit`, which are not steps in a run. The
-    /// daemon has always filtered them out of recordings, and this is that rule
-    /// where the types can see it.
-    pub fn into_step(self) -> Option<Step<V>> {
-        Some(match self {
+    /// `None` for everything else, which is every command that needs a run to
+    /// already be there.
+    pub fn into_start(self) -> Option<Start<V>> {
+        match self {
             Self::Start {
                 seed,
                 character,
                 ascension,
                 modifiers,
-            } => Decision::Start {
+            } => Some(Start {
                 seed,
                 character,
                 ascension,
                 modifiers,
-            }
-            .into(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// The step this is, for a command read back off disk.
+    ///
+    /// `None` for `start`, which makes the run rather than moving it, and for
+    /// `observe` and `quit`, which are not steps in a run. The daemon has
+    /// always filtered the last two out of recordings, and this is that rule
+    /// where the types can see it.
+    pub fn into_step(self) -> Option<Step<V>> {
+        Some(match self {
+            // Not a step. `into_start` is what reads one.
+            Self::Start { .. } => return None,
             Self::EnterRoom { room } => Decision::EnterRoom { room }.into(),
             Self::Travel { col, row } => Decision::Travel {
                 to: Coord::new(col, row),
@@ -446,10 +459,15 @@ mod tests {
         to_value(Wire::from(&step)).expect("a step serializes")
     }
 
+    /// The one command that is not a step. See [`sts2_core::Start`].
+    fn wire_start(start: &Start<V>) -> serde_json::Value {
+        to_value(Wire::from(start)).expect("a start serializes")
+    }
+
     #[test]
     fn the_typed_ids_reach_the_wire_as_the_games_own_spellings() {
         assert_eq!(
-            wire(Decision::Start {
+            wire_start(&Start {
                 seed: Seed::new("ABC").expect("a seed"),
                 character: Character::Silent,
                 ascension: AscensionLevel::AscendersBane,
@@ -555,20 +573,6 @@ mod tests {
     #[test]
     fn every_step_round_trips_through_the_wire_and_back() {
         let steps: Vec<Step<V>> = vec![
-            Decision::Start {
-                seed: Seed::new("SP1RE1").expect("a seed"),
-                character: Character::Ironclad,
-                ascension: AscensionLevel::None,
-                modifiers: vec![],
-            }
-            .into(),
-            Decision::Start {
-                seed: Seed::new("ABC").expect("a seed"),
-                character: Character::Silent,
-                ascension: AscensionLevel::AscendersBane,
-                modifiers: vec![Modifier::Draft],
-            }
-            .into(),
             Decision::EnterRoom {
                 room: RoomType::Shop,
             }

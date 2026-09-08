@@ -11,14 +11,14 @@
 
 use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
     Answer, Applied, ContentVersion, Cost, Decision, Observation, Play, Question, Room, TakeReward,
 };
 
 use super::keys::{self, Action};
 use super::screen;
-use super::state::{Aim, NewRun, Options, Overlay, Pile, SEED_MAX, Tone, Ui};
+use super::state::{Aim, Options, Overlay, Pile, Tone, Ui};
 use crate::cli::{choose, moves};
 use crate::render::{self, Amount, Pool};
 
@@ -59,15 +59,7 @@ pub enum Intent<V: ContentVersion> {
     Look,
     /// One decision, sent as a move in the run.
     Send(Decision<V>),
-    /// The run the setup screen describes.
-    ///
-    /// Its own variant because the screen it came from waits on the answer. It
-    /// closes when the game accepts the run. It stays up, with the reason on
-    /// it, when the game does not.
-    Begin(Decision<V>),
 }
-
-type BeforeBegin<V> = dyn FnMut(&Decision<V>) -> Result<()>;
 
 /// What a card costs, spelled out for a panel with room for words.
 ///
@@ -97,9 +89,20 @@ fn priced(energy: Cost, stars: Cost) -> String {
     }
 }
 
+/// Why the screen stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ended {
+    /// The player left.
+    Quit,
+    /// The game says it is holding no run. The daemon's can idle out from
+    /// under a live screen, and what wants drawing then is the setup screen.
+    NoRun,
+}
+
 pub struct App<V: ContentVersion, G: Play<V>> {
     game: G,
-    before_begin: Option<Box<BeforeBegin<V>>>,
+    /// Why the loop will stop, read once it has.
+    ended: Ended,
     /// The most recent thing the game said. `None` only before the first look.
     seen: Option<Applied<V>>,
     stage: Stage,
@@ -107,7 +110,6 @@ pub struct App<V: ContentVersion, G: Play<V>> {
     ///
     /// Nothing else on the screen is drawn while this is `Some`: there is no
     /// observation behind it to draw.
-    starting: Option<NewRun>,
     pub ui: Ui,
     pub options: Options,
 }
@@ -118,27 +120,19 @@ where
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    pub fn new(game: G, options: Options) -> App<V, G> {
+    /// A screen in front of a run.
+    ///
+    /// The only kind there is. Starting one is [`super::setup`]'s, and it has
+    /// happened by the time this exists.
+    pub fn playing(game: G, options: Options) -> App<V, G> {
         App {
             game,
-            before_begin: None,
+            ended: Ended::Quit,
             seen: None,
             stage: Stage::Nothing,
-            starting: options.fresh.then(NewRun::default),
             ui: Ui::default(),
             options,
         }
-    }
-
-    /// Adds work that must succeed before a new run is sent to the game.
-    ///
-    /// The daemon opens its recording here, so `Start` is the first step.
-    pub fn before_begin(
-        mut self,
-        before: impl FnMut(&Decision<V>) -> Result<()> + 'static,
-    ) -> Self {
-        self.before_begin = Some(Box::new(before));
-        self
     }
 
     /// What the game last said, for the screens to draw.
@@ -168,9 +162,7 @@ where
 
     /// One key press.
     ///
-    /// Raw rather than an [`Action`], because the setup screen is the one place
-    /// a letter means a letter. `k` is a seed character there and "move up"
-    /// everywhere else, and nothing in the key table tells those apart.
+    /// Raw rather than an [`Action`], for a caller that has one.
     pub fn key(&mut self, key: KeyEvent) -> Result<()> {
         let intent = self.decide(key);
         self.perform(intent)
@@ -182,9 +174,6 @@ where
     /// fail. Asking the game is [`App::perform`]'s, and happens after the
     /// screen has finished changing.
     pub fn decide(&mut self, key: KeyEvent) -> Intent<V> {
-        if self.starting.is_some() {
-            return self.in_new_run(key);
-        }
         match keys::map(key) {
             Some(action) => self.act(action),
             None => Intent::Nothing,
@@ -200,35 +189,18 @@ where
             Intent::Nothing => Ok(()),
             Intent::Look => self.look(),
             Intent::Send(decision) => self.send(decision).map(drop),
-            Intent::Begin(decision) => {
-                if let Some(before) = self.before_begin.as_mut() {
-                    before(&decision)?;
-                }
-                // The setup screen closes once the game has the run. A refused
-                // start leaves it up, with the reason `accept` put on it.
-                if self.send(decision)? {
-                    self.starting = None;
-                    self.ui.reset();
-                }
-                Ok(())
-            }
         }
     }
 
-    /// The run being set up, for the screen that draws it.
-    pub fn starting(&self) -> Option<&NewRun> {
-        self.starting.as_ref()
-    }
-
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+    /// Draws and reads keys until the player leaves, or the run goes away.
+    ///
+    /// The daemon's game can idle out from under a live screen. What comes back
+    /// says which happened, because a run that is gone wants the setup screen
+    /// rather than a window onto nothing.
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<Ended> {
         // One look before the first frame, so the screen is the run rather than
-        // an empty shape waiting for a key. Skipped while setting one up: it
-        // would launch the game to ask about a run nobody has started, and the
-        // twenty seconds that costs would be spent before the first frame
-        // rather than while a character is being picked.
-        if self.starting.is_none() {
-            self.look()?;
-        }
+        // an empty shape waiting for a key.
+        self.look()?;
 
         while !self.ui.leaving {
             terminal
@@ -245,7 +217,7 @@ where
                 _ => {}
             }
         }
-        Ok(())
+        Ok(self.ended)
     }
 
     // -----------------------------------------------------------------------
@@ -372,118 +344,6 @@ where
     // -----------------------------------------------------------------------
     // Before there is a run.
     // -----------------------------------------------------------------------
-
-    /// Every character this build offers, in the table's own order.
-    ///
-    /// Filtered by the build's own `playable`, not by a list written here.
-    /// Three of this build's eight are a deprecated placeholder, the Deprived
-    /// and a `random` pseudo-character. Which those are is a fact about the
-    /// build rather than about this screen.
-    pub fn roster(&self) -> Vec<V::Character> {
-        Self::characters()
-    }
-
-    pub fn characters() -> Vec<V::Character> {
-        <V::Character as sts2_core::Table>::ALL
-            .iter()
-            .copied()
-            .filter(|c| sts2_core::CharacterTable::playable(*c))
-            .collect()
-    }
-
-    /// The setup screen's keys.
-    ///
-    /// Only the arrows move the cursor. `j` and `k` are seed characters here,
-    /// which is the whole reason this screen reads keys rather than actions.
-    fn in_new_run(&mut self, key: KeyEvent) -> Intent<V> {
-        let roster = Self::characters();
-        let Some(setting_up) = self.starting.as_mut() else {
-            return Intent::Nothing;
-        };
-
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            if key.code == KeyCode::Char('c') {
-                self.ui.leaving = true;
-            }
-            return Intent::Nothing;
-        }
-
-        match key.code {
-            KeyCode::Esc => self.ui.leaving = true,
-            KeyCode::Up | KeyCode::Left => {
-                setting_up.at = (setting_up.at + roster.len().saturating_sub(1))
-                    .checked_rem(roster.len())
-                    .unwrap_or(0);
-            }
-            KeyCode::Down | KeyCode::Right | KeyCode::Tab => {
-                setting_up.at = (setting_up.at + 1).checked_rem(roster.len()).unwrap_or(0);
-            }
-            KeyCode::Backspace => {
-                setting_up.seed.pop();
-                setting_up.why = None;
-            }
-            KeyCode::Enter => return self.begin(),
-            // Anything the seed alphabet could hold once it is folded. Filtered
-            // as it is typed so the field never shows what the game will not
-            // take; the folding itself is `Seed::fold`'s and happens on Enter.
-            KeyCode::Char(c)
-                if c.is_ascii_alphanumeric() && setting_up.seed.chars().count() < SEED_MAX =>
-            {
-                setting_up.seed.push(c.to_ascii_uppercase());
-                setting_up.why = None;
-            }
-            _ => {}
-        }
-        Intent::Nothing
-    }
-
-    /// The run the setup screen describes.
-    ///
-    /// Everything it can reject itself, it rejects onto the screen: there is no
-    /// log yet to write a reason into. A refusal from the game lands there too.
-    /// See `accept`.
-    fn begin(&mut self) -> Intent<V> {
-        let roster = Self::characters();
-        let Some(setting_up) = self.starting.as_mut() else {
-            return Intent::Nothing;
-        };
-        let Some(character) = roster.get(setting_up.at).copied() else {
-            setting_up.why = Some("this build has no playable character".into());
-            return Intent::Nothing;
-        };
-
-        let typed = match setting_up.seed.trim().is_empty() {
-            true => made_up(),
-            false => setting_up.seed.clone(),
-        };
-        let seed = match sts2_core::Seed::fold(&typed) {
-            Ok(seed) => seed,
-            Err(why) => {
-                setting_up.why = Some(format!("{typed:?} is not a seed: {why}"));
-                return Intent::Nothing;
-            }
-        };
-
-        // Ascension `None` and no modifiers. Both are real choices this screen
-        // does not offer yet, and `sts2 run start` is where they are made.
-        let ascension = match crate::cli::ascension::<V>("None") {
-            Ok(level) => level,
-            Err(why) => {
-                setting_up.why = Some(why.to_string());
-                return Intent::Nothing;
-            }
-        };
-
-        // The folded seed is what travels, so the log line the send writes
-        // shows it back: a typed `ORACLE1` starts `0RACLE1`, the alphabet
-        // having no `O`.
-        Intent::Begin(Decision::Start {
-            seed,
-            character,
-            ascension,
-            modifiers: Vec::new(),
-        })
-    }
 
     fn in_overlay(&mut self, action: Action) {
         match action {
@@ -867,9 +727,6 @@ where
     }
 
     /// Sends one decision, and reports whether the game accepted it.
-    ///
-    /// The bool is for a caller whose next state depends on that. Starting a
-    /// run is the one: a refused start leaves the setup screen up.
     fn send(&mut self, decision: Decision<V>) -> Result<bool> {
         let said = moves::describe(&decision);
         let answered = self
@@ -913,9 +770,8 @@ where
                 // be started. Anything else is the game saying no to something
                 // that was asked, which belongs in the log.
                 if matches!(refusal.reason, sts2_core::Reason::NoRun) {
-                    self.starting.get_or_insert_with(NewRun::default).why = None;
-                } else if let Some(setting_up) = self.starting.as_mut() {
-                    setting_up.why = Some(crate::render::refusal::refusal(&refusal));
+                    self.ended = Ended::NoRun;
+                    self.ui.leaving = true;
                 } else {
                     self.ui
                         .say(Tone::Refused, crate::render::refusal::refusal(&refusal));
@@ -973,29 +829,6 @@ fn drink<V: ContentVersion>(index: usize, target: Option<u32>) -> Intent<V> {
     })
 }
 
-/// A seed for a player who did not want to pick one.
-///
-/// Off the clock rather than a PRNG, because this crate has no random number
-/// generator and does not want one for this. It has to be *a* seed nobody has
-/// played, not an unguessable one. The run is recorded with the seed in it
-/// either way, so reproducing it never depends on how it was chosen.
-fn made_up() -> String {
-    let mut n = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(1);
-
-    let alphabet: Vec<char> = sts2_core::Seed::ALPHABET.chars().collect();
-    let base = alphabet.len() as u128;
-    (0..sts2_core::Seed::DEFAULT_LENGTH)
-        .map(|_| {
-            let at = (n % base) as usize;
-            n /= base;
-            alphabet[at]
-        })
-        .collect()
-}
-
 /// Which kind of screen this is.
 fn stage_of<V: ContentVersion>(applied: &Applied<V>) -> Stage {
     if let Some(question) = &applied.asking {
@@ -1035,7 +868,7 @@ mod tests {
     use crate::scripted::Scripted;
     use crate::tui::keys::Action;
     use crate::tui::state::{Aim, Options};
-    use ratatui::crossterm::event::{KeyCode, KeyEvent};
+
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
     use sts2_core::{Applied, Decision};
@@ -1076,20 +909,9 @@ mod tests {
     /// The game under it fails the test if it is asked anything. Deciding what
     /// a key press means must not reach it, and that is what holds it to that.
     fn showing(applied: Applied<V>) -> App<V, Scripted<V>> {
-        let mut app = App::new(Scripted::untouchable(), Options::default());
+        let mut app = App::playing(Scripted::untouchable(), Options::default());
         app.accept(Ok(applied), None);
         app
-    }
-
-    /// The front end with no run behind it, on the setup screen.
-    fn setting_up() -> App<V, Scripted<V>> {
-        App::new(
-            Scripted::untouchable(),
-            Options {
-                fresh: true,
-                ..Options::default()
-            },
-        )
     }
 
     /// A room with one numbered option in it.
@@ -1193,99 +1015,6 @@ mod tests {
 
         assert_eq!(intent, Intent::Nothing);
         assert_eq!(app.ui.aim, Aim::Idle);
-    }
-
-    /// The field takes only what a folded seed can hold, so a seed the game
-    /// refuses cannot be typed into it in the first place.
-    #[test]
-    fn the_setup_screen_refuses_what_a_seed_cannot_hold() {
-        let mut app = setting_up();
-
-        for c in "A-B!".chars() {
-            assert_eq!(
-                app.decide(KeyEvent::from(KeyCode::Char(c))),
-                Intent::Nothing
-            );
-        }
-
-        assert_eq!(app.starting().map(|s| s.seed.as_str()), Some("AB"));
-    }
-
-    /// Recording is opened before the start is sent, so the file begins with it.
-    #[test]
-    fn starting_runs_the_preflight() {
-        let called = std::rc::Rc::new(std::cell::Cell::new(false));
-        let witness = called.clone();
-        let mut app = App::new(
-            Scripted::saying(fixture::applied(json!({}))),
-            Options {
-                fresh: true,
-                ..Options::default()
-            },
-        )
-        .before_begin(move |decision| {
-            assert!(matches!(decision, Decision::Start { .. }));
-            witness.set(true);
-            Ok(())
-        });
-
-        let intent = app.decide(KeyEvent::from(KeyCode::Enter));
-        app.perform(intent).unwrap();
-
-        assert!(called.get(), "the preflight runs before the start is sent");
-    }
-
-    /// A typed seed is folded before it travels, and starting is its own
-    /// intent because the screen it came from waits on the answer.
-    #[test]
-    fn a_started_run_is_its_own_intent() {
-        let mut app = setting_up();
-        for c in "ORACLE1".chars() {
-            app.decide(KeyEvent::from(KeyCode::Char(c)));
-        }
-
-        let intent = app.decide(KeyEvent::from(KeyCode::Enter));
-
-        let Intent::Begin(Decision::Start { seed, .. }) = intent else {
-            panic!("a start is not a Begin: {intent:?}");
-        };
-        assert_eq!(seed.as_str(), "0RACLE1", "the seed travelled unfolded");
-    }
-
-    /// The setup screen stays up until the game has the run, and carries the
-    /// reason it did not in the meantime. There is no log to put it in yet.
-    #[test]
-    fn a_refused_start_leaves_the_setup_screen_up() {
-        let refusing = Scripted::saying_in_turn(vec![
-            Err(sts2_core::Refusal {
-                what: "start".into(),
-                reason: sts2_core::Reason::InCombat,
-            }),
-            Ok(fixture::applied(json!({}))),
-        ]);
-        let mut app = App::new(
-            refusing,
-            Options {
-                fresh: true,
-                ..Options::default()
-            },
-        );
-
-        let refused = app.decide(KeyEvent::from(KeyCode::Enter));
-        app.perform(refused).unwrap();
-
-        assert!(
-            app.starting().is_some_and(|s| s.why.is_some()),
-            "the setup screen went away, or kept no reason"
-        );
-
-        let accepted = app.decide(KeyEvent::from(KeyCode::Enter));
-        app.perform(accepted).unwrap();
-
-        assert!(
-            app.starting().is_none(),
-            "the setup screen outlived the run"
-        );
     }
 
     /// A key that means nothing here means nothing, quietly.
