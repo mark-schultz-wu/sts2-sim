@@ -57,6 +57,21 @@ jobs:
           done
           cargo test -p sts2-content --features "${features#,}"
 
+      # What lets a review skip the generated tables. `codegen` runs for every
+      # pinned build and the tree has to come back unchanged. A hand edit to a
+      # generated file, or a generator whose output nobody refreshed, fails here
+      # rather than as a divergence nobody can place.
+      - name: Check the generated tables reproduce
+        run: |
+          set -euo pipefail
+          builds=0
+          for lock in mod/games/*.lock; do
+            STS2_GAME_VERSION="$(basename "$lock" .lock)" cargo run -q -p xtask -- codegen
+            builds=$((builds + 1))
+          done
+          test "$builds" -gt 0
+          git diff --exit-code -- 'crates/sts2-content/src/*/generated'
+
       - name: Lint prose structure
         run: ./tools/prose-lint.py
 

@@ -1,0 +1,20 @@
+# Files a machine wrote, marked so a review collapses them by default.
+#
+# `generated/` is what `cargo xtask codegen` emits from the dumps beside it, and
+# CI proves it comes back byte for byte. So it is verified rather than read, and
+# 40,000 lines of tables do not bury the code somebody wrote. The mark collapses
+# a diff. It does not hide one, and `git diff` is unaffected, so a content change
+# still reads as a diff when a reviewer wants it.
+crates/sts2-content/src/*/generated/** linguist-generated=true
+
+# Recorded ground truth. Each is the output of a run, kept so a later run can be
+# compared against it. Reading the numbers proves nothing. The test that consumes
+# them is what a reviewer wants.
+crates/sts2-core/tests/megarandom.txt linguist-generated=true
+crates/sts2-sim/tests/maps.txt linguist-generated=true
+crates/sts2-sim/tests/setup.txt linguist-generated=true
+crates/sts2-sim/tests/golden/** linguist-generated=true
+
+# `dumps/` is deliberately not marked. It is what the game printed, which is the
+# evidence behind every generated table, and this project commits it so that a
+# content change reads as a diff.
