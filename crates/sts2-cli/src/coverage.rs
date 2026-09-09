@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use sts2_core::ActMap as _;
 use sts2_core::{
-    Applied, CardIdent, CardTable, CharacterTable, Combat, ContentVersion, Decision,
-    EncounterTable, EventTable, Map, ModelId, MonsterTable, PotionTable, Question, RelicTable,
-    RewardKind, Room, Stock, Table, Take,
+    CardIdent, CardTable, CharacterTable, Combat, ContentVersion, Decision, EncounterTable,
+    EventTable, Map, ModelId, MonsterTable, PotionTable, Question, RelicTable, RewardKind, Room,
+    Snapshot, Stock, Table, Take,
 };
 
 /// Every id play has touched, by kind.
@@ -57,12 +57,12 @@ pub struct Coverage {
 
 impl Coverage {
     /// Folds in everything one reply reported.
-    pub fn saw<V: ContentVersion>(&mut self, applied: &Applied<V>) {
-        if let Some(question) = &applied.asking {
+    pub fn saw<V: ContentVersion>(&mut self, snapshot: &Snapshot<V>) {
+        if let Some(question) = &snapshot.asking {
             self.question(question);
         }
 
-        let observed = &applied.observation;
+        let observed = &snapshot.observation;
 
         self.acts.insert(observed.act.to_string());
         let relics: Vec<_> = observed.relics.iter().map(|r| r.relic).collect();
@@ -85,7 +85,7 @@ impl Coverage {
     /// The command carries an index and not an id. `play_card 3` says nothing
     /// about which card that was, so the state it was chosen from is what turns
     /// it back into content.
-    pub fn did<V: ContentVersion>(&mut self, command: &Decision<V>, from: &Applied<V>) {
+    pub fn did<V: ContentVersion>(&mut self, command: &Decision<V>, from: &Snapshot<V>) {
         let Decision::PlayCard { index, .. } = command else {
             return;
         };
@@ -512,7 +512,7 @@ mod tests {
     #[test]
     fn a_fight_covers_its_encounter_and_its_monsters() {
         let mut coverage = Coverage::default();
-        coverage.saw(&fixture::applied(json!({
+        coverage.saw(&fixture::snapshot(json!({
             "inCombat": true,
             "combat": fixture::combat(json!({
                 "encounter": "BOWLBUGS_WEAK",
@@ -534,7 +534,7 @@ mod tests {
 
     #[test]
     fn playing_a_card_is_what_covers_it() {
-        let before = fixture::applied(json!({
+        let before = fixture::snapshot(json!({
             "inCombat": true,
             "combat": fixture::combat(json!({ "hand": ["STRIKE_IRONCLAD", "BASH"] }))
         }));
@@ -553,7 +553,7 @@ mod tests {
     #[test]
     fn a_chest_covers_what_it_offered_not_what_was_taken() {
         let mut coverage = Coverage::default();
-        coverage.saw(&fixture::applied(json!({
+        coverage.saw(&fixture::snapshot(json!({
             "relics": ["BURNING_BLOOD"],
             "room": {
                 "type": "Treasure", "finished": false,
@@ -647,7 +647,7 @@ mod tests {
     #[test]
     fn a_monster_is_counted_by_its_entry_and_not_its_category() {
         let mut coverage = Coverage::default();
-        coverage.saw(&fixture::applied(json!({
+        coverage.saw(&fixture::snapshot(json!({
             "inCombat": true,
             "combat": fixture::combat(json!({
                 "creatures": [creature(1, "Enemy", Some("MONSTER/BOWLBUG_ROCK"), &[])]
@@ -675,7 +675,7 @@ mod tests {
     #[test]
     fn an_upgraded_card_is_counted_as_the_card_it_is() {
         let mut coverage = Coverage::default();
-        coverage.saw(&fixture::applied(json!({
+        coverage.saw(&fixture::snapshot(json!({
             "deck": ["BASH+1", "STRIKE_IRONCLAD/SMOG", "DEFEND_IRONCLAD"]
         })));
 
@@ -696,7 +696,7 @@ mod tests {
     /// Playing an upgraded card counts the card, for the same reason.
     #[test]
     fn playing_an_upgraded_card_counts_the_card() {
-        let before = fixture::applied(json!({
+        let before = fixture::snapshot(json!({
             "inCombat": true,
             "combat": fixture::combat(json!({ "hand": ["BASH+1"] }))
         }));
@@ -721,7 +721,7 @@ mod tests {
                    "stocked": true, "affordable": true, "blocked": null})
         };
         let mut coverage = Coverage::default();
-        coverage.saw(&fixture::applied(json!({
+        coverage.saw(&fixture::snapshot(json!({
             "room": {"type": "Shop", "entries": [
                 entry(0, "MerchantCardEntry", "BASH+1"),
                 entry(1, "MerchantRelicEntry", "AKABEKO"),

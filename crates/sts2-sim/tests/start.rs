@@ -18,10 +18,7 @@ fn the_simulator_opens_where_the_game_opened() {
     };
     let mut sim = Sim::<V>::begin((), &start).expect("the simulator starts this run");
 
-    let opened = sim
-        .observe()
-        .expect("the simulator reports its run")
-        .expect("the run has an observation");
+    let opened = sim.observe().expect("the simulator reports its run");
     assert_eq!(
         format!("{}", opened.observation.rules_digest()),
         "a94e804fd91b096a"

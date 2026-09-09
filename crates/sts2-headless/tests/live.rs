@@ -17,9 +17,10 @@ use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
 use sts2_core::Seed;
 use sts2_core::{
-    Answer, Answered, Applied, Construct, Coord, Decision, Digest, Gift, Play, Question, Reason,
-    Recorder, Room, Setup, Start, Step, Stock, Tool,
+    Answer, Answered, Construct, Coord, Decision, Digest, Gift, Play, Question, Reason, Recorder,
+    Room, Setup, Start, Step, Stock, Tool,
 };
+use sts2_core::{Decided, Snapshot};
 use sts2_headless::{Config, Error, MOD_IDENTITY, Oracle, Response, recording};
 
 /// The build these tests drive.
@@ -78,7 +79,9 @@ fn launched() -> Oracle<V> {
 /// are about the game's digest and the state as it wrote it, and neither
 /// survives into [`Applied`].
 struct Seen {
-    applied: Applied<V>,
+    snapshot: Snapshot<V>,
+    /// Absent for a look, which decided nothing.
+    decided: Option<Decided>,
     /// The digest the game computed, over its own state.
     reported: String,
     /// The state as the game wrote it.
@@ -95,12 +98,12 @@ impl Seen {
     /// [`the_same_seed_gives_the_same_digest`] for what the pair catches that
     /// neither catches alone.
     fn digest(&self) -> Digest {
-        self.applied.observation.digest()
+        self.snapshot.observation.digest()
     }
 
     /// What the game stopped to ask, for a command that parked it.
     fn asking(&self) -> Option<&Question<V>> {
-        self.applied.asking.as_ref()
+        self.snapshot.asking.as_ref()
     }
 }
 
@@ -110,10 +113,12 @@ impl Seen {
 /// the reply borrows the game mutably and the envelope borrows it again.
 fn observation(game: &Oracle<V>, answered: Answered<V>) -> Seen {
     let applied = answered.expect("expected the command to be accepted");
+    let (decided, snapshot) = applied.split();
     let response = game.reported().expect("a command was sent");
 
     Seen {
-        applied,
+        snapshot,
+        decided: Some(decided),
         reported: match response {
             Response::Observation { digest, .. } | Response::Pending { digest, .. } => {
                 digest.clone()
@@ -154,10 +159,28 @@ fn stepped(game: &mut Oracle<V>, step: &Step<V>) -> Seen {
 /// Starting is not a step any more, so this asks rather than sends. The run is
 /// begun when the game is reached, and this reports where that left it.
 fn start(game: &mut Oracle<V>) -> Seen {
-    let answered = game
+    let snapshot = game
         .observe()
         .expect("observe should not fail at the transport level");
-    observation(game, answered)
+    looked(game, snapshot)
+}
+
+/// A look, which decided nothing and so has no [`Decided`].
+fn looked(game: &Oracle<V>, snapshot: Snapshot<V>) -> Seen {
+    let response = game.reported().expect("a command was sent");
+
+    Seen {
+        snapshot,
+        decided: None,
+        reported: match response {
+            Response::Observation { digest, .. } | Response::Pending { digest, .. } => {
+                digest.clone()
+            }
+            Response::Bye => String::new(),
+        },
+        state: response.state().cloned().unwrap_or(Value::Null),
+        errors: game.logged().to_vec(),
+    }
 }
 
 /// The belt, end to end: what it reports, what it refuses, and what drinking
@@ -181,10 +204,10 @@ fn a_potion_is_reported_refused_and_drunk() {
     let held = constructed(&mut game, &Setup::Grant(Gift::Potion(Potion::FirePotion)));
     assert!(held.errors.is_empty(), "granting a potion logged errors");
 
-    let [potion] = &held.applied.observation.potions[..] else {
+    let [potion] = &held.snapshot.observation.potions[..] else {
         panic!(
             "one potion in the belt, got {:?}",
-            held.applied.observation.potions
+            held.snapshot.observation.potions
         );
     };
     assert_eq!(potion.potion, Potion::FirePotion);
@@ -204,7 +227,7 @@ fn a_potion_is_reported_refused_and_drunk() {
 
     // Every relic carries the same, and it is why the field is here rather than
     // in a table: `DynamicDescription` prints a relic's live counter.
-    for relic in &held.applied.observation.relics {
+    for relic in &held.snapshot.observation.relics {
         assert!(relic.title.is_some(), "{relic:?} has no name");
         assert!(relic.text.is_some(), "{relic:?} says nothing");
     }
@@ -234,12 +257,12 @@ fn a_potion_is_reported_refused_and_drunk() {
         },
     );
     let combat = fighting
-        .applied
+        .snapshot
         .observation
         .fight()
         .expect("a fight to drink into");
 
-    let potion = &fighting.applied.observation.potions[0];
+    let potion = &fighting.snapshot.observation.potions[0];
     assert_eq!(potion.reason, None, "in combat it can be drunk");
     assert!(
         !potion.targets.is_empty(),
@@ -264,12 +287,12 @@ fn a_potion_is_reported_refused_and_drunk() {
     assert!(drunk.errors.is_empty(), "drinking logged errors");
 
     assert!(
-        drunk.applied.observation.potions.is_empty(),
+        drunk.snapshot.observation.potions.is_empty(),
         "the potion is still in the belt"
     );
 
     let after = drunk
-        .applied
+        .snapshot
         .observation
         .fight()
         .and_then(|c| c.creatures.iter().find(|c| c.id == at).map(|c| c.hp));
@@ -473,7 +496,7 @@ fn every_observation_carries_state() {
     let mut game = launch();
     let observed = start(&mut game);
 
-    assert!(observed.applied.resolved);
+    assert_eq!(observed.decided, Some(Decided::Resolved));
     assert!(!observed.reported.is_empty());
     assert!(
         observed.state.is_object(),
@@ -750,7 +773,7 @@ fn an_ordinary_card_play_logs_no_game_errors() {
         },
     );
     assert!(played.errors.is_empty(), "playing a card logged errors");
-    assert!(played.applied.resolved);
+    assert_eq!(played.decided, Some(Decided::Resolved));
 }
 
 /// `Unassigned` is a `RoomType` the enum carries and nothing can be jumped to.
@@ -867,7 +890,7 @@ fn a_bad_game_dir_fails_without_the_game() {
 fn buying_card_removal_asks_which_card_rather_than_hanging() {
     let mut game = launch();
     let begun = start(&mut game);
-    let deck = begun.applied.observation.deck.len();
+    let deck = begun.snapshot.observation.deck.len();
 
     let shop = played(
         &mut game,
@@ -876,10 +899,10 @@ fn buying_card_removal_asks_which_card_rather_than_hanging() {
         },
     );
 
-    let Some(Room::Shop { entries }) = &shop.applied.observation.room else {
+    let Some(Room::Shop { entries }) = &shop.snapshot.observation.room else {
         panic!(
             "a shop should report its stock, got {:?}",
-            shop.applied.observation.room
+            shop.snapshot.observation.room
         );
     };
     let removal = entries
@@ -914,12 +937,12 @@ fn buying_card_removal_asks_which_card_rather_than_hanging() {
     // Returning is not the same as working: answer it and check the run moved.
     let after = played(&mut game, &Decision::Answer(Answer::Cards(vec![0])));
     assert_eq!(
-        after.applied.observation.deck.len(),
+        after.snapshot.observation.deck.len(),
         deck - 1,
         "a removal takes exactly one card out of the deck"
     );
     assert!(
-        after.applied.observation.gold < begun.applied.observation.gold,
+        after.snapshot.observation.gold < begun.snapshot.observation.gold,
         "and it is paid for"
     );
 }

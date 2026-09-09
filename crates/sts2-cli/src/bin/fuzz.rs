@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use sts2_cli::cli::moves;
 use sts2_cli::coverage::Coverage;
 use sts2_core::ContentVersion;
-use sts2_core::{Applied, Construct, Gift, Play, Setup, Start, Step};
+use sts2_core::{Construct, Gift, Play, Setup, Snapshot, Start, Step};
 use sts2_headless::{Config, Oracle, recording};
 use sts2_rng::{Seed, Seeding};
 
@@ -143,28 +143,25 @@ fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
 
     // The start is the recording's first line, and it happened above.
     recording::began(&mut tape, &start)?;
-    let mut applied = match game.observe().context("the game stopped answering")? {
-        Ok(applied) => applied,
-        Err(refusal) => anyhow::bail!("the game refused to report the run: {refusal}"),
-    };
-    cover.saw(&applied);
+    let mut seen = game.observe().context("the game stopped answering")?;
+    cover.saw(&seen);
 
     for _ in 0..cli.stack {
-        applied = send(
+        seen = send(
             &mut game,
             &mut tape,
             &Setup::Grant(Gift::Relic(relic)).into(),
         )?;
     }
-    cover.saw(&applied);
+    cover.saw(&seen);
 
     for taken in 1..=cli.steps {
-        if let Some(over) = finished(&applied) {
+        if let Some(over) = finished(&seen) {
             println!("{over} after {taken} move(s) · {}", path.display());
             return keep(&path, &cover);
         }
 
-        let legal = moves::legal::<V>(&applied);
+        let legal = moves::legal::<V>(&seen);
         if legal.is_empty() {
             keep(&path, &cover)?;
             bail!(
@@ -176,10 +173,10 @@ fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
         let chosen = legal[dice.below(legal.len())].clone();
         // Before the move is sent, because it is read against the state the
         // move was chosen in: afterwards the hand it indexes into is gone.
-        cover.did::<V>(&chosen, &applied);
+        cover.did::<V>(&chosen, &seen);
 
-        applied = match send(&mut game, &mut tape, &chosen.clone().into()) {
-            Ok(applied) => applied,
+        seen = match send(&mut game, &mut tape, &chosen.clone().into()) {
+            Ok(seen) => seen,
             Err(e) => {
                 let e = e.context(format!("move {taken}: {chosen:?}"));
                 keep(&path, &cover)?;
@@ -199,17 +196,17 @@ fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
                     &path,
                     &format!(
                         "{e:#}\n\nthe state it was chosen in:\n{:#?}",
-                        applied.observation
+                        seen.observation
                     ),
                 );
                 return Err(e).with_context(|| format!("replay {}", path.display()));
             }
         };
 
-        cover.saw(&applied);
+        cover.saw(&seen);
 
         if taken % 50 == 0 {
-            println!("{taken} moves · {}", where_it_is(&applied));
+            println!("{taken} moves · {}", where_it_is(&seen));
         }
     }
 
@@ -238,7 +235,7 @@ fn send<V: ContentVersion>(
     game: &mut Oracle<V>,
     tape: &mut BufWriter<File>,
     step: &Step<V>,
-) -> Result<Applied<V>> {
+) -> Result<Snapshot<V>> {
     recording::append(&mut *tape, step)?;
 
     // `Construct::step` reads the state on the way through, so every state a
@@ -246,8 +243,8 @@ fn send<V: ContentVersion>(
     // load: a key the mod adds, a category with no type, an intent shape nobody
     // wrote a test for — thousands of states an afternoon, each one refused
     // rather than half-read.
-    let applied = match game.step(step).context("the game stopped answering")? {
-        Ok(applied) => applied,
+    let seen = match game.step(step).context("the game stopped answering")? {
+        Ok(applied) => applied.snapshot(),
         // Not "the move was wrong": the move came out of the legal set, so a
         // refusal means that set and the game disagree, which is the bug.
         Err(refusal) => bail!("the game refused a move it offered: {refusal}"),
@@ -262,7 +259,7 @@ fn send<V: ContentVersion>(
         );
     }
 
-    Ok(applied)
+    Ok(seen)
 }
 
 /// Writes a finding down beside the run that produced it.
@@ -281,19 +278,19 @@ fn note(recording: &Path, what: &str) {
 ///
 /// `victory` is only meaningful once the run is over, because winning kills
 /// every player too. The order of these two tests is the whole of it.
-fn finished<V: ContentVersion>(applied: &Applied<V>) -> Option<&'static str> {
-    if !applied.observation.run_over {
+fn finished<V: ContentVersion>(snapshot: &Snapshot<V>) -> Option<&'static str> {
+    if !snapshot.observation.run_over {
         return None;
     }
-    Some(match applied.observation.victory {
+    Some(match snapshot.observation.victory {
         Some(true) => "won",
         _ => "died",
     })
 }
 
 /// Enough of the state to watch progress without printing the whole thing.
-fn where_it_is<V: ContentVersion>(applied: &Applied<V>) -> String {
-    let o = &applied.observation;
+fn where_it_is<V: ContentVersion>(snapshot: &Snapshot<V>) -> String {
+    let o = &snapshot.observation;
     format!(
         "floor {} · act {} · hp {}/{}",
         o.floor, o.act, o.hp, o.max_hp

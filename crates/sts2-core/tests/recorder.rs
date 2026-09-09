@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
     Answered, Applied, Construct, ContentVersion, Coord, Decision, Gift, Map, Observation, Play,
-    Reason, Recorder, Recording, Refusal, Setup, Start, Step, Table, Tape,
+    Reason, Recorder, Recording, Refusal, Setup, Snapshot, Start, Step, Table, Tape,
 };
 
 type V = V0_107_1;
@@ -108,8 +108,11 @@ impl Play<V> for Stub {
         self.answer()
     }
 
-    fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
-        self.answer()
+    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
+        match self.answer()? {
+            Ok(applied) => Ok(applied.snapshot()),
+            Err(_) => Err("the stub does not refuse an observation"),
+        }
     }
 }
 
@@ -154,6 +157,11 @@ fn play(index: u8) -> Decision<V> {
 fn took(answered: Result<Answered<V>, &'static str>) {
     let applied = answered.expect("the stub answers");
     assert!(applied.is_ok(), "the stub was told to accept");
+}
+
+/// Observing has one answer, so there is nothing to unwrap twice.
+fn saw(standing: Result<Snapshot<V>, &'static str>) {
+    standing.expect("the stub answers");
 }
 
 fn steps(taped: &Recorder<V, Stub, Recording<V>>) -> Vec<Step<V>> {
@@ -209,9 +217,9 @@ fn a_move_that_never_landed_is_not_a_step_in_the_run() {
 fn looking_at_the_run_is_not_a_step_in_it() {
     let mut taped = recorder(Answers::Accept);
 
-    took(taped.observe());
+    saw(taped.observe());
     took(taped.play(&play(0)));
-    took(taped.observe());
+    saw(taped.observe());
 
     assert_eq!(steps(&taped), vec![Step::Decision(play(0))]);
 }

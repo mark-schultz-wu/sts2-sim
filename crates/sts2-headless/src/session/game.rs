@@ -13,7 +13,7 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::process::{Child, Command as Proc, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use sts2_core::ContentVersion;
-use sts2_core::{Answered, Construct, Decision, Play, Setup, Start};
+use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start};
 
 /// A running game, and the process behind it.
 ///
@@ -274,9 +274,12 @@ impl<V: ContentVersion> Play<V> for Oracle<V> {
     /// Straight down the socket rather than through `dispatch`: there
     /// is no [`Decision`] that spells this, which is the point of it being its
     /// own method.
-    fn observe(&mut self) -> Result<Answered<V>, Error> {
+    fn observe(&mut self) -> Result<Snapshot<V>, Error> {
         let reply = parse_reply::<V>(&self.send_line(r#"{"cmd":"observe"}"#)?)?;
-        super::receive(reply, &mut self.last)
+        match super::receive(reply, &mut self.last)? {
+            Ok(applied) => Ok(applied.snapshot()),
+            Err(refusal) => Err(Error::NotObserved(refusal.to_string())),
+        }
     }
 }
 

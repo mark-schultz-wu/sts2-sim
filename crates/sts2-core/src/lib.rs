@@ -62,4 +62,4 @@ pub use step::start::Start;
 pub use play::recorder::{Recorder, Tape};
 pub use play::recording::Recording;
 pub use play::refusal::{Reason, Refusal};
-pub use play::{Answered, Applied, Construct, Play};
+pub use play::{Answered, Applied, Construct, Decided, Play, Snapshot};

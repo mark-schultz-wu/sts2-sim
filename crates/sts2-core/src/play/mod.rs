@@ -28,19 +28,27 @@ pub mod refusal;
 
 use crate::{ContentVersion, Decision, Observation, Question, Refusal, Setup, Start, Step};
 
-/// What a decision produced.
+/// Where a run is standing.
 ///
 /// The whole of what an implementation reports, and everything two of them are
 /// compared on. The oracle's protocol envelope does not survive into here,
 /// because none of it is a fact about the run. Not the sequence number, the
 /// command name, or the game's own digest.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Applied<V: ContentVersion> {
+pub struct Snapshot<V: ContentVersion> {
     pub observation: Observation<V>,
     /// The question the game stopped to ask, for a decision that parked it.
     ///
     /// A parked game still reports where it is standing, so this is beside the
     /// observation rather than instead of it.
+    pub asking: Option<Question<V>>,
+}
+
+/// What a decision produced, which is where it left the run and whether it
+/// finished.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Applied<V: ContentVersion> {
+    pub observation: Observation<V>,
     pub asking: Option<Question<V>>,
     /// False when combat ended mid-cascade and the decision was abandoned
     /// rather than completed.
@@ -48,6 +56,42 @@ pub struct Applied<V: ContentVersion> {
     /// Not a failure. An implementation that resolved it fully has diverged,
     /// even where the state it arrived at looks agreeable.
     pub resolved: bool,
+}
+
+/// What a decision decided.
+///
+/// A fact about the decision and not about the run, which is why it is beside
+/// [`Snapshot`] rather than inside it. A parked run's snapshot says nothing
+/// about whether the last decision finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Decided {
+    /// The decision ran to completion.
+    Resolved,
+    /// Combat ended mid-cascade and the decision was abandoned under it.
+    ///
+    /// Not a failure. An implementation that resolved it fully has diverged,
+    /// even where the state it arrived at looks agreeable.
+    Abandoned,
+}
+
+impl<V: ContentVersion> Applied<V> {
+    /// Where this left the run.
+    pub fn snapshot(self) -> Snapshot<V> {
+        Snapshot {
+            observation: self.observation,
+            asking: self.asking,
+        }
+    }
+
+    /// What it decided, and where it left the run.
+    pub fn split(self) -> (Decided, Snapshot<V>) {
+        let decided = if self.resolved {
+            Decided::Resolved
+        } else {
+            Decided::Abandoned
+        };
+        (decided, self.snapshot())
+    }
 }
 
 /// Whether the exchange happened, and then whether the game accepted it.
@@ -78,15 +122,13 @@ pub trait Play<V: ContentVersion>: Sized {
 
     /// Where the run is standing, without moving it.
     ///
-    /// Not a [`Decision`], because it decides nothing. A caller holding the
-    /// last [`Applied`] has this answer.
+    /// Not a [`Decision`], because it decides nothing. It is here for a caller
+    /// that is a whole process per command with nothing in hand. Without it,
+    /// such a front end reaches past the trait.
     ///
-    /// It remains on the trait for a caller that is a whole process per
-    /// command with nothing in hand. Without this, such a front end reaches
-    /// past the trait and is pinned to one implementation.
-    ///
-    /// Refusable. There is no run to report before one is started.
-    fn observe(&mut self) -> Result<Answered<V>, Self::Error>;
+    /// Not refusable. [`Play::begin`] is the only way to hold one of these, so
+    /// there is always a run to report on.
+    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error>;
 }
 
 /// Reaching a position that ordinary play takes an hour to arrive at.

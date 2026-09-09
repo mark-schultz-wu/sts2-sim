@@ -14,7 +14,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use sts2_core::{
-    Answer, Answered, ContentVersion, Decision, Play, Question, RewardKind, Room, Start, TakeReward,
+    Answer, Answered, ContentVersion, Decision, Play, Question, RewardKind, Room, Snapshot, Start,
+    TakeReward,
 };
 
 use super::app::App;
@@ -186,7 +187,7 @@ impl<V: ContentVersion, G: Play<V>> Play<V> for Spy<V, G> {
         self.game.play(decision)
     }
 
-    fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
+    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
         self.game.observe()
     }
 }
@@ -778,9 +779,9 @@ mod tests {
     ///
     /// Every claim here is about what the front end *sends*, and nothing it
     /// sends depends on what comes back. So a fixed reply is the whole input.
-    struct Standing;
+    struct Snapshot;
 
-    impl Stage<Version> for Standing {
+    impl Stage<Version> for Snapshot {
         type Game = Scripted<Version>;
 
         fn reach(&mut self, position: Position) -> Result<Scripted<Version>, String> {
@@ -898,7 +899,7 @@ mod tests {
     /// Every promise, against a state the mod can send.
     #[test]
     fn the_front_end_keeps_its_promises() {
-        let checks = run::<Version, _>(&mut Standing);
+        let checks = run::<Version, _>(&mut Snapshot);
         assert_eq!(checks.len(), claims_count(), "every claim ran");
 
         let broken: Vec<String> = checks
@@ -916,7 +917,7 @@ mod tests {
     /// being run.
     #[test]
     fn every_claim_actually_runs() {
-        for check in run::<Version, _>(&mut Standing) {
+        for check in run::<Version, _>(&mut Snapshot) {
             if let Outcome::Unreachable(why) = check.outcome {
                 panic!("{} never ran: {why}", check.name);
             }
@@ -924,6 +925,6 @@ mod tests {
     }
 
     fn claims_count() -> usize {
-        claims::<Version, Standing>().len()
+        claims::<Version, Snapshot>().len()
     }
 }

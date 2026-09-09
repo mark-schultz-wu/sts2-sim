@@ -41,7 +41,8 @@ fn step(game: &mut Oracle<V>, command: impl Into<Step<V>>) -> anyhow::Result<App
             // Printed from the reply the oracle kept, because the rule line at
             // the top of each step is the protocol's envelope and `Applied` does
             // not carry one.
-            let view = sts2_cli::Readable::new(&applied).logging(game.logged());
+            let seen = applied.clone().snapshot();
+            let view = sts2_cli::Readable::new(&seen).logging(game.logged());
             println!("{view}\n");
             Ok(applied)
         }

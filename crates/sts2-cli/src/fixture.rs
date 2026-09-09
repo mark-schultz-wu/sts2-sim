@@ -13,7 +13,7 @@
 //! whatever was here.
 
 use serde_json::{Value, json};
-use sts2_core::Applied;
+use sts2_core::{Applied, Snapshot};
 
 type V = sts2_content::v0_107_1::V0_107_1;
 
@@ -105,6 +105,10 @@ fn fill(state: &mut Value) {
 /// What almost every reader wants. Everything but the renderer works from
 /// [`sts2_core::Applied`], because the sequence number and the game's own digest
 /// are not facts about the run.
+pub fn snapshot(overlay: Value) -> Snapshot<V> {
+    applied(overlay).snapshot()
+}
+
 pub fn applied(overlay: Value) -> Applied<V> {
     answered(json!({
         "type": "observation", "seq": 1, "cmd": "observe",

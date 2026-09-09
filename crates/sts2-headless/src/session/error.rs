@@ -85,6 +85,14 @@ pub enum Error {
     #[error("the game refused to start the run: {0}")]
     NotStarted(String),
 
+    /// The game refused an observation.
+    ///
+    /// A fault rather than an answer, on the same ground as [`Error::NotStarted`].
+    /// Observing decides nothing, so there is nothing for the game to refuse.
+    /// A refusal here means the two sides disagree about what was asked.
+    #[error("the game refused to say where the run stands: {0}")]
+    NotObserved(String),
+
     /// The adapter fell over inside the mod.
     ///
     /// Not a refusal, and the distinction is the whole reason the mod sends this

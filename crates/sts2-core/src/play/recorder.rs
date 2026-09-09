@@ -14,7 +14,9 @@
 
 use std::marker::PhantomData;
 
-use crate::{Answered, Construct, ContentVersion, Decision, Play, Recording, Setup, Start, Step};
+use crate::{
+    Answered, Construct, ContentVersion, Decision, Play, Recording, Setup, Snapshot, Start, Step,
+};
 
 /// Somewhere a run is written down, one step at a time.
 ///
@@ -148,7 +150,7 @@ where
     }
 
     /// Not recorded: it moves nothing.
-    fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
+    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
         self.inner.observe()
     }
 }

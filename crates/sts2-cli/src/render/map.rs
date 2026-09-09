@@ -191,7 +191,7 @@ mod tests {
 
         let lines: Vec<&str> = out.lines().collect();
         assert_eq!(lines[0], "  2  T    [E]", "{out}");
-        // Standing on a visited node marks it as here, not as walked.
+        // Snapshot on a visited node marks it as here, not as walked.
         assert_eq!(lines[2], "  1    (R)", "{out}");
         assert_eq!(lines[4], "  0  m", "{out}");
     }

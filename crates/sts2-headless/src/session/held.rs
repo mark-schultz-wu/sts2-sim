@@ -13,7 +13,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use sts2_core::{Answered, Construct, ContentVersion, Decision, Play, Setup, Start};
+use sts2_core::{Answered, Construct, ContentVersion, Decision, Play, Setup, Snapshot, Start};
 
 use super::daemon::{
     self,
@@ -194,8 +194,11 @@ impl<V: ContentVersion> Play<V> for Session<V> {
         self.dispatch(decision)
     }
 
-    fn observe(&mut self) -> Result<Answered<V>, Error> {
-        self.dispatch(Command::Observe)
+    fn observe(&mut self) -> Result<Snapshot<V>, Error> {
+        match self.dispatch(Command::Observe)? {
+            Ok(applied) => Ok(applied.snapshot()),
+            Err(refusal) => Err(Error::NotObserved(refusal.to_string())),
+        }
     }
 }
 
