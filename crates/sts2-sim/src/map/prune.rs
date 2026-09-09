@@ -66,6 +66,10 @@ struct SegmentKey {
 #[derive(Default)]
 struct SegmentHasher(u64);
 
+/// A cheap hasher for the two already-packed integers in `SegmentKey`.
+///
+/// This table never sees attacker-controlled keys, and its iteration order is
+/// discarded: duplicate groups are sorted by their full key before use.
 impl Hasher for SegmentHasher {
     fn finish(&self) -> u64 {
         self.0
@@ -156,6 +160,8 @@ enum Segment {
 
 impl Segment {
     fn new(points: &[Id]) -> Self {
+        // An act path has at most 17 points. Seven bits per point therefore
+        // occupy 119 of the 128 available bits.
         if points.len() <= 17 && points.iter().all(|&id| id < 128) {
             let ids = points
                 .iter()
@@ -247,6 +253,8 @@ fn endpoint<V: Rules>(point: &super::Point<V>) -> (u64, u32) {
 /// is ordered by that key, as the game's `SortedDictionary` is, so the groups
 /// come back in the same order on every machine.
 fn matching_segments<V: Rules>(map: &ActMap<V>, segments: &mut SegmentMap) -> Vec<Vec<Vec<Id>>> {
+    // Pruning rebuilds this table after every cut. Retaining its allocation
+    // avoids growing the same table repeatedly.
     segments.clear();
     let endpoints: Vec<_> = map.points.iter().map(endpoint::<V>).collect();
     let mut segment = Vec::with_capacity(map.rows + 2);
