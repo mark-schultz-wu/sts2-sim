@@ -22,7 +22,42 @@ pub type Rarity<V> = <<V as ContentVersion>::Relic as RelicTable>::Rarity;
 pub type Pool<V> = <<V as ContentVersion>::Relic as RelicTable>::Pool;
 
 /// One rarity's relics, in the order the bag deals them.
-pub type Deque<V> = (Rarity<V>, Vec<<V as ContentVersion>::Relic>);
+///
+/// The rarity is derived from the first relic. Further relics must have that
+/// same rarity, so the label and contents cannot disagree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Deque<V: Rules> {
+    rarity: Rarity<V>,
+    relics: Vec<V::Relic>,
+}
+
+impl<V: Rules> Deque<V> {
+    fn new(relic: V::Relic) -> Self {
+        Deque {
+            rarity: relic.rarity(),
+            relics: vec![relic],
+        }
+    }
+
+    fn push(&mut self, relic: V::Relic) {
+        assert_eq!(
+            relic.rarity(),
+            self.rarity,
+            "a relic deque holds one rarity"
+        );
+        self.relics.push(relic);
+    }
+
+    /// The rarity shared by every relic in this deque.
+    pub fn rarity(&self) -> Rarity<V> {
+        self.rarity
+    }
+
+    /// The relics in the order the bag deals them.
+    pub fn relics(&self) -> &[V::Relic] {
+        &self.relics
+    }
+}
 
 /// One run's relic bag, by rarity, in the order it deals from.
 ///
@@ -31,10 +66,15 @@ pub type Deque<V> = (Rarity<V>, Vec<<V as ContentVersion>::Relic>);
 /// not a map, and the order the relics come in decides it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelicBag<V: Rules> {
-    pub deques: Vec<Deque<V>>,
+    deques: Vec<Deque<V>>,
 }
 
 impl<V: Rules> RelicBag<V> {
+    /// Each rarity's relics, in the order the bag first saw that rarity.
+    pub fn deques(&self) -> &[Deque<V>] {
+        &self.deques
+    }
+
     /// The shared bag, which is `RelicGrabBag.Populate(relics, rng)`.
     ///
     /// Every relic the shared pool holds, at any rarity. The overload that
@@ -76,13 +116,13 @@ impl<V: Rules> RelicBag<V> {
             if drafted_only && !Rarity::<V>::DRAFTED.contains(&rarity) {
                 continue;
             }
-            match deques.iter_mut().find(|(held, _)| *held == rarity) {
-                Some((_, deque)) => deque.push(relic),
-                None => deques.push((rarity, vec![relic])),
+            match deques.iter_mut().find(|deque| deque.rarity() == rarity) {
+                Some(deque) => deque.push(relic),
+                None => deques.push(Deque::new(relic)),
             }
         }
-        for (_, deque) in &mut deques {
-            rng.unstable_shuffle(deque);
+        for deque in &mut deques {
+            rng.unstable_shuffle(&mut deque.relics);
         }
         RelicBag { deques }
     }

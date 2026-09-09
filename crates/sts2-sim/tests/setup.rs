@@ -85,11 +85,11 @@ fn at(fixture: &Fixture, phase: &str) -> i32 {
 
 /// A bag's deques as the fixture spells them: `<phase>.<rarity>` to ids.
 fn spell(bag: &RelicBag<V>) -> Vec<(String, Vec<String>)> {
-    bag.deques
+    bag.deques()
         .iter()
-        .map(|(rarity, relics)| {
-            let ids: Vec<String> = relics.iter().map(id).collect();
-            (format!("{rarity:?}"), ids)
+        .map(|deque| {
+            let ids: Vec<String> = deque.relics().iter().map(id).collect();
+            (format!("{:?}", deque.rarity()), ids)
         })
         .collect()
 }
