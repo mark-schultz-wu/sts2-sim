@@ -47,25 +47,37 @@ fn prune_duplicates<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) {
     }
 }
 
-/// The game's textual segment key, held inline.
+/// The game's textual ordering, represented without its redundant characters.
 ///
-/// Unused bytes are zero, below every byte in the textual form, so the array's
-/// ordering is the same as the `.NET` string ordering used by the game.
+/// The header uses ordered four-bit character codes. Variable point kinds use
+/// three bits each; kinds fixed by their row are omitted.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct SegmentKey([u8; 64]);
+struct SegmentKey {
+    head: u64,
+    kinds: u64,
+}
 
-impl SegmentKey {
-    fn push(&mut self, len: &mut usize, byte: u8) {
-        self.0[*len] = byte;
-        *len += 1;
-    }
+enum SegmentGroup {
+    One(Vec<Id>),
+    Many(Vec<Vec<Id>>),
+}
 
-    fn number(&mut self, len: &mut usize, number: usize) {
-        if number >= 10 {
-            self.number(len, number / 10);
-        }
-        self.push(len, b'0' + (number % 10) as u8);
+fn push_head(head: &mut u64, len: &mut u32, byte: u8) {
+    let encoded = match byte {
+        b',' => 1,
+        b'-' => 2,
+        b'0'..=b'9' => byte - b'0' + 3,
+        _ => unreachable!("segment headers contain only digits and separators"),
+    };
+    *head = (*head << 4) | u64::from(encoded);
+    *len += 1;
+}
+
+fn push_number(head: &mut u64, len: &mut u32, number: usize) {
+    if number >= 10 {
+        push_number(head, len, number / 10);
     }
+    push_head(head, len, b'0' + (number % 10) as u8);
 }
 
 /// Every group of stretches that read the same, which is
@@ -75,69 +87,68 @@ impl SegmentKey {
 /// is ordered by that key, as the game's `SortedDictionary` is, so the groups
 /// come back in the same order on every machine.
 fn matching_segments<V: Rules>(map: &ActMap<V>) -> Vec<Vec<Vec<Id>>> {
-    let mut segments: BTreeMap<SegmentKey, Vec<Vec<Id>>> = BTreeMap::new();
-    let mut path = Vec::with_capacity(map.rows + 2);
-    collect_path_segments(map, map.ancient, &mut path, &mut segments);
+    let mut segments: BTreeMap<SegmentKey, SegmentGroup> = BTreeMap::new();
+    let starts: Vec<Id> = map
+        .live()
+        .chain([map.ancient])
+        .filter(|&id| starts_a_segment(map, id))
+        .collect();
+    let mut segment = Vec::with_capacity(map.rows + 2);
+    for start in starts {
+        segment.push(start);
+        collect_segments_from(map, start, &mut segment, &mut segments);
+        segment.clear();
+    }
     segments
         .into_values()
-        .filter(|group| group.len() > 1)
+        .filter_map(|group| match group {
+            SegmentGroup::One(_) => None,
+            SegmentGroup::Many(segments) => Some(segments),
+        })
         .collect()
 }
 
-/// Visit every route from here to the boss, which is `FindAllPaths`.
+/// Visit every stretch from one junction in child insertion order.
 ///
-/// In the order the children were linked, which is the order the game walks
-/// its `HashSet` in. That order decides which stretch of a duplicate pair is
-/// found first.
-fn collect_path_segments<V: Rules>(
+/// A stretch is independent of the route used to reach its first point and of
+/// every route after its last point. Walking from each eligible start therefore
+/// finds it once instead of once per complete ancient-to-boss route.
+fn collect_segments_from<V: Rules>(
     map: &ActMap<V>,
     from: Id,
-    path: &mut Vec<Id>,
-    segments: &mut BTreeMap<SegmentKey, Vec<Vec<Id>>>,
+    segment: &mut Vec<Id>,
+    segments: &mut BTreeMap<SegmentKey, SegmentGroup>,
 ) {
-    path.push(from);
-    if map.points[from].kind == V::MapPointType::BOSS {
-        collect_segments(map, path, segments);
-    } else {
-        for child in map.points[from].children.iter() {
-            collect_path_segments(map, child, path, segments);
+    for child in map.points[from].children.iter() {
+        segment.push(child);
+        if segment.len() >= 3 && map.points[child].parents.len() >= 2 {
+            collect_segment(map, segment, segments);
         }
+        collect_segments_from(map, child, segment, segments);
+        segment.pop();
     }
-    path.pop();
 }
 
-/// Every stretch of one route worth comparing, which is
-/// `AddSegmentsToDictionary`.
-///
-/// A stretch starts at a junction or at the first node, ends where two routes
-/// meet, and is at least three nodes long. A stretch overlapping one already
-/// filed under the same key is dropped rather than filed beside it.
-fn collect_segments<V: Rules>(
+/// File one candidate stretch unless it overlaps one already under its key.
+fn collect_segment<V: Rules>(
     map: &ActMap<V>,
-    path: &[Id],
-    segments: &mut BTreeMap<SegmentKey, Vec<Vec<Id>>>,
+    segment: &[Id],
+    segments: &mut BTreeMap<SegmentKey, SegmentGroup>,
 ) {
-    for start in 0..path.len().saturating_sub(1) {
-        if !starts_a_segment(map, path[start]) {
-            continue;
+    let key = segment_key(map, segment);
+    match segments.get_mut(&key) {
+        None => {
+            segments.insert(key, SegmentGroup::One(segment.to_vec()));
         }
-        for span in 2..path.len() - start {
-            if map.points[path[start + span]].parents.len() < 2 {
-                continue;
-            }
-            let segment = &path[start..=start + span];
-            let key = segment_key(map, segment);
-            match segments.get_mut(&key) {
-                None => {
-                    segments.insert(key, vec![segment.to_vec()]);
-                }
-                Some(group) => {
-                    if !group.iter().any(|held| overlaps(held, segment)) {
-                        group.push(segment.to_vec());
-                    }
-                }
-            }
+        Some(SegmentGroup::One(held)) if !overlaps(held, segment) => {
+            let first = std::mem::take(held);
+            *segments.get_mut(&key).expect("the key was just found") =
+                SegmentGroup::Many(vec![first, segment.to_vec()]);
         }
+        Some(SegmentGroup::Many(group)) if !group.iter().any(|held| overlaps(held, segment)) => {
+            group.push(segment.to_vec());
+        }
+        Some(_) => {}
     }
 }
 
@@ -154,27 +165,35 @@ fn starts_a_segment<V: Rules>(map: &ActMap<V>, id: Id) -> bool {
 fn segment_key<V: Rules>(map: &ActMap<V>, segment: &[Id]) -> SegmentKey {
     let first = &map.points[segment[0]];
     let last = &map.points[segment[segment.len() - 1]];
-    let mut key = SegmentKey([0; 64]);
-    let mut len = 0;
+    let mut head = 0;
+    let mut head_len = 0;
     if first.row == 0 {
-        key.number(&mut len, first.row);
+        push_number(&mut head, &mut head_len, first.row);
     } else {
-        key.number(&mut len, first.col);
-        key.push(&mut len, b',');
-        key.number(&mut len, first.row);
+        push_number(&mut head, &mut head_len, first.col);
+        push_head(&mut head, &mut head_len, b',');
+        push_number(&mut head, &mut head_len, first.row);
     }
-    key.push(&mut len, b'-');
-    key.number(&mut len, last.col);
-    key.push(&mut len, b',');
-    key.number(&mut len, last.row);
-    key.push(&mut len, b'-');
-    for (at, &id) in segment.iter().enumerate() {
-        if at != 0 {
-            key.push(&mut len, b',');
+    push_head(&mut head, &mut head_len, b'-');
+    push_number(&mut head, &mut head_len, last.col);
+    push_head(&mut head, &mut head_len, b',');
+    push_number(&mut head, &mut head_len, last.row);
+    push_head(&mut head, &mut head_len, b'-');
+    assert!(head_len <= 16, "a segment header must fit in 64 bits");
+    head <<= (16 - head_len) * 4;
+
+    let mut kinds = 0;
+    for &id in segment {
+        let point = &map.points[id];
+        if !point.modifiable
+            || point.kind == V::MapPointType::ANCIENT
+            || point.kind == V::MapPointType::BOSS
+        {
+            continue;
         }
-        key.push(&mut len, b'0' + kind_index::<V>(map.points[id].kind) as u8);
+        kinds = (kinds << 3) | kind_index::<V>(point.kind) as u64;
     }
-    key
+    SegmentKey { head, kinds }
 }
 
 /// A node type as the number the game writes into a key.
