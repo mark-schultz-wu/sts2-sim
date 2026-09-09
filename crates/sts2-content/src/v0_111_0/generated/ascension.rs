@@ -66,7 +66,7 @@ impl AscensionLevel {
     }
 }
 
-impl sts2_core::Ladder for AscensionLevel {
+impl sts2_core::AscensionKinds for AscensionLevel {
     const INFLATION: AscensionLevel = AscensionLevel::Inflation;
     const NONE: AscensionLevel = AscensionLevel::None;
     const SCARCITY: AscensionLevel = AscensionLevel::Scarcity;

@@ -12,8 +12,8 @@ use indexmap::IndexMap;
 use sts2_core::rng::GameRng;
 use sts2_core::rng::{Bound, Span};
 use sts2_core::{
-    ActTable, ContentVersion, EncounterTable, Rarities, RelicPools, RelicTable, Rooms as _, Rules,
-    Table,
+    ActTable, ContentVersion, EncounterTable, RarityKinds, RelicPoolKinds, RelicTable,
+    RoomKinds as _, Rules, Table,
 };
 
 /// How often a relic turns up, as this build spells it.

@@ -19,7 +19,7 @@ mod tidy;
 mod types;
 
 use sts2_core::rng::{GameRng, Span};
-use sts2_core::{Coord, MapPoints, Rules};
+use sts2_core::{Coord, MapPointKinds, Rules};
 
 use set::Order;
 pub use types::{Layout, Rests};

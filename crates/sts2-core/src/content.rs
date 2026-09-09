@@ -102,7 +102,7 @@ pub trait EncounterTable: Table {
     /// Where an encounter can appear.
     type Act: Copy + serde::Serialize + 'static;
     /// Monster, elite or boss.
-    type Room: Rooms + serde::Serialize;
+    type Room: RoomKinds + serde::Serialize;
     /// A creature the encounter can place in combat.
     type Monster: Copy + serde::Serialize + 'static;
 
@@ -217,7 +217,7 @@ pub trait CardTable: Table {
     /// How often it turns up.
     type Rarity: Copy + serde::Serialize + 'static;
     /// What it can be pointed at.
-    type Target: Targets + serde::Serialize + 'static;
+    type Target: TargetKinds + serde::Serialize + 'static;
     /// Which of the build's printed numbers one of its rows is.
     type Var: CardVars;
     /// The exact numeric representation used by this build's card variables.
@@ -364,14 +364,14 @@ pub trait PowerTable: Table {
 /// What a table says about a relic, beyond its row.
 pub trait RelicTable: Table {
     /// The pools a relic can be drawn from.
-    type Pool: RelicPools + serde::Serialize;
+    type Pool: RelicPoolKinds + serde::Serialize;
 
     /// How often it turns up.
     ///
     /// The one key on these traits carrying a shared vocabulary's bounds rather
     /// than a sweep's, because it appears in [`crate::Question`]. The crate
     /// README says why a reward screen puts it there.
-    type Rarity: Rarities + serde::Serialize + serde::de::DeserializeOwned;
+    type Rarity: RarityKinds + serde::Serialize + serde::de::DeserializeOwned;
 
     /// Every pool that holds it. Empty for one nothing draws.
     fn pools(self) -> &'static [Self::Pool];
@@ -400,7 +400,7 @@ pub trait PotionTable: Table {
     type Pool: Copy + serde::Serialize + 'static;
     /// What it can be pointed at, which is what a card is pointed at: a
     /// potion targets with the cards domain's own type.
-    type Target: Targets + serde::Serialize + 'static;
+    type Target: TargetKinds + serde::Serialize + 'static;
 
     /// The pool that holds it: shared, one character's, or one of the pools
     /// nothing in a run draws from.
@@ -476,7 +476,7 @@ pub trait FlagSet: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
 ///
 /// Nine and not fewer. A build that drops or renames one fails generation
 /// rather than mapping to the wrong node.
-pub trait MapPoints: std::fmt::Debug + Copy + Eq + 'static {
+pub trait MapPointKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// The grid before the types are dealt.
     const UNASSIGNED: Self;
     const UNKNOWN: Self;
@@ -492,9 +492,9 @@ pub trait MapPoints: std::fmt::Debug + Copy + Eq + 'static {
 
 /// The kinds of room run setup sorts an act's encounters into.
 ///
-/// The same bridge as [`MapPoints`], for the three a roster is split on. A
+/// The same bridge as [`MapPointKinds`], for the three a roster is split on. A
 /// treasure or a shop is a room a map point leads to and never an encounter.
-pub trait Rooms: std::fmt::Debug + Copy + Eq + 'static {
+pub trait RoomKinds: std::fmt::Debug + Copy + Eq + 'static {
     const MONSTER: Self;
     const ELITE: Self;
     const BOSS: Self;
@@ -508,19 +508,19 @@ pub trait Rooms: std::fmt::Debug + Copy + Eq + 'static {
 
 /// The sides of a fight, as consts a rule can name.
 ///
-/// The same bridge as [`MapPoints`]. The game's enum has a third member, its
+/// The same bridge as [`MapPointKinds`]. The game's enum has a third member, its
 /// C# zero, which no creature in a fight is on.
-pub trait Sides: std::fmt::Debug + Copy + Eq + 'static {
+pub trait SideKinds: std::fmt::Debug + Copy + Eq + 'static {
     const PLAYER: Self;
     const ENEMY: Self;
 }
 
 /// The phases of a player's turn, as consts a rule can name.
 ///
-/// The same bridge as [`MapPoints`]. `PLAY` is the phase a decision is taken
+/// The same bridge as [`MapPointKinds`]. `PLAY` is the phase a decision is taken
 /// in. The rest are the game working through its own queues, and a front end
 /// meets them in an observation it cannot act on.
-pub trait TurnPhases: std::fmt::Debug + Copy + Eq + 'static {
+pub trait TurnPhaseKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// Between turns, and after a fight ends.
     const NONE: Self;
     const START: Self;
@@ -532,10 +532,10 @@ pub trait TurnPhases: std::fmt::Debug + Copy + Eq + 'static {
 
 /// The rules a card in hand can fail, as consts a rule can name.
 ///
-/// The same bridge as [`MapPoints`], over the members of
+/// The same bridge as [`MapPointKinds`], over the members of
 /// [`ContentVersion::UnplayableReason`]. Legality is decided by code holding
 /// only a [`ContentVersion`], and it has to say which rule said no.
-pub trait Unplayable: std::fmt::Debug + Copy + Eq + 'static {
+pub trait UnplayableReasonKinds: std::fmt::Debug + Copy + Eq + 'static {
     const HAS_UNPLAYABLE_KEYWORD: Self;
     /// Something else said no, and `preventer` names which model.
     const BLOCKED_BY_HOOK: Self;
@@ -548,10 +548,10 @@ pub trait Unplayable: std::fmt::Debug + Copy + Eq + 'static {
 
 /// What a card can be pointed at, as consts a rule can name.
 ///
-/// The same bridge as [`MapPoints`]. Legality and previews both branch on
+/// The same bridge as [`MapPointKinds`]. Legality and previews both branch on
 /// these. `CardModel.IsValidTarget` names two of them. A preview is computed
 /// once per creature for the three that name one.
-pub trait Targets: std::fmt::Debug + Copy + Eq + 'static {
+pub trait TargetKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// The C# zero, which a card that points at nothing carries.
     const NONE: Self;
     /// `TargetType.Self`, which is a Rust keyword.
@@ -574,7 +574,7 @@ pub trait Targets: std::fmt::Debug + Copy + Eq + 'static {
 /// a stream's name is its member's, and the pair is not something an
 /// implementation gets to invent. Before this it was a string written out
 /// beside every draw, with nothing to say the two matched.
-pub trait Streams: std::fmt::Debug + Copy + Eq + 'static {
+pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// What the game hashes into this stream's seed.
     fn name(self) -> &'static str;
 }
@@ -621,9 +621,9 @@ pub struct Temporary<P> {
 
 /// The relic pool run setup names.
 ///
-/// The same bridge as [`MapPoints`]: a generated enum is per build, so a rule
+/// The same bridge as [`MapPointKinds`]: a generated enum is per build, so a rule
 /// holding only a [`ContentVersion`] cannot write `RelicPool::Shared`.
-pub trait RelicPools: std::fmt::Debug + Copy + Eq + 'static {
+pub trait RelicPoolKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// The pool every character draws from, beside its own.
     const SHARED: Self;
 }
@@ -633,7 +633,7 @@ pub trait RelicPools: std::fmt::Debug + Copy + Eq + 'static {
 /// `RelicGrabBag` keeps a set of four and drops every relic outside it, so a
 /// starter, an event relic and an ancient never enter a bag. The four are what
 /// this names, because the count of them is a rule and not a listing.
-pub trait Rarities: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
+pub trait RarityKinds: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
     /// The four, in the game's own order.
     const DRAFTED: [Self; 4];
 
@@ -641,7 +641,7 @@ pub trait Rarities: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
     ///
     /// A pull names a rarity, and walks to the next one when the bag holds
     /// nothing at it. So the walk has to be able to write them down. Not the
-    /// same fact as [`Rarities::DRAFTED`], which is a count and an order.
+    /// same fact as [`RarityKinds::DRAFTED`], which is a count and an order.
     const COMMON: Self;
     const UNCOMMON: Self;
     const RARE: Self;
@@ -659,11 +659,11 @@ pub trait Rarities: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
 /// The ascension ladder, as much of it as a rule needs to ask about.
 ///
 /// A run has one level and every rung at or below it applies. So this is a
-/// scalar, and [`Ladder::has`] is `>=` rather than equality.
+/// scalar, and [`AscensionKinds::has`] is `>=` rather than equality.
 ///
 /// The consts are the rungs a ported rule names. A rung with no const is one
 /// nothing here reads yet, and adding one is how that changes.
-pub trait Ladder: std::fmt::Debug + Copy + Eq + 'static {
+pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// No ascension at all, which is where a run starts.
     const NONE: Self;
     /// A merchant's card removal opens dearer and climbs faster.
@@ -694,7 +694,10 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     ///
     /// Version-dependent in a way that is easy to miss. Builds move what a
     /// level means, so the same number is a different rule across two of them.
-    type AscensionLevel: Ladder + std::hash::Hash + serde::Serialize + serde::de::DeserializeOwned;
+    type AscensionLevel: AscensionKinds
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned;
 
     /// Where in a run a room sits.
     type Act: std::fmt::Debug
@@ -837,13 +840,16 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + 'static;
 
     /// What kind of room a map point is.
-    type RoomType: Rooms + std::hash::Hash + serde::Serialize + serde::de::DeserializeOwned;
+    type RoomType: RoomKinds + std::hash::Hash + serde::Serialize + serde::de::DeserializeOwned;
 
     /// What a node on the act's map leads to.
     ///
     /// Not [`ContentVersion::RoomType`]: this is what the map *shows*, and an
     /// `Unknown` node rolls the room it becomes on arrival.
-    type MapPointType: MapPoints + std::hash::Hash + serde::Serialize + serde::de::DeserializeOwned;
+    type MapPointType: MapPointKinds
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned;
 
     /// The map one act generates, which is `ActModel.GetMapPointTypes` beside
     /// the room count the act's own row carries.
@@ -854,7 +860,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + Sides
+        + SideKinds
         + 'static;
     /// Where in their turn a player is.
     type PlayerTurnPhase: std::fmt::Debug
@@ -863,7 +869,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + TurnPhases
+        + TurnPhaseKinds
         + 'static;
     /// One rule a card in hand fails.
     type UnplayableReason: std::fmt::Debug
@@ -872,7 +878,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + Unplayable
+        + UnplayableReasonKinds
         + 'static;
     /// Every rule a card fails at once, which is how the game reports it.
     type UnplayableReasons: FlagSet<Member = Self::UnplayableReason>;
@@ -883,7 +889,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + Streams
+        + StreamKinds
         + 'static;
     /// One of the random streams each player keeps.
     type PlayerRngType: std::fmt::Debug
@@ -892,7 +898,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + Streams
+        + StreamKinds
         + 'static;
     /// What a monster telegraphs before a move resolves.
     type IntentKind: std::fmt::Debug
@@ -933,7 +939,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + Targets
+        + TargetKinds
         + 'static;
 }
 

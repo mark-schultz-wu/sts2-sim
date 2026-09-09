@@ -47,7 +47,7 @@ impl MapPointType {
     ];
 }
 
-impl sts2_core::MapPoints for MapPointType {
+impl sts2_core::MapPointKinds for MapPointType {
     const UNASSIGNED: MapPointType = MapPointType::Unassigned;
     const UNKNOWN: MapPointType = MapPointType::Unknown;
     const SHOP: MapPointType = MapPointType::Shop;
@@ -78,7 +78,7 @@ impl CombatSide {
     pub const ALL: [CombatSide; 3] = [CombatSide::None, CombatSide::Player, CombatSide::Enemy];
 }
 
-impl sts2_core::Sides for CombatSide {
+impl sts2_core::SideKinds for CombatSide {
     const PLAYER: CombatSide = CombatSide::Player;
     const ENEMY: CombatSide = CombatSide::Enemy;
 }
@@ -112,7 +112,7 @@ impl PlayerTurnPhase {
     ];
 }
 
-impl sts2_core::TurnPhases for PlayerTurnPhase {
+impl sts2_core::TurnPhaseKinds for PlayerTurnPhase {
     const NONE: PlayerTurnPhase = PlayerTurnPhase::None;
     const START: PlayerTurnPhase = PlayerTurnPhase::Start;
     const AUTO_PRE_PLAY: PlayerTurnPhase = PlayerTurnPhase::AutoPrePlay;
@@ -228,7 +228,7 @@ impl sts2_core::FlagSet for UnplayableReasons {
     }
 }
 
-impl sts2_core::Unplayable for UnplayableReason {
+impl sts2_core::UnplayableReasonKinds for UnplayableReason {
     const HAS_UNPLAYABLE_KEYWORD: UnplayableReason = UnplayableReason::HasUnplayableKeyword;
     const BLOCKED_BY_HOOK: UnplayableReason = UnplayableReason::BlockedByHook;
     const BLOCKED_BY_CARD_LOGIC: UnplayableReason = UnplayableReason::BlockedByCardLogic;
@@ -285,7 +285,7 @@ impl RunRngType {
     ];
 }
 
-impl sts2_core::Streams for RunRngType {
+impl sts2_core::StreamKinds for RunRngType {
     fn name(self) -> &'static str {
         match self {
             Self::UpFront => "up_front",
@@ -326,7 +326,7 @@ impl PlayerRngType {
     ];
 }
 
-impl sts2_core::Streams for PlayerRngType {
+impl sts2_core::StreamKinds for PlayerRngType {
     fn name(self) -> &'static str {
         match self {
             Self::Rewards => "rewards",

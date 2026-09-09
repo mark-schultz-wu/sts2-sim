@@ -353,7 +353,7 @@ fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result
 const BRIDGES: [Bridge; 4] = [
     Bridge {
         enum_name: "MapPointType",
-        trait_name: "MapPoints",
+        trait_name: "MapPointKinds",
         named: &[
             ("UNASSIGNED", "Unassigned"),
             ("UNKNOWN", "Unknown"),
@@ -369,13 +369,13 @@ const BRIDGES: [Bridge; 4] = [
     },
     Bridge {
         enum_name: "CombatSide",
-        trait_name: "Sides",
+        trait_name: "SideKinds",
         named: &[("PLAYER", "Player"), ("ENEMY", "Enemy")],
         unnamed: &["None"],
     },
     Bridge {
         enum_name: "PlayerTurnPhase",
-        trait_name: "TurnPhases",
+        trait_name: "TurnPhaseKinds",
         named: &[
             ("NONE", "None"),
             ("START", "Start"),
@@ -388,7 +388,7 @@ const BRIDGES: [Bridge; 4] = [
     },
     Bridge {
         enum_name: "UnplayableReason",
-        trait_name: "Unplayable",
+        trait_name: "UnplayableReasonKinds",
         named: &[
             ("HAS_UNPLAYABLE_KEYWORD", "HasUnplayableKeyword"),
             ("BLOCKED_BY_HOOK", "BlockedByHook"),
@@ -412,7 +412,7 @@ const BRIDGES: [Bridge; 4] = [
 /// The game's snake case has a second rule for runs of capitals, which no
 /// member here has. A member that grows one stops generation.
 fn emit_stream_names(out: &mut String, name: &str, members: &[(u8, String)]) -> Result<(), String> {
-    writeln!(out, "impl sts2_core::Streams for {name} {{").unwrap();
+    writeln!(out, "impl sts2_core::StreamKinds for {name} {{").unwrap();
     writeln!(out, "    fn name(self) -> &'static str {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
     for (_, member) in members {
