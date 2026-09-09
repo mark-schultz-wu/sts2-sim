@@ -28,16 +28,14 @@ pub(crate) struct State<V: Rules> {
 
 /// Data generated once and shared by every branch of this run.
 ///
-/// `map` is what the run is played out of. `nodes` is the shape a report
-/// wants, derived from it once. The derivation runs one way: `map` is free to
-/// become whatever the simulator needs, and `nodes` follows.
+/// An act's nodes, which settle when it is generated and never change again.
+/// Every branch reads the same ones, and so does every report.
 ///
-/// [`RunData::new`] builds both, so they cannot drift. Neither changes again
-/// while the act is played.
+/// [`ActMap`] generates them and is dropped. What it holds beyond them belongs
+/// to building a map, not to playing one.
 #[derive(Debug)]
 struct RunData<V: Rules> {
     _opening: Opening<V>,
-    map: ActMap<V>,
     nodes: Arc<[Node<V>]>,
 }
 
@@ -54,16 +52,14 @@ impl<V: Rules> RunData<V> {
             .map_err(|_| crate::map::Error::NoPointAt { at })
     }
 
-    fn new(opening: Opening<V>, map: ActMap<V>) -> Self {
-        let nodes = map
-            .nodes()
-            .into_iter()
-            .map(|(at, kind, to)| Node { at, kind, to })
-            .collect();
+    fn new(opening: Opening<V>, map: &ActMap<V>) -> Self {
         RunData {
             _opening: opening,
-            map,
-            nodes,
+            nodes: map
+                .nodes()
+                .into_iter()
+                .map(|(at, kind, to)| Node { at, kind, to })
+                .collect(),
         }
     }
 }
@@ -129,7 +125,7 @@ impl<V: Rules> State<V> {
         run_counters[up_front_at] = up_front.counter() as u32;
 
         Self {
-            shared: Arc::new(RunData::new(opening, map)),
+            shared: Arc::new(RunData::new(opening, &map)),
             at,
             player: Player {
                 relics: V::starting_relics(character).into_iter().collect(),
@@ -210,7 +206,6 @@ impl<V: Rules> State<V> {
 
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Applied<V> {
-        let map = &self.shared.map;
         let travelable = self
             .shared
             .node_at(self.at)
@@ -219,7 +214,11 @@ impl<V: Rules> State<V> {
             .iter()
             .map(|&at| Reachable {
                 at,
-                kind: map.at(at).expect("a map edge leads to a node").kind,
+                kind: self
+                    .shared
+                    .node_at(at)
+                    .expect("a map edge leads to a node")
+                    .kind,
             })
             .collect();
         let Phase::Neow {
@@ -332,6 +331,7 @@ mod tests {
     use super::*;
 
     type V = V0_107_1;
+    type MapPointType = <V as sts2_core::ContentVersion>::MapPointType;
 
     fn opened() -> State<V> {
         State::start(
@@ -373,6 +373,29 @@ mod tests {
             let found = run.shared.node_at(node.at).expect("a node of this map");
             assert_eq!(found.at, node.at);
         }
+    }
+
+    /// The first node and the boss are among the shared nodes.
+    ///
+    /// Neither sits on the grid the act was walked on, so a projection built
+    /// from grid cells alone drops both.
+    #[test]
+    fn the_nodes_hold_what_the_grid_does_not() {
+        use sts2_core::MapPoints;
+
+        let run = opened();
+        let kinds: Vec<_> = run.shared.nodes.iter().map(|node| node.kind).collect();
+        for kind in [MapPointType::ANCIENT, MapPointType::BOSS] {
+            assert!(kinds.contains(&kind), "no {kind:?} among the act's nodes");
+        }
+        assert_eq!(
+            run.shared
+                .node_at(run.at)
+                .expect("the run stands on its own map")
+                .kind,
+            MapPointType::ANCIENT,
+            "a run opens on an ancient"
+        );
     }
 
     #[test]

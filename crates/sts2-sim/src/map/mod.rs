@@ -168,25 +168,6 @@ impl<V: Rules> ActMap<V> {
         self.points[self.ancient].at()
     }
 
-    /// The point standing on a coordinate, which is the map's index.
-    ///
-    /// The grid answers for every point a path runs through. The first node
-    /// and the boss sit outside it, so they answer for themselves. Row zero
-    /// holds the first node alone, because a path starts at row one.
-    ///
-    /// A coordinate this map does not hold came off some other map. That is
-    /// an error, not an empty answer.
-    pub(crate) fn at(&self, at: Coord) -> Result<&Point<V>, Error> {
-        for id in [self.ancient, self.boss] {
-            if self.points[id].at() == at {
-                return Ok(&self.points[id]);
-            }
-        }
-        self.cell(at.col as usize, at.row as usize)
-            .map(|id| &self.points[id])
-            .ok_or(Error::NoPointAt { at })
-    }
-
     /// A new point, off the grid. The caller places it if it belongs on one.
     fn add(&mut self, col: usize, row: usize) -> Id {
         self.points.push(Point::new(col, row));
@@ -357,52 +338,5 @@ impl<V: Rules> ActMap<V> {
             .children
             .iter()
             .any(|child| self.points[child].col as i32 - self.points[neighbour].col as i32 == -step)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use sts2_content::v0_107_1::V0_107_1;
-    use sts2_content::v0_107_1::ascension::AscensionLevel;
-    use sts2_core::rng::{MegaRng, stream_seed};
-    use sts2_core::{ContentVersion, Seed};
-
-    use super::*;
-
-    type V = V0_107_1;
-
-    fn map() -> ActMap<V> {
-        let seed = Seed::new("0RACLE1").expect("the fixture's seed is a seed");
-        let mut rng = MegaRng::named(stream_seed(&seed), "act_1_map");
-        ActMap::<V>::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::None)
-            .expect("the fixture's map generates")
-    }
-
-    /// Every node the map reports is a node the map can find again.
-    ///
-    /// The first node and the boss are the cases worth the test. Neither sits
-    /// on the grid, so an index that only reads cells misses both.
-    #[test]
-    fn the_index_finds_every_node_the_walk_built() {
-        let map = map();
-        let nodes = map.nodes();
-        assert!(!nodes.is_empty(), "the fixture's map has nodes");
-        for (at, kind, _) in nodes {
-            let point = map.at(at).unwrap_or_else(|_| panic!("no point at {at}"));
-            assert_eq!(point.kind, kind, "at {at}");
-            assert_eq!(point.at(), at);
-        }
-        assert_eq!(
-            map.at(map.ancient()).expect("an act opens somewhere").kind,
-            <V as ContentVersion>::MapPointType::ANCIENT
-        );
-    }
-
-    /// A coordinate off this map is an error, not an empty answer.
-    #[test]
-    fn the_index_refuses_a_coordinate_it_does_not_hold() {
-        let map = map();
-        let off = Coord::new(0, 0);
-        assert_eq!(map.at(off), Err(Error::NoPointAt { at: off }));
     }
 }
