@@ -1,6 +1,7 @@
 //! Everything a run draws before play begins.
 
 mod setup;
-mod start;
+mod state;
 
 pub use setup::{Opening, RelicBag};
+pub(crate) use state::State;

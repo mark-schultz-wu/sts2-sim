@@ -1,12 +1,13 @@
-use sts2_core::{Answered, Applied, Construct, Decision, Play, Rules, Setup, Start};
+use sts2_core::{Answered, Construct, Decision, Play, Rules, Setup, Start};
+
+use crate::run::State;
 
 use super::Error;
 
 /// A run held entirely in this process.
 #[derive(Debug)]
 pub struct Sim<V: Rules> {
-    pub(crate) current: Applied<V>,
-    pub(crate) reward_seed: u32,
+    state: State<V>,
 }
 
 impl<V: Rules> Play<V> for Sim<V> {
@@ -17,19 +18,21 @@ impl<V: Rules> Play<V> for Sim<V> {
         if !start.modifiers.is_empty() {
             return Err(Error::NotImplemented("run modifiers"));
         }
-        Ok(Self::start(&start.seed, start.character, start.ascension))
+        Ok(Self {
+            state: State::start(&start.seed, start.character, start.ascension),
+        })
     }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
         match decision {
-            Decision::ChooseOption { index } => self.choose(*index).map(Ok),
-            Decision::Answer(answer) => self.answer(answer).map(Ok),
+            Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
+            Decision::Answer(answer) => self.state.answer(answer).map(Ok),
             _ => Err(Error::NotImplemented(name(decision))),
         }
     }
 
     fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
-        Ok(Ok(self.current.clone()))
+        Ok(Ok(self.state.report()))
     }
 }
 
