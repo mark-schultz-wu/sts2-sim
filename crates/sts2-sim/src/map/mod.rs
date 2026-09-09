@@ -170,6 +170,49 @@ impl<V: Rules> ActMap<V> {
         nodes
     }
 
+    /// Where the run stands before it has moved anywhere.
+    pub fn ancient(&self) -> Coord {
+        self.points[self.ancient].at()
+    }
+
+    /// The point standing on a coordinate.
+    ///
+    /// The grid answers for every point a path runs through. The first node
+    /// and the boss sit outside it, so they answer for themselves. A path
+    /// starts at row one and ends at the last, so row zero holds the first
+    /// node alone and never a grid cell.
+    fn id_at(&self, at: Coord) -> Option<Id> {
+        for id in [self.ancient, self.boss] {
+            if self.points[id].at() == at {
+                return Some(id);
+            }
+        }
+        self.cell(at.col as usize, at.row as usize)
+    }
+
+    /// What stands on a coordinate, or None where nothing does.
+    pub fn kind_at(&self, at: Coord) -> Option<V::MapPointType> {
+        self.id_at(at).map(|id| self.points[id].kind)
+    }
+
+    /// Every coordinate one move from this one, in the observation's order.
+    ///
+    /// Row then column, which is the order [`ActMap::nodes`] puts a point's
+    /// children in. The two have to agree, because a report reads travel out
+    /// of this and the map out of that.
+    pub fn children_of(&self, at: Coord) -> Vec<Coord> {
+        let Some(id) = self.id_at(at) else {
+            return Vec::new();
+        };
+        let mut to: Vec<Coord> = self.points[id]
+            .children
+            .iter()
+            .map(|child| self.points[child].at())
+            .collect();
+        to.sort_by_key(|at| (at.row, at.col));
+        to
+    }
+
     /// A new point, off the grid. The caller places it if it belongs on one.
     fn add(&mut self, col: usize, row: usize) -> Id {
         self.points.push(Point::new(col, row));

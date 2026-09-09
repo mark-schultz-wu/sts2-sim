@@ -4,8 +4,8 @@ use std::sync::Arc;
 use smallvec::SmallVec;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
-    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Counters, EventOption, Map,
-    MapPoints, Node, Observation, Question, Reachable, Room, Rules, Seed, Table,
+    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Counters, EventOption, Map, Node,
+    Observation, Question, Reachable, Room, Rules, Seed, Table,
 };
 
 use crate::engine::Error;
@@ -27,10 +27,14 @@ pub(crate) struct State<V: Rules> {
 }
 
 /// Data generated once and shared by every branch of this run.
+///
+/// The act's own map, and not the nodes a report is made of. A report's `Node`
+/// is a shape the oracle compares, so holding one here makes the report the
+/// run again.
 #[derive(Debug)]
 struct RunData<V: Rules> {
     _opening: Opening<V>,
-    nodes: Box<[Node<V>]>,
+    map: ActMap<V>,
 }
 
 /// The small, mutable part of one player's run state.
@@ -78,18 +82,9 @@ impl<V: Rules> State<V> {
         let opening = Opening::draw(&mut up_front, character, &acts);
 
         let mut map_rng = MegaRng::named(raw_seed, "act_1_map");
-        let act_map = ActMap::<V>::generate(&mut map_rng, Layout::ACT_ONE, ascension)
+        let map = ActMap::<V>::generate(&mut map_rng, Layout::ACT_ONE, ascension)
             .expect("the game's act-one layout fits a packed map path");
-        let nodes: Vec<Node<V>> = act_map
-            .nodes()
-            .into_iter()
-            .map(|(at, kind, to)| Node { at, kind, to })
-            .collect();
-        let at = nodes
-            .iter()
-            .find(|node| node.kind == V::MapPointType::ANCIENT)
-            .expect("an act map opens on an ancient")
-            .at;
+        let at = map.ancient();
 
         let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
         let neow_options = Blessing::<V>::roll(&mut neow_rng, 1).options;
@@ -105,7 +100,7 @@ impl<V: Rules> State<V> {
         Self {
             shared: Arc::new(RunData {
                 _opening: opening,
-                nodes: nodes.into_boxed_slice(),
+                map,
             }),
             at,
             player: Player {
@@ -187,23 +182,13 @@ impl<V: Rules> State<V> {
 
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Applied<V> {
-        let travelable = self
-            .shared
-            .nodes
-            .iter()
-            .find(|node| node.at == self.at)
-            .expect("the run stands on its map")
-            .to
-            .iter()
-            .map(|&at| {
-                let kind = self
-                    .shared
-                    .nodes
-                    .iter()
-                    .find(|node| node.at == at)
-                    .expect("a map edge leads to a node")
-                    .kind;
-                Reachable { at, kind }
+        let map = &self.shared.map;
+        let travelable = map
+            .children_of(self.at)
+            .into_iter()
+            .map(|at| Reachable {
+                at,
+                kind: map.kind_at(at).expect("a map edge leads to a node"),
             })
             .collect();
         let Phase::Neow {
@@ -287,7 +272,11 @@ impl<V: Rules> State<V> {
                     at: Some(self.at),
                     visited: vec![self.at],
                     travelable,
-                    points: self.shared.nodes.to_vec(),
+                    points: map
+                        .nodes()
+                        .into_iter()
+                        .map(|(at, kind, to)| Node { at, kind, to })
+                        .collect(),
                     proceed: false,
                 },
                 rng: Counters { run, player },
