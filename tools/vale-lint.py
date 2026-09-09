@@ -20,7 +20,7 @@ DIRECT_SUFFIXES = {
     ".rst", ".tsx", ".ts",
 }
 HASH_SUFFIXES = {".bash", ".env", ".sh", ".toml", ".yaml", ".yml", ".zsh"}
-HASH_NAMES = {"Dockerfile", "versions.env"}
+HASH_NAMES = {"Dockerfile", "pre-push", "versions.env"}
 HASH_COMMENT = re.compile(r"^\s*#(?!\!)(?:\s?)(.*)$")
 
 

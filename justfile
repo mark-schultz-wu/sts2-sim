@@ -4,7 +4,7 @@
 #
 # The four arcs, in the order a new machine meets them:
 #
-#   set up      vendor-game, then deploy
+#   set up      vale, hooks, vendor-game, then deploy
 #   change code check, which is what CI runs
 #   exercise it selftest, determinism-test, live
 #   re-pin      publish-game, vendor-game, dump, codegen, check
@@ -21,9 +21,17 @@
 _default:
     @just --list
 
-# The same set CI runs, so that a green run here means a green run there.
-[doc("Everything CI runs: tests, lints, and the mod build")]
-check: test lint mods
+# The same set CI runs, so that a green run here means a green run there. Every
+# step CI's `check` job runs belongs in one of these, or the promise this line
+# makes is not true.
+[doc("Everything CI runs: tests, lints, generated tables, and the mod build")]
+check: check-repo mods
+
+# The half of `check` that needs nothing but this repository, which is what the
+# pre-push hook runs. `mods` is the other half, and it needs the game's own
+# assemblies, which not every machine has.
+[doc("Everything CI runs that needs only this repository")]
+check-repo: test lint generated
 
 [doc("The Rust suite, minus the tests that need the game")]
 test:
@@ -45,10 +53,40 @@ lint: prose
     cargo clippy --workspace --all-targets -- -D warnings
     cargo fmt --all --check
 
-# Documentation is part of the interface, and rots the same way code does.
-[doc("The prose rules alone, over the Rust documentation")]
-prose:
+# Documentation is part of the interface, and rots the same way code does. So is
+# a commit message, which is why the last of these reads them too. CI lints the
+# messages this branch adds to its base, and names that base itself. Here the
+# base is an argument, because a local branch has no environment to read it out
+# of.
+#
+# The base is `forgejo/main` and not `main`, because a local `main` goes stale
+# and a stale base makes this read the whole history back to it. Fetch before a
+# check that has to be exact.
+#
+# `--self-test` comes first. A rule that matches nothing reports a clean
+# repository for the wrong reason.
+[doc("The prose rules: structure, style, and this branch's commit messages")]
+prose base="forgejo/main":
     ./tools/prose-lint.py
+    ./tools/vale-lint.py --self-test
+    ./tools/vale-lint.py
+    ./tools/vale-lint.py --commits --base {{base}}
+
+# What lets a review skip the generated tables. A hand edit to a generated file,
+# or a generator whose output nobody refreshed, fails here rather than as a
+# divergence nobody can place. This reads the dumps in the repository and never
+# launches the game.
+[doc("Check the generated tables still reproduce from the dumps")]
+generated:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    builds=0
+    for lock in mod/games/*.lock; do
+        STS2_GAME_VERSION="$(basename "$lock" .lock)" cargo run -q -p xtask -- codegen
+        builds=$((builds + 1))
+    done
+    test "$builds" -gt 0
+    git diff --exit-code -- 'crates/sts2-content/src/*/generated'
 
 # Needs the game's own assemblies, which are not in the repository. A machine
 # with the vendored game already has them; otherwise `mod/game.sh fetch
@@ -86,6 +124,40 @@ dump: deploy
 [doc("Regenerate the content tables from the dumps")]
 codegen:
     cargo xtask codegen
+
+# The prose linter, which `just prose` needs and which no package manager here
+# carries. Pinned by version and by checksum out of the same versions.env the
+# runner image builds from, so a local check and a CI run read the same rules
+# through the same binary.
+[doc("Install the pinned prose linter into ~/.local/bin")]
+vale:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    . .forgejo/runner/versions.env
+    test -n "$VALE_VERSION"
+    test -n "$VALE_SHA256"
+    archive="$(mktemp -d)/vale.tar.gz"
+    curl --proto '=https' --tlsv1.2 -fsSL \
+      --retry 8 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 15 --max-time 300 \
+      -o "$archive" \
+      "https://github.com/vale-cli/vale/releases/download/v$VALE_VERSION/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
+    echo "$VALE_SHA256  $archive" | sha256sum -c -
+    mkdir -p "$HOME/.local/bin"
+    tar -xzf "$archive" -C "$HOME/.local/bin" vale
+    rm "$archive"
+    # An install that installed nothing must fail here rather than two recipes
+    # later, so this asks the binary what it is.
+    test "$("$HOME/.local/bin/vale" --version | grep -o '[0-9.]*$')" = "$VALE_VERSION"
+
+# Points git at .githooks/, which holds a pre-push that runs `check-repo`. Once
+# per clone: a hook path is machine state, and a repository cannot set it.
+[doc("Install this repository's git hooks")]
+hooks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git config core.hooksPath .githooks
+    test "$(git config core.hooksPath)" = ".githooks"
 
 # Unpacked where .envrc points. What a fresh machine runs before anything that touches the game. 1.2G over the
 # wire, 2.0G unpacked, and a no-op once the unpacked copy says it is already at
