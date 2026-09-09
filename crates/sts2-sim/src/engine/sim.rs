@@ -5,7 +5,10 @@ use crate::run::State;
 use super::Error;
 
 /// A run held entirely in this process.
-#[derive(Debug)]
+///
+/// Cloning one branches the run. The setup a run drew before play began is
+/// shared by every branch, so a branch copies only what play can change.
+#[derive(Debug, Clone)]
 pub struct Sim<V: Rules> {
     state: State<V>,
 }

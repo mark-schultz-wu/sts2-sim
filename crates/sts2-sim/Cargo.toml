@@ -7,6 +7,7 @@ edition = "2024"
 # The vocabulary both implementations speak. See docs/STS2-CORE.md.
 indexmap = { workspace = true }
 serde_json = { workspace = true }
+smallvec = { workspace = true }
 sts2-core = { workspace = true }
 thiserror = { workspace = true }
 
