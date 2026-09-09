@@ -45,7 +45,7 @@ pub(super) const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
 /// The one enum here the simulator names members of.
 const BRIDGES: [Bridge; 1] = [Bridge {
     enum_name: "TargetType",
-    trait_name: "Targets",
+    trait_name: "TargetKinds",
     named: &[
         ("NONE", "None"),
         ("SELF", "Self"),

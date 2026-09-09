@@ -542,11 +542,11 @@ fn emit_bridges(
         }
     }
 
-    writeln!(out, "\nimpl sts2_core::RelicPools for RelicPool {{").unwrap();
+    writeln!(out, "\nimpl sts2_core::RelicPoolKinds for RelicPool {{").unwrap();
     writeln!(out, "    const SHARED: RelicPool = RelicPool::Shared;").unwrap();
     writeln!(out, "}}\n").unwrap();
 
-    writeln!(out, "impl sts2_core::Rarities for RelicRarity {{").unwrap();
+    writeln!(out, "impl sts2_core::RarityKinds for RelicRarity {{").unwrap();
     writeln!(out, "    const DRAFTED: [RelicRarity; 4] = [").unwrap();
     for rarity in DRAFTED {
         writeln!(out, "        RelicRarity::{rarity},").unwrap();

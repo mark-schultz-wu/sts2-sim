@@ -91,7 +91,7 @@ pub enum TargetType {
     Osty = 9,
 }
 
-impl sts2_core::Targets for TargetType {
+impl sts2_core::TargetKinds for TargetType {
     const NONE: TargetType = TargetType::None;
     const SELF: TargetType = TargetType::SelfTarget;
     const ANY_ENEMY: TargetType = TargetType::AnyEnemy;

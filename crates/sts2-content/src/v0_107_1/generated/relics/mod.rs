@@ -1754,11 +1754,11 @@ static POOLS: [&[RelicPool]; 297] = [
     &[RelicPool::Event],
 ];
 
-impl sts2_core::RelicPools for RelicPool {
+impl sts2_core::RelicPoolKinds for RelicPool {
     const SHARED: RelicPool = RelicPool::Shared;
 }
 
-impl sts2_core::Rarities for RelicRarity {
+impl sts2_core::RarityKinds for RelicRarity {
     const DRAFTED: [RelicRarity; 4] = [
         RelicRarity::Common,
         RelicRarity::Uncommon,

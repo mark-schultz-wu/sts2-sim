@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
 use sts2_core::rng::GameRng;
-use sts2_core::{MapPoints, Rules};
+use sts2_core::{MapPointKinds, Rules};
 
 use super::{ActMap, Error, Id};
 

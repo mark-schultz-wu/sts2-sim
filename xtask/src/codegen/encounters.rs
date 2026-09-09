@@ -845,7 +845,7 @@ fn emit_rooms(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> 
         }
     }
 
-    writeln!(out, "impl sts2_core::Rooms for RoomType {{").unwrap();
+    writeln!(out, "impl sts2_core::RoomKinds for RoomType {{").unwrap();
     for (name, room) in NAMED {
         writeln!(out, "    const {name}: RoomType = RoomType::{room};").unwrap();
     }

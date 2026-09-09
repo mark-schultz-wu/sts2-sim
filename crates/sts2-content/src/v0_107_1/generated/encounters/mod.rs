@@ -869,7 +869,7 @@ impl sts2_core::EncounterTable for Encounter {
     }
 }
 
-impl sts2_core::Rooms for RoomType {
+impl sts2_core::RoomKinds for RoomType {
     const MONSTER: RoomType = RoomType::Monster;
     const ELITE: RoomType = RoomType::Elite;
     const BOSS: RoomType = RoomType::Boss;

@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 
 use sts2_core::rng::{GameRng, Interval, Span};
 
-use sts2_core::{Ladder, MapPoints, Rules};
+use sts2_core::{AscensionKinds, MapPointKinds, Rules};
 
 use super::{ActMap, Id};
 
@@ -75,7 +75,11 @@ impl Counts {
     /// Three shops always. Five elites, or eight from the first rung of the
     /// ascension ladder upwards. Nothing else on the ladder reaches a map, and
     /// `tests/maps.txt` holds every rung for ten seeds to say so.
-    pub(crate) fn roll<R: GameRng, A: Ladder>(rng: &mut R, layout: Layout, ascension: A) -> Self {
+    pub(crate) fn roll<R: GameRng, A: AscensionKinds>(
+        rng: &mut R,
+        layout: Layout,
+        ascension: A,
+    ) -> Self {
         let rests = match layout.rests {
             Rests::Around { mean, min, max } => {
                 let accept = Interval::new(min, max).expect("an act's rest range is ordered");
@@ -101,7 +105,7 @@ impl Counts {
 /// The game multiplies in `f32` and rounds the result, and this does the same
 /// rather than writing the eight down. The product is a hair over eight, so
 /// which way the rounding goes is not something to leave to a comment.
-fn elites<A: Ladder>(ascension: A) -> usize {
+fn elites<A: AscensionKinds>(ascension: A) -> usize {
     let scale: f32 = if ascension.has(A::SWARMING_ELITES) {
         1.6
     } else {

@@ -133,7 +133,11 @@ fn emit_ladder(out: &mut String, levels: &[(u8, String)]) -> Result<(), String> 
         }
     }
 
-    writeln!(out, "\nimpl sts2_core::Ladder for AscensionLevel {{").unwrap();
+    writeln!(
+        out,
+        "\nimpl sts2_core::AscensionKinds for AscensionLevel {{"
+    )
+    .unwrap();
     for (name, rung) in NAMED {
         writeln!(
             out,
