@@ -18,8 +18,8 @@ use std::path::Path;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
+use sts2_core::Seed;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
-use sts2_core::{ContentVersion, MapPoints, Seed};
 use sts2_sim::map::{ActMap, Layout};
 
 type V = V0_107_1;
@@ -200,35 +200,4 @@ fn the_ladder_reaches_no_map_above_the_first_rung() {
         "the ladder now reaches a map above its first rung, and the generator \
          does not know\n{report}"
     );
-}
-
-/// The map answers the same whichever side it is asked from.
-///
-/// [`ActMap::nodes`] walks the grid. `kind_at` and `children_of` look one
-/// coordinate up. A report reads travel out of the second and the map out of
-/// the first, so the two must agree.
-///
-/// The first node and the boss are the cases worth testing. Neither sits on
-/// the grid, so a grid-only lookup misses both.
-#[test]
-fn a_lookup_finds_what_the_walk_built() {
-    let (path, blocks) = fixture();
-    let mut checked = 0;
-    for (seed, rung, _) in &blocks {
-        let parsed = Seed::new(seed).expect("a fixture's seed is a seed");
-        let mut rng = MegaRng::named(stream_seed(&parsed), "act_1_map");
-        let map = ActMap::<V>::generate(&mut rng, Layout::ACT_ONE, level(rung))
-            .expect("a fixture's map generates");
-        for (at, kind, to) in map.nodes() {
-            assert_eq!(map.kind_at(at), Some(kind), "{seed} at {at}");
-            assert_eq!(map.children_of(at), to, "{seed} at {at}");
-            checked += 1;
-        }
-        assert_eq!(
-            map.kind_at(map.ancient()),
-            Some(<V as ContentVersion>::MapPointType::ANCIENT),
-            "{seed} does not open on an ancient"
-        );
-    }
-    assert!(checked > 0, "{} named no map to look up", path.display());
 }

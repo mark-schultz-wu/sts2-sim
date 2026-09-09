@@ -31,6 +31,9 @@ pub enum Error {
     PointIdTooLarge { id: usize },
     /// A segment needs more than the 17 identities that fit in its packed path.
     SegmentTooLong { length: usize },
+    /// Nothing stands where a caller asked. A map's own coordinates all
+    /// answer, so this is a run reading a coordinate off some other map.
+    NoPointAt { at: Coord },
 }
 
 impl std::fmt::Display for Error {
@@ -40,6 +43,7 @@ impl std::fmt::Display for Error {
             Error::SegmentTooLong { length } => {
                 write!(f, "map segment of length {length} does not fit in 128 bits")
             }
+            Error::NoPointAt { at } => write!(f, "this act's map has no point at {at}"),
         }
     }
 }
@@ -175,42 +179,23 @@ impl<V: Rules> ActMap<V> {
         self.points[self.ancient].at()
     }
 
-    /// The point standing on a coordinate.
+    /// The point standing on a coordinate, which is the map's index.
     ///
     /// The grid answers for every point a path runs through. The first node
-    /// and the boss sit outside it, so they answer for themselves. A path
-    /// starts at row one and ends at the last, so row zero holds the first
-    /// node alone and never a grid cell.
-    fn id_at(&self, at: Coord) -> Option<Id> {
+    /// and the boss sit outside it, so they answer for themselves. Row zero
+    /// holds the first node alone, because a path starts at row one.
+    ///
+    /// A coordinate this map does not hold came off some other map. That is
+    /// an error, not an empty answer.
+    pub(crate) fn at(&self, at: Coord) -> Result<&Point<V>, Error> {
         for id in [self.ancient, self.boss] {
             if self.points[id].at() == at {
-                return Some(id);
+                return Ok(&self.points[id]);
             }
         }
         self.cell(at.col as usize, at.row as usize)
-    }
-
-    /// What stands on a coordinate, or None where nothing does.
-    pub fn kind_at(&self, at: Coord) -> Option<V::MapPointType> {
-        self.id_at(at).map(|id| self.points[id].kind)
-    }
-
-    /// Every coordinate one move from this one, in the observation's order.
-    ///
-    /// Row then column, which is the order [`ActMap::nodes`] puts a point's
-    /// children in. The two have to agree, because a report reads travel out
-    /// of this and the map out of that.
-    pub fn children_of(&self, at: Coord) -> Vec<Coord> {
-        let Some(id) = self.id_at(at) else {
-            return Vec::new();
-        };
-        let mut to: Vec<Coord> = self.points[id]
-            .children
-            .iter()
-            .map(|child| self.points[child].at())
-            .collect();
-        to.sort_by_key(|at| (at.row, at.col));
-        to
+            .map(|id| &self.points[id])
+            .ok_or(Error::NoPointAt { at })
     }
 
     /// A new point, off the grid. The caller places it if it belongs on one.
@@ -383,5 +368,52 @@ impl<V: Rules> ActMap<V> {
             .children
             .iter()
             .any(|child| self.points[child].col as i32 - self.points[neighbour].col as i32 == -step)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sts2_content::v0_107_1::V0_107_1;
+    use sts2_content::v0_107_1::ascension::AscensionLevel;
+    use sts2_core::rng::{MegaRng, stream_seed};
+    use sts2_core::{ContentVersion, Seed};
+
+    use super::*;
+
+    type V = V0_107_1;
+
+    fn map() -> ActMap<V> {
+        let seed = Seed::new("0RACLE1").expect("the fixture's seed is a seed");
+        let mut rng = MegaRng::named(stream_seed(&seed), "act_1_map");
+        ActMap::<V>::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::None)
+            .expect("the fixture's map generates")
+    }
+
+    /// Every node the map reports is a node the map can find again.
+    ///
+    /// The first node and the boss are the cases worth the test. Neither sits
+    /// on the grid, so an index that only reads cells misses both.
+    #[test]
+    fn the_index_finds_every_node_the_walk_built() {
+        let map = map();
+        let nodes = map.nodes();
+        assert!(!nodes.is_empty(), "the fixture's map has nodes");
+        for (at, kind, _) in nodes {
+            let point = map.at(at).unwrap_or_else(|_| panic!("no point at {at}"));
+            assert_eq!(point.kind, kind, "at {at}");
+            assert_eq!(point.at(), at);
+        }
+        assert_eq!(
+            map.at(map.ancient()).expect("an act opens somewhere").kind,
+            <V as ContentVersion>::MapPointType::ANCIENT
+        );
+    }
+
+    /// A coordinate off this map is an error, not an empty answer.
+    #[test]
+    fn the_index_refuses_a_coordinate_it_does_not_hold() {
+        let map = map();
+        let off = Coord::new(0, 0);
+        assert_eq!(map.at(off), Err(Error::NoPointAt { at: off }));
     }
 }

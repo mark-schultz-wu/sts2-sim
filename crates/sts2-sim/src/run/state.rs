@@ -199,14 +199,22 @@ impl<V: Rules> State<V> {
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Applied<V> {
         let map = &self.shared.map;
-        let travelable = map
-            .children_of(self.at)
-            .into_iter()
-            .map(|at| Reachable {
-                at,
-                kind: map.kind_at(at).expect("a map edge leads to a node"),
+        let here = map.at(self.at).expect("the run stands on its own map");
+        let mut travelable: Vec<Reachable<V>> = here
+            .children
+            .iter()
+            .map(|id| {
+                let child = &map.points[id];
+                Reachable {
+                    at: child.at(),
+                    kind: child.kind,
+                }
             })
             .collect();
+        // Row then column, which is the order `ActMap::nodes` puts a point's
+        // children in. A report gives travel and the map itself, and the two
+        // listing the same edges in two orders is a difference the oracle sees.
+        travelable.sort_by_key(|step| (step.at.row, step.at.col));
         let Phase::Neow {
             options: neow_options,
             chosen: neow_chosen,
