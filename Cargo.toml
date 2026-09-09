@@ -6,6 +6,7 @@ members = [
     "crates/sts2-core",
     "crates/sts2-headless",
     "crates/sts2-rng",
+    "crates/sts2-sim",
     "xtask",
 ]
 
