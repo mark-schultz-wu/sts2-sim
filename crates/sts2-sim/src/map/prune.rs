@@ -56,7 +56,7 @@ fn prune_duplicates<V: Rules, R: GameRng>(
 /// The game's textual ordering, represented without its redundant characters.
 ///
 /// The header uses ordered four-bit character codes. Variable point kinds use
-/// three bits each; kinds fixed by their row are omitted.
+/// three bits each. Kinds fixed by their row are omitted.
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct SegmentKey {
     head: u64,
