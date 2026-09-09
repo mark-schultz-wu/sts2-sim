@@ -32,20 +32,22 @@ pub struct Deque<V: Rules> {
 }
 
 impl<V: Rules> Deque<V> {
-    fn new(relic: V::Relic) -> Self {
-        Deque {
-            rarity: relic.rarity(),
-            relics: vec![relic],
+    fn from_relics(
+        rarity: Rarity<V>,
+        count: usize,
+        relics: impl Iterator<Item = V::Relic>,
+    ) -> Self {
+        let mut held = Vec::with_capacity(count);
+        for relic in relics {
+            assert_eq!(relic.rarity(), rarity, "a relic deque holds one rarity");
+            held.push(relic);
         }
-    }
-
-    fn push(&mut self, relic: V::Relic) {
-        assert_eq!(
-            relic.rarity(),
-            self.rarity,
-            "a relic deque holds one rarity"
-        );
-        self.relics.push(relic);
+        assert_eq!(held.len(), count, "a relic deque's count was measured");
+        assert!(!held.is_empty(), "a relic deque holds at least one relic");
+        Deque {
+            rarity,
+            relics: held,
+        }
     }
 
     /// The rarity shared by every relic in this deque.
@@ -109,18 +111,31 @@ impl<V: Rules> RelicBag<V> {
 
     /// Group by rarity and shuffle each group, which is the body both
     /// overloads share.
-    fn populate<R: GameRng>(rng: &mut R, relics: Vec<V::Relic>, drafted_only: bool) -> Self {
-        let mut deques: Vec<Deque<V>> = Vec::new();
-        for relic in relics {
+    fn populate<R: GameRng>(rng: &mut R, mut relics: Vec<V::Relic>, drafted_only: bool) -> Self {
+        relics.retain(|relic| !drafted_only || Rarity::<V>::DRAFTED.contains(&relic.rarity()));
+
+        let mut counts: Vec<(Rarity<V>, usize)> = Vec::new();
+        for relic in &relics {
             let rarity = relic.rarity();
-            if drafted_only && !Rarity::<V>::DRAFTED.contains(&rarity) {
-                continue;
-            }
-            match deques.iter_mut().find(|deque| deque.rarity() == rarity) {
-                Some(deque) => deque.push(relic),
-                None => deques.push(Deque::new(relic)),
+            match counts.iter_mut().find(|(held, _)| *held == rarity) {
+                Some((_, count)) => *count += 1,
+                None => counts.push((rarity, 1)),
             }
         }
+
+        let mut deques: Vec<_> = counts
+            .into_iter()
+            .map(|(rarity, count)| {
+                Deque::from_relics(
+                    rarity,
+                    count,
+                    relics
+                        .iter()
+                        .copied()
+                        .filter(|relic| relic.rarity() == rarity),
+                )
+            })
+            .collect();
         for deque in &mut deques {
             rng.unstable_shuffle(&mut deque.relics);
         }
