@@ -25,30 +25,19 @@ use set::Order;
 pub use types::{Layout, Rests};
 
 /// Why the simulator failed to represent an act map.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     /// A point identity needs more than the seven bits reserved for it.
+    #[error("map point {id} does not fit in seven bits")]
     PointIdTooLarge { id: usize },
     /// A segment needs more than the 17 identities that fit in its packed path.
+    #[error("map segment of length {length} does not fit in 128 bits")]
     SegmentTooLong { length: usize },
     /// Nothing stands where a caller asked. A map's own coordinates all
     /// answer, so this is a run reading a coordinate off some other map.
+    #[error("this act's map has no point at {at}")]
     NoPointAt { at: Coord },
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::PointIdTooLarge { id } => write!(f, "map point {id} does not fit in seven bits"),
-            Error::SegmentTooLong { length } => {
-                write!(f, "map segment of length {length} does not fit in 128 bits")
-            }
-            Error::NoPointAt { at } => write!(f, "this act's map has no point at {at}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// The grid is this wide in every act.
 pub(crate) const COLS: usize = 7;
