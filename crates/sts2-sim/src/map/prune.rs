@@ -57,9 +57,67 @@ struct SegmentKey {
     kinds: u64,
 }
 
+enum Segment {
+    Packed { ids: u128, len: u8 },
+    Heap(Vec<Id>),
+}
+
+impl Segment {
+    fn new(points: &[Id]) -> Self {
+        if points.len() <= 17 && points.iter().all(|&id| id < 128) {
+            let ids = points
+                .iter()
+                .fold(0, |packed, &id| (packed << 7) | id as u128);
+            Segment::Packed {
+                ids,
+                len: points.len() as u8,
+            }
+        } else {
+            Segment::Heap(points.to_vec())
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Segment::Packed { len, .. } => usize::from(*len),
+            Segment::Heap(points) => points.len(),
+        }
+    }
+
+    fn get(&self, at: usize) -> Option<Id> {
+        match self {
+            Segment::Packed { ids, len } if at < usize::from(*len) => {
+                let shift = (usize::from(*len) - at - 1) * 7;
+                Some(((ids >> shift) & 0x7f) as Id)
+            }
+            Segment::Packed { .. } => None,
+            Segment::Heap(points) => points.get(at).copied(),
+        }
+    }
+
+    fn overlaps(&self, other: &[Id]) -> bool {
+        if self.len() < 3 || other.len() < 3 {
+            return false;
+        }
+        (1..=self.len() - 2).any(|at| other.get(at).copied() == self.get(at))
+    }
+
+    fn into_vec(self) -> Vec<Id> {
+        match self {
+            Segment::Packed { ids, len } => {
+                let len = usize::from(len);
+                (0..len)
+                    .map(|at| ((ids >> ((len - at - 1) * 7)) & 0x7f) as Id)
+                    .collect()
+            }
+            Segment::Heap(points) => points,
+        }
+    }
+}
+
 enum SegmentGroup {
-    One(Vec<Id>),
-    Many(Vec<Vec<Id>>),
+    One(Segment),
+    Many(Vec<Segment>),
 }
 
 fn push_head(head: &mut u64, len: &mut u32, byte: u8) {
@@ -100,7 +158,9 @@ fn matching_segments<V: Rules>(map: &ActMap<V>) -> Vec<Vec<Vec<Id>>> {
         .into_values()
         .filter_map(|group| match group {
             SegmentGroup::One(_) => None,
-            SegmentGroup::Many(segments) => Some(segments),
+            SegmentGroup::Many(segments) => {
+                Some(segments.into_iter().map(Segment::into_vec).collect())
+            }
         })
         .collect()
 }
@@ -135,17 +195,17 @@ fn collect_segment<V: Rules>(
     let key = segment_key(map, segment);
     match segments.entry(key) {
         std::collections::btree_map::Entry::Vacant(entry) => {
-            entry.insert(SegmentGroup::One(segment.to_vec()));
+            entry.insert(SegmentGroup::One(Segment::new(segment)));
         }
         std::collections::btree_map::Entry::Occupied(mut entry) => {
             let group = entry.get_mut();
             match group {
-                SegmentGroup::One(held) if !overlaps(held, segment) => {
-                    let first = std::mem::take(held);
-                    *group = SegmentGroup::Many(vec![first, segment.to_vec()]);
+                SegmentGroup::One(held) if !held.overlaps(segment) => {
+                    let first = std::mem::replace(held, Segment::Packed { ids: 0, len: 0 });
+                    *group = SegmentGroup::Many(vec![first, Segment::new(segment)]);
                 }
-                SegmentGroup::Many(held) if !held.iter().any(|prior| overlaps(prior, segment)) => {
-                    held.push(segment.to_vec());
+                SegmentGroup::Many(held) if !held.iter().any(|prior| prior.overlaps(segment)) => {
+                    held.push(Segment::new(segment));
                 }
                 _ => {}
             }
@@ -220,14 +280,6 @@ fn kind_index<V: Rules>(kind: V::MapPointType) -> usize {
         .iter()
         .position(|&of| of == kind)
         .expect("every node carries one of the nine types")
-}
-
-/// Whether two stretches share an inner node, which is `OverlappingSegment`.
-fn overlaps(a: &[Id], b: &[Id]) -> bool {
-    if a.len() < 3 || b.len() < 3 {
-        return false;
-    }
-    (1..=a.len() - 2).any(|at| b.get(at) == Some(&a[at]))
 }
 
 /// One pass over the duplicate groups, which is `PrunePaths`.
