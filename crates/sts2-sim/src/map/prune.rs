@@ -12,7 +12,8 @@
 //! Both halves draw from the map's stream, so this is not tidying that a
 //! simulator can skip. What it removes decides where every later draw lands.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 
 use sts2_core::rng::GameRng;
 use sts2_core::{MapPoints, Rules};
@@ -21,8 +22,9 @@ use super::{ActMap, Id};
 
 /// Prune, repair, and go round again while the repair changed anything.
 pub(super) fn prune_and_repair<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) {
+    let mut segments = SegmentMap::default();
     for _ in 0..3 {
-        prune_duplicates(map, rng);
+        prune_duplicates(map, rng, &mut segments);
         if !repair(map, rng) {
             break;
         }
@@ -34,16 +36,20 @@ pub(super) fn prune_and_repair<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &
 ///
 /// Each pass changes one thing and then looks again, because a cut can join two
 /// stretches that were separate.
-fn prune_duplicates<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) {
+fn prune_duplicates<V: Rules, R: GameRng>(
+    map: &mut ActMap<V>,
+    rng: &mut R,
+    segments: &mut SegmentMap,
+) {
     let mut passes = 0;
-    let mut duplicates = matching_segments(map);
+    let mut duplicates = matching_segments(map, segments);
     while prune_pass(map, rng, duplicates) {
         passes += 1;
         assert!(
             passes <= 50,
             "the map still has duplicate stretches after 50 prunes"
         );
-        duplicates = matching_segments(map);
+        duplicates = matching_segments(map, segments);
     }
 }
 
@@ -51,10 +57,96 @@ fn prune_duplicates<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) {
 ///
 /// The header uses ordered four-bit character codes. Variable point kinds use
 /// three bits each; kinds fixed by their row are omitted.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct SegmentKey {
     head: u64,
     kinds: u64,
+}
+
+#[derive(Default)]
+struct SegmentHasher(u64);
+
+impl Hasher for SegmentHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for chunk in bytes.chunks(8) {
+            let mut word = [0; 8];
+            word[..chunk.len()].copy_from_slice(chunk);
+            self.write_u64(u64::from_ne_bytes(word));
+        }
+    }
+
+    fn write_u64(&mut self, word: u64) {
+        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
+
+type SegmentMap = HashMap<SegmentKey, SegmentGroup, BuildHasherDefault<SegmentHasher>>;
+
+#[derive(Clone, Copy)]
+struct PackedPath {
+    ids: u128,
+    kinds: u64,
+    head: u64,
+    head_len: u32,
+    len: u8,
+}
+
+impl PackedPath {
+    fn start<V: Rules>(map: &ActMap<V>, id: Id) -> Option<Self> {
+        if id >= 128 {
+            return None;
+        }
+        let point = &map.points[id];
+        let mut head = 0;
+        let mut head_len = 0;
+        if point.row == 0 {
+            push_number(&mut head, &mut head_len, point.row);
+        } else {
+            push_number(&mut head, &mut head_len, point.col);
+            push_head(&mut head, &mut head_len, b',');
+            push_number(&mut head, &mut head_len, point.row);
+        }
+        push_head(&mut head, &mut head_len, b'-');
+        Some(PackedPath {
+            ids: id as u128,
+            kinds: variable_kind::<V>(point).unwrap_or(0),
+            head,
+            head_len,
+            len: 1,
+        })
+    }
+
+    fn push<V: Rules>(self, map: &ActMap<V>, id: Id) -> Option<Self> {
+        if self.len >= 17 || id >= 128 {
+            return None;
+        }
+        let kinds = match variable_kind::<V>(&map.points[id]) {
+            Some(kind) => (self.kinds << 3) | kind,
+            None => self.kinds,
+        };
+        Some(PackedPath {
+            ids: (self.ids << 7) | id as u128,
+            kinds,
+            head: self.head,
+            head_len: self.head_len,
+            len: self.len + 1,
+        })
+    }
+}
+
+fn variable_kind<V: Rules>(point: &super::Point<V>) -> Option<u64> {
+    if !point.modifiable
+        || point.kind == V::MapPointType::ANCIENT
+        || point.kind == V::MapPointType::BOSS
+    {
+        None
+    } else {
+        Some(kind_index::<V>(point.kind) as u64)
+    }
 }
 
 enum Segment {
@@ -138,31 +230,51 @@ fn push_number(head: &mut u64, len: &mut u32, number: usize) {
     push_head(head, len, b'0' + (number % 10) as u8);
 }
 
+fn endpoint<V: Rules>(point: &super::Point<V>) -> (u64, u32) {
+    let mut head = 0;
+    let mut len = 0;
+    push_number(&mut head, &mut len, point.col);
+    push_head(&mut head, &mut len, b',');
+    push_number(&mut head, &mut len, point.row);
+    push_head(&mut head, &mut len, b'-');
+    (head, len)
+}
+
 /// Every group of stretches that read the same, which is
 /// `FindMatchingSegments`.
 ///
 /// Keyed by where the stretch starts and ends and the types along it. The map
 /// is ordered by that key, as the game's `SortedDictionary` is, so the groups
 /// come back in the same order on every machine.
-fn matching_segments<V: Rules>(map: &ActMap<V>) -> Vec<Vec<Vec<Id>>> {
-    let mut segments: BTreeMap<SegmentKey, SegmentGroup> = BTreeMap::new();
+fn matching_segments<V: Rules>(map: &ActMap<V>, segments: &mut SegmentMap) -> Vec<Vec<Vec<Id>>> {
+    segments.clear();
+    let endpoints: Vec<_> = map.points.iter().map(endpoint::<V>).collect();
     let mut segment = Vec::with_capacity(map.rows + 2);
     for start in map.live().chain([map.ancient]) {
         if starts_a_segment(map, start) {
             segment.push(start);
-            collect_segments_from(map, start, &mut segment, &mut segments);
+            collect_segments_from(
+                map,
+                start,
+                &mut segment,
+                PackedPath::start(map, start),
+                &endpoints,
+                segments,
+            );
             segment.clear();
         }
     }
-    segments
-        .into_values()
-        .filter_map(|group| match group {
+    let mut duplicates: Vec<_> = segments
+        .drain()
+        .filter_map(|(key, group)| match group {
             SegmentGroup::One(_) => None,
             SegmentGroup::Many(segments) => {
-                Some(segments.into_iter().map(Segment::into_vec).collect())
+                Some((key, segments.into_iter().map(Segment::into_vec).collect()))
             }
         })
-        .collect()
+        .collect();
+    duplicates.sort_unstable_by_key(|(key, _)| *key);
+    duplicates.into_iter().map(|(_, group)| group).collect()
 }
 
 /// Visit every stretch from one junction in child insertion order.
@@ -174,15 +286,28 @@ fn collect_segments_from<V: Rules>(
     map: &ActMap<V>,
     from: Id,
     segment: &mut Vec<Id>,
-    segments: &mut BTreeMap<SegmentKey, SegmentGroup>,
+    packed: Option<PackedPath>,
+    endpoints: &[(u64, u32)],
+    segments: &mut SegmentMap,
 ) {
     for child in map.points[from].children.iter() {
         segment.push(child);
+        let packed = packed.and_then(|path| path.push(map, child));
         if segment.len() >= 3 && map.points[child].parents.len() >= 2 {
-            collect_segment(map, segment, segments);
+            collect_segment(map, segment, packed, endpoints, segments);
         }
-        collect_segments_from(map, child, segment, segments);
+        collect_segments_from(map, child, segment, packed, endpoints, segments);
         segment.pop();
+    }
+}
+
+fn stored_segment(segment: &[Id], packed: Option<PackedPath>) -> Segment {
+    match packed {
+        Some(path) => Segment::Packed {
+            ids: path.ids,
+            len: path.len,
+        },
+        None => Segment::new(segment),
     }
 }
 
@@ -190,22 +315,24 @@ fn collect_segments_from<V: Rules>(
 fn collect_segment<V: Rules>(
     map: &ActMap<V>,
     segment: &[Id],
-    segments: &mut BTreeMap<SegmentKey, SegmentGroup>,
+    packed: Option<PackedPath>,
+    endpoints: &[(u64, u32)],
+    segments: &mut SegmentMap,
 ) {
-    let key = segment_key(map, segment);
+    let key = segment_key(map, segment, packed, endpoints);
     match segments.entry(key) {
-        std::collections::btree_map::Entry::Vacant(entry) => {
-            entry.insert(SegmentGroup::One(Segment::new(segment)));
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            entry.insert(SegmentGroup::One(stored_segment(segment, packed)));
         }
-        std::collections::btree_map::Entry::Occupied(mut entry) => {
+        std::collections::hash_map::Entry::Occupied(mut entry) => {
             let group = entry.get_mut();
             match group {
                 SegmentGroup::One(held) if !held.overlaps(segment) => {
                     let first = std::mem::replace(held, Segment::Packed { ids: 0, len: 0 });
-                    *group = SegmentGroup::Many(vec![first, Segment::new(segment)]);
+                    *group = SegmentGroup::Many(vec![first, stored_segment(segment, packed)]);
                 }
                 SegmentGroup::Many(held) if !held.iter().any(|prior| prior.overlaps(segment)) => {
-                    held.push(Segment::new(segment));
+                    held.push(stored_segment(segment, packed));
                 }
                 _ => {}
             }
@@ -223,37 +350,40 @@ fn starts_a_segment<V: Rules>(map: &ActMap<V>, id: Id) -> bool {
 ///
 /// A stretch from the first node is keyed by its row alone, so two openings
 /// into the same node compare equal wherever they started.
-fn segment_key<V: Rules>(map: &ActMap<V>, segment: &[Id]) -> SegmentKey {
+fn segment_key<V: Rules>(
+    map: &ActMap<V>,
+    segment: &[Id],
+    packed: Option<PackedPath>,
+    endpoints: &[(u64, u32)],
+) -> SegmentKey {
     let first = &map.points[segment[0]];
-    let last = &map.points[segment[segment.len() - 1]];
-    let mut head = 0;
-    let mut head_len = 0;
-    if first.row == 0 {
-        push_number(&mut head, &mut head_len, first.row);
-    } else {
-        push_number(&mut head, &mut head_len, first.col);
-        push_head(&mut head, &mut head_len, b',');
-        push_number(&mut head, &mut head_len, first.row);
-    }
-    push_head(&mut head, &mut head_len, b'-');
-    push_number(&mut head, &mut head_len, last.col);
-    push_head(&mut head, &mut head_len, b',');
-    push_number(&mut head, &mut head_len, last.row);
-    push_head(&mut head, &mut head_len, b'-');
+    let (mut head, mut head_len) = match packed {
+        Some(path) => (path.head, path.head_len),
+        None => {
+            let mut head = 0;
+            let mut head_len = 0;
+            if first.row == 0 {
+                push_number(&mut head, &mut head_len, first.row);
+            } else {
+                push_number(&mut head, &mut head_len, first.col);
+                push_head(&mut head, &mut head_len, b',');
+                push_number(&mut head, &mut head_len, first.row);
+            }
+            push_head(&mut head, &mut head_len, b'-');
+            (head, head_len)
+        }
+    };
+    let (end, end_len) = endpoints[segment[segment.len() - 1]];
+    head = (head << (end_len * 4)) | end;
+    head_len += end_len;
     assert!(head_len <= 16, "a segment header must fit in 64 bits");
     head <<= (16 - head_len) * 4;
 
-    let mut kinds = 0;
-    for &id in segment {
-        let point = &map.points[id];
-        if !point.modifiable
-            || point.kind == V::MapPointType::ANCIENT
-            || point.kind == V::MapPointType::BOSS
-        {
-            continue;
-        }
-        kinds = (kinds << 3) | kind_index::<V>(point.kind) as u64;
-    }
+    let kinds = packed.map(|path| path.kinds).unwrap_or_else(|| {
+        segment.iter().fold(0, |kinds, &id| {
+            variable_kind::<V>(&map.points[id]).map_or(kinds, |kind| (kinds << 3) | kind)
+        })
+    });
     SegmentKey { head, kinds }
 }
 
