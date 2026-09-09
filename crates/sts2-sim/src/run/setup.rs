@@ -32,24 +32,6 @@ pub struct Deque<V: Rules> {
 }
 
 impl<V: Rules> Deque<V> {
-    fn from_relics(
-        rarity: Rarity<V>,
-        count: usize,
-        relics: impl Iterator<Item = V::Relic>,
-    ) -> Self {
-        let mut held = Vec::with_capacity(count);
-        for relic in relics {
-            assert_eq!(relic.rarity(), rarity, "a relic deque holds one rarity");
-            held.push(relic);
-        }
-        assert_eq!(held.len(), count, "a relic deque's count was measured");
-        assert!(!held.is_empty(), "a relic deque holds at least one relic");
-        Deque {
-            rarity,
-            relics: held,
-        }
-    }
-
     /// The rarity shared by every relic in this deque.
     pub fn rarity(&self) -> Rarity<V> {
         self.rarity
@@ -58,6 +40,26 @@ impl<V: Rules> Deque<V> {
     /// The relics in the order the bag deals them.
     pub fn relics(&self) -> &[V::Relic] {
         &self.relics
+    }
+}
+
+impl<V: Rules> FromIterator<V::Relic> for Deque<V> {
+    fn from_iter<T: IntoIterator<Item = V::Relic>>(relics: T) -> Self {
+        let mut relics = relics.into_iter();
+        let first = relics.next().expect("a relic deque is not empty");
+        let (at_least, _) = relics.size_hint();
+        let rarity = first.rarity();
+        let capacity = at_least.saturating_add(1);
+        let mut held = Vec::with_capacity(capacity);
+        held.push(first);
+        for relic in relics {
+            assert_eq!(relic.rarity(), rarity, "a relic deque holds one rarity");
+            held.push(relic);
+        }
+        Deque {
+            rarity,
+            relics: held,
+        }
     }
 }
 
@@ -114,26 +116,22 @@ impl<V: Rules> RelicBag<V> {
     fn populate<R: GameRng>(rng: &mut R, mut relics: Vec<V::Relic>, drafted_only: bool) -> Self {
         relics.retain(|relic| !drafted_only || Rarity::<V>::DRAFTED.contains(&relic.rarity()));
 
-        let mut counts: Vec<(Rarity<V>, usize)> = Vec::new();
+        let mut rarities: Vec<Rarity<V>> = Vec::new();
         for relic in &relics {
             let rarity = relic.rarity();
-            match counts.iter_mut().find(|(held, _)| *held == rarity) {
-                Some((_, count)) => *count += 1,
-                None => counts.push((rarity, 1)),
+            if !rarities.contains(&rarity) {
+                rarities.push(rarity);
             }
         }
 
-        let mut deques: Vec<_> = counts
+        let mut deques: Vec<Deque<V>> = rarities
             .into_iter()
-            .map(|(rarity, count)| {
-                Deque::from_relics(
-                    rarity,
-                    count,
-                    relics
-                        .iter()
-                        .copied()
-                        .filter(|relic| relic.rarity() == rarity),
-                )
+            .map(|rarity| {
+                relics
+                    .iter()
+                    .copied()
+                    .filter(|relic| relic.rarity() == rarity)
+                    .collect()
             })
             .collect();
         for deque in &mut deques {
