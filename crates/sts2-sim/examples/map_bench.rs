@@ -50,7 +50,7 @@ type V = V0_107_1;
 
 fn generate(seed: u32) -> ActMap<V> {
     let mut rng = MegaRng::new(seed);
-    ActMap::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::SwarmingElites)
+    ActMap::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::SwarmingElites).unwrap()
 }
 
 fn main() {

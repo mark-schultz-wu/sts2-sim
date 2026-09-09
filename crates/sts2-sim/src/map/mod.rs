@@ -24,6 +24,28 @@ use sts2_core::{Coord, MapPoints, Rules};
 use set::Order;
 pub use types::{Layout, Rests};
 
+/// Why the simulator failed to represent an act map.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Error {
+    /// A point identity needs more than the seven bits reserved for it.
+    PointIdTooLarge { id: usize },
+    /// A segment needs more than the 17 identities that fit in its packed path.
+    SegmentTooLong { length: usize },
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::PointIdTooLarge { id } => write!(f, "map point {id} does not fit in seven bits"),
+            Error::SegmentTooLong { length } => {
+                write!(f, "map segment of length {length} does not fit in 128 bits")
+            }
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
 /// The grid is this wide in every act.
 pub(crate) const COLS: usize = 7;
 
@@ -93,7 +115,11 @@ impl<V: Rules> ActMap<V> {
     ///
     /// `ascension` reaches only the elite count. Every other rung of the ladder
     /// leaves a map alone, which `tests/maps.txt` checks rather than assumes.
-    pub fn generate<R: GameRng>(rng: &mut R, layout: Layout, ascension: V::AscensionLevel) -> Self {
+    pub fn generate<R: GameRng>(
+        rng: &mut R,
+        layout: Layout,
+        ascension: V::AscensionLevel,
+    ) -> Result<Self, Error> {
         let rows = layout.rooms + 1;
         let counts = types::Counts::roll(rng, layout, ascension);
         let mut map = ActMap {
@@ -114,11 +140,11 @@ impl<V: Rules> ActMap<V> {
 
         map.walk_paths(rng);
         map.assign_types(rng);
-        prune::prune_and_repair(&mut map, rng);
+        prune::prune_and_repair(&mut map, rng)?;
         tidy::center(&mut map);
         tidy::spread(&mut map);
         tidy::straighten(&mut map);
-        map
+        Ok(map)
     }
 
     /// Every node the run can stand on, in the observation's own order.

@@ -18,17 +18,21 @@ use std::hash::{BuildHasherDefault, Hasher};
 use sts2_core::rng::GameRng;
 use sts2_core::{MapPoints, Rules};
 
-use super::{ActMap, Id};
+use super::{ActMap, Error, Id};
 
 /// Prune, repair, and go round again while the repair changed anything.
-pub(super) fn prune_and_repair<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) {
+pub(super) fn prune_and_repair<V: Rules, R: GameRng>(
+    map: &mut ActMap<V>,
+    rng: &mut R,
+) -> Result<(), Error> {
     let mut segments = SegmentMap::default();
     for _ in 0..3 {
-        prune_duplicates(map, rng, &mut segments);
+        prune_duplicates(map, rng, &mut segments)?;
         if !repair(map, rng) {
-            break;
+            return Ok(());
         }
     }
+    Ok(())
 }
 
 /// Prune until no duplicate stretch is left, which is
@@ -40,17 +44,18 @@ fn prune_duplicates<V: Rules, R: GameRng>(
     map: &mut ActMap<V>,
     rng: &mut R,
     segments: &mut SegmentMap,
-) {
+) -> Result<(), Error> {
     let mut passes = 0;
-    let mut duplicates = matching_segments(map, segments);
+    let mut duplicates = matching_segments(map, segments)?;
     while prune_pass(map, rng, duplicates) {
         passes += 1;
         assert!(
             passes <= 50,
             "the map still has duplicate stretches after 50 prunes"
         );
-        duplicates = matching_segments(map, segments);
+        duplicates = matching_segments(map, segments)?;
     }
+    Ok(())
 }
 
 /// The game's textual ordering, represented without its redundant characters.
@@ -100,9 +105,9 @@ struct PackedPath {
 }
 
 impl PackedPath {
-    fn start<V: Rules>(map: &ActMap<V>, id: Id) -> Option<Self> {
+    fn start<V: Rules>(map: &ActMap<V>, id: Id) -> Result<Self, Error> {
         if id >= 128 {
-            return None;
+            return Err(Error::PointIdTooLarge { id });
         }
         let point = &map.points[id];
         let mut head = 0;
@@ -115,7 +120,7 @@ impl PackedPath {
             push_number(&mut head, &mut head_len, point.row);
         }
         push_head(&mut head, &mut head_len, b'-');
-        Some(PackedPath {
+        Ok(PackedPath {
             ids: id as u128,
             kinds: variable_kind::<V>(point).unwrap_or(0),
             head,
@@ -124,15 +129,20 @@ impl PackedPath {
         })
     }
 
-    fn push<V: Rules>(self, map: &ActMap<V>, id: Id) -> Option<Self> {
+    fn push<V: Rules>(self, map: &ActMap<V>, id: Id) -> Result<Self, Error> {
         if self.len >= 17 || id >= 128 {
-            return None;
+            if self.len >= 17 {
+                return Err(Error::SegmentTooLong {
+                    length: usize::from(self.len) + 1,
+                });
+            }
+            return Err(Error::PointIdTooLarge { id });
         }
         let kinds = match variable_kind::<V>(&map.points[id]) {
             Some(kind) => (self.kinds << 3) | kind,
             None => self.kinds,
         };
-        Some(PackedPath {
+        Ok(PackedPath {
             ids: (self.ids << 7) | id as u128,
             kinds,
             head: self.head,
@@ -153,43 +163,22 @@ fn variable_kind<V: Rules>(point: &super::Point<V>) -> Option<u64> {
     }
 }
 
-enum Segment {
-    Packed { ids: u128, len: u8 },
-    Heap(Vec<Id>),
+struct Segment {
+    ids: u128,
+    len: u8,
 }
 
 impl Segment {
-    fn new(points: &[Id]) -> Self {
-        // An act path has at most 17 points. Seven bits per point therefore
-        // occupy 119 of the 128 available bits.
-        if points.len() <= 17 && points.iter().all(|&id| id < 128) {
-            let ids = points
-                .iter()
-                .fold(0, |packed, &id| (packed << 7) | id as u128);
-            Segment::Packed {
-                ids,
-                len: points.len() as u8,
-            }
-        } else {
-            Segment::Heap(points.to_vec())
-        }
-    }
-
     fn len(&self) -> usize {
-        match self {
-            Segment::Packed { len, .. } => usize::from(*len),
-            Segment::Heap(points) => points.len(),
-        }
+        usize::from(self.len)
     }
 
     fn get(&self, at: usize) -> Option<Id> {
-        match self {
-            Segment::Packed { ids, len } if at < usize::from(*len) => {
-                let shift = (usize::from(*len) - at - 1) * 7;
-                Some(((ids >> shift) & 0x7f) as Id)
-            }
-            Segment::Packed { .. } => None,
-            Segment::Heap(points) => points.get(at).copied(),
+        if at < self.len() {
+            let shift = (self.len() - at - 1) * 7;
+            Some(((self.ids >> shift) & 0x7f) as Id)
+        } else {
+            None
         }
     }
 
@@ -201,15 +190,10 @@ impl Segment {
     }
 
     fn into_vec(self) -> Vec<Id> {
-        match self {
-            Segment::Packed { ids, len } => {
-                let len = usize::from(len);
-                (0..len)
-                    .map(|at| ((ids >> ((len - at - 1) * 7)) & 0x7f) as Id)
-                    .collect()
-            }
-            Segment::Heap(points) => points,
-        }
+        let len = usize::from(self.len);
+        (0..len)
+            .map(|at| ((self.ids >> ((len - at - 1) * 7)) & 0x7f) as Id)
+            .collect()
     }
 }
 
@@ -252,7 +236,10 @@ fn endpoint<V: Rules>(point: &super::Point<V>) -> (u64, u32) {
 /// Keyed by where the stretch starts and ends and the types along it. The map
 /// is ordered by that key, as the game's `SortedDictionary` is, so the groups
 /// come back in the same order on every machine.
-fn matching_segments<V: Rules>(map: &ActMap<V>, segments: &mut SegmentMap) -> Vec<Vec<Vec<Id>>> {
+fn matching_segments<V: Rules>(
+    map: &ActMap<V>,
+    segments: &mut SegmentMap,
+) -> Result<Vec<Vec<Vec<Id>>>, Error> {
     // Pruning rebuilds this table after every cut. Retaining its allocation
     // avoids growing the same table repeatedly.
     segments.clear();
@@ -265,10 +252,10 @@ fn matching_segments<V: Rules>(map: &ActMap<V>, segments: &mut SegmentMap) -> Ve
                 map,
                 start,
                 &mut segment,
-                PackedPath::start(map, start),
+                PackedPath::start(map, start)?,
                 &endpoints,
                 segments,
-            );
+            )?;
             segment.clear();
         }
     }
@@ -282,7 +269,7 @@ fn matching_segments<V: Rules>(map: &ActMap<V>, segments: &mut SegmentMap) -> Ve
         })
         .collect();
     duplicates.sort_unstable_by_key(|(key, _)| *key);
-    duplicates.into_iter().map(|(_, group)| group).collect()
+    Ok(duplicates.into_iter().map(|(_, group)| group).collect())
 }
 
 /// Visit every stretch from one junction in child insertion order.
@@ -294,53 +281,50 @@ fn collect_segments_from<V: Rules>(
     map: &ActMap<V>,
     from: Id,
     segment: &mut Vec<Id>,
-    packed: Option<PackedPath>,
+    packed: PackedPath,
     endpoints: &[(u64, u32)],
     segments: &mut SegmentMap,
-) {
+) -> Result<(), Error> {
     for child in map.points[from].children.iter() {
         segment.push(child);
-        let packed = packed.and_then(|path| path.push(map, child));
+        let packed = packed.push(map, child)?;
         if segment.len() >= 3 && map.points[child].parents.len() >= 2 {
-            collect_segment(map, segment, packed, endpoints, segments);
+            collect_segment(segment, packed, endpoints, segments);
         }
-        collect_segments_from(map, child, segment, packed, endpoints, segments);
+        collect_segments_from(map, child, segment, packed, endpoints, segments)?;
         segment.pop();
     }
+    Ok(())
 }
 
-fn stored_segment(segment: &[Id], packed: Option<PackedPath>) -> Segment {
-    match packed {
-        Some(path) => Segment::Packed {
-            ids: path.ids,
-            len: path.len,
-        },
-        None => Segment::new(segment),
+fn stored_segment(packed: PackedPath) -> Segment {
+    Segment {
+        ids: packed.ids,
+        len: packed.len,
     }
 }
 
 /// File one candidate stretch unless it overlaps one already under its key.
-fn collect_segment<V: Rules>(
-    map: &ActMap<V>,
+fn collect_segment(
     segment: &[Id],
-    packed: Option<PackedPath>,
+    packed: PackedPath,
     endpoints: &[(u64, u32)],
     segments: &mut SegmentMap,
 ) {
-    let key = segment_key(map, segment, packed, endpoints);
+    let key = segment_key(segment, packed, endpoints);
     match segments.entry(key) {
         std::collections::hash_map::Entry::Vacant(entry) => {
-            entry.insert(SegmentGroup::One(stored_segment(segment, packed)));
+            entry.insert(SegmentGroup::One(stored_segment(packed)));
         }
         std::collections::hash_map::Entry::Occupied(mut entry) => {
             let group = entry.get_mut();
             match group {
                 SegmentGroup::One(held) if !held.overlaps(segment) => {
-                    let first = std::mem::replace(held, Segment::Packed { ids: 0, len: 0 });
-                    *group = SegmentGroup::Many(vec![first, stored_segment(segment, packed)]);
+                    let first = std::mem::replace(held, Segment { ids: 0, len: 0 });
+                    *group = SegmentGroup::Many(vec![first, stored_segment(packed)]);
                 }
                 SegmentGroup::Many(held) if !held.iter().any(|prior| prior.overlaps(segment)) => {
-                    held.push(stored_segment(segment, packed));
+                    held.push(stored_segment(packed));
                 }
                 _ => {}
             }
@@ -358,40 +342,15 @@ fn starts_a_segment<V: Rules>(map: &ActMap<V>, id: Id) -> bool {
 ///
 /// A stretch from the first node is keyed by its row alone, so two openings
 /// into the same node compare equal wherever they started.
-fn segment_key<V: Rules>(
-    map: &ActMap<V>,
-    segment: &[Id],
-    packed: Option<PackedPath>,
-    endpoints: &[(u64, u32)],
-) -> SegmentKey {
-    let first = &map.points[segment[0]];
-    let (mut head, mut head_len) = match packed {
-        Some(path) => (path.head, path.head_len),
-        None => {
-            let mut head = 0;
-            let mut head_len = 0;
-            if first.row == 0 {
-                push_number(&mut head, &mut head_len, first.row);
-            } else {
-                push_number(&mut head, &mut head_len, first.col);
-                push_head(&mut head, &mut head_len, b',');
-                push_number(&mut head, &mut head_len, first.row);
-            }
-            push_head(&mut head, &mut head_len, b'-');
-            (head, head_len)
-        }
-    };
+fn segment_key(segment: &[Id], packed: PackedPath, endpoints: &[(u64, u32)]) -> SegmentKey {
+    let (mut head, mut head_len) = (packed.head, packed.head_len);
     let (end, end_len) = endpoints[segment[segment.len() - 1]];
     head = (head << (end_len * 4)) | end;
     head_len += end_len;
     assert!(head_len <= 16, "a segment header must fit in 64 bits");
     head <<= (16 - head_len) * 4;
 
-    let kinds = packed.map(|path| path.kinds).unwrap_or_else(|| {
-        segment.iter().fold(0, |kinds, &id| {
-            variable_kind::<V>(&map.points[id]).map_or(kinds, |kind| (kinds << 3) | kind)
-        })
-    });
+    let kinds = packed.kinds;
     SegmentKey { head, kinds }
 }
 
