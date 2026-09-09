@@ -1,0 +1,12 @@
+[package]
+name = "sts2-sim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# The vocabulary both implementations speak. See docs/STS2-CORE.md.
+sts2-core = { workspace = true }
+
+[dev-dependencies]
+# Map fixtures name one build and use its ascension ladder.
+sts2-content = { workspace = true, features = ["v0_107_1"] }
