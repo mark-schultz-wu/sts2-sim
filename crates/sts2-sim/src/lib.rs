@@ -3,6 +3,10 @@
 //! Gameplay rules live under their domain modules. This first slice generates
 //! the act map from the same random stream and constraints as the game.
 
+mod engine;
 pub mod event;
 pub mod map;
+mod reward;
 pub mod run;
+
+pub use engine::{Error, Sim};
