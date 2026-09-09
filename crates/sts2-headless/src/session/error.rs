@@ -85,6 +85,17 @@ pub enum Error {
     #[error("the game refused to start the run: {0}")]
     NotStarted(String),
 
+    /// A transcript was asked a question it does not hold the answer to.
+    ///
+    /// It knows one line of play. Playing something other than what was
+    /// recorded is not a miss to fill, it is a different run.
+    #[error("the transcript expected {expected} at {at}, and was played {played}")]
+    OffScript {
+        at: usize,
+        expected: String,
+        played: String,
+    },
+
     /// The game refused an observation.
     ///
     /// A fault rather than an answer, on the same ground as [`Error::NotStarted`].

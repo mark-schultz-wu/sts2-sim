@@ -50,6 +50,7 @@ mod session;
 mod stamp;
 mod wire;
 
+pub use session::cached::{Cached, FromTranscript, Transport};
 pub use session::config::{Config, game_dir_from_env};
 pub use session::error::Error;
 pub use session::game::{Oracle, parse_reply};

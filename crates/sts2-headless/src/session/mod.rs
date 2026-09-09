@@ -10,6 +10,7 @@
 //! Both implement [`Play`](sts2_core::Play), which is what lets a front end not
 //! care.
 
+pub(crate) mod cached;
 pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod error;
@@ -43,6 +44,22 @@ pub(crate) fn receive<V: ContentVersion>(
 
     match applied {
         Some(applied) => Ok(Ok(applied)),
+        None => Err(Error::SaidGoodbye),
+    }
+}
+
+/// Where the run stands, from the envelope the last answer left behind.
+///
+/// What [`crate::Cached`] answers a look with. Looking spends no transcript
+/// entry, because nothing moved.
+pub(crate) fn snapshot_of<V: ContentVersion>(
+    last: Option<&crate::Response>,
+) -> Result<sts2_core::Snapshot<V>, Error> {
+    let response = last.ok_or_else(|| {
+        Error::NotObserved("nothing has been played, so nothing has been reported".to_string())
+    })?;
+    match response.applied::<V>()? {
+        Some(applied) => Ok(applied.snapshot()),
         None => Err(Error::SaidGoodbye),
     }
 }
