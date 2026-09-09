@@ -8,6 +8,7 @@
 //! `tests/setup.txt` is where the phases stand, taken from the game by
 //! `cargo xtask dump setupdump`. Each line is a place this has to reach.
 
+use indexmap::IndexMap;
 use sts2_core::rng::GameRng;
 use sts2_core::rng::{Bound, Span};
 use sts2_core::{
@@ -21,62 +22,22 @@ pub type Rarity<V> = <<V as ContentVersion>::Relic as RelicTable>::Rarity;
 /// The pool a relic is drafted from, as this build spells it.
 pub type Pool<V> = <<V as ContentVersion>::Relic as RelicTable>::Pool;
 
-/// One rarity's relics, in the order the bag deals them.
-///
-/// The rarity is derived from the first relic. Further relics must have that
-/// same rarity, so the label and contents cannot disagree.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Deque<V: Rules> {
-    rarity: Rarity<V>,
-    relics: Vec<V::Relic>,
-}
-
-impl<V: Rules> Deque<V> {
-    /// The rarity shared by every relic in this deque.
-    pub fn rarity(&self) -> Rarity<V> {
-        self.rarity
-    }
-
-    /// The relics in the order the bag deals them.
-    pub fn relics(&self) -> &[V::Relic] {
-        &self.relics
-    }
-}
-
-impl<V: Rules> FromIterator<V::Relic> for Deque<V> {
-    fn from_iter<T: IntoIterator<Item = V::Relic>>(relics: T) -> Self {
-        let mut relics = relics.into_iter();
-        let first = relics.next().expect("a relic deque is not empty");
-        let (at_least, _) = relics.size_hint();
-        let rarity = first.rarity();
-        let capacity = at_least.saturating_add(1);
-        let mut held = Vec::with_capacity(capacity);
-        held.push(first);
-        for relic in relics {
-            assert_eq!(relic.rarity(), rarity, "a relic deque holds one rarity");
-            held.push(relic);
-        }
-        Deque {
-            rarity,
-            relics: held,
-        }
-    }
-}
-
 /// One run's relic bag, by rarity, in the order it deals from.
 ///
 /// The game keeps a dictionary of rarity to list and shuffles each list. That
-/// dictionary is in the order a rarity was first seen. So this is a list and
-/// not a map, and the order the relics come in decides it.
+/// dictionary is in the order a rarity was first seen, which `IndexMap`
+/// preserves.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelicBag<V: Rules> {
-    deques: Vec<Deque<V>>,
+    deques: IndexMap<Rarity<V>, Vec<V::Relic>>,
 }
 
 impl<V: Rules> RelicBag<V> {
     /// Each rarity's relics, in the order the bag first saw that rarity.
-    pub fn deques(&self) -> &[Deque<V>] {
-        &self.deques
+    pub fn deques(&self) -> impl Iterator<Item = (Rarity<V>, &[V::Relic])> {
+        self.deques
+            .iter()
+            .map(|(&rarity, relics)| (rarity, relics.as_slice()))
     }
 
     /// The shared bag, which is `RelicGrabBag.Populate(relics, rng)`.
@@ -113,29 +74,17 @@ impl<V: Rules> RelicBag<V> {
 
     /// Group by rarity and shuffle each group, which is the body both
     /// overloads share.
-    fn populate<R: GameRng>(rng: &mut R, mut relics: Vec<V::Relic>, drafted_only: bool) -> Self {
-        relics.retain(|relic| !drafted_only || Rarity::<V>::DRAFTED.contains(&relic.rarity()));
-
-        let mut rarities: Vec<Rarity<V>> = Vec::new();
-        for relic in &relics {
+    fn populate<R: GameRng>(rng: &mut R, relics: Vec<V::Relic>, drafted_only: bool) -> Self {
+        let mut deques: IndexMap<Rarity<V>, Vec<V::Relic>> = IndexMap::new();
+        for relic in relics {
             let rarity = relic.rarity();
-            if !rarities.contains(&rarity) {
-                rarities.push(rarity);
+            if !drafted_only || Rarity::<V>::DRAFTED.contains(&rarity) {
+                deques.entry(rarity).or_default().push(relic);
             }
         }
 
-        let mut deques: Vec<Deque<V>> = rarities
-            .into_iter()
-            .map(|rarity| {
-                relics
-                    .iter()
-                    .copied()
-                    .filter(|relic| relic.rarity() == rarity)
-                    .collect()
-            })
-            .collect();
-        for deque in &mut deques {
-            rng.unstable_shuffle(&mut deque.relics);
+        for relics in deques.values_mut() {
+            rng.unstable_shuffle(relics);
         }
         RelicBag { deques }
     }

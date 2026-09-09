@@ -16,6 +16,7 @@ members = [
 [workspace.dependencies]
 anyhow = "1.0.104"
 clap = { version = "4", features = ["derive"] }
+indexmap = "2"
 # The transcendentals the gaussian draws need, compiled in rather than taken
 # from whatever libm the target has. See `sts2-core/src/rng`.
 libm = "0.2"
