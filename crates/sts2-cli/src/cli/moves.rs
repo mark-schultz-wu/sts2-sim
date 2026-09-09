@@ -12,7 +12,7 @@
 use super::choose;
 use nonmax::NonMaxU32;
 use sts2_core::{
-    Answer, Applied, Combat, ContentVersion, Decision, Map, Observation, Question, RewardKind,
+    Answer, Combat, ContentVersion, Decision, Map, Observation, Question, RewardKind, Snapshot,
     TakeReward, Tool,
 };
 
@@ -22,16 +22,16 @@ use sts2_core::{
 /// question blocks everything but an answer, and a room with options must be
 /// answered before the map opens again. Mixing categories produces moves that
 /// are legal in isolation and refused in place.
-pub fn legal<V: ContentVersion>(applied: &Applied<V>) -> Vec<Decision<V>> {
-    match &applied.asking {
+pub fn legal<V: ContentVersion>(snapshot: &Snapshot<V>) -> Vec<Decision<V>> {
+    match &snapshot.asking {
         Some(question) => answers(question),
-        None => plays(&applied.observation, applied.observation.fight()),
+        None => plays(&snapshot.observation, snapshot.observation.fight()),
     }
 }
 
 /// The ordinary numbered choices shared by terminal and automation frontends.
-pub fn navigation<V: ContentVersion>(applied: &Applied<V>) -> Vec<Decision<V>> {
-    legal(applied)
+pub fn navigation<V: ContentVersion>(snapshot: &Snapshot<V>) -> Vec<Decision<V>> {
+    legal(snapshot)
         .into_iter()
         .filter(|decision| {
             matches!(
@@ -293,12 +293,12 @@ mod tests {
 
     /// The moves an observation with this much bent into it offers.
     fn moves(overlay: serde_json::Value) -> Vec<Decision<V>> {
-        legal::<V>(&fixture::applied(overlay))
+        legal::<V>(&fixture::snapshot(overlay))
     }
 
     /// The moves a whole reply offers, for a pending, which carries no room.
     fn answering(reply: serde_json::Value) -> Vec<Decision<V>> {
-        legal::<V>(&fixture::answered(reply))
+        legal::<V>(&fixture::answered(reply).snapshot())
     }
 
     /// The belt is believed rather than second-guessed. What is drinkable is
@@ -379,7 +379,7 @@ mod tests {
         }));
 
         assert_eq!(
-            navigation(&applied),
+            navigation(&applied.snapshot()),
             vec![Decision::ChooseOption { index: 6 }]
         );
     }

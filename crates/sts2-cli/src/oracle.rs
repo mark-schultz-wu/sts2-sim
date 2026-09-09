@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use sts2_core::{Applied, ContentVersion};
+use sts2_core::{ContentVersion, Snapshot};
 use sts2_headless::daemon::{self, DEFAULT_IDLE_TIMEOUT};
 use sts2_headless::{Config, Recorded, Session, recording};
 
@@ -203,8 +203,8 @@ pub fn recorded<V: ContentVersion>(file: &Path) -> Result<sts2_core::Recording<V
 /// The rule line and the game's log are the protocol's and not the run's. So
 /// they are handed to the renderer rather than reached for by it. A front end
 /// driving something else prints the same page without them.
-pub fn readable<V: ContentVersion>(game: &Session<V>, applied: &Applied<V>, rng: bool) -> String {
-    let mut view = Readable::new(applied).logging(game.logged());
+pub fn readable<V: ContentVersion>(game: &Session<V>, snapshot: &Snapshot<V>, rng: bool) -> String {
+    let mut view = Readable::new(snapshot).logging(game.logged());
     if let Some((seq, cmd, digest)) = game.reported().and_then(envelope) {
         view = view.in_reply(seq, cmd, digest);
     }

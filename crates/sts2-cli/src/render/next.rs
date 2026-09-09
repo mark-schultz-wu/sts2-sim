@@ -11,13 +11,13 @@
 //! advice.
 
 use crate::cli::choose;
-use sts2_core::{Applied, Combat, ContentVersion, Map, Observation, Question, RewardKind, Room};
+use sts2_core::{Combat, ContentVersion, Map, Observation, Question, RewardKind, Room, Snapshot};
 
 /// The command to run next, or nothing when the game is not waiting on anyone.
-pub(super) fn next<V: ContentVersion>(applied: &Applied<V>) -> Option<String> {
-    match &applied.asking {
+pub(super) fn next<V: ContentVersion>(snapshot: &Snapshot<V>) -> Option<String> {
+    match &snapshot.asking {
         Some(question) => Some(answering(question)),
-        None => observing(&applied.observation, applied.observation.fight()),
+        None => observing(&snapshot.observation, snapshot.observation.fight()),
     }
 }
 

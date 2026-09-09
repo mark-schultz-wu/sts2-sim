@@ -11,7 +11,7 @@
 use super::Taking;
 use anyhow::{Result, bail};
 use sts2_core::ContentVersion;
-use sts2_core::{Answer as GameAnswer, Applied, Decision, Question, Room};
+use sts2_core::{Answer as GameAnswer, Decision, Question, Room, Snapshot};
 
 /// What the game is currently waiting to be told.
 pub enum Awaiting {
@@ -74,8 +74,8 @@ pub(crate) fn buyable<V: ContentVersion>(room: &Room<V>) -> Vec<u8> {
 }
 
 /// Reads one reply and says which mechanism a choice goes through.
-pub fn awaiting<V: ContentVersion>(applied: &Applied<V>) -> Result<Awaiting> {
-    if let Some(question) = &applied.asking {
+pub fn awaiting<V: ContentVersion>(standing: &Snapshot<V>) -> Result<Awaiting> {
+    if let Some(question) = &standing.asking {
         return Ok(match question {
             Question::SelectCards { .. } => Awaiting::Cards,
             Question::Rewards { .. } => Awaiting::Rewards,
@@ -86,7 +86,7 @@ pub fn awaiting<V: ContentVersion>(applied: &Applied<V>) -> Result<Awaiting> {
     // A room offers one or the other: a list to choose from, or a shop's stock,
     // which is bought rather than chosen — a different command for what reads
     // as the same act.
-    let room = applied.observation.room.as_ref();
+    let room = standing.observation.room.as_ref();
     if room.is_some_and(|r| !choosable(r).is_empty()) {
         return Ok(Awaiting::RoomOption);
     }

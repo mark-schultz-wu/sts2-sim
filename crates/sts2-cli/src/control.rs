@@ -9,7 +9,7 @@
 //! no orchestration, because the orchestration is here and generic.
 
 use anyhow::{Context, Result};
-use sts2_core::{Answered, Applied, Construct, ContentVersion, Play, Step};
+use sts2_core::{Answered, Applied, Construct, ContentVersion, Decided, Play, Snapshot, Step};
 
 use crate::cli::{Taking, choose};
 
@@ -37,11 +37,15 @@ pub enum Command {
 /// game log to it, and a simulator has neither.
 #[derive(Debug)]
 pub enum Outcome<V: ContentVersion> {
-    /// A state to print.
+    /// A state to print, and what the decision that reached it decided.
     ///
     /// Boxed because a whole observation dwarfs a drawn map, and this is one
-    /// command per process rather than a hot loop.
-    Seen(Box<Applied<V>>),
+    /// command per process rather than a hot loop. `made` is absent for a
+    /// look, which decided nothing.
+    Seen {
+        snapshot: Box<Snapshot<V>>,
+        decided: Option<Decided>,
+    },
     /// Words that are the whole answer, ending in their own newline.
     Said(String),
 }
@@ -83,11 +87,24 @@ where
             let decision = choose::command::<V>(&awaiting, indices)?;
 
             eprintln!("({})", choose::describe(&awaiting));
-            Ok(Outcome::Seen(Box::new(send(game, &decision.into())?)))
+            let (decided, snapshot) = send(game, &decision.into())?;
+            Ok(Outcome::Seen {
+                snapshot: Box::new(snapshot),
+                decided: Some(decided),
+            })
         }
 
-        Command::Step(play) => Ok(Outcome::Seen(Box::new(send(game, &play.step::<V>()?)?))),
-        Command::Observe => Ok(Outcome::Seen(Box::new(look(game)?))),
+        Command::Step(play) => {
+            let (decided, snapshot) = send(game, &play.step::<V>()?)?;
+            Ok(Outcome::Seen {
+                snapshot: Box::new(snapshot),
+                decided: Some(decided),
+            })
+        }
+        Command::Observe => Ok(Outcome::Seen {
+            snapshot: Box::new(look(game)?),
+            decided: None,
+        }),
     }
 }
 
@@ -100,13 +117,13 @@ where
 /// # Errors
 ///
 /// A refusal, or a fault. See [`accepted`] for why a refusal is one here.
-pub fn send<V, G>(game: &mut G, step: &Step<V>) -> Result<Applied<V>>
+pub fn send<V, G>(game: &mut G, step: &Step<V>) -> Result<(Decided, Snapshot<V>)>
 where
     V: ContentVersion,
     G: Construct<V>,
     G::Error: Fault,
 {
-    accepted(game.step(step)?)
+    Ok(accepted(game.step(step)?)?.split())
 }
 
 /// Asks where the run is standing, without moving it.
@@ -117,14 +134,14 @@ where
 ///
 /// # Errors
 ///
-/// A refusal, or a fault. There is no run to report before one is started.
-pub fn look<V, G>(game: &mut G) -> Result<Applied<V>>
+/// A fault. Observing decides nothing, so there is nothing to refuse.
+pub fn look<V, G>(game: &mut G) -> Result<Snapshot<V>>
 where
     V: ContentVersion,
     G: Play<V>,
     G::Error: Fault,
 {
-    accepted(game.observe().context("asking the game where it is")?)
+    game.observe().context("asking the game where it is")
 }
 
 /// A refusal, turned into an error.
@@ -153,7 +170,7 @@ pub fn accepted<V: ContentVersion>(answered: Answered<V>) -> Result<Applied<V>> 
 ///
 /// The step that broke, named by its position, so a divergence points at the
 /// move rather than at whatever came after.
-pub fn replay<V, G>(game: &mut G, steps: &[Step<V>]) -> Result<Option<Applied<V>>>
+pub fn replay<V, G>(game: &mut G, steps: &[Step<V>]) -> Result<Option<(Decided, Snapshot<V>)>>
 where
     V: ContentVersion,
     G: Construct<V>,
@@ -183,7 +200,7 @@ mod tests {
     use crate::scripted::Scripted;
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
-    use sts2_core::{Answered, Applied, Decision, Reason, Refusal, Step};
+    use sts2_core::{Answered, Applied, Decided, Decision, Reason, Refusal, Snapshot, Step};
 
     type V = V0_107_1;
 
@@ -206,7 +223,7 @@ mod tests {
 
         let outcome = perform(&mut game, &Command::Observe).unwrap();
 
-        assert!(matches!(outcome, Outcome::Seen(_)));
+        assert!(matches!(outcome, Outcome::Seen { .. }));
         assert_eq!(game.looked(), 1);
         assert_eq!(sent.count(), 0, "{:?}", sent.all());
     }
@@ -297,7 +314,7 @@ mod tests {
     fn an_empty_replay_reports_nothing() {
         let mut game = Scripted::saying(plain());
 
-        let last: Option<Applied<V>> = replay(&mut game, &[]).unwrap();
+        let last: Option<(Decided, Snapshot<V>)> = replay(&mut game, &[]).unwrap();
 
         assert!(last.is_none());
     }

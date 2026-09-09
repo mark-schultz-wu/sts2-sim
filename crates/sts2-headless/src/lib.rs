@@ -39,13 +39,9 @@
 //!     },
 //! )?;
 //!
-//! // Every step has two results: whether the exchange happened, and whether
-//! // the game accepted it. Starting has one, because there is no run to
-//! // report from when it did not.
-//! match game.observe()? {
-//!     Ok(applied) => println!("floor {}", applied.observation.floor),
-//!     Err(refusal) => println!("{refusal}"),
-//! }
+//! // Looking has one result. A step has two, because the game can refuse it,
+//! // but nothing about a run can refuse to say where it stands.
+//! println!("floor {}", game.observe()?.observation.floor);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 

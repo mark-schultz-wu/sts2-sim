@@ -13,7 +13,8 @@ use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
-    Answer, Applied, ContentVersion, Cost, Decision, Observation, Play, Question, Room, TakeReward,
+    Answer, ContentVersion, Cost, Decided, Decision, Observation, Play, Question, Room, Snapshot,
+    TakeReward,
 };
 
 use super::keys::{self, Action};
@@ -104,7 +105,7 @@ pub struct App<V: ContentVersion, G: Play<V>> {
     /// Why the loop will stop, read once it has.
     ended: Ended,
     /// The most recent thing the game said. `None` only before the first look.
-    seen: Option<Applied<V>>,
+    seen: Option<Snapshot<V>>,
     stage: Stage,
     /// The run being set up, when there is no run.
     ///
@@ -136,7 +137,7 @@ where
     }
 
     /// What the game last said, for the screens to draw.
-    pub fn seen(&self) -> Option<&Applied<V>> {
+    pub fn seen(&self) -> Option<&Snapshot<V>> {
         self.seen.as_ref()
     }
 
@@ -721,8 +722,8 @@ where
     // -----------------------------------------------------------------------
 
     fn look(&mut self) -> Result<()> {
-        let answered = self.game.observe().context("asking the game where it is")?;
-        self.accept(answered, None);
+        let standing = self.game.observe().context("asking the game where it is")?;
+        self.arrive(standing);
         Ok(())
     }
 
@@ -741,6 +742,17 @@ where
     /// A refusal is a value here rather than an error. The game answered, the
     /// run is where it was, and the reason belongs on the screen where the
     /// player can act on it.
+    /// Takes where the run now stands, and resets the log when the screen
+    /// behind it changes.
+    fn arrive(&mut self, standing: Snapshot<V>) {
+        let stage = stage_of(&standing);
+        if stage != self.stage {
+            self.ui.reset();
+            self.stage = stage;
+        }
+        self.seen = Some(standing);
+    }
+
     fn accept(&mut self, answered: sts2_core::Answered<V>, said: Option<String>) -> bool {
         let accepted = answered.is_ok();
         match answered {
@@ -748,22 +760,18 @@ where
                 if let Some(said) = said {
                     self.ui.say(Tone::Did, said);
                 }
+                let (decided, snapshot) = applied.split();
                 // A parked decision is not resolved either, and that is
                 // ordinary — the question is what tells the two apart. Without
                 // the second test this fired on every card selection in the
                 // game, including Neow's.
-                if !applied.resolved && applied.asking.is_none() {
+                if decided == Decided::Abandoned && snapshot.asking.is_none() {
                     self.ui.say(
                         Tone::Warned,
                         "the game abandoned that mid-cascade — the fight ended under it",
                     );
                 }
-                let stage = stage_of(&applied);
-                if stage != self.stage {
-                    self.ui.reset();
-                    self.stage = stage;
-                }
-                self.seen = Some(applied);
+                self.arrive(snapshot);
             }
             Err(refusal) => {
                 // "No run" is not a refusal to report, it is a run waiting to
@@ -830,8 +838,8 @@ fn drink<V: ContentVersion>(index: usize, target: Option<u32>) -> Intent<V> {
 }
 
 /// Which kind of screen this is.
-fn stage_of<V: ContentVersion>(applied: &Applied<V>) -> Stage {
-    if let Some(question) = &applied.asking {
+fn stage_of<V: ContentVersion>(standing: &Snapshot<V>) -> Stage {
+    if let Some(question) = &standing.asking {
         return match question {
             Question::SelectCards { .. } => Stage::AskingCards,
             Question::Rewards { .. } => Stage::AskingRewards,
@@ -839,7 +847,7 @@ fn stage_of<V: ContentVersion>(applied: &Applied<V>) -> Stage {
         };
     }
 
-    let observed = &applied.observation;
+    let observed = &standing.observation;
     if observed.run_over {
         return Stage::Over;
     }

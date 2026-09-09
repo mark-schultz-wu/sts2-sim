@@ -25,7 +25,9 @@ use prose::{asker as who_asked, one_line};
 use state::state_of;
 
 use std::fmt;
-use sts2_core::{Applied, CardIdent, ContentVersion, Cost, FlagSet, ModelId, Question, RewardKind};
+use sts2_core::{
+    CardIdent, ContentVersion, Cost, Decided, FlagSet, ModelId, Question, RewardKind, Snapshot,
+};
 
 /// What one step produced, rendered for a person.
 ///
@@ -35,7 +37,9 @@ use sts2_core::{Applied, CardIdent, ContentVersion, Cost, FlagSet, ModelId, Ques
 /// The wrapper permits this crate to implement `Display` without violating the
 /// orphan rule. It also carries whose choice is being rendered.
 pub struct Readable<'a, V: ContentVersion> {
-    applied: &'a Applied<V>,
+    snapshot: &'a Snapshot<V>,
+    /// Absent for a look, which decided nothing to report on.
+    decided: Option<Decided>,
     rule: Option<Rule<'a>>,
     errors: &'a [String],
     rng: bool,
@@ -54,9 +58,10 @@ struct Rule<'a> {
 
 impl<'a, V: ContentVersion> Readable<'a, V> {
     /// The player's view: what a person sitting down to play can see.
-    pub fn new(applied: &'a Applied<V>) -> Self {
+    pub fn new(snapshot: &'a Snapshot<V>) -> Self {
         Self {
-            applied,
+            snapshot,
+            decided: None,
             rule: None,
             errors: &[],
             rng: false,
@@ -91,7 +96,7 @@ impl<'a, V: ContentVersion> Readable<'a, V> {
 
 impl<V: ContentVersion> fmt::Display for Readable<'_, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let applied = self.applied;
+        let snapshot = self.snapshot;
 
         if let Some(Rule { seq, cmd, digest }) = self.rule {
             rule(f, seq, cmd, digest)?;
@@ -99,18 +104,18 @@ impl<V: ContentVersion> fmt::Display for Readable<'_, V> {
 
         // A pending is unresolved by construction — the game stopped to ask
         // something — so saying so there would be noise on every question.
-        if !applied.resolved && applied.asking.is_none() {
+        if self.decided == Some(Decided::Abandoned) && snapshot.asking.is_none() {
             writeln!(f, "note    unresolved: combat ended mid-decision")?;
         }
         for e in self.errors {
             writeln!(f, "error   {e}")?;
         }
 
-        if let Some(question) = applied.asking.as_ref() {
+        if let Some(question) = snapshot.asking.as_ref() {
             question_of(f, question)?;
         }
-        state_of(f, &applied.observation, self.rng)?;
-        next_of(f, applied)
+        state_of(f, &snapshot.observation, self.rng)?;
+        next_of(f, snapshot)
     }
 }
 
@@ -431,8 +436,8 @@ pub(super) fn names<T: serde::Serialize + std::fmt::Debug>(list: &[T]) -> String
 }
 
 /// The one line that says what to do next.
-fn next_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, applied: &Applied<V>) -> fmt::Result {
-    match next::next(applied) {
+fn next_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, snapshot: &Snapshot<V>) -> fmt::Result {
+    match next::next(snapshot) {
         Some(command) => writeln!(f, "next    {command}"),
         None => Ok(()),
     }
@@ -450,8 +455,8 @@ mod tests {
     }
 
     fn shown(value: serde_json::Value, rng: bool) -> String {
-        let applied = crate::fixture::answered(value);
-        let readable = Readable::new(&applied).in_reply(1, "observe", "AA");
+        let snapshot = crate::fixture::answered(value).snapshot();
+        let readable = Readable::new(&snapshot).in_reply(1, "observe", "AA");
         let readable = if rng { readable.with_rng() } else { readable };
 
         format!("{readable}")

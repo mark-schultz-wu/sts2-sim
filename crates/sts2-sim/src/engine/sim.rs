@@ -1,4 +1,4 @@
-use sts2_core::{Answered, Construct, Decision, Play, Rules, Setup, Start};
+use sts2_core::{Answered, Construct, Decision, Play, Rules, Setup, Snapshot, Start};
 
 use crate::run::State;
 
@@ -34,8 +34,8 @@ impl<V: Rules> Play<V> for Sim<V> {
         }
     }
 
-    fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
-        Ok(Ok(self.state.report()))
+    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
+        Ok(self.state.report().snapshot())
     }
 }
 

@@ -10,7 +10,9 @@
 
 use std::collections::VecDeque;
 
-use sts2_core::{Answered, Applied, Construct, ContentVersion, Decision, Play, Setup, Start};
+use sts2_core::{
+    Answered, Applied, Construct, ContentVersion, Decision, Play, Setup, Snapshot, Start,
+};
 
 use crate::tui::check::Sent;
 
@@ -119,9 +121,12 @@ impl<V: ContentVersion> Play<V> for Scripted<V> {
         Ok(self.next("play a decision"))
     }
 
-    fn observe(&mut self) -> Result<Answered<V>, Self::Error> {
+    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
         self.looked += 1;
-        Ok(self.next("say where the run is standing"))
+        match self.next("say where the run is standing") {
+            Ok(applied) => Ok(applied.snapshot()),
+            Err(refusal) => panic!("a script refused an observation: {refusal}"),
+        }
     }
 }
 

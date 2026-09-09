@@ -368,7 +368,10 @@ fn start<V: ContentVersion>(held: &Host<V>, args: &StartArgs, show: Show) -> Res
     // makes the thing `perform` sends to, and the daemon refuses a second one
     // while it is holding a run.
     let mut game = Game::<V>::begin((), &opening).context("starting the run")?;
-    let outcome = Outcome::Seen(Box::new(control::look(&mut game)?));
+    let outcome = Outcome::Seen {
+        snapshot: Box::new(control::look(&mut game)?),
+        decided: None,
+    };
     report(&game, outcome, show)
 }
 
@@ -443,7 +446,9 @@ fn report<V: ContentVersion>(game: &Game<V>, outcome: Outcome<V>, show: Show) ->
         eprintln!("(warning: {warning})");
     }
     match outcome {
-        Outcome::Seen(applied) => println!("{}", oracle::readable(game, &applied, show.rng)),
+        Outcome::Seen { snapshot, .. } => {
+            println!("{}", oracle::readable(game, &snapshot, show.rng));
+        }
         Outcome::Said(words) => print!("{words}"),
     }
     Ok(())
@@ -538,7 +543,14 @@ fn replay<V: ContentVersion>(
     }
 
     match last {
-        Some(applied) => report(&game, Outcome::Seen(Box::new(applied)), show),
+        Some((decided, snapshot)) => report(
+            &game,
+            Outcome::Seen {
+                snapshot: Box::new(snapshot),
+                decided: Some(decided),
+            },
+            show,
+        ),
         None => Ok(()),
     }
 }
