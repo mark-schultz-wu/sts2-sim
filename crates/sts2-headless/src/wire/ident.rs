@@ -12,35 +12,21 @@ use serde::de::value::{Error as ValueError, StrDeserializer};
 use sts2_core::{CardIdent, ContentVersion, Coord, ModelId};
 
 /// Why a packed string is not the thing it was read as.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     /// Not the shape at all: a coordinate with no comma, an id with no slash.
+    #[error("{text:?} is not {want}")]
     Shape { text: String, want: &'static str },
     /// The right shape, with something in a number's place that is not one.
+    #[error("{text:?} has no {part} number")]
     Number { text: String, part: &'static str },
     /// A model category this build has no type for.
+    #[error("{text:?} names the {category} category, which has no type here")]
     Category { text: String, category: String },
     /// A name that is not one of this build's, for the kind it was read as.
+    #[error("{text:?} names no {kind} in this build")]
     Entry { text: String, kind: &'static str },
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Shape { text, want } => write!(f, "{text:?} is not {want}"),
-            Error::Number { text, part } => write!(f, "{text:?} has no {part} number"),
-            Error::Category { text, category } => {
-                write!(
-                    f,
-                    "{text:?} names the {category} category, which has no type here"
-                )
-            }
-            Error::Entry { text, kind } => write!(f, "{text:?} names no {kind} in this build"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// A map coordinate, as the observation writes it: `col,row`.
 pub fn coord(text: &str) -> Result<Coord, Error> {
