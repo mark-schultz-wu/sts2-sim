@@ -18,11 +18,11 @@ use std::hash::{BuildHasherDefault, Hasher};
 use sts2_core::rng::GameRng;
 use sts2_core::{MapPointKinds, Rules};
 
-use super::{ActMap, Error, Id};
+use super::{ActMapBuilder, Error, Id};
 
 /// Prune, repair, and go round again while the repair changed anything.
 pub(super) fn prune_and_repair<V: Rules, R: GameRng>(
-    map: &mut ActMap<V>,
+    map: &mut ActMapBuilder<V>,
     rng: &mut R,
 ) -> Result<(), Error> {
     let mut segments = SegmentMap::default();
@@ -41,7 +41,7 @@ pub(super) fn prune_and_repair<V: Rules, R: GameRng>(
 /// Each pass changes one thing and then looks again, because a cut can join two
 /// stretches that were separate.
 fn prune_duplicates<V: Rules, R: GameRng>(
-    map: &mut ActMap<V>,
+    map: &mut ActMapBuilder<V>,
     rng: &mut R,
     segments: &mut SegmentMap,
 ) -> Result<(), Error> {
@@ -105,7 +105,7 @@ struct PackedPath {
 }
 
 impl PackedPath {
-    fn start<V: Rules>(map: &ActMap<V>, id: Id) -> Result<Self, Error> {
+    fn start<V: Rules>(map: &ActMapBuilder<V>, id: Id) -> Result<Self, Error> {
         if id >= 128 {
             return Err(Error::PointIdTooLarge { id });
         }
@@ -129,7 +129,7 @@ impl PackedPath {
         })
     }
 
-    fn push<V: Rules>(self, map: &ActMap<V>, id: Id) -> Result<Self, Error> {
+    fn push<V: Rules>(self, map: &ActMapBuilder<V>, id: Id) -> Result<Self, Error> {
         if self.len >= 17 || id >= 128 {
             if self.len >= 17 {
                 return Err(Error::SegmentTooLong {
@@ -237,7 +237,7 @@ fn endpoint<V: Rules>(point: &super::Point<V>) -> (u64, u32) {
 /// is ordered by that key, as the game's `SortedDictionary` is, so the groups
 /// come back in the same order on every machine.
 fn matching_segments<V: Rules>(
-    map: &ActMap<V>,
+    map: &ActMapBuilder<V>,
     segments: &mut SegmentMap,
 ) -> Result<Vec<Vec<Vec<Id>>>, Error> {
     // Pruning rebuilds this table after every cut. Retaining its allocation
@@ -278,7 +278,7 @@ fn matching_segments<V: Rules>(
 /// every route after its last point. Walking from each eligible start therefore
 /// finds it once instead of once per complete ancient-to-boss route.
 fn collect_segments_from<V: Rules>(
-    map: &ActMap<V>,
+    map: &ActMapBuilder<V>,
     from: Id,
     segment: &mut Vec<Id>,
     packed: PackedPath,
@@ -334,7 +334,7 @@ fn collect_segment(
 
 /// Whether a stretch is allowed to start here, which is
 /// `IsValidSegmentStartMapPoint`.
-fn starts_a_segment<V: Rules>(map: &ActMap<V>, id: Id) -> bool {
+fn starts_a_segment<V: Rules>(map: &ActMapBuilder<V>, id: Id) -> bool {
     map.points[id].children.len() > 1 || map.points[id].row == 0
 }
 
@@ -384,7 +384,7 @@ fn kind_index<V: Rules>(kind: V::MapPointType) -> usize {
 /// Returns as soon as anything changed, so the groups are found again against
 /// the map that change left behind.
 fn prune_pass<V: Rules, R: GameRng>(
-    map: &mut ActMap<V>,
+    map: &mut ActMapBuilder<V>,
     rng: &mut R,
     duplicates: Vec<Vec<Vec<Id>>>,
 ) -> bool {
@@ -402,7 +402,7 @@ fn prune_pass<V: Rules, R: GameRng>(
 
 /// Try to remove every stretch in a group but the last, which is
 /// `PruneAllButLast`.
-fn all_but_last<V: Rules>(map: &mut ActMap<V>, group: &[Vec<Id>]) -> usize {
+fn all_but_last<V: Rules>(map: &mut ActMapBuilder<V>, group: &[Vec<Id>]) -> usize {
     let mut removed = 0;
     for segment in group {
         // Counted prunes, not stretches looked at: the last one of a group
@@ -421,7 +421,7 @@ fn all_but_last<V: Rules>(map: &mut ActMap<V>, group: &[Vec<Id>]) -> usize {
 ///
 /// A node goes only where nothing depends on it. Not a junction, not a
 /// meeting point, and not the only child of a parent left with none.
-fn prune_segment<V: Rules>(map: &mut ActMap<V>, segment: &[Id]) -> bool {
+fn prune_segment<V: Rules>(map: &mut ActMapBuilder<V>, segment: &[Id]) -> bool {
     let mut removed = false;
     for at in 0..segment.len() - 1 {
         let id = segment[at];
@@ -464,7 +464,7 @@ fn prune_segment<V: Rules>(map: &mut ActMap<V>, segment: &[Id]) -> bool {
 ///
 /// The fallback for a duplicate whose nodes are all load bearing. Both nodes
 /// stay and the route between them goes.
-fn break_a_link<V: Rules>(map: &mut ActMap<V>, segment: &[Id]) -> bool {
+fn break_a_link<V: Rules>(map: &mut ActMapBuilder<V>, segment: &[Id]) -> bool {
     let mut broken = false;
     for at in 0..segment.len() - 1 {
         let (parent, child) = (segment[at], segment[at + 1]);
@@ -482,7 +482,7 @@ fn break_a_link<V: Rules>(map: &mut ActMap<V>, segment: &[Id]) -> bool {
 /// Shops, elites, rest sites and question marks, in that order, each replacing
 /// monsters the rules allow it over. Returns whether anything changed, which is
 /// what makes the caller prune again.
-fn repair<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) -> bool {
+fn repair<V: Rules, R: GameRng>(map: &mut ActMapBuilder<V>, rng: &mut R) -> bool {
     let mut changed = false;
     let wanted = [
         (V::MapPointType::SHOP, map.counts.shops),
@@ -498,7 +498,7 @@ fn repair<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) -> bool {
 
 /// Replace monsters with one missing type, which is `RepairPointType`.
 fn repair_kind<V: Rules, R: GameRng>(
-    map: &mut ActMap<V>,
+    map: &mut ActMapBuilder<V>,
     rng: &mut R,
     kind: V::MapPointType,
     wanted: usize,

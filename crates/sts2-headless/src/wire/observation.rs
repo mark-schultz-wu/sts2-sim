@@ -27,7 +27,8 @@ use sts2_core::{
 use super::ident::{self, named};
 
 /// Why a captured observation is not one.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{at}: {why}")]
 pub struct Error {
     /// Where it went wrong, as a dotted path into the observation.
     pub at: String,
@@ -35,12 +36,14 @@ pub struct Error {
 }
 
 /// What was wrong with it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Why {
     /// A packed string that is not the thing it claims to be.
+    #[error("{0}")]
     Ident(ident::Error),
     /// A field the game types as nullable, where nothing here can stand in for
     /// the absence.
+    #[error("no {0}, and there is no standing in for one")]
     Absent(&'static str),
     /// A field the shape that carries it requires.
     ///
@@ -48,27 +51,15 @@ pub enum Why {
     /// game legitimately leaves out and this crate cannot read past. This is a
     /// field the game promised. A `GoldReward` names its own `amount`, so its
     /// absence is the two sides disagreeing about the shape.
+    #[error("a {from} with no {field}")]
     Missing { field: &'static str, from: String },
     /// A name outside the set this build has.
+    #[error("{value:?} is no {what} this build has")]
     Unknown { what: &'static str, value: String },
     /// Two fields that say the same thing, saying different things.
+    #[error("{0}")]
     Disagree(&'static str),
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: ", self.at)?;
-        match &self.why {
-            Why::Ident(e) => write!(f, "{e}"),
-            Why::Absent(what) => write!(f, "no {what}, and there is no standing in for one"),
-            Why::Missing { field, from } => write!(f, "a {from} with no {field}"),
-            Why::Unknown { what, value } => write!(f, "{value:?} is no {what} this build has"),
-            Why::Disagree(what) => write!(f, "{what}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// The observation a captured state spells.
 ///

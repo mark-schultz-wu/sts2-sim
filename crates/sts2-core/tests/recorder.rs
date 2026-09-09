@@ -42,7 +42,7 @@ fn nowhere() -> Applied<V> {
                 at: Some(Coord::new(3, 11)),
                 visited: Vec::new(),
                 travelable: Vec::new(),
-                points: Vec::new(),
+                points: [].into(),
                 proceed: false,
             },
             rng: sts2_core::Counters {

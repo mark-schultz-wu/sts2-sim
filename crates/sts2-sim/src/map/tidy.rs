@@ -10,14 +10,14 @@
 
 use sts2_core::Rules;
 
-use super::{ActMap, COLS, Id};
+use super::{ActMapBuilder, COLS, Id};
 
 /// Shift the map one column towards the empty side, which is `CenterGrid`.
 ///
 /// Only when two columns at one end are empty and two at the other are not.
 /// Anything shifted off the end is dropped, which the emptiness check makes
 /// unreachable.
-pub(super) fn center<V: Rules>(map: &mut ActMap<V>) {
+pub(super) fn center<V: Rules>(map: &mut ActMapBuilder<V>) {
     let left_clear = column_empty(map, 0) && column_empty(map, 1);
     let right_clear = column_empty(map, COLS - 1) && column_empty(map, COLS - 2);
     let step: i32 = match (left_clear, right_clear) {
@@ -50,7 +50,7 @@ pub(super) fn center<V: Rules>(map: &mut ActMap<V>) {
 }
 
 /// Whether a column holds nothing at all.
-fn column_empty<V: Rules>(map: &ActMap<V>, col: usize) -> bool {
+fn column_empty<V: Rules>(map: &ActMapBuilder<V>, col: usize) -> bool {
     (0..map.rows).all(|row| map.cell(col, row).is_none())
 }
 
@@ -61,7 +61,7 @@ fn column_empty<V: Rules>(map: &ActMap<V>, col: usize) -> bool {
 /// the room it has is the overlap of those. It takes the free column that
 /// leaves the widest gap to its neighbours, and the row settles when nothing
 /// moves.
-pub(super) fn spread<V: Rules>(map: &mut ActMap<V>) {
+pub(super) fn spread<V: Rules>(map: &mut ActMapBuilder<V>) {
     for row in 0..map.rows {
         let nodes = map.row(row);
         loop {
@@ -100,7 +100,7 @@ pub(super) fn spread<V: Rules>(map: &mut ActMap<V>) {
 ///
 /// Ascending, which is the order the game's own set comes back in: it starts
 /// at every column and only ever removes.
-fn allowed<V: Rules>(map: &ActMap<V>, id: Id) -> Vec<usize> {
+fn allowed<V: Rules>(map: &ActMapBuilder<V>, id: Id) -> Vec<usize> {
     let point = &map.points[id];
     let linked: Vec<usize> = point
         .parents
@@ -117,7 +117,7 @@ fn allowed<V: Rules>(map: &ActMap<V>, id: Id) -> Vec<usize> {
 ///
 /// `usize::MAX` for a row holding nothing else, which is the game's own
 /// `int.MaxValue` and makes a lone node stay put.
-fn gap<V: Rules>(map: &ActMap<V>, candidate: usize, nodes: &[Id], id: Id) -> usize {
+fn gap<V: Rules>(map: &ActMapBuilder<V>, candidate: usize, nodes: &[Id], id: Id) -> usize {
     nodes
         .iter()
         .filter(|&&other| other != id)
@@ -130,7 +130,7 @@ fn gap<V: Rules>(map: &ActMap<V>, candidate: usize, nodes: &[Id], id: Id) -> usi
 ///
 /// Only a node with exactly one parent and one child, sitting outside both. It
 /// moves one column towards them if that column is free.
-pub(super) fn straighten<V: Rules>(map: &mut ActMap<V>) {
+pub(super) fn straighten<V: Rules>(map: &mut ActMapBuilder<V>) {
     for row in 0..map.rows {
         for col in 0..COLS {
             let Some(id) = map.cell(col, row) else {

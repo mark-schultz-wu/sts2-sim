@@ -105,11 +105,12 @@ fn full() -> Observation<V> {
                 at: Coord::new(4, 12),
                 kind: MapPointType::Monster,
             }],
-            points: vec![Node {
+            points: [Node {
                 at: Coord::new(3, 11),
                 kind: MapPointType::RestSite,
                 to: vec![Coord::new(4, 12)],
-            }],
+            }]
+            .into(),
             proceed: false,
         },
         rng: Counters {
@@ -430,6 +431,17 @@ fn rooms() -> Vec<Room<V>> {
 type Nudge = (&'static str, fn(&mut Observation<V>));
 
 /// One nudge each, naming the field it moves.
+/// Change the act's first node in place.
+///
+/// `Map::points` is shared, so a nudge rebuilds the slice. Every field of a
+/// node still has to reach the digest, and the table below says so one field
+/// at a time.
+fn edit_first_node(observation: &mut Observation<V>, edit: impl FnOnce(&mut Node<V>)) {
+    let mut points = observation.map.points.to_vec();
+    edit(points.first_mut().expect("the fixture map has a node"));
+    observation.map.points = points.into();
+}
+
 fn mutations() -> Vec<Nudge> {
     fn combat(o: &mut Observation<V>) -> &mut Combat<V> {
         o.combat.as_mut().expect("the fixture is in a fight")
@@ -503,12 +515,14 @@ fn mutations() -> Vec<Nudge> {
         ("map.travelable.kind", |o| {
             o.map.travelable[0].kind = MapPointType::Elite;
         }),
-        ("map.points.at", |o| o.map.points[0].at = Coord::new(9, 9)),
+        ("map.points.at", |o| {
+            edit_first_node(o, |node| node.at = Coord::new(9, 9));
+        }),
         ("map.points.kind", |o| {
-            o.map.points[0].kind = MapPointType::Shop;
+            edit_first_node(o, |node| node.kind = MapPointType::Shop);
         }),
         ("map.points.to", |o| {
-            o.map.points[0].to.push(Coord::new(5, 12));
+            edit_first_node(o, |node| node.to.push(Coord::new(5, 12)));
         }),
         ("map.proceed", |o| o.map.proceed = true),
         ("rng.run: a draw", |o| {

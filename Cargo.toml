@@ -27,6 +27,7 @@ nonmax = { version = "0.5.5", features = ["serde"] }
 ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+smallvec = "1"
 serial_test = "4.0.1"
 # Default features off here, so a dependent takes the trait with no build
 # attached. Anything that needs the tables opts in with `features`.
