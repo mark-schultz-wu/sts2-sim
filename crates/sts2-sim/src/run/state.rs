@@ -28,13 +28,32 @@ pub(crate) struct State<V: Rules> {
 
 /// Data generated once and shared by every branch of this run.
 ///
-/// The act's own map, and not the nodes a report is made of. A report's `Node`
-/// is a shape the oracle compares, so holding one here makes the report the
-/// run again.
+/// `map` is what the run is played out of. `nodes` is the shape a report
+/// wants, derived from it once. The derivation runs one way: `map` is free to
+/// become whatever the simulator needs, and `nodes` follows.
+///
+/// [`RunData::new`] builds both, so they cannot drift. Neither changes again
+/// while the act is played.
 #[derive(Debug)]
 struct RunData<V: Rules> {
     _opening: Opening<V>,
     map: ActMap<V>,
+    nodes: Arc<[Node<V>]>,
+}
+
+impl<V: Rules> RunData<V> {
+    fn new(opening: Opening<V>, map: ActMap<V>) -> Self {
+        let nodes = map
+            .nodes()
+            .into_iter()
+            .map(|(at, kind, to)| Node { at, kind, to })
+            .collect();
+        RunData {
+            _opening: opening,
+            map,
+            nodes,
+        }
+    }
 }
 
 /// The small, mutable part of one player's run state.
@@ -98,10 +117,7 @@ impl<V: Rules> State<V> {
         run_counters[up_front_at] = up_front.counter() as u32;
 
         Self {
-            shared: Arc::new(RunData {
-                _opening: opening,
-                map,
-            }),
+            shared: Arc::new(RunData::new(opening, map)),
             at,
             player: Player {
                 relics: V::starting_relics(character).into_iter().collect(),
@@ -272,11 +288,7 @@ impl<V: Rules> State<V> {
                     at: Some(self.at),
                     visited: vec![self.at],
                     travelable,
-                    points: map
-                        .nodes()
-                        .into_iter()
-                        .map(|(at, kind, to)| Node { at, kind, to })
-                        .collect(),
+                    points: Arc::clone(&self.shared.nodes),
                     proceed: false,
                 },
                 rng: Counters { run, player },
@@ -312,6 +324,18 @@ mod tests {
             Character::Regent,
             AscensionLevel::None,
         )
+    }
+
+    /// A branch has to be able to cross a thread, so that searching a run in
+    /// parallel is a matter of handing the branches out.
+    ///
+    /// Nothing needs it yet. One `Rc` or one `RefCell` on a field loses it,
+    /// and this fails on that commit rather than years later.
+    #[test]
+    fn a_branch_can_cross_a_thread() {
+        fn assert<T: Send + Sync>() {}
+        assert::<State<V>>();
+        assert::<crate::Sim<V>>();
     }
 
     #[test]
