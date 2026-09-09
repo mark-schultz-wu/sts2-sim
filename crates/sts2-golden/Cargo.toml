@@ -1,0 +1,26 @@
+[package]
+name = "sts2-golden"
+version = "0.1.0"
+edition = "2024"
+
+# Nothing depends on this crate. It is where the simulator is held against the
+# real game, so it depends on both and is depended on by neither.
+
+[dependencies]
+sts2-core = { workspace = true }
+sts2-headless = { workspace = true }
+
+[build-dependencies]
+sts2-core = { workspace = true }
+# The build script fills the oracle cache, which means launching a real game and
+# naming a build to launch it for.
+sts2-content = { workspace = true, features = ["v0_107_1"] }
+sts2-headless = { workspace = true }
+
+[dev-dependencies]
+# Replaying a recording means spelling the decisions in it, which names a build.
+sts2-content = { workspace = true, features = ["v0_107_1"] }
+sts2-sim = { workspace = true }
+# A fixture spells a relic by its game id, which is the serde rename.
+serde = { workspace = true }
+serde_json = { workspace = true }

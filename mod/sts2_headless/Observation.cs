@@ -133,6 +133,7 @@ public static class Observation
                 ["turn"] = pcs.TurnNumber,
                 ["phase"] = pcs.Phase.ToString(),
                 ["energy"] = pcs.Energy,
+                ["stars"] = pcs.Stars,
                 ["round"] = combat.RoundNumber,
 
                 // Which fight this is, which nothing else in the observation
@@ -197,6 +198,51 @@ public static class Observation
     /// <see cref="Id(ModelId)"/> packs a model id. A deck is forty of these and
     /// four combat piles are more, so the key names would outweigh the values.
     /// </remarks>
+    /// <summary>
+    /// What a card costs in energy, in the three states the game has.
+    /// </summary>
+    /// <remarks>
+    /// A number, the string <c>"x"</c>, or null. The game spells "not priced in
+    /// this pool" as <c>-1</c>, and <c>GetWithModifiers</c> hands that straight
+    /// back for a curse or a status. It also zeroes the canonical cost of an
+    /// X-cost card, so on the wire an X card and a free card were the same
+    /// integer. Both are resolved here, once, rather than by every reader.
+    /// </remarks>
+    public static object? EnergyCost(CardModel card)
+    {
+        if (card.EnergyCost.CostsX)
+        {
+            return "x";
+        }
+
+        int cost = card.EnergyCost.GetWithModifiers(CostModifiers.All);
+        return cost < 0 ? null : cost;
+    }
+
+    /// <summary>
+    /// What a card costs in stars, the same three ways.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetStarCostWithModifiers</c> rather than <c>CurrentStarCost</c>,
+    /// because it is the star-side twin of the energy call above: it runs the
+    /// combat hooks that change a card's cost where it is sitting. Outside a
+    /// combat pile it falls through to <c>CurrentStarCost</c>, so a reward
+    /// screen reads the same either way.
+    ///
+    /// Every card outside the Regent's has <c>CanonicalStarCost</c> of -1, so
+    /// null here is the common case rather than the exception.
+    /// </remarks>
+    public static object? StarCost(CardModel card)
+    {
+        if (card.HasStarCostX)
+        {
+            return "x";
+        }
+
+        int cost = card.GetStarCostWithModifiers();
+        return cost < 0 ? null : cost;
+    }
+
     public static string Ident(CardModel card)
     {
         string s = card.Id.Entry;
@@ -572,7 +618,8 @@ public static class Observation
             yield return new Dictionary<string, object?>
             {
                 ["card"] = Ident(card),
-                ["cost"] = card.EnergyCost.GetWithModifiers(CostModifiers.All),
+                ["cost"] = EnergyCost(card),
+                ["starCost"] = StarCost(card),
                 ["target"] = card.TargetType.ToString(),
                 ["playable"] = canPlay,
                 ["reason"] = reason == UnplayableReason.None ? null : reason.ToString(),

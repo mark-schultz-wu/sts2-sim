@@ -4,6 +4,7 @@ members = [
     "crates/sts2-cli",
     "crates/sts2-content",
     "crates/sts2-core",
+    "crates/sts2-golden",
     "crates/sts2-headless",
     "crates/sts2-rng",
     "crates/sts2-sim",
@@ -35,6 +36,7 @@ sts2-content = { path = "crates/sts2-content", default-features = false }
 sts2-core = { path = "crates/sts2-core" }
 sts2-headless = { path = "crates/sts2-headless" }
 sts2-rng = { path = "crates/sts2-rng" }
+sts2-sim = { path = "crates/sts2-sim" }
 thiserror = "2.0.20"
 
 [profile.release]

@@ -37,7 +37,7 @@ check-repo: test lint generated
 test:
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo test --workspace
+    cargo test --workspace --exclude sts2-golden
     # Every pinned build's tables, named rather than inherited. The workspace
     # run above happens to compile them all, because `sts2-cli` asks for them
     # and cargo unifies features. That is a coincidence of one crate's
@@ -87,6 +87,19 @@ generated:
     done
     test "$builds" -gt 0
     git diff --exit-code -- 'crates/sts2-content/src/*/generated'
+
+# How far the simulator gets through a real run before it disagrees with the
+# game. The build script takes the game's answers once and keeps them under
+# target/, so later runs need no game. `cargo clean` drops that cache.
+[doc("How far the simulator replays a real run")]
+divergence:
+    cargo test -p sts2-golden --test divergence -- --nocapture
+
+# The reviewable answers derived from the cached transcript. A re-pin runs this
+# to put any changed digest, map, or opening room in the diff.
+[doc("Rewrite the committed oracle answers after a re-pin")]
+golden: deploy
+    STS2_UPDATE=1 cargo test -p sts2-golden --test committed -- --nocapture
 
 # Needs the game's own assemblies, which are not in the repository. A machine
 # with the vendored game already has them; otherwise `mod/game.sh fetch
