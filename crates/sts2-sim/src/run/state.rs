@@ -4,8 +4,8 @@ use std::sync::Arc;
 use smallvec::SmallVec;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
-    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Counters, EventOption, Map, Node,
-    Observation, Question, Reachable, Room, Rules, Seed, Table,
+    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Coord, Counters, EventOption, Map,
+    Node, Observation, Question, Reachable, Room, Rules, Seed, Table,
 };
 
 use crate::engine::Error;
@@ -20,7 +20,7 @@ use crate::run::Opening;
 #[derive(Debug, Clone)]
 pub(crate) struct State<V: Rules> {
     shared: Arc<RunData<V>>,
-    at: sts2_core::Coord,
+    at: Coord,
     player: Player<V>,
     rngs: Rngs,
     phase: Phase<V>,
@@ -42,6 +42,18 @@ struct RunData<V: Rules> {
 }
 
 impl<V: Rules> RunData<V> {
+    /// The node standing on a coordinate.
+    ///
+    /// `nodes` is in the observation's order, so this searches rather than
+    /// scans. A caller reads a node's edges straight out of it, already in
+    /// the order a report lists them.
+    fn node_at(&self, at: Coord) -> Result<&Node<V>, crate::map::Error> {
+        self.nodes
+            .binary_search_by_key(&(at.row, at.col), |node| (node.at.row, node.at.col))
+            .map(|found| &self.nodes[found])
+            .map_err(|_| crate::map::Error::NoPointAt { at })
+    }
+
     fn new(opening: Opening<V>, map: ActMap<V>) -> Self {
         let nodes = map
             .nodes()
@@ -199,22 +211,17 @@ impl<V: Rules> State<V> {
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Applied<V> {
         let map = &self.shared.map;
-        let here = map.at(self.at).expect("the run stands on its own map");
-        let mut travelable: Vec<Reachable<V>> = here
-            .children
+        let travelable = self
+            .shared
+            .node_at(self.at)
+            .expect("the run stands on its own map")
+            .to
             .iter()
-            .map(|id| {
-                let child = &map.points[id];
-                Reachable {
-                    at: child.at(),
-                    kind: child.kind,
-                }
+            .map(|&at| Reachable {
+                at,
+                kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect();
-        // Row then column, which is the order `ActMap::nodes` puts a point's
-        // children in. A report gives travel and the map itself, and the two
-        // listing the same edges in two orders is a difference the oracle sees.
-        travelable.sort_by_key(|step| (step.at.row, step.at.col));
         let Phase::Neow {
             options: neow_options,
             chosen: neow_chosen,
@@ -344,6 +351,35 @@ mod tests {
         fn assert<T: Send + Sync>() {}
         assert::<State<V>>();
         assert::<crate::Sim<V>>();
+    }
+
+    /// The shared nodes are in the order a report lists them.
+    ///
+    /// `node_at` searches rather than scans, which needs that order to hold.
+    /// `ActMap::nodes` is where it is decided, and this is the run holding it
+    /// to that.
+    #[test]
+    fn the_shared_nodes_are_in_the_order_a_report_lists_them() {
+        let run = opened();
+        let nodes = &run.shared.nodes;
+        assert!(nodes.len() > 1, "an act map has nodes");
+        assert!(
+            nodes
+                .windows(2)
+                .all(|pair| (pair[0].at.row, pair[0].at.col) < (pair[1].at.row, pair[1].at.col)),
+            "the shared nodes are not sorted by row and then column"
+        );
+        for node in nodes.iter() {
+            let found = run.shared.node_at(node.at).expect("a node of this map");
+            assert_eq!(found.at, node.at);
+        }
+    }
+
+    #[test]
+    fn a_coordinate_off_the_map_is_an_error() {
+        let run = opened();
+        let off = Coord::new(0, 0);
+        assert!(run.shared.node_at(off).is_err(), "{off} is not on the map");
     }
 
     #[test]
