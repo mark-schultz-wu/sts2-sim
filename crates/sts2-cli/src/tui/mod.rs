@@ -20,30 +20,29 @@ pub mod check;
 mod keys;
 mod names;
 mod screen;
+pub mod setup;
 #[cfg(test)]
 mod shots;
 mod state;
 mod theme;
 
 use anyhow::Result;
+use ratatui::DefaultTerminal;
 use sts2_core::{ContentVersion, Play};
 
+pub use app::Ended;
 pub use state::Options;
 
-/// Plays until the user leaves.
+/// Draws a run and reads keys, until the player leaves or the run goes away.
 ///
-/// The terminal is put into raw mode and an alternate screen here, and restored
-/// on the way out, including out of a panic. `ratatui::init` installs the hook
-/// that does it, so a crash leaves a usable terminal behind rather than a dead
-/// one.
-pub fn run<V, G>(game: G, options: Options) -> Result<()>
+/// A window onto a run that has already started. What run that is, and what to
+/// do once this returns, belong to the caller: this draws one and reports how
+/// it ended.
+pub fn play<V, G>(terminal: &mut DefaultTerminal, game: G, options: Options) -> Result<app::Ended>
 where
     V: ContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
-    let mut terminal = ratatui::init();
-    let outcome = app::App::new(game, options).run(&mut terminal);
-    ratatui::restore();
-    outcome
+    app::App::playing(game, options).run(terminal)
 }

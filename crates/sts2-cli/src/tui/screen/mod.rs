@@ -15,7 +15,7 @@ mod combat;
 mod map;
 mod overlay;
 mod room;
-mod start;
+pub(super) mod start;
 pub mod widget;
 
 use ratatui::Frame;
@@ -51,14 +51,6 @@ where
     G::Error: std::error::Error + Send + Sync + 'static,
 {
     let whole = frame.area();
-
-    // Before there is a run there is nothing else to draw: no strip, because
-    // there are no numbers; no log, because nothing has happened; no key bar,
-    // because the setup screen has its own keys and they are on it.
-    if let Some(setting_up) = app.starting() {
-        start::draw(frame, whole, app, setting_up);
-        return;
-    }
 
     let logs = log_rows(whole.height);
     let [strip, body, log, keys] = Layout::vertical([

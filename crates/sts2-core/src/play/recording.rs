@@ -12,23 +12,32 @@
 //! to choose, and where it lives until this crate chooses it.
 
 use crate::ContentVersion;
+use crate::Start;
 use crate::Step;
 
-/// A run of build `V`, as the steps that made it.
+/// A run of build `V`: what started it, and the steps that followed.
+///
+/// The start is a field rather than the first step. A recording that does not
+/// begin with one is a fragment rather than a run. Holding it this way makes
+/// that a thing the reader cannot produce, instead of a thing every caller has
+/// to check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recording<V: ContentVersion> {
+    start: Start<V>,
     steps: Vec<Step<V>>,
 }
 
-impl<V: ContentVersion> Default for Recording<V> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<V: ContentVersion> Recording<V> {
-    pub fn new() -> Self {
-        Self { steps: Vec::new() }
+    pub fn new(start: Start<V>) -> Self {
+        Self {
+            start,
+            steps: Vec::new(),
+        }
+    }
+
+    /// What started the run this recorded.
+    pub fn start(&self) -> &Start<V> {
+        &self.start
     }
 
     pub fn steps(&self) -> &[Step<V>] {
@@ -48,9 +57,11 @@ impl<V: ContentVersion> Recording<V> {
     }
 }
 
-impl<V: ContentVersion> FromIterator<Step<V>> for Recording<V> {
-    fn from_iter<I: IntoIterator<Item = Step<V>>>(steps: I) -> Self {
+impl<V: ContentVersion> Recording<V> {
+    /// A recording of `start` and the steps that followed it.
+    pub fn of(start: Start<V>, steps: impl IntoIterator<Item = Step<V>>) -> Self {
         Self {
+            start,
             steps: steps.into_iter().collect(),
         }
     }

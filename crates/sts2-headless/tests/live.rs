@@ -18,7 +18,7 @@ use sts2_core::ContentVersion;
 use sts2_core::Seed;
 use sts2_core::{
     Answer, Answered, Applied, Construct, Coord, Decision, Digest, Gift, Play, Question, Reason,
-    Recorder, Room, Setup, Step, Stock, Tool,
+    Recorder, Room, Setup, Start, Step, Stock, Tool,
 };
 use sts2_headless::{Config, Error, MOD_IDENTITY, Oracle, Response, recording};
 
@@ -51,6 +51,24 @@ fn launch() -> Oracle<V> {
     let dir = sts2_headless::game_dir_from_env()
         .expect("set STS2_GAME_DIR to the game directory (`just live` does this)");
     Oracle::<V>::launch(Config::new(dir)).expect("the game should launch and connect back")
+}
+
+/// The run these tests play.
+fn opening() -> Start<V> {
+    Start {
+        seed: Seed::new(SEED).expect("a seed"),
+        character: Character::Ironclad,
+        ascension: AscensionLevel::None,
+        modifiers: vec![],
+    }
+}
+
+/// A game with the run already started, which is the only kind there is.
+fn launched() -> Oracle<V> {
+    let dir = sts2_headless::game_dir_from_env()
+        .expect("set STS2_GAME_DIR to the game directory (`just live` does this)");
+    Oracle::<V>::begin(Config::new(dir), &opening())
+        .expect("the game should launch and start the run")
 }
 
 /// The parts of an answer these tests look at.
@@ -131,15 +149,14 @@ fn stepped(game: &mut Oracle<V>, step: &Step<V>) -> Seen {
     observation(game, answered)
 }
 
+/// Where a freshly started run is standing.
+///
+/// Starting is not a step any more, so this asks rather than sends. The run is
+/// begun when the game is reached, and this reports where that left it.
 fn start(game: &mut Oracle<V>) -> Seen {
     let answered = game
-        .play(&Decision::Start {
-            seed: Seed::new(SEED).expect("a seed"),
-            character: Character::Ironclad,
-            ascension: AscensionLevel::None,
-            modifiers: vec![],
-        })
-        .expect("start should not fail at the transport level");
+        .observe()
+        .expect("observe should not fail at the transport level");
     observation(game, answered)
 }
 
@@ -976,13 +993,6 @@ fn a_rest_site_option_that_asks_a_question_still_replies() {
 #[serial(game)]
 fn a_recorded_run_replays_into_the_same_run() {
     let steps: Vec<Step<V>> = vec![
-        Decision::Start {
-            seed: Seed::new(SEED).expect("a seed"),
-            character: Character::Ironclad,
-            ascension: AscensionLevel::None,
-            modifiers: vec![],
-        }
-        .into(),
         Setup::Fight {
             encounter: ENCOUNTER,
         }
@@ -1000,8 +1010,8 @@ fn a_recorded_run_replays_into_the_same_run() {
     // told — a recording assembled from the caller's intentions would agree
     // with itself no matter what the wrapper did.
     let path = std::env::temp_dir().join(format!("sts2-replay-{}.jsonl", std::process::id()));
-    let tape = recording::Writer::<V>::create(&path).expect("a file to record into");
-    let mut first = Recorder::new(launch(), tape);
+    let tape = recording::Writer::<V>::create(&path, &opening()).expect("a file to record into");
+    let mut first = Recorder::new(launched(), tape);
     let mut digests = Vec::new();
 
     for step in &steps {

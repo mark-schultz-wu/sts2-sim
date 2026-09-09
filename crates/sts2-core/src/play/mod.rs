@@ -26,7 +26,7 @@ pub mod recorder;
 pub mod recording;
 pub mod refusal;
 
-use crate::{ContentVersion, Decision, Observation, Question, Refusal, Setup, Step};
+use crate::{ContentVersion, Decision, Observation, Question, Refusal, Setup, Start, Step};
 
 /// What a decision produced.
 ///
@@ -54,9 +54,24 @@ pub struct Applied<V: ContentVersion> {
 pub type Answered<V> = Result<Applied<V>, Refusal<V>>;
 
 /// Playing: every implementation, and nothing beyond what a run needs.
-pub trait Play<V: ContentVersion> {
+pub trait Play<V: ContentVersion>: Sized {
     /// A fault, which is not a refusal. See the module docs.
     type Error;
+
+    /// What it takes to reach a game, before a run is started on it.
+    ///
+    /// A description rather than a resource. `()` for a simulator, a directory
+    /// for something that owns a game process, and `()` again for something
+    /// that reaches a game somebody else holds.
+    type Host;
+
+    /// Starts a run, and hands back the thing that plays it.
+    ///
+    /// The only way to get one, so a value of this type holds a run and "no
+    /// run yet" stays out of every decision. One result, where every other
+    /// method has two: this makes the run, so a game that will not start one
+    /// leaves nothing to report from.
+    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error>;
 
     /// Plays one decision and reports what it produced.
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error>;

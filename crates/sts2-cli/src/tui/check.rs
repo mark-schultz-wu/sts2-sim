@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use sts2_core::{
-    Answer, Answered, ContentVersion, Decision, Play, Question, RewardKind, Room, TakeReward,
+    Answer, Answered, ContentVersion, Decision, Play, Question, RewardKind, Room, Start, TakeReward,
 };
 
 use super::app::App;
@@ -75,7 +75,27 @@ pub trait Stage<V: ContentVersion> {
 /// Shared with the [`Spy`] rather than read back off it. The front end owns the
 /// game it is driving, and a test cannot reach through it.
 #[derive(Debug)]
-pub struct Sent<V: ContentVersion>(Rc<RefCell<Vec<Decision<V>>>>);
+pub struct Sent<V: ContentVersion>(Rc<RefCell<Watched<V>>>);
+
+/// What the spy saw: the run it was started with, and every decision since.
+///
+/// The start is beside the decisions rather than the first of them, because it
+/// is not one. It reaches the game through
+/// [`Play::begin`](sts2_core::Play::begin), so the spy notes it there.
+#[derive(Debug)]
+struct Watched<V: ContentVersion> {
+    started: Option<Start<V>>,
+    decisions: Vec<Decision<V>>,
+}
+
+impl<V: ContentVersion> Default for Watched<V> {
+    fn default() -> Watched<V> {
+        Watched {
+            started: None,
+            decisions: Vec::new(),
+        }
+    }
+}
 
 impl<V: ContentVersion> Clone for Sent<V> {
     fn clone(&self) -> Sent<V> {
@@ -85,28 +105,38 @@ impl<V: ContentVersion> Clone for Sent<V> {
 
 impl<V: ContentVersion> Default for Sent<V> {
     fn default() -> Sent<V> {
-        Sent(Rc::new(RefCell::new(Vec::new())))
+        Sent(Rc::new(RefCell::new(Watched::default())))
     }
 }
 
 impl<V: ContentVersion> Sent<V> {
     pub fn all(&self) -> Vec<Decision<V>> {
-        self.0.borrow().clone()
+        self.0.borrow().decisions.clone()
     }
 
     pub fn count(&self) -> usize {
-        self.0.borrow().len()
+        self.0.borrow().decisions.len()
+    }
+
+    /// The run the game was started with, if it was started through the spy.
+    pub fn started(&self) -> Option<Start<V>> {
+        self.0.borrow().started.clone()
     }
 
     /// Writes one decision down, for whatever is watching the game.
     pub fn note(&self, decision: Decision<V>) {
-        self.0.borrow_mut().push(decision);
+        self.0.borrow_mut().decisions.push(decision);
+    }
+
+    /// Writes down the run the game was started with.
+    pub(crate) fn note_start(&self, start: &Start<V>) {
+        self.0.borrow_mut().started = Some(start.clone());
     }
 
     /// What was sent after the first `from` decisions, which is what a check
     /// cares about. A stage usually had to send some to reach its position.
     pub fn since(&self, from: usize) -> Vec<Decision<V>> {
-        self.0.borrow()[from.min(self.count())..].to_vec()
+        self.0.borrow().decisions[from.min(self.count())..].to_vec()
     }
 }
 
@@ -135,6 +165,21 @@ impl<V: ContentVersion, G: Play<V>> Spy<V, G> {
 
 impl<V: ContentVersion, G: Play<V>> Play<V> for Spy<V, G> {
     type Error = G::Error;
+
+    /// What the game underneath needs, and where to note what is sent.
+    ///
+    /// The caller supplies the sink, the way it does when it builds a `Spy`
+    /// around a game it already has.
+    type Host = (G::Host, Sent<V>);
+
+    fn begin(host: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
+        let (inner, sent) = host;
+        sent.note_start(start);
+        Ok(Spy {
+            game: G::begin(inner, start)?,
+            sent,
+        })
+    }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
         self.sent.note(decision.clone());
@@ -175,7 +220,7 @@ where
             Err(why) => Outcome::Unreachable(why),
             Ok(game) => {
                 let (spy, sent) = Spy::new(game);
-                let mut app = App::new(spy, Options::default());
+                let mut app = App::playing(spy, Options::default());
                 app.look_now();
                 let before = sent.count();
                 check(&mut app, &sent, before)

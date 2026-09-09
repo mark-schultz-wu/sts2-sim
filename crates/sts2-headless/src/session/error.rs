@@ -77,6 +77,14 @@ pub enum Error {
     #[error("the game's answer did not parse: {0}")]
     Unreadable(#[from] crate::ObservationError),
 
+    /// The game refused to start the run.
+    ///
+    /// A fault rather than an answer, because there is no run to report from.
+    /// The game refuses a `start` while it is parked on a question, which
+    /// something else holding the game can leave it on.
+    #[error("the game refused to start the run: {0}")]
+    NotStarted(String),
+
     /// The adapter fell over inside the mod.
     ///
     /// Not a refusal, and the distinction is the whole reason the mod sends this

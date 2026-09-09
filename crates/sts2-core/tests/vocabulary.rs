@@ -9,7 +9,7 @@
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::Seed;
-use sts2_core::{ContentVersion, Decision, Recording, Setup, Step};
+use sts2_core::{ContentVersion, Decision, Recording, Setup, Start, Step};
 
 type V = V0_107_1;
 type Character = <V as ContentVersion>::Character;
@@ -18,25 +18,24 @@ type Encounter = <V as ContentVersion>::Encounter;
 
 #[test]
 fn a_recording_takes_either_half_of_a_step() {
-    let mut r: Recording<V> = Recording::new();
-    assert!(r.is_empty());
-
-    r.push(Decision::Start {
+    let mut r: Recording<V> = Recording::new(Start {
         seed: Seed::new("SP1RE1").expect("a seed"),
         character: Character::Ironclad,
         ascension: AscensionLevel::None,
         modifiers: vec![],
     });
+    assert!(r.is_empty(), "the start is not a step");
+
     r.push(Setup::Fight {
         encounter: Encounter::ShrinkerBeetleWeak,
     });
     r.push(Decision::EndTurn);
 
-    assert_eq!(r.len(), 3);
-    assert!(matches!(r.steps()[0], Step::Decision(_)));
+    assert_eq!(r.len(), 2);
+    assert_eq!(r.start().seed.as_str(), "SP1RE1");
     assert!(
-        matches!(r.steps()[1], Step::Setup(_)),
+        matches!(r.steps()[0], Step::Setup(_)),
         "a constructed run records too"
     );
-    assert!(matches!(r.steps()[2], Step::Decision(_)));
+    assert!(matches!(r.steps()[1], Step::Decision(_)));
 }

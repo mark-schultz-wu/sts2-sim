@@ -13,7 +13,7 @@ use std::io::{self, BufRead, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use sts2_core::ContentVersion;
-use sts2_core::{Recording, Step, Tape};
+use sts2_core::{Recording, Start, Step, Tape};
 
 /// Writes the stamp and every step.
 ///
@@ -22,10 +22,20 @@ use sts2_core::{Recording, Step, Tape};
 /// leave a replayable file.
 pub fn write<V: ContentVersion>(recording: &Recording<V>, mut out: impl Write) -> io::Result<()> {
     open::<V>(&mut out)?;
+    began(&mut out, recording.start())?;
     for step in recording.steps() {
         append(&mut out, step)?;
     }
     Ok(())
+}
+
+/// Writes the command that starts the run, which is a recording's first line.
+///
+/// Its own function rather than a case inside [`append`], because a [`Start`]
+/// is not a [`Step`]. A file has exactly one of these, and it comes first.
+pub fn began<V: ContentVersion>(mut out: impl Write, start: &Start<V>) -> io::Result<()> {
+    let wire: Command<V> = start.into();
+    writeln!(out, "{}", serde_json::to_string(&wire)?)
 }
 
 /// Writes the stamp line that opens a recording of this build.
@@ -59,11 +69,16 @@ pub struct Writer<V: ContentVersion> {
 }
 
 impl<V: ContentVersion> Writer<V> {
-    /// Begins a recording, replacing whatever was at the path.
-    pub fn create(path: impl Into<PathBuf>) -> io::Result<Writer<V>> {
+    /// Begins a recording of `start`, replacing whatever was at the path.
+    ///
+    /// The run is named at the top rather than recorded as it goes. A
+    /// recording has one, and it is what every later line is relative to. The
+    /// caller has it, because it is what they are about to begin.
+    pub fn create(path: impl Into<PathBuf>, start: &Start<V>) -> io::Result<Writer<V>> {
         let path = path.into();
         let mut file = File::create(&path)?;
         open::<V>(&mut file)?;
+        began(&mut file, start)?;
         file.flush()?;
 
         Ok(Writer {
@@ -88,14 +103,14 @@ impl<V: ContentVersion> Writer<V> {
         let path = path.into();
         let existing = std::fs::read_to_string(&path)?;
 
-        // Checked rather than subtracted from: an empty file has no stamp, and
-        // is not a recording to carry on.
+        // Checked rather than subtracted from: a file with fewer than two lines
+        // has no stamp and no start, and is not a recording to carry on.
         let lines = existing.lines().filter(|l| !l.trim().is_empty()).count();
-        let steps = lines.checked_sub(1).ok_or_else(|| {
+        let steps = lines.checked_sub(2).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "{} is empty; there is no recording to carry on",
+                    "{} starts no run; there is no recording to carry on",
                     path.display()
                 ),
             )
@@ -157,7 +172,11 @@ pub fn read<V: ContentVersion>(input: impl BufRead) -> Result<Recording<V>, Erro
         });
     }
 
-    let mut steps = Vec::new();
+    // The first command starts the run, and everything after it is a step. A
+    // file that opens with anything else is a fragment rather than a run, and
+    // saying so here is what lets `Recording` hold a `Start` rather than hope
+    // for one.
+    let mut recording: Option<Recording<V>> = None;
     for (at, line) in lines.enumerate() {
         let line = line?;
         // A recording gets concatenated, edited and pasted, and a trailing
@@ -175,13 +194,24 @@ pub fn read<V: ContentVersion>(input: impl BufRead) -> Result<Recording<V>, Erro
             source: e,
         })?;
 
-        steps.push(command.into_step().ok_or_else(|| Error::NotAStep {
-            at,
-            line: named(&line),
-        })?);
+        match recording.as_mut() {
+            None => {
+                let start = command.into_start().ok_or_else(|| Error::NotAStart {
+                    at,
+                    line: named(&line),
+                })?;
+                recording = Some(Recording::new(start));
+            }
+            Some(recording) => {
+                recording.push(command.into_step().ok_or_else(|| Error::NotAStep {
+                    at,
+                    line: named(&line),
+                })?);
+            }
+        }
     }
 
-    Ok(steps.into_iter().collect())
+    recording.ok_or(Error::NoStart)
 }
 
 /// Why a recording did not read.
@@ -219,6 +249,16 @@ pub enum Error {
     #[error("line {at} is a command but not a step in a run: {line}")]
     NotAStep { at: usize, line: String },
 
+    /// A recording opens with the command that starts the run. One that opens
+    /// with anything else is a fragment, and replaying it plays onto a run
+    /// nothing started.
+    #[error("line {at} does not start a run, so this is a fragment rather than a run: {line}")]
+    NotAStart { at: usize, line: String },
+
+    /// The stamp read, and then the file ended.
+    #[error("the recording has no commands in it, so it starts no run")]
+    NoStart,
+
     #[error(transparent)]
     Io(#[from] io::Error),
 }
@@ -228,15 +268,14 @@ mod tests {
     use super::*;
     use sts2_content::v0_107_1::V0_107_1;
     use sts2_core::Seed;
-    use sts2_core::{Coord, Decision};
+    use sts2_core::{Coord, Decision, Start};
 
     type V = V0_107_1;
     type Character = <V as ContentVersion>::Character;
     type AscensionLevel = <V as ContentVersion>::AscensionLevel;
 
     fn recorded() -> Recording<V> {
-        let mut r = Recording::new();
-        r.push(Decision::Start {
+        let mut r = Recording::new(Start {
             seed: Seed::new("SP1RE1").expect("a seed"),
             character: Character::Ironclad,
             ascension: AscensionLevel::None,
@@ -282,11 +321,31 @@ mod tests {
         let cut = text.lines().take(2).collect::<Vec<_>>().join("\n");
 
         let read = read::<V>(cut.as_bytes()).expect("still a recording");
-        assert_eq!(read.len(), 1);
-        assert!(matches!(
-            read.steps()[0],
-            Step::Decision(Decision::Start { .. })
-        ));
+        assert!(read.is_empty(), "the start is not a step");
+        assert_eq!(read.start().seed.as_str(), "SP1RE1");
+    }
+
+    /// A file that opens with anything else is a fragment of a run.
+    #[test]
+    fn a_recording_that_starts_no_run_is_refused() {
+        let text = written(&recorded());
+        let mut lines: Vec<&str> = text.lines().collect();
+        lines.remove(1);
+
+        let err = read::<V>(lines.join("\n").as_bytes()).expect_err("no start");
+
+        assert!(matches!(err, Error::NotAStart { at: 2, .. }), "{err}");
+    }
+
+    /// The stamp, and nothing after it.
+    #[test]
+    fn a_recording_of_nothing_is_refused() {
+        let text = written(&recorded());
+        let stamp = text.lines().next().expect("a stamp");
+
+        let err = read::<V>(stamp.as_bytes()).expect_err("no run in it");
+
+        assert!(matches!(err, Error::NoStart), "{err}");
     }
 
     /// The refusal this format exists for.
@@ -353,7 +412,12 @@ mod tests {
     /// nobody reaches by playing.
     #[test]
     fn a_constructed_run_records_and_reads_back() {
-        let mut r: Recording<V> = Recording::new();
+        let mut r: Recording<V> = Recording::new(Start {
+            seed: Seed::new("SP1RE1").expect("a seed"),
+            character: Character::Ironclad,
+            ascension: AscensionLevel::None,
+            modifiers: vec![],
+        });
         r.push(sts2_core::Setup::Fight {
             encounter: <V as ContentVersion>::Encounter::ShrinkerBeetleWeak,
         });
@@ -382,7 +446,7 @@ mod tests {
     #[test]
     fn a_writer_leaves_a_file_that_reads_back_as_the_run() {
         let path = scratch("writer");
-        let mut writer = Writer::<V>::create(&path).expect("a file");
+        let mut writer = Writer::<V>::create(&path, recorded().start()).expect("a file");
 
         for step in recorded().steps() {
             writer.record(step).expect("a step is written");
@@ -402,7 +466,7 @@ mod tests {
     #[test]
     fn every_step_is_on_disk_before_the_next_one_is_asked_for() {
         let path = scratch("flush");
-        let mut writer = Writer::<V>::create(&path).expect("a file");
+        let mut writer = Writer::<V>::create(&path, recorded().start()).expect("a file");
 
         let steps = recorded();
         let first = &steps.steps()[0];
@@ -424,7 +488,7 @@ mod tests {
     #[test]
     fn resuming_keeps_what_was_there_and_counts_it() {
         let path = scratch("resume");
-        let mut writer = Writer::<V>::create(&path).expect("a file");
+        let mut writer = Writer::<V>::create(&path, recorded().start()).expect("a file");
         let steps = recorded();
         writer.record(&steps.steps()[0]).expect("a step is written");
         drop(writer);
@@ -433,16 +497,21 @@ mod tests {
         assert_eq!(
             carried.steps(),
             1,
-            "the stamp is not a step, and the step is"
+            "neither the stamp nor the start is a step, and the step is"
         );
         carried
-            .record(&steps.steps()[1])
+            .record(&Decision::Proceed.into())
             .expect("a step is written");
         assert_eq!(carried.steps(), 2);
 
         let file = std::io::BufReader::new(File::open(&path).expect("the file"));
         let whole = read::<V>(file).expect("it reads back");
-        assert_eq!(whole.steps(), &steps.steps()[..2]);
+        assert_eq!(whole.start(), steps.start(), "the run it carried on");
+        assert_eq!(
+            whole.steps(),
+            &[steps.steps()[0].clone(), Decision::Proceed.into()],
+            "what was there, and what this session added"
+        );
 
         std::fs::remove_file(&path).ok();
     }
@@ -455,7 +524,7 @@ mod tests {
         File::create(&path).expect("a file");
 
         let err = Writer::<V>::resume(&path).expect_err("there is nothing to carry on");
-        assert!(err.to_string().contains("empty"), "{err}");
+        assert!(err.to_string().contains("starts no run"), "{err}");
 
         std::fs::remove_file(&path).ok();
     }

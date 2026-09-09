@@ -23,10 +23,12 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use sts2_cli::cli::Play;
+use sts2_cli::cli::{Play, StartArgs};
 use sts2_cli::control::{self, Outcome};
 use sts2_cli::oracle::{self, Held};
+use sts2_cli::tui;
 use sts2_core::ContentVersion;
+use sts2_core::Play as _;
 use sts2_headless::Session;
 use sts2_headless::daemon::DEFAULT_IDLE_TIMEOUT;
 
@@ -204,12 +206,14 @@ enum DaemonCommand {
     },
 }
 
-/// One invocation, in the two halves a front end has.
+/// One invocation, grouped by what it addresses.
 ///
-/// A [`control::Command`] is answered by any implementation. The rest is about
-/// the machinery that holds one, and only the oracle has any.
+/// Starting creates a run. A [`control::Command`] addresses one that exists.
+/// A [`Machinery`] command addresses what holds the oracle between invocations.
 #[derive(Debug)]
 enum Command {
+    /// Begins a run, which creates the thing that play commands use.
+    Start(StartArgs),
     Run(control::Command),
     Held(Machinery),
 }
@@ -239,7 +243,7 @@ fn grouped(top: Top) -> Command {
 
     match top {
         Top::Run { command } => match command {
-            RunCommand::Start(args) => run(Play::Start(args)),
+            RunCommand::Start(args) => Command::Start(args),
             RunCommand::Record { file } => Command::Held(Machinery::Record { file }),
             RunCommand::Replay {
                 file,
@@ -254,7 +258,7 @@ fn grouped(top: Top) -> Command {
             RunCommand::Stop => Command::Held(Machinery::Stop),
         },
         Top::Show { command } => match command {
-            ShowCommand::State => run(Play::Observe),
+            ShowCommand::State => Command::Run(control::Command::Observe),
             ShowCommand::Map => Command::Run(control::Command::Map),
         },
         Top::Act { command } => match command {
@@ -336,36 +340,36 @@ fn drive<V: ContentVersion>(cli: Cli) -> Result<()> {
             record,
         }) => replay(&held, &file, steps, record, show),
 
+        Command::Start(args) => start(&held, &args, show),
+
         Command::Run(command) => {
-            let mut game = for_command(&held, &command)?;
+            let mut game = held.attached();
             let outcome = control::perform(&mut game, &command)?;
             report(&game, outcome, show)
         }
     }
 }
 
-/// The game this command goes to.
-///
-/// Only `start` brings one up. Any other command against no game is a mistake
-/// worth naming, not a twenty-second pause followed by a refusal.
-fn for_command<V: ContentVersion>(held: &Host<V>, command: &control::Command) -> Result<Game<V>> {
-    let control::Command::Step(start @ Play::Start(args)) = command else {
-        return Ok(held.attached());
-    };
-
+/// Starts a run and prints the state it opened on.
+fn start<V: ContentVersion>(held: &Host<V>, args: &StartArgs, show: Show) -> Result<()> {
     // Read before anything is brought up, so a mistyped seed or character
     // leaves behind neither a daemon nor an empty recording.
-    start.step::<V>()?;
+    let opening = args.start::<V>()?;
 
     held.wake(DEFAULT_IDLE_TIMEOUT)?;
-    let game = held.attached();
 
-    // Before the `start` itself, so the recording opens with it. A recording
-    // that does not begin at a `start` is not a run.
+    // Before the run starts, so the daemon's recording opens with it. A
+    // recording that does not begin at a `start` is not a run.
     if let Some(path) = args.recording()? {
-        oracle::begin_recording(&game, path, false)?;
+        oracle::begin_recording(&held.attached(), path, false)?;
     }
-    Ok(game)
+
+    // Starting is not a step, so it does not go through `perform`. It is what
+    // makes the thing `perform` sends to, and the daemon refuses a second one
+    // while it is holding a run.
+    let mut game = Game::<V>::begin((), &opening).context("starting the run")?;
+    let outcome = Outcome::Seen(Box::new(control::look(&mut game)?));
+    report(&game, outcome, show)
 }
 
 /// Opens the game on the screen.
@@ -381,15 +385,36 @@ fn play<V: ContentVersion>(held: &Host<V>, show: Show) -> Result<()> {
     let fresh = held.wake(DEFAULT_IDLE_TIMEOUT)?;
 
     let game = held.attached();
-    let recording = game.status().ok().and_then(|status| status.recording);
-    sts2_cli::tui::run::<V, _>(
-        game,
-        sts2_cli::tui::Options {
-            recording,
-            rng: show.rng,
-            fresh,
-        },
-    )
+    let options = tui::Options {
+        recording: game.status().ok().and_then(|status| status.recording),
+        rng: show.rng,
+    };
+    // What run to draw, and what to do when one ends, is this front end's
+    // business rather than the screen's. The screen draws a run and says how it
+    // ended.
+    //
+    // A daemon that was already up is holding a run, so that one is attached
+    // to. A fresh one is holding nothing, and the setup screen is what asks
+    // for the first.
+    let mut attached = (!fresh).then_some(game);
+    ratatui::run(|terminal| {
+        let mut screen = tui::setup::Screen::<V>::default();
+        loop {
+            let game = match attached.take() {
+                Some(game) => game,
+                None => match screen.collect(terminal)? {
+                    Some(start) => Game::<V>::begin((), &start).context("starting the run")?,
+                    None => return Ok(()),
+                },
+            };
+
+            // A run that goes away leaves the setup screen, so the daemon
+            // idling out mid-session is a new run rather than a dead window.
+            if tui::play(terminal, game, options.clone())? == tui::Ended::Quit {
+                return Ok(());
+            }
+        }
+    })
 }
 
 /// What the caller asked to be shown beyond the game itself.
@@ -561,6 +586,19 @@ mod tests {
         let parsed = Cli::try_parse_from(argv).expect("a command line sts2 accepts");
 
         assert_eq!(parsed.game_version.as_deref(), Some("v0.111.0"));
+    }
+
+    /// Start and observe stay out of the enum whose variants become steps.
+    #[test]
+    fn starting_and_observing_are_commands_of_their_own() {
+        let start = Cli::try_parse_from(["sts2", "run", "start", "SP1RE1", "IRONCLAD"]).unwrap();
+        assert!(matches!(grouped(start.command.unwrap()), Command::Start(_)));
+
+        let observe = Cli::try_parse_from(["sts2", "show", "state"]).unwrap();
+        assert!(matches!(
+            grouped(observe.command.unwrap()),
+            Command::Run(sts2_cli::control::Command::Observe)
+        ));
     }
 
     /// The seconds the daemon is told to wait are the seconds it is spawned

@@ -242,6 +242,8 @@ pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Resul
     })?;
 
     let mut game: Option<Oracle<V>> = None;
+    // Whether a run is open on `game`. See `relay`.
+    let mut started = false;
     let mut tape: Option<Tape> = None;
     let mut last = Instant::now();
 
@@ -249,7 +251,15 @@ pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Resul
         match listener.accept() {
             Ok((stream, _)) => {
                 last = Instant::now();
-                if !serve_one::<V>(stream, &config, &mut game, &mut tape, idle_timeout, last)? {
+                if !serve_one::<V>(
+                    stream,
+                    &config,
+                    &mut game,
+                    &mut started,
+                    &mut tape,
+                    idle_timeout,
+                    last,
+                )? {
                     break;
                 }
             }
@@ -272,6 +282,7 @@ fn serve_one<V: ContentVersion>(
     stream: UnixStream,
     config: &Config,
     game: &mut Option<Oracle<V>>,
+    started: &mut bool,
     tape: &mut Option<Tape>,
     idle_timeout: Duration,
     last: Instant,
@@ -322,7 +333,7 @@ fn serve_one<V: ContentVersion>(
             true,
         ),
         Request::Record { path, append } => (record::<V>(tape, path, append), true),
-        Request::Game { command } => (relay::<V>(config, game, tape, command), true),
+        Request::Game { command } => (relay::<V>(config, game, started, tape, command), true),
     };
 
     answer_with(writer, &answer)?;
@@ -383,6 +394,15 @@ fn record<V: ContentVersion>(
     }
 }
 
+/// Whether a command is the one that starts a run.
+///
+/// Read off the wire rather than typed. The daemon relays a `Value`, and the
+/// typing happens once at the client's edge. This is the one command it has to
+/// know, because it is the one that must not happen twice.
+fn starts_a_run(command: &serde_json::Value) -> bool {
+    command.get("cmd").and_then(|cmd| cmd.as_str()) == Some("start")
+}
+
 /// Sends one command to the game, launching it on the first one.
 ///
 /// Launching lazily means `sts2 run start` is the only command that pays the
@@ -391,12 +411,25 @@ fn record<V: ContentVersion>(
 fn relay<V: ContentVersion>(
     config: &Config,
     game: &mut Option<Oracle<V>>,
+    started: &mut bool,
     tape: &mut Option<Tape>,
     command: serde_json::Value,
 ) -> Answer {
+    // One run per held game. A second `start` replaces a run this daemon holds
+    // for somebody, leaving its clients a decision deep in a run that is gone.
+    // The trait says nothing about this: it is a fact about holding one game.
+    if starts_a_run(&command) && *started {
+        return Answer::Failed {
+            message: "a run is already open on this game; stop it first".into(),
+        };
+    }
+
     if game.is_none() {
         match Oracle::<V>::launch(config.clone()) {
-            Ok(fresh) => *game = Some(fresh),
+            Ok(fresh) => {
+                *game = Some(fresh);
+                *started = false;
+            }
             Err(e) => {
                 return Answer::Failed {
                     message: format!("launching the game: {e}"),
@@ -417,6 +450,11 @@ fn relay<V: ContentVersion>(
 
     match held.send_line(&encoded) {
         Ok(line) => {
+            // A refused start opened nothing, so the game is still free for the
+            // next one to try.
+            if starts_a_run(&command) && !refused(&line) {
+                *started = true;
+            }
             // Recorded after the game accepted it, and only if it did: a command
             // the game refused did not happen, and replaying it would either be
             // refused again — noise — or, worse, be legal in the replayed run

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
     Answered, Applied, Construct, ContentVersion, Coord, Decision, Gift, Map, Observation, Play,
-    Reason, Recorder, Recording, Refusal, Setup, Step, Table, Tape,
+    Reason, Recorder, Recording, Refusal, Setup, Start, Step, Table, Tape,
 };
 
 type V = V0_107_1;
@@ -96,6 +96,12 @@ impl Stub {
 
 impl Play<V> for Stub {
     type Error = &'static str;
+    type Host = Stub;
+
+    /// The stub is what it is before a run starts, so beginning hands it back.
+    fn begin(host: Self::Host, _: &Start<V>) -> Result<Self, Self::Error> {
+        Ok(host)
+    }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
         self.asked.push(Step::Decision(decision.clone()));
@@ -114,8 +120,19 @@ impl Construct<V> for Stub {
     }
 }
 
+/// A run for a tape to name. Nothing here reads it, and the stub answers
+/// alike either way.
+fn started() -> Start<V> {
+    Start {
+        seed: sts2_core::Seed::new("SP1RE1").expect("a seed"),
+        character: <V as ContentVersion>::Character::ALL[0],
+        ascension: <V as ContentVersion>::AscensionLevel::ALL[0],
+        modifiers: vec![],
+    }
+}
+
 fn recorder(answers: Answers) -> Recorder<V, Stub, Recording<V>> {
-    Recorder::new(Stub::new(answers), Recording::new())
+    Recorder::new(Stub::new(answers), Recording::new(started()))
 }
 
 fn nth<T: Table + Copy>(n: usize) -> T {

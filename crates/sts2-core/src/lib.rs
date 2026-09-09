@@ -57,6 +57,7 @@ pub use step::Step;
 pub use step::answer::{Answer, TakeReward, Tool};
 pub use step::decision::Decision;
 pub use step::setup::{Gift, Setup};
+pub use step::start::Start;
 
 pub use play::recorder::{Recorder, Tape};
 pub use play::recording::Recording;

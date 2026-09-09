@@ -8,24 +8,21 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use sts2_core::{ContentVersion, Play};
+use sts2_core::ContentVersion;
 
 use crate::render::spelling;
-use crate::tui::app::App;
 use crate::tui::names;
 use crate::tui::state::NewRun;
 use crate::tui::theme;
 
 use super::{centred, widget};
 
-pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, setting_up: &NewRun)
-where
-    V: ContentVersion,
-    G: Play<V>,
-    G::Error: std::error::Error + Send + Sync + 'static,
-{
-    let roster = app.roster();
-
+pub fn draw<V: ContentVersion>(
+    frame: &mut Frame,
+    area: Rect,
+    roster: &[V::Character],
+    setting_up: &NewRun,
+) {
     // Tall enough for the roster, the seed field and the note under it, and no
     // taller: a panel with room for eight characters when there are five is a
     // box of air.
@@ -51,7 +48,7 @@ where
     ])
     .areas(inner);
 
-    characters(frame, who, &roster, setting_up.at);
+    characters(frame, who, roster, setting_up.at);
     let _ = gap;
     field(frame, seed, setting_up);
     why(frame, note, setting_up);

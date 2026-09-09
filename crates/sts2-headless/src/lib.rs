@@ -16,27 +16,33 @@
 //!
 //! ```no_run
 //! use sts2_content::v0_107_1::V0_107_1;
-//! use sts2_core::{ContentVersion, Decision, Play, Seed};
+//! use sts2_core::{ContentVersion, Play, Seed, Start};
 //! use sts2_headless::{Config, Oracle};
 //!
 //! // The build is named once and every id is reached through the trait, so
-//! // pointing this at another build is a one-line change. `launch` refuses a
+//! // pointing this at another build is a one-line change. Beginning refuses a
 //! // game whose content or assembly hash disagrees with the tables, and one
 //! // running a mod this client was not built against.
 //! type V = V0_107_1;
 //! type Character = <V as ContentVersion>::Character;
 //! type AscensionLevel = <V as ContentVersion>::AscensionLevel;
 //!
-//! let mut game: Oracle<V> = Oracle::launch(Config::new("/path/to/Slay the Spire 2"))?;
-//! let answered = game.play(&Decision::Start {
-//!     seed: Seed::new("ABCDEF")?,
-//!     character: Character::Ironclad,
-//!     ascension: AscensionLevel::None,
-//!     modifiers: vec![],
-//! })?;
+//! // Starting a run is how a game is reached. There is no oracle without one,
+//! // so nothing here has to answer for a run that never started.
+//! let mut game = Oracle::<V>::begin(
+//!     Config::new("/path/to/Slay the Spire 2"),
+//!     &Start {
+//!         seed: Seed::new("ABCDEF")?,
+//!         character: Character::Ironclad,
+//!         ascension: AscensionLevel::None,
+//!         modifiers: vec![],
+//!     },
+//! )?;
 //!
-//! // The outer `?` above covered the transport. This is the game's answer.
-//! match answered {
+//! // Every step has two results: whether the exchange happened, and whether
+//! // the game accepted it. Starting has one, because there is no run to
+//! // report from when it did not.
+//! match game.observe()? {
 //!     Ok(applied) => println!("floor {}", applied.observation.floor),
 //!     Err(refusal) => println!("{refusal}"),
 //! }

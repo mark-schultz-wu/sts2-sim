@@ -186,23 +186,16 @@ pub fn begin_recording<V: ContentVersion>(
 ///
 /// # Errors
 ///
-/// The file is unreadable, empty, or begins mid-run. A recording begun mid-run
+/// The file is unreadable, or begins mid-run. A recording begun mid-run
 /// replays into a different run, silently: the seed is unset, so every shuffle
-/// differs from the first step on.
+/// differs from the first step on. The reader refuses one, so there is no
+/// check here. A [`Recording`](sts2_core::Recording) holds the run it started,
+/// and a fragment cannot be read into one.
 pub fn recorded<V: ContentVersion>(file: &Path) -> Result<sts2_core::Recording<V>> {
     let opened =
         std::fs::File::open(file).with_context(|| format!("opening {}", file.display()))?;
-    let recording = recording::read::<V>(std::io::BufReader::new(opened))
-        .with_context(|| format!("reading {}", file.display()))?;
-
-    match recording.steps().first() {
-        None => anyhow::bail!("{} has no steps in it", file.display()),
-        Some(sts2_core::Step::Decision(sts2_core::Decision::Start { .. })) => Ok(recording),
-        Some(_) => anyhow::bail!(
-            "{} does not begin with a `start`, so it is a fragment rather than a run",
-            file.display()
-        ),
-    }
+    recording::read::<V>(std::io::BufReader::new(opened))
+        .with_context(|| format!("reading {}", file.display()))
 }
 
 /// Everything the oracle adds to what a simulator says.

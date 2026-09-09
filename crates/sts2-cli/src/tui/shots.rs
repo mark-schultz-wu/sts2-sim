@@ -12,8 +12,7 @@
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use ratatui::crossterm::event::KeyCode;
-use sts2_core::{Applied, Decision};
+use sts2_core::Applied;
 
 use super::app::App;
 use super::state::Options;
@@ -24,73 +23,13 @@ type V = sts2_content::v0_107_1::V0_107_1;
 /// Draws one frame and gives back the buffer, for a claim about colour.
 ///
 /// Returns the cells so tests can inspect properties such as colour.
-/// Draws the setup screen and drives it with real keys.
-///
-/// Keys rather than actions, because the whole point of that screen is that a
-/// letter is a letter there. `k` types a `k` instead of moving the cursor, and
-/// only a `KeyEvent` can say so.
-fn typing(
-    w: u16,
-    h: u16,
-    keys: &str,
-    before: impl FnOnce(&mut App<V, Scripted<V>>),
-) -> (String, Vec<Decision<V>>) {
-    let game = Scripted::saying(crate::fixture::applied(serde_json::json!({})));
-    let sent = game.sent();
-
-    let mut app = App::new(
-        game,
-        Options {
-            fresh: true,
-            ..Options::default()
-        },
-    );
-    before(&mut app);
-    for key in keys.chars() {
-        // A newline in the script is the Enter key, so a test can spell "type
-        // this and start" as one string.
-        match key {
-            '\n' => press(&mut app, KeyCode::Enter),
-            c => press(&mut app, KeyCode::Char(c)),
-        }
-    }
-
-    let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
-    terminal
-        .draw(|frame| super::screen::draw(frame, &app))
-        .expect("a frame");
-
-    let buffer = terminal.backend().buffer();
-    let text = (0..buffer.area.height)
-        .map(|y| {
-            (0..buffer.area.width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-                .trim_end()
-                .to_string()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    (text, sent.all())
-}
-
-fn press(app: &mut App<V, Scripted<V>>, code: KeyCode) {
-    app.key(ratatui::crossterm::event::KeyEvent {
-        code,
-        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
-        kind: ratatui::crossterm::event::KeyEventKind::Press,
-        state: ratatui::crossterm::event::KeyEventState::NONE,
-    })
-    .expect("the game answers");
-}
-
 fn painted(
     applied: Applied<V>,
     w: u16,
     h: u16,
     before: impl FnOnce(&mut App<V, Scripted<V>>),
 ) -> ratatui::buffer::Buffer {
-    let mut app = App::new(Scripted::saying(applied), Options::default());
+    let mut app = App::playing(Scripted::saying(applied), Options::default());
     let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
     terminal
         .draw(|frame| super::screen::draw(frame, &app))
@@ -110,7 +49,7 @@ fn shot(
     h: u16,
     before: impl FnOnce(&mut App<V, Scripted<V>>),
 ) -> String {
-    let mut app = App::new(Scripted::saying(applied), Options::default());
+    let mut app = App::playing(Scripted::saying(applied), Options::default());
     // The app looks once on the way in, which is what puts the fixture in it.
     let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
     terminal
@@ -300,90 +239,6 @@ mod tests {
     fn a_fight_with_no_pet_has_no_ally_row() {
         let out = shot(a_fight(), 100, 34, |_| {});
         assert!(!out.contains(" yours "), "{out}");
-    }
-
-    /// A bare `sts2` with nothing running opens on a character to pick and a
-    /// seed to type. Not on advice about a command to go and run.
-    #[test]
-    fn a_fresh_front_end_opens_on_a_new_run() {
-        let (out, sent) = typing(100, 30, "", |_| {});
-        println!("\n{out}\n");
-
-        assert!(out.contains("a new run"), "{out}");
-        assert!(out.contains("Ironclad"), "the roster: {out}");
-        assert!(out.contains("seed"), "{out}");
-        // Nothing is asked of the game until a character is chosen — which is
-        // what keeps the twenty-second boot off the first frame.
-        assert!(sent.is_empty(), "{sent:?}");
-    }
-
-    /// A letter is a letter here. `k` is "move up" on every other screen, and
-    /// typing a seed with a `k` in it must not walk the roster.
-    #[test]
-    fn the_seed_field_takes_letters_that_are_keys_elsewhere() {
-        let (out, _) = typing(100, 30, "kjdw", |_| {});
-        assert!(out.contains("KJDW"), "the seed field: {out}");
-        // The first character is still the one under the cursor.
-        let (before, _) = out.split_once("seed").expect("a seed field");
-        assert!(before.contains("> Defect"), "the cursor moved: {before}");
-    }
-
-    /// Folded the way the game folds it, so what is typed and what is played
-    /// can differ. The alphabet has no `O`.
-    #[test]
-    fn starting_sends_the_character_and_the_folded_seed() {
-        let (_, sent) = typing(100, 30, "oracle1\n", |app| {
-            // Past Defect, onto Ironclad.
-            press(app, KeyCode::Down);
-        });
-        let [
-            Decision::Start {
-                seed,
-                character,
-                modifiers,
-                ..
-            },
-        ] = &sent[..]
-        else {
-            panic!("expected one start, got {sent:?}")
-        };
-
-        assert_eq!(seed.as_str(), "0RACLE1", "the seed was not folded");
-        assert_eq!(crate::render::spelling(character), "IRONCLAD");
-        assert!(modifiers.is_empty());
-    }
-
-    /// A blank field is not a blank seed. It means "pick one", and what is
-    /// picked has to be a seed the game accepts.
-    #[test]
-    fn a_blank_seed_is_made_up_rather_than_refused() {
-        let (_, sent) = typing(100, 30, "", |app| {
-            press(app, KeyCode::Enter);
-        });
-
-        let [Decision::Start { seed, .. }] = &sent[..] else {
-            panic!("expected one start, got {sent:?}")
-        };
-        assert_eq!(
-            seed.as_str().chars().count(),
-            sts2_core::Seed::DEFAULT_LENGTH
-        );
-        assert!(
-            seed.as_str()
-                .chars()
-                .all(|c| sts2_core::Seed::ALPHABET.contains(c)),
-            "{seed:?} is not spelled in the game's alphabet"
-        );
-    }
-
-    /// Once the run is started the setup screen is gone, and what is drawn is
-    /// the run.
-    #[test]
-    fn the_setup_screen_goes_when_the_run_begins() {
-        let (out, _) = typing(100, 30, "", |app| {
-            press(app, KeyCode::Enter);
-        });
-        assert!(!out.contains("a new run"), "{out}");
     }
 
     /// The smallest terminal anyone plays in. Every panel has a floor, so this

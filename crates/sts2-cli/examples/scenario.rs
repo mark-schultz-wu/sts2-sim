@@ -18,7 +18,7 @@ use anyhow::bail;
 use nonmax::NonMaxU32;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
-use sts2_core::{Applied, Construct, Decision, Gift, Setup, Step};
+use sts2_core::{Applied, Construct, Decision, Gift, Play, Setup, Start, Step};
 use sts2_headless::{Config, Oracle};
 use sts2_rng::Seed;
 
@@ -52,7 +52,17 @@ fn step(game: &mut Oracle<V>, command: impl Into<Step<V>>) -> anyhow::Result<App
 fn main() -> anyhow::Result<()> {
     let dir = sts2_headless::game_dir_from_env()
         .expect("set STS2_GAME_DIR — the repo's .envrc exports it, run `direnv allow`");
-    let mut game = Oracle::launch(Config::new(dir))?;
+    // 1. A fresh run, seeded explicitly. Starting one is how a game is
+    //    reached at all: nothing plays without a run behind it.
+    let mut game = Oracle::begin(
+        Config::new(dir),
+        &Start {
+            seed: Seed::new("0RACLE1")?,
+            character: Character::Ironclad,
+            ascension: AscensionLevel::None,
+            modifiers: vec![],
+        },
+    )?;
     println!(
         "{}, mod {}\n",
         game.greeting().game,
@@ -61,17 +71,6 @@ fn main() -> anyhow::Result<()> {
             .as_deref()
             .unwrap_or("unidentified")
     );
-
-    // 1. A fresh run, seeded explicitly. Nothing may start a run without one.
-    step(
-        &mut game,
-        Decision::Start {
-            seed: Seed::new("0RACLE1")?,
-            character: Character::Ironclad,
-            ascension: AscensionLevel::None,
-            modifiers: vec![],
-        },
-    )?;
 
     // 2. Edit it. Granting goes through the game's own `RelicCmd.Obtain` rather
     //    than writing to `Player.Relics`, so the effects that come with picking

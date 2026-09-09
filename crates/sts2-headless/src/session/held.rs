@@ -13,7 +13,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use sts2_core::{Answered, Construct, ContentVersion, Decision, Play, Setup};
+use sts2_core::{Answered, Construct, ContentVersion, Decision, Play, Setup, Start};
 
 use super::daemon::{
     self,
@@ -172,6 +172,23 @@ impl<V: ContentVersion> Session<V> {
 
 impl<V: ContentVersion> Play<V> for Session<V> {
     type Error = Error;
+
+    /// Nothing. The daemon is already holding a game, so there is nowhere to
+    /// point this: the socket is derived from the build.
+    type Host = ();
+
+    /// Asks the daemon to start a run on the game it is holding.
+    ///
+    /// Whether it will is the daemon's business. It holds one game, so it is
+    /// the thing that knows a run is already open. It says so, rather than
+    /// starting a second one over the first.
+    fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        let mut session = Session::new();
+        match session.dispatch(start)? {
+            Ok(_) => Ok(session),
+            Err(refusal) => Err(Error::NotStarted(refusal.to_string())),
+        }
+    }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
         self.dispatch(decision)

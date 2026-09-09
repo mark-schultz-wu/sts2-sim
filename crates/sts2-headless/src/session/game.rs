@@ -13,7 +13,7 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::process::{Child, Command as Proc, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use sts2_core::ContentVersion;
-use sts2_core::{Answered, Construct, Decision, Play, Setup};
+use sts2_core::{Answered, Construct, Decision, Play, Setup, Start};
 
 /// A running game, and the process behind it.
 ///
@@ -246,6 +246,25 @@ impl<V: ContentVersion> Oracle<V> {
 
 impl<V: ContentVersion> Play<V> for Oracle<V> {
     type Error = Error;
+
+    /// Where the game is. This holder owns the process, so it has to be told.
+    type Host = Config;
+
+    /// Launches a game and starts a run on it.
+    ///
+    /// One run per process here: the child is this value's, and it dies with
+    /// it. A holder that outlives a run is [`Session`](super::held::Session),
+    /// where the daemon owns the game and says whether a run is already open.
+    fn begin(config: Self::Host, start: &Start<V>) -> Result<Self, Error> {
+        let mut oracle = Self::launch(config)?;
+        let reply = oracle.dispatch(start)?;
+        // The run's own first report is dropped. `observe` asks for it, and a
+        // caller that wants it says so, the way it does after any other step.
+        match super::receive(reply, &mut oracle.last)? {
+            Ok(_) => Ok(oracle),
+            Err(refusal) => Err(Error::NotStarted(refusal.to_string())),
+        }
+    }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Error> {
         let reply = self.dispatch(decision)?;
