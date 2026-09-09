@@ -88,16 +88,13 @@ fn push_number(head: &mut u64, len: &mut u32, number: usize) {
 /// come back in the same order on every machine.
 fn matching_segments<V: Rules>(map: &ActMap<V>) -> Vec<Vec<Vec<Id>>> {
     let mut segments: BTreeMap<SegmentKey, SegmentGroup> = BTreeMap::new();
-    let starts: Vec<Id> = map
-        .live()
-        .chain([map.ancient])
-        .filter(|&id| starts_a_segment(map, id))
-        .collect();
     let mut segment = Vec::with_capacity(map.rows + 2);
-    for start in starts {
-        segment.push(start);
-        collect_segments_from(map, start, &mut segment, &mut segments);
-        segment.clear();
+    for start in map.live().chain([map.ancient]) {
+        if starts_a_segment(map, start) {
+            segment.push(start);
+            collect_segments_from(map, start, &mut segment, &mut segments);
+            segment.clear();
+        }
     }
     segments
         .into_values()
@@ -136,19 +133,23 @@ fn collect_segment<V: Rules>(
     segments: &mut BTreeMap<SegmentKey, SegmentGroup>,
 ) {
     let key = segment_key(map, segment);
-    match segments.get_mut(&key) {
-        None => {
-            segments.insert(key, SegmentGroup::One(segment.to_vec()));
+    match segments.entry(key) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            entry.insert(SegmentGroup::One(segment.to_vec()));
         }
-        Some(SegmentGroup::One(held)) if !overlaps(held, segment) => {
-            let first = std::mem::take(held);
-            *segments.get_mut(&key).expect("the key was just found") =
-                SegmentGroup::Many(vec![first, segment.to_vec()]);
+        std::collections::btree_map::Entry::Occupied(mut entry) => {
+            let group = entry.get_mut();
+            match group {
+                SegmentGroup::One(held) if !overlaps(held, segment) => {
+                    let first = std::mem::take(held);
+                    *group = SegmentGroup::Many(vec![first, segment.to_vec()]);
+                }
+                SegmentGroup::Many(held) if !held.iter().any(|prior| overlaps(prior, segment)) => {
+                    held.push(segment.to_vec());
+                }
+                _ => {}
+            }
         }
-        Some(SegmentGroup::Many(group)) if !group.iter().any(|held| overlaps(held, segment)) => {
-            group.push(segment.to_vec());
-        }
-        Some(_) => {}
     }
 }
 
