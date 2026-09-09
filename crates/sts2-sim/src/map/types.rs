@@ -15,7 +15,7 @@ use sts2_core::rng::{GameRng, Interval, Span};
 
 use sts2_core::{AscensionKinds, MapPointKinds, Rules};
 
-use super::{ActMap, Id};
+use super::{ActMapBuilder, Id};
 
 /// How many of each type an act's map holds.
 ///
@@ -121,7 +121,7 @@ fn standard_unknowns<R: GameRng>(rng: &mut R) -> i32 {
     rng.next_gaussian_int(12, 1, accept)
 }
 
-impl<V: Rules> ActMap<V> {
+impl<V: Rules> ActMapBuilder<V> {
     /// Stamp the fixed rows and deal out the rest, which is
     /// `AssignPointTypes`.
     ///

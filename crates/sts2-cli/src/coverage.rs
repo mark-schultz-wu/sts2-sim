@@ -14,6 +14,7 @@
 use crate::id::spelling;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use sts2_core::ActMap as _;
 use sts2_core::{
     Applied, CardIdent, CardTable, CharacterTable, Combat, ContentVersion, Decision,
     EncounterTable, EventTable, Map, ModelId, MonsterTable, PotionTable, Question, RelicTable,
@@ -178,7 +179,7 @@ impl Coverage {
         let Some(here) = map.at else {
             return;
         };
-        if let Some(node) = map.points.iter().find(|node| node.at == here)
+        if let Ok(node) = map.points.at(here)
             && let Some(kind) = spelling(&node.kind)
         {
             self.rooms.insert(kind);

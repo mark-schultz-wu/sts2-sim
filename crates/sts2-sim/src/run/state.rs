@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use smallvec::SmallVec;
+use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Coord, Counters, EventOption, Map,
-    Node, Observation, Question, Reachable, Room, Rules, Seed, Table,
+    Observation, Question, Reachable, Room, Rules, Seed, Table,
 };
 
 use crate::engine::Error;
@@ -28,40 +29,14 @@ pub(crate) struct State<V: Rules> {
 
 /// Data generated once and shared by every branch of this run.
 ///
-/// An act's nodes, which settle when it is generated and never change again.
-/// Every branch reads the same ones, and so does every report.
+/// Data generated once and shared by every branch of this run.
 ///
-/// [`ActMap`] generates them and is dropped. What it holds beyond them belongs
-/// to building a map, not to playing one.
+/// The act's map settles when it is generated. It does not change while the
+/// act is played, so every branch and every report reads one copy.
 #[derive(Debug)]
 struct RunData<V: Rules> {
     _opening: Opening<V>,
-    nodes: Arc<[Node<V>]>,
-}
-
-impl<V: Rules> RunData<V> {
-    /// The node standing on a coordinate.
-    ///
-    /// `nodes` is in the observation's order, so this searches rather than
-    /// scans. A caller reads a node's edges straight out of it, already in
-    /// the order a report lists them.
-    fn node_at(&self, at: Coord) -> Result<&Node<V>, crate::map::Error> {
-        self.nodes
-            .binary_search_by_key(&(at.row, at.col), |node| (node.at.row, node.at.col))
-            .map(|found| &self.nodes[found])
-            .map_err(|_| crate::map::Error::NoPointAt { at })
-    }
-
-    fn new(opening: Opening<V>, map: &ActMap<V>) -> Self {
-        RunData {
-            _opening: opening,
-            nodes: map
-                .nodes()
-                .into_iter()
-                .map(|(at, kind, to)| Node { at, kind, to })
-                .collect(),
-        }
-    }
+    map: ActMap<V>,
 }
 
 /// The small, mutable part of one player's run state.
@@ -111,7 +86,10 @@ impl<V: Rules> State<V> {
         let mut map_rng = MegaRng::named(raw_seed, "act_1_map");
         let map = ActMap::<V>::generate(&mut map_rng, Layout::ACT_ONE, ascension)
             .expect("the game's act-one layout fits a packed map path");
-        let at = map.ancient();
+        let at = map
+            .ancient()
+            .expect("a generated act map opens somewhere")
+            .at;
 
         let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
         let neow_options = Blessing::<V>::roll(&mut neow_rng, 1).options;
@@ -125,7 +103,10 @@ impl<V: Rules> State<V> {
         run_counters[up_front_at] = up_front.counter() as u32;
 
         Self {
-            shared: Arc::new(RunData::new(opening, &map)),
+            shared: Arc::new(RunData {
+                _opening: opening,
+                map,
+            }),
             at,
             player: Player {
                 relics: V::starting_relics(character).into_iter().collect(),
@@ -206,19 +187,15 @@ impl<V: Rules> State<V> {
 
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Applied<V> {
-        let travelable = self
-            .shared
-            .node_at(self.at)
+        let map = &self.shared.map;
+        let travelable = map
+            .at(self.at)
             .expect("the run stands on its own map")
             .to
             .iter()
             .map(|&at| Reachable {
                 at,
-                kind: self
-                    .shared
-                    .node_at(at)
-                    .expect("a map edge leads to a node")
-                    .kind,
+                kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect();
         let Phase::Neow {
@@ -302,7 +279,7 @@ impl<V: Rules> State<V> {
                     at: Some(self.at),
                     visited: vec![self.at],
                     travelable,
-                    points: Arc::clone(&self.shared.nodes),
+                    points: map.shared(),
                     proceed: false,
                 },
                 rng: Counters { run, player },
@@ -331,7 +308,6 @@ mod tests {
     use super::*;
 
     type V = V0_107_1;
-    type MapPointType = <V as sts2_core::ContentVersion>::MapPointType;
 
     fn opened() -> State<V> {
         State::start(
@@ -351,58 +327,6 @@ mod tests {
         fn assert<T: Send + Sync>() {}
         assert::<State<V>>();
         assert::<crate::Sim<V>>();
-    }
-
-    /// The shared nodes are in the order a report lists them.
-    ///
-    /// `node_at` searches rather than scans, which needs that order to hold.
-    /// `ActMap::nodes` is where it is decided, and this is the run holding it
-    /// to that.
-    #[test]
-    fn the_shared_nodes_are_in_the_order_a_report_lists_them() {
-        let run = opened();
-        let nodes = &run.shared.nodes;
-        assert!(nodes.len() > 1, "an act map has nodes");
-        assert!(
-            nodes
-                .windows(2)
-                .all(|pair| (pair[0].at.row, pair[0].at.col) < (pair[1].at.row, pair[1].at.col)),
-            "the shared nodes are not sorted by row and then column"
-        );
-        for node in nodes.iter() {
-            let found = run.shared.node_at(node.at).expect("a node of this map");
-            assert_eq!(found.at, node.at);
-        }
-    }
-
-    /// The first node and the boss are among the shared nodes.
-    ///
-    /// Neither sits on the grid the act was walked on, so a projection built
-    /// from grid cells alone drops both.
-    #[test]
-    fn the_nodes_hold_what_the_grid_does_not() {
-        use sts2_core::MapPoints;
-
-        let run = opened();
-        let kinds: Vec<_> = run.shared.nodes.iter().map(|node| node.kind).collect();
-        for kind in [MapPointType::ANCIENT, MapPointType::BOSS] {
-            assert!(kinds.contains(&kind), "no {kind:?} among the act's nodes");
-        }
-        assert_eq!(
-            run.shared
-                .node_at(run.at)
-                .expect("the run stands on its own map")
-                .kind,
-            MapPointType::ANCIENT,
-            "a run opens on an ancient"
-        );
-    }
-
-    #[test]
-    fn a_coordinate_off_the_map_is_an_error() {
-        let run = opened();
-        let off = Coord::new(0, 0);
-        assert!(run.shared.node_at(off).is_err(), "{off} is not on the map");
     }
 
     #[test]

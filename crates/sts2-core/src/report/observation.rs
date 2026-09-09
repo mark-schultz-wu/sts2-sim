@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use crate::{CardIdent, ContentVersion, Coord, Cost, ModelId};
+use crate::{CardIdent, ContentVersion, Coord, Cost, MapPointKinds, ModelId};
 
 /// Everything the simulator is compared against after a decision.
 #[derive(Debug, Clone, PartialEq)]
@@ -87,6 +87,51 @@ pub struct Map<V: ContentVersion> {
 pub struct Reachable<V: ContentVersion> {
     pub at: Coord,
     pub kind: V::MapPointType,
+}
+
+/// No node stands on a coordinate a caller asked about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("this act's map has no node at {at}")]
+pub struct NoNode {
+    pub at: Coord,
+}
+
+/// What an act's map answers, whoever is holding one.
+///
+/// An observation carries the act's nodes, and so does whatever generated
+/// them. Both get asked the same questions here.
+///
+/// [`ActMap::nodes`] is the whole of it. The rest are written in terms of that
+/// one, for an implementation to replace. A map that decides its own order can
+/// search where this walks.
+pub trait ActMap<V: ContentVersion> {
+    /// Every node of the act, in the order an observation lists them.
+    fn nodes(&self) -> &[Node<V>];
+
+    /// The node standing on a coordinate.
+    ///
+    /// A coordinate this map does not hold came off some other map, which is
+    /// an error and not an empty answer.
+    fn at(&self, at: Coord) -> Result<&Node<V>, NoNode> {
+        self.nodes()
+            .iter()
+            .find(|node| node.at == at)
+            .ok_or(NoNode { at })
+    }
+
+    /// Where a run stands on this map before it has moved anywhere.
+    fn ancient(&self) -> Option<&Node<V>> {
+        self.nodes()
+            .iter()
+            .find(|node| node.kind == V::MapPointType::ANCIENT)
+    }
+}
+
+/// An observation's own nodes answer for the act it reported.
+impl<V: ContentVersion> ActMap<V> for [Node<V>] {
+    fn nodes(&self) -> &[Node<V>] {
+        self
+    }
 }
 
 /// A node in the act, and the nodes it leads on to.

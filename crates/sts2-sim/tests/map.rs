@@ -18,8 +18,8 @@ use std::path::Path;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
-use sts2_core::Seed;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
+use sts2_core::{ActMap as _, Seed};
 use sts2_sim::map::{ActMap, Layout};
 
 type V = V0_107_1;
@@ -34,7 +34,8 @@ const SEED: &str = "0RACLE1";
 /// the map rather than as a pile of unordered nodes.
 fn render(map: &ActMap<V>) -> String {
     let mut out = String::new();
-    for (at, kind, to) in map.nodes() {
+    for node in map.nodes() {
+        let (at, kind, to) = (node.at, node.kind, &node.to);
         let edges = if to.is_empty() {
             "-".to_string()
         } else {

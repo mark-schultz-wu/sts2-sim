@@ -1,6 +1,6 @@
 //! The act's map, generated the way the game generates it.
 //!
-//! A port of `StandardActMap`, which every act but the Spoils uses. Seven
+//! A port of `ActMapBuilder`, which every act but the Spoils uses. Seven
 //! paths are walked from the second row to the last. The rows a run cannot
 //! choose are stamped, and the rest of the node types are dealt out. Duplicate
 //! stretches are pruned away, and the survivors are nudged apart for looks.
@@ -18,8 +18,10 @@ mod set;
 mod tidy;
 mod types;
 
+use std::sync::Arc;
+
 use sts2_core::rng::{GameRng, Span};
-use sts2_core::{Coord, MapPointKinds, Rules};
+use sts2_core::{Coord, MapPointKinds, NoNode, Node, Rules};
 
 use set::Order;
 pub use types::{Layout, Rests};
@@ -33,10 +35,6 @@ pub enum Error {
     /// A segment needs more than the 17 identities that fit in its packed path.
     #[error("map segment of length {length} does not fit in 128 bits")]
     SegmentTooLong { length: usize },
-    /// Nothing stands where a caller asked. A map's own coordinates all
-    /// answer, so this is a run reading a coordinate off some other map.
-    #[error("this act's map has no point at {at}")]
-    NoPointAt { at: Coord },
 }
 
 /// The grid is this wide in every act.
@@ -45,7 +43,7 @@ pub(crate) const COLS: usize = 7;
 /// How many paths are walked, which is also how wide the grid is.
 const PATHS: usize = 7;
 
-/// Which point this is. An index into [`ActMap::points`], never reused.
+/// Which point this is. An index into `ActMapBuilder::points`, never reused.
 pub(crate) type Id = usize;
 
 /// One node: where it sits, what it is, and what it leads to.
@@ -81,23 +79,19 @@ impl<V: Rules> Point<V> {
     }
 }
 
-/// A generated act map.
+/// One act's map, as a run holds it.
 ///
-/// The grid holds the rows a path can pass through. The first node and the
-/// boss sit outside it. The first is above the grid's row zero, and the boss a
-/// row past its end. Both are still points, and the rest of the map links to
-/// them.
+/// The act's nodes, settled when it was generated and unchanged while it is
+/// played. Cloning shares them, so every branch and every report reads one
+/// copy.
+///
+/// Held as the shape a report asks for. That is convenience, not a promise.
+/// A run needing what a [`Node`] lacks changes what is behind these
+/// accessors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActMap<V: Rules> {
-    pub(crate) points: Vec<Point<V>>,
-    /// `COLS` columns by [`ActMap::rows`] rows, column major, as the game's is.
-    grid: Vec<Option<Id>>,
-    /// One more than the act's room count, which is the grid's height.
-    rows: usize,
-    starts: Order<Id>,
-    boss: Id,
-    ancient: Id,
-    counts: types::Counts,
+    /// In the observation's order, which is what lets [`ActMap::at`] search.
+    nodes: Arc<[Node<V>]>,
 }
 
 impl<V: Rules> ActMap<V> {
@@ -113,9 +107,69 @@ impl<V: Rules> ActMap<V> {
         layout: Layout,
         ascension: V::AscensionLevel,
     ) -> Result<Self, Error> {
+        Ok(ActMapBuilder::<V>::generate(rng, layout, ascension)?.into())
+    }
+
+    /// The act's nodes, to hand to a report that outlives this borrow.
+    pub fn shared(&self) -> Arc<[Node<V>]> {
+        Arc::clone(&self.nodes)
+    }
+}
+
+/// A map is what a finished builder holds, once its order is settled.
+impl<V: Rules> From<ActMapBuilder<V>> for ActMap<V> {
+    fn from(built: ActMapBuilder<V>) -> Self {
+        ActMap {
+            nodes: built.nodes().into(),
+        }
+    }
+}
+
+impl<V: Rules> sts2_core::ActMap<V> for ActMap<V> {
+    fn nodes(&self) -> &[Node<V>] {
+        &self.nodes
+    }
+
+    /// The nodes are in the observation's order, so this searches them. The
+    /// trait walks them instead.
+    fn at(&self, at: Coord) -> Result<&Node<V>, NoNode> {
+        self.nodes
+            .binary_search_by_key(&(at.row, at.col), |node| (node.at.row, node.at.col))
+            .map(|found| &self.nodes[found])
+            .map_err(|_| NoNode { at })
+    }
+}
+
+/// A map being generated, which is the port of the game's own class.
+///
+/// The grid holds the rows a path can pass through. The first node and the
+/// boss sit outside it. The first is above the grid's row zero, and the boss a
+/// row past its end. Both are still points, and the map links to them.
+///
+/// Generation's own working shape. A run holds the [`ActMap`] this turns into.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActMapBuilder<V: Rules> {
+    pub(crate) points: Vec<Point<V>>,
+    /// `COLS` columns by `ActMapBuilder::rows` rows, column major, as the game's is.
+    grid: Vec<Option<Id>>,
+    /// One more than the act's room count, which is the grid's height.
+    rows: usize,
+    starts: Order<Id>,
+    boss: Id,
+    ancient: Id,
+    counts: types::Counts,
+}
+
+impl<V: Rules> ActMapBuilder<V> {
+    /// Walk, deal, prune and tidy one act's map.
+    fn generate<R: GameRng>(
+        rng: &mut R,
+        layout: Layout,
+        ascension: V::AscensionLevel,
+    ) -> Result<Self, Error> {
         let rows = layout.rooms + 1;
         let counts = types::Counts::roll(rng, layout, ascension);
-        let mut map = ActMap {
+        let mut map = ActMapBuilder {
             points: Vec::new(),
             grid: vec![None; COLS * rows],
             rows,
@@ -143,9 +197,10 @@ impl<V: Rules> ActMap<V> {
     /// Every node the run can stand on, in the observation's own order.
     ///
     /// Row then column, which is how the game's own reporting sorts them. The
-    /// first node and the boss are in here, unlike in `GetAllMapPoints`.
-    pub fn nodes(&self) -> Vec<(Coord, V::MapPointType, Vec<Coord>)> {
-        let mut nodes: Vec<(Coord, V::MapPointType, Vec<Coord>)> = self
+    /// first node and the boss are in here, unlike in `GetAllMapPoints`. This
+    /// is the only place that order is decided.
+    fn nodes(&self) -> Vec<Node<V>> {
+        let mut nodes: Vec<Node<V>> = self
             .live()
             .chain([self.ancient, self.boss])
             .map(|id| {
@@ -156,16 +211,15 @@ impl<V: Rules> ActMap<V> {
                     .map(|child| self.points[child].at())
                     .collect();
                 to.sort_by_key(|at| (at.row, at.col));
-                (point.at(), point.kind, to)
+                Node {
+                    at: point.at(),
+                    kind: point.kind,
+                    to,
+                }
             })
             .collect();
-        nodes.sort_by_key(|(at, _, _)| (at.row, at.col));
+        nodes.sort_by_key(|node| (node.at.row, node.at.col));
         nodes
-    }
-
-    /// Where the run stands before it has moved anywhere.
-    pub fn ancient(&self) -> Coord {
-        self.points[self.ancient].at()
     }
 
     /// A new point, off the grid. The caller places it if it belongs on one.
@@ -338,5 +392,84 @@ impl<V: Rules> ActMap<V> {
             .children
             .iter()
             .any(|child| self.points[child].col as i32 - self.points[neighbour].col as i32 == -step)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sts2_content::v0_107_1::V0_107_1;
+    use sts2_content::v0_107_1::ascension::AscensionLevel;
+    use sts2_core::ActMap as _;
+    use sts2_core::Seed;
+    use sts2_core::rng::{MegaRng, stream_seed};
+
+    use super::*;
+
+    type V = V0_107_1;
+    type MapPointType = <V as sts2_core::ContentVersion>::MapPointType;
+
+    fn map() -> ActMap<V> {
+        let seed = Seed::new("0RACLE1").expect("the fixture's seed is a seed");
+        let mut rng = MegaRng::named(stream_seed(&seed), "act_1_map");
+        ActMap::<V>::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::None)
+            .expect("the fixture's map generates")
+    }
+
+    /// The nodes are in the order a report lists them.
+    ///
+    /// [`ActMap::at`] searches rather than scans, which needs that order. A
+    /// search over an unsorted slice finds nothing, and this map then reports
+    /// no such node.
+    #[test]
+    fn the_nodes_are_in_the_order_a_report_lists_them() {
+        let map = map();
+        let nodes = map.nodes();
+        assert!(nodes.len() > 1, "an act map has nodes");
+        assert!(
+            nodes
+                .windows(2)
+                .all(|pair| (pair[0].at.row, pair[0].at.col) < (pair[1].at.row, pair[1].at.col)),
+            "the nodes are not sorted by row and then column"
+        );
+    }
+
+    /// Every node the map reports is one it can find again.
+    ///
+    /// The first node and the boss are the cases worth the test. Neither sits
+    /// on the grid, so a map built from grid cells alone loses both.
+    #[test]
+    fn the_map_finds_every_node_it_holds() {
+        let map = map();
+        for node in map.nodes() {
+            let found = map
+                .at(node.at)
+                .unwrap_or_else(|_| panic!("no node at {}", node.at));
+            assert_eq!(found, node);
+        }
+        let kinds: Vec<_> = map.nodes().iter().map(|node| node.kind).collect();
+        for kind in [MapPointType::ANCIENT, MapPointType::BOSS] {
+            assert!(kinds.contains(&kind), "no {kind:?} among the act's nodes");
+        }
+    }
+
+    #[test]
+    fn a_map_opens_on_an_ancient() {
+        let map = map();
+        let first = map.ancient().expect("an act opens somewhere");
+        assert_eq!(first.kind, MapPointType::ANCIENT);
+        assert_eq!(
+            map.at(first.at).expect("the first node is on the map"),
+            first
+        );
+    }
+
+    /// A coordinate off the map is an error. The search says so, and so does
+    /// the walk the trait writes.
+    #[test]
+    fn a_coordinate_off_the_map_is_an_error() {
+        let off = Coord::new(0, 0);
+        let map = map();
+        assert_eq!(map.at(off), Err(NoNode { at: off }));
+        assert_eq!(map.nodes().at(off), Err(NoNode { at: off }));
     }
 }
