@@ -37,13 +37,34 @@ pub(super) fn prune_and_repair<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &
 fn prune_duplicates<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) {
     let mut passes = 0;
     let mut duplicates = matching_segments(map);
-    while prune_pass(map, rng, &duplicates) {
+    while prune_pass(map, rng, duplicates) {
         passes += 1;
         assert!(
             passes <= 50,
             "the map still has duplicate stretches after 50 prunes"
         );
         duplicates = matching_segments(map);
+    }
+}
+
+/// The game's textual segment key, held inline.
+///
+/// Unused bytes are zero, below every byte in the textual form, so the array's
+/// ordering is the same as the `.NET` string ordering used by the game.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct SegmentKey([u8; 64]);
+
+impl SegmentKey {
+    fn push(&mut self, len: &mut usize, byte: u8) {
+        self.0[*len] = byte;
+        *len += 1;
+    }
+
+    fn number(&mut self, len: &mut usize, number: usize) {
+        if number >= 10 {
+            self.number(len, number / 10);
+        }
+        self.push(len, b'0' + (number % 10) as u8);
     }
 }
 
@@ -54,34 +75,35 @@ fn prune_duplicates<V: Rules, R: GameRng>(map: &mut ActMap<V>, rng: &mut R) {
 /// is ordered by that key, as the game's `SortedDictionary` is, so the groups
 /// come back in the same order on every machine.
 fn matching_segments<V: Rules>(map: &ActMap<V>) -> Vec<Vec<Vec<Id>>> {
-    let mut segments: BTreeMap<String, Vec<Vec<Id>>> = BTreeMap::new();
-    for path in all_paths(map, map.ancient) {
-        collect_segments(map, &path, &mut segments);
-    }
+    let mut segments: BTreeMap<SegmentKey, Vec<Vec<Id>>> = BTreeMap::new();
+    let mut path = Vec::with_capacity(map.rows + 2);
+    collect_path_segments(map, map.ancient, &mut path, &mut segments);
     segments
         .into_values()
         .filter(|group| group.len() > 1)
         .collect()
 }
 
-/// Every route from here to the boss, which is `FindAllPaths`.
+/// Visit every route from here to the boss, which is `FindAllPaths`.
 ///
 /// In the order the children were linked, which is the order the game walks
 /// its `HashSet` in. That order decides which stretch of a duplicate pair is
 /// found first.
-fn all_paths<V: Rules>(map: &ActMap<V>, from: Id) -> Vec<Vec<Id>> {
+fn collect_path_segments<V: Rules>(
+    map: &ActMap<V>,
+    from: Id,
+    path: &mut Vec<Id>,
+    segments: &mut BTreeMap<SegmentKey, Vec<Vec<Id>>>,
+) {
+    path.push(from);
     if map.points[from].kind == V::MapPointType::BOSS {
-        return vec![vec![from]];
-    }
-    let mut paths = Vec::new();
-    for child in map.points[from].children.iter() {
-        for tail in all_paths(map, child) {
-            let mut path = vec![from];
-            path.extend(tail);
-            paths.push(path);
+        collect_segments(map, path, segments);
+    } else {
+        for child in map.points[from].children.iter() {
+            collect_path_segments(map, child, path, segments);
         }
     }
-    paths
+    path.pop();
 }
 
 /// Every stretch of one route worth comparing, which is
@@ -93,7 +115,7 @@ fn all_paths<V: Rules>(map: &ActMap<V>, from: Id) -> Vec<Vec<Id>> {
 fn collect_segments<V: Rules>(
     map: &ActMap<V>,
     path: &[Id],
-    segments: &mut BTreeMap<String, Vec<Vec<Id>>>,
+    segments: &mut BTreeMap<SegmentKey, Vec<Vec<Id>>>,
 ) {
     for start in 0..path.len().saturating_sub(1) {
         if !starts_a_segment(map, path[start]) {
@@ -103,15 +125,15 @@ fn collect_segments<V: Rules>(
             if map.points[path[start + span]].parents.len() < 2 {
                 continue;
             }
-            let segment: Vec<Id> = path[start..=start + span].to_vec();
-            let key = segment_key(map, &segment);
+            let segment = &path[start..=start + span];
+            let key = segment_key(map, segment);
             match segments.get_mut(&key) {
                 None => {
-                    segments.insert(key, vec![segment]);
+                    segments.insert(key, vec![segment.to_vec()]);
                 }
                 Some(group) => {
-                    if !group.iter().any(|held| overlaps(held, &segment)) {
-                        group.push(segment);
+                    if !group.iter().any(|held| overlaps(held, segment)) {
+                        group.push(segment.to_vec());
                     }
                 }
             }
@@ -129,19 +151,30 @@ fn starts_a_segment<V: Rules>(map: &ActMap<V>, id: Id) -> bool {
 ///
 /// A stretch from the first node is keyed by its row alone, so two openings
 /// into the same node compare equal wherever they started.
-fn segment_key<V: Rules>(map: &ActMap<V>, segment: &[Id]) -> String {
+fn segment_key<V: Rules>(map: &ActMap<V>, segment: &[Id]) -> SegmentKey {
     let first = &map.points[segment[0]];
     let last = &map.points[segment[segment.len() - 1]];
-    let head = if first.row == 0 {
-        format!("{}-{},{}-", first.row, last.col, last.row)
+    let mut key = SegmentKey([0; 64]);
+    let mut len = 0;
+    if first.row == 0 {
+        key.number(&mut len, first.row);
     } else {
-        format!("{},{}-{},{}-", first.col, first.row, last.col, last.row)
-    };
-    let types: Vec<String> = segment
-        .iter()
-        .map(|&id| kind_index::<V>(map.points[id].kind).to_string())
-        .collect();
-    head + &types.join(",")
+        key.number(&mut len, first.col);
+        key.push(&mut len, b',');
+        key.number(&mut len, first.row);
+    }
+    key.push(&mut len, b'-');
+    key.number(&mut len, last.col);
+    key.push(&mut len, b',');
+    key.number(&mut len, last.row);
+    key.push(&mut len, b'-');
+    for (at, &id) in segment.iter().enumerate() {
+        if at != 0 {
+            key.push(&mut len, b',');
+        }
+        key.push(&mut len, b'0' + kind_index::<V>(map.points[id].kind) as u8);
+    }
+    key
 }
 
 /// A node type as the number the game writes into a key.
@@ -184,10 +217,9 @@ fn overlaps(a: &[Id], b: &[Id]) -> bool {
 fn prune_pass<V: Rules, R: GameRng>(
     map: &mut ActMap<V>,
     rng: &mut R,
-    duplicates: &[Vec<Vec<Id>>],
+    duplicates: Vec<Vec<Vec<Id>>>,
 ) -> bool {
-    for group in duplicates {
-        let mut group = group.clone();
+    for mut group in duplicates {
         rng.unstable_shuffle(&mut group);
         if all_but_last(map, &group) != 0 {
             return true;
