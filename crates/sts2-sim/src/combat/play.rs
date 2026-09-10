@@ -48,7 +48,7 @@ pub(crate) fn resolve<V: Rules>(
 
     // The creature the play named, which every command the card issues is
     // pointed at. Found once, here, so a rule never carries a bare number.
-    let target = match target {
+    let aimed = match target {
         None => None,
         Some(id) => Some(
             combat
@@ -70,11 +70,10 @@ pub(crate) fn resolve<V: Rules>(
 
     // `CanPlayTargeting`: the card is pointed at one of the creatures its own
     // target type accepts, and a card that names one is pointed at something.
-    if !target.is_some_and(|at| playable.targets.contains(&at.id())) && !playable.targets.is_empty()
-    {
+    if !target.is_some_and(|id| playable.targets.contains(&id)) && !playable.targets.is_empty() {
         return Err(Reason::WrongTarget {
             card: playable.card,
-            target: target.map(CombatId::id),
+            target,
             takes: playable.target,
         });
     }
@@ -92,7 +91,7 @@ pub(crate) fn resolve<V: Rules>(
     const PAYS: &str = "a play the legality pass approved is one the pool pays";
     Ok(Play {
         index: at,
-        target,
+        target: aimed,
         energy: legal::spend(playable.card.card.cost(), combat.energy).expect(PAYS),
         stars: legal::spend(star_cost, combat.stars).expect(PAYS),
     })
@@ -150,7 +149,7 @@ impl<V: Rules> Board<'_, V> {
         self.combat
             .creatures
             .iter()
-            .position(|creature| creature.id == at.id())
+            .position(|creature| creature.combat_id() == at)
     }
 
     /// The player, which is the only creature a card is played from.

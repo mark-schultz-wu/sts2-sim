@@ -387,15 +387,11 @@ pub struct Channelled<V: ContentVersion> {
 /// A card's commands are pointed at one of these, and [`crate::Fight::target`]
 /// is the only place a card's behaviour gets one. So a rule cannot make an id
 /// up and hit whatever it lands on.
+///
+/// The number inside stays inside. A fight asks each creature whether it is
+/// this one, which is all anybody has needed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CombatId(u32);
-
-impl CombatId {
-    /// The id an observation reports, for the fight that has to find it.
-    pub fn id(self) -> u32 {
-        self.0
-    }
-}
 
 impl<V: ContentVersion> Creature<V> {
     /// This creature, as a command names one.
