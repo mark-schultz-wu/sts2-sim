@@ -3,7 +3,6 @@
 use sts2_core::Fight;
 
 use super::super::super::generated::cards::{CardVar, Cards, RegentCard};
-use super::super::super::generated::powers::Power;
 use super::{V, printed};
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
@@ -38,12 +37,8 @@ fn defend<F: Fight<V>>(card: Cards, fight: &mut F) {
 fn falling_star<F: Fight<V>>(card: Cards, fight: &mut F) {
     let target = fight.target();
     fight.attack(target, printed(card, CardVar::Damage));
-    fight.apply_power(target, Power::WeakPower, printed(card, CardVar::WeakPower));
-    fight.apply_power(
-        target,
-        Power::VulnerablePower,
-        printed(card, CardVar::VulnerablePower),
-    );
+    fight.weaken(target, printed(card, CardVar::WeakPower));
+    fight.make_vulnerable(target, printed(card, CardVar::VulnerablePower));
 }
 
 /// `Venerate`. Gain stars.

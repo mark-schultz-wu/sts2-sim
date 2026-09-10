@@ -744,8 +744,94 @@ pub trait Fight<V: ContentVersion> {
     /// A printed number, so signed. The pool it lands in is not.
     fn gain_stars(&mut self, amount: V::Number);
 
-    /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
-    fn apply_power(&mut self, at: crate::CombatId, power: V::Power, amount: V::Number);
+    /// `PowerCmd.Apply<WeakPower>(at, amount, Owner.Creature, this)`.
+    fn weaken(&mut self, at: crate::CombatId, amount: V::Number);
+
+    /// `PowerCmd.Apply<VulnerablePower>(at, amount, Owner.Creature, this)`.
+    fn make_vulnerable(&mut self, at: crate::CombatId, amount: V::Number);
+
+    /// What the acting monster's move advertises it will hit for.
+    ///
+    /// A move's damage and the intent beside it are one number in the game:
+    /// both read the monster's own property. The table carries it, so a move
+    /// reads it here rather than print it a second time.
+    fn intent_damage(&self) -> V::Number;
+
+    /// `DamageCmd.Attack(damage).FromMonster(this)`, which hits every creature
+    /// on the other side.
+    fn attack_opponents(&mut self, damage: V::Number);
+
+    /// `CardPileCmd.Draw(count, Owner)`.
+    ///
+    /// A printed number, so signed. A card printing a negative one draws
+    /// nothing, which is what the game's own loop does.
+    fn draw(&mut self, count: V::Number);
+
+    /// `CardPileCmd.AddToCombatAndPreview<C>(targets, Discard, count)`.
+    ///
+    /// One copy per count, into the discard pile of every creature on the
+    /// other side.
+    fn give_cards(&mut self, card: V::Card, count: usize);
+}
+
+/// Which side of a hit the creature holding a power is on.
+///
+/// A power that modifies damage asks this. Vulnerable acts when its owner is
+/// hit, Weak when its owner is doing the hitting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Holding {
+    /// The power's owner is the one taking the hit.
+    Target,
+    /// The power's owner is the one dealing it.
+    Dealer,
+}
+
+/// Where a monster's move graph stands.
+///
+/// `MonsterMoveStateMachine`, which no observation reports: an observation
+/// says what a monster does next, not how its graph arrived there. Two runs
+/// that agree on every intent so far can still part on the next one.
+///
+/// The numbers index the build's own state list, so only that build's walk
+/// reads them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MoveMachine {
+    /// The state the machine stands on.
+    pub at: u8,
+    /// `_performedAtLeastOnce` on that state, which is what lets the machine
+    /// leave a move the graph pins it to.
+    pub performed: bool,
+    /// `_performedFirstMove` on the machine. The machine stays on the move it
+    /// started on until this is set.
+    pub ever_performed: bool,
+    /// `StateLog`: every move state entered, in order. A random branch's
+    /// repeat rules read it.
+    pub log: Vec<u8>,
+}
+
+impl MoveMachine {
+    /// Where a monster's graph starts, which is `initial` in its table.
+    pub fn new(at: u8) -> Self {
+        Self {
+            at,
+            ..Self::default()
+        }
+    }
+
+    /// Go to a state, which is `SetCurrentState`.
+    ///
+    /// Leaving a state clears its own performed flag. So a move the graph
+    /// pins until it is performed is pinned again next time round.
+    pub fn enter(&mut self, at: u8) {
+        self.at = at;
+        self.performed = false;
+    }
+
+    /// `PerformMove` and `OnMovePerformed`, which happen together.
+    pub fn performed(&mut self) {
+        self.performed = true;
+        self.ever_performed = true;
+    }
 }
 
 /// One game build's content, as the types that name it.
@@ -1093,13 +1179,63 @@ pub trait Rules: ContentVersion {
         ascension: Self::AscensionLevel,
     ) -> crate::rng::Interval<u16>;
 
-    /// Roll the monster’s first visible move from its dumped state graph.
-    /// A combat-dependent graph returns a typed error.
-    fn initial_monster_move<R: crate::rng::GameRng>(
+    /// Walk a monster's state graph to the move it makes next, which is
+    /// `MonsterMoveStateMachine.RollMove`.
+    ///
+    /// `machine` is where the graph stands, and this leaves it where the walk
+    /// ended. A machine on the graph's own initial state has not walked yet,
+    /// so the first call answers the opening intent. A graph the table cannot
+    /// describe returns a typed error.
+    fn roll_monster_move<R: crate::rng::GameRng>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
+        machine: &mut MoveMachine,
         rng: &mut R,
     ) -> Result<crate::NextMove<Self>, ContentError>;
+
+    /// Where a monster's graph starts, for a machine that has not walked.
+    fn initial_monster_state(monster: Self::Monster) -> u8;
+
+    /// The key a card prints the number an attack hits for under, which is
+    /// the game's own `Damage`.
+    ///
+    /// A preview runs it through the same hook the hit itself goes through,
+    /// so this is where a fight's own arithmetic reaches a card's face.
+    fn damage_var() -> Self::CardVar;
+
+    /// The power a `weaken` command applies, which is `WeakPower`.
+    fn weak_power() -> Self::Power;
+
+    /// The power a `make_vulnerable` command applies, which is
+    /// `VulnerablePower`.
+    fn vulnerable_power() -> Self::Power;
+
+    /// What a power multiplies a hit by, which is
+    /// `ModifyDamageMultiplicative`.
+    ///
+    /// One for a power that leaves this hit alone, including one that acts
+    /// only from the other side of it.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported. One is only in a fight because ported
+    /// behaviour put it there.
+    fn damage_multiplier(power: Self::Power, holding: Holding) -> f64;
+
+    /// Whether a power counts down when one side's turn ends, which is its
+    /// `AfterSideTurnEnd`.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported.
+    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool;
+
+    /// What one of a monster's moves does, which is its `onPerform`.
+    ///
+    /// # Panics
+    ///
+    /// A move nobody has ported.
+    fn perform_move<F: Fight<Self>>(monster: Self::Monster, move_id: Self::MoveId, fight: &mut F);
 
     /// Generate an encounter whose roster is code rather than table data.
     /// An unported build-specific rule returns a typed error.

@@ -13,7 +13,9 @@ use sts2_core::{CardTable, Fight};
 use super::super::V0_107_1;
 use super::super::generated::cards::{CardVar, Cards};
 
+mod colorless;
 mod regent;
+mod status;
 
 type V = V0_107_1;
 
@@ -35,18 +37,18 @@ fn printed(card: Cards, key: CardVar) -> <V as sts2_core::ContentVersion>::Numbe
 /// What a card does when it is played.
 pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) {
     match card {
+        Cards::Colorless(card) => colorless::on_play(card, fight),
         Cards::Regent(card) => regent::on_play(card, fight),
+        Cards::Status(card) => status::on_play(card, fight),
         // Nothing from these pools is ported. Named rather than left to a
         // wildcard, so a build that adds a pool stops here.
         Cards::Ironclad(_)
         | Cards::Silent(_)
         | Cards::Necrobinder(_)
         | Cards::Defect(_)
-        | Cards::Colorless(_)
         | Cards::Curse(_)
         | Cards::Event(_)
         | Cards::Quest(_)
-        | Cards::Status(_)
         | Cards::Token(_)
         | Cards::Deprecated(_) => unimplemented!("what {card:?} does when it is played"),
     }

@@ -23,16 +23,49 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let Some(combat) = self.fight() else {
+        let Some(ongoing) = self.fight() else {
             return refused(Reason::NotInCombat);
         };
-        let play = match combat::resolve(combat, index, target) {
+        let play = match combat::resolve(&ongoing.combat, index, target) {
             Ok(play) => play,
             Err(reason) => return refused(reason),
         };
 
-        let played = combat::play(combat, play)?;
-        self.fought(played);
+        let machines = ongoing.machines.clone();
+        let (played, counters) =
+            combat::play(&ongoing.combat, play, self.raw_seed(), &self.counters())?;
+
+        self.drew(counters);
+        self.fought(combat::Ongoing {
+            combat: played,
+            machines,
+        });
+        Ok(Ok(self.report()))
+    }
+
+    /// End the player's turn, and set up the next one.
+    ///
+    /// On a copy of the fight and the graphs beside it, as playing a card is.
+    pub(crate) fn end_turn(&mut self) -> Result<Answered<V>, Error> {
+        let Some(ongoing) = self.fight() else {
+            return Ok(Err(Refusal {
+                what: "end_turn".into(),
+                reason: Reason::NotInCombat,
+            }));
+        };
+
+        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
+            .expect("the turn's energy fits the build's count type");
+        let (ended, counters) = combat::end_turn(
+            ongoing,
+            self.raw_seed(),
+            self.ascension(),
+            &self.counters(),
+            max_energy,
+        )?;
+
+        self.drew(counters);
+        self.fought(ended);
         Ok(Ok(self.report()))
     }
 }

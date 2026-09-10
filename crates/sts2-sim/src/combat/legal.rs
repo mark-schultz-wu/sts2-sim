@@ -95,7 +95,7 @@ fn playable<V: Rules>(
         // `BlockedByHook` is the only reason that names one, and nothing in a
         // fight raises it yet.
         preventer: None,
-        effect: effect::<V>(card, &targets)?,
+        effect: effect::<V>(card, creatures, &targets)?,
         targets,
     })
 }
@@ -135,12 +135,13 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 /// What the card does, once per outcome that differs.
 ///
 /// A card that names a single creature is previewed against each legal
-/// target. Identical previews collapse into one with no target.
-///
-/// Nothing modifies a card's numbers yet, so the collapse always fires. It is
-/// written as the collapse anyway. The first hook to move a number then
-/// reports per target, and this does not change.
-fn effect<V: Rules>(card: &CardIdent<V>, targets: &[CombatId]) -> Result<Vec<Preview<V>>, Error> {
+/// target. Identical previews collapse into one with no target, which is what
+/// a card the fight moves no number of reports.
+fn effect<V: Rules>(
+    card: &CardIdent<V>,
+    creatures: &[Creature<V>],
+    targets: &[CombatId],
+) -> Result<Vec<Preview<V>>, Error> {
     let per_target = matches!(
         card.card.target(),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
@@ -163,7 +164,7 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[CombatId]) -> Result<Vec<Pre
             // simulator does not have. `Observation::rules_digest` leaves it
             // out for that reason, and a front end reads the numbers.
             text: None,
-            vars: numbers.clone(),
+            vars: previewed::<V>(&numbers, creatures, target),
             base: numbers.clone(),
         })
         .collect();
@@ -177,6 +178,27 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[CombatId]) -> Result<Vec<Pre
         previews[0].target = None;
     }
     Ok(previews)
+}
+
+/// The card's numbers after the fight has had its say, which is `Preview`'s
+/// own half of `Hook.ModifyDamage`.
+///
+/// Only the damage moves. The modifiers run over the same hook whether the
+/// hit is previewed or dealt.
+fn previewed<V: Rules>(
+    numbers: &std::collections::BTreeMap<V::CardVar, V::Number>,
+    creatures: &[Creature<V>],
+    target: Option<CombatId>,
+) -> std::collections::BTreeMap<V::CardVar, V::Number> {
+    let Some(at) = target.and_then(|id| creatures.iter().position(|c| c.id == id)) else {
+        return numbers.clone();
+    };
+    let dealer = super::board::player::<V>(creatures);
+    let mut previewed = numbers.clone();
+    if let Some(damage) = previewed.get_mut(&V::damage_var()) {
+        *damage = super::board::modified::<V>(creatures, dealer, at, *damage);
+    }
+    previewed
 }
 
 /// The numbers the card prints, as they resolve right now.

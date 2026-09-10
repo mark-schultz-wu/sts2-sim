@@ -148,12 +148,45 @@ impl sts2_core::Rules for V0_107_1 {
         )
     }
 
-    fn initial_monster_move<R: sts2_core::rng::GameRng>(
+    fn roll_monster_move<R: sts2_core::rng::GameRng>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
+        machine: &mut sts2_core::MoveMachine,
         rng: &mut R,
     ) -> Result<sts2_core::NextMove<Self>, sts2_core::ContentError> {
-        initial_monster_move(monster, ascension as u8, rng)
+        roll_monster_move(monster, ascension as u8, machine, rng)
+    }
+
+    fn initial_monster_state(monster: Self::Monster) -> u8 {
+        sts2_core::Table::data(monster).initial
+    }
+
+    fn damage_var() -> Self::CardVar {
+        generated::cards::CardVar::Damage
+    }
+
+    fn weak_power() -> Self::Power {
+        generated::powers::Power::WeakPower
+    }
+
+    fn vulnerable_power() -> Self::Power {
+        generated::powers::Power::VulnerablePower
+    }
+
+    fn damage_multiplier(power: Self::Power, holding: sts2_core::Holding) -> f64 {
+        behaviour::powers::damage_multiplier(power, holding)
+    }
+
+    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool {
+        behaviour::powers::ticks_down(power, side)
+    }
+
+    fn perform_move<F: sts2_core::Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        fight: &mut F,
+    ) {
+        behaviour::monsters::perform(monster, move_id, fight);
     }
 
     fn random_encounter_monsters<R: sts2_core::rng::GameRng>(
@@ -271,82 +304,153 @@ impl sts2_core::Rules for V0_107_1 {
     }
 }
 
-fn initial_monster_move<R: sts2_core::rng::GameRng>(
+/// Walk to the move a monster makes next, which is `RollMove`.
+///
+/// `FindNextMoveState` returns early while the machine is pinned. Two things
+/// pin it. One is the move it started on, until any move has been performed.
+/// The other is a move the graph holds it on until that move has been.
+///
+/// Otherwise it steps until it lands on a move, and logs the move it lands on.
+fn roll_monster_move<R: sts2_core::rng::GameRng>(
     monster: generated::monsters::Monster,
     ascension: u8,
+    machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
 ) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
-    use crate::Field;
-    use generated::monsters::{IntentKind, State};
-    use sts2_core::rng::Interval;
+    use generated::monsters::{FollowUp, State};
 
     let data = sts2_core::Table::data(monster);
-    let mut at = data.initial as usize;
-    loop {
-        match *data
-            .states
-            .get(at)
-            .ok_or(sts2_core::ContentError::InvalidMonsterState { index: at as u8 })?
-        {
-            State::Move(next) => {
-                let attack = match next.intents.attack {
-                    None => None,
-                    Some(attack) => {
-                        let Field::Constant(damage) = attack.damage else {
-                            unimplemented!("a move whose damage the fight decides");
-                        };
-                        let Field::Constant(repeats) = attack.repeats else {
-                            unimplemented!("a move whose repeats the fight decides");
-                        };
-                        Some(sts2_core::Attack {
-                            damage: i32::from(damage.at(ascension)),
-                            repeats: repeats.at(ascension),
-                        })
-                    }
-                };
-                let intents = next
-                    .intents
-                    .kinds
-                    .iter()
-                    .map(|kind| sts2_core::Intent {
-                        kind,
-                        attack: matches!(kind, IntentKind::Attack | IntentKind::DeathBlow)
-                            .then_some(attack)
-                            .flatten(),
-                    })
-                    .collect();
-                return Ok(sts2_core::NextMove {
-                    id: next.id,
-                    intents,
-                });
+    let state = |at: u8| {
+        data.states
+            .get(usize::from(at))
+            .copied()
+            .ok_or(sts2_core::ContentError::InvalidMonsterState { index: at })
+    };
+
+    if !pinned(state(machine.at)?, machine) {
+        loop {
+            let next = match state(machine.at)? {
+                State::Move(held) => match held.follow_up {
+                    FollowUp::Next(at) | FollowUp::OncePerformed(at) => at,
+                    // `MoveState.GetNextState` throws on a missing follow-up.
+                    FollowUp::Never => unimplemented!("a move with no follow-up"),
+                },
+                State::Random(branches) => branch(branches, machine, rng)?,
+                State::Conditional(_) => unimplemented!("a monster state the fight decides"),
+            };
+            machine.enter(next);
+            if let State::Move(_) = state(machine.at)? {
+                machine.log.push(machine.at);
+                break;
             }
-            State::Random(branches) => {
-                let mut total = 0.0f32;
-                for branch in branches {
-                    let Field::Constant(weight) = branch.weight else {
-                        unimplemented!("a branch whose weight the fight decides");
-                    };
-                    total += weight;
-                }
-                let range = Interval::try_new(0.0, total)
-                    .map_err(|_| sts2_core::ContentError::InvalidMonsterWeights)?;
-                let mut draw = rng.next_f32_range(range);
-                let mut chosen = None;
-                for branch in branches {
-                    let Field::Constant(weight) = branch.weight else {
-                        unimplemented!("a branch whose weight the fight decides");
-                    };
-                    draw -= weight;
-                    if draw <= 0.0 {
-                        chosen = Some(branch.target as usize);
-                        break;
-                    }
-                }
-                at = chosen.ok_or(sts2_core::ContentError::InvalidMonsterWeights)?;
-            }
-            State::Conditional(_) => unimplemented!("a monster state the fight decides"),
         }
     }
+
+    let State::Move(held) = state(machine.at)? else {
+        return Err(sts2_core::ContentError::InvalidMonsterState { index: machine.at });
+    };
+    intents(held, ascension)
+}
+
+/// Whether the machine cannot leave the state it stands on.
+fn pinned(state: generated::monsters::State, machine: &sts2_core::MoveMachine) -> bool {
+    use generated::monsters::{FollowUp, State};
+
+    let State::Move(held) = state else {
+        return false;
+    };
+    // `CanTransitionAway`, then the machine-wide "no move performed yet".
+    matches!(held.follow_up, FollowUp::OncePerformed(_)) && !machine.performed
+        || !machine.ever_performed
+}
+
+/// One branch of a random node, which is `RandomBranchState.GetNextState`.
+///
+/// One draw, scaled by the total weight, walking the branches in order. A
+/// branch its own history bars weighs nothing, which is `GetStateWeight`.
+fn branch<R: sts2_core::rng::GameRng>(
+    branches: &'static [generated::monsters::Branch],
+    machine: &sts2_core::MoveMachine,
+    rng: &mut R,
+) -> Result<u8, sts2_core::ContentError> {
+    use crate::Field;
+    use sts2_core::rng::Interval;
+
+    let weight = |branch: &generated::monsters::Branch| match branch.weight {
+        Field::Constant(weight) if allowed(branch, machine) => weight,
+        Field::Constant(_) => 0.0,
+        Field::Computed => unimplemented!("a branch whose weight the fight decides"),
+    };
+
+    let total: f32 = branches.iter().map(weight).sum();
+    let range = Interval::try_new(0.0, total)
+        .map_err(|_| sts2_core::ContentError::InvalidMonsterWeights)?;
+    let mut draw = rng.next_f32_range(range);
+    for branch in branches {
+        draw -= weight(branch);
+        if draw <= 0.0 {
+            return Ok(branch.target);
+        }
+    }
+    Err(sts2_core::ContentError::InvalidMonsterWeights)
+}
+
+/// Whether a branch's own history leaves it takeable.
+fn allowed(branch: &generated::monsters::Branch, machine: &sts2_core::MoveMachine) -> bool {
+    use generated::monsters::Repeat;
+
+    let recent = |n: usize| machine.log.iter().rev().take(n);
+    match branch.repeat {
+        Repeat::Forever => true,
+        // Barred while the last `n` log entries are all this branch.
+        Repeat::InARow(n) => {
+            let n = usize::from(n.get());
+            machine.log.len() < n || recent(n).any(|&at| at != branch.target)
+        }
+        // Barred while this branch is anywhere in the last `n`.
+        Repeat::Cooldown(n) => recent(usize::from(n.get())).all(|&at| at != branch.target),
+        Repeat::Once => !machine.log.contains(&branch.target),
+    }
+}
+
+/// The intents a move state publishes, at this ascension.
+fn intents(
+    held: generated::monsters::Move,
+    ascension: u8,
+) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
+    use crate::Field;
+    use generated::monsters::IntentKind;
+
+    let attack = match held.intents.attack {
+        None => None,
+        Some(attack) => {
+            let Field::Constant(damage) = attack.damage else {
+                unimplemented!("a move whose damage the fight decides");
+            };
+            let Field::Constant(repeats) = attack.repeats else {
+                unimplemented!("a move whose repeats the fight decides");
+            };
+            Some(sts2_core::Attack {
+                damage: i32::from(damage.at(ascension)),
+                repeats: repeats.at(ascension),
+            })
+        }
+    };
+    let intents = held
+        .intents
+        .kinds
+        .iter()
+        .map(|kind| sts2_core::Intent {
+            kind,
+            attack: matches!(kind, IntentKind::Attack | IntentKind::DeathBlow)
+                .then_some(attack)
+                .flatten(),
+        })
+        .collect();
+    Ok(sts2_core::NextMove {
+        id: held.id,
+        intents,
+    })
 }
 
 pub const VERSION: Version = Version {
