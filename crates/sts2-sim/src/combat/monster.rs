@@ -48,7 +48,12 @@ pub(crate) fn initialize<V: Rules>(
             block: num_traits::zero(),
             alive: true,
             powers: Vec::new(),
-            next_move: Some(V::initial_monster_move(monster, ascension, &mut ai)?),
+            next_move: Some(V::roll_monster_move(
+                monster,
+                ascension,
+                &mut sts2_core::MoveMachine::new(V::initial_monster_state(monster)),
+                &mut ai,
+            )?),
         });
     }
 
