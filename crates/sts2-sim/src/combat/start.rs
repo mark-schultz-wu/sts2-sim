@@ -32,7 +32,7 @@ pub(crate) fn enter<V: Rules>(
     // Id zero, and the enemies from one. `CombatId` counts from the player.
     let mut creatures = Vec::with_capacity(enemies.len() + 1);
     creatures.push(Creature {
-        id: CombatId::new(0).expect("the player is creature zero"),
+        id: CombatId::new(nonmax::NonMaxU8::ZERO),
         model: Some(ModelId::Character(character)),
         side: <V::CombatSide as SideKinds>::PLAYER,
         hp: observation.hp,

@@ -107,8 +107,8 @@ fn main() -> anyhow::Result<()> {
     step(
         &mut game,
         Decision::PlayCard {
-            index: 2,
-            target: serde_json::from_value(serde_json::json!(1)).ok(),
+            index: sts2_core::fixture::hand(2),
+            target: Some(sts2_core::fixture::at(1)),
         },
     )?;
 

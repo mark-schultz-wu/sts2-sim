@@ -406,9 +406,15 @@ impl std::fmt::Display for CombatId {
 }
 
 impl CombatId {
-    /// The creature this number names, or nothing for one no fight assigns.
-    pub fn new(id: u8) -> Option<Self> {
-        nonmax::NonMaxU8::new(id).map(Self)
+    /// The creature this number names.
+    pub fn new(id: nonmax::NonMaxU8) -> Self {
+        Self(id)
+    }
+
+    /// The creature this number names, or [`OutOfRange`] for one no fight
+    /// assigns.
+    pub fn try_new(id: u8) -> Result<Self, crate::OutOfRange> {
+        nonmax::NonMaxU8::new(id).map(Self).ok_or(crate::OutOfRange)
     }
 
     /// The number the game spells.

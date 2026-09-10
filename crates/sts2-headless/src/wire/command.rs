@@ -62,12 +62,12 @@ pub enum Command<V: ContentVersion> {
     },
     Proceed,
     PlayCard {
-        index: u8,
+        index: sts2_core::HandIndex,
         target: Option<sts2_core::CombatId>,
     },
     EndTurn,
     UsePotion {
-        index: u8,
+        index: sts2_core::BeltIndex,
         target: Option<sts2_core::CombatId>,
     },
     ChooseOption {
@@ -437,11 +437,8 @@ impl<V: ContentVersion> WireGift<V> {
 
 #[cfg(test)]
 mod tests {
+    use sts2_core::fixture::{at, belt, hand};
 
-    /// A creature id, as an observation spells one.
-    fn at(id: u8) -> Option<sts2_core::CombatId> {
-        sts2_core::CombatId::new(id)
-    }
     use super::*;
     use serde_json::{json, to_value};
     use sts2_content::v0_107_1::V0_107_1;
@@ -508,7 +505,7 @@ mod tests {
     fn an_untargeted_card_sends_a_null_target() {
         assert_eq!(
             wire(Decision::PlayCard {
-                index: 2,
+                index: hand(2),
                 target: None
             }),
             json!({"cmd": "play_card", "index": 2, "target": null})
@@ -521,14 +518,14 @@ mod tests {
     fn a_potion_is_addressed_like_a_card() {
         assert_eq!(
             wire(Decision::UsePotion {
-                index: 1,
-                target: at(4),
+                index: belt(1),
+                target: Some(at(4)),
             }),
             json!({"cmd": "use_potion", "index": 1, "target": 4})
         );
         assert_eq!(
             wire(Decision::UsePotion {
-                index: 0,
+                index: belt(0),
                 target: None,
             }),
             json!({"cmd": "use_potion", "index": 0, "target": null})
@@ -587,23 +584,23 @@ mod tests {
             }
             .into(),
             Decision::PlayCard {
-                index: 3,
-                target: at(1),
+                index: hand(3),
+                target: Some(at(1)),
             }
             .into(),
             Decision::PlayCard {
-                index: 0,
+                index: hand(0),
                 target: None,
             }
             .into(),
             Decision::EndTurn.into(),
             Decision::UsePotion {
-                index: 1,
-                target: at(4),
+                index: belt(1),
+                target: Some(at(4)),
             }
             .into(),
             Decision::UsePotion {
-                index: 0,
+                index: belt(0),
                 target: None,
             }
             .into(),

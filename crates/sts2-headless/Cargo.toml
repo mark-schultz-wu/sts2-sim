@@ -19,6 +19,8 @@ sts2-core = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# The `at` a test spells a creature with. See `sts2_core::fixture`.
+sts2-core = { workspace = true, features = ["fixture"] }
 anyhow = { workspace = true }
 # The tests and examples do name a build, because driving a real game means
 # picking one.

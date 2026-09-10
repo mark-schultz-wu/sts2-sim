@@ -6,11 +6,14 @@ edition = "2024"
 [dependencies]
 # The vocabulary both implementations speak. See docs/STS2-CORE.md.
 indexmap = { workspace = true }
+nonmax = { workspace = true }
 num-traits = { workspace = true }
 smallvec = { workspace = true }
 sts2-core = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# The `at` a test spells a creature with. See `sts2_core::fixture`.
+sts2-core = { workspace = true, features = ["fixture"] }
 # A unit test drives a rule, and a rule is written against one build's tables.
 sts2-content = { workspace = true, features = ["v0_107_1"] }

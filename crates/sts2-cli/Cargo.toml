@@ -32,3 +32,7 @@ sts2-content = { workspace = true, features = ["v0_107_1", "v0_111_0"] }
 sts2-core = { workspace = true }
 sts2-headless = { workspace = true }
 sts2-rng = { workspace = true }
+
+[dev-dependencies]
+# The `at` a test spells a creature with. See `sts2_core::fixture`.
+sts2-core = { workspace = true, features = ["fixture"] }

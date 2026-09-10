@@ -1,6 +1,6 @@
 //! Driving the fight the run is standing in.
 
-use sts2_core::{Answered, CombatId, Reason, Refusal, Rules};
+use sts2_core::{Answered, CombatId, HandIndex, Reason, Refusal, Rules};
 
 use super::State;
 use crate::combat;
@@ -13,7 +13,7 @@ impl<V: Rules> State<V> {
     /// simulator cannot play leaves the run exactly as it was.
     pub(crate) fn play_card(
         &mut self,
-        index: u8,
+        index: HandIndex,
         target: Option<CombatId>,
     ) -> Result<Answered<V>, Error> {
         let refused = |reason| {

@@ -317,11 +317,8 @@ enum FaultDiscriminator {
 
 #[cfg(test)]
 mod tests {
+    use sts2_core::fixture::at;
 
-    /// A creature id, as an observation spells one.
-    fn at(id: u8) -> Option<sts2_core::CombatId> {
-        sts2_core::CombatId::new(id)
-    }
     use super::*;
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
@@ -479,7 +476,7 @@ mod tests {
         };
         assert_eq!(spelled(&card.card), "STRIKE_IRONCLAD");
         assert_eq!(card.upgrade, 0);
-        assert_eq!(target, at(4));
+        assert_eq!(target, Some(at(4)));
         assert_eq!(takes, TargetType::AnyEnemy);
 
         let err = read(

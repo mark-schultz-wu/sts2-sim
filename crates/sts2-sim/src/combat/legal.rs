@@ -212,6 +212,7 @@ mod tests {
         runstate::{CombatSide, UnplayableReason, UnplayableReasons},
     };
     use sts2_core::ModelId;
+    use sts2_core::fixture::at;
 
     type V = V0_107_1;
 
@@ -223,12 +224,12 @@ mod tests {
     fn fight() -> Vec<Creature<V>> {
         vec![
             creature(
-                CombatId::new(0).expect("a creature id"),
+                at(0),
                 ModelId::Character(Character::Regent),
                 CombatSide::Player,
             ),
             creature(
-                CombatId::new(1).expect("a creature id"),
+                at(1),
                 ModelId::Monster(Monster::TwigSlimeS),
                 CombatSide::Enemy,
             ),

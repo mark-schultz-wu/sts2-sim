@@ -93,7 +93,7 @@ impl Coverage {
             .observation
             .combat
             .as_ref()
-            .and_then(|combat| combat.hand.get(*index as usize))
+            .and_then(|combat| combat.hand.get(usize::from(index.get())))
             .and_then(|ident| spelling(&ident.card))
         else {
             return;
@@ -502,6 +502,7 @@ mod tests {
     use super::*;
     use crate::fixture::{self, creature};
     use serde_json::json;
+    use sts2_core::fixture::hand;
 
     type V = sts2_content::v0_107_1::V0_107_1;
 
@@ -541,7 +542,7 @@ mod tests {
         let mut coverage = Coverage::default();
         coverage.did::<V>(
             &Decision::PlayCard {
-                index: 1,
+                index: hand(1),
                 target: None,
             },
             &before,
@@ -704,7 +705,7 @@ mod tests {
         let mut coverage = Coverage::default();
         coverage.did::<V>(
             &Decision::PlayCard {
-                index: 0,
+                index: hand(0),
                 target: None,
             },
             &before,

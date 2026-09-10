@@ -13,8 +13,8 @@ use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
-    Answer, CombatId, ContentVersion, Cost, Decided, Decision, Observation, Play, Question, Room,
-    Snapshot, TakeReward,
+    Answer, BeltIndex, CombatId, ContentVersion, Cost, Decided, Decision, HandIndex, Observation,
+    Play, Question, Room, Snapshot, TakeReward,
 };
 
 use super::keys::{self, Action};
@@ -825,18 +825,34 @@ where
 
 /// The card at an index in the hand, played at a creature or at nothing.
 fn play_card<V: ContentVersion>(index: usize, target: Option<CombatId>) -> Intent<V> {
-    Intent::Send(Decision::PlayCard {
-        index: u8::try_from(index).unwrap_or(u8::MAX),
-        target,
-    })
+    // A hand that long is no hand the game deals, so the key meant nothing.
+    let Some(index) = hand_index(index) else {
+        return Intent::Nothing;
+    };
+    Intent::Send(Decision::PlayCard { index, target })
+}
+
+/// The place in the hand a screen position names, for a hand the game deals.
+fn hand_index(index: usize) -> Option<HandIndex> {
+    u8::try_from(index)
+        .ok()
+        .and_then(|index| HandIndex::try_new(index).ok())
+}
+
+/// The slot in the belt a screen position names, for a belt the game gives.
+fn belt_index(index: usize) -> Option<BeltIndex> {
+    u8::try_from(index)
+        .ok()
+        .and_then(|index| BeltIndex::try_new(index).ok())
 }
 
 /// The potion at an index in the belt, drunk at a creature or at nothing.
 fn drink<V: ContentVersion>(index: usize, target: Option<CombatId>) -> Intent<V> {
-    Intent::Send(Decision::UsePotion {
-        index: u8::try_from(index).unwrap_or(u8::MAX),
-        target,
-    })
+    // As in [`play_card`]: a belt that long is no belt the game gives.
+    let Some(index) = belt_index(index) else {
+        return Intent::Nothing;
+    };
+    Intent::Send(Decision::UsePotion { index, target })
 }
 
 /// Which kind of screen this is.
@@ -873,11 +889,8 @@ fn stage_of<V: ContentVersion>(standing: &Snapshot<V>) -> Stage {
 
 #[cfg(test)]
 mod tests {
+    use sts2_core::fixture::{at, hand};
 
-    /// A creature id, as an observation spells one.
-    fn at(id: u8) -> Option<sts2_core::CombatId> {
-        sts2_core::CombatId::new(id)
-    }
     use super::{App, Intent, Stage, priced};
     use crate::fixture::{self, playable, unplayable};
     use crate::scripted::Scripted;
@@ -1014,8 +1027,8 @@ mod tests {
         assert_eq!(
             played,
             Intent::Send(Decision::PlayCard {
-                index: 0,
-                target: at(2)
+                index: hand(0),
+                target: Some(at(2))
             })
         );
         assert_eq!(app.ui.aim, Aim::Idle, "the aim outlived the card");

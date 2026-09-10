@@ -8,6 +8,7 @@ use sts2_content::v0_107_1::ascension::AscensionLevel;
 use sts2_content::v0_107_1::{
     V0_107_1, cards::Cards, cards::RegentCard, characters::Character, runstate::UnplayableReason,
 };
+use sts2_core::fixture::{at, hand};
 use sts2_core::{Answer, Coord, Decision, Play, Reason, Seed, SideKinds, Start};
 use sts2_sim::Sim;
 
@@ -39,11 +40,6 @@ fn fighting() -> Sim<V> {
     sim
 }
 
-/// A creature id, as an observation spells one.
-fn at(id: u8) -> Option<sts2_core::CombatId> {
-    sts2_core::CombatId::new(id)
-}
-
 #[test]
 fn a_strike_spends_energy_and_lands_on_what_it_was_pointed_at() {
     let mut sim = fighting();
@@ -57,8 +53,8 @@ fn a_strike_spends_energy_and_lands_on_what_it_was_pointed_at() {
     let hp = fight.creatures[1].hp;
 
     sim.play(&Decision::PlayCard {
-        index: strike as u8,
-        target: at(1),
+        index: hand(strike as u8),
+        target: Some(at(1)),
     })
     .expect("the card is ported")
     .expect("the play is legal");
@@ -83,7 +79,7 @@ fn a_defend_gains_block_without_naming_a_creature() {
         .expect("the opening hand holds a Defend");
 
     sim.play(&Decision::PlayCard {
-        index: defend as u8,
+        index: hand(defend as u8),
         target: None,
     })
     .expect("the card is ported")
@@ -109,19 +105,17 @@ fn a_refused_play_leaves_the_fight_where_it_stood() {
     let refusals = [
         (
             Decision::PlayCard {
-                index: 9,
-                target: at(1),
+                index: hand(9),
+                target: Some(at(1)),
             },
             Reason::OutOfRange { index: 9, count: 5 },
         ),
         (
             Decision::PlayCard {
-                index: 0,
-                target: at(9),
+                index: hand(0),
+                target: Some(at(9)),
             },
-            Reason::NoSuchCreature {
-                id: at(9).expect("nine is a spellable id"),
-            },
+            Reason::NoSuchCreature { id: at(9) },
         ),
     ];
 
@@ -155,7 +149,7 @@ fn a_card_the_pools_cannot_pay_for_is_unplayable_before_it_is_refused() {
         };
         let target = fight.legal[playable].targets.first().copied();
         sim.play(&Decision::PlayCard {
-            index: playable as u8,
+            index: hand(playable as u8),
             target,
         })
         .expect("the card is ported")

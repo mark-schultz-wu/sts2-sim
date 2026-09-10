@@ -36,7 +36,8 @@ pub(crate) fn initialize<V: Rules>(
         let id = u8::try_from(index)
             .ok()
             .and_then(|index| index.checked_add(1))
-            .and_then(CombatId::new)
+            .and_then(nonmax::NonMaxU8::new)
+            .map(CombatId::new)
             .ok_or(Error::CreatureIdOverflow)?;
         creatures.push(Creature {
             id,

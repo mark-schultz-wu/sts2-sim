@@ -157,7 +157,7 @@ fn combat_id(path: &str, id: Option<u32>) -> Result<CombatId, Error> {
     // crate cannot number is a divergence, not a wider id.
     u8::try_from(id)
         .ok()
-        .and_then(CombatId::new)
+        .and_then(|id| CombatId::try_new(id).ok())
         .ok_or_else(|| {
             at(
                 path,
@@ -1031,11 +1031,9 @@ pub(crate) fn unknown(path: &str, what: &'static str, value: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
+    use sts2_core::fixture::at;
 
     /// A creature id, as an observation spells one.
-    fn at(id: u8) -> CombatId {
-        CombatId::new(id).expect("a creature id")
-    }
     use super::*;
     use serde_json::{Value, json};
     use sts2_content::v0_107_1::V0_107_1;

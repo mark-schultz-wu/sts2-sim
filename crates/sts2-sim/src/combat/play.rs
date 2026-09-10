@@ -10,7 +10,9 @@
 //! trait acts on.
 
 use num_traits::Zero;
-use sts2_core::{CardTable, Combat, CombatId, Cost, Creature, Fight, Reason, Rules, SideKinds};
+use sts2_core::{
+    CardTable, Combat, CombatId, Cost, Creature, Fight, HandIndex, Reason, Rules, SideKinds,
+};
 
 use super::{Error, legal};
 
@@ -37,12 +39,12 @@ pub(crate) struct Play<V: Rules> {
 /// index, then the creature id, then the card's own two rules.
 pub(crate) fn resolve<V: Rules>(
     combat: &Combat<V>,
-    index: u8,
+    index: HandIndex,
     target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
-    let at = usize::from(index);
+    let at = usize::from(index.get());
     let playable = combat.legal.get(at).ok_or(Reason::OutOfRange {
-        index: i64::from(index),
+        index: i64::from(index.get()),
         count: combat.hand.len(),
     })?;
 

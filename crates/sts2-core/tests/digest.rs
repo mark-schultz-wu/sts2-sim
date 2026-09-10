@@ -17,21 +17,18 @@
 //! compile, and this is what says the destructured field was then *used*.
 
 use std::collections::{BTreeMap, HashMap};
+use sts2_core::fixture::at;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, CombatId, ContentVersion,
-    Coord, Cost, Counters, Creature, Digest, Entry, EventOption, EventOptionKey, EventOptionName,
-    FlagSet, Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview,
-    Reachable, RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
+    Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
+    Cost, Counters, Creature, Digest, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet,
+    Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable,
+    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
 };
 
 type V = V0_107_1;
 
-/// A creature id, as an observation spells one.
-fn at(id: u8) -> CombatId {
-    CombatId::new(id).expect("a creature id")
-}
 type Card = <V as ContentVersion>::Card;
 type CardVar = <V as ContentVersion>::CardVar;
 type Relic = <V as ContentVersion>::Relic;

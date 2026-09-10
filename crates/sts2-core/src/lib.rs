@@ -40,7 +40,7 @@ pub use content::{
     RarityKinds, RelicPoolKinds, RelicTable, Rests, RewardRarity, RoomKinds, Rules, SideKinds,
     StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
-pub use ident::{CardIdent, Coord, ModelId};
+pub use ident::{CardIdent, Coord, ModelId, OutOfRange};
 pub use seed::Seed;
 
 pub use report::digest::Digest;
@@ -54,9 +54,12 @@ pub use report::question::{
     CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail, RewardKind,
 };
 
+#[cfg(feature = "fixture")]
+pub mod fixture;
+
 pub use step::Step;
 pub use step::answer::{Answer, TakeReward, Tool};
-pub use step::decision::Decision;
+pub use step::decision::{BeltIndex, Decision, HandIndex};
 pub use step::setup::{Gift, Setup};
 pub use step::start::Start;
 
