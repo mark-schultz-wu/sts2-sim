@@ -1,7 +1,7 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    Combat, Counters, Creature, ModelId, Observation, Rules, SideKinds, TurnPhaseKinds,
+    Combat, CombatId, Counters, Creature, ModelId, Observation, Rules, SideKinds, TurnPhaseKinds,
 };
 
 use super::{Error, encounter, legal, monster, pile, stream};
@@ -32,7 +32,7 @@ pub(crate) fn enter<V: Rules>(
     // Id zero, and the enemies from one. `CombatId` counts from the player.
     let mut creatures = Vec::with_capacity(enemies.len() + 1);
     creatures.push(Creature {
-        id: 0,
+        id: CombatId::new(nonmax::NonMaxU8::ZERO),
         model: Some(ModelId::Character(character)),
         side: <V::CombatSide as SideKinds>::PLAYER,
         hp: observation.hp,

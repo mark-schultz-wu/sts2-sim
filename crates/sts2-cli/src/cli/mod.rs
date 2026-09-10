@@ -10,7 +10,6 @@ pub mod moves;
 
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use nonmax::NonMaxU32;
 use std::path::Path;
 use sts2_core::ContentVersion;
 use sts2_core::{
@@ -65,6 +64,24 @@ pub struct StartArgs {
     /// Do not write this run down at all.
     #[arg(long, conflicts_with = "record")]
     pub no_record: bool,
+}
+
+/// A creature id as a person types one.
+fn combat_id(id: u32) -> anyhow::Result<sts2_core::CombatId> {
+    u8::try_from(id)
+        .ok()
+        .and_then(|id| sts2_core::CombatId::try_new(id).ok())
+        .with_context(|| format!("{id} is no creature in a fight"))
+}
+
+/// A place in the hand as a person types one.
+fn hand_index(index: u8) -> anyhow::Result<sts2_core::HandIndex> {
+    sts2_core::HandIndex::try_new(index).with_context(|| format!("{index} is no card in a hand"))
+}
+
+/// A slot in the belt as a person types one.
+fn belt_index(index: u8) -> anyhow::Result<sts2_core::BeltIndex> {
+    sts2_core::BeltIndex::try_new(index).with_context(|| format!("{index} is no potion in a belt"))
 }
 
 impl StartArgs {
@@ -305,20 +322,14 @@ impl Play {
             }
             .into(),
             Play::PlayCard { index, target } => Decision::PlayCard {
-                index: *index,
-                target: match target {
-                    Some(t) => Some(NonMaxU32::new(*t).context("u32::MAX is not a creature")?),
-                    None => None,
-                },
+                index: hand_index(*index)?,
+                target: target.map(combat_id).transpose()?,
             }
             .into(),
             Play::EndTurn => Decision::EndTurn.into(),
             Play::UsePotion { index, target } => Decision::UsePotion {
-                index: *index,
-                target: match target {
-                    Some(t) => Some(NonMaxU32::new(*t).context("u32::MAX is not a creature")?),
-                    None => None,
-                },
+                index: belt_index(*index)?,
+                target: target.map(combat_id).transpose()?,
             }
             .into(),
             Play::Proceed => Decision::Proceed.into(),

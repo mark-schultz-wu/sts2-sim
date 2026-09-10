@@ -41,7 +41,7 @@ test:
     # `sts2-golden` is excluded because two of its tests replay a recording
     # through a real game. These three hold the simulator to what the game
     # already wrote down, so they run here, with no game anywhere.
-    cargo test -p sts2-golden --test map --test setup --test travel
+    cargo test -p sts2-golden --test map --test setup --test travel --test play
     # Every pinned build's tables, named rather than inherited. The workspace
     # run above happens to compile them all, because `sts2-cli` asks for them
     # and cargo unifies features. That is a coincidence of one crate's

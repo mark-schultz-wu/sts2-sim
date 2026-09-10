@@ -54,10 +54,10 @@ impl<V: Rules> State<V> {
     /// The room comes first, and nothing before the last block touches the
     /// run. A room the simulator cannot build yet reports which one, and the
     /// caller still holds the run it had.
-    pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Applied<V>, crate::engine::Error> {
+    pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Applied<V>, crate::combat::Error> {
         let Move { to, destination } = moving;
         let Destination::Monster(encounter) = destination else {
-            return Err(crate::engine::Error::NotImplemented("this room"));
+            unimplemented!("entering {destination:?}");
         };
 
         let (combat, counters) = combat::enter::<V>(

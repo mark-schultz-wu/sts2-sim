@@ -382,12 +382,53 @@ pub struct Channelled<V: ContentVersion> {
     pub evoke: V::Number,
 }
 
+/// One creature in a fight, as the game's `CombatId` names one.
+///
+/// A card's commands are pointed at one of these, and [`crate::Fight::target`]
+/// is where a rule gets one. Rules code compares two of them and reads neither
+/// out. The number is for the edges that spell an id or read one.
+///
+/// A byte, because the roster bounds it: the player is `0` and the monsters
+/// are `index + 1`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(transparent)]
+pub struct CombatId(nonmax::NonMaxU8);
+
+impl std::fmt::Display for CombatId {
+    /// The number the game spells, for a front end saying which creature.
+    ///
+    /// Reading one out as words is not a way back to one: nothing parses this.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl CombatId {
+    /// The creature this number names.
+    pub fn new(id: nonmax::NonMaxU8) -> Self {
+        Self(id)
+    }
+
+    /// The creature this number names, or [`OutOfRange`] for one no fight
+    /// assigns.
+    pub fn try_new(id: u8) -> Result<Self, crate::OutOfRange> {
+        nonmax::NonMaxU8::new(id).map(Self).ok_or(crate::OutOfRange)
+    }
+
+    /// The number the game spells.
+    pub fn get(self) -> u8 {
+        self.0.get()
+    }
+}
+
 /// One creature in a fight.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Creature<V: ContentVersion> {
     /// Stable for as long as the fight lasts, which an index into the living
     /// creatures is not.
-    pub id: u32,
+    pub id: CombatId,
     /// Absent for a creature that is neither a monster nor a player.
     pub model: Option<ModelId<V>>,
     /// Not the same question as whether it is a monster: a charmed monster
@@ -490,7 +531,7 @@ pub struct Held<V: ContentVersion> {
     /// Empty is not "it cannot be drunk". A potion that takes no target has
     /// none, and so does one drunk outside combat, where there are no combat
     /// ids to name. Both are drunk with no target at all.
-    pub targets: Vec<u32>,
+    pub targets: Vec<CombatId>,
 }
 
 /// Why a potion cannot be drunk right now.
@@ -547,7 +588,7 @@ pub struct Playable<V: ContentVersion> {
     /// Which model said no, for the rule that is one model saying no.
     pub preventer: Option<ModelId<V>>,
     /// The creatures this card can legally be pointed at.
-    pub targets: Vec<u32>,
+    pub targets: Vec<CombatId>,
     /// What it does, with everything applied.
     pub effect: Vec<Preview<V>>,
 }
@@ -563,7 +604,7 @@ pub struct Playable<V: ContentVersion> {
 pub struct Preview<V: ContentVersion> {
     /// Which creature this was computed against, or nothing for a preview that
     /// does not vary by target.
-    pub target: Option<u32>,
+    pub target: Option<CombatId>,
     /// The rules text with these numbers in it, carrying the game's own
     /// markup. Nothing at all for an implementation with no localisation
     /// tables, which is not the same as a card that says nothing.

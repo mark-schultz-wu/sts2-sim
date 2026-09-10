@@ -19,7 +19,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use sts2_core::Cost;
-use sts2_core::{CardIdent, ContentVersion, Playable};
+use sts2_core::{CardIdent, CombatId, ContentVersion, Playable};
 
 use crate::render::{self, Pool, spelling};
 use crate::tui::names;
@@ -103,7 +103,11 @@ impl Face {
     /// `aimed` is the creature it is currently pointed at, which decides which
     /// of the previews is shown. The game computes one per creature the card
     /// reaches, because that is where the numbers differ.
-    pub fn playable<V: ContentVersion>(card: &Playable<V>, at: usize, aimed: Option<u32>) -> Face {
+    pub fn playable<V: ContentVersion>(
+        card: &Playable<V>,
+        at: usize,
+        aimed: Option<CombatId>,
+    ) -> Face {
         let unplayable = card.reason.map(|reason| {
             // A card can fail several rules at once, and the set is never empty
             // when it is present. All of them are shown: "not enough energy"

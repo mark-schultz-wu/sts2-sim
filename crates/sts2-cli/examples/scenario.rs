@@ -15,7 +15,7 @@
 //! ```
 
 use anyhow::bail;
-use nonmax::NonMaxU32;
+
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
 use sts2_core::{Applied, Construct, Decision, Gift, Play, Setup, Start, Step};
@@ -107,8 +107,8 @@ fn main() -> anyhow::Result<()> {
     step(
         &mut game,
         Decision::PlayCard {
-            index: 2,
-            target: NonMaxU32::new(1),
+            index: sts2_core::fixture::hand(2),
+            target: Some(sts2_core::fixture::at(1)),
         },
     )?;
 

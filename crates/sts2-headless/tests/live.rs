@@ -8,7 +8,6 @@
 //! process shares one profile directory. The crate README says why that
 //! matters.
 
-use nonmax::NonMaxU32;
 use serde_json::Value;
 use serde_json::json;
 use serial_test::serial;
@@ -16,6 +15,7 @@ use std::time::{Duration, Instant};
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
 use sts2_core::Seed;
+use sts2_core::fixture::{at, belt, hand};
 use sts2_core::{
     Answer, Answered, Construct, Coord, Decision, Digest, Gift, Play, Question, Reason, Recorder,
     Room, Setup, Start, Step, Stock, Tool,
@@ -191,6 +191,7 @@ fn looked(game: &Oracle<V>, snapshot: Snapshot<V>) -> Seen {
 /// `CombatManager` and `PotionModel.IsValidTarget`, and the prose comes out of
 /// the localisation tables.
 /// Whether the damage lands is the point of the command.
+
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -237,7 +238,7 @@ fn a_potion_is_reported_refused_and_drunk() {
     // belt and asked anyway must be told the same word it was already holding.
     let refusal = game
         .play(&Decision::UsePotion {
-            index: 0,
+            index: belt(0),
             target: None,
         })
         .expect("a refusal is still a reply, not a transport failure")
@@ -280,8 +281,8 @@ fn a_potion_is_reported_refused_and_drunk() {
     let drunk = played(
         &mut game,
         &Decision::UsePotion {
-            index: 0,
-            target: NonMaxU32::new(at),
+            index: belt(0),
+            target: Some(at),
         },
     );
     assert!(drunk.errors.is_empty(), "drinking logged errors");
@@ -656,7 +657,7 @@ fn illegal_commands_are_refused_and_leave_the_session_alive() {
     refused(
         &mut game,
         Decision::PlayCard {
-            index: 0,
+            index: hand(0),
             target: None,
         },
         Reason::NotInCombat,
@@ -768,8 +769,8 @@ fn an_ordinary_card_play_logs_no_game_errors() {
     let played = played(
         &mut game,
         &Decision::PlayCard {
-            index: 0,
-            target: NonMaxU32::new(1),
+            index: hand(0),
+            target: Some(at(1)),
         },
     );
     assert!(played.errors.is_empty(), "playing a card logged errors");
@@ -1021,8 +1022,8 @@ fn a_recorded_run_replays_into_the_same_run() {
         }
         .into(),
         Decision::PlayCard {
-            index: 0,
-            target: NonMaxU32::new(1),
+            index: hand(0),
+            target: Some(at(1)),
         }
         .into(),
         Decision::EndTurn.into(),
@@ -1325,8 +1326,8 @@ fn every_room_parses_into_an_observation() {
     let played = played(
         &mut game,
         &Decision::PlayCard {
-            index: 0,
-            target: NonMaxU32::new(1),
+            index: hand(0),
+            target: Some(at(1)),
         },
     );
     check("after a card", &played);

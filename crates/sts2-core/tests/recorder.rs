@@ -144,7 +144,7 @@ fn nth<T: Table + Copy>(n: usize) -> T {
 
 fn play(index: u8) -> Decision<V> {
     Decision::PlayCard {
-        index,
+        index: sts2_core::fixture::hand(index),
         target: None,
     }
 }

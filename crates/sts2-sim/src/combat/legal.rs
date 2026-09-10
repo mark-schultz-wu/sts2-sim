@@ -9,8 +9,8 @@
 //! powers, no relic that listens, and no card that overrides it.
 
 use sts2_core::{
-    CardIdent, CardTable, CardVars, Cost, Creature, FlagSet, Playable, Preview, Rules, SideKinds,
-    TargetKinds, UnplayableReasonKinds,
+    CardIdent, CardTable, CardVars, CombatId, Cost, Creature, FlagSet, Playable, Preview, Rules,
+    SideKinds, TargetKinds, UnplayableReasonKinds,
 };
 
 use super::Error;
@@ -34,13 +34,19 @@ fn playable<V: Rules>(
     stars: V::Count,
 ) -> Result<Playable<V>, Error> {
     if card.upgrade != 0 {
-        return Err(Error::UpgradedCard);
+        // An upgraded card prints different numbers, and the tables carry the
+        // unupgraded ones. See `OnUpgrade` on the card.
+        unimplemented!("what an upgraded card prints");
     }
     if card.affliction.is_some() || card.enchantment.is_some() {
-        return Err(Error::AlteredCard);
+        unimplemented!("what an afflicted or enchanted card prints");
     }
 
-    let target = card.card.target().ok_or(Error::ComputedTarget)?;
+    // One of the four cards that work their target out from the fight.
+    let target = card
+        .card
+        .target()
+        .unwrap_or_else(|| unimplemented!("a card that decides its own target"));
     let cost = card.card.cost();
     let star_cost = card.card.star_cost();
 
@@ -69,7 +75,7 @@ fn playable<V: Rules>(
     // `CanPlayTargeting` is a valid target *and* a card that can be played, so
     // a card refused for any reason names nobody, rather than naming who it
     // was going to hit.
-    let targets: Vec<u32> = if reasons.is_empty() {
+    let targets: Vec<CombatId> = if reasons.is_empty() {
         creatures
             .iter()
             .filter(|creature| valid_target::<V>(target, creature))
@@ -98,7 +104,7 @@ fn playable<V: Rules>(
 ///
 /// `GetAmountToSpend` clamps at zero, so a card not priced in a pool spends
 /// nothing from it rather than the `-1` the game stores.
-fn spend<C: num_traits::PrimInt>(cost: Cost, pool: C) -> Option<C> {
+pub(super) fn spend<C: num_traits::PrimInt>(cost: Cost, pool: C) -> Option<C> {
     match cost {
         Cost::X => Some(pool),
         // Nothing at all for a price this build's count cannot hold, which
@@ -134,7 +140,7 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 /// Nothing modifies a card's numbers yet, so the collapse always fires. It is
 /// written as the collapse anyway. The first hook to move a number then
 /// reports per target, and this does not change.
-fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<V>>, Error> {
+fn effect<V: Rules>(card: &CardIdent<V>, targets: &[CombatId]) -> Result<Vec<Preview<V>>, Error> {
     let per_target = matches!(
         card.card.target(),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
@@ -143,7 +149,7 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<
     );
 
     let numbers = numbers::<V>(card)?;
-    let against: Vec<Option<u32>> = if per_target && !targets.is_empty() {
+    let against: Vec<Option<CombatId>> = if per_target && !targets.is_empty() {
         targets.iter().copied().map(Some).collect()
     } else {
         vec![None]
@@ -182,15 +188,15 @@ fn numbers<V: Rules>(
         .iter()
         .map(|var| {
             if var.calculated {
-                Err(Error::CalculatedVar {
-                    name: var.id.name(),
-                })
-            } else {
-                let base = num_traits::NumCast::from(var.base).ok_or(Error::FractionalVar {
-                    name: var.id.name(),
-                })?;
-                Ok((var.id, base))
+                // A `CalculatedVar` counts something in the live fight.
+                unimplemented!("the {} this card prints", var.id.name());
             }
+            // A build can store exact fractions where this slice only
+            // evaluates whole-number effects.
+            let base = num_traits::NumCast::from(var.base).unwrap_or_else(|| {
+                unimplemented!("the fractional {} this card prints", var.id.name())
+            });
+            Ok((var.id, base))
         })
         .collect()
 }
@@ -206,6 +212,7 @@ mod tests {
         runstate::{CombatSide, UnplayableReason, UnplayableReasons},
     };
     use sts2_core::ModelId;
+    use sts2_core::fixture::at;
 
     type V = V0_107_1;
 
@@ -216,12 +223,20 @@ mod tests {
     /// A player and one living enemy, which is the smallest fight.
     fn fight() -> Vec<Creature<V>> {
         vec![
-            creature(0, ModelId::Character(Character::Regent), CombatSide::Player),
-            creature(1, ModelId::Monster(Monster::TwigSlimeS), CombatSide::Enemy),
+            creature(
+                at(0),
+                ModelId::Character(Character::Regent),
+                CombatSide::Player,
+            ),
+            creature(
+                at(1),
+                ModelId::Monster(Monster::TwigSlimeS),
+                CombatSide::Enemy,
+            ),
         ]
     }
 
-    fn creature(id: u32, model: ModelId<V>, side: CombatSide) -> Creature<V> {
+    fn creature(id: CombatId, model: ModelId<V>, side: CombatSide) -> Creature<V> {
         Creature {
             id,
             model: Some(model),

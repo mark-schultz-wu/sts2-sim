@@ -19,6 +19,7 @@
 //! them err the same way, towards computed. Marking a constant as computed
 //! costs one method, and the reverse costs a divergence nobody can see.
 
+mod behaviour;
 mod generated;
 
 pub use generated::*;
@@ -132,6 +133,10 @@ impl sts2_core::Rules for V0_107_1 {
         generated::relics::Relic::DivineRight
     }
 
+    fn on_play<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
+        behaviour::cards::on_play(card, fight)
+    }
+
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
@@ -160,7 +165,7 @@ impl sts2_core::Rules for V0_107_1 {
         use sts2_core::rng::Bound;
 
         let Encounter::SlimesWeak = encounter else {
-            return Err(sts2_core::ContentError::Unported("random encounter roster"));
+            unimplemented!("the roster {encounter:?} rolls");
         };
 
         let small = [Monster::LeafSlimeS, Monster::TwigSlimeS];
@@ -288,14 +293,10 @@ fn initial_monster_move<R: sts2_core::rng::GameRng>(
                     None => None,
                     Some(attack) => {
                         let Field::Constant(damage) = attack.damage else {
-                            return Err(sts2_core::ContentError::CombatDependent(
-                                "monster move value",
-                            ));
+                            unimplemented!("a move whose damage the fight decides");
                         };
                         let Field::Constant(repeats) = attack.repeats else {
-                            return Err(sts2_core::ContentError::CombatDependent(
-                                "monster move value",
-                            ));
+                            unimplemented!("a move whose repeats the fight decides");
                         };
                         Some(sts2_core::Attack {
                             damage: i32::from(damage.at(ascension)),
@@ -323,9 +324,7 @@ fn initial_monster_move<R: sts2_core::rng::GameRng>(
                 let mut total = 0.0f32;
                 for branch in branches {
                     let Field::Constant(weight) = branch.weight else {
-                        return Err(sts2_core::ContentError::CombatDependent(
-                            "monster move value",
-                        ));
+                        unimplemented!("a branch whose weight the fight decides");
                     };
                     total += weight;
                 }
@@ -335,9 +334,7 @@ fn initial_monster_move<R: sts2_core::rng::GameRng>(
                 let mut chosen = None;
                 for branch in branches {
                     let Field::Constant(weight) = branch.weight else {
-                        return Err(sts2_core::ContentError::CombatDependent(
-                            "monster move value",
-                        ));
+                        unimplemented!("a branch whose weight the fight decides");
                     };
                     draw -= weight;
                     if draw <= 0.0 {
@@ -347,11 +344,7 @@ fn initial_monster_move<R: sts2_core::rng::GameRng>(
                 }
                 at = chosen.ok_or(sts2_core::ContentError::InvalidMonsterWeights)?;
             }
-            State::Conditional(_) => {
-                return Err(sts2_core::ContentError::CombatDependent(
-                    "conditional monster state",
-                ));
-            }
+            State::Conditional(_) => unimplemented!("a monster state the fight decides"),
         }
     }
 }

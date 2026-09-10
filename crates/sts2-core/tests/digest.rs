@@ -17,6 +17,7 @@
 //! compile, and this is what says the destructured field was then *used*.
 
 use std::collections::{BTreeMap, HashMap};
+use sts2_core::fixture::at;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
@@ -27,6 +28,7 @@ use sts2_core::{
 };
 
 type V = V0_107_1;
+
 type Card = <V as ContentVersion>::Card;
 type CardVar = <V as ContentVersion>::CardVar;
 type Relic = <V as ContentVersion>::Relic;
@@ -70,7 +72,7 @@ fn held(n: usize) -> Held<V> {
         title: Some(format!("Potion {n}")),
         text: Some(format!("It does thing {n}.")),
         reason: None,
-        targets: vec![1, 2],
+        targets: vec![at(1), at(2)],
     }
 }
 
@@ -135,7 +137,7 @@ fn full() -> Observation<V> {
             discard: vec![card(5)],
             exhaust: vec![card(6)],
             creatures: vec![Creature {
-                id: 1,
+                id: at(1),
                 model: Some(ModelId::Monster(nth::<Monster>(0))),
                 side: CombatSide::Enemy,
                 hp: 30,
@@ -166,9 +168,9 @@ fn full() -> Observation<V> {
                     UnplayableReason::EnergyCostTooHigh,
                 ])),
                 preventer: Some(ModelId::Power(nth::<Power>(1))),
-                targets: vec![1, 2],
+                targets: vec![at(1), at(2)],
                 effect: vec![Preview {
-                    target: Some(1),
+                    target: Some(at(1)),
                     text: Some("Deal {Damage} damage.".into()),
                     vars: BTreeMap::from([(CardVar::Damage, 9)]),
                     base: BTreeMap::from([(CardVar::Damage, 6)]),
@@ -496,9 +498,11 @@ fn mutations() -> Vec<Nudge> {
         ("potions: a different reason", |o| {
             o.potions[0].reason = Some(Undrinkable::NotYourTurn)
         }),
-        ("potions: another target", |o| o.potions[0].targets.push(7)),
+        ("potions: another target", |o| {
+            o.potions[0].targets.push(at(7))
+        }),
         ("potions: a different target", |o| {
-            o.potions[0].targets[0] = 9
+            o.potions[0].targets[0] = at(9)
         }),
         ("potions: no targets", |o| o.potions[0].targets.clear()),
         ("potion_slots", |o| o.potion_slots += 1),
@@ -560,7 +564,7 @@ fn mutations() -> Vec<Nudge> {
         ("combat.draw", |o| combat(o).draw.push(card(7))),
         ("combat.discard", |o| combat(o).discard.clear()),
         ("combat.exhaust", |o| combat(o).exhaust[0] = card(8)),
-        ("creature.id", |o| creature(o).id += 1),
+        ("creature.id", |o| creature(o).id = at(9)),
         ("creature.model", |o| {
             creature(o).model = Some(ModelId::Monster(nth::<Monster>(1)));
         }),
@@ -652,7 +656,7 @@ fn mutations() -> Vec<Nudge> {
         }),
         ("playable.targets", |o| playable(o).targets.swap(0, 1)),
         ("preview.target", |o| {
-            playable(o).effect[0].target = Some(2);
+            playable(o).effect[0].target = Some(at(2));
         }),
         ("preview.target absent", |o| {
             playable(o).effect[0].target = None;

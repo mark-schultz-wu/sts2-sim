@@ -10,7 +10,7 @@ use sts2_core::{
     Rules, Seed, Table,
 };
 
-use crate::engine::Error;
+use crate::combat::Error;
 use crate::event::Blessing;
 use crate::map::{ActMap, Layout};
 use crate::run::Opening;
@@ -159,6 +159,22 @@ impl<V: Rules> State<V> {
         self.shared.character
     }
 
+    /// The fight the run is standing in, or nothing outside one.
+    pub(super) fn fight(&self) -> Option<&Combat<V>> {
+        match &self.phase {
+            Phase::Combat(combat) => Some(combat),
+            Phase::Neow { .. } => None,
+        }
+    }
+
+    /// Put the fight a decision left behind in place of the one it acted on.
+    ///
+    /// Whole, rather than edited where it stands. A decision the simulator
+    /// cannot carry out never reaches this, so the run keeps the fight it had.
+    pub(super) fn fought(&mut self, combat: Combat<V>) {
+        self.phase = Phase::Combat(combat);
+    }
+
     pub(super) fn enter_combat(&mut self, to: Coord, counters: Counters<V>, combat: Combat<V>) {
         self.floor = self.floor + num_traits::one();
         self.at = to;
@@ -200,13 +216,13 @@ impl<V: Rules> State<V> {
             ..
         } = &mut self.phase
         else {
-            return Err(Error::NotImplemented("choose_option in combat"));
+            unimplemented!("choosing an option inside a fight");
         };
         let option = options
             .get(index as usize)
-            .ok_or(Error::NotImplemented("choose_option"))?;
+            .unwrap_or_else(|| unimplemented!("an option the blessing does not offer"));
         if *option != V::lead_paperweight() {
-            return Err(Error::NotImplemented("this Neow option"));
+            unimplemented!("what {option:?} does when Neow offers it");
         }
 
         *chosen = Some(index);
@@ -228,23 +244,23 @@ impl<V: Rules> State<V> {
             ..
         } = &mut self.phase
         else {
-            return Err(Error::NotImplemented("answer in combat"));
+            unimplemented!("answering a question inside a fight");
         };
         let cards = selection
             .as_ref()
-            .ok_or(Error::NotImplemented("this answer"))?;
+            .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"));
         let Answer::Cards(indices) = answer else {
-            return Err(Error::NotImplemented("this answer"));
+            unimplemented!("an answer that is not a card selection");
         };
         if indices.len() > 1 {
-            return Err(Error::NotImplemented("an invalid card selection"));
+            unimplemented!("a card selection of more than one");
         }
         let chosen: Option<Vec<_>> = indices
             .iter()
             .map(|&index| cards.get(index).copied().map(CardIdent::new))
             .collect();
         let Some(chosen) = chosen else {
-            return Err(Error::NotImplemented("an invalid card selection"));
+            unimplemented!("a card selection naming a card that was not offered");
         };
 
         self.player.deck.extend(chosen);

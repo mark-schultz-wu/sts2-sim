@@ -364,10 +364,10 @@ where
 
     match sent.since(before).as_slice() {
         [Decision::PlayCard { index, target }] => {
-            if *index as usize != at {
+            if usize::from(index.get()) != at {
                 return failed(format!("it played card {index}, not {at}"));
             }
-            match target.map(|t| t.get()) {
+            match *target {
                 Some(id) if id == aimed => Outcome::Passed,
                 other => failed(format!("it aimed at {aimed} and played at {other:?}")),
             }
@@ -616,10 +616,10 @@ where
 
     match sent.since(before).as_slice() {
         [Decision::UsePotion { index, target }] => {
-            if *index as usize != at {
+            if usize::from(index.get()) != at {
                 return failed(format!("it drank potion {index}, not {at}"));
             }
-            match target.map(|t| t.get()) {
+            match *target {
                 Some(id) if id == aimed => Outcome::Passed,
                 other => failed(format!("it aimed at {aimed} and drank at {other:?}")),
             }

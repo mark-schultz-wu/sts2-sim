@@ -19,10 +19,10 @@ use sts2_core::{Cost, ShopCard};
 use num_traits::{NumCast, ToPrimitive};
 use serde::Deserialize;
 use sts2_core::{
-    Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet, Held, Intent,
-    Map, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, Stack,
-    Stock, Take, Undrinkable,
+    Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, CombatId, ContentVersion,
+    Coord, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet, Held,
+    Intent, Map, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room,
+    Stack, Stock, Take, Undrinkable,
 };
 
 use super::ident::{self, named};
@@ -151,8 +151,22 @@ pub(crate) fn ident<T>(
 /// joins a fight, and an observation is captured once the game is quiescent. So
 /// a null here means something this does not understand, and saying so beats
 /// propagating a maybe.
-fn combat_id(path: &str, id: Option<u32>) -> Result<u32, Error> {
-    id.ok_or_else(|| at(path, Why::Absent("CombatId")))
+fn combat_id(path: &str, id: Option<u32>) -> Result<CombatId, Error> {
+    let id = id.ok_or_else(|| at(path, Why::Absent("CombatId")))?;
+    // A creature id is a byte, because the roster bounds it. A fight this
+    // crate cannot number is a divergence, not a wider id.
+    u8::try_from(id)
+        .ok()
+        .and_then(|id| CombatId::try_new(id).ok())
+        .ok_or_else(|| {
+            at(
+                path,
+                Why::OutOfRange {
+                    what: "a creature id",
+                    value: id.to_string(),
+                },
+            )
+        })
 }
 
 fn domain_number<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> Result<T, Error> {
@@ -452,7 +466,7 @@ struct WirePlayable<V: ContentVersion> {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WirePreview {
-    target: Option<u32>,
+    target: Option<CombatId>,
     text: String,
     vars: BTreeMap<String, i32>,
     base: BTreeMap<String, i32>,
@@ -1017,6 +1031,9 @@ pub(crate) fn unknown(path: &str, what: &'static str, value: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
+    use sts2_core::fixture::at;
+
+    /// A creature id, as an observation spells one.
     use super::*;
     use serde_json::{Value, json};
     use sts2_content::v0_107_1::V0_107_1;
@@ -1174,7 +1191,11 @@ mod tests {
         let obs = parse(&state).expect("a drinkable potion parses");
 
         assert_eq!(obs.potions[0].reason, None);
-        assert_eq!(obs.potions[0].targets, vec![3, 4]);
+        assert_eq!(
+            obs.potions[0].targets,
+            vec![at(3), at(4)],
+            "a potion names the creatures it can be drunk at"
+        );
     }
 
     /// `usable` and `reason` are one fact written twice, the way a card's

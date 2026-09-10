@@ -76,10 +76,6 @@ pub struct Layout {
 /// A content rule that cannot produce a value from static state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ContentError {
-    #[error("{0} has not been ported")]
-    Unported(&'static str),
-    #[error("{0} depends on live combat state")]
-    CombatDependent(&'static str),
     #[error("monster state index {index} is outside its graph")]
     InvalidMonsterState { index: u8 },
     #[error("a random monster state has invalid weights")]
@@ -721,6 +717,37 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     fn has(self, rung: Self) -> bool;
 }
 
+/// The fight, as a card's own behaviour reaches it.
+///
+/// A card's behaviour is ported code and lives per build, in `sts2-content`.
+/// The fight it acts on lives in the engine. They meet here, at the game's
+/// `ICombatState`.
+///
+/// Each method is a command, and arrives when a ported card needs it. What a
+/// card prints is not here: that is static, and a card reads its own table.
+pub trait Fight<V: ContentVersion> {
+    /// The creature the card was pointed at.
+    ///
+    /// A card whose target type names a creature is played at one. The play
+    /// reaching behaviour has already been held to `CardModel.IsValidTarget`,
+    /// so this is not a question the card asks and then answers.
+    fn target(&self) -> crate::CombatId;
+
+    /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
+    fn attack(&mut self, at: crate::CombatId, damage: V::Number);
+
+    /// `CreatureCmd.GainBlock(Owner.Creature, amount, cardPlay)`.
+    fn gain_block(&mut self, amount: V::Number);
+
+    /// `PlayerCmd.GainStars(amount, Owner)`.
+    ///
+    /// A printed number, so signed. The pool it lands in is not.
+    fn gain_stars(&mut self, amount: V::Number);
+
+    /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
+    fn apply_power(&mut self, at: crate::CombatId, power: V::Power, amount: V::Number);
+}
+
 /// One game build's content, as the types that name it.
 ///
 /// The seam: name the build once, as a type parameter, and every id follows
@@ -1049,6 +1076,16 @@ pub trait Rules: ContentVersion {
 
     /// The Regent's starting relic, which opens every fight with three stars.
     fn divine_right() -> Self::Relic;
+
+    /// What one card does when it is played, which is `CardModel.OnPlay`.
+    ///
+    /// Generic over the fight rather than a trait object, because playing a
+    /// card is the hot path.
+    ///
+    /// Panics for a card nobody has ported. A simulator that plays a card
+    /// whose text it does not know is worse than one that stops. The run
+    /// carries on, and the divergence surfaces somewhere else.
+    fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
     /// Resolve a monster’s unmodified HP range at this ascension.
     fn monster_hp_bounds(

@@ -4,6 +4,7 @@ use sts2_content::v0_107_1::{
     V0_107_1, ascension::AscensionLevel, cards::TargetType, characters::Character,
     encounters::Encounter, monsters::Monster,
 };
+use sts2_core::fixture::at;
 use sts2_core::{Answer, Coord, Decision, ModelId, Play, Reason, Seed, Start};
 use sts2_sim::Sim;
 
@@ -85,10 +86,10 @@ fn travelling_into_a_monster_room_opens_the_fight() {
             .map(|creature| (creature.id, creature.model, creature.max_hp))
             .collect::<Vec<_>>(),
         [
-            (0, Some(ModelId::Character(Character::Regent)), 75),
-            (1, Some(ModelId::Monster(Monster::TwigSlimeS)), 8),
-            (2, Some(ModelId::Monster(Monster::LeafSlimeM)), 35),
-            (3, Some(ModelId::Monster(Monster::LeafSlimeS)), 12),
+            (at(0), Some(ModelId::Character(Character::Regent)), 75),
+            (at(1), Some(ModelId::Monster(Monster::TwigSlimeS)), 8),
+            (at(2), Some(ModelId::Monster(Monster::LeafSlimeM)), 35),
+            (at(3), Some(ModelId::Monster(Monster::LeafSlimeS)), 12),
         ]
     );
     assert!(combat.legal.iter().all(|play| play.reason.is_none()));
@@ -108,7 +109,9 @@ fn a_cards_targets_are_the_creatures_it_can_be_pointed_at() {
 
     for play in &combat.legal {
         match play.target {
-            TargetType::AnyEnemy => assert_eq!(play.targets, [1, 2, 3], "{:?}", play.card),
+            TargetType::AnyEnemy => {
+                assert_eq!(play.targets, [at(1), at(2), at(3),], "{:?}", play.card)
+            }
             TargetType::SelfTarget => assert!(play.targets.is_empty(), "{:?}", play.card),
             other => panic!("the opening hand has no {other:?} card"),
         }

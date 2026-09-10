@@ -1,5 +1,6 @@
 //! Everything a run draws before play begins.
 
+mod fight;
 mod setup;
 mod state;
 mod travel;

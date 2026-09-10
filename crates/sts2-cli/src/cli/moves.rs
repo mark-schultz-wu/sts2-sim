@@ -10,7 +10,7 @@
 //! random. `grant` and `fight` construct a scenario rather than play one.
 
 use super::choose;
-use nonmax::NonMaxU32;
+use sts2_core::CombatId;
 use sts2_core::{
     Answer, Combat, ContentVersion, Decision, Map, Observation, Question, RewardKind, Snapshot,
     TakeReward, Tool,
@@ -161,12 +161,14 @@ fn potion_moves<V: ContentVersion>(observed: &Observation<V>) -> Vec<Decision<V>
         if potion.reason.is_some() {
             continue;
         }
-        let Ok(index) = u8::try_from(index) else {
+        let Some(index) = u8::try_from(index)
+            .ok()
+            .and_then(|index| sts2_core::BeltIndex::try_new(index).ok())
+        else {
             continue;
         };
 
-        let targets: Vec<Option<NonMaxU32>> =
-            potion.targets.iter().copied().map(NonMaxU32::new).collect();
+        let targets: Vec<Option<CombatId>> = potion.targets.iter().copied().map(Some).collect();
 
         match targets.is_empty() {
             true => moves.push(Decision::UsePotion {
@@ -213,12 +215,14 @@ fn combat_moves<V: ContentVersion>(combat: &Combat<V>) -> Vec<Decision<V>> {
         if card.reason.is_some() {
             continue;
         }
-        let Ok(index) = u8::try_from(index) else {
+        let Some(index) = u8::try_from(index)
+            .ok()
+            .and_then(|index| sts2_core::HandIndex::try_new(index).ok())
+        else {
             continue;
         };
 
-        let targets: Vec<Option<NonMaxU32>> =
-            card.targets.iter().copied().map(NonMaxU32::new).collect();
+        let targets: Vec<Option<CombatId>> = card.targets.iter().copied().map(Some).collect();
 
         match targets.is_empty() {
             true => moves.push(Decision::PlayCard {
@@ -283,6 +287,8 @@ pub fn describe<V: ContentVersion>(decision: &Decision<V>) -> String {
 
 #[cfg(test)]
 mod tests {
+    use sts2_core::fixture::{at, belt, hand};
+
     use super::{legal, navigation};
     use crate::fixture::{self, playable, unplayable};
     use serde_json::json;
@@ -316,21 +322,21 @@ mod tests {
         }));
 
         assert!(out.contains(&Decision::UsePotion {
-            index: 0,
-            target: nonmax::NonMaxU32::new(1),
+            index: belt(0),
+            target: Some(at(1)),
         }));
         assert!(out.contains(&Decision::UsePotion {
-            index: 0,
-            target: nonmax::NonMaxU32::new(2),
+            index: belt(0),
+            target: Some(at(2)),
         }));
         // No target at all, which is what an untargeted potion sends.
         assert!(out.contains(&Decision::UsePotion {
-            index: 2,
+            index: belt(2),
             target: None,
         }));
         assert!(
             !out.iter()
-                .any(|m| matches!(m, Decision::UsePotion { index: 1, .. })),
+                .any(|m| matches!(m, Decision::UsePotion { index, .. } if *index == belt(1))),
             "a potion the game said cannot be drunk was offered: {out:?}"
         );
     }
@@ -341,7 +347,7 @@ mod tests {
     fn a_potion_is_offered_beside_whatever_else_there_is() {
         let belt = json!([{"id": "ASHWATER", "usable": true, "reason": null, "targets": []}]);
         let drink = Decision::UsePotion {
-            index: 0,
+            index: sts2_core::fixture::belt(0),
             target: None,
         };
 
@@ -406,12 +412,12 @@ mod tests {
 
         assert_eq!(out.len(), 4, "{out:?}");
         assert!(out.contains(&Decision::PlayCard {
-            index: 0,
-            target: nonmax::NonMaxU32::new(2)
+            index: hand(0),
+            target: Some(at(2))
         }));
         // No target to name, so exactly one move rather than none.
         assert!(out.contains(&Decision::PlayCard {
-            index: 1,
+            index: hand(1),
             target: None
         }));
         // Unplayable is not a move, and the turn always is.

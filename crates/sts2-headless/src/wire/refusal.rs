@@ -77,7 +77,7 @@ pub(crate) enum WireReason {
         count: usize,
     },
     NoSuchCreature {
-        id: u32,
+        id: sts2_core::CombatId,
     },
     Unplayable {
         /// The packed spelling, as a card in hand is written.
@@ -88,7 +88,7 @@ pub(crate) enum WireReason {
     },
     WrongTarget {
         card: String,
-        target: Option<u32>,
+        target: Option<sts2_core::CombatId>,
         takes: String,
     },
     Undrinkable {
@@ -97,7 +97,7 @@ pub(crate) enum WireReason {
     },
     WrongPotionTarget {
         potion: String,
-        target: Option<u32>,
+        target: Option<sts2_core::CombatId>,
         takes: String,
     },
     NotTravelable {
@@ -317,6 +317,8 @@ enum FaultDiscriminator {
 
 #[cfg(test)]
 mod tests {
+    use sts2_core::fixture::at;
+
     use super::*;
     use serde_json::json;
     use sts2_content::v0_107_1::V0_107_1;
@@ -474,7 +476,7 @@ mod tests {
         };
         assert_eq!(spelled(&card.card), "STRIKE_IRONCLAD");
         assert_eq!(card.upgrade, 0);
-        assert_eq!(target, Some(4));
+        assert_eq!(target, Some(at(4)));
         assert_eq!(takes, TargetType::AnyEnemy);
 
         let err = read(

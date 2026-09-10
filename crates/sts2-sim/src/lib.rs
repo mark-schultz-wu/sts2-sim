@@ -10,4 +10,5 @@ pub mod map;
 mod reward;
 pub mod run;
 
-pub use engine::{Error, Sim};
+pub use combat::Error;
+pub use engine::Sim;

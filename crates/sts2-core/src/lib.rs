@@ -35,28 +35,31 @@ pub use play::recording;
 
 pub use content::{
     ActTable, AscensionKinds, CardTable, CardVars, CharacterTable, ContentError, ContentVersion,
-    Cost, Drafted, EncounterRoster, EncounterTable, EventTable, Fixed, FlagSet, Layout,
+    Cost, Drafted, EncounterRoster, EncounterTable, EventTable, Fight, Fixed, FlagSet, Layout,
     MapPointKinds, MonsterTable, PotionTable, PotionUsage, PowerAmount, PowerTable, Printed,
     RarityKinds, RelicPoolKinds, RelicTable, Rests, RewardRarity, RoomKinds, Rules, SideKinds,
     StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
-pub use ident::{CardIdent, Coord, ModelId};
+pub use ident::{CardIdent, Coord, ModelId, OutOfRange};
 pub use seed::Seed;
 
 pub use report::digest::Digest;
 pub use report::observation::{
-    ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, Counters, Creature, Entry,
-    EventOption, EventOptionKey, EventOptionName, Held, Intent, Map, NextMove, NoNode, Node,
-    Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, ShopCard, Stack, Stock,
-    Take, Undrinkable,
+    ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, CombatId, Counters,
+    Creature, Entry, EventOption, EventOptionKey, EventOptionName, Held, Intent, Map, NextMove,
+    NoNode, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, ShopCard,
+    Stack, Stock, Take, Undrinkable,
 };
 pub use report::question::{
     CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail, RewardKind,
 };
 
+#[cfg(feature = "fixture")]
+pub mod fixture;
+
 pub use step::Step;
 pub use step::answer::{Answer, TakeReward, Tool};
-pub use step::decision::Decision;
+pub use step::decision::{BeltIndex, Decision, HandIndex};
 pub use step::setup::{Gift, Setup};
 pub use step::start::Start;
 

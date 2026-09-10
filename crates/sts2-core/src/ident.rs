@@ -11,6 +11,15 @@
 
 use crate::ContentVersion;
 
+/// The largest byte, which the game's small numbers never reach.
+///
+/// [`CombatId`](crate::CombatId), [`HandIndex`](crate::HandIndex) and
+/// [`BeltIndex`](crate::BeltIndex) leave it free, so that an `Option` of one is
+/// still a byte wide. Each refuses it, and this is what each says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the largest byte names nothing")]
+pub struct OutOfRange;
+
 /// Where a node sits on an act's map.
 ///
 /// Both are `u8` because the game says so. `MapCoord.Serialize` writes each as
