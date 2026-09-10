@@ -9,10 +9,9 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
+use nonmax::NonMaxU32;
 use num_traits::Zero;
-use sts2_core::{
-    CardTable, Combat, CombatId, Cost, Creature, Fight, NonMaxU32, Reason, Rules, SideKinds,
-};
+use sts2_core::{CardTable, Combat, CombatId, Cost, Creature, Fight, Reason, Rules, SideKinds};
 
 use super::{Error, legal};
 

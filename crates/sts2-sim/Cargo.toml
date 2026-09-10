@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 # The vocabulary both implementations speak. See docs/STS2-CORE.md.
 indexmap = { workspace = true }
+# A decision names the creature a card is pointed at with one of these.
+nonmax = { workspace = true }
 num-traits = { workspace = true }
 smallvec = { workspace = true }
 sts2-core = { workspace = true }

@@ -1,6 +1,7 @@
 //! Driving the fight the run is standing in.
 
-use sts2_core::{Answered, NonMaxU32, Reason, Refusal, Rules};
+use nonmax::NonMaxU32;
+use sts2_core::{Answered, Reason, Refusal, Rules};
 
 use super::State;
 use crate::combat;

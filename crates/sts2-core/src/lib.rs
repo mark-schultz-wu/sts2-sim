@@ -41,9 +41,6 @@ pub use content::{
     StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
 pub use ident::{CardIdent, Coord, ModelId};
-// The type [`step::Decision`] names a creature with. Re-exported so a caller
-// spelling one does not take a dependency to write down what it was handed.
-pub use nonmax::NonMaxU32;
 pub use seed::Seed;
 
 pub use report::digest::Digest;

@@ -4,11 +4,12 @@
 //! a refusal does. These do. A refused play leaves the fight exactly as it
 //! stood, which is the property the whole design rests on.
 
+use nonmax::NonMaxU32;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
 use sts2_content::v0_107_1::{
     V0_107_1, cards::Cards, cards::RegentCard, characters::Character, runstate::UnplayableReason,
 };
-use sts2_core::{Answer, Coord, Decision, NonMaxU32, Play, Reason, Seed, SideKinds, Start};
+use sts2_core::{Answer, Coord, Decision, Play, Reason, Seed, SideKinds, Start};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
