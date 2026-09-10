@@ -975,8 +975,8 @@ pub trait Rules: ContentVersion {
     /// Neow's event id, which the opening room reports.
     fn neow_event() -> Self::Event;
 
-    /// The colorless pool in the order the game enumerates it.
-    fn colorless_cards() -> Vec<Self::Card>;
+    /// The colorless pool, split by rarity in the game's enumeration order.
+    fn colorless_cards() -> Drafted<'static, Self::Card>;
 
     /// A card rarity reduced to the three-way reward rule.
     fn reward_rarity(card: Self::Card) -> RewardRarity;

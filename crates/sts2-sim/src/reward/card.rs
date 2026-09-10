@@ -1,7 +1,7 @@
 //! Card rewards drawn from a player's reward stream.
 
 use sts2_core::rng::{Bound, GameRng};
-use sts2_core::{RewardRarity, Rules};
+use sts2_core::{Drafted, RewardRarity, Rules};
 
 /// Draw distinct cards with regular-encounter rarity odds.
 ///
@@ -9,7 +9,7 @@ use sts2_core::{RewardRarity, Rules};
 /// upgrade roll. At Neow the upgrade chance is zero, but the roll still happens.
 pub(crate) fn regular<V: Rules, R: GameRng>(
     rng: &mut R,
-    cards: &[V::Card],
+    cards: Drafted<'_, V::Card>,
     count: usize,
 ) -> Vec<V::Card> {
     let mut drawn = Vec::with_capacity(count);
@@ -22,24 +22,28 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
         } else {
             RewardRarity::Common
         };
-        let rarity = next_available::<V>(cards, &drawn, wanted);
-        let choices: Vec<V::Card> = cards
-            .iter()
-            .copied()
-            .filter(|card| !drawn.contains(card) && V::reward_rarity(*card) == rarity)
-            .collect();
-        let bound = Bound::new(choices.len() as i32).expect("an available rarity has a card");
-        drawn.push(choices[rng.next_int(bound) as usize]);
+        let choices = available::<V>(cards, &drawn, wanted);
+        let left = choices.iter().filter(|card| !drawn.contains(card)).count() as i32;
+        let bound = Bound::new(left).expect("an available rarity has a card");
+        let at = rng.next_int(bound) as usize;
+        drawn.push(
+            choices
+                .iter()
+                .filter(|card| !drawn.contains(card))
+                .nth(at)
+                .copied()
+                .expect("the draw is inside the count"),
+        );
         let _upgrade_roll = rng.next_double();
     }
     drawn
 }
 
-fn next_available<V: Rules>(
-    cards: &[V::Card],
+fn available<'a, V: Rules>(
+    cards: Drafted<'a, V::Card>,
     drawn: &[V::Card],
     wanted: RewardRarity,
-) -> RewardRarity {
+) -> &'a [V::Card] {
     let order = match wanted {
         RewardRarity::Common => [
             RewardRarity::Common,
@@ -60,10 +64,7 @@ fn next_available<V: Rules>(
     };
     order
         .into_iter()
-        .find(|rarity| {
-            cards
-                .iter()
-                .any(|card| !drawn.contains(card) && V::reward_rarity(*card) == *rarity)
-        })
+        .map(|rarity| cards.at(rarity))
+        .find(|cards| cards.iter().any(|card| !drawn.contains(card)))
         .expect("a card pool has a drafted rarity")
 }

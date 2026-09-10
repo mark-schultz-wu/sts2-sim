@@ -103,26 +103,8 @@ impl sts2_core::Rules for V0_107_1 {
         generated::events::Event::Neow
     }
 
-    fn colorless_cards() -> Vec<Self::Card> {
-        use generated::cards::{Cards, ColorlessCard};
-        let mut cards: Vec<Self::Card> = <Cards as sts2_core::Table>::ALL
-            .iter()
-            .copied()
-            .filter(|card| matches!(card, Cards::Colorless(_)))
-            .collect();
-        // The generated outer table is id-sorted. The game pool has this one
-        // cross-rarity inversion, which changes the index within the uncommon
-        // subpool after a rarity is rolled.
-        let jack = cards
-            .iter()
-            .position(|card| *card == Cards::Colorless(ColorlessCard::JackOfAllTrades))
-            .expect("the colorless pool has Jack of All Trades");
-        let jackpot = cards
-            .iter()
-            .position(|card| *card == Cards::Colorless(ColorlessCard::Jackpot))
-            .expect("the colorless pool has Jackpot");
-        cards.swap(jack, jackpot);
-        cards
+    fn colorless_cards() -> sts2_core::Drafted<'static, Self::Card> {
+        generated::cards::colorless_cards()
     }
 
     fn reward_rarity(card: Self::Card) -> sts2_core::RewardRarity {
