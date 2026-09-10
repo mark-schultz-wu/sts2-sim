@@ -10,7 +10,7 @@
 //! trait acts on.
 
 use num_traits::Zero;
-use sts2_core::{CardTable, Combat, Cost, Creature, Fight, Reason, Rules, SideKinds};
+use sts2_core::{CardTable, Combat, CombatId, Cost, Creature, Fight, Reason, Rules, SideKinds};
 
 use super::{Error, legal};
 
@@ -23,7 +23,8 @@ pub(crate) struct Play<V: Rules> {
     /// holds two of one card, and only the index tells them apart.
     index: usize,
     /// The creature it was pointed at, or nothing for a card that names none.
-    target: Option<u32>,
+    /// Held as the fight names one, because this is where it was found.
+    target: Option<CombatId>,
     /// What each pool gives up for it, worked out where the play was approved
     /// rather than again where it is made.
     energy: V::Count,
@@ -45,11 +46,19 @@ pub(crate) fn resolve<V: Rules>(
         count: combat.hand.len(),
     })?;
 
-    if let Some(id) = target
-        && !combat.creatures.iter().any(|creature| creature.id == id)
-    {
-        return Err(Reason::NoSuchCreature { id });
-    }
+    // The creature the play named, which every command the card issues is
+    // pointed at. Found once, here, so a rule never carries a bare number.
+    let target = match target {
+        None => None,
+        Some(id) => Some(
+            combat
+                .creatures
+                .iter()
+                .find(|creature| creature.id == id)
+                .ok_or(Reason::NoSuchCreature { id })?
+                .combat_id(),
+        ),
+    };
 
     if let Some(why) = playable.reason {
         return Err(Reason::Unplayable {
@@ -61,10 +70,11 @@ pub(crate) fn resolve<V: Rules>(
 
     // `CanPlayTargeting`: the card is pointed at one of the creatures its own
     // target type accepts, and a card that names one is pointed at something.
-    if !target.is_some_and(|id| playable.targets.contains(&id)) && !playable.targets.is_empty() {
+    if !target.is_some_and(|at| playable.targets.contains(&at.id())) && !playable.targets.is_empty()
+    {
         return Err(Reason::WrongTarget {
             card: playable.card,
-            target,
+            target: target.map(CombatId::id),
             takes: playable.target,
         });
     }
@@ -131,16 +141,16 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
 /// yet. A command that needs one stops the run where it stands.
 struct Board<'a, V: Rules> {
     combat: &'a mut Combat<V>,
-    target: Option<u32>,
+    target: Option<CombatId>,
 }
 
 impl<V: Rules> Board<'_, V> {
     /// Where a creature sits, or nothing for one no longer in the fight.
-    fn at(&self, id: u32) -> Option<usize> {
+    fn at(&self, at: CombatId) -> Option<usize> {
         self.combat
             .creatures
             .iter()
-            .position(|creature| creature.id == id)
+            .position(|creature| creature.id == at.id())
     }
 
     /// The player, which is the only creature a card is played from.
@@ -174,14 +184,14 @@ impl<V: Rules> Board<'_, V> {
 }
 
 impl<V: Rules> Fight<V> for Board<'_, V> {
-    fn target(&self) -> u32 {
+    fn target(&self) -> CombatId {
         // [`resolve`] refuses a play whose card names a creature and was
         // pointed at none, so a card that reads this was pointed at one.
         self.target
             .expect("a card that names a target is played at one")
     }
 
-    fn attack(&mut self, at: u32, damage: V::Number) {
+    fn attack(&mut self, at: CombatId, damage: V::Number) {
         // `CreatureCmd.Damage`: block first, then hit points, then the death
         // the hit caused. Nothing modifies the amount on the way.
         let Some(at) = self.at(at) else { return };
@@ -218,7 +228,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.combat.stars = self.combat.stars + amount;
     }
 
-    fn apply_power(&mut self, at: u32, _power: V::Power, amount: V::Number) {
+    fn apply_power(&mut self, at: CombatId, _power: V::Power, amount: V::Number) {
         // `PowerCmd.Apply` returns on a zero amount, and on a creature that
         // cannot receive powers. A monster the fight has taken out is one,
         // because its combat state is gone.

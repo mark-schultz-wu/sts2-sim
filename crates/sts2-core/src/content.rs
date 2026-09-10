@@ -731,10 +731,10 @@ pub trait Fight<V: ContentVersion> {
     /// A card whose target type names a creature is played at one. The play
     /// reaching behaviour has already been held to `CardModel.IsValidTarget`,
     /// so this is not a question the card asks and then answers.
-    fn target(&self) -> u32;
+    fn target(&self) -> crate::CombatId;
 
     /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
-    fn attack(&mut self, at: u32, damage: V::Number);
+    fn attack(&mut self, at: crate::CombatId, damage: V::Number);
 
     /// `CreatureCmd.GainBlock(Owner.Creature, amount, cardPlay)`.
     fn gain_block(&mut self, amount: V::Number);
@@ -745,7 +745,7 @@ pub trait Fight<V: ContentVersion> {
     fn gain_stars(&mut self, amount: V::Number);
 
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
-    fn apply_power(&mut self, at: u32, power: V::Power, amount: V::Number);
+    fn apply_power(&mut self, at: crate::CombatId, power: V::Power, amount: V::Number);
 }
 
 /// One game build's content, as the types that name it.
