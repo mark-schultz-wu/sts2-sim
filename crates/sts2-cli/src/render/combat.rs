@@ -2,7 +2,7 @@
 
 use super::prose::one_line;
 use super::{cards, entry, flags, ident, spelling};
-use num_traits::{ToPrimitive, Zero};
+use num_traits::Zero;
 use std::fmt;
 use sts2_core::{CardIdent, Combat, ContentVersion, Creature, Orbs, Playable, Preview};
 
@@ -149,12 +149,7 @@ fn orbs_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, orbs: &Orbs<V>) -> fmt
 
     // The empty ones matter: channelling into a full queue evokes the front of
     // it, and how many are free is what says whether that is about to happen.
-    let free = orbs
-        .capacity
-        .to_usize()
-        .expect("orb capacity fits an addressable list")
-        .saturating_sub(orbs.queue.len());
-    slots.extend(std::iter::repeat_n("—".to_string(), free));
+    slots.extend(std::iter::repeat_n("—".to_string(), orbs.free()));
 
     writeln!(f, "orbs    {}", slots.join(" · "))
 }

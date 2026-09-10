@@ -19,7 +19,6 @@
 //! hand at the bottom, because that is where the answer is chosen. The player
 //! between them, because both halves are about that row of numbers.
 
-use num_traits::ToPrimitive;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -304,13 +303,7 @@ fn you_row<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>)
             orbs.queue
                 .iter()
                 .map(|o| format!("({}:{})", names::pretty(&spelling(&o.orb)), o.passive))
-                .chain(std::iter::repeat_n(
-                    "( )".to_string(),
-                    orbs.capacity
-                        .to_usize()
-                        .expect("orb capacity fits an addressable list")
-                        .saturating_sub(orbs.queue.len()),
-                ))
+                .chain(std::iter::repeat_n("( )".to_string(), orbs.free()))
                 .collect::<Vec<_>>()
                 .join(" "),
             theme::guard(),

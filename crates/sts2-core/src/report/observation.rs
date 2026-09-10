@@ -329,6 +329,22 @@ pub struct Orbs<V: ContentVersion> {
     pub queue: Vec<Channelled<V>>,
 }
 
+impl<V: ContentVersion> Orbs<V> {
+    /// The empty slots, which channelling fills before it evokes.
+    ///
+    /// A queue longer than the capacity is not a state to render around. It is
+    /// two halves of one observation contradicting each other, so whoever built
+    /// this value is wrong. Everything that builds one rejects that pair before
+    /// it gets here.
+    pub fn free(&self) -> usize {
+        let capacity = num_traits::ToPrimitive::to_usize(&self.capacity)
+            .expect("orb capacity fits an addressable list");
+        capacity
+            .checked_sub(self.queue.len())
+            .expect("more orbs channelled than the queue holds")
+    }
+}
+
 /// One orb in a slot, with the numbers it currently has.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Channelled<V: ContentVersion> {

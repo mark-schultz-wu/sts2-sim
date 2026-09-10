@@ -685,8 +685,27 @@ impl<V: ContentVersion> WireCombat<V> {
             orbs: self
                 .orbs
                 .map(|o| {
+                    let capacity: V::Count = domain_count("combat.orbs.capacity", o.capacity)?;
+                    // Two halves of one observation. A queue longer than the
+                    // capacity is them contradicting each other, and nothing
+                    // downstream has a sensible reading of that pair.
+                    let slots = capacity.to_usize().ok_or_else(|| {
+                        at(
+                            "combat.orbs.capacity",
+                            Why::OutOfRange {
+                                what: "an addressable list",
+                                value: o.capacity.to_string(),
+                            },
+                        )
+                    })?;
+                    if o.queue.len() > slots {
+                        return Err(at(
+                            "combat.orbs",
+                            Why::Disagree("more orbs channelled than the queue holds"),
+                        ));
+                    }
                     Ok(Orbs {
-                        capacity: domain_count("combat.orbs.capacity", o.capacity)?,
+                        capacity,
                         queue: o
                             .queue
                             .into_iter()
@@ -1219,6 +1238,37 @@ mod tests {
         // The skip that is not called SKIP.
         let renamed = chest(json!({"index": 0, "id": "PASS", "skip": true, "chosen": false}));
         assert!(matches!(renamed.unwrap_err().why, Why::Disagree(_)));
+    }
+
+    /// The capacity and the queue are one state, and they can contradict.
+    #[test]
+    fn more_orbs_than_slots_is_refused_rather_than_rendered() {
+        let orbs = |capacity: i32, channelled: usize| {
+            let mut state = base();
+            state["combat"] = json!({
+                "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
+                "encounter": null, "hand": [], "draw": [], "discard": [],
+                "exhaust": [], "legal": [], "creatures": [],
+                "orbs": {
+                    "capacity": capacity,
+                    "queue": (0..channelled)
+                        .map(|_| json!({"id": "LIGHTNING_ORB", "passive": 3, "evoke": 8}))
+                        .collect::<Vec<_>>(),
+                }
+            });
+            parse(&state)
+        };
+
+        let room = orbs(3, 1).unwrap();
+        let queue = room.combat.unwrap().orbs.expect("a channelled orb");
+        assert_eq!(queue.free(), 2);
+
+        let full = orbs(1, 1).unwrap();
+        assert_eq!(full.combat.unwrap().orbs.expect("orbs").free(), 0);
+
+        let over = orbs(1, 2).unwrap_err();
+        assert_eq!(over.at, "combat.orbs");
+        assert!(matches!(over.why, Why::Disagree(_)), "{over}");
     }
 
     /// A creature reports its move id and its intents together or not at all.
