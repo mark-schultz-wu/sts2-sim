@@ -385,18 +385,41 @@ pub struct Channelled<V: ContentVersion> {
 /// One creature in a fight, as the game's `CombatId` names one.
 ///
 /// A card's commands are pointed at one of these, and [`crate::Fight::target`]
-/// is the only place a card's behaviour gets one. So a rule cannot make an id
-/// up and hit whatever it lands on.
+/// is where a rule gets one. The number stays inside.
 ///
-/// The number inside stays inside. A fight asks each creature whether it is
-/// this one, which is all anybody has needed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CombatId(u32);
+/// Reading one off the wire goes through `serde`, so a crate that does not
+/// talk to the game cannot make one from a number. A byte, because the roster
+/// bounds it.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(transparent)]
+pub struct CombatId(nonmax::NonMaxU8);
 
-impl<V: ContentVersion> Creature<V> {
-    /// This creature, as a command names one.
-    pub fn combat_id(&self) -> CombatId {
-        CombatId(self.id)
+impl std::fmt::Display for CombatId {
+    /// The number the game spells, for a front end saying which creature.
+    ///
+    /// Reading one out as words is not a way back to one: nothing parses this.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl CombatId {
+    /// The player, which `CombatId` counts from.
+    pub const PLAYER: Self = Self(nonmax::NonMaxU8::ZERO);
+
+    /// The `index`th monster the encounter fields, which the game numbers from
+    /// one, or nothing for a fight with more creatures than ids.
+    ///
+    /// The game's own numbering, rather than a way to make an id out of a
+    /// number. A fight that fields creatures says which one it is fielding.
+    pub fn monster(index: usize) -> Option<Self> {
+        u8::try_from(index)
+            .ok()
+            .and_then(|index| index.checked_add(1))
+            .and_then(nonmax::NonMaxU8::new)
+            .map(Self)
     }
 }
 
@@ -405,7 +428,7 @@ impl<V: ContentVersion> Creature<V> {
 pub struct Creature<V: ContentVersion> {
     /// Stable for as long as the fight lasts, which an index into the living
     /// creatures is not.
-    pub id: u32,
+    pub id: CombatId,
     /// Absent for a creature that is neither a monster nor a player.
     pub model: Option<ModelId<V>>,
     /// Not the same question as whether it is a monster: a charmed monster
@@ -508,7 +531,7 @@ pub struct Held<V: ContentVersion> {
     /// Empty is not "it cannot be drunk". A potion that takes no target has
     /// none, and so does one drunk outside combat, where there are no combat
     /// ids to name. Both are drunk with no target at all.
-    pub targets: Vec<u32>,
+    pub targets: Vec<CombatId>,
 }
 
 /// Why a potion cannot be drunk right now.
@@ -565,7 +588,7 @@ pub struct Playable<V: ContentVersion> {
     /// Which model said no, for the rule that is one model saying no.
     pub preventer: Option<ModelId<V>>,
     /// The creatures this card can legally be pointed at.
-    pub targets: Vec<u32>,
+    pub targets: Vec<CombatId>,
     /// What it does, with everything applied.
     pub effect: Vec<Preview<V>>,
 }
@@ -581,7 +604,7 @@ pub struct Playable<V: ContentVersion> {
 pub struct Preview<V: ContentVersion> {
     /// Which creature this was computed against, or nothing for a preview that
     /// does not vary by target.
-    pub target: Option<u32>,
+    pub target: Option<CombatId>,
     /// The rules text with these numbers in it, carrying the game's own
     /// markup. Nothing at all for an implementation with no localisation
     /// tables, which is not the same as a card that says nothing.

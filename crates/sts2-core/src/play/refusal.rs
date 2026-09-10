@@ -9,6 +9,7 @@
 //! The reason is a type rather than a sentence, and the prose belongs to a
 //! front end. The crate README says why, and what the four kinds of reason are.
 
+use crate::CombatId;
 use crate::{Blocked, CardIdent, ContentVersion, Coord, ModelId, QuestionKind, Undrinkable};
 
 /// A move the game refused.
@@ -85,7 +86,7 @@ pub enum Reason<V: ContentVersion> {
     /// and a caller that can send `-1` is exactly the caller this refuses.
     OutOfRange { index: i64, count: usize },
     /// A `CombatId` no creature in this fight has.
-    NoSuchCreature { id: u32 },
+    NoSuchCreature { id: CombatId },
 
     // ---- the rules say no: the game looked, and said no ----
     /// The card cannot be played at all, for every rule it fails.
@@ -104,7 +105,7 @@ pub enum Reason<V: ContentVersion> {
         card: CardIdent<V>,
         /// The creature it was pointed at, or nothing for a play with no target
         /// where one was needed.
-        target: Option<u32>,
+        target: Option<CombatId>,
         takes: V::TargetType,
     },
     /// The potion cannot be drunk right now.
@@ -118,7 +119,7 @@ pub enum Reason<V: ContentVersion> {
         potion: V::Potion,
         /// The creature it was pointed at, or nothing for a drink with no
         /// target where one was needed.
-        target: Option<u32>,
+        target: Option<CombatId>,
         takes: V::TargetType,
     },
     /// Not a node the run can enter from where it stands.

@@ -10,7 +10,7 @@
 //! random. `grant` and `fight` construct a scenario rather than play one.
 
 use super::choose;
-use nonmax::NonMaxU32;
+use sts2_core::CombatId;
 use sts2_core::{
     Answer, Combat, ContentVersion, Decision, Map, Observation, Question, RewardKind, Snapshot,
     TakeReward, Tool,
@@ -165,8 +165,7 @@ fn potion_moves<V: ContentVersion>(observed: &Observation<V>) -> Vec<Decision<V>
             continue;
         };
 
-        let targets: Vec<Option<NonMaxU32>> =
-            potion.targets.iter().copied().map(NonMaxU32::new).collect();
+        let targets: Vec<Option<CombatId>> = potion.targets.iter().copied().map(Some).collect();
 
         match targets.is_empty() {
             true => moves.push(Decision::UsePotion {
@@ -217,8 +216,7 @@ fn combat_moves<V: ContentVersion>(combat: &Combat<V>) -> Vec<Decision<V>> {
             continue;
         };
 
-        let targets: Vec<Option<NonMaxU32>> =
-            card.targets.iter().copied().map(NonMaxU32::new).collect();
+        let targets: Vec<Option<CombatId>> = card.targets.iter().copied().map(Some).collect();
 
         match targets.is_empty() {
             true => moves.push(Decision::PlayCard {
@@ -283,6 +281,11 @@ pub fn describe<V: ContentVersion>(decision: &Decision<V>) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// A creature id, as an observation spells one. `serde` is the door in.
+    fn at(id: u8) -> Option<sts2_core::CombatId> {
+        serde_json::from_value(serde_json::json!(id)).ok()
+    }
     use super::{legal, navigation};
     use crate::fixture::{self, playable, unplayable};
     use serde_json::json;
@@ -317,11 +320,11 @@ mod tests {
 
         assert!(out.contains(&Decision::UsePotion {
             index: 0,
-            target: nonmax::NonMaxU32::new(1),
+            target: at(1),
         }));
         assert!(out.contains(&Decision::UsePotion {
             index: 0,
-            target: nonmax::NonMaxU32::new(2),
+            target: at(2),
         }));
         // No target at all, which is what an untargeted potion sends.
         assert!(out.contains(&Decision::UsePotion {
@@ -407,7 +410,7 @@ mod tests {
         assert_eq!(out.len(), 4, "{out:?}");
         assert!(out.contains(&Decision::PlayCard {
             index: 0,
-            target: nonmax::NonMaxU32::new(2)
+            target: at(2)
         }));
         // No target to name, so exactly one move rather than none.
         assert!(out.contains(&Decision::PlayCard {

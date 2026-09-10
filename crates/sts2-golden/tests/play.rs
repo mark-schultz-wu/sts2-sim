@@ -4,7 +4,6 @@
 //! a refusal does. These do. A refused play leaves the fight exactly as it
 //! stood, which is the property the whole design rests on.
 
-use nonmax::NonMaxU32;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
 use sts2_content::v0_107_1::{
     V0_107_1, cards::Cards, cards::RegentCard, characters::Character, runstate::UnplayableReason,
@@ -40,9 +39,9 @@ fn fighting() -> Sim<V> {
     sim
 }
 
-/// A creature id as a decision spells one.
-fn at(id: u32) -> Option<NonMaxU32> {
-    NonMaxU32::new(id)
+/// A creature id, as an observation spells one. `serde` is the door in.
+fn at(id: u8) -> Option<sts2_core::CombatId> {
+    serde_json::from_value(serde_json::json!(id)).ok()
 }
 
 #[test]
@@ -120,7 +119,9 @@ fn a_refused_play_leaves_the_fight_where_it_stood() {
                 index: 0,
                 target: at(9),
             },
-            Reason::NoSuchCreature { id: 9 },
+            Reason::NoSuchCreature {
+                id: at(9).expect("nine is a spellable id"),
+            },
         ),
     ];
 
@@ -155,7 +156,7 @@ fn a_card_the_pools_cannot_pay_for_is_unplayable_before_it_is_refused() {
         let target = fight.legal[playable].targets.first().copied();
         sim.play(&Decision::PlayCard {
             index: playable as u8,
-            target: target.and_then(at),
+            target,
         })
         .expect("the card is ported")
         .expect("the play is legal");

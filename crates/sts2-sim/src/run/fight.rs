@@ -1,7 +1,6 @@
 //! Driving the fight the run is standing in.
 
-use nonmax::NonMaxU32;
-use sts2_core::{Answered, Reason, Refusal, Rules};
+use sts2_core::{Answered, CombatId, Reason, Refusal, Rules};
 
 use super::State;
 use crate::combat;
@@ -15,7 +14,7 @@ impl<V: Rules> State<V> {
     pub(crate) fn play_card(
         &mut self,
         index: u8,
-        target: Option<NonMaxU32>,
+        target: Option<CombatId>,
     ) -> Result<Answered<V>, Error> {
         let refused = |reason| {
             Ok(Err(Refusal {

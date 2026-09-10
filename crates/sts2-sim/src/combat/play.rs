@@ -9,7 +9,6 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
-use nonmax::NonMaxU32;
 use num_traits::Zero;
 use sts2_core::{CardTable, Combat, CombatId, Cost, Creature, Fight, Reason, Rules, SideKinds};
 
@@ -39,7 +38,7 @@ pub(crate) struct Play<V: Rules> {
 pub(crate) fn resolve<V: Rules>(
     combat: &Combat<V>,
     index: u8,
-    target: Option<NonMaxU32>,
+    target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
     let at = usize::from(index);
     let playable = combat.legal.get(at).ok_or(Reason::OutOfRange {
@@ -47,23 +46,13 @@ pub(crate) fn resolve<V: Rules>(
         count: combat.hand.len(),
     })?;
 
-    // The id the decision named, which the observation reported and the two
-    // refusals below quote back.
-    let named = target.map(|target| target.get());
-
-    // The creature it names, which every command the card issues is pointed
-    // at. Found once, here, so a rule never carries a bare number.
-    let aimed = match named {
-        None => None,
-        Some(id) => Some(
-            combat
-                .creatures
-                .iter()
-                .find(|creature| creature.id == id)
-                .ok_or(Reason::NoSuchCreature { id })?
-                .combat_id(),
-        ),
-    };
+    // The creature the play named has to still be in this fight. An id is
+    // chosen against an observation, and a fight moves on from one.
+    if let Some(id) = target
+        && !combat.creatures.iter().any(|creature| creature.id == id)
+    {
+        return Err(Reason::NoSuchCreature { id });
+    }
 
     if let Some(why) = playable.reason {
         return Err(Reason::Unplayable {
@@ -75,10 +64,10 @@ pub(crate) fn resolve<V: Rules>(
 
     // `CanPlayTargeting`: the card is pointed at one of the creatures its own
     // target type accepts, and a card that names one is pointed at something.
-    if !named.is_some_and(|id| playable.targets.contains(&id)) && !playable.targets.is_empty() {
+    if !target.is_some_and(|id| playable.targets.contains(&id)) && !playable.targets.is_empty() {
         return Err(Reason::WrongTarget {
             card: playable.card,
-            target: named,
+            target,
             takes: playable.target,
         });
     }
@@ -96,7 +85,7 @@ pub(crate) fn resolve<V: Rules>(
     const PAYS: &str = "a play the legality pass approved is one the pool pays";
     Ok(Play {
         index: at,
-        target: aimed,
+        target,
         energy: legal::spend(playable.card.card.cost(), combat.energy).expect(PAYS),
         stars: legal::spend(star_cost, combat.stars).expect(PAYS),
     })
@@ -154,7 +143,7 @@ impl<V: Rules> Board<'_, V> {
         self.combat
             .creatures
             .iter()
-            .position(|creature| creature.combat_id() == at)
+            .position(|creature| creature.id == at)
     }
 
     /// The player, which is the only creature a card is played from.

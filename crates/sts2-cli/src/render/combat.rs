@@ -218,7 +218,7 @@ fn playing<V: ContentVersion>(l: &Playable<V>) -> String {
     match l.targets.as_slice() {
         [] => line.push_str(&format!("  ({})", spelling(&l.target))),
         targets => {
-            let ids: Vec<String> = targets.iter().map(u32::to_string).collect();
+            let ids: Vec<String> = targets.iter().map(ToString::to_string).collect();
             line.push_str(&format!("  → {}", ids.join(",")));
         }
     }

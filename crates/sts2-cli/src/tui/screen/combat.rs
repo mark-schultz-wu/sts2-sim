@@ -23,7 +23,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use sts2_core::{Combat, ContentVersion, Creature, Play};
+use sts2_core::{Combat, CombatId, ContentVersion, Creature, Play};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -126,7 +126,7 @@ fn creature_row<V: ContentVersion>(
     area: Rect,
     title: &str,
     them: &[&Creature<V>],
-    aimed: Option<u32>,
+    aimed: Option<CombatId>,
 ) {
     let block = titled(title);
     let inner = block.inner(area);

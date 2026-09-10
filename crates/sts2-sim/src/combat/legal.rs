@@ -9,8 +9,8 @@
 //! powers, no relic that listens, and no card that overrides it.
 
 use sts2_core::{
-    CardIdent, CardTable, CardVars, Cost, Creature, FlagSet, Playable, Preview, Rules, SideKinds,
-    TargetKinds, UnplayableReasonKinds,
+    CardIdent, CardTable, CardVars, CombatId, Cost, Creature, FlagSet, Playable, Preview, Rules,
+    SideKinds, TargetKinds, UnplayableReasonKinds,
 };
 
 use super::Error;
@@ -75,7 +75,7 @@ fn playable<V: Rules>(
     // `CanPlayTargeting` is a valid target *and* a card that can be played, so
     // a card refused for any reason names nobody, rather than naming who it
     // was going to hit.
-    let targets: Vec<u32> = if reasons.is_empty() {
+    let targets: Vec<CombatId> = if reasons.is_empty() {
         creatures
             .iter()
             .filter(|creature| valid_target::<V>(target, creature))
@@ -140,7 +140,7 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 /// Nothing modifies a card's numbers yet, so the collapse always fires. It is
 /// written as the collapse anyway. The first hook to move a number then
 /// reports per target, and this does not change.
-fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<V>>, Error> {
+fn effect<V: Rules>(card: &CardIdent<V>, targets: &[CombatId]) -> Result<Vec<Preview<V>>, Error> {
     let per_target = matches!(
         card.card.target(),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
@@ -149,7 +149,7 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<
     );
 
     let numbers = numbers::<V>(card)?;
-    let against: Vec<Option<u32>> = if per_target && !targets.is_empty() {
+    let against: Vec<Option<CombatId>> = if per_target && !targets.is_empty() {
         targets.iter().copied().map(Some).collect()
     } else {
         vec![None]
@@ -222,12 +222,20 @@ mod tests {
     /// A player and one living enemy, which is the smallest fight.
     fn fight() -> Vec<Creature<V>> {
         vec![
-            creature(0, ModelId::Character(Character::Regent), CombatSide::Player),
-            creature(1, ModelId::Monster(Monster::TwigSlimeS), CombatSide::Enemy),
+            creature(
+                CombatId::PLAYER,
+                ModelId::Character(Character::Regent),
+                CombatSide::Player,
+            ),
+            creature(
+                CombatId::monster(0).expect("the first monster has an id"),
+                ModelId::Monster(Monster::TwigSlimeS),
+                CombatSide::Enemy,
+            ),
         ]
     }
 
-    fn creature(id: u32, model: ModelId<V>, side: CombatSide) -> Creature<V> {
+    fn creature(id: CombatId, model: ModelId<V>, side: CombatSide) -> Creature<V> {
         Creature {
             id,
             model: Some(model),

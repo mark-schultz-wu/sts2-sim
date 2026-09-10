@@ -10,7 +10,6 @@ pub mod moves;
 
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use nonmax::NonMaxU32;
 use std::path::Path;
 use sts2_core::ContentVersion;
 use sts2_core::{
@@ -65,6 +64,16 @@ pub struct StartArgs {
     /// Do not write this run down at all.
     #[arg(long, conflicts_with = "record")]
     pub no_record: bool,
+}
+
+/// A creature id as a person types one, read the way an observation spells one.
+///
+/// A number off a command line is outside data, like a number off the wire, so
+/// it comes in the same way. The player is zero and the monsters count from
+/// one, so a fight has few enough ids to fit a byte.
+fn combat_id(id: u32) -> anyhow::Result<sts2_core::CombatId> {
+    serde_json::from_value(serde_json::Value::from(id))
+        .with_context(|| format!("{id} is no creature in a fight"))
 }
 
 impl StartArgs {
@@ -306,19 +315,13 @@ impl Play {
             .into(),
             Play::PlayCard { index, target } => Decision::PlayCard {
                 index: *index,
-                target: match target {
-                    Some(t) => Some(NonMaxU32::new(*t).context("u32::MAX is not a creature")?),
-                    None => None,
-                },
+                target: target.map(combat_id).transpose()?,
             }
             .into(),
             Play::EndTurn => Decision::EndTurn.into(),
             Play::UsePotion { index, target } => Decision::UsePotion {
                 index: *index,
-                target: match target {
-                    Some(t) => Some(NonMaxU32::new(*t).context("u32::MAX is not a creature")?),
-                    None => None,
-                },
+                target: target.map(combat_id).transpose()?,
             }
             .into(),
             Play::Proceed => Decision::Proceed.into(),

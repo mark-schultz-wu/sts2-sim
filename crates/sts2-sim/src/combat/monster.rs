@@ -1,7 +1,7 @@
 //! Creating the enemy creatures that begin a combat.
 
 use sts2_core::rng::{Bound, GameRng};
-use sts2_core::{Counters, Creature, ModelId, Rules, SideKinds};
+use sts2_core::{CombatId, Counters, Creature, ModelId, Rules, SideKinds};
 
 use super::Error;
 
@@ -32,10 +32,7 @@ pub(crate) fn initialize<V: Rules>(
         let hp = choices[niche.next_int(bound) as usize];
         health.push(hp);
 
-        let id = u32::try_from(index)
-            .ok()
-            .and_then(|id| id.checked_add(1))
-            .ok_or(Error::CreatureIdOverflow)?;
+        let id = CombatId::monster(index).ok_or(Error::CreatureIdOverflow)?;
         creatures.push(Creature {
             id,
             model: Some(ModelId::Monster(monster)),

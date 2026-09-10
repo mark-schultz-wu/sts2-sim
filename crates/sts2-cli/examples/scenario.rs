@@ -15,7 +15,7 @@
 //! ```
 
 use anyhow::bail;
-use nonmax::NonMaxU32;
+
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
 use sts2_core::{Applied, Construct, Decision, Gift, Play, Setup, Start, Step};
@@ -108,7 +108,7 @@ fn main() -> anyhow::Result<()> {
         &mut game,
         Decision::PlayCard {
             index: 2,
-            target: NonMaxU32::new(1),
+            target: serde_json::from_value(serde_json::json!(1)).ok(),
         },
     )?;
 

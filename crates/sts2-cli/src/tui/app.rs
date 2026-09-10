@@ -13,8 +13,8 @@ use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
-    Answer, ContentVersion, Cost, Decided, Decision, Observation, Play, Question, Room, Snapshot,
-    TakeReward,
+    Answer, CombatId, ContentVersion, Cost, Decided, Decision, Observation, Play, Question, Room,
+    Snapshot, TakeReward,
 };
 
 use super::keys::{self, Action};
@@ -681,7 +681,7 @@ where
     /// One answer for a card and for a potion. Every screen that asks wants the
     /// same thing, which is the creature to draw the aim on. None of them cares
     /// which of the two is in flight.
-    pub fn aimed_at(&self) -> Option<u32> {
+    pub fn aimed_at(&self) -> Option<CombatId> {
         let (targets, at) = match self.ui.aim {
             Aim::Targeting { card, at } => (
                 self.observation()
@@ -824,18 +824,18 @@ where
 }
 
 /// The card at an index in the hand, played at a creature or at nothing.
-fn play_card<V: ContentVersion>(index: usize, target: Option<u32>) -> Intent<V> {
+fn play_card<V: ContentVersion>(index: usize, target: Option<CombatId>) -> Intent<V> {
     Intent::Send(Decision::PlayCard {
         index: u8::try_from(index).unwrap_or(u8::MAX),
-        target: target.and_then(nonmax::NonMaxU32::new),
+        target,
     })
 }
 
 /// The potion at an index in the belt, drunk at a creature or at nothing.
-fn drink<V: ContentVersion>(index: usize, target: Option<u32>) -> Intent<V> {
+fn drink<V: ContentVersion>(index: usize, target: Option<CombatId>) -> Intent<V> {
     Intent::Send(Decision::UsePotion {
         index: u8::try_from(index).unwrap_or(u8::MAX),
-        target: target.and_then(nonmax::NonMaxU32::new),
+        target,
     })
 }
 
@@ -873,6 +873,11 @@ fn stage_of<V: ContentVersion>(standing: &Snapshot<V>) -> Stage {
 
 #[cfg(test)]
 mod tests {
+
+    /// A creature id, as an observation spells one. `serde` is the door in.
+    fn at(id: u8) -> Option<sts2_core::CombatId> {
+        serde_json::from_value(serde_json::json!(id)).ok()
+    }
     use super::{App, Intent, Stage, priced};
     use crate::fixture::{self, playable, unplayable};
     use crate::scripted::Scripted;
@@ -1010,7 +1015,7 @@ mod tests {
             played,
             Intent::Send(Decision::PlayCard {
                 index: 0,
-                target: nonmax::NonMaxU32::new(2)
+                target: at(2)
             })
         );
         assert_eq!(app.ui.aim, Aim::Idle, "the aim outlived the card");

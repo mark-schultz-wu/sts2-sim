@@ -8,7 +8,6 @@
 //! process shares one profile directory. The crate README says why that
 //! matters.
 
-use nonmax::NonMaxU32;
 use serde_json::Value;
 use serde_json::json;
 use serial_test::serial;
@@ -183,6 +182,11 @@ fn looked(game: &Oracle<V>, snapshot: Snapshot<V>) -> Seen {
     }
 }
 
+/// A creature id, as an observation spells one. `serde` is the door in.
+fn at(id: u8) -> Option<sts2_core::CombatId> {
+    serde_json::from_value(serde_json::json!(id)).ok()
+}
+
 /// The belt, end to end: what it reports, what it refuses, and what drinking
 /// one actually does to the fight.
 ///
@@ -191,6 +195,7 @@ fn looked(game: &Oracle<V>, snapshot: Snapshot<V>) -> Seen {
 /// `CombatManager` and `PotionModel.IsValidTarget`, and the prose comes out of
 /// the localisation tables.
 /// Whether the damage lands is the point of the command.
+
 #[test]
 #[ignore = "launches the real game"]
 #[serial(game)]
@@ -281,7 +286,7 @@ fn a_potion_is_reported_refused_and_drunk() {
         &mut game,
         &Decision::UsePotion {
             index: 0,
-            target: NonMaxU32::new(at),
+            target: Some(at),
         },
     );
     assert!(drunk.errors.is_empty(), "drinking logged errors");
@@ -769,7 +774,7 @@ fn an_ordinary_card_play_logs_no_game_errors() {
         &mut game,
         &Decision::PlayCard {
             index: 0,
-            target: NonMaxU32::new(1),
+            target: at(1),
         },
     );
     assert!(played.errors.is_empty(), "playing a card logged errors");
@@ -1022,7 +1027,7 @@ fn a_recorded_run_replays_into_the_same_run() {
         .into(),
         Decision::PlayCard {
             index: 0,
-            target: NonMaxU32::new(1),
+            target: at(1),
         }
         .into(),
         Decision::EndTurn.into(),
@@ -1326,7 +1331,7 @@ fn every_room_parses_into_an_observation() {
         &mut game,
         &Decision::PlayCard {
             index: 0,
-            target: NonMaxU32::new(1),
+            target: at(1),
         },
     );
     check("after a card", &played);

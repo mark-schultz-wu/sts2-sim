@@ -726,7 +726,7 @@ impl Sink {
             next_move,
         } = creature;
 
-        self.u32(*id);
+        self.id(id);
         self.option(model, |sink, model| sink.model(model));
         self.id(side);
         self.number(hp);
@@ -772,7 +772,7 @@ impl Sink {
         self.prose_option(title);
         self.prose_option(text);
         self.option(reason, |sink, why| sink.id(why));
-        self.list(targets, |sink, id| sink.u32(*id));
+        self.list(targets, |sink, id| sink.id(id));
     }
 
     fn playable<V: ContentVersion>(&mut self, playable: &Playable<V>) {
@@ -793,7 +793,7 @@ impl Sink {
         self.id(target);
         self.option(reason, |sink, reasons| sink.flags(reasons));
         self.option(preventer, |sink, model| sink.model(model));
-        self.list(targets, |sink, id| sink.u32(*id));
+        self.list(targets, |sink, id| sink.id(id));
         self.list(effect, |sink, preview| {
             let Preview {
                 target,
@@ -801,7 +801,7 @@ impl Sink {
                 vars,
                 base,
             } = preview;
-            sink.option(target, |sink, id| sink.u32(*id));
+            sink.option(target, |sink, id| sink.id(id));
             // The numbers this sentence has in it are `vars` and `base`, which
             // are digested either way. This is the sentence.
             sink.prose_option(text);

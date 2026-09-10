@@ -63,12 +63,12 @@ pub enum Command<V: ContentVersion> {
     Proceed,
     PlayCard {
         index: u8,
-        target: Option<nonmax::NonMaxU32>,
+        target: Option<sts2_core::CombatId>,
     },
     EndTurn,
     UsePotion {
         index: u8,
-        target: Option<nonmax::NonMaxU32>,
+        target: Option<sts2_core::CombatId>,
     },
     ChooseOption {
         index: u8,
@@ -437,6 +437,11 @@ impl<V: ContentVersion> WireGift<V> {
 
 #[cfg(test)]
 mod tests {
+
+    /// A creature id, as an observation spells one. `serde` is the door in.
+    fn at(id: u8) -> Option<sts2_core::CombatId> {
+        serde_json::from_value(serde_json::json!(id)).ok()
+    }
     use super::*;
     use serde_json::{json, to_value};
     use sts2_content::v0_107_1::V0_107_1;
@@ -517,7 +522,7 @@ mod tests {
         assert_eq!(
             wire(Decision::UsePotion {
                 index: 1,
-                target: nonmax::NonMaxU32::new(4),
+                target: at(4),
             }),
             json!({"cmd": "use_potion", "index": 1, "target": 4})
         );
@@ -583,7 +588,7 @@ mod tests {
             .into(),
             Decision::PlayCard {
                 index: 3,
-                target: nonmax::NonMaxU32::new(1),
+                target: at(1),
             }
             .into(),
             Decision::PlayCard {
@@ -594,7 +599,7 @@ mod tests {
             Decision::EndTurn.into(),
             Decision::UsePotion {
                 index: 1,
-                target: nonmax::NonMaxU32::new(4),
+                target: at(4),
             }
             .into(),
             Decision::UsePotion {

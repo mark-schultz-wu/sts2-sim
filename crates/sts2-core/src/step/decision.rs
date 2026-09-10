@@ -10,9 +10,9 @@
 //! argument means to the real game.
 
 use crate::Answer;
+use crate::CombatId;
 use crate::ContentVersion;
 use crate::Coord;
-use nonmax::NonMaxU32;
 
 /// One decision in a run.
 ///
@@ -40,7 +40,7 @@ pub enum Decision<V: ContentVersion> {
     /// index into the living creatures, which shifts when one dies.
     PlayCard {
         index: u8,
-        target: Option<NonMaxU32>,
+        target: Option<CombatId>,
     },
     EndTurn,
     /// Drinks one potion from the belt, addressed by its index in the
@@ -52,7 +52,7 @@ pub enum Decision<V: ContentVersion> {
     /// points it at the player itself.
     UsePotion {
         index: u8,
-        target: Option<NonMaxU32>,
+        target: Option<CombatId>,
     },
     /// Indexes into the options the *most recent* observation reported. The rest
     /// site list shrinks as it is chosen from, so an older index means nothing.
