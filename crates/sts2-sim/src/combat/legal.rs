@@ -9,8 +9,9 @@
 //! powers, no relic that listens, and no card that overrides it.
 
 use sts2_core::{
-    CardIdent, CardTable, CardVars, CombatId, Cost, Creature, FlagSet, Playable, Preview, Rules,
-    SideKinds, TargetKinds, UnplayableReasonKinds,
+    CardIdent, CardTable, CardVars, Combat, CombatId, Cost, Creature, FlagSet, Held, Playable,
+    PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable,
+    UnplayableReasonKinds,
 };
 
 use super::Error;
@@ -98,6 +99,68 @@ fn playable<V: Rules>(
         effect: effect::<V>(card, creatures, &targets)?,
         targets,
     })
+}
+
+/// The belt, and why each potion in it cannot be drunk.
+///
+/// The order `NPotionPopup.RefreshButtons` asks in, minus the questions this
+/// slice cannot raise. Nothing is queued, because a decision resolves whole.
+/// Nothing is stuck, because that is a relic and none is ported. The player is
+/// alive, because a dead one stops the run.
+pub(crate) fn belt<V: Rules>(potions: &[V::Potion], combat: Option<&Combat<V>>) -> Vec<Held<V>> {
+    potions
+        .iter()
+        .map(|&potion| {
+            let reason = undrinkable::<V>(potion, combat);
+            Held {
+                potion,
+                // The game reads both out of its localisation tables, which
+                // the simulator does not have.
+                title: None,
+                text: None,
+                targets: match (reason, combat) {
+                    (None, Some(combat)) => aimable::<V>(potion, &combat.creatures),
+                    // A potion nobody can drink names nobody, and one drunk
+                    // outside a fight has no creature to name.
+                    _ => Vec::new(),
+                },
+                reason,
+            }
+        })
+        .collect()
+}
+
+/// Why one potion cannot be drunk, or nothing for one that can.
+fn undrinkable<V: Rules>(potion: V::Potion, combat: Option<&Combat<V>>) -> Option<Undrinkable> {
+    if potion.usage() == PotionUsage::Automatic {
+        return Some(Undrinkable::Automatic);
+    }
+    match combat {
+        None if potion.usage() == PotionUsage::CombatOnly => return Some(Undrinkable::OutOfCombat),
+        None => {}
+        Some(combat) if combat.phase != <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::PLAY => {
+            return Some(Undrinkable::NotYourTurn);
+        }
+        Some(_) => {}
+    }
+    match potion.passes_own_check() {
+        Some(true) => None,
+        Some(false) => Some(Undrinkable::ItsOwnCheck),
+        None => unimplemented!("a potion that decides for itself whether it can be drunk"),
+    }
+}
+
+/// The creatures a potion can be pointed at.
+fn aimable<V: Rules>(potion: V::Potion, creatures: &[Creature<V>]) -> Vec<CombatId> {
+    let Some(target) = potion.target() else {
+        // One of the potions that work their target out from the fight.
+        unimplemented!("a potion that decides its own target");
+    };
+    creatures
+        .iter()
+        .filter(|creature| valid_target::<V>(target, creature))
+        .map(|creature| creature.id)
+        .collect()
 }
 
 /// What the pool it is priced in has to give up for it.

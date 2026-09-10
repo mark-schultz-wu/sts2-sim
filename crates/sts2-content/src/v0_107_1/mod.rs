@@ -141,6 +141,10 @@ impl sts2_core::Rules for V0_107_1 {
         generated::cards::reward_cards(character)
     }
 
+    fn reward_potions(character: Self::Character) -> sts2_core::Drafted<'static, Self::Potion> {
+        generated::potions::reward_potions(character)
+    }
+
     fn encounter_gold(
         encounter: Self::Encounter,
         ascension: Self::AscensionLevel,

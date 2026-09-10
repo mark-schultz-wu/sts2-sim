@@ -59,6 +59,8 @@ struct RunData<V: Rules> {
 #[derive(Debug, Clone)]
 struct Player<V: Rules> {
     relics: SmallVec<[V::Relic; 8]>,
+    /// The belt, in the order the potions were taken.
+    potions: SmallVec<[V::Potion; 3]>,
     deck: Vec<CardIdent<V>>,
     hp: V::Number,
     gold: V::Number,
@@ -140,6 +142,7 @@ impl<V: Rules> State<V> {
             visited: vec![at],
             player: Player {
                 relics: V::starting_relics(character).into_iter().collect(),
+                potions: SmallVec::new(),
                 deck: V::starting_deck(character)
                     .into_iter()
                     .map(CardIdent::new)
@@ -349,6 +352,8 @@ impl<V: Rules> State<V> {
         let Answer::Take(taking) = answer else {
             unimplemented!("an answer to a reward screen that takes nothing");
         };
+        let slots: usize = num_traits::cast(self.player.potion_slots)
+            .expect("the belt has an addressable number of slots");
         for take in taking {
             let Phase::Rewards { offered, .. } = &mut self.phase else {
                 unreachable!("the phase was a reward screen when this began");
@@ -361,6 +366,16 @@ impl<V: Rules> State<V> {
                     let amount = *amount;
                     *taken = true;
                     self.player.gold = self.player.gold + amount;
+                }
+                (Offer::Potion { potion, taken }, TakeReward::NonCard { .. }) => {
+                    let potion = *potion;
+                    // `PotionCmd.TryToProcure` fails on a full belt, and the
+                    // reward is then neither taken nor gone.
+                    if self.player.potions.len() >= slots {
+                        unimplemented!("a potion offered to a full belt");
+                    }
+                    *taken = true;
+                    self.player.potions.push(potion);
                 }
                 (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
                     let chosen = cards
@@ -479,7 +494,12 @@ impl<V: Rules> State<V> {
                         text: None,
                     })
                     .collect(),
-                potions: Vec::new(),
+                potions: crate::combat::belt::<V>(
+                    &self.player.potions,
+                    // A fight that is over is not one a potion can be drunk
+                    // in. `in_combat` is that question already answered.
+                    combat.as_ref().filter(|_| in_combat),
+                ),
                 potion_slots: self.player.potion_slots,
                 deck: self.player.deck.clone(),
                 in_combat,
@@ -523,6 +543,9 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                         amount: amount
                             .to_i64()
                             .expect("a fight's gold fits the reported width"),
+                    },
+                    Offer::Potion { potion, .. } => RewardKind::Potion {
+                        potion: Some(*potion),
                     },
                     Offer::Card { cards, .. } => RewardKind::Card {
                         cards: cards

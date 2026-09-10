@@ -25,15 +25,16 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     gold: Interval<u16>,
     act: usize,
 ) -> Vec<Offer<V>> {
-    let potion = potion(rng, odds);
+    let pays_potion = potion(rng, odds);
     let mut offered = vec![Offer::Gold {
         amount: purse::<V, R>(rng, gold),
         taken: false,
     }];
-    if potion {
-        // The belt is not in the simulator at all: an observation reports no
-        // potions and no decision drinks one.
-        unimplemented!("a potion offered as a reward");
+    if pays_potion {
+        offered.push(Offer::Potion {
+            potion: super::potion::rolled::<V, R>(rng, character),
+            taken: false,
+        });
     }
     offered.push(Offer::Card {
         cards: card::encounter::<V, R>(rng, odds, ascension, character, CARDS_OFFERED, act),

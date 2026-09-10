@@ -10,6 +10,7 @@ mod play;
 mod start;
 mod stream;
 mod turn;
+pub(crate) use legal::belt;
 pub(crate) use play::{play, resolve};
 pub(crate) use start::enter;
 pub(crate) use turn::end as end_turn;
@@ -52,4 +53,10 @@ pub(crate) fn finish<V: Rules>(combat: &mut Combat<V>) {
     combat.discard.clear();
     combat.exhaust.clear();
     combat.legal.clear();
+    // `Player.AfterCombatEnd`: every power off, and the block with it. Nothing
+    // a fight put on a creature outlives the fight.
+    for creature in &mut combat.creatures {
+        creature.powers.clear();
+        creature.block = num_traits::zero();
+    }
 }

@@ -1186,6 +1186,12 @@ pub trait Rules: ContentVersion {
     /// [`Rules::colorless_cards`] is the other pool, and no character holds it.
     fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card>;
 
+    /// The potions a reward draws from, split by rarity.
+    ///
+    /// `Character.PotionPool` and the shared pool together, which is
+    /// `PotionFactory.GetPotionOptions`.
+    fn reward_potions(character: Self::Character) -> Drafted<'static, Self::Potion>;
+
     /// What winning an encounter pays, which is `MinGoldReward` to
     /// `MaxGoldReward`.
     fn encounter_gold(

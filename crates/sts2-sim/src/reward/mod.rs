@@ -2,6 +2,7 @@
 
 pub(crate) mod card;
 pub(crate) mod combat;
+pub(crate) mod potion;
 
 use sts2_core::Rules;
 
@@ -20,12 +21,18 @@ pub(crate) enum Offer<V: Rules> {
         cards: Vec<V::Card>,
         taken: bool,
     },
+    Potion {
+        potion: V::Potion,
+        taken: bool,
+    },
 }
 
 impl<V: Rules> Offer<V> {
     pub(crate) fn taken(&self) -> bool {
         match self {
-            Self::Gold { taken, .. } | Self::Card { taken, .. } => *taken,
+            Self::Gold { taken, .. } | Self::Card { taken, .. } | Self::Potion { taken, .. } => {
+                *taken
+            }
         }
     }
 }
