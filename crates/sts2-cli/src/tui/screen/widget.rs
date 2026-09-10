@@ -6,6 +6,7 @@
 //! when the terminal is too small. A player at 80x24 gets a worse screen, not an
 //! empty one.
 
+use num_traits::{PrimInt, ToPrimitive};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
@@ -18,17 +19,19 @@ use crate::tui::theme;
 /// bar drawn in whole blocks only moves every 1/`width` of the total, which at
 /// ten columns is four points. Small hits then look free, which is the opposite
 /// of what a health bar is for.
-pub fn bar(value: i32, max: i32, width: usize) -> String {
+pub fn bar<N: PrimInt + ToPrimitive>(value: N, max: N, width: usize) -> String {
     const EIGHTHS: [char; 8] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
 
     if width == 0 {
         return String::new();
     }
-    if max <= 0 {
+    if max <= N::zero() {
         return "─".repeat(width);
     }
 
-    let filled = (value.clamp(0, max) as f64 / max as f64) * width as f64;
+    let filled = (value.clamp(N::zero(), max).to_f64().unwrap_or(0.0)
+        / max.to_f64().expect("positive game number converts to f64"))
+        * width as f64;
     let whole = filled.floor() as usize;
     let part = ((filled - filled.floor()) * 8.0).round() as usize;
 
@@ -39,7 +42,7 @@ pub fn bar(value: i32, max: i32, width: usize) -> String {
     // A creature that is alive shows something, even at one hit point in
     // fifty: an empty bar is what dead looks like.
     if whole < width {
-        match (part, value > 0 && whole == 0) {
+        match (part, value > N::zero() && whole == 0) {
             (0, false) => {}
             (0, true) => out.push(EIGHTHS[0]),
             (p, _) => out.push(EIGHTHS[(p - 1).min(7)]),
@@ -53,13 +56,18 @@ pub fn bar(value: i32, max: i32, width: usize) -> String {
 }
 
 /// `hp 34/72` with a bar after it, and the block beside that.
-pub fn vitals(hp: i32, max_hp: i32, block: i32, width: usize) -> Line<'static> {
+pub fn vitals<N: PrimInt + ToPrimitive + std::fmt::Display>(
+    hp: N,
+    max_hp: N,
+    block: N,
+    width: usize,
+) -> Line<'static> {
     let mut spans = vec![
         Span::styled(format!("{hp}/{max_hp}"), theme::hurt()),
         Span::raw(" "),
         Span::styled(bar(hp, max_hp, width), theme::hurt()),
     ];
-    if block > 0 {
+    if block > N::zero() {
         spans.push(Span::styled(format!("  B{block}"), theme::guard()));
     }
     Line::from(spans)
@@ -70,7 +78,7 @@ pub fn vitals(hp: i32, max_hp: i32, block: i32, width: usize) -> Line<'static> {
 /// The arrow carries the sign, so the colour is not the only thing saying it. A
 /// terminal without colour, or a reader who cannot tell red from green, still
 /// gets which way the power points.
-pub fn chip(name: &str, amount: i32, good: bool) -> Span<'static> {
+pub fn chip(name: &str, amount: impl std::fmt::Display, good: bool) -> Span<'static> {
     let (mark, style) = match good {
         true => ("^", theme::better()),
         false => ("v", theme::hurt()),
@@ -87,7 +95,7 @@ pub fn chip(name: &str, amount: i32, good: bool) -> Span<'static> {
 /// No arrow and no colour: the amount alone. Half the build's dynamic powers
 /// point either way depending on their own amount, and a guess with a colour on
 /// it reads as a fact.
-pub fn unknown_chip(name: &str, amount: i32) -> Span<'static> {
+pub fn unknown_chip(name: &str, amount: impl std::fmt::Display) -> Span<'static> {
     Span::styled(format!("· {name} {amount}"), theme::TEXT)
 }
 

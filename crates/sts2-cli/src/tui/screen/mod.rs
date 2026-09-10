@@ -18,6 +18,7 @@ mod room;
 pub(super) mod start;
 pub mod widget;
 
+use num_traits::{One, ToPrimitive};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -89,7 +90,10 @@ fn run_strip<V: ContentVersion>(
     rng: bool,
 ) {
     let mut spans = vec![
-        Span::styled(format!(" act {} ", observed.act + 1), theme::label()),
+        Span::styled(
+            format!(" act {} ", observed.act + V::Count::one()),
+            theme::label(),
+        ),
         Span::styled(format!("floor {}", observed.floor), theme::TEXT),
         Span::raw("   "),
         Span::styled(
@@ -127,7 +131,11 @@ fn run_strip<V: ContentVersion>(
         })
         .chain(std::iter::repeat_n(
             "—".to_string(),
-            observed.potion_slots.saturating_sub(observed.potions.len()),
+            observed
+                .potion_slots
+                .to_usize()
+                .expect("potion slot count fits an addressable list")
+                .saturating_sub(observed.potions.len()),
         ))
         .collect::<Vec<_>>();
     if !potions.is_empty() {
@@ -180,7 +188,7 @@ fn over<V: ContentVersion>(frame: &mut Frame, area: Rect, observed: &Observation
         Line::raw(""),
         Line::from(format!(
             "act {} · floor {} · {} gold",
-            observed.act + 1,
+            observed.act + V::Count::one(),
             observed.floor,
             observed.gold
         )),

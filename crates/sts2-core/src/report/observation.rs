@@ -14,10 +14,10 @@ use crate::{CardIdent, ContentVersion, Coord, Cost, MapPointKinds, ModelId};
 /// Everything the simulator is compared against after a decision.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Observation<V: ContentVersion> {
-    pub act: i32,
-    pub floor: i32,
-    pub hp: i32,
-    pub max_hp: i32,
+    pub act: V::Count,
+    pub floor: V::Count,
+    pub hp: V::Number,
+    pub max_hp: V::Number,
     pub alive: bool,
     /// The run has ended, won or lost.
     pub run_over: bool,
@@ -27,14 +27,14 @@ pub struct Observation<V: ContentVersion> {
     /// because `RunManager.WinRun` calls `GuaranteeKillAllPlayers`. So `alive`
     /// cannot tell a win from a loss. This field is the one that can.
     pub victory: Option<bool>,
-    pub gold: i32,
+    pub gold: V::Number,
     pub relics: Vec<Carried<V>>,
     pub potions: Vec<Held<V>>,
     /// How many potions the belt holds, which is not how many are in it.
     ///
     /// A full belt is what makes a potion refuse to be bought, and relics move
     /// the count, so `potions.len()` cannot answer it.
-    pub potion_slots: usize,
+    pub potion_slots: V::Count,
     pub deck: Vec<CardIdent<V>>,
     pub in_combat: bool,
     pub map: Map<V>,
@@ -256,7 +256,7 @@ pub struct Entry<V: ContentVersion> {
     pub stock: Stock<V>,
     /// The price in gold. What a card on the shelf costs to *play* is in
     /// [`Stock::Card`].
-    pub cost: i32,
+    pub cost: V::Number,
     /// What the shop calls it, and what it does, in the game's own words.
     ///
     /// The same descriptions the belt and the relic panel show for things
@@ -299,11 +299,11 @@ pub enum Blocked {
 /// The fight, while there is one.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Combat<V: ContentVersion> {
-    pub turn: i32,
+    pub turn: V::Count,
     pub phase: V::PlayerTurnPhase,
-    pub energy: i32,
-    pub stars: i32,
-    pub round: i32,
+    pub energy: V::Count,
+    pub stars: V::Count,
+    pub round: V::Count,
     /// Which fight this is, which nothing else says: two encounters can field
     /// the same monsters at different counts. Absent for a combat with no
     /// encounter behind it, which `CombatState` allows.
@@ -325,7 +325,7 @@ pub struct Combat<V: ContentVersion> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Orbs<V: ContentVersion> {
     /// Separate from the count, because empty slots are part of the state.
-    pub capacity: i32,
+    pub capacity: V::Count,
     pub queue: Vec<Channelled<V>>,
 }
 
@@ -333,8 +333,8 @@ pub struct Orbs<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Channelled<V: ContentVersion> {
     pub orb: V::Orb,
-    pub passive: i32,
-    pub evoke: i32,
+    pub passive: V::Number,
+    pub evoke: V::Number,
 }
 
 /// One creature in a fight.
@@ -348,9 +348,9 @@ pub struct Creature<V: ContentVersion> {
     /// Not the same question as whether it is a monster: a charmed monster
     /// fights on the player's side and is still a monster.
     pub side: V::CombatSide,
-    pub hp: i32,
-    pub max_hp: i32,
-    pub block: i32,
+    pub hp: V::Number,
+    pub max_hp: V::Number,
+    pub block: V::Number,
     pub alive: bool,
     pub powers: Vec<Stack<V>>,
     /// What it will do next, for a creature that is a monster.
@@ -365,7 +365,7 @@ pub struct Creature<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Stack<V: ContentVersion> {
     pub power: V::Power,
-    pub amount: i32,
+    pub amount: V::Number,
 }
 
 /// The move a monster has chosen, and what it amounts to.
@@ -394,15 +394,15 @@ pub struct Intent<V: ContentVersion> {
     /// no combat state to compute them against. `DefendIntent` has no block
     /// field at all, and neither do the other twelve. The game draws a shield
     /// with no number for the same reason.
-    pub attack: Option<Attack>,
+    pub attack: Option<Attack<V>>,
 }
 
 /// What an attack will land.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Attack {
+pub struct Attack<V: ContentVersion> {
     /// After `Hook.ModifyDamage`, so this is the number that will land rather
     /// than the move's base value.
-    pub damage: i32,
+    pub damage: V::Number,
     pub repeats: u8,
 }
 
@@ -504,7 +504,7 @@ pub struct Playable<V: ContentVersion> {
     /// The creatures this card can legally be pointed at.
     pub targets: Vec<u32>,
     /// What it does, with everything applied.
-    pub effect: Vec<Preview>,
+    pub effect: Vec<Preview<V>>,
 }
 
 /// What a card does right now, against one target.
@@ -515,15 +515,15 @@ pub struct Playable<V: ContentVersion> {
 /// One entry per distinct outcome. A targeted attack is previewed against each
 /// creature it can hit. Identical previews collapse to one with no target.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Preview {
+pub struct Preview<V: ContentVersion> {
     /// Which creature this was computed against, or nothing for a preview that
     /// does not vary by target.
     pub target: Option<u32>,
     /// The rules text with these numbers in it, carrying the game's own markup.
     pub text: String,
     /// The card's variables, as they resolve right now.
-    pub vars: BTreeMap<String, i32>,
+    pub vars: BTreeMap<String, V::Number>,
     /// The same variables as the card prints them, upgrades and enchantment
     /// included. Equal to `vars` exactly when nothing is modifying the card.
-    pub base: BTreeMap<String, i32>,
+    pub base: BTreeMap<String, V::Number>,
 }

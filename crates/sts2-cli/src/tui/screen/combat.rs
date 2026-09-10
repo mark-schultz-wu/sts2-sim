@@ -19,6 +19,7 @@
 //! hand at the bottom, because that is where the answer is chosen. The player
 //! between them, because both halves are about that row of numbers.
 
+use num_traits::ToPrimitive;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -215,7 +216,12 @@ fn intent_line<V: ContentVersion>(creature: &Creature<V>, width: usize) -> Line<
                 ));
                 if attack.repeats > 1 {
                     spans.push(Span::styled(
-                        format!(" ({})", attack.damage * i32::from(attack.repeats)),
+                        format!(
+                            " ({})",
+                            attack.damage
+                                * num_traits::cast(attack.repeats)
+                                    .expect("attack repeats fit the game-number type")
+                        ),
                         theme::dim(),
                     ));
                 }
@@ -300,7 +306,10 @@ fn you_row<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>)
                 .map(|o| format!("({}:{})", names::pretty(&spelling(&o.orb)), o.passive))
                 .chain(std::iter::repeat_n(
                     "( )".to_string(),
-                    (orbs.capacity as usize).saturating_sub(orbs.queue.len()),
+                    orbs.capacity
+                        .to_usize()
+                        .expect("orb capacity fits an addressable list")
+                        .saturating_sub(orbs.queue.len()),
                 ))
                 .collect::<Vec<_>>()
                 .join(" "),

@@ -36,6 +36,9 @@ pub struct V0_107_1;
 impl sts2_core::ContentVersion for V0_107_1 {
     const VERSION: Version = VERSION;
 
+    type Number = i32;
+    type Count = u32;
+
     type AscensionLevel = generated::ascension::AscensionLevel;
     type Act = generated::acts::Act;
     type Affliction = generated::afflictions::Affliction;

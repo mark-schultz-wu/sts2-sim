@@ -310,7 +310,7 @@ impl Fixed {
 /// build generates the set as an enum. So a card asking for one it does not
 /// print is a compile error, not a lookup that finds nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Printed<K, N = i32> {
+pub struct Printed<K, N> {
     pub id: K,
     /// The value with nothing modifying the card, upgrades and enchantment
     /// included.
@@ -689,6 +689,24 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
 pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
     /// The build these types were generated from.
     const VERSION: Version;
+
+    /// A signed amount in this build's live game state.
+    type Number: num_traits::PrimInt
+        + num_traits::Signed
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + std::fmt::Debug
+        + std::fmt::Display
+        + std::hash::Hash;
+
+    /// A nonnegative quantity in this build's live game state.
+    type Count: num_traits::PrimInt
+        + num_traits::Unsigned
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + std::fmt::Debug
+        + std::fmt::Display
+        + std::hash::Hash;
 
     /// One rung of the ascension ladder.
     ///

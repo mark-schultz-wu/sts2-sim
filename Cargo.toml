@@ -22,6 +22,7 @@ indexmap = "2"
 # from whatever libm the target has. See `sts2-core/src/rng`.
 libm = "0.2"
 nonmax = { version = "0.5.5", features = ["serde"] }
+num-traits = "0.2"
 # The TUI. It reaches its `crossterm` backend through `ratatui::crossterm`
 # rather than as a second dependency. So the key and resize events that the
 # front end matches on cannot drift from the backend's.
