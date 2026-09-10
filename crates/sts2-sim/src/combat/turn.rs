@@ -7,6 +7,7 @@
 //! The whole of it happens on a copy, so a turn the simulator cannot finish
 //! leaves the fight where it stood.
 
+use num_traits::Zero;
 use sts2_core::rng::MegaRng;
 use sts2_core::{CardTable, Combat, CombatId, Counters, Rules, SideKinds, TurnPhaseKinds};
 
@@ -33,11 +34,15 @@ pub(crate) fn end<V: Rules>(
 
     turn_end(&mut next);
     flush_hand(&mut next);
+    // `AfterSideTurnEnd` for the side that just ended.
+    tick_powers::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
     enemy_turn(&mut next, &mut shuffle, &mut machines);
+
+    tick_powers::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -96,6 +101,22 @@ fn flush_hand<V: Rules>(combat: &mut Combat<V>) {
 fn clear_block<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
     for creature in combat.creatures.iter_mut().filter(|c| c.side == side) {
         creature.block = num_traits::zero();
+    }
+}
+
+/// `AfterSideTurnEnd`: the powers that count down when this side's turn ends.
+///
+/// Every creature in the fight, not only the ones on that side. Which side's
+/// turn ending counts a power down is the power's own rule.
+fn tick_powers<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
+    let one = num_traits::one();
+    for creature in &mut combat.creatures {
+        for held in &mut creature.powers {
+            if V::ticks_down(held.power, side) {
+                held.amount = held.amount - one;
+            }
+        }
+        creature.powers.retain(|held| !held.amount.is_zero());
     }
 }
 

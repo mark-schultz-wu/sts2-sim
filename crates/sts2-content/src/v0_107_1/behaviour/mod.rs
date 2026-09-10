@@ -9,3 +9,4 @@
 
 pub(crate) mod cards;
 pub(crate) mod monsters;
+pub(crate) mod powers;

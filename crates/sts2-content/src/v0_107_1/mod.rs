@@ -161,6 +161,26 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(monster).initial
     }
 
+    fn damage_var() -> Self::CardVar {
+        generated::cards::CardVar::Damage
+    }
+
+    fn weak_power() -> Self::Power {
+        generated::powers::Power::WeakPower
+    }
+
+    fn vulnerable_power() -> Self::Power {
+        generated::powers::Power::VulnerablePower
+    }
+
+    fn damage_multiplier(power: Self::Power, holding: sts2_core::Holding) -> f64 {
+        behaviour::powers::damage_multiplier(power, holding)
+    }
+
+    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool {
+        behaviour::powers::ticks_down(power, side)
+    }
+
     fn perform_move<F: sts2_core::Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,

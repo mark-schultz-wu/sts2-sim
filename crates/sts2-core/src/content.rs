@@ -744,8 +744,11 @@ pub trait Fight<V: ContentVersion> {
     /// A printed number, so signed. The pool it lands in is not.
     fn gain_stars(&mut self, amount: V::Number);
 
-    /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
-    fn apply_power(&mut self, at: crate::CombatId, power: V::Power, amount: V::Number);
+    /// `PowerCmd.Apply<WeakPower>(at, amount, Owner.Creature, this)`.
+    fn weaken(&mut self, at: crate::CombatId, amount: V::Number);
+
+    /// `PowerCmd.Apply<VulnerablePower>(at, amount, Owner.Creature, this)`.
+    fn make_vulnerable(&mut self, at: crate::CombatId, amount: V::Number);
 
     /// What the acting monster's move advertises it will hit for.
     ///
@@ -769,6 +772,18 @@ pub trait Fight<V: ContentVersion> {
     /// One copy per count, into the discard pile of every creature on the
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
+}
+
+/// Which side of a hit the creature holding a power is on.
+///
+/// A power that modifies damage asks this. Vulnerable acts when its owner is
+/// hit, Weak when its owner is doing the hitting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Holding {
+    /// The power's owner is the one taking the hit.
+    Target,
+    /// The power's owner is the one dealing it.
+    Dealer,
 }
 
 /// Where a monster's move graph stands.
@@ -1180,6 +1195,40 @@ pub trait Rules: ContentVersion {
 
     /// Where a monster's graph starts, for a machine that has not walked.
     fn initial_monster_state(monster: Self::Monster) -> u8;
+
+    /// The key a card prints the number an attack hits for under, which is
+    /// the game's own `Damage`.
+    ///
+    /// A preview runs it through the same hook the hit itself goes through,
+    /// so this is where a fight's own arithmetic reaches a card's face.
+    fn damage_var() -> Self::CardVar;
+
+    /// The power a `weaken` command applies, which is `WeakPower`.
+    fn weak_power() -> Self::Power;
+
+    /// The power a `make_vulnerable` command applies, which is
+    /// `VulnerablePower`.
+    fn vulnerable_power() -> Self::Power;
+
+    /// What a power multiplies a hit by, which is
+    /// `ModifyDamageMultiplicative`.
+    ///
+    /// One for a power that leaves this hit alone, including one that acts
+    /// only from the other side of it.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported. One is only in a fight because ported
+    /// behaviour put it there.
+    fn damage_multiplier(power: Self::Power, holding: Holding) -> f64;
+
+    /// Whether a power counts down when one side's turn ends, which is its
+    /// `AfterSideTurnEnd`.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported.
+    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool;
 
     /// What one of a monster's moves does, which is its `onPerform`.
     ///

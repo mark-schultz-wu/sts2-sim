@@ -10,7 +10,9 @@
 
 use num_traits::Zero;
 use sts2_core::rng::{GameRng, MegaRng};
-use sts2_core::{CardIdent, CardTable, Combat, CombatId, Creature, Fight, Rules, SideKinds};
+use sts2_core::{
+    CardIdent, CardTable, Combat, CombatId, Creature, Fight, Holding, Rules, SideKinds, Stack,
+};
 
 /// The fight an effect is resolved against.
 pub(super) struct Board<'a, V: Rules> {
@@ -85,6 +87,36 @@ impl<'a, V: Rules> Board<'a, V> {
             .collect()
     }
 
+    /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
+    fn apply(&mut self, at: CombatId, power: V::Power, amount: V::Number) {
+        // The command returns on a zero amount, and on a creature that cannot
+        // hold powers. A monster the fight has taken out is one, because its
+        // combat state is gone with it.
+        if amount.is_zero() {
+            return;
+        }
+        let Some(at) = self.at(at) else { return };
+
+        // A debuff landing on the player skips its first tick down. That is
+        // state no observation reports, and this does not keep it.
+        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER {
+            unimplemented!("a debuff on the player");
+        }
+
+        // `FindExistingInstanceForStacking`: a counter stacks into the one
+        // already there.
+        match self.combat.creatures[at]
+            .powers
+            .iter_mut()
+            .find(|held| held.power == power)
+        {
+            Some(held) => held.amount = held.amount + amount,
+            None => self.combat.creatures[at]
+                .powers
+                .push(Stack { power, amount }),
+        }
+    }
+
     /// `KillWithoutCheckingWinCondition`, for a creature the damage killed.
     fn kill(&mut self, at: usize) {
         self.combat.creatures[at].alive = false;
@@ -104,6 +136,32 @@ impl<'a, V: Rules> Board<'a, V> {
             unimplemented!("the end of a fight");
         }
     }
+}
+
+/// One hit after every power on either side has multiplied it, which is
+/// `Hook.ModifyDamage`.
+///
+/// `dealer` is the creature swinging and `at` is where the one it hits sits.
+/// Nothing adds to a hit yet, and nothing caps one.
+///
+/// The multipliers this build fields are halves and quarters. A binary float
+/// holds those exactly, so the truncation at the end lands where the game's
+/// own decimal arithmetic lands.
+pub(super) fn modified<V: Rules>(
+    creatures: &[Creature<V>],
+    dealer: CombatId,
+    at: usize,
+    damage: V::Number,
+) -> V::Number {
+    let dealer = creatures.iter().position(|creature| creature.id == dealer);
+    let mut amount: f64 = num_traits::cast(damage).expect("a hit is a number a float holds");
+    for (holder, holding) in [(Some(at), Holding::Target), (dealer, Holding::Dealer)] {
+        let Some(holder) = holder else { continue };
+        for held in &creatures[holder].powers {
+            amount *= V::damage_multiplier(held.power, holding);
+        }
+    }
+    num_traits::cast(amount.max(0.0).trunc()).expect("a modified hit is a game number")
 }
 
 /// The player, which every fight has one of.
@@ -130,6 +188,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if !self.combat.creatures[at].alive {
             return;
         }
+        let damage = modified::<V>(&self.combat.creatures, self.actor, at, damage);
         let zero = V::Number::zero();
         let blocked = self.combat.creatures[at].block.min(damage).max(zero);
         self.combat.creatures[at].block = self.combat.creatures[at].block - blocked;
@@ -161,14 +220,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.combat.stars = self.combat.stars + amount;
     }
 
-    fn apply_power(&mut self, at: CombatId, _power: V::Power, amount: V::Number) {
-        // `PowerCmd.Apply` returns on a zero amount, and on a creature that
-        // cannot receive powers. A monster the fight has taken out is one,
-        // because its combat state is gone.
-        if amount.is_zero() || self.at(at).is_none() {
-            return;
-        }
-        unimplemented!("a power on a creature still in the fight");
+    fn weaken(&mut self, at: CombatId, amount: V::Number) {
+        self.apply(at, V::weak_power(), amount);
+    }
+
+    fn make_vulnerable(&mut self, at: CombatId, amount: V::Number) {
+        self.apply(at, V::vulnerable_power(), amount);
     }
 
     fn intent_damage(&self) -> V::Number {
