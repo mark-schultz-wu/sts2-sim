@@ -389,6 +389,16 @@ pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
 /// creature has to know which way it points, and the game's own tables say. Not
 /// derived here from a name or a suffix, for the reason the crate README gives.
 pub trait PowerTable: Table {
+    /// Whether a negative amount means one endless instance rather than a
+    /// count below zero.
+    ///
+    /// `PowerStackType` is a constant for every power in this build but one.
+    /// `ShrinkPower` works it out at the time: below zero it is a single
+    /// instance rather than a counter, which is `IsInfinite`. So the number
+    /// the game sends is not always a count, and this says which powers it is
+    /// not a count for.
+    fn endless_below_zero(self) -> bool;
+
     /// Whether the game counts this as a debuff.
     ///
     /// `None` for a power that decides at the time. The game's own
@@ -617,32 +627,19 @@ pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
     fn name(self) -> &'static str;
 }
 
-/// The meaning of a power application, before it is lowered to the game's
-/// overloaded numeric amount.
+/// How much of a power is on a creature.
 ///
-/// The widths are the game's own. A duration is a count of side turns and a
-/// counter is a signed magnitude, and neither is near sixteen bits. Both are
-/// carried natively rather than converted here, so a caller already holding a
-/// narrow number hands one straight over.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PowerAmount {
-    /// A single instance that does not count down.
-    Permanent,
-    /// A power lasting this many side turns.
-    Duration(std::num::NonZeroU16),
-    /// A signed counter whose magnitude changes the effect.
-    Intensity(std::num::NonZeroI16),
-}
-
-impl PowerAmount {
-    /// The numeric representation used by the game's combat observation.
-    pub fn observed(self) -> i32 {
-        match self {
-            Self::Permanent => -1,
-            Self::Duration(amount) => i32::from(amount.get()),
-            Self::Intensity(amount) => i32::from(amount.get()),
-        }
-    }
+/// The game keeps one number and overloads its sign, so `PowerModel.Amount` is
+/// a count for most powers and a flag for one. That is the game's spelling and
+/// it stops at the wire. A rule reads which of the two this is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PowerAmount<N> {
+    /// A number that stacks, and counts down where the power counts down.
+    Counted(N),
+    /// One instance, with no number to run out. `PowerModel.IsInfinite`.
+    ///
+    /// Nothing to decrement, so an endless power sits out every tick.
+    Endless,
 }
 
 /// `ITemporaryPower`, as the two facts a fight reads off one.
@@ -744,11 +741,11 @@ pub trait Fight<V: ContentVersion> {
     /// A printed number, so signed. The pool it lands in is not.
     fn gain_stars(&mut self, amount: V::Number);
 
-    /// `PowerCmd.Apply<WeakPower>(at, amount, Owner.Creature, this)`.
-    fn weaken(&mut self, at: crate::CombatId, amount: V::Number);
-
-    /// `PowerCmd.Apply<VulnerablePower>(at, amount, Owner.Creature, this)`.
-    fn make_vulnerable(&mut self, at: crate::CombatId, amount: V::Number);
+    /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
+    ///
+    /// The power is the caller's to name. A rule knows which power it applies,
+    /// and the fight only has to put it somewhere.
+    fn apply(&mut self, at: crate::CombatId, power: V::Power, amount: PowerAmount<V::Number>);
 
     /// What the acting monster's move advertises it will hit for.
     ///
@@ -760,6 +757,13 @@ pub trait Fight<V: ContentVersion> {
     /// `DamageCmd.Attack(damage).FromMonster(this)`, which hits every creature
     /// on the other side.
     fn attack_opponents(&mut self, damage: V::Number);
+
+    /// `PowerCmd.Apply<P>(targets, amount, ...)`, which lands on every
+    /// creature on the other side.
+    ///
+    /// A monster's move points at the creatures across from it rather than at
+    /// one, the way [`Fight::attack_opponents`] does.
+    fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 
     /// `CardPileCmd.Draw(count, Owner)`.
     ///
@@ -1173,6 +1177,25 @@ pub trait Rules: ContentVersion {
     /// carries on, and the divergence surfaces somewhere else.
     fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
+    /// The cards a character's own pool offers, split by rarity.
+    ///
+    /// `Character.CardPool`, which is what a fight's card reward draws from.
+    /// [`Rules::colorless_cards`] is the other pool, and no character holds it.
+    fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card>;
+
+    /// The potions a reward draws from, split by rarity.
+    ///
+    /// `Character.PotionPool` and the shared pool together, which is
+    /// `PotionFactory.GetPotionOptions`.
+    fn reward_potions(character: Self::Character) -> Drafted<'static, Self::Potion>;
+
+    /// What winning an encounter pays, which is `MinGoldReward` to
+    /// `MaxGoldReward`.
+    fn encounter_gold(
+        encounter: Self::Encounter,
+        ascension: Self::AscensionLevel,
+    ) -> crate::rng::Interval<u16>;
+
     /// Resolve a monster’s unmodified HP range at this ascension.
     fn monster_hp_bounds(
         monster: Self::Monster,
@@ -1196,20 +1219,6 @@ pub trait Rules: ContentVersion {
     /// Where a monster's graph starts, for a machine that has not walked.
     fn initial_monster_state(monster: Self::Monster) -> u8;
 
-    /// The key a card prints the number an attack hits for under, which is
-    /// the game's own `Damage`.
-    ///
-    /// A preview runs it through the same hook the hit itself goes through,
-    /// so this is where a fight's own arithmetic reaches a card's face.
-    fn damage_var() -> Self::CardVar;
-
-    /// The power a `weaken` command applies, which is `WeakPower`.
-    fn weak_power() -> Self::Power;
-
-    /// The power a `make_vulnerable` command applies, which is
-    /// `VulnerablePower`.
-    fn vulnerable_power() -> Self::Power;
-
     /// What a power multiplies a hit by, which is
     /// `ModifyDamageMultiplicative`.
     ///
@@ -1224,6 +1233,8 @@ pub trait Rules: ContentVersion {
 
     /// Whether a power counts down when one side's turn ends, which is its
     /// `AfterSideTurnEnd`.
+    ///
+    /// An endless power never reaches this: there is no number to count.
     ///
     /// # Panics
     ///

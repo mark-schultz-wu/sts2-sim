@@ -13,7 +13,7 @@
 //! for. None is a content id, and inventing an enum for one without a dump
 //! behind it is a guess wearing a type.
 
-use crate::{CardIdent, ContentVersion, Cost, RelicTable, Tool};
+use crate::{CardIdent, ContentVersion, RelicTable, Tool};
 
 /// A question the game stopped to ask.
 #[derive(Debug, Clone, PartialEq)]
@@ -120,11 +120,6 @@ pub struct CardOption<V: ContentVersion> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RewardCard<V: ContentVersion> {
     pub card: CardIdent<V>,
-    /// The costs shown on the reward screen. See [`Playable::cost`].
-    ///
-    /// [`Playable`]: crate::report::observation::Playable
-    pub cost: Cost,
-    pub star_cost: Cost,
     /// See [`CardOption::text`].
     pub text: Option<String>,
 }

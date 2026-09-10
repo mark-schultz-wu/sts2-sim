@@ -96,11 +96,12 @@ pub(crate) fn resolve<V: Rules>(
 /// Nothing is committed until this returns. It works on a copy, so a card
 /// asking for a rule the simulator lacks costs the caller nothing.
 pub(crate) fn play<V: Rules>(
-    combat: &Combat<V>,
+    ongoing: &super::Ongoing<V>,
     play: Play<V>,
     raw_seed: u32,
     counters: &Counters<V>,
-) -> Result<(Combat<V>, Counters<V>), Error> {
+) -> Result<super::Fought<V>, Error> {
+    let combat = &ongoing.combat;
     let mut next = combat.clone();
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
@@ -114,6 +115,7 @@ pub(crate) fn play<V: Rules>(
     let card = next.hand.remove(play.index);
     let mut board = Board::for_card(&mut next, &mut shuffle, play.target);
     V::on_play(card.card, &mut board);
+    let board_won = board.won;
 
     // `GetResultPileTypeForCardPlay`, once the effect is over.
     match card
@@ -127,7 +129,21 @@ pub(crate) fn play<V: Rules>(
         false => next.discard.push(card),
     }
 
-    next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
+    match board_won {
+        // `CheckWinCondition` after the card, so a card that killed the last
+        // enemy still finished what it was doing.
+        true => super::finish(&mut next),
+        false => {
+            next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
+        }
+    }
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
-    Ok((next, counters))
+    Ok(super::Fought {
+        ongoing: super::Ongoing {
+            combat: next,
+            machines: ongoing.machines.clone(),
+        },
+        counters,
+        won: board_won,
+    })
 }

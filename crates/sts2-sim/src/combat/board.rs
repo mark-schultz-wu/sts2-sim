@@ -11,7 +11,8 @@
 use num_traits::Zero;
 use sts2_core::rng::{GameRng, MegaRng};
 use sts2_core::{
-    CardIdent, CardTable, Combat, CombatId, Creature, Fight, Holding, Rules, SideKinds, Stack,
+    CardIdent, CardTable, Combat, CombatId, Creature, Fight, Holding, PowerAmount, Rules,
+    SideKinds, Stack,
 };
 
 /// The fight an effect is resolved against.
@@ -26,6 +27,11 @@ pub(super) struct Board<'a, V: Rules> {
     target: Option<CombatId>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
+    /// The last enemy left the fight while this effect was resolving.
+    ///
+    /// `CheckWinCondition` runs after the command that killed it, so this is
+    /// read once the effect is over rather than acted on where it is set.
+    pub(super) won: bool,
 }
 
 impl<'a, V: Rules> Board<'a, V> {
@@ -42,6 +48,7 @@ impl<'a, V: Rules> Board<'a, V> {
             actor,
             target,
             intent_damage: V::Number::zero(),
+            won: false,
         }
     }
 
@@ -58,6 +65,7 @@ impl<'a, V: Rules> Board<'a, V> {
             actor,
             target: None,
             intent_damage,
+            won: false,
         }
     }
 
@@ -88,30 +96,44 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
-    fn apply(&mut self, at: CombatId, power: V::Power, amount: V::Number) {
+    fn land(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
         // The command returns on a zero amount, and on a creature that cannot
         // hold powers. A monster the fight has taken out is one, because its
         // combat state is gone with it.
-        if amount.is_zero() {
+        if amount == PowerAmount::Counted(V::Number::zero()) {
             return;
         }
         let Some(at) = self.at(at) else { return };
 
-        // A debuff landing on the player skips its first tick down. That is
-        // state no observation reports, and this does not keep it.
-        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER {
-            unimplemented!("a debuff on the player");
+        // `PowerCmd.Apply` sets `SkipNextDurationTick` on a debuff that lands
+        // on the player, so the next tick passes it over. That is per-power
+        // state no observation reports, and nothing here keeps it. An endless
+        // power has no tick to skip.
+        let counts_down = amount != PowerAmount::Endless
+            && [
+                <V::CombatSide as SideKinds>::PLAYER,
+                <V::CombatSide as SideKinds>::ENEMY,
+            ]
+            .into_iter()
+            .any(|side| V::ticks_down(power, side));
+        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && counts_down {
+            unimplemented!("a debuff on the player that counts down");
         }
 
         // `FindExistingInstanceForStacking`: a counter stacks into the one
-        // already there.
-        match self.combat.creatures[at]
+        // already there. An endless instance is one instance however many
+        // times it lands.
+        let held = self.combat.creatures[at]
             .powers
             .iter_mut()
-            .find(|held| held.power == power)
-        {
-            Some(held) => held.amount = held.amount + amount,
-            None => self.combat.creatures[at]
+            .find(|held| held.power == power);
+        match (held, amount) {
+            (Some(held), PowerAmount::Counted(more)) => match held.amount {
+                PowerAmount::Counted(had) => held.amount = PowerAmount::Counted(had + more),
+                PowerAmount::Endless => unimplemented!("a count landing on an endless power"),
+            },
+            (Some(_), PowerAmount::Endless) => {}
+            (None, amount) => self.combat.creatures[at]
                 .powers
                 .push(Stack { power, amount }),
         }
@@ -127,14 +149,11 @@ impl<'a, V: Rules> Board<'a, V> {
         // afterwards can see it. That is why the observation stops reporting
         // it rather than reporting it dead.
         self.combat.creatures.remove(at);
-        if !self
+        self.won = !self
             .combat
             .creatures
             .iter()
-            .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
-        {
-            unimplemented!("the end of a fight");
-        }
+            .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY);
     }
 }
 
@@ -220,12 +239,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.combat.stars = self.combat.stars + amount;
     }
 
-    fn weaken(&mut self, at: CombatId, amount: V::Number) {
-        self.apply(at, V::weak_power(), amount);
+    fn apply(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
+        self.land(at, power, amount);
     }
 
-    fn make_vulnerable(&mut self, at: CombatId, amount: V::Number) {
-        self.apply(at, V::vulnerable_power(), amount);
+    fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
+        // The list is taken before the first lands, as an attack's is.
+        for id in self.opponents() {
+            self.land(id, power, amount);
+        }
     }
 
     fn intent_damage(&self) -> V::Number {

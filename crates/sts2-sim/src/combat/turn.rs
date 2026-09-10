@@ -7,9 +7,10 @@
 //! The whole of it happens on a copy, so a turn the simulator cannot finish
 //! leaves the fight where it stood.
 
-use num_traits::Zero;
 use sts2_core::rng::MegaRng;
-use sts2_core::{CardTable, Combat, CombatId, Counters, Rules, SideKinds, TurnPhaseKinds};
+use sts2_core::{
+    CardTable, Combat, CombatId, Counters, PowerAmount, Rules, SideKinds, TurnPhaseKinds,
+};
 
 use super::board::{Board, draw};
 use super::monster::Machine;
@@ -25,7 +26,7 @@ pub(crate) fn end<V: Rules>(
     ascension: V::AscensionLevel,
     counters: &Counters<V>,
     max_energy: V::Count,
-) -> Result<(Ongoing<V>, Counters<V>), Error> {
+) -> Result<super::Fought<V>, Error> {
     let mut next = ongoing.combat.clone();
     let mut machines = ongoing.machines.clone();
     let mut counters = counters.clone();
@@ -40,7 +41,7 @@ pub(crate) fn end<V: Rules>(
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
-    enemy_turn(&mut next, &mut shuffle, &mut machines);
+    let won = enemy_turn(&mut next, &mut shuffle, &mut machines);
 
     tick_powers::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
 
@@ -62,13 +63,14 @@ pub(crate) fn end<V: Rules>(
 
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     stream::record(&mut counters, V::monster_ai_rng(), "monster_ai", &ai)?;
-    Ok((
-        Ongoing {
+    Ok(super::Fought {
+        ongoing: Ongoing {
             combat: next,
             machines,
         },
         counters,
-    ))
+        won,
+    })
 }
 
 /// `DoTurnEnd`: the cards in hand that answer to a turn ending.
@@ -112,11 +114,18 @@ fn tick_powers<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
     let one = num_traits::one();
     for creature in &mut combat.creatures {
         for held in &mut creature.powers {
+            // An endless power sits out every tick. There is no number to
+            // count, which is the whole of what endless means.
+            let PowerAmount::Counted(amount) = held.amount else {
+                continue;
+            };
             if V::ticks_down(held.power, side) {
-                held.amount = held.amount - one;
+                held.amount = PowerAmount::Counted(amount - one);
             }
         }
-        creature.powers.retain(|held| !held.amount.is_zero());
+        creature
+            .powers
+            .retain(|held| held.amount != PowerAmount::Counted(num_traits::zero()));
     }
 }
 
@@ -128,7 +137,8 @@ fn enemy_turn<V: Rules>(
     combat: &mut Combat<V>,
     shuffle: &mut MegaRng,
     machines: &mut [Machine<V>],
-) {
+) -> bool {
+    let mut won = false;
     let acting: Vec<CombatId> = combat
         .creatures
         .iter()
@@ -161,7 +171,9 @@ fn enemy_turn<V: Rules>(
 
         let mut board = Board::for_move(combat, shuffle, id, damage);
         V::perform_move(monster, next_move.id, &mut board);
+        won |= board.won;
     }
+    won
 }
 
 /// `PrepareForNextTurn`: every enemy still in the fight advertises its next

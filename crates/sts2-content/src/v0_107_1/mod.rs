@@ -137,6 +137,22 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::on_play(card, fight)
     }
 
+    fn reward_cards(character: Self::Character) -> sts2_core::Drafted<'static, Self::Card> {
+        generated::cards::reward_cards(character)
+    }
+
+    fn reward_potions(character: Self::Character) -> sts2_core::Drafted<'static, Self::Potion> {
+        generated::potions::reward_potions(character)
+    }
+
+    fn encounter_gold(
+        encounter: Self::Encounter,
+        ascension: Self::AscensionLevel,
+    ) -> sts2_core::rng::Interval<u16> {
+        let gold = sts2_core::Table::data(encounter).gold;
+        sts2_core::rng::Interval::new(gold.min.at(ascension as u8), gold.max.at(ascension as u8))
+    }
+
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
@@ -159,18 +175,6 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn initial_monster_state(monster: Self::Monster) -> u8 {
         sts2_core::Table::data(monster).initial
-    }
-
-    fn damage_var() -> Self::CardVar {
-        generated::cards::CardVar::Damage
-    }
-
-    fn weak_power() -> Self::Power {
-        generated::powers::Power::WeakPower
-    }
-
-    fn vulnerable_power() -> Self::Power {
-        generated::powers::Power::VulnerablePower
     }
 
     fn damage_multiplier(power: Self::Power, holding: sts2_core::Holding) -> f64 {

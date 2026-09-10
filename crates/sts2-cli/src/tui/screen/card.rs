@@ -18,6 +18,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
+use sts2_core::CardTable as _;
 use sts2_core::Cost;
 use sts2_core::{CardIdent, CombatId, ContentVersion, Playable};
 
@@ -172,6 +173,14 @@ impl Face {
         let mut face = Self::plain(card);
         face.cost = cost(energy, stars);
         face
+    }
+
+    /// A card priced at what its own table prints.
+    ///
+    /// For a reward, where no fight has had a say and the game reports no
+    /// price. An upgrade moves a price, and no reward offers an upgraded card.
+    pub fn printed<V: ContentVersion>(card: &CardIdent<V>) -> Face {
+        Self::plain_with_cost(card, card.card.cost(), card.card.star_cost())
     }
 
     /// A card with nothing computed about it: a pile listing, a reward.

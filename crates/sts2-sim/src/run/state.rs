@@ -1,18 +1,20 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use num_traits::ToPrimitive as _;
 use smallvec::SmallVec;
 use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
-    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Coord, Counters, EventOption,
-    EventOptionKey, EventOptionName, Map, Observation, Question, Reachable, Room, Rules, Seed,
-    Table,
+    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
+    EventOption, EventOptionKey, EventOptionName, Map, Observation, Question, Reachable,
+    RewardCard, RewardDetail, RewardKind, Room, Rules, Seed, Table, TakeReward,
 };
 
 use crate::combat::Error;
 use crate::event::Blessing;
 use crate::map::{ActMap, Layout};
+use crate::reward::{Odds, Offer};
 use crate::run::Opening;
 
 /// The authoritative state of the run slice implemented so far.
@@ -27,6 +29,13 @@ pub(crate) struct State<V: Rules> {
     visited: Vec<Coord>,
     player: Player<V>,
     rngs: Rngs,
+    /// How many of this act's normal fights the run has walked into.
+    ///
+    /// The act's encounter list is dealt at the start of the run and met in
+    /// order, so this is where the next one is. Not in an observation: the
+    /// observation names the fight the run is in, not the queue behind it.
+    fought: usize,
+    odds: Odds,
     phase: Phase<V>,
 }
 
@@ -49,6 +58,8 @@ struct RunData<V: Rules> {
 #[derive(Debug, Clone)]
 struct Player<V: Rules> {
     relics: SmallVec<[V::Relic; 8]>,
+    /// The belt, in the order the potions were taken.
+    potions: SmallVec<[V::Potion; 3]>,
     deck: Vec<CardIdent<V>>,
     hp: V::Number,
     gold: V::Number,
@@ -73,6 +84,14 @@ enum Phase<V: Rules> {
         selection: Option<SmallVec<[V::Card; 4]>>,
     },
     Combat(crate::combat::Ongoing<V>),
+    /// A fight that is over, and the rewards it has not handed out yet.
+    ///
+    /// The fight stays in the observation. It reports the state it ended in
+    /// until the run leaves the room.
+    Rewards {
+        combat: Combat<V>,
+        offered: Vec<Offer<V>>,
+    },
 }
 
 impl<V: Rules> State<V> {
@@ -122,6 +141,7 @@ impl<V: Rules> State<V> {
             visited: vec![at],
             player: Player {
                 relics: V::starting_relics(character).into_iter().collect(),
+                potions: SmallVec::new(),
                 deck: V::starting_deck(character)
                     .into_iter()
                     .map(CardIdent::new)
@@ -133,6 +153,8 @@ impl<V: Rules> State<V> {
                 potion_slots: num_traits::cast(V::starting_potion_slots())
                     .expect("starting potion slots fit the build's count type"),
             },
+            fought: 0,
+            odds: Odds::default(),
             rngs: Rngs {
                 run: run_counters,
                 player: smallvec::smallvec![0; V::player_rng_types().len()],
@@ -163,7 +185,7 @@ impl<V: Rules> State<V> {
     pub(super) fn fight(&self) -> Option<&crate::combat::Ongoing<V>> {
         match &self.phase {
             Phase::Combat(ongoing) => Some(ongoing),
-            Phase::Neow { .. } => None,
+            Phase::Neow { .. } | Phase::Rewards { .. } => None,
         }
     }
 
@@ -175,6 +197,27 @@ impl<V: Rules> State<V> {
         self.phase = Phase::Combat(ongoing);
     }
 
+    /// Park the run on the rewards a won fight left it.
+    pub(super) fn won(&mut self, combat: Combat<V>, offered: Vec<Offer<V>>) {
+        self.phase = Phase::Rewards { combat, offered };
+    }
+
+    /// The stream a reward draws from, and the pity counters it moves.
+    ///
+    /// Together, because a roll reads and writes both, and they are two fields
+    /// of the same run.
+    pub(super) fn rewarding(&mut self) -> (&mut MegaRng, &mut Odds) {
+        (&mut self.rngs.rewards, &mut self.odds)
+    }
+
+    /// Which act the run stands in.
+    ///
+    /// One, until the simulator leaves it. An act's own boss is the way out and
+    /// nothing beats one yet.
+    pub(super) fn act(&self) -> usize {
+        0
+    }
+
     pub(super) fn enter_combat(
         &mut self,
         to: Coord,
@@ -182,6 +225,7 @@ impl<V: Rules> State<V> {
         ongoing: crate::combat::Ongoing<V>,
     ) {
         self.floor = self.floor + num_traits::one();
+        self.fought += 1;
         self.at = to;
         self.visited.push(to);
         self.drew(counters);
@@ -230,7 +274,7 @@ impl<V: Rules> State<V> {
             .opening
             .acts
             .get(act)
-            .and_then(|(_, rooms)| rooms.normal.first())
+            .and_then(|(_, rooms)| rooms.normal.get(self.fought))
             .copied()
     }
 
@@ -264,6 +308,9 @@ impl<V: Rules> State<V> {
     }
 
     pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+        if let Phase::Rewards { .. } = self.phase {
+            return self.take(answer);
+        }
         let Phase::Neow {
             finished,
             selection,
@@ -295,6 +342,57 @@ impl<V: Rules> State<V> {
         Ok(self.report())
     }
 
+    /// Take rewards from the screen a won fight put up.
+    ///
+    /// `RewardsSetSynchronizer.SelectLocalReward`, one entry at a time. A
+    /// reward stays in the set once it is taken, because the indices an answer
+    /// names never renumber.
+    fn take(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+        let Answer::Take(taking) = answer else {
+            unimplemented!("an answer to a reward screen that takes nothing");
+        };
+        let slots: usize = num_traits::cast(self.player.potion_slots)
+            .expect("the belt has an addressable number of slots");
+        for take in taking {
+            let Phase::Rewards { offered, .. } = &mut self.phase else {
+                unreachable!("the phase was a reward screen when this began");
+            };
+            let offer = offered
+                .get_mut(take.index())
+                .unwrap_or_else(|| unimplemented!("a reward the screen does not offer"));
+            match (offer, take) {
+                (Offer::Gold { amount, taken }, TakeReward::NonCard { .. }) => {
+                    let amount = *amount;
+                    *taken = true;
+                    self.player.gold = self.player.gold + amount;
+                }
+                (Offer::Potion { potion, taken }, TakeReward::NonCard { .. }) => {
+                    let potion = *potion;
+                    // `PotionCmd.TryToProcure` fails on a full belt, and the
+                    // reward is then neither taken nor gone.
+                    if self.player.potions.len() >= slots {
+                        unimplemented!("a potion offered to a full belt");
+                    }
+                    *taken = true;
+                    self.player.potions.push(potion);
+                }
+                (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
+                    let chosen = cards
+                        .get(*card)
+                        .copied()
+                        .unwrap_or_else(|| unimplemented!("a card the reward does not offer"));
+                    *taken = true;
+                    self.player.deck.push(CardIdent::new(chosen));
+                }
+                _ => unimplemented!("a reward taken as the wrong kind"),
+            }
+        }
+
+        let mut applied = self.report();
+        applied.resolved = applied.asking.is_none();
+        Ok(applied)
+    }
+
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Applied<V> {
         let map = &self.shared.map;
@@ -308,7 +406,7 @@ impl<V: Rules> State<V> {
                 kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect();
-        let (asking, room, combat) = match &self.phase {
+        let (asking, room, combat, in_combat) = match &self.phase {
             Phase::Neow {
                 options: neow_options,
                 chosen: neow_chosen,
@@ -359,9 +457,20 @@ impl<V: Rules> State<V> {
                     text: None,
                     options: if *neow_finished { Vec::new() } else { options },
                 };
-                (asking, Some(room), None)
+                (asking, Some(room), None, false)
             }
-            Phase::Combat(ongoing) => (None, None, Some(ongoing.combat.clone())),
+            Phase::Combat(ongoing) => (None, None, Some(ongoing.combat.clone()), true),
+            Phase::Rewards { combat, offered } => (
+                offered
+                    .iter()
+                    .any(|offer| !offer.taken())
+                    .then(|| asked::<V>(offered)),
+                None,
+                Some(combat.clone()),
+                // The fight is over. It is still reported, because the run has
+                // not left the room it was fought in.
+                false,
+            ),
         };
         Applied {
             observation: Observation {
@@ -384,10 +493,15 @@ impl<V: Rules> State<V> {
                         text: None,
                     })
                     .collect(),
-                potions: Vec::new(),
+                potions: crate::combat::belt::<V>(
+                    &self.player.potions,
+                    // A fight that is over is not one a potion can be drunk
+                    // in. `in_combat` is that question already answered.
+                    combat.as_ref().filter(|_| in_combat),
+                ),
                 potion_slots: self.player.potion_slots,
                 deck: self.player.deck.clone(),
-                in_combat: combat.is_some(),
+                in_combat,
                 map: Map {
                     at: Some(self.at),
                     visited: self.visited.clone(),
@@ -402,6 +516,50 @@ impl<V: Rules> State<V> {
             asking,
             resolved: true,
         }
+    }
+}
+
+/// The rewards screen a won fight parks the run on.
+///
+/// Every reward stays in the list once it is taken, because the indices an
+/// answer names never renumber.
+fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
+    Question::Rewards {
+        // `RewardsSet` disallows skipping only where something says so, and
+        // nothing a fight offers does.
+        skippable: true,
+        rewards: offered
+            .iter()
+            .enumerate()
+            .map(|(index, offer)| RewardDetail {
+                index,
+                // Nothing offers a reward it has not rolled: the whole set is
+                // populated where it is generated.
+                populated: true,
+                taken: offer.taken(),
+                reward: match offer {
+                    Offer::Gold { amount, .. } => RewardKind::Gold {
+                        amount: amount
+                            .to_i64()
+                            .expect("a fight's gold fits the reported width"),
+                    },
+                    Offer::Potion { potion, .. } => RewardKind::Potion {
+                        potion: Some(*potion),
+                    },
+                    Offer::Card { cards, .. } => RewardKind::Card {
+                        cards: cards
+                            .iter()
+                            .map(|card| RewardCard {
+                                card: CardIdent::new(*card),
+                                // The game formats this from its localisation
+                                // tables, which the simulator does not have.
+                                text: None,
+                            })
+                            .collect(),
+                    },
+                },
+            })
+            .collect(),
     }
 }
 

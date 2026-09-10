@@ -56,8 +56,8 @@ use xxhash::XxHash64;
 use crate::{
     Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, Combat, ContentVersion,
     Coord, Cost, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet,
-    Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable,
-    RestOption, Room, Stack, Stock, Take,
+    Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
+    Reachable, RestOption, Room, Stack, Stock, Take,
 };
 
 /// One observation, as eight bytes.
@@ -132,6 +132,9 @@ const STOCK_POTION: u8 = 3;
 const STOCK_CARD_REMOVAL: u8 = 4;
 
 const BLOCKED_NO_POTION_SLOT: u8 = 1;
+
+const POWER_COUNTED: u8 = 1;
+const POWER_ENDLESS: u8 = 2;
 
 const MODEL_ACT: u8 = 1;
 const MODEL_AFFLICTION: u8 = 2;
@@ -736,7 +739,13 @@ impl Sink {
         self.list(powers, |sink, stack| {
             let Stack { power, amount } = stack;
             sink.id(power);
-            sink.number(amount);
+            match amount {
+                PowerAmount::Counted(amount) => {
+                    sink.u8(POWER_COUNTED);
+                    sink.number(amount);
+                }
+                PowerAmount::Endless => sink.u8(POWER_ENDLESS),
+            }
         });
         self.option(next_move, |sink, next| {
             let NextMove { id, intents } = next;

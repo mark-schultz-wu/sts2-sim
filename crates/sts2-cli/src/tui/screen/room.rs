@@ -297,11 +297,7 @@ where
                 match &detail.reward {
                     RewardKind::Card { cards } => {
                         for (card_at, offered) in cards.iter().enumerate() {
-                            let mut face = card::Face::plain_with_cost(
-                                &offered.card,
-                                offered.cost,
-                                offered.star_cost,
-                            );
+                            let mut face = card::Face::printed(&offered.card);
                             face.rules = offered
                                 .text
                                 .as_deref()
@@ -323,11 +319,7 @@ where
                     RewardKind::SpecialCard {
                         card: Some(offered),
                     } => {
-                        let mut face = card::Face::plain_with_cost(
-                            &offered.card,
-                            offered.cost,
-                            offered.star_cost,
-                        );
+                        let mut face = card::Face::printed(&offered.card);
                         face.note = Some(("returned to you".into(), theme::dim()));
                         face.rules = offered
                             .text

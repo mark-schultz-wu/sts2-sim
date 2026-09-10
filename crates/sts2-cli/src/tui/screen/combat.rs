@@ -265,8 +265,8 @@ fn powers<V: ContentVersion>(creature: &Creature<V>, width: usize) -> Line<'stat
         .map(|stack| {
             let name = names::power(&spelling(&stack.power));
             match sts2_core::PowerTable::debuff(stack.power) {
-                Some(bad) => widget::chip(&name, stack.amount, !bad),
-                None => widget::unknown_chip(&name, stack.amount),
+                Some(bad) => widget::chip(&crate::render::stacked(&name, &stack.amount), !bad),
+                None => widget::unknown_chip(&crate::render::stacked(&name, &stack.amount)),
             }
         })
         .collect();
