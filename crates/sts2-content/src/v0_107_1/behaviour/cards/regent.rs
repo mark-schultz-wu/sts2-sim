@@ -16,17 +16,9 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
     }
 }
 
-/// The card names a target, so it has one: `PlayCardAction` refuses a play
-/// `IsValidTarget` rejects, and the game throws here for the same reason.
-fn at<F: Fight<V>>(fight: &F) -> u32 {
-    fight
-        .target()
-        .expect("a card that names a target is played at one")
-}
-
 /// `StrikeRegent`. Deal damage.
 fn strike<F: Fight<V>>(fight: &mut F) {
-    let target = at(fight);
+    let target = fight.target();
     let damage = fight.var(CardVar::Damage);
     fight.attack(target, damage);
 }
@@ -43,7 +35,7 @@ fn defend<F: Fight<V>>(fight: &mut F) {
 /// the fight and takes neither. `PowerCmd.Apply` returns on a creature with no
 /// combat state.
 fn falling_star<F: Fight<V>>(fight: &mut F) {
-    let target = at(fight);
+    let target = fight.target();
     let damage = fight.var(CardVar::Damage);
     fight.attack(target, damage);
     let weak = fight.var(CardVar::WeakPower);

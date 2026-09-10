@@ -10,9 +10,7 @@
 //! trait acts on.
 
 use num_traits::Zero;
-use sts2_core::{
-    CardIdent, CardTable, Combat, Cost, Creature, Fight, Printed, Reason, Rules, SideKinds,
-};
+use sts2_core::{CardTable, Combat, Cost, Creature, Fight, Printed, Reason, Rules, SideKinds};
 
 use super::{Error, legal};
 
@@ -21,11 +19,15 @@ use super::{Error, legal};
 /// Split from making it the way travel is, so that a card the simulator
 /// cannot resolve leaves the fight where it stood.
 pub(crate) struct Play<V: Rules> {
-    /// Where in the hand it is. The hand can hold two of one card, so the
-    /// index is the identity and the card beside it is a convenience.
+    /// Where in the hand it is, which is the card's identity here. A hand
+    /// holds two of one card, and only the index tells them apart.
     index: usize,
-    card: CardIdent<V>,
+    /// The creature it was pointed at, or nothing for a card that names none.
     target: Option<u32>,
+    /// What each pool gives up for it, worked out where the play was approved
+    /// rather than again where it is made.
+    energy: V::Count,
+    stars: V::Count,
 }
 
 /// Check one play against the fight, without changing anything.
@@ -67,10 +69,22 @@ pub(crate) fn resolve<V: Rules>(
         });
     }
 
+    let star_cost = playable.card.card.star_cost();
+    if star_cost == Cost::X {
+        // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
+        // on this build prices its stars at X.
+        unimplemented!("a card priced at X stars");
+    }
+
+    // `SpendResources`, worked out where the play was held to the pools rather
+    // than again where it is made. `legal::playable` marks a card whose price
+    // its pool cannot meet unplayable, and the reason check above has passed.
+    const PAYS: &str = "a play the legality pass approved is one the pool pays";
     Ok(Play {
         index: at,
-        card: playable.card,
         target,
+        energy: legal::spend(playable.card.card.cost(), combat.energy).expect(PAYS),
+        stars: legal::spend(star_cost, combat.stars).expect(PAYS),
     })
 }
 
@@ -81,18 +95,9 @@ pub(crate) fn resolve<V: Rules>(
 pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat<V>, Error> {
     let mut next = combat.clone();
 
-    // `SpendResources`, before the card leaves the hand. A price this build's
-    // count cannot hold got the card refused as unplayable well before here.
-    let spent = |cost, pool| legal::spend(cost, pool).expect("a legal play is one this pool pays");
-    let energy = spent(play.card.card.cost(), next.energy);
-    let stars = match play.card.card.star_cost() {
-        // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
-        // on this build prices its stars at X.
-        Cost::X => unimplemented!("a card priced at X stars"),
-        other => spent(other, next.stars),
-    };
-    next.energy = next.energy - energy;
-    next.stars = next.stars - stars;
+    // `SpendResources`, before the card leaves the hand.
+    next.energy = next.energy - play.energy;
+    next.stars = next.stars - play.stars;
 
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
@@ -173,8 +178,11 @@ impl<V: Rules> Board<'_, V> {
 }
 
 impl<V: Rules> Fight<V> for Board<'_, V> {
-    fn target(&self) -> Option<u32> {
+    fn target(&self) -> u32 {
+        // [`resolve`] refuses a play whose card names a creature and was
+        // pointed at none, so a card that reads this was pointed at one.
         self.target
+            .expect("a card that names a target is played at one")
     }
 
     fn var(&mut self, key: V::CardVar) -> V::Number {

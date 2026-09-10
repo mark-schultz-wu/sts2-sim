@@ -728,9 +728,10 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
 pub trait Fight<V: ContentVersion> {
     /// The creature the card was pointed at.
     ///
-    /// Present for every card whose target type names one. A play that reaches
-    /// behaviour has already been checked against `CardModel.IsValidTarget`.
-    fn target(&self) -> Option<u32>;
+    /// A card whose target type names a creature is played at one. The play
+    /// reaching behaviour has already been held to `CardModel.IsValidTarget`,
+    /// so this is not a question the card asks and then answers.
+    fn target(&self) -> u32;
 
     /// One of the card's own printed numbers, by the build's key for it.
     ///
