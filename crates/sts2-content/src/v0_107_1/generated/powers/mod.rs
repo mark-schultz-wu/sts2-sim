@@ -1308,6 +1308,19 @@ static ROWS: [PowerData; 273] = [
 ];
 
 impl sts2_core::PowerTable for Power {
+    /// Whether a negative amount means one endless instance.
+    ///
+    /// True for the powers whose stacking is `dynamic` in
+    /// the dump. A power that works its stack type out at
+    /// the time works it out from the amount, and below
+    /// zero it is one instance rather than a counter.
+    fn endless_below_zero(self) -> bool {
+        matches!(
+            <Self as sts2_core::Table>::data(self).stack,
+            Field::Computed
+        )
+    }
+
     /// Whether the game counts this as a debuff.
     ///
     /// `None` for the powers whose type is `dynamic` in the dump:

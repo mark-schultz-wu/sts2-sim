@@ -19,8 +19,8 @@ use std::panic::{self, AssertUnwindSafe};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Combat, Construct, ContentVersion, Counters, Creature, Decided, Play, Playable, Rules,
-    Snapshot, Step,
+    Combat, Construct, ContentVersion, Counters, Creature, Decided, Play, Playable, PowerAmount,
+    Rules, Snapshot, Step,
 };
 use sts2_golden::{golden_dir, oracle_or_explain, recording};
 
@@ -424,7 +424,10 @@ fn combat_differences<V: ContentVersion>(want: &Combat<V>, got: &Combat<V>, out:
                         c.max_hp,
                         c.block,
                         c.alive,
-                        ids(&c.powers, |s| format!("{:?}={}", s.power, s.amount)),
+                        ids(&c.powers, |s| match s.amount {
+                            PowerAmount::Counted(amount) => format!("{:?}={amount}", s.power),
+                            PowerAmount::Endless => format!("{:?}=endless", s.power),
+                        }),
                         c.next_move,
                     )
                 };

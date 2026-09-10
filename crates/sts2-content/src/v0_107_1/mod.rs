@@ -181,24 +181,12 @@ impl sts2_core::Rules for V0_107_1 {
         generated::cards::CardVar::Damage
     }
 
-    fn weak_power() -> Self::Power {
-        generated::powers::Power::WeakPower
-    }
-
-    fn vulnerable_power() -> Self::Power {
-        generated::powers::Power::VulnerablePower
-    }
-
-    fn shrink_power() -> Self::Power {
-        generated::powers::Power::ShrinkPower
-    }
-
     fn damage_multiplier(power: Self::Power, holding: sts2_core::Holding) -> f64 {
         behaviour::powers::damage_multiplier(power, holding)
     }
 
-    fn ticks_down(power: Self::Power, amount: Self::Number, side: Self::CombatSide) -> bool {
-        behaviour::powers::ticks_down(power, amount, side)
+    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool {
+        behaviour::powers::ticks_down(power, side)
     }
 
     fn perform_move<F: sts2_core::Fight<Self>>(

@@ -11,7 +11,8 @@
 use num_traits::Zero;
 use sts2_core::rng::{GameRng, MegaRng};
 use sts2_core::{
-    CardIdent, CardTable, Combat, CombatId, Creature, Fight, Holding, Rules, SideKinds, Stack,
+    CardIdent, CardTable, Combat, CombatId, Creature, Fight, Holding, PowerAmount, Rules,
+    SideKinds, Stack,
 };
 
 /// The fight an effect is resolved against.
@@ -95,40 +96,44 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
-    fn apply(&mut self, at: CombatId, power: V::Power, amount: V::Number) {
+    fn land(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
         // The command returns on a zero amount, and on a creature that cannot
         // hold powers. A monster the fight has taken out is one, because its
         // combat state is gone with it.
-        if amount.is_zero() {
+        if amount == PowerAmount::Counted(V::Number::zero()) {
             return;
         }
         let Some(at) = self.at(at) else { return };
 
         // `PowerCmd.Apply` sets `SkipNextDurationTick` on a debuff that lands
         // on the player, so the next tick passes it over. That is per-power
-        // state no observation reports, and nothing here keeps it. A power
-        // that never counts down does not need it.
-        let sides = [
-            <V::CombatSide as SideKinds>::PLAYER,
-            <V::CombatSide as SideKinds>::ENEMY,
-        ];
-        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER
-            && sides
-                .into_iter()
-                .any(|side| V::ticks_down(power, amount, side))
-        {
+        // state no observation reports, and nothing here keeps it. An endless
+        // power has no tick to skip.
+        let counts_down = amount != PowerAmount::Endless
+            && [
+                <V::CombatSide as SideKinds>::PLAYER,
+                <V::CombatSide as SideKinds>::ENEMY,
+            ]
+            .into_iter()
+            .any(|side| V::ticks_down(power, side));
+        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && counts_down {
             unimplemented!("a debuff on the player that counts down");
         }
 
         // `FindExistingInstanceForStacking`: a counter stacks into the one
-        // already there.
-        match self.combat.creatures[at]
+        // already there. An endless instance is one instance however many
+        // times it lands.
+        let held = self.combat.creatures[at]
             .powers
             .iter_mut()
-            .find(|held| held.power == power)
-        {
-            Some(held) => held.amount = held.amount + amount,
-            None => self.combat.creatures[at]
+            .find(|held| held.power == power);
+        match (held, amount) {
+            (Some(held), PowerAmount::Counted(more)) => match held.amount {
+                PowerAmount::Counted(had) => held.amount = PowerAmount::Counted(had + more),
+                PowerAmount::Endless => unimplemented!("a count landing on an endless power"),
+            },
+            (Some(_), PowerAmount::Endless) => {}
+            (None, amount) => self.combat.creatures[at]
                 .powers
                 .push(Stack { power, amount }),
         }
@@ -234,18 +239,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.combat.stars = self.combat.stars + amount;
     }
 
-    fn weaken(&mut self, at: CombatId, amount: V::Number) {
-        self.apply(at, V::weak_power(), amount);
+    fn apply(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
+        self.land(at, power, amount);
     }
 
-    fn make_vulnerable(&mut self, at: CombatId, amount: V::Number) {
-        self.apply(at, V::vulnerable_power(), amount);
-    }
-
-    fn shrink_opponents(&mut self, amount: V::Number) {
+    fn apply_to_opponents(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
         // The list is taken before the first lands, as an attack's is.
         for id in self.opponents() {
-            self.apply(id, V::shrink_power(), amount);
+            self.land(id, power, amount);
         }
     }
 

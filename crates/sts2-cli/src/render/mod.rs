@@ -239,6 +239,18 @@ fn question_of<V: ContentVersion>(
     Ok(())
 }
 
+/// A power and how much of it, as a person reads one.
+///
+/// An endless power has no number. `NPower` shows an amount label for a
+/// counter and nothing for a single instance. A number here is the game's own
+/// spelling of "endless" on a screen a person reads.
+pub fn stacked<N: std::fmt::Display>(name: &str, amount: &sts2_core::PowerAmount<N>) -> String {
+    match amount {
+        sts2_core::PowerAmount::Counted(amount) => format!("{name} {amount}"),
+        sts2_core::PowerAmount::Endless => name.to_string(),
+    }
+}
+
 /// A pool a card is priced in.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Pool {
@@ -687,6 +699,9 @@ mod tests {
     }
 
     /// A power's amount is the question being asked when anyone looks at one.
+    ///
+    /// Unless it has none. The game writes an endless power down as `-1`, and
+    /// a reader who sees that reads it as a count of minus one.
     #[test]
     fn a_power_is_shown_with_its_amount() {
         let out = rendered(observation(json!({
@@ -703,7 +718,7 @@ mod tests {
             }
         })));
 
-        assert!(out.contains("[VULNERABLE 1, SHRINK -1]"), "{out}");
+        assert!(out.contains("[VULNERABLE 1, SHRINK]"), "{out}");
     }
 
     /// An event is prose, and the keys the protocol carries are not it.

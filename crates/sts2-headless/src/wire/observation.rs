@@ -21,8 +21,8 @@ use serde::Deserialize;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, CombatId, ContentVersion,
     Coord, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet, Held,
-    Intent, Map, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room,
-    Stack, Stock, Take, Undrinkable,
+    Intent, Map, NextMove, Node, Observation, Orbs, Playable, PowerAmount, PowerTable, Preview,
+    Reachable, RestOption, Room, Stack, Stock, Take, Undrinkable,
 };
 
 use super::ident::{self, named};
@@ -147,6 +147,22 @@ pub(crate) fn ident<T>(
 /// has.
 ///
 /// Refused rather than carried as an `Option` through every reader.
+/// How much of a power is on a creature, from the number the game sends.
+///
+/// The game overloads the sign. One power works its stacking out at the time,
+/// and below zero it is a single endless instance. This is where that spelling
+/// stops.
+fn power_amount<V: ContentVersion>(
+    path: &str,
+    power: V::Power,
+    amount: i32,
+) -> Result<PowerAmount<V::Number>, Error> {
+    if amount < 0 && power.endless_below_zero() {
+        return Ok(PowerAmount::Endless);
+    }
+    Ok(PowerAmount::Counted(domain_number(path, amount)?))
+}
+
 /// `Creature.CombatId` is a plain `uint?` the game fills in when a creature
 /// joins a fight, and an observation is captured once the game is quiescent. So
 /// a null here means something this does not understand, and saying so beats
@@ -863,7 +879,11 @@ impl<V: ContentVersion> WireCreature<V> {
                 .map(|(j, p)| {
                     Ok(Stack {
                         power: p.id,
-                        amount: domain_number(&format!("{path}.powers[{j}].amount"), p.amount)?,
+                        amount: power_amount::<V>(
+                            &format!("{path}.powers[{j}].amount"),
+                            p.id,
+                            p.amount,
+                        )?,
                     })
                 })
                 .collect::<Result<_, Error>>()?,
@@ -1480,7 +1500,7 @@ mod tests {
                 repeats: 2
             })
         );
-        assert_eq!(c.powers[0].amount, 2);
+        assert_eq!(c.powers[0].amount, PowerAmount::Counted(2));
 
         // A player: neither, which is how the oracle spells "not a monster".
         assert!(

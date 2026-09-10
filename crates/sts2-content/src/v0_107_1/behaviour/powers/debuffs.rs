@@ -42,12 +42,12 @@ pub(super) fn damage_multiplier(power: Power, holding: Holding) -> f64 {
 /// # Panics
 ///
 /// A power nobody has ported.
-pub(super) fn ticks_down(power: Power, amount: i32, side: CombatSide) -> bool {
+pub(super) fn ticks_down(power: Power, side: CombatSide) -> bool {
     match power {
         Power::VulnerablePower | Power::WeakPower => side == CombatSide::Enemy,
-        // A Shrink the game stores as a negative number is `IsInfinite`, and
-        // an infinite one never counts down.
-        Power::ShrinkPower if amount < 0 => false,
+        // `ShrinkPower.AfterSideTurnEnd` counts down on the side its owner is
+        // on. Only an endless one is in a fight so far, and an endless power
+        // has no number to count.
         Power::ShrinkPower => unimplemented!("when a counted Shrink runs out"),
         power => unimplemented!("when {power:?} counts down"),
     }

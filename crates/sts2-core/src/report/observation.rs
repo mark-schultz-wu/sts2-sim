@@ -451,7 +451,7 @@ pub struct Creature<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Stack<V: ContentVersion> {
     pub power: V::Power,
-    pub amount: V::Number,
+    pub amount: crate::PowerAmount<V::Number>,
 }
 
 /// The move a monster has chosen, and what it amounts to.

@@ -7,9 +7,10 @@
 //! The whole of it happens on a copy, so a turn the simulator cannot finish
 //! leaves the fight where it stood.
 
-use num_traits::Zero;
 use sts2_core::rng::MegaRng;
-use sts2_core::{CardTable, Combat, CombatId, Counters, Rules, SideKinds, TurnPhaseKinds};
+use sts2_core::{
+    CardTable, Combat, CombatId, Counters, PowerAmount, Rules, SideKinds, TurnPhaseKinds,
+};
 
 use super::board::{Board, draw};
 use super::monster::Machine;
@@ -113,11 +114,18 @@ fn tick_powers<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
     let one = num_traits::one();
     for creature in &mut combat.creatures {
         for held in &mut creature.powers {
-            if V::ticks_down(held.power, held.amount, side) {
-                held.amount = held.amount - one;
+            // An endless power sits out every tick. There is no number to
+            // count, which is the whole of what endless means.
+            let PowerAmount::Counted(amount) = held.amount else {
+                continue;
+            };
+            if V::ticks_down(held.power, side) {
+                held.amount = PowerAmount::Counted(amount - one);
             }
         }
-        creature.powers.retain(|held| !held.amount.is_zero());
+        creature
+            .powers
+            .retain(|held| held.amount != PowerAmount::Counted(num_traits::zero()));
     }
 }
 

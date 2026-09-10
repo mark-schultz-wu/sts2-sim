@@ -28,6 +28,6 @@ pub(crate) fn damage_multiplier(power: Power, holding: Holding) -> f64 {
 /// # Panics
 ///
 /// A power nobody has ported.
-pub(crate) fn ticks_down(power: Power, amount: i32, side: CombatSide) -> bool {
-    debuffs::ticks_down(power, amount, side)
+pub(crate) fn ticks_down(power: Power, side: CombatSide) -> bool {
+    debuffs::ticks_down(power, side)
 }

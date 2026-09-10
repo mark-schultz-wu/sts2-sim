@@ -127,8 +127,8 @@ fn creature<V: ContentVersion>(f: &mut fmt::Formatter<'_>, c: &Creature<V>) -> f
         .iter()
         .map(|p| {
             let id = spelling(&p.power);
-            let id = id.strip_suffix("_POWER").unwrap_or(&id).to_string();
-            format!("{id} {}", p.amount)
+            let id = id.strip_suffix("_POWER").unwrap_or(&id);
+            super::stacked(id, &p.amount)
         })
         .collect();
     if !powers.is_empty() {

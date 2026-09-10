@@ -17,6 +17,7 @@
 //! compile, and this is what says the destructured field was then *used*.
 
 use std::collections::{BTreeMap, HashMap};
+use sts2_core::PowerAmount;
 use sts2_core::fixture::at;
 
 use sts2_content::v0_107_1::V0_107_1;
@@ -146,7 +147,7 @@ fn full() -> Observation<V> {
                 alive: true,
                 powers: vec![Stack {
                     power: nth::<Power>(0),
-                    amount: 3,
+                    amount: PowerAmount::Counted(3),
                 }],
                 next_move: Some(NextMove {
                     id: MoveId::AboutToBlowMove,
@@ -583,7 +584,7 @@ fn mutations() -> Vec<Nudge> {
             creature(o).powers[0].power = nth::<Power>(2);
         }),
         ("creature.powers: how many", |o| {
-            creature(o).powers[0].amount += 1;
+            creature(o).powers[0].amount = PowerAmount::Counted(4);
         }),
         ("creature.next_move absent", |o| {
             creature(o).next_move = None;

@@ -78,7 +78,7 @@ pub fn vitals<N: PrimInt + ToPrimitive + std::fmt::Display>(
 /// The arrow carries the sign, so the colour is not the only thing saying it. A
 /// terminal without colour, or a reader who cannot tell red from green, still
 /// gets which way the power points.
-pub fn chip(name: &str, amount: impl std::fmt::Display, good: bool) -> Span<'static> {
+pub fn chip(label: &str, good: bool) -> Span<'static> {
     let (mark, style) = match good {
         true => ("^", theme::better()),
         false => ("v", theme::hurt()),
@@ -87,7 +87,7 @@ pub fn chip(name: &str, amount: impl std::fmt::Display, good: bool) -> Span<'sta
     // ⚡ for energy, ⛁ for gold, ✗ for a refusal — are East Asian Wide or
     // Ambiguous, which means the width depends on the reader's terminal and a
     // panel drawn to the column silently comes apart in half of them.
-    Span::styled(format!("{mark} {name} {amount}"), style)
+    Span::styled(format!("{mark} {label}"), style)
 }
 
 /// A power the tables will not class without a creature to ask.
@@ -95,8 +95,8 @@ pub fn chip(name: &str, amount: impl std::fmt::Display, good: bool) -> Span<'sta
 /// No arrow and no colour: the amount alone. Half the build's dynamic powers
 /// point either way depending on their own amount, and a guess with a colour on
 /// it reads as a fact.
-pub fn unknown_chip(name: &str, amount: impl std::fmt::Display) -> Span<'static> {
-    Span::styled(format!("· {name} {amount}"), theme::TEXT)
+pub fn unknown_chip(label: &str) -> Span<'static> {
+    Span::styled(format!("· {label}"), theme::TEXT)
 }
 
 /// As many whole chips as fit, then a count of what did not.
@@ -208,9 +208,9 @@ mod tests {
     #[test]
     fn chips_that_do_not_fit_are_counted_instead_of_cut() {
         let powers = vec![
-            chip("Strength", 2, true),
-            chip("Vulnerable", 3, false),
-            chip("Weak", 1, false),
+            chip("Strength 2", true),
+            chip("Vulnerable 3", false),
+            chip("Weak 1", false),
         ];
         let line = chips(powers, 20);
         let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
@@ -221,14 +221,14 @@ mod tests {
     /// power's name is not.
     #[test]
     fn a_panel_too_narrow_for_any_chip_still_counts_them() {
-        let line = chips(vec![chip("Strength", 2, true), chip("Weak", 1, false)], 6);
+        let line = chips(vec![chip("Strength 2", true), chip("Weak 1", false)], 6);
         let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
         assert_eq!(text, "  +2");
     }
 
     #[test]
     fn every_chip_shown_when_they_all_fit() {
-        let line = chips(vec![chip("Strength", 2, true), chip("Weak", 1, false)], 40);
+        let line = chips(vec![chip("Strength 2", true), chip("Weak 1", false)], 40);
         assert_eq!(width(&line), "^ Strength 2".len() + 2 + "v Weak 1".len());
     }
 

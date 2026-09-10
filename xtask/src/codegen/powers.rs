@@ -492,6 +492,19 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
     writeln!(
         out,
         "impl sts2_core::PowerTable for Power {{\n\
+         \x20   /// Whether a negative amount means one endless instance.\n\
+         \x20   ///\n\
+         \x20   /// True for the powers whose stacking is `dynamic` in\n\
+         \x20   /// the dump. A power that works its stack type out at\n\
+         \x20   /// the time works it out from the amount, and below\n\
+         \x20   /// zero it is one instance rather than a counter.\n\
+         \x20   fn endless_below_zero(self) -> bool {{\n\
+         \x20       matches!(\n\
+         \x20           <Self as sts2_core::Table>::data(self).stack,\n\
+         \x20           Field::Computed\n\
+         \x20       )\n\
+         \x20   }}\n\
+         \n\
          \x20   /// Whether the game counts this as a debuff.\n\
          \x20   ///\n\
          \x20   /// `None` for the powers whose type is `dynamic` in the dump:\n\
