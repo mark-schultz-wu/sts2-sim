@@ -30,6 +30,9 @@ pub fn golden_dir() -> PathBuf {
 }
 
 /// Every run, by name, in a fixed order so a failure reads the same twice.
+pub mod scenario;
+pub mod suite;
+
 pub fn every_run() -> Vec<String> {
     let dir = golden_dir();
     let mut names: Vec<String> = std::fs::read_dir(&dir)

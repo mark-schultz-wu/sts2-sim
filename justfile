@@ -99,6 +99,12 @@ generated:
 divergence:
     cargo test -p sts2-golden --test divergence -- --nocapture
 
+# What the game answers for every scenario, as one file. Needs the game and the
+# mod, and is the only thing in the suite that launches one.
+[doc("Rewrite the recorded scenario answers")]
+scenarios: deploy
+    STS2_UPDATE=1 cargo test -p sts2-golden --test scenarios -- --nocapture
+
 # The reviewable answers derived from the cached transcript. A re-pin runs this
 # to put any changed digest, map, or opening room in the diff.
 [doc("Rewrite the committed oracle answers after a re-pin")]

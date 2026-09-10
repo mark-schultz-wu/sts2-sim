@@ -44,7 +44,7 @@ pub use content::{
 pub use ident::{CardIdent, Coord, ModelId, OutOfRange};
 pub use seed::Seed;
 
-pub use report::digest::Digest;
+pub use report::digest::{Digest, Section};
 pub use report::observation::{
     ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, CombatId, Counters,
     Creature, Entry, EventOption, EventOptionKey, EventOptionName, Held, Intent, Map, NextMove,

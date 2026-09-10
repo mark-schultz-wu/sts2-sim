@@ -1,0 +1,17 @@
+# Every scenario the simulator is held to, and the build that answered them.
+#
+# A scenario reaches a position and then plays into it. `fight` and the other
+# setup commands are the game's own debug commands, so a state one reaches is a
+# state the game reaches. See `mod/sts2_headless/PROTOCOL.md`.
+#
+# `just scenarios` records the answers into `scenarios.bin`.
+
+{"game":"v0.107.1","commit":"59260271","assemblyHash":1692500715,"contentHash":3954186980}
+
+# The smallest thing worth asking: does a fight the run was put into look like
+# a fight the run walked into, and does what the slimes do to the player come
+# out of the fight with them?
+=== constructed-slimes
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}

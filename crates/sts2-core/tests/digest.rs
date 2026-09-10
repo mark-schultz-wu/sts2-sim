@@ -16,9 +16,9 @@
 //! forever and pass. The walk destructures exhaustively so that cannot
 //! compile, and this is what says the destructured field was then *used*.
 
-use std::collections::{BTreeMap, HashMap};
-use sts2_core::PowerAmount;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sts2_core::fixture::at;
+use sts2_core::{PowerAmount, Section};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
@@ -749,6 +749,48 @@ fn the_rules_digest_ignores_prose_and_nothing_else() {
         poorer.rules_digest(),
         "dropping prose must not drop anything else"
     );
+}
+
+/// Every field a scenario can see reaches a section, and every section moves.
+///
+/// The sweep below proves each field reaches the whole digest. This proves the
+/// split into sections loses none of it. A field in no section is one a
+/// scenario is blind to.
+///
+/// Not "exactly one section". Taking the whole fight away moves every section
+/// it owns, and that is right rather than double-counting.
+#[test]
+fn every_field_reaches_a_section_and_every_section_is_reached() {
+    let base = full();
+    let mut ever_moved: BTreeSet<Section> = BTreeSet::new();
+
+    for (what, nudge) in mutations() {
+        let mut moved = base.clone();
+        nudge(&mut moved);
+        if moved.rules_digest() == base.rules_digest() {
+            continue;
+        }
+
+        let differing: Vec<Section> = base
+            .sections()
+            .into_iter()
+            .zip(moved.sections())
+            .filter(|((_, was), (_, now))| was != now)
+            .map(|((section, _), _)| section)
+            .collect();
+
+        assert!(
+            !differing.is_empty(),
+            "{what} changed the digest and no section with it"
+        );
+        ever_moved.extend(differing);
+    }
+
+    let never: Vec<Section> = Section::ALL
+        .into_iter()
+        .filter(|section| !ever_moved.contains(section))
+        .collect();
+    assert!(never.is_empty(), "no nudge moves {never:?}");
 }
 
 /// Every field of an observation reaches the digest.

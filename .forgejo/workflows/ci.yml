@@ -55,6 +55,9 @@ jobs:
         run: |
           set -euo pipefail
           cargo test --workspace --exclude sts2-golden
+          # The scenarios read what the game answered from `scenarios.bin`, so
+          # they hold the simulator to a real game without launching one.
+          cargo test -p sts2-golden --test scenarios
           features=""
           for lock in mod/games/*.lock; do
             features="$features,$(basename "$lock" .lock | tr . _)"
