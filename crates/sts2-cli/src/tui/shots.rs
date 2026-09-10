@@ -450,11 +450,12 @@ mod tests {
                 "title": "The Wellspring",
                 "text": "A spring of [gold]clear water[/gold] runs from the rock.",
                 "options": [
-                    {"index": 0, "key": "DRINK", "title": "Drink",
-                     "text": "Heal [green]12[/green] HP."},
-                    {"index": 1, "key": "FILL", "title": "Fill a flask",
-                     "text": "Gain a potion."},
-                    {"index": 2, "key": "LEAVE", "title": "Leave", "proceed": true},
+                    {"index": 0, "key": "WELLSPRING.pages.INITIAL.options.DRINK",
+                     "title": "Drink", "text": "Heal [green]12[/green] HP."},
+                    {"index": 1, "key": "WELLSPRING.pages.INITIAL.options.FILL",
+                     "title": "Fill a flask", "text": "Gain a potion."},
+                    {"index": 2, "key": "WELLSPRING.pages.INITIAL.options.LEAVE",
+                     "title": "Leave", "proceed": true},
                 ]
             }
         }))
@@ -516,13 +517,15 @@ mod tests {
                 "title": null,
                 "text": null,
                 "options": [
-                    {"index": 0, "key": "LEAD", "title": "Lead Paperweight",
-                     "relic": "LEAD_PAPERWEIGHT"},
-                    {"index": 1, "key": "KALEIDOSCOPE", "title": "Kaleidoscope",
+                    {"index": 0,
+                     "key": "WELLSPRING.pages.INITIAL.options.LEAD_PAPERWEIGHT",
+                     "title": "Lead Paperweight", "relic": "LEAD_PAPERWEIGHT"},
+                    {"index": 1, "key": "WELLSPRING.pages.INITIAL.options.KALEIDOSCOPE",
+                     "title": "Kaleidoscope",
                      "text": "Obtain 2 card rewards from other characters.",
                      "relic": "KALEIDOSCOPE"},
-                    {"index": 2, "key": "HEFTY", "title": "Hefty Tablet",
-                     "relic": "HEFTY_TABLET"},
+                    {"index": 2, "key": "WELLSPRING.pages.INITIAL.options.HEFTY_TABLET",
+                     "title": "Hefty Tablet", "relic": "HEFTY_TABLET"},
                 ]
             }
         }))

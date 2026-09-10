@@ -1502,8 +1502,6 @@ version = "0.1.0"
 dependencies = [
  "indexmap",
  "num-traits",
- "serde",
- "serde_json",
  "smallvec",
  "sts2-content",
  "sts2-core",

@@ -20,9 +20,9 @@ use num_traits::{NumCast, ToPrimitive};
 use serde::Deserialize;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Counters, Creature, Entry, EventOption, FlagSet, Held, Intent, Map, NextMove, Node,
-    Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, Stack, Stock, Take,
-    Undrinkable,
+    Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet, Held, Intent,
+    Map, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, Stack,
+    Stock, Take, Undrinkable,
 };
 
 use super::ident::{self, named};
@@ -82,6 +82,50 @@ pub fn observation<V: ContentVersion>(state: &serde_json::Value) -> Result<Obser
     wire.into_domain()
 }
 
+/// One event option's localisation key, split into the parts it names.
+///
+/// `NEOW.pages.INITIAL.options.NEOWS_TALISMAN`. The room already names the
+/// event, so the first segment is held to it rather than read again. The two
+/// disagreeing is the game saying two things at once.
+fn option_key<V: ContentVersion>(
+    path: &str,
+    event: V::Event,
+    text: &str,
+) -> Result<EventOptionKey<V>, Error> {
+    let named_event = serde_json::to_value(event)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| {
+            at(
+                path,
+                Why::Unknown {
+                    what: "event",
+                    value: text.to_string(),
+                },
+            )
+        })?;
+    let shape = || {
+        at(
+            path,
+            Why::Disagree("an option key is not `<event>.pages.INITIAL.options.<option>`"),
+        )
+    };
+    let rest = text
+        .strip_prefix(&named_event)
+        .and_then(|rest| rest.strip_prefix(".pages.INITIAL.options."))
+        .ok_or_else(shape)?;
+    if rest.is_empty() || rest.contains('.') {
+        return Err(shape());
+    }
+    Ok(EventOptionKey {
+        event,
+        option: match named(rest) {
+            Some(relic) => EventOptionName::Relic(relic),
+            None => EventOptionName::Said(rest.to_string()),
+        },
+    })
+}
+
 /// A path, built as the conversion walks down.
 pub(crate) fn at(path: &str, why: Why) -> Error {
     Error {
@@ -137,14 +181,28 @@ fn domain_count<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> R
     })
 }
 
-fn domain_vars<T: NumCast>(
+/// A preview's numbers, keyed by the build's own variable rather than by name.
+///
+/// A key this build does not print is a divergence. The game printed a number
+/// under a name the tables do not have, and that is what the comparison exists
+/// to notice.
+fn domain_vars<V: ContentVersion, T: NumCast>(
     path: &str,
     values: BTreeMap<String, i32>,
-) -> Result<BTreeMap<String, T>, Error> {
+) -> Result<BTreeMap<V::CardVar, T>, Error> {
     values
         .into_iter()
         .map(|(name, value)| {
-            domain_number(&format!("{path}.{name}"), value).map(|value| (name, value))
+            let key: V::CardVar = named(&name).ok_or_else(|| {
+                at(
+                    path,
+                    Why::Unknown {
+                        what: "printed card number",
+                        value: name.clone(),
+                    },
+                )
+            })?;
+            domain_number(&format!("{path}.{name}"), value).map(|value| (key, value))
         })
         .collect()
 }
@@ -585,17 +643,20 @@ impl<V: ContentVersion> WireRoom<V> {
                 text,
                 options: options
                     .into_iter()
-                    .map(|o| EventOption {
-                        index: o.index,
-                        key: o.key,
-                        title: o.title,
-                        text: o.text,
-                        locked: o.locked,
-                        proceed: o.proceed,
-                        chosen: o.chosen,
-                        relic: o.relic,
+                    .enumerate()
+                    .map(|(i, o)| {
+                        Ok(EventOption {
+                            index: o.index,
+                            key: option_key::<V>(&format!("room.options[{i}].key"), id, &o.key)?,
+                            title: o.title,
+                            text: o.text,
+                            locked: o.locked,
+                            proceed: o.proceed,
+                            chosen: o.chosen,
+                            relic: o.relic,
+                        })
                     })
-                    .collect(),
+                    .collect::<Result<_, Error>>()?,
             },
 
             WireRoom::Shop { entries } => Room::Shop {
@@ -880,9 +941,9 @@ impl<V: ContentVersion> WirePlayable<V> {
                 .map(|(j, p)| {
                     Ok(Preview {
                         target: p.target,
-                        text: p.text,
-                        vars: domain_vars(&format!("{path}.effect[{j}].vars"), p.vars)?,
-                        base: domain_vars(&format!("{path}.effect[{j}].base"), p.base)?,
+                        text: Some(p.text),
+                        vars: domain_vars::<V, _>(&format!("{path}.effect[{j}].vars"), p.vars)?,
+                        base: domain_vars::<V, _>(&format!("{path}.effect[{j}].base"), p.base)?,
                     })
                 })
                 .collect::<Result<_, Error>>()?,
@@ -1206,6 +1267,99 @@ mod tests {
         assert!(reason.contains(UnplayableReason::EnergyCostTooHigh));
         assert!(reason.contains(UnplayableReason::NoLivingAllies));
         assert!(!reason.contains(UnplayableReason::BlockedByHook));
+    }
+
+    /// An option's key is read as its parts, and held to the room it is in.
+    #[test]
+    fn an_event_option_key_is_the_event_and_the_option_it_names() {
+        let event = |key: &str| {
+            let mut state = base();
+            state["room"] = json!({
+                "type": "Event", "id": "NEOW", "finished": false,
+                "title": null, "text": null,
+                "options": [{"index": 0, "key": key, "title": null, "text": null,
+                             "locked": false, "proceed": false, "chosen": false,
+                             "relic": null}]
+            });
+            parse(&state)
+        };
+        let read = |key: &str| {
+            let room = event(key).expect("the key parses").room.expect("a room");
+            match room {
+                Room::Event { options, .. } => options[0].key.clone(),
+                other => panic!("not an event: {other:?}"),
+            }
+        };
+
+        // A name this build has is that relic, and one it does not have is
+        // what the event called it.
+        let neow = sts2_content::v0_107_1::events::Event::Neow;
+        assert_eq!(
+            read("NEOW.pages.INITIAL.options.NEOWS_TALISMAN"),
+            EventOptionKey {
+                event: neow,
+                option: EventOptionName::Relic(
+                    sts2_content::v0_107_1::relics::Relic::NeowsTalisman
+                ),
+            }
+        );
+        assert_eq!(
+            read("NEOW.pages.INITIAL.options.LEAVE"),
+            EventOptionKey {
+                event: neow,
+                option: EventOptionName::Said("LEAVE".into()),
+            }
+        );
+
+        // The room already says which event this is. A key naming another one
+        // is the observation saying two things at once.
+        let other = event("OROBAS.pages.INITIAL.options.DRIFTWOOD").unwrap_err();
+        assert_eq!(other.at, "room.options[0].key");
+        assert!(matches!(other.why, Why::Disagree(_)), "{other}");
+
+        // And a key that is not built the way every recorded key is built.
+        for bad in [
+            "NEOW",
+            "NEOW.options.LEAVE",
+            "NEOW.pages.SECOND.options.LEAVE",
+            "NEOW.pages.INITIAL.options.",
+            "NEOW.pages.INITIAL.options.A.B",
+        ] {
+            let err = event(bad).unwrap_err();
+            assert!(matches!(err.why, Why::Disagree(_)), "{bad}: {err}");
+        }
+    }
+
+    /// A printed number the build has no key for is a divergence, not a skip.
+    #[test]
+    fn a_preview_variable_outside_the_build_is_refused() {
+        let preview = |name: &str| {
+            let mut state = base();
+            state["combat"] = json!({
+                "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
+                "encounter": null, "hand": ["STRIKE_REGENT"], "draw": [],
+                "discard": [], "exhaust": [], "creatures": [], "orbs": null,
+                "legal": [{
+                    "card": "STRIKE_REGENT", "cost": 1, "starCost": null,
+                    "target": "AnyEnemy", "playable": true, "reason": null,
+                    "preventer": null, "targets": [],
+                    "effect": [{"target": null, "text": "Deal 6 damage.",
+                                "vars": {name: 6}, "base": {name: 6}}]
+                }]
+            });
+            parse(&state)
+        };
+
+        let known = preview("Damage").expect("a key this build prints");
+        let vars = &known.combat.expect("combat").legal[0].effect[0].vars;
+        assert_eq!(
+            vars[&sts2_content::v0_107_1::cards::CardVar::Damage],
+            6,
+            "the number comes back under the build's own key"
+        );
+
+        let err = preview("Vibes").unwrap_err();
+        assert!(matches!(err.why, Why::Unknown { .. }), "{err}");
     }
 
     /// A chest option is a relic or the skip, and the wire can say both.

@@ -7,4 +7,6 @@ pub enum Error {
     /// No rule for this yet.
     #[error("the simulator does not implement {0} yet")]
     NotImplemented(&'static str),
+    #[error(transparent)]
+    Combat(#[from] crate::combat::Error),
 }

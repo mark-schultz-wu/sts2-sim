@@ -98,6 +98,10 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(character).starting_gold
     }
 
+    fn max_energy(character: Self::Character) -> u8 {
+        sts2_core::Table::data(character).max_energy
+    }
+
     fn starting_potion_slots() -> usize {
         3
     }
@@ -122,6 +126,50 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn lead_paperweight() -> Self::Relic {
         generated::relics::Relic::LeadPaperweight
+    }
+
+    fn divine_right() -> Self::Relic {
+        generated::relics::Relic::DivineRight
+    }
+
+    fn monster_hp_bounds(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+    ) -> sts2_core::rng::Interval<u16> {
+        let data = sts2_core::Table::data(monster);
+        sts2_core::rng::Interval::new(
+            data.min_hp.at(ascension as u8),
+            data.max_hp.at(ascension as u8),
+        )
+    }
+
+    fn initial_monster_move<R: sts2_core::rng::GameRng>(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+        rng: &mut R,
+    ) -> Result<sts2_core::NextMove<Self>, sts2_core::ContentError> {
+        initial_monster_move(monster, ascension as u8, rng)
+    }
+
+    fn random_encounter_monsters<R: sts2_core::rng::GameRng>(
+        encounter: Self::Encounter,
+        rng: &mut R,
+    ) -> Result<Vec<Self::Monster>, sts2_core::ContentError> {
+        use generated::encounters::Encounter;
+        use generated::monsters::Monster;
+        use sts2_core::rng::Bound;
+
+        let Encounter::SlimesWeak = encounter else {
+            return Err(sts2_core::ContentError::Unported("random encounter roster"));
+        };
+
+        let small = [Monster::LeafSlimeS, Monster::TwigSlimeS];
+        let first = rng.next_int(Bound::new(2).expect("two small slimes")) as usize;
+        let second = rng.next_int(Bound::new(1).expect("one small slime remains"));
+        debug_assert_eq!(second, 0);
+        let medium = [Monster::LeafSlimeM, Monster::TwigSlimeM]
+            [rng.next_int(Bound::new(2).expect("two medium slimes")) as usize];
+        Ok(vec![small[first], medium, small[1 - first]])
     }
 
     fn encounters(act: Self::Act) -> &'static [Self::Encounter] {
@@ -190,6 +238,18 @@ impl sts2_core::Rules for V0_107_1 {
         &generated::runstate::RunRngType::ALL
     }
 
+    fn niche_rng() -> Self::RunRngType {
+        generated::runstate::RunRngType::Niche
+    }
+
+    fn monster_ai_rng() -> Self::RunRngType {
+        generated::runstate::RunRngType::MonsterAi
+    }
+
+    fn shuffle_rng() -> Self::RunRngType {
+        generated::runstate::RunRngType::Shuffle
+    }
+
     fn up_front_rng() -> Self::RunRngType {
         generated::runstate::RunRngType::UpFront
     }
@@ -200,6 +260,99 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn rewards_rng() -> Self::PlayerRngType {
         generated::runstate::PlayerRngType::Rewards
+    }
+    fn enemy_side() -> Self::CombatSide {
+        generated::runstate::CombatSide::Enemy
+    }
+}
+
+fn initial_monster_move<R: sts2_core::rng::GameRng>(
+    monster: generated::monsters::Monster,
+    ascension: u8,
+    rng: &mut R,
+) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
+    use crate::Field;
+    use generated::monsters::{IntentKind, State};
+    use sts2_core::rng::Interval;
+
+    let data = sts2_core::Table::data(monster);
+    let mut at = data.initial as usize;
+    loop {
+        match *data
+            .states
+            .get(at)
+            .ok_or(sts2_core::ContentError::InvalidMonsterState { index: at as u8 })?
+        {
+            State::Move(next) => {
+                let attack = match next.intents.attack {
+                    None => None,
+                    Some(attack) => {
+                        let Field::Constant(damage) = attack.damage else {
+                            return Err(sts2_core::ContentError::CombatDependent(
+                                "monster move value",
+                            ));
+                        };
+                        let Field::Constant(repeats) = attack.repeats else {
+                            return Err(sts2_core::ContentError::CombatDependent(
+                                "monster move value",
+                            ));
+                        };
+                        Some(sts2_core::Attack {
+                            damage: i32::from(damage.at(ascension)),
+                            repeats: repeats.at(ascension),
+                        })
+                    }
+                };
+                let intents = next
+                    .intents
+                    .kinds
+                    .iter()
+                    .map(|kind| sts2_core::Intent {
+                        kind,
+                        attack: matches!(kind, IntentKind::Attack | IntentKind::DeathBlow)
+                            .then_some(attack)
+                            .flatten(),
+                    })
+                    .collect();
+                return Ok(sts2_core::NextMove {
+                    id: next.id,
+                    intents,
+                });
+            }
+            State::Random(branches) => {
+                let mut total = 0.0f32;
+                for branch in branches {
+                    let Field::Constant(weight) = branch.weight else {
+                        return Err(sts2_core::ContentError::CombatDependent(
+                            "monster move value",
+                        ));
+                    };
+                    total += weight;
+                }
+                let range = Interval::try_new(0.0, total)
+                    .map_err(|_| sts2_core::ContentError::InvalidMonsterWeights)?;
+                let mut draw = rng.next_f32_range(range);
+                let mut chosen = None;
+                for branch in branches {
+                    let Field::Constant(weight) = branch.weight else {
+                        return Err(sts2_core::ContentError::CombatDependent(
+                            "monster move value",
+                        ));
+                    };
+                    draw -= weight;
+                    if draw <= 0.0 {
+                        chosen = Some(branch.target as usize);
+                        break;
+                    }
+                }
+                at = chosen.ok_or(sts2_core::ContentError::InvalidMonsterWeights)?;
+            }
+            State::Conditional(_) => {
+                return Err(sts2_core::ContentError::CombatDependent(
+                    "conditional monster state",
+                ));
+            }
+        }
     }
 }
 

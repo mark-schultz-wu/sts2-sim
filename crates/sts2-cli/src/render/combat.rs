@@ -4,7 +4,7 @@ use super::prose::one_line;
 use super::{cards, entry, flags, ident, spelling};
 use num_traits::Zero;
 use std::fmt;
-use sts2_core::{CardIdent, Combat, ContentVersion, Creature, Orbs, Playable, Preview};
+use sts2_core::{CardIdent, CardVars, Combat, ContentVersion, Creature, Orbs, Playable, Preview};
 
 pub(super) fn combat_of<V: ContentVersion>(
     f: &mut fmt::Formatter<'_>,
@@ -238,7 +238,7 @@ fn effects_of<V: ContentVersion>(previews: &[Preview<V>]) -> Vec<String> {
     previews
         .iter()
         .filter_map(|preview| {
-            let text = one_line(&preview.text);
+            let text = preview.text.as_deref().map(one_line).unwrap_or_default();
             if text.is_empty() {
                 return None;
             }
@@ -264,7 +264,7 @@ fn moved_in<V: ContentVersion>(preview: &Preview<V>) -> String {
         .iter()
         .filter_map(|(name, was)| {
             let is = preview.vars.get(name)?;
-            (was != is).then(|| format!("{name} {was}→{is}"))
+            (was != is).then(|| format!("{} {was}→{is}", name.name()))
         })
         .collect();
 

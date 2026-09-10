@@ -177,7 +177,7 @@ fn event_options<V: ContentVersion>(
             .map(|t| one_line(t))
             .filter(|t| !t.is_empty())
             .or_else(|| o.relic.as_ref().map(spelling))
-            .unwrap_or_else(|| o.key.clone());
+            .unwrap_or_else(|| super::option_key(&o.key));
 
         let mut flags = Vec::new();
         if o.chosen {

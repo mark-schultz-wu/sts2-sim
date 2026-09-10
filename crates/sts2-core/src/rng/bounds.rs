@@ -88,14 +88,18 @@ impl<T: Copy> Span<T> {
 /// A closed interval `min..=max`, known ordered. A single point is allowed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Interval<T> {
-    min: T,
-    max: T,
+    bounds: (T, T),
 }
 
 impl<T: PartialOrd> Interval<T> {
-    pub fn new(min: T, max: T) -> Result<Self, Error> {
+    pub fn new(min: T, max: T) -> Self {
+        assert!(min <= max, "an interval must be ordered");
+        Interval { bounds: (min, max) }
+    }
+
+    pub fn try_new(min: T, max: T) -> Result<Self, Error> {
         if min <= max {
-            Ok(Interval { min, max })
+            Ok(Interval { bounds: (min, max) })
         } else {
             Err(Error::Inverted)
         }
@@ -104,11 +108,11 @@ impl<T: PartialOrd> Interval<T> {
 
 impl<T: Copy> Interval<T> {
     pub const fn min(&self) -> T {
-        self.min
+        self.bounds.0
     }
 
     pub const fn max(&self) -> T {
-        self.max
+        self.bounds.1
     }
 }
 
@@ -133,14 +137,20 @@ mod tests {
 
     #[test]
     fn an_interval_may_be_a_point_but_not_inverted() {
-        assert!(Interval::new(5, 5).is_ok());
-        assert_eq!(Interval::new(5, 4).unwrap_err(), Error::Inverted);
+        assert_eq!(Interval::new(5, 5), Interval { bounds: (5, 5) });
+        assert_eq!(Interval::try_new(5, 4).unwrap_err(), Error::Inverted);
     }
 
     #[test]
     fn nan_is_rejected_by_construction() {
-        assert_eq!(Interval::new(f64::NAN, 1.0).unwrap_err(), Error::Inverted);
-        assert_eq!(Interval::new(0.0, f64::NAN).unwrap_err(), Error::Inverted);
+        assert_eq!(
+            Interval::try_new(f64::NAN, 1.0).unwrap_err(),
+            Error::Inverted
+        );
+        assert_eq!(
+            Interval::try_new(0.0, f64::NAN).unwrap_err(),
+            Error::Inverted
+        );
         assert_eq!(Span::new(f64::NAN, 1.0).unwrap_err(), Error::Empty);
 
         #[allow(clippy::neg_cmp_op_on_partial_ord)]

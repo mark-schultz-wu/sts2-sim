@@ -82,7 +82,7 @@ impl Counts {
     ) -> Self {
         let rests = match layout.rests {
             Rests::Around { mean, min, max } => {
-                let accept = Interval::new(min, max).expect("an act's rest range is ordered");
+                let accept = Interval::new(min, max);
                 rng.next_gaussian_int(mean, 1, accept)
             }
             Rests::Between { min, max } => {
@@ -117,7 +117,7 @@ fn elites<A: AscensionKinds>(ascension: A) -> usize {
 /// `MapPointTypeCounts.StandardRandomUnknownCount`, which every act starts
 /// from.
 fn standard_unknowns<R: GameRng>(rng: &mut R) -> i32 {
-    let accept = Interval::new(10, 14).expect("ten is below fourteen");
+    let accept = Interval::new(10, 14);
     rng.next_gaussian_int(12, 1, accept)
 }
 

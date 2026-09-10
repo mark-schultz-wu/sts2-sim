@@ -150,7 +150,7 @@ where
                         .title
                         .clone()
                         .map(|t| crate::render::prose::plain(&t))
-                        .unwrap_or_else(|| names::pretty(&option.key)),
+                        .unwrap_or_else(|| names::pretty(&crate::render::option_key(&option.key))),
                     // The relic an option hands over, *unless* the option's
                     // own title already names it — which at Neow every one of
                     // them does, and "Golden Pearl   Golden Pearl" is not a

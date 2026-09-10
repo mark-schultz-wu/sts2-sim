@@ -220,13 +220,42 @@ pub enum Take<V: ContentVersion> {
     Skip,
 }
 
+/// Which option an event is offering, as the game's key names it.
+///
+/// The game spells this `BYRDONIS_NEST.pages.INITIAL.options.EAT`. A simulator
+/// reports one, and building that sentence puts a formatter on the path of
+/// every report. So the parts are carried apart.
+///
+/// The `pages.INITIAL.options` between them is not stored. Every key in every
+/// recording has it, and a reader refuses a key without it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EventOptionKey<V: ContentVersion> {
+    /// The event offering it, which is the key's first segment.
+    pub event: V::Event,
+    /// What the option is called within the page.
+    pub option: EventOptionName<V>,
+}
+
+/// The last segment of an event option's key.
+///
+/// An event generates its own options in code, so what they are called is not
+/// table data. The ones that hand a relic over are named by that relic, and
+/// those are the only ones a simulator reports so far.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EventOptionName<V: ContentVersion> {
+    /// Named by the relic it hands over.
+    Relic(V::Relic),
+    /// Named by the event itself, as the game spelled it. Read from an
+    /// observation, never built here.
+    Said(String),
+}
+
 /// One thing an event offers.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EventOption<V: ContentVersion> {
     pub index: u8,
-    /// The localisation key, which names the option without saying anything
-    /// about it: `BYRDONIS_NEST.pages.INITIAL.options.EAT`.
-    pub key: String,
+    /// Which option this is, which names it without saying anything about it.
+    pub key: EventOptionKey<V>,
     pub title: Option<String>,
     pub text: Option<String>,
     pub locked: bool,
@@ -535,11 +564,17 @@ pub struct Preview<V: ContentVersion> {
     /// Which creature this was computed against, or nothing for a preview that
     /// does not vary by target.
     pub target: Option<u32>,
-    /// The rules text with these numbers in it, carrying the game's own markup.
-    pub text: String,
+    /// The rules text with these numbers in it, carrying the game's own
+    /// markup. Nothing at all for an implementation with no localisation
+    /// tables, which is not the same as a card that says nothing.
+    pub text: Option<String>,
     /// The card's variables, as they resolve right now.
-    pub vars: BTreeMap<String, V::Number>,
+    ///
+    /// Keyed by the build's own variable, not by its name. A key outside the
+    /// set this build prints is a divergence the reader reports, and no caller
+    /// spells one to look it up.
+    pub vars: BTreeMap<V::CardVar, V::Number>,
     /// The same variables as the card prints them, upgrades and enchantment
     /// included. Equal to `vars` exactly when nothing is modifying the card.
-    pub base: BTreeMap<String, V::Number>,
+    pub base: BTreeMap<V::CardVar, V::Number>,
 }

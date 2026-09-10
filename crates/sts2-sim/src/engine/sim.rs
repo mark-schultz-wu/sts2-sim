@@ -1,4 +1,4 @@
-use sts2_core::{Answered, Construct, Decision, Play, Rules, Setup, Snapshot, Start};
+use sts2_core::{Answered, Construct, Decision, Play, Refusal, Rules, Setup, Snapshot, Start};
 
 use crate::run::State;
 
@@ -30,6 +30,13 @@ impl<V: Rules> Play<V> for Sim<V> {
         match decision {
             Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
             Decision::Answer(answer) => self.state.answer(answer).map(Ok),
+            Decision::Travel { to } => match self.state.resolve(*to) {
+                Err(reason) => Ok(Err(Refusal {
+                    what: "travel".into(),
+                    reason,
+                })),
+                Ok(moving) => self.state.travel(moving).map(Ok),
+            },
             _ => Err(Error::NotImplemented(name(decision))),
         }
     }

@@ -133,6 +133,23 @@ pub fn render_map<V: sts2_core::ContentVersion>(map: &sts2_core::Map<V>) -> Stri
     out
 }
 
+/// One id, by the game's name for it, which is the serde rename.
+fn spelled<T: serde::Serialize>(id: &T) -> String {
+    match serde_json::to_value(id) {
+        Ok(serde_json::Value::String(name)) => name,
+        _ => String::new(),
+    }
+}
+
+/// An option's key as the game spells it, put back together from its parts.
+fn option_key<V: sts2_core::ContentVersion>(key: &sts2_core::EventOptionKey<V>) -> String {
+    let option = match &key.option {
+        sts2_core::EventOptionName::Relic(relic) => spelled(relic),
+        sts2_core::EventOptionName::Said(name) => name.clone(),
+    };
+    format!("{}.pages.INITIAL.options.{option}", spelled(&key.event))
+}
+
 /// The room a run opens in, as its ids.
 ///
 /// The first act's ancient, which is Neow. Its options are rolled off the
@@ -156,7 +173,7 @@ pub fn render_room<V: sts2_core::ContentVersion>(room: Option<&sts2_core::Room<V
                     out,
                     "option {} {} locked={} proceed={} chosen={} relic={:?}",
                     option.index,
-                    option.key,
+                    option_key(&option.key),
                     option.locked,
                     option.proceed,
                     option.chosen,

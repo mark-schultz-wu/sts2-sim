@@ -9,6 +9,9 @@ edition = "2024"
 [dependencies]
 sts2-core = { workspace = true }
 sts2-headless = { workspace = true }
+# The reviewable files spell an id by its game name, which is the serde rename.
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [build-dependencies]
 sts2-core = { workspace = true }
@@ -21,6 +24,3 @@ sts2-headless = { workspace = true }
 # Replaying a recording means spelling the decisions in it, which names a build.
 sts2-content = { workspace = true, features = ["v0_107_1"] }
 sts2-sim = { workspace = true }
-# A fixture spells a relic by its game id, which is the serde rename.
-serde = { workspace = true }
-serde_json = { workspace = true }
