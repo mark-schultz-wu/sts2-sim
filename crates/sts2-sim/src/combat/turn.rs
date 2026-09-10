@@ -37,7 +37,7 @@ pub(crate) fn end<V: Rules>(
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
-    enemy_turn(&mut next, &mut machines);
+    enemy_turn(&mut next, &mut shuffle, &mut machines);
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -103,7 +103,11 @@ fn clear_block<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
 ///
 /// The list is taken first, and each is held against the fight again before it
 /// acts. An earlier move can take a later one out of the fight.
-fn enemy_turn<V: Rules>(combat: &mut Combat<V>, machines: &mut [Machine<V>]) {
+fn enemy_turn<V: Rules>(
+    combat: &mut Combat<V>,
+    shuffle: &mut MegaRng,
+    machines: &mut [Machine<V>],
+) {
     let acting: Vec<CombatId> = combat
         .creatures
         .iter()
@@ -134,7 +138,7 @@ fn enemy_turn<V: Rules>(combat: &mut Combat<V>, machines: &mut [Machine<V>]) {
             .find_map(|intent| intent.attack.map(|attack| attack.damage))
             .unwrap_or_else(num_traits::zero);
 
-        let mut board = Board::for_move(combat, id, damage);
+        let mut board = Board::for_move(combat, shuffle, id, damage);
         V::perform_move(monster, next_move.id, &mut board);
     }
 }

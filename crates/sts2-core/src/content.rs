@@ -758,6 +758,12 @@ pub trait Fight<V: ContentVersion> {
     /// on the other side.
     fn attack_opponents(&mut self, damage: V::Number);
 
+    /// `CardPileCmd.Draw(count, Owner)`.
+    ///
+    /// A printed number, so signed. A card printing a negative one draws
+    /// nothing, which is what the game's own loop does.
+    fn draw(&mut self, count: V::Number);
+
     /// `CardPileCmd.AddToCombatAndPreview<C>(targets, Discard, count)`.
     ///
     /// One copy per count, into the discard pile of every creature on the

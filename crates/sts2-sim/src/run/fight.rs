@@ -31,10 +31,14 @@ impl<V: Rules> State<V> {
             Err(reason) => return refused(reason),
         };
 
-        let played = combat::play(&ongoing.combat, play)?;
+        let machines = ongoing.machines.clone();
+        let (played, counters) =
+            combat::play(&ongoing.combat, play, self.raw_seed(), &self.counters())?;
+
+        self.drew(counters);
         self.fought(combat::Ongoing {
             combat: played,
-            machines: ongoing.machines.clone(),
+            machines,
         });
         Ok(Ok(self.report()))
     }

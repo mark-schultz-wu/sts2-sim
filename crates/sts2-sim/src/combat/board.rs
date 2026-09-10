@@ -15,6 +15,9 @@ use sts2_core::{CardIdent, CardTable, Combat, CombatId, Creature, Fight, Rules, 
 /// The fight an effect is resolved against.
 pub(super) struct Board<'a, V: Rules> {
     combat: &'a mut Combat<V>,
+    /// The shuffle stream, because drawing a card can turn the discard pile
+    /// back into a draw pile.
+    shuffle: &'a mut MegaRng,
     /// Whose effect this is. The player for a card, the monster for a move.
     actor: CombatId,
     /// The creature a card was pointed at.
@@ -25,10 +28,15 @@ pub(super) struct Board<'a, V: Rules> {
 
 impl<'a, V: Rules> Board<'a, V> {
     /// A board for one card, played from the player.
-    pub(super) fn for_card(combat: &'a mut Combat<V>, target: Option<CombatId>) -> Self {
+    pub(super) fn for_card(
+        combat: &'a mut Combat<V>,
+        shuffle: &'a mut MegaRng,
+        target: Option<CombatId>,
+    ) -> Self {
         let actor = player::<V>(&combat.creatures);
         Board {
             combat,
+            shuffle,
             actor,
             target,
             intent_damage: V::Number::zero(),
@@ -38,11 +46,13 @@ impl<'a, V: Rules> Board<'a, V> {
     /// A board for one move, made by a monster.
     pub(super) fn for_move(
         combat: &'a mut Combat<V>,
+        shuffle: &'a mut MegaRng,
         actor: CombatId,
         intent_damage: V::Number,
     ) -> Self {
         Board {
             combat,
+            shuffle,
             actor,
             target: None,
             intent_damage,
@@ -171,6 +181,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         for id in self.opponents() {
             self.attack(id, damage);
         }
+    }
+
+    fn draw(&mut self, count: V::Number) {
+        // A negative count draws nothing: the game's own loop runs no times.
+        let count = num_traits::NumCast::from(count).unwrap_or(0usize);
+        draw(self.combat, self.shuffle, count);
     }
 
     fn give_cards(&mut self, card: V::Card, count: usize) {

@@ -9,10 +9,10 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
-use sts2_core::{CardTable, Combat, CombatId, Cost, HandIndex, Reason, Rules};
+use sts2_core::{CardTable, Combat, CombatId, Cost, Counters, HandIndex, Reason, Rules};
 
 use super::board::Board;
-use super::{Error, legal};
+use super::{Error, legal, stream};
 
 /// A play the fight allows, resolved but not yet made.
 ///
@@ -95,8 +95,15 @@ pub(crate) fn resolve<V: Rules>(
 ///
 /// Nothing is committed until this returns. It works on a copy, so a card
 /// asking for a rule the simulator lacks costs the caller nothing.
-pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat<V>, Error> {
+pub(crate) fn play<V: Rules>(
+    combat: &Combat<V>,
+    play: Play<V>,
+    raw_seed: u32,
+    counters: &Counters<V>,
+) -> Result<(Combat<V>, Counters<V>), Error> {
     let mut next = combat.clone();
+    let mut counters = counters.clone();
+    let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
 
     // `SpendResources`, before the card leaves the hand.
     next.energy = next.energy - play.energy;
@@ -105,7 +112,7 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
-    let mut board = Board::for_card(&mut next, play.target);
+    let mut board = Board::for_card(&mut next, &mut shuffle, play.target);
     V::on_play(card.card, &mut board);
 
     // `GetResultPileTypeForCardPlay`, once the effect is over.
@@ -121,5 +128,6 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
     }
 
     next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
-    Ok(next)
+    stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
+    Ok((next, counters))
 }
