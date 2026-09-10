@@ -10,7 +10,7 @@
 //! trait acts on.
 
 use num_traits::Zero;
-use sts2_core::{CardTable, Combat, Cost, Creature, Fight, Printed, Reason, Rules, SideKinds};
+use sts2_core::{CardTable, Combat, Cost, Creature, Fight, Reason, Rules, SideKinds};
 
 use super::{Error, legal};
 
@@ -102,12 +102,9 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
-    let vars = card.card.vars();
-
     let mut board = Board {
         combat: &mut next,
         target: play.target,
-        vars,
     };
     V::on_play(card.card, &mut board);
 
@@ -135,7 +132,6 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
 struct Board<'a, V: Rules> {
     combat: &'a mut Combat<V>,
     target: Option<u32>,
-    vars: &'static [Printed<V::CardVar, <V::Card as CardTable>::Number>],
 }
 
 impl<V: Rules> Board<'_, V> {
@@ -183,17 +179,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // pointed at none, so a card that reads this was pointed at one.
         self.target
             .expect("a card that names a target is played at one")
-    }
-
-    fn var(&mut self, key: V::CardVar) -> V::Number {
-        // A key the card does not print is a mistake in the port. A printed
-        // number this build's game number cannot hold is the same mistake
-        // wearing a different hat: the card cannot act on what it read.
-        self.vars
-            .iter()
-            .find(|var| var.id == key)
-            .and_then(|var| num_traits::NumCast::from(var.base))
-            .expect("a card reads a number it prints")
     }
 
     fn attack(&mut self, at: u32, damage: V::Number) {

@@ -2,31 +2,32 @@
 
 use sts2_core::Fight;
 
-use super::super::super::generated::cards::{CardVar, RegentCard};
+use super::super::super::generated::cards::{CardVar, Cards, RegentCard};
 use super::super::super::generated::powers::Power;
-use super::V;
+use super::{V, printed};
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
+    // Carried down, so a card reads the numbers it was played as rather than
+    // the ones whichever card its rule was written beside prints.
+    let id = Cards::Regent(card);
     match card {
-        RegentCard::Strike => strike(fight),
-        RegentCard::Defend => defend(fight),
-        RegentCard::FallingStar => falling_star(fight),
-        RegentCard::Venerate => venerate(fight),
+        RegentCard::Strike => strike(id, fight),
+        RegentCard::Defend => defend(id, fight),
+        RegentCard::FallingStar => falling_star(id, fight),
+        RegentCard::Venerate => venerate(id, fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
 }
 
 /// `StrikeRegent`. Deal damage.
-fn strike<F: Fight<V>>(fight: &mut F) {
+fn strike<F: Fight<V>>(card: Cards, fight: &mut F) {
     let target = fight.target();
-    let damage = fight.var(CardVar::Damage);
-    fight.attack(target, damage);
+    fight.attack(target, printed(card, CardVar::Damage));
 }
 
 /// `DefendRegent`. Gain block.
-fn defend<F: Fight<V>>(fight: &mut F) {
-    let block = fight.var(CardVar::Block);
-    fight.gain_block(block);
+fn defend<F: Fight<V>>(card: Cards, fight: &mut F) {
+    fight.gain_block(printed(card, CardVar::Block));
 }
 
 /// `FallingStar`. Deal damage, then weaken and expose what it hit.
@@ -34,18 +35,18 @@ fn defend<F: Fight<V>>(fight: &mut F) {
 /// The powers land after the damage, so a target the damage killed has left
 /// the fight and takes neither. `PowerCmd.Apply` returns on a creature with no
 /// combat state.
-fn falling_star<F: Fight<V>>(fight: &mut F) {
+fn falling_star<F: Fight<V>>(card: Cards, fight: &mut F) {
     let target = fight.target();
-    let damage = fight.var(CardVar::Damage);
-    fight.attack(target, damage);
-    let weak = fight.var(CardVar::WeakPower);
-    fight.apply_power(target, Power::WeakPower, weak);
-    let vulnerable = fight.var(CardVar::VulnerablePower);
-    fight.apply_power(target, Power::VulnerablePower, vulnerable);
+    fight.attack(target, printed(card, CardVar::Damage));
+    fight.apply_power(target, Power::WeakPower, printed(card, CardVar::WeakPower));
+    fight.apply_power(
+        target,
+        Power::VulnerablePower,
+        printed(card, CardVar::VulnerablePower),
+    );
 }
 
 /// `Venerate`. Gain stars.
-fn venerate<F: Fight<V>>(fight: &mut F) {
-    let stars = fight.var(CardVar::Stars);
-    fight.gain_stars(stars);
+fn venerate<F: Fight<V>>(card: Cards, fight: &mut F) {
+    fight.gain_stars(printed(card, CardVar::Stars));
 }

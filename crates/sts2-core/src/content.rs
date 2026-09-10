@@ -720,11 +720,11 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
 /// The fight, as a card's own behaviour reaches it.
 ///
 /// A card's behaviour is ported code and lives per build, in `sts2-content`.
-/// The fight it acts on lives in the engine. They meet here, which is what
-/// `ICombatState` is in the game.
+/// The fight it acts on lives in the engine. They meet here, at the game's
+/// `ICombatState`.
 ///
-/// Each method is one of the game's commands, named after it. One the engine
-/// cannot honour records a fault and does nothing.
+/// Each method is a command, and arrives when a ported card needs it. What a
+/// card prints is not here: that is static, and a card reads its own table.
 pub trait Fight<V: ContentVersion> {
     /// The creature the card was pointed at.
     ///
@@ -732,13 +732,6 @@ pub trait Fight<V: ContentVersion> {
     /// reaching behaviour has already been held to `CardModel.IsValidTarget`,
     /// so this is not a question the card asks and then answers.
     fn target(&self) -> u32;
-
-    /// One of the card's own printed numbers, by the build's key for it.
-    ///
-    /// `DynamicVars.Damage.BaseValue` and its neighbours. A key the card does
-    /// not print answers zero and records a fault. A card asking for a number
-    /// it has no row for is a mistake in the port.
-    fn var(&mut self, key: V::CardVar) -> V::Number;
 
     /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
     fn attack(&mut self, at: u32, damage: V::Number);
