@@ -4,7 +4,6 @@ use std::sync::Arc;
 use num_traits::ToPrimitive as _;
 use smallvec::SmallVec;
 use sts2_core::ActMap as _;
-use sts2_core::CardTable as _;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
@@ -552,8 +551,6 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                             .iter()
                             .map(|card| RewardCard {
                                 card: CardIdent::new(*card),
-                                cost: card.cost(),
-                                star_cost: card.star_cost(),
                                 // The game formats this from its localisation
                                 // tables, which the simulator does not have.
                                 text: None,

@@ -503,9 +503,9 @@ mod tests {
             "rewards": [
                 {"index": 0, "type": "CardReward", "populated": true, "taken": false,
                  "cards": [
-                     {"card": "POISONED_STAB", "cost": 1, "starCost": null, "text": "Deal 6 damage.\nApply [green]4[/green] Poison."},
-                     {"card": "FTL", "cost": 0, "starCost": null},
-                     {"card": "SPOILS_OF_BATTLE", "cost": 1, "starCost": null}
+                     {"card": "POISONED_STAB", "text": "Deal 6 damage.\nApply [green]4[/green] Poison."},
+                     {"card": "FTL"},
+                     {"card": "SPOILS_OF_BATTLE"}
                  ]},
                 {"index": 1, "type": "GoldReward", "populated": true, "amount": 25}
             ],

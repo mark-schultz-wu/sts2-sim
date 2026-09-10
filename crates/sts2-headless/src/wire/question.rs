@@ -13,8 +13,6 @@
 //! converted immediately, so nothing downstream can hold a `GoldReward` with a
 //! relic in it.
 
-use super::cost::WireCost;
-use super::observation;
 use serde::Deserialize;
 use sts2_core::{
     CardOption, Cell, ContentVersion, FoundItem, Question, RelicTable, RewardCard, RewardDetail,
@@ -81,9 +79,6 @@ pub(crate) struct WireFoundItem {
 #[serde(deny_unknown_fields)]
 pub(crate) struct WireRewardCard {
     card: String,
-    cost: WireCost,
-    #[serde(rename = "starCost")]
-    star_cost: WireCost,
     #[serde(default)]
     text: Option<String>,
 }
@@ -298,8 +293,6 @@ fn read_cards<V: ContentVersion>(
                     &c.card,
                     ident::card_ident::<V>,
                 )?,
-                cost: observation::cost(&format!("{path}.cards[{i}].cost"), c.cost)?,
-                star_cost: observation::cost(&format!("{path}.cards[{i}].starCost"), c.star_cost)?,
                 text: c.text,
             })
         })
@@ -310,7 +303,7 @@ fn read_cards<V: ContentVersion>(
 mod tests {
     use super::*;
     use sts2_content::v0_107_1::V0_107_1;
-    use sts2_core::{Applied, Cost, Table, Tool};
+    use sts2_core::{Applied, Table, Tool};
 
     type V = V0_107_1;
     type Relic = <V as ContentVersion>::Relic;
@@ -413,9 +406,8 @@ mod tests {
             "rewards": [
                 {"index": 5, "type": "GoldReward", "populated": true, "amount": 25},
                 {"index": 6, "type": "CardReward", "populated": true, "taken": true,
-                 "cards": [{"card": "STRIKE_IRONCLAD", "cost": 1, "starCost": null,
-                            "text": "Deal 6 damage."},
-                           {"card": "BASH+1", "cost": 2, "starCost": null}]},
+                 "cards": [{"card": "STRIKE_IRONCLAD", "text": "Deal 6 damage."},
+                           {"card": "BASH+1"}]},
                 {"index": 9, "type": "RelicReward", "populated": false,
                  "relic": null, "rarity": "Common"}
             ]
@@ -435,18 +427,6 @@ mod tests {
         assert_eq!(cards[0].text.as_deref(), Some("Deal 6 damage."));
         assert_eq!(cards[1].text, None);
         assert_eq!(cards[1].card.upgrade, 1);
-
-        // The costs the screen prints, sent with the card rather than looked
-        // up: a reward screen shows the modified cost, and the table holds the
-        // printed one.
-        assert_eq!(
-            (cards[0].cost, cards[0].star_cost),
-            (Cost::Fixed(1), Cost::None)
-        );
-        assert_eq!(
-            (cards[1].cost, cards[1].star_cost),
-            (Cost::Fixed(2), Cost::None)
-        );
 
         // A screen asked twice reports which of its rewards are already gone,
         // and the ones still on offer keep the numbers they were first offered
@@ -477,8 +457,7 @@ mod tests {
             "kind": "rewards", "skippable": false,
             "rewards": [
                 {"index": 0, "type": "SpecialCardReward", "populated": true,
-                 "cards": [{"card": "BASH", "cost": 2, "starCost": 1,
-                            "text": "Deal 8 damage."}]},
+                 "cards": [{"card": "BASH", "text": "Deal 8 damage."}]},
                 // Populated is a fact about the slot, and the game sends no
                 // card list until it has one to send.
                 {"index": 1, "type": "SpecialCardReward", "populated": false}
@@ -494,10 +473,6 @@ mod tests {
             panic!("expected a returned card");
         };
         assert_eq!(card.text.as_deref(), Some("Deal 8 damage."));
-        assert_eq!(
-            (card.cost, card.star_cost),
-            (Cost::Fixed(2), Cost::Fixed(1))
-        );
 
         assert_eq!(
             rewards[1].reward,
