@@ -5,9 +5,9 @@ use smallvec::SmallVec;
 use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
-    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
-    EventOption, EventOptionKey, EventOptionName, Map, Observation, Question, Reachable, Room,
-    Rules, Seed, Table,
+    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Coord, Counters, EventOption,
+    EventOptionKey, EventOptionName, Map, Observation, Question, Reachable, Room, Rules, Seed,
+    Table,
 };
 
 use crate::combat::Error;
@@ -72,7 +72,7 @@ enum Phase<V: Rules> {
         finished: bool,
         selection: Option<SmallVec<[V::Card; 4]>>,
     },
-    Combat(Combat<V>),
+    Combat(crate::combat::Ongoing<V>),
 }
 
 impl<V: Rules> State<V> {
@@ -160,9 +160,9 @@ impl<V: Rules> State<V> {
     }
 
     /// The fight the run is standing in, or nothing outside one.
-    pub(super) fn fight(&self) -> Option<&Combat<V>> {
+    pub(super) fn fight(&self) -> Option<&crate::combat::Ongoing<V>> {
         match &self.phase {
-            Phase::Combat(combat) => Some(combat),
+            Phase::Combat(ongoing) => Some(ongoing),
             Phase::Neow { .. } => None,
         }
     }
@@ -171,11 +171,16 @@ impl<V: Rules> State<V> {
     ///
     /// Whole, rather than edited where it stands. A decision the simulator
     /// cannot carry out never reaches this, so the run keeps the fight it had.
-    pub(super) fn fought(&mut self, combat: Combat<V>) {
-        self.phase = Phase::Combat(combat);
+    pub(super) fn fought(&mut self, ongoing: crate::combat::Ongoing<V>) {
+        self.phase = Phase::Combat(ongoing);
     }
 
-    pub(super) fn enter_combat(&mut self, to: Coord, counters: Counters<V>, combat: Combat<V>) {
+    pub(super) fn enter_combat(
+        &mut self,
+        to: Coord,
+        counters: Counters<V>,
+        ongoing: crate::combat::Ongoing<V>,
+    ) {
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
@@ -196,7 +201,7 @@ impl<V: Rules> State<V> {
                 .expect("a reported player stream belongs to the player");
             self.rngs.player[at] = counter;
         }
-        self.phase = Phase::Combat(combat);
+        self.phase = Phase::Combat(ongoing);
     }
 
     pub(super) fn normal_encounter(&self, act: usize) -> Option<V::Encounter> {
@@ -335,7 +340,7 @@ impl<V: Rules> State<V> {
                 };
                 (asking, Some(room), None)
             }
-            Phase::Combat(combat) => (None, None, Some(combat.clone())),
+            Phase::Combat(ongoing) => (None, None, Some(ongoing.combat.clone())),
         };
         let run: HashMap<_, _> = V::run_rng_types()
             .iter()

@@ -23,16 +23,19 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let Some(combat) = self.fight() else {
+        let Some(ongoing) = self.fight() else {
             return refused(Reason::NotInCombat);
         };
-        let play = match combat::resolve(combat, index, target) {
+        let play = match combat::resolve(&ongoing.combat, index, target) {
             Ok(play) => play,
             Err(reason) => return refused(reason),
         };
 
-        let played = combat::play(combat, play)?;
-        self.fought(played);
+        let played = combat::play(&ongoing.combat, play)?;
+        self.fought(combat::Ongoing {
+            combat: played,
+            machines: ongoing.machines.clone(),
+        });
         Ok(Ok(self.report()))
     }
 }

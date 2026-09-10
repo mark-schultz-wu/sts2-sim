@@ -1,9 +1,28 @@
 //! Creating the enemy creatures that begin a combat.
 
 use sts2_core::rng::{Bound, GameRng};
-use sts2_core::{CombatId, Counters, Creature, ModelId, Rules, SideKinds};
+use sts2_core::{CombatId, Counters, Creature, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
+
+/// The enemy side of a fight, as it begins.
+#[derive(Debug)]
+pub(crate) struct Roster<V: Rules> {
+    pub(crate) creatures: Vec<Creature<V>>,
+    pub(crate) machines: Vec<Machine<V>>,
+}
+
+/// One monster's move graph, and where it stands.
+///
+/// Beside the fight rather than in it. An observation reports what a monster
+/// does next, not how its graph reached that.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Machine<V: Rules> {
+    /// The creature in the fight this graph belongs to.
+    pub(crate) creature: CombatId,
+    pub(crate) monster: V::Monster,
+    pub(crate) machine: MoveMachine,
+}
 
 /// Roll health and the first move in encounter order, advancing the two run
 /// streams that own those draws.
@@ -12,12 +31,13 @@ pub(crate) fn initialize<V: Rules>(
     ascension: V::AscensionLevel,
     counters: &mut Counters<V>,
     monsters: &[V::Monster],
-) -> Result<Vec<Creature<V>>, Error> {
+) -> Result<Roster<V>, Error> {
     let mut niche = super::stream::seek(raw_seed, counters, V::niche_rng(), "niche")?;
     let mut ai = super::stream::seek(raw_seed, counters, V::monster_ai_rng(), "monster_ai")?;
 
     let mut health = Vec::with_capacity(monsters.len());
     let mut creatures = Vec::with_capacity(monsters.len());
+    let mut machines = Vec::with_capacity(monsters.len());
     for (index, &monster) in monsters.iter().enumerate() {
         let range = V::monster_hp_bounds(monster, ascension);
         let (min, max) = (range.min(), range.max());
@@ -39,6 +59,13 @@ pub(crate) fn initialize<V: Rules>(
             .and_then(nonmax::NonMaxU8::new)
             .map(CombatId::new)
             .ok_or(Error::CreatureIdOverflow)?;
+        let mut machine = MoveMachine::new(V::initial_monster_state(monster));
+        let opening = V::roll_monster_move(monster, ascension, &mut machine, &mut ai)?;
+        machines.push(Machine {
+            creature: id,
+            monster,
+            machine,
+        });
         creatures.push(Creature {
             id,
             model: Some(ModelId::Monster(monster)),
@@ -48,18 +75,16 @@ pub(crate) fn initialize<V: Rules>(
             block: num_traits::zero(),
             alive: true,
             powers: Vec::new(),
-            next_move: Some(V::roll_monster_move(
-                monster,
-                ascension,
-                &mut sts2_core::MoveMachine::new(V::initial_monster_state(monster)),
-                &mut ai,
-            )?),
+            next_move: Some(opening),
         });
     }
 
     super::stream::record(counters, V::niche_rng(), "niche", &niche)?;
     super::stream::record(counters, V::monster_ai_rng(), "monster_ai", &ai)?;
-    Ok(creatures)
+    Ok(Roster {
+        creatures,
+        machines,
+    })
 }
 
 #[cfg(test)]
@@ -88,13 +113,14 @@ mod tests {
             Monster::LeafSlimeS,
         ];
 
-        let creatures = initialize::<V0_107_1>(
+        let roster = initialize::<V0_107_1>(
             stream_seed(&seed),
             AscensionLevel::None,
             &mut counters,
             &monsters,
         )
         .unwrap();
+        let creatures = roster.creatures;
 
         assert_eq!(
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),

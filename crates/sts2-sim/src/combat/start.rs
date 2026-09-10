@@ -23,14 +23,14 @@ pub(crate) fn enter<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     observation: &Observation<V>,
-) -> Result<(Combat<V>, Counters<V>), Error> {
+) -> Result<(super::Ongoing<V>, Counters<V>), Error> {
     let mut counters = observation.rng.clone();
 
     let monsters = encounter::opening::<V>(raw_seed, observation.floor, encounter)?;
     let enemies = monster::initialize::<V>(raw_seed, ascension, &mut counters, &monsters)?;
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.
-    let mut creatures = Vec::with_capacity(enemies.len() + 1);
+    let mut creatures = Vec::with_capacity(enemies.creatures.len() + 1);
     creatures.push(Creature {
         id: CombatId::new(nonmax::NonMaxU8::ZERO),
         model: Some(ModelId::Character(character)),
@@ -42,7 +42,7 @@ pub(crate) fn enter<V: Rules>(
         powers: Vec::new(),
         next_move: None,
     });
-    creatures.extend(enemies);
+    creatures.extend(enemies.creatures);
 
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
     let piles = pile::shuffle(&mut shuffle, observation.deck.clone()).deal(HAND_SIZE);
@@ -54,22 +54,25 @@ pub(crate) fn enter<V: Rules>(
     let legal = legal::hand::<V>(piles.hand(), &creatures, energy, stars)?;
 
     Ok((
-        Combat {
-            turn: num_traits::one(),
-            phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
-            energy,
-            stars,
-            round: num_traits::one(),
-            encounter: Some(encounter),
-            hand: piles.hand().to_vec(),
-            draw: piles.draw().to_vec(),
-            discard: piles.discard().to_vec(),
-            exhaust: piles.exhaust().to_vec(),
-            creatures,
-            legal,
-            // Absent rather than an empty queue: the subsystem is inert until
-            // something gives the player a slot.
-            orbs: None,
+        super::Ongoing {
+            machines: enemies.machines,
+            combat: Combat {
+                turn: num_traits::one(),
+                phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
+                energy,
+                stars,
+                round: num_traits::one(),
+                encounter: Some(encounter),
+                hand: piles.hand().to_vec(),
+                draw: piles.draw().to_vec(),
+                discard: piles.discard().to_vec(),
+                exhaust: piles.exhaust().to_vec(),
+                creatures,
+                legal,
+                // Absent rather than an empty queue: the subsystem is inert until
+                // something gives the player a slot.
+                orbs: None,
+            },
         },
         counters,
     ))
