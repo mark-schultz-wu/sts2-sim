@@ -1173,6 +1173,19 @@ pub trait Rules: ContentVersion {
     /// carries on, and the divergence surfaces somewhere else.
     fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
+    /// The cards a character's own pool offers, split by rarity.
+    ///
+    /// `Character.CardPool`, which is what a fight's card reward draws from.
+    /// [`Rules::colorless_cards`] is the other pool, and no character holds it.
+    fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card>;
+
+    /// What winning an encounter pays, which is `MinGoldReward` to
+    /// `MaxGoldReward`.
+    fn encounter_gold(
+        encounter: Self::Encounter,
+        ascension: Self::AscensionLevel,
+    ) -> crate::rng::Interval<u16>;
+
     /// Resolve a monster’s unmodified HP range at this ascension.
     fn monster_hp_bounds(
         monster: Self::Monster,

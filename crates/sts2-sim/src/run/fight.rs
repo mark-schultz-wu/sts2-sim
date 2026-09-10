@@ -31,16 +31,8 @@ impl<V: Rules> State<V> {
             Err(reason) => return refused(reason),
         };
 
-        let machines = ongoing.machines.clone();
-        let (played, counters) =
-            combat::play(&ongoing.combat, play, self.raw_seed(), &self.counters())?;
-
-        self.drew(counters);
-        self.fought(combat::Ongoing {
-            combat: played,
-            machines,
-        });
-        Ok(Ok(self.report()))
+        let played = combat::play(ongoing, play, self.raw_seed(), &self.counters())?;
+        Ok(Ok(self.settle(played)))
     }
 
     /// End the player's turn, and set up the next one.
@@ -56,16 +48,46 @@ impl<V: Rules> State<V> {
 
         let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
             .expect("the turn's energy fits the build's count type");
-        let (ended, counters) = combat::end_turn(
+        let ended = combat::end_turn(
             ongoing,
             self.raw_seed(),
             self.ascension(),
             &self.counters(),
             max_energy,
         )?;
+        Ok(Ok(self.settle(ended)))
+    }
 
-        self.drew(counters);
-        self.fought(ended);
-        Ok(Ok(self.report()))
+    /// Put what a decision left behind in place of the fight it acted on.
+    ///
+    /// A decision that won the fight goes on to the rewards, which is
+    /// `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
+    fn settle(&mut self, fought: combat::Fought<V>) -> sts2_core::Applied<V> {
+        self.drew(fought.counters);
+        match fought.won {
+            false => self.fought(fought.ongoing),
+            true => {
+                let offered = self.combat_rewards(&fought.ongoing.combat);
+                self.won(fought.ongoing.combat, offered);
+            }
+        }
+        let mut applied = self.report();
+        // A decision the end of a fight cut short is `Decided::Abandoned`. The
+        // rewards it put up are what is left of it.
+        applied.resolved = applied.asking.is_none();
+        applied
+    }
+
+    /// `RewardsSet.WithRewardsFromRoom`, for the fight just won.
+    fn combat_rewards(&mut self, combat: &sts2_core::Combat<V>) -> Vec<crate::reward::Offer<V>> {
+        let encounter = combat
+            .encounter
+            .unwrap_or_else(|| unimplemented!("a fight with no encounter behind it"));
+        let ascension = self.ascension();
+        let character = self.character();
+        let gold = V::encounter_gold(encounter, ascension);
+        let act = self.act();
+        let (rng, odds) = self.rewarding();
+        crate::reward::combat::won::<V, _>(rng, odds, ascension, character, gold, act)
     }
 }

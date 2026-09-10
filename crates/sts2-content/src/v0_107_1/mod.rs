@@ -137,6 +137,18 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::on_play(card, fight)
     }
 
+    fn reward_cards(character: Self::Character) -> sts2_core::Drafted<'static, Self::Card> {
+        generated::cards::reward_cards(character)
+    }
+
+    fn encounter_gold(
+        encounter: Self::Encounter,
+        ascension: Self::AscensionLevel,
+    ) -> sts2_core::rng::Interval<u16> {
+        let gold = sts2_core::Table::data(encounter).gold;
+        sts2_core::rng::Interval::new(gold.min.at(ascension as u8), gold.max.at(ascension as u8))
+    }
+
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,

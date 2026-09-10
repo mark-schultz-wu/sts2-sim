@@ -27,3 +27,29 @@ pub(crate) struct Ongoing<V: Rules> {
     pub(crate) combat: Combat<V>,
     pub(crate) machines: Vec<Machine<V>>,
 }
+
+/// What one decision leaves behind.
+///
+/// The counters travel with the fight because a decision can draw, and the run
+/// writes both back together or neither.
+pub(crate) struct Fought<V: Rules> {
+    pub(crate) ongoing: Ongoing<V>,
+    pub(crate) counters: sts2_core::Counters<V>,
+    /// The last enemy left the fight, so this decision won it.
+    pub(crate) won: bool,
+}
+
+/// `CombatManager.EndCombat`: what a won fight leaves in the observation.
+///
+/// The fight is over and still reported. The piles empty into nothing rather
+/// than into each other. The turn stops where it stopped. The stars stay,
+/// because they belong to the run and not to the turn.
+pub(crate) fn finish<V: Rules>(combat: &mut Combat<V>) {
+    combat.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
+    combat.energy = num_traits::zero();
+    combat.hand.clear();
+    combat.draw.clear();
+    combat.discard.clear();
+    combat.exhaust.clear();
+    combat.legal.clear();
+}

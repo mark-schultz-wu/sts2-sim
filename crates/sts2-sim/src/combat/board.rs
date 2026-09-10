@@ -26,6 +26,11 @@ pub(super) struct Board<'a, V: Rules> {
     target: Option<CombatId>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
+    /// The last enemy left the fight while this effect was resolving.
+    ///
+    /// `CheckWinCondition` runs after the command that killed it, so this is
+    /// read once the effect is over rather than acted on where it is set.
+    pub(super) won: bool,
 }
 
 impl<'a, V: Rules> Board<'a, V> {
@@ -42,6 +47,7 @@ impl<'a, V: Rules> Board<'a, V> {
             actor,
             target,
             intent_damage: V::Number::zero(),
+            won: false,
         }
     }
 
@@ -58,6 +64,7 @@ impl<'a, V: Rules> Board<'a, V> {
             actor,
             target: None,
             intent_damage,
+            won: false,
         }
     }
 
@@ -127,14 +134,11 @@ impl<'a, V: Rules> Board<'a, V> {
         // afterwards can see it. That is why the observation stops reporting
         // it rather than reporting it dead.
         self.combat.creatures.remove(at);
-        if !self
+        self.won = !self
             .combat
             .creatures
             .iter()
-            .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
-        {
-            unimplemented!("the end of a fight");
-        }
+            .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY);
     }
 }
 
