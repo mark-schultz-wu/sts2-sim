@@ -28,12 +28,9 @@ use sts2_core::{
 
 type V = V0_107_1;
 
-/// A creature id, spelled the way an observation off the wire spells one.
-///
-/// `CombatId` is minted from the number a game reports, and `serde` is that
-/// door. A test naming a creature is a reader of observations, so it uses it.
+/// A creature id, as an observation spells one.
 fn at(id: u8) -> CombatId {
-    serde_json::from_value(serde_json::json!(id)).expect("a creature id is a small number")
+    CombatId::new(id).expect("a creature id")
 }
 type Card = <V as ContentVersion>::Card;
 type CardVar = <V as ContentVersion>::CardVar;

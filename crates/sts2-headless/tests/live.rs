@@ -182,9 +182,9 @@ fn looked(game: &Oracle<V>, snapshot: Snapshot<V>) -> Seen {
     }
 }
 
-/// A creature id, as an observation spells one. `serde` is the door in.
+/// A creature id, as an observation spells one.
 fn at(id: u8) -> Option<sts2_core::CombatId> {
-    serde_json::from_value(serde_json::json!(id)).ok()
+    sts2_core::CombatId::new(id)
 }
 
 /// The belt, end to end: what it reports, what it refuses, and what drinking

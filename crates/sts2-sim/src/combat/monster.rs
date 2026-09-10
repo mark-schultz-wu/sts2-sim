@@ -32,7 +32,12 @@ pub(crate) fn initialize<V: Rules>(
         let hp = choices[niche.next_int(bound) as usize];
         health.push(hp);
 
-        let id = CombatId::monster(index).ok_or(Error::CreatureIdOverflow)?;
+        // `CombatId` counts from the player, so the monsters start at one.
+        let id = u8::try_from(index)
+            .ok()
+            .and_then(|index| index.checked_add(1))
+            .and_then(CombatId::new)
+            .ok_or(Error::CreatureIdOverflow)?;
         creatures.push(Creature {
             id,
             model: Some(ModelId::Monster(monster)),

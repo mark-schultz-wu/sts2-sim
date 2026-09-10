@@ -86,22 +86,22 @@ fn travelling_into_a_monster_room_opens_the_fight() {
             .collect::<Vec<_>>(),
         [
             (
-                CombatId::PLAYER,
+                CombatId::new(0).expect("a creature id"),
                 Some(ModelId::Character(Character::Regent)),
                 75
             ),
             (
-                CombatId::monster(0).expect("a first monster"),
+                CombatId::new(1).expect("a creature id"),
                 Some(ModelId::Monster(Monster::TwigSlimeS)),
                 8
             ),
             (
-                CombatId::monster(1).expect("a second monster"),
+                CombatId::new(2).expect("a creature id"),
                 Some(ModelId::Monster(Monster::LeafSlimeM)),
                 35
             ),
             (
-                CombatId::monster(2).expect("a third monster"),
+                CombatId::new(3).expect("a creature id"),
                 Some(ModelId::Monster(Monster::LeafSlimeS)),
                 12
             ),
@@ -127,9 +127,9 @@ fn a_cards_targets_are_the_creatures_it_can_be_pointed_at() {
             TargetType::AnyEnemy => assert_eq!(
                 play.targets,
                 [
-                    CombatId::monster(0).expect("a first monster"),
-                    CombatId::monster(1).expect("a second monster"),
-                    CombatId::monster(2).expect("a third monster"),
+                    CombatId::new(1).expect("a creature id"),
+                    CombatId::new(2).expect("a creature id"),
+                    CombatId::new(3).expect("a creature id"),
                 ],
                 "{:?}",
                 play.card

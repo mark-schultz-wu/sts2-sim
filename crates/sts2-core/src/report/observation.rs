@@ -385,11 +385,11 @@ pub struct Channelled<V: ContentVersion> {
 /// One creature in a fight, as the game's `CombatId` names one.
 ///
 /// A card's commands are pointed at one of these, and [`crate::Fight::target`]
-/// is where a rule gets one. The number stays inside.
+/// is where a rule gets one. Rules code compares two of them and reads neither
+/// out. The number is for the edges that spell an id or read one.
 ///
-/// Reading one off the wire goes through `serde`, so a crate that does not
-/// talk to the game cannot make one from a number. A byte, because the roster
-/// bounds it.
+/// A byte, because the roster bounds it: the player is `0` and the monsters
+/// are `index + 1`.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
@@ -406,20 +406,14 @@ impl std::fmt::Display for CombatId {
 }
 
 impl CombatId {
-    /// The player, which `CombatId` counts from.
-    pub const PLAYER: Self = Self(nonmax::NonMaxU8::ZERO);
+    /// The creature this number names, or nothing for one no fight assigns.
+    pub fn new(id: u8) -> Option<Self> {
+        nonmax::NonMaxU8::new(id).map(Self)
+    }
 
-    /// The `index`th monster the encounter fields, which the game numbers from
-    /// one, or nothing for a fight with more creatures than ids.
-    ///
-    /// The game's own numbering, rather than a way to make an id out of a
-    /// number. A fight that fields creatures says which one it is fielding.
-    pub fn monster(index: usize) -> Option<Self> {
-        u8::try_from(index)
-            .ok()
-            .and_then(|index| index.checked_add(1))
-            .and_then(nonmax::NonMaxU8::new)
-            .map(Self)
+    /// The number the game spells.
+    pub fn get(self) -> u8 {
+        self.0.get()
     }
 }
 

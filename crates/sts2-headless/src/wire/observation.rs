@@ -153,19 +153,20 @@ pub(crate) fn ident<T>(
 /// propagating a maybe.
 fn combat_id(path: &str, id: Option<u32>) -> Result<CombatId, Error> {
     let id = id.ok_or_else(|| at(path, Why::Absent("CombatId")))?;
-    // A creature id is a byte: the player is zero and the monsters count from
-    // one, so a roster is what bounds it. Reading it is what mints one, and
-    // `serde` is the only door in. A fight this crate cannot number is a
-    // divergence, not a wider id.
-    serde_json::from_value(serde_json::Value::from(id)).map_err(|_| {
-        at(
-            path,
-            Why::OutOfRange {
-                what: "a creature id",
-                value: id.to_string(),
-            },
-        )
-    })
+    // A creature id is a byte, because the roster bounds it. A fight this
+    // crate cannot number is a divergence, not a wider id.
+    u8::try_from(id)
+        .ok()
+        .and_then(CombatId::new)
+        .ok_or_else(|| {
+            at(
+                path,
+                Why::OutOfRange {
+                    what: "a creature id",
+                    value: id.to_string(),
+                },
+            )
+        })
 }
 
 fn domain_number<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> Result<T, Error> {
@@ -1033,7 +1034,7 @@ mod tests {
 
     /// A creature id, as an observation spells one.
     fn at(id: u8) -> CombatId {
-        serde_json::from_value(serde_json::json!(id)).expect("a creature id is a small number")
+        CombatId::new(id).expect("a creature id")
     }
     use super::*;
     use serde_json::{Value, json};

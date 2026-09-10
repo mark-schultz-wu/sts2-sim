@@ -66,13 +66,11 @@ pub struct StartArgs {
     pub no_record: bool,
 }
 
-/// A creature id as a person types one, read the way an observation spells one.
-///
-/// A number off a command line is outside data, like a number off the wire, so
-/// it comes in the same way. The player is zero and the monsters count from
-/// one, so a fight has few enough ids to fit a byte.
+/// A creature id as a person types one.
 fn combat_id(id: u32) -> anyhow::Result<sts2_core::CombatId> {
-    serde_json::from_value(serde_json::Value::from(id))
+    u8::try_from(id)
+        .ok()
+        .and_then(sts2_core::CombatId::new)
         .with_context(|| format!("{id} is no creature in a fight"))
 }
 

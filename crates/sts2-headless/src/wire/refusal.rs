@@ -318,9 +318,9 @@ enum FaultDiscriminator {
 #[cfg(test)]
 mod tests {
 
-    /// A creature id, as a refusal off the wire spells one.
+    /// A creature id, as an observation spells one.
     fn at(id: u8) -> Option<sts2_core::CombatId> {
-        serde_json::from_value(serde_json::json!(id)).ok()
+        sts2_core::CombatId::new(id)
     }
     use super::*;
     use serde_json::json;

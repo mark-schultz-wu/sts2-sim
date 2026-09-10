@@ -223,12 +223,12 @@ mod tests {
     fn fight() -> Vec<Creature<V>> {
         vec![
             creature(
-                CombatId::PLAYER,
+                CombatId::new(0).expect("a creature id"),
                 ModelId::Character(Character::Regent),
                 CombatSide::Player,
             ),
             creature(
-                CombatId::monster(0).expect("the first monster has an id"),
+                CombatId::new(1).expect("a creature id"),
                 ModelId::Monster(Monster::TwigSlimeS),
                 CombatSide::Enemy,
             ),
