@@ -149,11 +149,13 @@ impl<V: Rules> State<V> {
         *chosen = Some(index);
         self.player.relics.push(V::lead_paperweight());
         *selection = Some(
-            crate::reward::card::regular::<V, _>(&mut self.rngs.rewards, &V::colorless_cards(), 2)
+            crate::reward::card::regular::<V, _>(&mut self.rngs.rewards, V::colorless_cards(), 2)
                 .into_iter()
                 .collect(),
         );
-        Ok(self.report())
+        let mut applied = self.report();
+        applied.resolved = false;
+        Ok(applied)
     }
 
     pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
