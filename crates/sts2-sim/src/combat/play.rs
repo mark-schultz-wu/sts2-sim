@@ -9,11 +9,9 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
-use num_traits::Zero;
-use sts2_core::{
-    CardTable, Combat, CombatId, Cost, Creature, Fight, HandIndex, Reason, Rules, SideKinds,
-};
+use sts2_core::{CardTable, Combat, CombatId, Cost, HandIndex, Reason, Rules};
 
+use super::board::Board;
 use super::{Error, legal};
 
 /// A play the fight allows, resolved but not yet made.
@@ -107,10 +105,7 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
-    let mut board = Board {
-        combat: &mut next,
-        target: play.target,
-    };
+    let mut board = Board::for_card(&mut next, play.target);
     V::on_play(card.card, &mut board);
 
     // `GetResultPileTypeForCardPlay`, once the effect is over.
@@ -127,109 +122,4 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
 
     next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
     Ok(next)
-}
-
-/// The fight a card's own behaviour acts on.
-///
-/// Everything it does is one of the game's commands with nothing listening.
-/// This build's fights have no power, relic or card that hooks any of them
-/// yet. A command that needs one stops the run where it stands.
-struct Board<'a, V: Rules> {
-    combat: &'a mut Combat<V>,
-    target: Option<CombatId>,
-}
-
-impl<V: Rules> Board<'_, V> {
-    /// Where a creature sits, or nothing for one no longer in the fight.
-    fn at(&self, at: CombatId) -> Option<usize> {
-        self.combat
-            .creatures
-            .iter()
-            .position(|creature| creature.id == at)
-    }
-
-    /// The player, which is the only creature a card is played from.
-    fn player(&mut self) -> &mut Creature<V> {
-        self.combat
-            .creatures
-            .iter_mut()
-            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-            .expect("a fight has the player in it")
-    }
-
-    /// `KillWithoutCheckingWinCondition`, for a creature the damage killed.
-    fn kill(&mut self, at: usize) {
-        self.combat.creatures[at].alive = false;
-        if self.combat.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
-            unimplemented!("a player dying in a fight");
-        }
-        // A dead monster is taken out of the fight, so nothing that reads it
-        // afterwards can see it. That is why the observation stops reporting
-        // it rather than reporting it dead.
-        self.combat.creatures.remove(at);
-        if !self
-            .combat
-            .creatures
-            .iter()
-            .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
-        {
-            unimplemented!("the end of a fight");
-        }
-    }
-}
-
-impl<V: Rules> Fight<V> for Board<'_, V> {
-    fn target(&self) -> CombatId {
-        // [`resolve`] refuses a play whose card names a creature and was
-        // pointed at none, so a card that reads this was pointed at one.
-        self.target
-            .expect("a card that names a target is played at one")
-    }
-
-    fn attack(&mut self, at: CombatId, damage: V::Number) {
-        // `CreatureCmd.Damage`: block first, then hit points, then the death
-        // the hit caused. Nothing modifies the amount on the way.
-        let Some(at) = self.at(at) else { return };
-        if !self.combat.creatures[at].alive {
-            return;
-        }
-        let zero = V::Number::zero();
-        let blocked = self.combat.creatures[at].block.min(damage).max(zero);
-        self.combat.creatures[at].block = self.combat.creatures[at].block - blocked;
-        let unblocked = (damage - blocked).max(zero);
-
-        let hp = self.combat.creatures[at].hp;
-        let killed = hp > zero && unblocked >= hp;
-        self.combat.creatures[at].hp = (hp - unblocked).max(zero);
-        if killed {
-            self.kill(at);
-        }
-    }
-
-    fn gain_block(&mut self, amount: V::Number) {
-        // `GainBlock` clamps the modified amount at zero and only then adds.
-        let amount = amount.max(V::Number::zero());
-        if amount > V::Number::zero() {
-            let player = self.player();
-            player.block = player.block + amount;
-        }
-    }
-
-    fn gain_stars(&mut self, amount: V::Number) {
-        // The pool is a count, so a card printing a negative one is spending
-        // rather than gaining. No card on this build does.
-        let amount = num_traits::NumCast::from(amount)
-            .unwrap_or_else(|| unimplemented!("a card spending stars as it plays"));
-        self.combat.stars = self.combat.stars + amount;
-    }
-
-    fn apply_power(&mut self, at: CombatId, _power: V::Power, amount: V::Number) {
-        // `PowerCmd.Apply` returns on a zero amount, and on a creature that
-        // cannot receive powers. A monster the fight has taken out is one,
-        // because its combat state is gone.
-        if amount.is_zero() || self.at(at).is_none() {
-            return;
-        }
-        unimplemented!("a power on a creature still in the fight");
-    }
 }

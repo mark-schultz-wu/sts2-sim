@@ -161,6 +161,14 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(monster).initial
     }
 
+    fn perform_move<F: sts2_core::Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        fight: &mut F,
+    ) {
+        behaviour::monsters::perform(monster, move_id, fight);
+    }
+
     fn random_encounter_monsters<R: sts2_core::rng::GameRng>(
         encounter: Self::Encounter,
         rng: &mut R,

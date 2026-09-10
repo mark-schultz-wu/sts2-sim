@@ -2,14 +2,17 @@
 mod error;
 pub use error::Error;
 
+mod board;
 mod encounter;
 mod legal;
 mod monster;
 mod play;
 mod start;
 mod stream;
+mod turn;
 pub(crate) use play::{play, resolve};
 pub(crate) use start::enter;
+pub(crate) use turn::end as end_turn;
 pub mod pile;
 
 use monster::Machine;

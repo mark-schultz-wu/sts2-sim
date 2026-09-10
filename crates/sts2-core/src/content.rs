@@ -746,6 +746,23 @@ pub trait Fight<V: ContentVersion> {
 
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
     fn apply_power(&mut self, at: crate::CombatId, power: V::Power, amount: V::Number);
+
+    /// What the acting monster's move advertises it will hit for.
+    ///
+    /// A move's damage and the intent beside it are one number in the game:
+    /// both read the monster's own property. The table carries it, so a move
+    /// reads it here rather than print it a second time.
+    fn intent_damage(&self) -> V::Number;
+
+    /// `DamageCmd.Attack(damage).FromMonster(this)`, which hits every creature
+    /// on the other side.
+    fn attack_opponents(&mut self, damage: V::Number);
+
+    /// `CardPileCmd.AddToCombatAndPreview<C>(targets, Discard, count)`.
+    ///
+    /// One copy per count, into the discard pile of every creature on the
+    /// other side.
+    fn give_cards(&mut self, card: V::Card, count: usize);
 }
 
 /// Where a monster's move graph stands.
@@ -1157,6 +1174,13 @@ pub trait Rules: ContentVersion {
 
     /// Where a monster's graph starts, for a machine that has not walked.
     fn initial_monster_state(monster: Self::Monster) -> u8;
+
+    /// What one of a monster's moves does, which is its `onPerform`.
+    ///
+    /// # Panics
+    ///
+    /// A move nobody has ported.
+    fn perform_move<F: Fight<Self>>(monster: Self::Monster, move_id: Self::MoveId, fight: &mut F);
 
     /// Generate an encounter whose roster is code rather than table data.
     /// An unported build-specific rule returns a typed error.

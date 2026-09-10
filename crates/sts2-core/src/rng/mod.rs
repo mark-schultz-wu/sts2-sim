@@ -162,6 +162,17 @@ pub trait GameRng: Sized {
         self.unstable_shuffle(items);
     }
 
+    /// The same, over a list whose order is a key rather than the item.
+    ///
+    /// `List.Sort` goes through `IComparable`, and what a card compares on is
+    /// two of its fields rather than the whole of it. The game's own sort is
+    /// unstable and this one is not. That shows only on items the key cannot
+    /// tell apart, which the game cannot tell apart either.
+    fn stable_shuffle_by_key<T, K: Ord>(&mut self, items: &mut [T], key: impl FnMut(&T) -> K) {
+        items.sort_by_key(key);
+        self.unstable_shuffle(items);
+    }
+
     /// Box–Muller with rejection: two draws per attempt, rejecting against
     /// `[0, 1]` regardless of `scale`, because the scaling happens after. So how
     /// far the counter moves is part of what has to be reproduced.

@@ -184,6 +184,12 @@ impl<V: Rules> State<V> {
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
+        self.drew(counters);
+        self.phase = Phase::Combat(ongoing);
+    }
+
+    /// Take back how far each stream a rule drew from now stands.
+    pub(super) fn drew(&mut self, counters: Counters<V>) {
         for (kind, counter) in counters.run {
             let at = V::run_rng_types()
                 .iter()
@@ -201,7 +207,22 @@ impl<V: Rules> State<V> {
                 .expect("a reported player stream belongs to the player");
             self.rngs.player[at] = counter;
         }
-        self.phase = Phase::Combat(ongoing);
+    }
+
+    /// How far each stream has been drawn, as a rule reads it.
+    pub(super) fn counters(&self) -> Counters<V> {
+        let run: HashMap<_, _> = V::run_rng_types()
+            .iter()
+            .copied()
+            .zip(self.rngs.run.iter().copied())
+            .collect();
+        let mut player: HashMap<_, _> = V::player_rng_types()
+            .iter()
+            .copied()
+            .zip(self.rngs.player.iter().copied())
+            .collect();
+        player.insert(V::rewards_rng(), self.rngs.rewards.counter() as u32);
+        Counters { run, player }
     }
 
     pub(super) fn normal_encounter(&self, act: usize) -> Option<V::Encounter> {
@@ -342,18 +363,6 @@ impl<V: Rules> State<V> {
             }
             Phase::Combat(ongoing) => (None, None, Some(ongoing.combat.clone())),
         };
-        let run: HashMap<_, _> = V::run_rng_types()
-            .iter()
-            .copied()
-            .zip(self.rngs.run.iter().copied())
-            .collect();
-        let mut player: HashMap<_, _> = V::player_rng_types()
-            .iter()
-            .copied()
-            .zip(self.rngs.player.iter().copied())
-            .collect();
-        player.insert(V::rewards_rng(), self.rngs.rewards.counter() as u32);
-
         Applied {
             observation: Observation {
                 act: num_traits::zero(),
@@ -386,7 +395,7 @@ impl<V: Rules> State<V> {
                     points: map.shared(),
                     proceed: false,
                 },
-                rng: Counters { run, player },
+                rng: self.counters(),
                 room,
                 combat,
             },
