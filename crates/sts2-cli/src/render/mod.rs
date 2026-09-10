@@ -374,6 +374,18 @@ pub(super) fn render_run(name: &str, count: usize) -> String {
 // The display-safe spelling remains under `render` for existing rendering callers.
 pub use crate::id::display as spelling;
 
+/// An event option's key, spelled the way the game writes it.
+///
+/// The parts are typed, so this is the one place that puts the sentence back
+/// together. A front end is where a name becomes words.
+pub fn option_key<V: sts2_core::ContentVersion>(key: &sts2_core::EventOptionKey<V>) -> String {
+    let option = match &key.option {
+        sts2_core::EventOptionName::Relic(relic) => spelling(relic),
+        sts2_core::EventOptionName::Said(name) => name.clone(),
+    };
+    format!("{}.pages.INITIAL.options.{option}", spelling(&key.event))
+}
+
 /// A card identity, the way the observation spells one.
 ///
 /// `BASH+1/SMOG*ADROIT`: the card, then what it is carrying. A person reading a

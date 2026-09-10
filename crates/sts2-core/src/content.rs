@@ -370,7 +370,9 @@ pub struct Printed<K, N> {
 /// a card applies, spelled as the power's type is (`WeakPower`). Two builds do
 /// not print the same set, so the set belongs to a build and the strings stay
 /// at the edges that spell them.
-pub trait CardVars: std::fmt::Debug + Copy + Eq + 'static {
+///
+/// `Ord`, because a preview keys its numbers by one of these.
+pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
     /// Every key, once each.
     const ALL: &'static [Self];
 

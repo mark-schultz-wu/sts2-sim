@@ -156,7 +156,7 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<
             // The game formats this from its localisation tables, which the
             // simulator does not have. `Observation::rules_digest` leaves it
             // out for that reason, and a front end reads the numbers.
-            text: String::new(),
+            text: None,
             vars: numbers.clone(),
             base: numbers.clone(),
         })
@@ -176,7 +176,7 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<
 /// The numbers the card prints, as they resolve right now.
 fn numbers<V: Rules>(
     card: &CardIdent<V>,
-) -> Result<std::collections::BTreeMap<String, V::Number>, Error> {
+) -> Result<std::collections::BTreeMap<V::CardVar, V::Number>, Error> {
     card.card
         .vars()
         .iter()
@@ -189,7 +189,7 @@ fn numbers<V: Rules>(
                 let base = num_traits::NumCast::from(var.base).ok_or(Error::FractionalVar {
                     name: var.id.name(),
                 })?;
-                Ok((var.id.name().to_string(), base))
+                Ok((var.id, base))
             }
         })
         .collect()

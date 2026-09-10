@@ -89,8 +89,14 @@ fn fill(state: &mut Value) {
         let mut whole = json!({"type": "Event", "id": "WELLSPRING", "finished": false,
                                "title": null, "text": null, "options": []});
         merge(&mut whole, room.take());
+        // An option's key names the event it belongs to, and a reader holds
+        // the two to each other. So the default follows whichever event the
+        // fixture asked for.
+        let event = whole["id"].as_str().unwrap_or("WELLSPRING").to_string();
         for option in whole["options"].as_array_mut().into_iter().flatten() {
-            let mut base = json!({"index": 0, "key": "K", "title": null, "text": null,
+            let mut base = json!({"index": 0,
+                                  "key": format!("{event}.pages.INITIAL.options.LEAVE"),
+                                  "title": null, "text": null,
                                   "locked": false, "proceed": false, "chosen": false,
                                   "relic": null});
             merge(&mut base, option.take());

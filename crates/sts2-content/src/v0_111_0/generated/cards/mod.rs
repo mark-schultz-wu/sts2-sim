@@ -109,7 +109,7 @@ impl sts2_core::TargetKinds for TargetType {
 /// Ordered by the game's own key, which is the order a card's row prints
 /// them in. No discriminant is the game's: this is a set the dump gathers
 /// rather than a C# enum reflected out of it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum CardVar {
     Accelerant,

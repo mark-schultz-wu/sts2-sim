@@ -348,7 +348,8 @@ mod tests {
         let in_a_room = moves(json!({
             "potions": belt,
             "room": {"type": "Event", "id": "WELLSPRING",
-                     "options": [{"index": 0, "key": "DRINK"}]}
+                     "options": [{"index": 0,
+                                  "key": "WELLSPRING.pages.INITIAL.options.DRINK"}]}
         }));
         assert!(in_a_room.contains(&drink), "{in_a_room:?}");
         assert!(in_a_room.contains(&Decision::ChooseOption { index: 0 }));
@@ -375,7 +376,8 @@ mod tests {
         let applied = fixture::applied(json!({
             "potions": [{"id": "ASHWATER", "usable": true, "reason": null, "targets": []}],
             "room": {"type": "Event", "id": "WELLSPRING",
-                     "options": [{"index": 6, "key": "DRINK"}]}
+                     "options": [{"index": 6,
+                                  "key": "WELLSPRING.pages.INITIAL.options.DRINK"}]}
         }));
 
         assert_eq!(
@@ -424,7 +426,8 @@ mod tests {
     #[test]
     fn an_unfinished_room_hides_the_map() {
         let option = |index: u8, chosen: bool, locked: bool| {
-            json!({"index": index, "key": "K", "title": null, "text": null,
+            json!({"index": index, "key": "WELLSPRING.pages.INITIAL.options.LEAVE",
+                   "title": null, "text": null,
                    "locked": locked, "proceed": false, "chosen": chosen, "relic": null})
         };
         let state = json!({

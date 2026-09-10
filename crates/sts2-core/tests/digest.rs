@@ -21,13 +21,14 @@ use std::collections::{BTreeMap, HashMap};
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Cost, Counters, Creature, Digest, Entry, EventOption, FlagSet, Held, Intent, Map, ModelId,
-    NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, ShopCard,
-    Stack, Stock, Table, Take, Undrinkable,
+    Cost, Counters, Creature, Digest, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet,
+    Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable,
+    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
 };
 
 type V = V0_107_1;
 type Card = <V as ContentVersion>::Card;
+type CardVar = <V as ContentVersion>::CardVar;
 type Relic = <V as ContentVersion>::Relic;
 type Potion = <V as ContentVersion>::Potion;
 type Power = <V as ContentVersion>::Power;
@@ -168,9 +169,9 @@ fn full() -> Observation<V> {
                 targets: vec![1, 2],
                 effect: vec![Preview {
                     target: Some(1),
-                    text: "Deal {Damage} damage.".into(),
-                    vars: BTreeMap::from([("Damage".to_string(), 9)]),
-                    base: BTreeMap::from([("Damage".to_string(), 6)]),
+                    text: Some("Deal {Damage} damage.".into()),
+                    vars: BTreeMap::from([(CardVar::Damage, 9)]),
+                    base: BTreeMap::from([(CardVar::Damage, 6)]),
                 }],
             }],
             orbs: Some(Orbs {
@@ -198,7 +199,10 @@ fn rooms() -> Vec<Room<V>> {
     };
     let event_option = || EventOption {
         index: 0,
-        key: "BYRDONIS_NEST.pages.INITIAL.options.EAT".into(),
+        key: EventOptionKey {
+            event: nth::<Event>(0),
+            option: EventOptionName::Said("EAT".into()),
+        },
         title: Some("Eat".into()),
         text: Some("Swallow it whole.".into()),
         locked: false,
@@ -360,7 +364,10 @@ fn rooms() -> Vec<Room<V>> {
             title: Some("A Nest".into()),
             text: Some("Something stirs.".into()),
             options: vec![EventOption {
-                key: "BYRDONIS_NEST.pages.INITIAL.options.LEAVE".into(),
+                key: EventOptionKey {
+                    event: nth::<Event>(0),
+                    option: EventOptionName::Said("LEAVE".into()),
+                },
                 ..event_option()
             }],
         },
@@ -651,16 +658,16 @@ fn mutations() -> Vec<Nudge> {
             playable(o).effect[0].target = None;
         }),
         ("preview.text", |o| {
-            playable(o).effect[0].text = "Deal {Damage} damage twice.".into();
+            playable(o).effect[0].text = Some("Deal {Damage} damage twice.".into());
         }),
         ("preview.vars", |o| {
-            playable(o).effect[0].vars.insert("Damage".to_string(), 10);
+            playable(o).effect[0].vars.insert(CardVar::Damage, 10);
         }),
         ("preview.base", |o| {
-            playable(o).effect[0].base.insert("Damage".to_string(), 7);
+            playable(o).effect[0].base.insert(CardVar::Damage, 7);
         }),
         ("preview.vars: another", |o| {
-            playable(o).effect[0].vars.insert("Block".to_string(), 5);
+            playable(o).effect[0].vars.insert(CardVar::Block, 5);
         }),
         ("combat.orbs absent", |o| combat(o).orbs = None),
         ("orbs.capacity", |o| {

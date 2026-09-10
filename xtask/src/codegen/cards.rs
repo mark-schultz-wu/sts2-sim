@@ -511,7 +511,14 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         "///\n/// Ordered by the game's own key, which is the order a card's row prints\n         /// them in. No discriminant is the game's: this is a set the dump gathers\n         /// rather than a C# enum reflected out of it."
     )
     .unwrap();
-    writeln!(out, "{DERIVES}").unwrap();
+    // Ordered as well as compared: a preview carries its numbers in a map
+    // keyed by one of these, and the keys are sorted above by the game's own
+    // spelling, so the derived order is that spelling's.
+    writeln!(
+        out,
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]"
+    )
+    .unwrap();
     writeln!(out, "#[repr({})]", repr(keys.len())?).unwrap();
     writeln!(out, "pub enum CardVar {{").unwrap();
     for key in &keys {

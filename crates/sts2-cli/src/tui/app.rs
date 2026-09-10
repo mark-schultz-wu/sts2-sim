@@ -815,7 +815,9 @@ where
             if let Some(id) = preview.target {
                 lines.push(format!("against {id}:"));
             }
-            lines.push(crate::render::prose::plain(&preview.text));
+            if let Some(text) = &preview.text {
+                lines.push(crate::render::prose::plain(text));
+            }
         }
         self.ui.overlay = Some(Overlay::Detail(lines));
     }
@@ -926,7 +928,8 @@ mod tests {
     fn in_an_event() -> App<V, Scripted<V>> {
         showing(fixture::applied(json!({
             "room": {"type": "Event", "id": "WELLSPRING",
-                     "options": [{"index": 6, "key": "DRINK"}]}
+                     "options": [{"index": 6,
+                                  "key": "WELLSPRING.pages.INITIAL.options.DRINK"}]}
         })))
     }
 

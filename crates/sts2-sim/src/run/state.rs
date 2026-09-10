@@ -6,7 +6,8 @@ use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, MegaRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
-    EventOption, Map, Observation, Question, Reachable, Room, Rules, Seed, Table,
+    EventOption, EventOptionKey, EventOptionName, Map, Observation, Question, Reachable, Room,
+    Rules, Seed, Table,
 };
 
 use crate::engine::Error;
@@ -277,16 +278,19 @@ impl<V: Rules> State<V> {
                     .copied()
                     .enumerate()
                     .map(|(index, relic)| {
-                        let value = serde_json::to_value(relic).expect("a relic id serializes");
-                        let id = value.as_str().expect("a relic id is a string");
+                        let index = u8::try_from(index)
+                            .expect("a page offers few enough options to number");
                         EventOption {
-                            index: index as u8,
-                            key: format!("NEOW.pages.INITIAL.options.{id}"),
+                            index,
+                            key: EventOptionKey {
+                                event: V::neow_event(),
+                                option: EventOptionName::Relic(relic),
+                            },
                             title: None,
                             text: None,
                             locked: false,
                             proceed: false,
-                            chosen: *neow_chosen == Some(index as u8),
+                            chosen: *neow_chosen == Some(index),
                             relic: Some(relic),
                         }
                     })

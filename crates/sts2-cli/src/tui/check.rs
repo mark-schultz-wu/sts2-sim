@@ -847,12 +847,14 @@ mod tests {
             "room": {
                 "type": "Event", "id": "WELLSPRING", "title": "The Wellspring",
                 "options": [
-                    {"index": 0, "key": "DRINK", "title": "Drink"},
-                    {"index": 1, "key": "FILL", "title": "Fill a flask"},
-                    {"index": 2, "key": "PRAY", "title": "Pray"},
+                    {"index": 0, "key": "WELLSPRING.pages.INITIAL.options.DRINK", "title": "Drink"},
+                    {"index": 1, "key": "WELLSPRING.pages.INITIAL.options.FILL",
+                     "title": "Fill a flask"},
+                    {"index": 2, "key": "WELLSPRING.pages.INITIAL.options.PRAY", "title": "Pray"},
                     // A fourth, so that a list drawn backwards is a different
                     // list at every position rather than only at the ends.
-                    {"index": 3, "key": "LEAVE", "title": "Leave", "proceed": true},
+                    {"index": 3, "key": "WELLSPRING.pages.INITIAL.options.LEAVE",
+                     "title": "Leave", "proceed": true},
                 ]
             }
         }))

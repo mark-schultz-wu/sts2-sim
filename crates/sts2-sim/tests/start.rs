@@ -21,7 +21,7 @@ fn the_simulator_opens_where_the_game_opened() {
     let opened = sim.observe().expect("the simulator reports its run");
     assert_eq!(
         format!("{}", opened.observation.rules_digest()),
-        "a94e804fd91b096a"
+        "2d5badf4b243989a"
     );
 
     let chosen = sim
@@ -30,7 +30,7 @@ fn the_simulator_opens_where_the_game_opened() {
         .expect("the game accepts this option");
     assert_eq!(
         format!("{}", chosen.observation.rules_digest()),
-        "36dad63b8bb88605"
+        "ebe22b098fe0eda1"
     );
 
     let answered = sim

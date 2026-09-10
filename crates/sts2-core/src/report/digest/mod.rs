@@ -54,9 +54,10 @@ use num_traits::ToPrimitive;
 use xxhash::XxHash64;
 
 use crate::{
-    Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Cost, Counters, Creature, Entry, EventOption, FlagSet, Held, Intent, Map, ModelId, NextMove,
-    Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, Stack, Stock, Take,
+    Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, Combat, ContentVersion,
+    Coord, Cost, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet,
+    Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable,
+    RestOption, Room, Stack, Stock, Take,
 };
 
 /// One observation, as eight bytes.
@@ -119,6 +120,8 @@ const ROOM_REST_SITE: u8 = 1;
 const ROOM_TREASURE: u8 = 2;
 const ROOM_EVENT: u8 = 3;
 const ROOM_SHOP: u8 = 4;
+const EVENT_OPTION_RELIC: u8 = 1;
+const EVENT_OPTION_SAID: u8 = 2;
 
 const TAKE_RELIC: u8 = 1;
 const TAKE_SKIP: u8 = 2;
@@ -242,13 +245,6 @@ impl Sink {
     /// Skipped entirely rather than replaced with a placeholder, in both the
     /// present and absent cases, so two observations that differ only in their
     /// wording collide. That is the point.
-    fn prose(&mut self, value: &str) {
-        if self.prose {
-            self.str(value);
-        }
-    }
-
-    /// The same, for prose the game does not always have.
     fn prose_option(&mut self, value: &Option<String>) {
         if self.prose {
             self.option(value, |sink, said| sink.str(said));
@@ -379,11 +375,31 @@ impl Sink {
     }
 
     /// A map that has an order, walked in it.
-    fn vars<N: ToPrimitive>(&mut self, vars: &BTreeMap<String, N>) {
+    ///
+    /// Keyed by the build's own variable, and digested by the game's name for
+    /// it. Two builds that print the same number under the same name agree
+    /// here, whatever each spells its own variant.
+    fn vars<K: CardVars, N: ToPrimitive>(&mut self, vars: &BTreeMap<K, N>) {
         self.len(vars.len());
-        for (name, value) in vars {
-            self.str(name);
+        for (key, value) in vars {
+            self.str(key.name());
             self.number(value);
+        }
+    }
+
+    /// Which option an event offers, by the parts its key names.
+    fn event_key<V: ContentVersion>(&mut self, key: &EventOptionKey<V>) {
+        let EventOptionKey { event, option } = key;
+        self.id(event);
+        match option {
+            EventOptionName::Relic(relic) => {
+                self.u8(EVENT_OPTION_RELIC);
+                self.id(relic);
+            }
+            EventOptionName::Said(name) => {
+                self.u8(EVENT_OPTION_SAID);
+                self.str(name);
+            }
         }
     }
 
@@ -597,7 +613,7 @@ impl Sink {
                     sink.u8(*index);
                     // The key is an id, not prose: it names the option without
                     // saying anything about it, and two options never share one.
-                    sink.str(key);
+                    sink.event_key(key);
                     sink.prose_option(title);
                     sink.prose_option(text);
                     sink.bool(*locked);
@@ -788,7 +804,7 @@ impl Sink {
             sink.option(target, |sink, id| sink.u32(*id));
             // The numbers this sentence has in it are `vars` and `base`, which
             // are digested either way. This is the sentence.
-            sink.prose(text);
+            sink.prose_option(text);
             sink.vars(vars);
             sink.vars(base);
         });

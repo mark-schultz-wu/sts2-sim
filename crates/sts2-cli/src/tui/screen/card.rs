@@ -136,7 +136,7 @@ impl Face {
                 .or_else(|| card.effect.iter().find(|p| p.target.is_none()))
                 .or_else(|| card.effect.iter().find(|p| p.vars == p.base))
                 .or_else(|| card.effect.first())
-                .map(|p| widget::words(&p.text))
+                .map(|p| widget::words(p.text.as_deref().unwrap_or_default()))
                 .unwrap_or_default(),
             faded: card.reason.is_some(),
             key: Some(at),

@@ -46,8 +46,9 @@ pub use seed::Seed;
 pub use report::digest::Digest;
 pub use report::observation::{
     ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, Counters, Creature, Entry,
-    EventOption, Held, Intent, Map, NextMove, NoNode, Node, Observation, Orbs, Playable, Preview,
-    Reachable, RestOption, Room, ShopCard, Stack, Stock, Take, Undrinkable,
+    EventOption, EventOptionKey, EventOptionName, Held, Intent, Map, NextMove, NoNode, Node,
+    Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, ShopCard, Stack, Stock,
+    Take, Undrinkable,
 };
 pub use report::question::{
     CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail, RewardKind,
