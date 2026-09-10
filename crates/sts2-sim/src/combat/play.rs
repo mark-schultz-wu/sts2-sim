@@ -10,7 +10,9 @@
 //! trait acts on.
 
 use num_traits::Zero;
-use sts2_core::{CardTable, Combat, CombatId, Cost, Creature, Fight, Reason, Rules, SideKinds};
+use sts2_core::{
+    CardTable, Combat, CombatId, Cost, Creature, Fight, NonMaxU32, Reason, Rules, SideKinds,
+};
 
 use super::{Error, legal};
 
@@ -38,7 +40,7 @@ pub(crate) struct Play<V: Rules> {
 pub(crate) fn resolve<V: Rules>(
     combat: &Combat<V>,
     index: u8,
-    target: Option<u32>,
+    target: Option<NonMaxU32>,
 ) -> Result<Play<V>, Reason<V>> {
     let at = usize::from(index);
     let playable = combat.legal.get(at).ok_or(Reason::OutOfRange {
@@ -46,9 +48,13 @@ pub(crate) fn resolve<V: Rules>(
         count: combat.hand.len(),
     })?;
 
-    // The creature the play named, which every command the card issues is
-    // pointed at. Found once, here, so a rule never carries a bare number.
-    let aimed = match target {
+    // The id the decision named, which the observation reported and the two
+    // refusals below quote back.
+    let named = target.map(|target| target.get());
+
+    // The creature it names, which every command the card issues is pointed
+    // at. Found once, here, so a rule never carries a bare number.
+    let aimed = match named {
         None => None,
         Some(id) => Some(
             combat
@@ -70,10 +76,10 @@ pub(crate) fn resolve<V: Rules>(
 
     // `CanPlayTargeting`: the card is pointed at one of the creatures its own
     // target type accepts, and a card that names one is pointed at something.
-    if !target.is_some_and(|id| playable.targets.contains(&id)) && !playable.targets.is_empty() {
+    if !named.is_some_and(|id| playable.targets.contains(&id)) && !playable.targets.is_empty() {
         return Err(Reason::WrongTarget {
             card: playable.card,
-            target,
+            target: named,
             takes: playable.target,
         });
     }

@@ -8,7 +8,7 @@ use sts2_content::v0_107_1::ascension::AscensionLevel;
 use sts2_content::v0_107_1::{
     V0_107_1, cards::Cards, cards::RegentCard, characters::Character, runstate::UnplayableReason,
 };
-use sts2_core::{Answer, Coord, Decision, Play, Reason, Seed, SideKinds, Start};
+use sts2_core::{Answer, Coord, Decision, NonMaxU32, Play, Reason, Seed, SideKinds, Start};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
@@ -40,8 +40,8 @@ fn fighting() -> Sim<V> {
 }
 
 /// A creature id as a decision spells one.
-fn at(id: u32) -> Option<nonmax::NonMaxU32> {
-    nonmax::NonMaxU32::new(id)
+fn at(id: u32) -> Option<NonMaxU32> {
+    NonMaxU32::new(id)
 }
 
 #[test]

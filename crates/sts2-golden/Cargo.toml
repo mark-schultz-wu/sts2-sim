@@ -24,5 +24,3 @@ sts2-headless = { workspace = true }
 # Replaying a recording means spelling the decisions in it, which names a build.
 sts2-content = { workspace = true, features = ["v0_107_1"] }
 sts2-sim = { workspace = true }
-# A play names the creature it is pointed at, in the type a decision carries.
-nonmax = { workspace = true }

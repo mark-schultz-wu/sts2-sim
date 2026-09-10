@@ -30,9 +30,7 @@ impl<V: Rules> Play<V> for Sim<V> {
         match decision {
             Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
             Decision::Answer(answer) => self.state.answer(answer).map(Ok),
-            Decision::PlayCard { index, target } => self
-                .state
-                .play_card(*index, target.map(|target| target.get())),
+            Decision::PlayCard { index, target } => self.state.play_card(*index, *target),
             Decision::Travel { to } => match self.state.resolve(*to) {
                 Err(reason) => Ok(Err(Refusal {
                     what: "travel".into(),
