@@ -12,7 +12,7 @@ pub(crate) fn initialize<V: Rules>(
     ascension: V::AscensionLevel,
     counters: &mut Counters<V>,
     monsters: &[V::Monster],
-) -> Result<Vec<Creature<V>>, Error> {
+) -> Result<Vec<Creature<V>>, Error<V>> {
     let mut niche = super::stream::seek(raw_seed, counters, V::niche_rng(), "niche")?;
     let mut ai = super::stream::seek(raw_seed, counters, V::monster_ai_rng(), "monster_ai")?;
 

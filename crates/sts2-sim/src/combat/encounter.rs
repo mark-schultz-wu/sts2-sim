@@ -11,7 +11,7 @@ pub(crate) fn opening<V: Rules>(
     raw_seed: u32,
     floor: V::Count,
     encounter: V::Encounter,
-) -> Result<Vec<V::Monster>, Error> {
+) -> Result<Vec<V::Monster>, Error<V>> {
     match encounter.roster() {
         EncounterRoster::Fixed(monsters) => Ok(monsters.collect()),
         EncounterRoster::Random => {

@@ -21,7 +21,7 @@ pub(crate) fn hand<V: Rules>(
     creatures: &[Creature<V>],
     energy: V::Count,
     stars: V::Count,
-) -> Result<Vec<Playable<V>>, Error> {
+) -> Result<Vec<Playable<V>>, Error<V>> {
     hand.iter()
         .map(|card| playable::<V>(card, creatures, energy, stars))
         .collect()
@@ -32,7 +32,7 @@ fn playable<V: Rules>(
     creatures: &[Creature<V>],
     energy: V::Count,
     stars: V::Count,
-) -> Result<Playable<V>, Error> {
+) -> Result<Playable<V>, Error<V>> {
     if card.upgrade != 0 {
         return Err(Error::UpgradedCard);
     }
@@ -98,7 +98,7 @@ fn playable<V: Rules>(
 ///
 /// `GetAmountToSpend` clamps at zero, so a card not priced in a pool spends
 /// nothing from it rather than the `-1` the game stores.
-fn spend<C: num_traits::PrimInt>(cost: Cost, pool: C) -> Option<C> {
+pub(super) fn spend<C: num_traits::PrimInt>(cost: Cost, pool: C) -> Option<C> {
     match cost {
         Cost::X => Some(pool),
         // Nothing at all for a price this build's count cannot hold, which
@@ -134,7 +134,7 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 /// Nothing modifies a card's numbers yet, so the collapse always fires. It is
 /// written as the collapse anyway. The first hook to move a number then
 /// reports per target, and this does not change.
-fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<V>>, Error> {
+fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<V>>, Error<V>> {
     let per_target = matches!(
         card.card.target(),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
@@ -176,7 +176,7 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<
 /// The numbers the card prints, as they resolve right now.
 fn numbers<V: Rules>(
     card: &CardIdent<V>,
-) -> Result<std::collections::BTreeMap<V::CardVar, V::Number>, Error> {
+) -> Result<std::collections::BTreeMap<V::CardVar, V::Number>, Error<V>> {
     card.card
         .vars()
         .iter()

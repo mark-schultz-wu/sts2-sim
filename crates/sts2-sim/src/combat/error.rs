@@ -1,8 +1,13 @@
 //! Failures while constructing or advancing a combat.
 
-/// Why combat construction failed.
+use sts2_core::ContentVersion;
+
+/// Why a combat stopped, whether it was being built or carried forward.
+///
+/// Generic, because a card the port does not cover names itself, and this
+/// crate reports ids rather than spelling them. A front end spells one.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
+pub enum Error<V: ContentVersion> {
     #[error("the encounter roster must be supplied by its caller")]
     ConfiguredRoster,
     #[error(transparent)]
@@ -36,4 +41,14 @@ pub enum Error {
     /// evaluates whole-number effects.
     #[error("the {name} the card prints is not a whole number")]
     FractionalVar { name: &'static str },
+    /// A card whose `OnPlay` nobody has ported.
+    #[error("the simulator does not know what {card:?} does")]
+    UnportedCard { card: V::Card },
+    /// A command a card issued that the fight cannot answer.
+    #[error("the simulator does not implement {0} yet")]
+    Unimplemented(&'static str),
+    /// A card whose type the tables do not settle, which decides where a
+    /// played copy goes.
+    #[error("the card works its own type out from the fight")]
+    ComputedType,
 }

@@ -35,7 +35,7 @@ pub use play::recording;
 
 pub use content::{
     ActTable, AscensionKinds, CardTable, CardVars, CharacterTable, ContentError, ContentVersion,
-    Cost, Drafted, EncounterRoster, EncounterTable, EventTable, Fixed, FlagSet, Layout,
+    Cost, Drafted, EncounterRoster, EncounterTable, EventTable, Fight, Fixed, FlagSet, Layout,
     MapPointKinds, MonsterTable, PotionTable, PotionUsage, PowerAmount, PowerTable, Printed,
     RarityKinds, RelicPoolKinds, RelicTable, Rests, RewardRarity, RoomKinds, Rules, SideKinds,
     StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,

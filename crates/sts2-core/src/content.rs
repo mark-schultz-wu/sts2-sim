@@ -721,6 +721,43 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     fn has(self, rung: Self) -> bool;
 }
 
+/// The fight, as a card's own behaviour reaches it.
+///
+/// A card's behaviour is ported code and lives per build, in `sts2-content`.
+/// The fight it acts on lives in the engine. They meet here, which is what
+/// `ICombatState` is in the game.
+///
+/// Each method is one of the game's commands, named after it. One the engine
+/// cannot honour records a fault and does nothing.
+pub trait Fight<V: ContentVersion> {
+    /// The creature the card was pointed at.
+    ///
+    /// Present for every card whose target type names one. A play that reaches
+    /// behaviour has already been checked against `CardModel.IsValidTarget`.
+    fn target(&self) -> Option<u32>;
+
+    /// One of the card's own printed numbers, by the build's key for it.
+    ///
+    /// `DynamicVars.Damage.BaseValue` and its neighbours. A key the card does
+    /// not print answers zero and records a fault. A card asking for a number
+    /// it has no row for is a mistake in the port.
+    fn var(&mut self, key: V::CardVar) -> V::Number;
+
+    /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
+    fn attack(&mut self, at: u32, damage: V::Number);
+
+    /// `CreatureCmd.GainBlock(Owner.Creature, amount, cardPlay)`.
+    fn gain_block(&mut self, amount: V::Number);
+
+    /// `PlayerCmd.GainStars(amount, Owner)`.
+    ///
+    /// A printed number, so signed. The pool it lands in is not.
+    fn gain_stars(&mut self, amount: V::Number);
+
+    /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
+    fn apply_power(&mut self, at: u32, power: V::Power, amount: V::Number);
+}
+
 /// One game build's content, as the types that name it.
 ///
 /// The seam: name the build once, as a type parameter, and every id follows
@@ -1049,6 +1086,16 @@ pub trait Rules: ContentVersion {
 
     /// The Regent's starting relic, which opens every fight with three stars.
     fn divine_right() -> Self::Relic;
+
+    /// What one card does when it is played, which is `CardModel.OnPlay`.
+    ///
+    /// Generic over the fight rather than a trait object, because playing a
+    /// card is the hot path.
+    ///
+    /// False for a card nobody has ported. The engine reports that rather than
+    /// play a card whose text it does not know, and a card answering false has
+    /// issued no command.
+    fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F) -> bool;
 
     /// Resolve a monster’s unmodified HP range at this ascension.
     fn monster_hp_bounds(

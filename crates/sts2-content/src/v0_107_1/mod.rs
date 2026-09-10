@@ -19,6 +19,7 @@
 //! them err the same way, towards computed. Marking a constant as computed
 //! costs one method, and the reverse costs a divergence nobody can see.
 
+mod behaviour;
 mod generated;
 
 pub use generated::*;
@@ -130,6 +131,10 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn divine_right() -> Self::Relic {
         generated::relics::Relic::DivineRight
+    }
+
+    fn on_play<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) -> bool {
+        behaviour::cards::on_play(card, fight)
     }
 
     fn monster_hp_bounds(

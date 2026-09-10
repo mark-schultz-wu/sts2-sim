@@ -159,6 +159,22 @@ impl<V: Rules> State<V> {
         self.shared.character
     }
 
+    /// The fight the run is standing in, or nothing outside one.
+    pub(super) fn fight(&self) -> Option<&Combat<V>> {
+        match &self.phase {
+            Phase::Combat(combat) => Some(combat),
+            Phase::Neow { .. } => None,
+        }
+    }
+
+    /// Put the fight a decision left behind in place of the one it acted on.
+    ///
+    /// Whole, rather than edited where it stands. A decision the simulator
+    /// cannot carry out never reaches this, so the run keeps the fight it had.
+    pub(super) fn fought(&mut self, combat: Combat<V>) {
+        self.phase = Phase::Combat(combat);
+    }
+
     pub(super) fn enter_combat(&mut self, to: Coord, counters: Counters<V>, combat: Combat<V>) {
         self.floor = self.floor + num_traits::one();
         self.at = to;
@@ -192,7 +208,7 @@ impl<V: Rules> State<V> {
             .copied()
     }
 
-    pub(crate) fn choose(&mut self, index: u8) -> Result<Applied<V>, Error> {
+    pub(crate) fn choose(&mut self, index: u8) -> Result<Applied<V>, Error<V>> {
         let Phase::Neow {
             options,
             chosen,
@@ -221,7 +237,7 @@ impl<V: Rules> State<V> {
         Ok(applied)
     }
 
-    pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+    pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Applied<V>, Error<V>> {
         let Phase::Neow {
             finished,
             selection,

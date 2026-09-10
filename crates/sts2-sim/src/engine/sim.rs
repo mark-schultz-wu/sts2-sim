@@ -14,7 +14,7 @@ pub struct Sim<V: Rules> {
 }
 
 impl<V: Rules> Play<V> for Sim<V> {
-    type Error = Error;
+    type Error = Error<V>;
     type Host = ();
 
     fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
@@ -30,6 +30,9 @@ impl<V: Rules> Play<V> for Sim<V> {
         match decision {
             Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
             Decision::Answer(answer) => self.state.answer(answer).map(Ok),
+            Decision::PlayCard { index, target } => self
+                .state
+                .play_card(*index, target.map(|target| target.get())),
             Decision::Travel { to } => match self.state.resolve(*to) {
                 Err(reason) => Ok(Err(Refusal {
                     what: "travel".into(),

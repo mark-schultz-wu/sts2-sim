@@ -23,7 +23,7 @@ pub(crate) fn enter<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     observation: &Observation<V>,
-) -> Result<(Combat<V>, Counters<V>), Error> {
+) -> Result<(Combat<V>, Counters<V>), Error<V>> {
     let mut counters = observation.rng.clone();
 
     let monsters = encounter::opening::<V>(raw_seed, observation.floor, encounter)?;
