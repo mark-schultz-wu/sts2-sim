@@ -18,7 +18,7 @@ pub(crate) fn seek<V: Rules>(
     counters: &Counters<V>,
     kind: V::RunRngType,
     stream: &'static str,
-) -> Result<MegaRng, Error<V>> {
+) -> Result<MegaRng, Error> {
     let at = counters
         .run
         .get(&kind)
@@ -38,7 +38,7 @@ pub(crate) fn record<V: Rules>(
     kind: V::RunRngType,
     stream: &'static str,
     rng: &MegaRng,
-) -> Result<(), Error<V>> {
+) -> Result<(), Error> {
     let counter = u32::try_from(rng.counter()).map_err(|_| Error::CounterOutOfRange { stream })?;
     counters.run.insert(kind, counter);
     Ok(())

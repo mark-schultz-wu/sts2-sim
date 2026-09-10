@@ -6,15 +6,14 @@ use super::super::super::generated::cards::{CardVar, RegentCard};
 use super::super::super::generated::powers::Power;
 use super::V;
 
-pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> bool {
+pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
     match card {
         RegentCard::Strike => strike(fight),
         RegentCard::Defend => defend(fight),
         RegentCard::FallingStar => falling_star(fight),
         RegentCard::Venerate => venerate(fight),
-        _ => return false,
+        card => unimplemented!("what {card:?} does when it is played"),
     }
-    true
 }
 
 /// The card names a target, so it has one: `PlayCardAction` refuses a play

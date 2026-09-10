@@ -78,7 +78,7 @@ pub(crate) fn resolve<V: Rules>(
 ///
 /// Nothing is committed until this returns. It works on a copy, so a card
 /// asking for a rule the simulator lacks costs the caller nothing.
-pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat<V>, Error<V>> {
+pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat<V>, Error> {
     let mut next = combat.clone();
 
     // `SpendResources`, before the card leaves the hand. A price this build's
@@ -88,7 +88,7 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
     let stars = match play.card.card.star_cost() {
         // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
         // on this build prices its stars at X.
-        Cost::X => return Err(Error::Unimplemented("an X star cost")),
+        Cost::X => unimplemented!("a card priced at X stars"),
         other => spent(other, next.stars),
     };
     next.energy = next.energy - energy;
@@ -103,17 +103,15 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
         combat: &mut next,
         target: play.target,
         vars,
-        blocked: None,
     };
-    if !V::on_play(card.card, &mut board) {
-        return Err(Error::UnportedCard { card: card.card });
-    }
-    if let Some(blocked) = board.blocked {
-        return Err(Error::Unimplemented(blocked));
-    }
+    V::on_play(card.card, &mut board);
 
     // `GetResultPileTypeForCardPlay`, once the effect is over.
-    match card.card.power().ok_or(Error::ComputedType)? {
+    match card
+        .card
+        .power()
+        .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
+    {
         // A power card leaves the fight rather than going to a pile.
         true => {}
         false if card.card.exhausts() => next.exhaust.push(card),
@@ -128,13 +126,11 @@ pub(crate) fn play<V: Rules>(combat: &Combat<V>, play: Play<V>) -> Result<Combat
 ///
 /// Everything it does is one of the game's commands with nothing listening.
 /// This build's fights have no power, relic or card that hooks any of them
-/// yet. A command that needs one records what it was and does nothing, and
-/// [`play`] reports that rather than commit half a play.
+/// yet. A command that needs one stops the run where it stands.
 struct Board<'a, V: Rules> {
     combat: &'a mut Combat<V>,
     target: Option<u32>,
     vars: &'static [Printed<V::CardVar, <V::Card as CardTable>::Number>],
-    blocked: Option<&'static str>,
 }
 
 impl<V: Rules> Board<'_, V> {
@@ -159,8 +155,7 @@ impl<V: Rules> Board<'_, V> {
     fn kill(&mut self, at: usize) {
         self.combat.creatures[at].alive = false;
         if self.combat.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
-            self.blocked = Some("a player dying in a fight");
-            return;
+            unimplemented!("a player dying in a fight");
         }
         // A dead monster is taken out of the fight, so nothing that reads it
         // afterwards can see it. That is why the observation stops reporting
@@ -172,7 +167,7 @@ impl<V: Rules> Board<'_, V> {
             .iter()
             .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
         {
-            self.blocked = Some("the end of a fight");
+            unimplemented!("the end of a fight");
         }
     }
 }
@@ -183,21 +178,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn var(&mut self, key: V::CardVar) -> V::Number {
-        // A printed number this build's game number cannot hold is the same
-        // fault as a key the card does not print: the port asked for a number
-        // it cannot act on.
-        match self
-            .vars
+        // A key the card does not print is a mistake in the port. A printed
+        // number this build's game number cannot hold is the same mistake
+        // wearing a different hat: the card cannot act on what it read.
+        self.vars
             .iter()
             .find(|var| var.id == key)
             .and_then(|var| num_traits::NumCast::from(var.base))
-        {
-            Some(number) => number,
-            None => {
-                self.blocked = Some("a card reading a number it does not print");
-                V::Number::zero()
-            }
-        }
+            .expect("a card reads a number it prints")
     }
 
     fn attack(&mut self, at: u32, damage: V::Number) {
@@ -230,12 +218,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn gain_stars(&mut self, amount: V::Number) {
-        // The pool is a count. A card printing a negative one is a rule this
-        // fight has never been asked for.
-        match num_traits::NumCast::from(amount) {
-            Some(amount) => self.combat.stars = self.combat.stars + amount,
-            None => self.blocked = Some("a card spending stars as it plays"),
-        }
+        // The pool is a count, so a card printing a negative one is spending
+        // rather than gaining. No card on this build does.
+        let amount = num_traits::NumCast::from(amount)
+            .unwrap_or_else(|| unimplemented!("a card spending stars as it plays"));
+        self.combat.stars = self.combat.stars + amount;
     }
 
     fn apply_power(&mut self, at: u32, _power: V::Power, amount: V::Number) {
@@ -245,6 +232,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if amount.is_zero() || self.at(at).is_none() {
             return;
         }
-        self.blocked = Some("a power on a creature still in the fight");
+        unimplemented!("a power on a creature still in the fight");
     }
 }

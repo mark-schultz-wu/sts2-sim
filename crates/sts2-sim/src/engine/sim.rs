@@ -2,7 +2,7 @@ use sts2_core::{Answered, Construct, Decision, Play, Refusal, Rules, Setup, Snap
 
 use crate::run::State;
 
-use super::Error;
+use crate::combat::Error;
 
 /// A run held entirely in this process.
 ///
@@ -14,12 +14,12 @@ pub struct Sim<V: Rules> {
 }
 
 impl<V: Rules> Play<V> for Sim<V> {
-    type Error = Error<V>;
+    type Error = Error;
     type Host = ();
 
     fn begin(_: Self::Host, start: &Start<V>) -> Result<Self, Self::Error> {
         if !start.modifiers.is_empty() {
-            return Err(Error::NotImplemented("run modifiers"));
+            unimplemented!("a run started with modifiers");
         }
         Ok(Self {
             state: State::start(&start.seed, start.character, start.ascension),
@@ -40,7 +40,7 @@ impl<V: Rules> Play<V> for Sim<V> {
                 })),
                 Ok(moving) => self.state.travel(moving).map(Ok),
             },
-            _ => Err(Error::NotImplemented(name(decision))),
+            _ => unimplemented!("{}", name(decision)),
         }
     }
 
@@ -51,7 +51,7 @@ impl<V: Rules> Play<V> for Sim<V> {
 
 impl<V: Rules> Construct<V> for Sim<V> {
     fn setup(&mut self, _: &Setup<V>) -> Result<Answered<V>, Self::Error> {
-        Err(Error::NotImplemented("setup"))
+        unimplemented!("setup")
     }
 }
 

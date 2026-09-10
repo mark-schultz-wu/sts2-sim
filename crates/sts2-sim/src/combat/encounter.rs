@@ -11,7 +11,7 @@ pub(crate) fn opening<V: Rules>(
     raw_seed: u32,
     floor: V::Count,
     encounter: V::Encounter,
-) -> Result<Vec<V::Monster>, Error<V>> {
+) -> Result<Vec<V::Monster>, Error> {
     match encounter.roster() {
         EncounterRoster::Fixed(monsters) => Ok(monsters.collect()),
         EncounterRoster::Random => {
@@ -23,7 +23,9 @@ pub(crate) fn opening<V: Rules>(
             let mut rng = MegaRng::new(seed);
             V::random_encounter_monsters(encounter, &mut rng).map_err(Error::from)
         }
-        EncounterRoster::Configured => Err(Error::ConfiguredRoster),
+        EncounterRoster::Configured => {
+            unimplemented!("an encounter whose caller supplies its roster")
+        }
     }
 }
 
@@ -54,22 +56,21 @@ mod tests {
 }
 
 #[cfg(test)]
-mod error_tests {
+mod unported_tests {
     use super::*;
     use sts2_content::v0_107_1::{V0_107_1, encounters::Encounter};
-    use sts2_core::ContentError;
 
+    /// A roster the caller supplies is a rule nobody has written.
     #[test]
-    fn each_non_static_roster_failure_keeps_its_reason() {
-        assert_eq!(
-            opening::<V0_107_1>(123, 2, Encounter::BattlewornDummyEventEncounter),
-            Err(Error::ConfiguredRoster)
-        );
-        assert_eq!(
-            opening::<V0_107_1>(123, 2, Encounter::BowlbugsNormal),
-            Err(Error::Content(ContentError::Unported(
-                "random encounter roster"
-            )))
-        );
+    #[should_panic(expected = "an encounter whose caller supplies its roster")]
+    fn a_configured_roster_stops_the_run() {
+        let _ = opening::<V0_107_1>(123, 2, Encounter::BattlewornDummyEventEncounter);
+    }
+
+    /// So is a roster this build rolls that the port has not reached.
+    #[test]
+    #[should_panic(expected = "the roster")]
+    fn an_unported_random_roster_stops_the_run() {
+        let _ = opening::<V0_107_1>(123, 2, Encounter::BowlbugsNormal);
     }
 }

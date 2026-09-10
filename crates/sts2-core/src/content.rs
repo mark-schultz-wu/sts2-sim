@@ -76,10 +76,6 @@ pub struct Layout {
 /// A content rule that cannot produce a value from static state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ContentError {
-    #[error("{0} has not been ported")]
-    Unported(&'static str),
-    #[error("{0} depends on live combat state")]
-    CombatDependent(&'static str),
     #[error("monster state index {index} is outside its graph")]
     InvalidMonsterState { index: u8 },
     #[error("a random monster state has invalid weights")]
@@ -1092,10 +1088,10 @@ pub trait Rules: ContentVersion {
     /// Generic over the fight rather than a trait object, because playing a
     /// card is the hot path.
     ///
-    /// False for a card nobody has ported. The engine reports that rather than
-    /// play a card whose text it does not know, and a card answering false has
-    /// issued no command.
-    fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F) -> bool;
+    /// Panics for a card nobody has ported. A simulator that plays a card
+    /// whose text it does not know is worse than one that stops. The run
+    /// carries on, and the divergence surfaces somewhere else.
+    fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
     /// Resolve a monster’s unmodified HP range at this ascension.
     fn monster_hp_bounds(

@@ -21,7 +21,7 @@ pub(crate) fn hand<V: Rules>(
     creatures: &[Creature<V>],
     energy: V::Count,
     stars: V::Count,
-) -> Result<Vec<Playable<V>>, Error<V>> {
+) -> Result<Vec<Playable<V>>, Error> {
     hand.iter()
         .map(|card| playable::<V>(card, creatures, energy, stars))
         .collect()
@@ -32,15 +32,21 @@ fn playable<V: Rules>(
     creatures: &[Creature<V>],
     energy: V::Count,
     stars: V::Count,
-) -> Result<Playable<V>, Error<V>> {
+) -> Result<Playable<V>, Error> {
     if card.upgrade != 0 {
-        return Err(Error::UpgradedCard);
+        // An upgraded card prints different numbers, and the tables carry the
+        // unupgraded ones. See `OnUpgrade` on the card.
+        unimplemented!("what an upgraded card prints");
     }
     if card.affliction.is_some() || card.enchantment.is_some() {
-        return Err(Error::AlteredCard);
+        unimplemented!("what an afflicted or enchanted card prints");
     }
 
-    let target = card.card.target().ok_or(Error::ComputedTarget)?;
+    // One of the four cards that work their target out from the fight.
+    let target = card
+        .card
+        .target()
+        .unwrap_or_else(|| unimplemented!("a card that decides its own target"));
     let cost = card.card.cost();
     let star_cost = card.card.star_cost();
 
@@ -134,7 +140,7 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 /// Nothing modifies a card's numbers yet, so the collapse always fires. It is
 /// written as the collapse anyway. The first hook to move a number then
 /// reports per target, and this does not change.
-fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<V>>, Error<V>> {
+fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<V>>, Error> {
     let per_target = matches!(
         card.card.target(),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
@@ -176,21 +182,21 @@ fn effect<V: Rules>(card: &CardIdent<V>, targets: &[u32]) -> Result<Vec<Preview<
 /// The numbers the card prints, as they resolve right now.
 fn numbers<V: Rules>(
     card: &CardIdent<V>,
-) -> Result<std::collections::BTreeMap<V::CardVar, V::Number>, Error<V>> {
+) -> Result<std::collections::BTreeMap<V::CardVar, V::Number>, Error> {
     card.card
         .vars()
         .iter()
         .map(|var| {
             if var.calculated {
-                Err(Error::CalculatedVar {
-                    name: var.id.name(),
-                })
-            } else {
-                let base = num_traits::NumCast::from(var.base).ok_or(Error::FractionalVar {
-                    name: var.id.name(),
-                })?;
-                Ok((var.id, base))
+                // A `CalculatedVar` counts something in the live fight.
+                unimplemented!("the {} this card prints", var.id.name());
             }
+            // A build can store exact fractions where this slice only
+            // evaluates whole-number effects.
+            let base = num_traits::NumCast::from(var.base).unwrap_or_else(|| {
+                unimplemented!("the fractional {} this card prints", var.id.name())
+            });
+            Ok((var.id, base))
         })
         .collect()
 }

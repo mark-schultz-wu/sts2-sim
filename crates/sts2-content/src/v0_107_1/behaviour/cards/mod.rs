@@ -4,9 +4,9 @@
 //! behaviour sits under the same name as its row. A pool gets a module when
 //! its first card is ported.
 //!
-//! [`on_play`] answers false for a card nobody has ported. The engine reports
-//! that rather than play a card whose text it does not know. So this tree is
-//! also the list of what the simulator can play.
+//! [`on_play`] panics for a card nobody has ported, so this tree is also the
+//! list of what the simulator can play. A card outside it stops the run where
+//! it stands rather than playing as if it did nothing.
 
 use sts2_core::Fight;
 
@@ -18,7 +18,7 @@ mod regent;
 type V = V0_107_1;
 
 /// What a card does when it is played.
-pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> bool {
+pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) {
     match card {
         Cards::Regent(card) => regent::on_play(card, fight),
         // Nothing from these pools is ported. Named rather than left to a
@@ -33,6 +33,6 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> bool {
         | Cards::Quest(_)
         | Cards::Status(_)
         | Cards::Token(_)
-        | Cards::Deprecated(_) => false,
+        | Cards::Deprecated(_) => unimplemented!("what {card:?} does when it is played"),
     }
 }

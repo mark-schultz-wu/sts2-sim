@@ -4,7 +4,7 @@ use sts2_core::{Answered, Reason, Refusal, Rules};
 
 use super::State;
 use crate::combat;
-use crate::engine::Error;
+use crate::combat::Error;
 
 impl<V: Rules> State<V> {
     /// Play one card from the hand.
@@ -15,7 +15,7 @@ impl<V: Rules> State<V> {
         &mut self,
         index: u8,
         target: Option<u32>,
-    ) -> Result<Answered<V>, Error<V>> {
+    ) -> Result<Answered<V>, Error> {
         let refused = |reason| {
             Ok(Err(Refusal {
                 what: "play_card".into(),
