@@ -2,6 +2,7 @@
 
 use super::prose::one_line;
 use super::{cards, entry, flags, ident, spelling};
+use num_traits::Zero;
 use std::fmt;
 use sts2_core::{CardIdent, Combat, ContentVersion, Creature, Orbs, Playable, Preview};
 
@@ -87,7 +88,7 @@ fn creature<V: ContentVersion>(f: &mut fmt::Formatter<'_>, c: &Creature<V>) -> f
         "        {marker} {:<2} {model:<20} {}/{}",
         c.id, c.hp, c.max_hp
     );
-    if c.block != 0 {
+    if !c.block.is_zero() {
         line.push_str(&format!(" +{} block", c.block));
     }
     if !c.alive {
@@ -148,8 +149,7 @@ fn orbs_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, orbs: &Orbs<V>) -> fmt
 
     // The empty ones matter: channelling into a full queue evokes the front of
     // it, and how many are free is what says whether that is about to happen.
-    let free = (orbs.capacity as usize).saturating_sub(orbs.queue.len());
-    slots.extend(std::iter::repeat_n("—".to_string(), free));
+    slots.extend(std::iter::repeat_n("—".to_string(), orbs.free()));
 
     writeln!(f, "orbs    {}", slots.join(" · "))
 }
@@ -232,7 +232,7 @@ fn playing<V: ContentVersion>(l: &Playable<V>) -> String {
 ///
 /// The oracle reports the game.s computed values. Distinct target outcomes get
 /// separate prefixed lines. A single outcome has no prefix.
-fn effects_of(previews: &[Preview]) -> Vec<String> {
+fn effects_of<V: ContentVersion>(previews: &[Preview<V>]) -> Vec<String> {
     let many = previews.len() > 1;
 
     previews
@@ -258,7 +258,7 @@ fn effects_of(previews: &[Preview]) -> Vec<String> {
 ///
 /// This compares the oracle.s two maps. Colour is insufficient because `[red]`
 /// also styles ordinary event prose.
-fn moved_in(preview: &Preview) -> String {
+fn moved_in<V: ContentVersion>(preview: &Preview<V>) -> String {
     let changed: Vec<String> = preview
         .base
         .iter()

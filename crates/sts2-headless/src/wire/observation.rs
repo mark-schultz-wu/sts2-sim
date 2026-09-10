@@ -16,6 +16,7 @@ use super::cost::WireCost;
 use std::collections::{BTreeMap, HashMap};
 use sts2_core::{Cost, ShopCard};
 
+use num_traits::{NumCast, ToPrimitive};
 use serde::Deserialize;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
@@ -59,6 +60,9 @@ pub enum Why {
     /// Two fields that say the same thing, saying different things.
     #[error("{0}")]
     Disagree(&'static str),
+    /// A wire integer that the selected build's domain type cannot represent.
+    #[error("{value} does not fit {what}")]
+    OutOfRange { what: &'static str, value: String },
 }
 
 /// The observation a captured state spells.
@@ -105,6 +109,44 @@ pub(crate) fn ident<T>(
 /// propagating a maybe.
 fn combat_id(path: &str, id: Option<u32>) -> Result<u32, Error> {
     id.ok_or_else(|| at(path, Why::Absent("CombatId")))
+}
+
+fn domain_number<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> Result<T, Error> {
+    let shown = value.to_string();
+    T::from(value).ok_or_else(|| {
+        at(
+            path,
+            Why::OutOfRange {
+                what: "a game number",
+                value: shown,
+            },
+        )
+    })
+}
+
+fn domain_count<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> Result<T, Error> {
+    let shown = value.to_string();
+    T::from(value).ok_or_else(|| {
+        at(
+            path,
+            Why::OutOfRange {
+                what: "a game count",
+                value: shown,
+            },
+        )
+    })
+}
+
+fn domain_vars<T: NumCast>(
+    path: &str,
+    values: BTreeMap<String, i32>,
+) -> Result<BTreeMap<String, T>, Error> {
+    values
+        .into_iter()
+        .map(|(name, value)| {
+            domain_number(&format!("{path}.{name}"), value).map(|value| (name, value))
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -361,14 +403,14 @@ struct WirePreview {
 impl<V: ContentVersion> WireObservation<V> {
     fn into_domain(self) -> Result<Observation<V>, Error> {
         Ok(Observation {
-            act: self.act,
-            floor: self.floor,
-            hp: self.hp,
-            max_hp: self.max_hp,
+            act: domain_count("act", self.act)?,
+            floor: domain_count("floor", self.floor)?,
+            hp: domain_number("hp", self.hp)?,
+            max_hp: domain_number("maxHp", self.max_hp)?,
             alive: self.alive,
             run_over: self.run_over,
             victory: self.victory,
-            gold: self.gold,
+            gold: domain_number("gold", self.gold)?,
             relics: self
                 .relics
                 .into_iter()
@@ -380,7 +422,7 @@ impl<V: ContentVersion> WireObservation<V> {
                 .enumerate()
                 .map(|(i, p)| p.into_domain(i))
                 .collect::<Result<_, Error>>()?,
-            potion_slots: self.potion_slots,
+            potion_slots: domain_count("potionSlots", self.potion_slots)?,
             deck: cards("deck", &self.deck)?,
             in_combat: self.in_combat,
             map: self.map.into_domain()?,
@@ -605,7 +647,7 @@ impl WireEntry {
         Ok(Entry {
             index: self.index,
             stock,
-            cost: self.cost,
+            cost: domain_number(&format!("{path}.cost"), self.cost)?,
             title: self.title,
             text: self.text,
             stocked: self.stocked,
@@ -618,11 +660,11 @@ impl WireEntry {
 impl<V: ContentVersion> WireCombat<V> {
     fn into_domain(self) -> Result<Combat<V>, Error> {
         Ok(Combat {
-            turn: self.turn,
+            turn: domain_count("combat.turn", self.turn)?,
             phase: self.phase,
-            energy: self.energy,
-            stars: self.stars,
-            round: self.round,
+            energy: domain_count("combat.energy", self.energy)?,
+            stars: domain_count("combat.stars", self.stars)?,
+            round: domain_count("combat.round", self.round)?,
             encounter: self.encounter,
             hand: cards("combat.hand", &self.hand)?,
             draw: cards("combat.draw", &self.draw)?,
@@ -640,18 +682,51 @@ impl<V: ContentVersion> WireCombat<V> {
                 .enumerate()
                 .map(|(i, l)| l.into_domain(i))
                 .collect::<Result<_, Error>>()?,
-            orbs: self.orbs.map(|o| Orbs {
-                capacity: o.capacity,
-                queue: o
-                    .queue
-                    .into_iter()
-                    .map(|c| Channelled {
-                        orb: c.id,
-                        passive: c.passive,
-                        evoke: c.evoke,
+            orbs: self
+                .orbs
+                .map(|o| {
+                    let capacity: V::Count = domain_count("combat.orbs.capacity", o.capacity)?;
+                    // Two halves of one observation. A queue longer than the
+                    // capacity is them contradicting each other, and nothing
+                    // downstream has a sensible reading of that pair.
+                    let slots = capacity.to_usize().ok_or_else(|| {
+                        at(
+                            "combat.orbs.capacity",
+                            Why::OutOfRange {
+                                what: "an addressable list",
+                                value: o.capacity.to_string(),
+                            },
+                        )
+                    })?;
+                    if o.queue.len() > slots {
+                        return Err(at(
+                            "combat.orbs",
+                            Why::Disagree("more orbs channelled than the queue holds"),
+                        ));
+                    }
+                    Ok(Orbs {
+                        capacity,
+                        queue: o
+                            .queue
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, c)| {
+                                Ok(Channelled {
+                                    orb: c.id,
+                                    passive: domain_number(
+                                        &format!("combat.orbs.queue[{i}].passive"),
+                                        c.passive,
+                                    )?,
+                                    evoke: domain_number(
+                                        &format!("combat.orbs.queue[{i}].evoke"),
+                                        c.evoke,
+                                    )?,
+                                })
+                            })
+                            .collect::<Result<_, Error>>()?,
                     })
-                    .collect(),
-            }),
+                })
+                .transpose()?,
         })
     }
 }
@@ -667,14 +742,23 @@ impl<V: ContentVersion> WireCreature<V> {
                 id,
                 intents: intents
                     .into_iter()
-                    .map(|w| Intent {
-                        kind: w.kind,
-                        attack: match (w.damage, w.repeats) {
-                            (Some(damage), Some(repeats)) => Some(Attack { damage, repeats }),
-                            _ => None,
-                        },
+                    .enumerate()
+                    .map(|(j, w)| {
+                        Ok(Intent {
+                            kind: w.kind,
+                            attack: match (w.damage, w.repeats) {
+                                (Some(damage), Some(repeats)) => Some(Attack {
+                                    damage: domain_number(
+                                        &format!("{path}.intents[{j}].damage"),
+                                        damage,
+                                    )?,
+                                    repeats,
+                                }),
+                                _ => None,
+                            },
+                        })
                     })
-                    .collect(),
+                    .collect::<Result<_, Error>>()?,
             }),
             (None, None) => None,
             _ => {
@@ -693,18 +777,21 @@ impl<V: ContentVersion> WireCreature<V> {
                 .map(|text| ident(&format!("{path}.model"), text, ident::model_id::<V>))
                 .transpose()?,
             side: self.side,
-            hp: self.hp,
-            max_hp: self.max_hp,
-            block: self.block,
+            hp: domain_number(&format!("{path}.hp"), self.hp)?,
+            max_hp: domain_number(&format!("{path}.maxHp"), self.max_hp)?,
+            block: domain_number(&format!("{path}.block"), self.block)?,
             alive: self.alive,
             powers: self
                 .powers
                 .into_iter()
-                .map(|p| Stack {
-                    power: p.id,
-                    amount: p.amount,
+                .enumerate()
+                .map(|(j, p)| {
+                    Ok(Stack {
+                        power: p.id,
+                        amount: domain_number(&format!("{path}.powers[{j}].amount"), p.amount)?,
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, Error>>()?,
             next_move,
         })
     }
@@ -789,13 +876,16 @@ impl<V: ContentVersion> WirePlayable<V> {
             effect: self
                 .effect
                 .into_iter()
-                .map(|p| Preview {
-                    target: p.target,
-                    text: p.text,
-                    vars: p.vars,
-                    base: p.base,
+                .enumerate()
+                .map(|(j, p)| {
+                    Ok(Preview {
+                        target: p.target,
+                        text: p.text,
+                        vars: domain_vars(&format!("{path}.effect[{j}].vars"), p.vars)?,
+                        base: domain_vars(&format!("{path}.effect[{j}].base"), p.base)?,
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, Error>>()?,
         })
     }
 }
@@ -919,6 +1009,19 @@ mod tests {
         assert_eq!(obs.map.at, Some(Coord::new(3, 11)));
         assert_eq!(obs.map.points[0].to, [Coord::new(2, 10)]);
         assert!(obs.room.is_none() && obs.combat.is_none());
+    }
+
+    #[test]
+    fn domain_numeric_boundaries_refuse_values_the_build_cannot_hold() {
+        assert_eq!(domain_number::<i8>("hp", 127).unwrap(), 127);
+        let number = domain_number::<i8>("hp", 128).unwrap_err();
+        assert_eq!(number.at, "hp");
+        assert!(matches!(number.why, Why::OutOfRange { .. }));
+
+        assert_eq!(domain_count::<u8>("energy", 3).unwrap(), 3);
+        let count = domain_count::<u8>("energy", -1).unwrap_err();
+        assert_eq!(count.at, "energy");
+        assert!(matches!(count.why, Why::OutOfRange { .. }));
     }
 
     /// The two counter sets come back apart, keyed by their own enums.
@@ -1135,6 +1238,37 @@ mod tests {
         // The skip that is not called SKIP.
         let renamed = chest(json!({"index": 0, "id": "PASS", "skip": true, "chosen": false}));
         assert!(matches!(renamed.unwrap_err().why, Why::Disagree(_)));
+    }
+
+    /// The capacity and the queue are one state, and they can contradict.
+    #[test]
+    fn more_orbs_than_slots_is_refused_rather_than_rendered() {
+        let orbs = |capacity: i32, channelled: usize| {
+            let mut state = base();
+            state["combat"] = json!({
+                "turn": 1, "phase": "Play", "energy": 3, "stars": 0, "round": 1,
+                "encounter": null, "hand": [], "draw": [], "discard": [],
+                "exhaust": [], "legal": [], "creatures": [],
+                "orbs": {
+                    "capacity": capacity,
+                    "queue": (0..channelled)
+                        .map(|_| json!({"id": "LIGHTNING_ORB", "passive": 3, "evoke": 8}))
+                        .collect::<Vec<_>>(),
+                }
+            });
+            parse(&state)
+        };
+
+        let room = orbs(3, 1).unwrap();
+        let queue = room.combat.unwrap().orbs.expect("a channelled orb");
+        assert_eq!(queue.free(), 2);
+
+        let full = orbs(1, 1).unwrap();
+        assert_eq!(full.combat.unwrap().orbs.expect("orbs").free(), 0);
+
+        let over = orbs(1, 2).unwrap_err();
+        assert_eq!(over.at, "combat.orbs");
+        assert!(matches!(over.why, Why::Disagree(_)), "{over}");
     }
 
     /// A creature reports its move id and its intents together or not at all.

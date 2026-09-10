@@ -215,7 +215,12 @@ fn intent_line<V: ContentVersion>(creature: &Creature<V>, width: usize) -> Line<
                 ));
                 if attack.repeats > 1 {
                     spans.push(Span::styled(
-                        format!(" ({})", attack.damage * i32::from(attack.repeats)),
+                        format!(
+                            " ({})",
+                            attack.damage
+                                * num_traits::cast(attack.repeats)
+                                    .expect("attack repeats fit the game-number type")
+                        ),
                         theme::dim(),
                     ));
                 }
@@ -298,10 +303,7 @@ fn you_row<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>)
             orbs.queue
                 .iter()
                 .map(|o| format!("({}:{})", names::pretty(&spelling(&o.orb)), o.passive))
-                .chain(std::iter::repeat_n(
-                    "( )".to_string(),
-                    (orbs.capacity as usize).saturating_sub(orbs.queue.len()),
-                ))
+                .chain(std::iter::repeat_n("( )".to_string(), orbs.free()))
                 .collect::<Vec<_>>()
                 .join(" "),
             theme::guard(),

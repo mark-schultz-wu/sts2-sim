@@ -50,6 +50,7 @@ mod xxhash;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 
+use num_traits::ToPrimitive;
 use xxhash::XxHash64;
 
 use crate::{
@@ -270,6 +271,15 @@ impl Sink {
         self.hash.write(&value.to_le_bytes());
     }
 
+    /// A game-domain number, encoded in the legacy digest width.
+    fn number(&mut self, value: &impl ToPrimitive) {
+        self.i32(
+            value
+                .to_i32()
+                .expect("game number must fit the digest format"),
+        );
+    }
+
     fn u64(&mut self, value: u64) {
         self.hash.write(&value.to_le_bytes());
     }
@@ -369,11 +379,11 @@ impl Sink {
     }
 
     /// A map that has an order, walked in it.
-    fn vars(&mut self, vars: &BTreeMap<String, i32>) {
+    fn vars<N: ToPrimitive>(&mut self, vars: &BTreeMap<String, N>) {
         self.len(vars.len());
         for (name, value) in vars {
             self.str(name);
-            self.i32(*value);
+            self.number(value);
         }
     }
 
@@ -474,17 +484,21 @@ impl Sink {
             combat,
         } = observed;
 
-        self.i32(*act);
-        self.i32(*floor);
-        self.i32(*hp);
-        self.i32(*max_hp);
+        self.number(act);
+        self.number(floor);
+        self.number(hp);
+        self.number(max_hp);
         self.bool(*alive);
         self.bool(*run_over);
         self.option(victory, |sink, won| sink.bool(*won));
-        self.i32(*gold);
+        self.number(gold);
         self.list(relics, |sink, relic| sink.carried(relic));
         self.list(potions, |sink, potion| sink.held(potion));
-        self.len(*potion_slots);
+        self.len(
+            potion_slots
+                .to_usize()
+                .expect("potion slot count must fit the digest format"),
+        );
         self.list(deck, |sink, card| sink.card(card));
         self.bool(*in_combat);
         self.map(map);
@@ -626,7 +640,7 @@ impl Sink {
                         }
                         Stock::CardRemoval => sink.u8(STOCK_CARD_REMOVAL),
                     }
-                    sink.i32(*cost);
+                    sink.number(cost);
                     sink.prose_option(title);
                     sink.prose_option(text);
                     sink.bool(*stocked);
@@ -656,11 +670,11 @@ impl Sink {
             orbs,
         } = combat;
 
-        self.i32(*turn);
+        self.number(turn);
         self.id(phase);
-        self.i32(*energy);
-        self.i32(*stars);
-        self.i32(*round);
+        self.number(energy);
+        self.number(stars);
+        self.number(round);
         self.option(encounter, |sink, encounter| sink.id(encounter));
         for pile in [hand, draw, discard, exhaust] {
             self.list(pile, |sink, card| sink.card(card));
@@ -669,7 +683,7 @@ impl Sink {
         self.list(legal, |sink, playable| sink.playable(playable));
         self.option(orbs, |sink, orbs| {
             let Orbs { capacity, queue } = orbs;
-            sink.i32(*capacity);
+            sink.number(capacity);
             sink.list(queue, |sink, channelled| {
                 let Channelled {
                     orb,
@@ -677,8 +691,8 @@ impl Sink {
                     evoke,
                 } = channelled;
                 sink.id(orb);
-                sink.i32(*passive);
-                sink.i32(*evoke);
+                sink.number(passive);
+                sink.number(evoke);
             });
         });
     }
@@ -699,14 +713,14 @@ impl Sink {
         self.u32(*id);
         self.option(model, |sink, model| sink.model(model));
         self.id(side);
-        self.i32(*hp);
-        self.i32(*max_hp);
-        self.i32(*block);
+        self.number(hp);
+        self.number(max_hp);
+        self.number(block);
         self.bool(*alive);
         self.list(powers, |sink, stack| {
             let Stack { power, amount } = stack;
             sink.id(power);
-            sink.i32(*amount);
+            sink.number(amount);
         });
         self.option(next_move, |sink, next| {
             let NextMove { id, intents } = next;
@@ -716,7 +730,7 @@ impl Sink {
                 sink.id(kind);
                 sink.option(attack, |sink, attack| {
                     let Attack { damage, repeats } = attack;
-                    sink.i32(*damage);
+                    sink.number(damage);
                     sink.u8(*repeats);
                 });
             });

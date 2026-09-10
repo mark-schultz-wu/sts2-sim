@@ -1427,6 +1427,7 @@ dependencies = [
  "anyhow",
  "clap",
  "nonmax",
+ "num-traits",
  "ratatui",
  "serde",
  "serde_json",
@@ -1452,6 +1453,7 @@ version = "0.1.0"
 dependencies = [
  "libm",
  "nonmax",
+ "num-traits",
  "serde",
  "serde_json",
  "sts2-content",
@@ -1476,6 +1478,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "nonmax",
+ "num-traits",
  "serde",
  "serde_json",
  "serial_test",
@@ -1498,6 +1501,7 @@ name = "sts2-sim"
 version = "0.1.0"
 dependencies = [
  "indexmap",
+ "num-traits",
  "serde",
  "serde_json",
  "smallvec",

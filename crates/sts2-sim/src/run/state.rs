@@ -44,9 +44,9 @@ struct RunData<V: Rules> {
 struct Player<V: Rules> {
     relics: SmallVec<[V::Relic; 8]>,
     deck: Vec<CardIdent<V>>,
-    hp: i32,
-    gold: i32,
-    potion_slots: usize,
+    hp: V::Number,
+    gold: V::Number,
+    potion_slots: V::Count,
 }
 
 /// Mutable random streams and their compact counters.
@@ -114,9 +114,12 @@ impl<V: Rules> State<V> {
                     .into_iter()
                     .map(CardIdent::new)
                     .collect(),
-                hp: i32::from(V::starting_hp(character)),
-                gold: i32::from(V::starting_gold(character)),
-                potion_slots: V::starting_potion_slots(),
+                hp: num_traits::cast(V::starting_hp(character))
+                    .expect("starting HP fits the build's game-number type"),
+                gold: num_traits::cast(V::starting_gold(character))
+                    .expect("starting gold fits the build's game-number type"),
+                potion_slots: num_traits::cast(V::starting_potion_slots())
+                    .expect("starting potion slots fit the build's count type"),
             },
             rngs: Rngs {
                 run: run_counters,
@@ -254,8 +257,8 @@ impl<V: Rules> State<V> {
 
         Applied {
             observation: Observation {
-                act: 0,
-                floor: 1,
+                act: num_traits::zero(),
+                floor: num_traits::one(),
                 hp: self.player.hp,
                 max_hp: self.player.hp,
                 alive: true,
