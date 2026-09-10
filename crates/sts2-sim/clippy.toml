@@ -1,0 +1,11 @@
+# The simulator reports ids, not sentences.
+#
+# Every string in an observation is either the game's own prose, which this
+# crate leaves absent, or a name a front end spells. Neither is built here, and
+# `-D warnings` is what keeps it that way.
+disallowed-macros = [
+    { path = "std::format", reason = "report the parts; a front end spells them" },
+]
+disallowed-types = [
+    { path = "std::string::String", reason = "report the parts; a front end spells them" },
+]

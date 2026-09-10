@@ -12,8 +12,5 @@ sts2-core = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-# Map fixtures name one build and use its ascension ladder.
+# A unit test drives a rule, and a rule is written against one build's tables.
 sts2-content = { workspace = true, features = ["v0_107_1"] }
-# Setup fixtures compare content ids by their serialized game names.
-serde = { workspace = true }
-serde_json = { workspace = true }

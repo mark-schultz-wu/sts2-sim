@@ -1,4 +1,0 @@
-event Neow finished=false
-option 0 NEOW.pages.INITIAL.options.LEAD_PAPERWEIGHT locked=false proceed=false chosen=false relic=Some(LeadPaperweight)
-option 1 NEOW.pages.INITIAL.options.KALEIDOSCOPE locked=false proceed=false chosen=false relic=Some(Kaleidoscope)
-option 2 NEOW.pages.INITIAL.options.HEFTY_TABLET locked=false proceed=false chosen=false relic=Some(HeftyTablet)
