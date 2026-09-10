@@ -104,10 +104,20 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let Some(at) = self.at(at) else { return };
 
-        // A debuff landing on the player skips its first tick down. That is
-        // state no observation reports, and this does not keep it.
-        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER {
-            unimplemented!("a debuff on the player");
+        // `PowerCmd.Apply` sets `SkipNextDurationTick` on a debuff that lands
+        // on the player, so the next tick passes it over. That is per-power
+        // state no observation reports, and nothing here keeps it. A power
+        // that never counts down does not need it.
+        let sides = [
+            <V::CombatSide as SideKinds>::PLAYER,
+            <V::CombatSide as SideKinds>::ENEMY,
+        ];
+        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER
+            && sides
+                .into_iter()
+                .any(|side| V::ticks_down(power, amount, side))
+        {
+            unimplemented!("a debuff on the player that counts down");
         }
 
         // `FindExistingInstanceForStacking`: a counter stacks into the one
@@ -230,6 +240,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn make_vulnerable(&mut self, at: CombatId, amount: V::Number) {
         self.apply(at, V::vulnerable_power(), amount);
+    }
+
+    fn shrink_opponents(&mut self, amount: V::Number) {
+        // The list is taken before the first lands, as an attack's is.
+        for id in self.opponents() {
+            self.apply(id, V::shrink_power(), amount);
+        }
     }
 
     fn intent_damage(&self) -> V::Number {

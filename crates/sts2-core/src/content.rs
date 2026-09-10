@@ -761,6 +761,13 @@ pub trait Fight<V: ContentVersion> {
     /// on the other side.
     fn attack_opponents(&mut self, damage: V::Number);
 
+    /// `PowerCmd.Apply<ShrinkPower>(targets, amount, ...)`, which lands on
+    /// every creature on the other side.
+    ///
+    /// A monster's move points at the creatures across from it rather than at
+    /// one, the way [`Fight::attack_opponents`] does.
+    fn shrink_opponents(&mut self, amount: V::Number);
+
     /// `CardPileCmd.Draw(count, Owner)`.
     ///
     /// A printed number, so signed. A card printing a negative one draws
@@ -1223,6 +1230,9 @@ pub trait Rules: ContentVersion {
     /// `VulnerablePower`.
     fn vulnerable_power() -> Self::Power;
 
+    /// The power a `shrink_opponents` command applies, which is `ShrinkPower`.
+    fn shrink_power() -> Self::Power;
+
     /// What a power multiplies a hit by, which is
     /// `ModifyDamageMultiplicative`.
     ///
@@ -1238,10 +1248,13 @@ pub trait Rules: ContentVersion {
     /// Whether a power counts down when one side's turn ends, which is its
     /// `AfterSideTurnEnd`.
     ///
+    /// The amount, because one power reads it: a Shrink the game stores as a
+    /// negative number never runs out.
+    ///
     /// # Panics
     ///
     /// A power nobody has ported.
-    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool;
+    fn ticks_down(power: Self::Power, amount: Self::Number, side: Self::CombatSide) -> bool;
 
     /// What one of a monster's moves does, which is its `onPerform`.
     ///

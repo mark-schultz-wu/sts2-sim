@@ -13,6 +13,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
         RegentCard::Strike => strike(id, fight),
         RegentCard::Defend => defend(id, fight),
         RegentCard::FallingStar => falling_star(id, fight),
+        RegentCard::GuidingStar => guiding_star(id, fight),
         RegentCard::Venerate => venerate(id, fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
@@ -39,6 +40,13 @@ fn falling_star<F: Fight<V>>(card: Cards, fight: &mut F) {
     fight.attack(target, printed(card, CardVar::Damage));
     fight.weaken(target, printed(card, CardVar::WeakPower));
     fight.make_vulnerable(target, printed(card, CardVar::VulnerablePower));
+}
+
+/// `GuidingStar`. Deal damage, then draw.
+fn guiding_star<F: Fight<V>>(card: Cards, fight: &mut F) {
+    let target = fight.target();
+    fight.attack(target, printed(card, CardVar::Damage));
+    fight.draw(printed(card, CardVar::Cards));
 }
 
 /// `Venerate`. Gain stars.

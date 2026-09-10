@@ -113,7 +113,7 @@ fn tick_powers<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
     let one = num_traits::one();
     for creature in &mut combat.creatures {
         for held in &mut creature.powers {
-            if V::ticks_down(held.power, side) {
+            if V::ticks_down(held.power, held.amount, side) {
                 held.amount = held.amount - one;
             }
         }

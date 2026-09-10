@@ -55,8 +55,27 @@ pub(super) fn twig_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     }
 }
 
-/// `DamageCmd.Attack(n).FromMonster(this)`, for the three slime moves that are
-/// that and nothing else.
+/// How much smaller the beetle makes what it shrinks.
+///
+/// The move's own constant, and a negative one: a Shrink the game stores below
+/// zero is the kind that never runs out.
+const SHRINK: i32 = -1;
+
+/// `ShrinkerBeetle`. Shrinks once, then chews and stamps by turns.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+pub(super) fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::ShrinkerMove => fight.shrink_opponents(SHRINK),
+        MoveId::ChompMove | MoveId::StompMove => attack(fight),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `DamageCmd.Attack(n).FromMonster(this)`, for the moves that are that and
+/// nothing else.
 fn attack<F: Fight<V>>(fight: &mut F) {
     let damage = fight.intent_damage();
     fight.attack_opponents(damage);
