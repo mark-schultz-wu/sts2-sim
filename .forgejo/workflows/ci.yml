@@ -54,7 +54,7 @@ jobs:
       - name: Test
         run: |
           set -euo pipefail
-          cargo test --workspace
+          cargo test --workspace --exclude sts2-golden
           features=""
           for lock in mod/games/*.lock; do
             features="$features,$(basename "$lock" .lock | tr . _)"
@@ -149,4 +149,41 @@ jobs:
             version="$(basename "$lock" .lock)"
             echo "==> $version"
             STS2_GAME_VERSION="$version" ./mod/build.sh
+          done
+
+  # A recording belongs to one game build: its indices mean whatever that
+  # build dealt. This job owns the complete pinned installation and replays the
+  # recording into it once. The tests then read the cached answers.
+  golden:
+    runs-on: sts2
+    timeout-minutes: 45
+    env:
+      STS2_GAME_VERSION: v0.107.1
+      STS2_GAME_DIR: /opt/sts2/share/sts2/games/v0.107.1
+    steps:
+      - name: Check out the repository
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: sts2-checkout
+
+      - name: Check the pinned game
+        run: |
+          set -euo pipefail
+          test -x "$STS2_GAME_DIR/SlayTheSpire2"
+          test "$(cat "$STS2_GAME_DIR/.pinned-version")" = \
+            "$(sed -n 's/^# version: //p' "mod/games/$STS2_GAME_VERSION.lock")"
+
+      - name: Build and install the mods
+        run: ./mod/deploy.sh
+
+      - name: Replay the golden runs
+        run: cargo test -p sts2-golden -- --nocapture
+
+      - name: Check the mod inside the game
+        run: |
+          set -euo pipefail
+          for mode in selftest determinism; do
+            echo "==> $mode"
+            (cd "$STS2_GAME_DIR" && timeout -k 5 300 env LD_PRELOAD=libgcc_s.so.1 \
+              STS2_HEADLESS_MODE="$mode" ./SlayTheSpire2 --headless --force-steam=off)
           done

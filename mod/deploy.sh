@@ -9,7 +9,7 @@
 set -euo pipefail
 
 GAME_DIR="${STS2_GAME_DIR:?is not set. The repo .envrc exports it: run 'direnv allow' in the repo root, or set it by hand}"
-PROFILE_DIR="${STS2_PROFILE_DIR:-$HOME/.local/share/SlayTheSpire2/default/1}"
+PROFILE_DIR="${STS2_PROFILE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/SlayTheSpire2/default/1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # All of them, in dependency order, or none: build.sh stops on the first

@@ -1459,6 +1459,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sts2-golden"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sts2-content",
+ "sts2-core",
+ "sts2-headless",
+ "sts2-sim",
+]
+
+[[package]]
 name = "sts2-headless"
 version = "0.1.0"
 dependencies = [
