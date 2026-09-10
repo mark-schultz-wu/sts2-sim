@@ -1219,13 +1219,6 @@ pub trait Rules: ContentVersion {
     /// Where a monster's graph starts, for a machine that has not walked.
     fn initial_monster_state(monster: Self::Monster) -> u8;
 
-    /// The key a card prints the number an attack hits for under, which is
-    /// the game's own `Damage`.
-    ///
-    /// A preview runs it through the same hook the hit itself goes through,
-    /// so this is where a fight's own arithmetic reaches a card's face.
-    fn damage_var() -> Self::CardVar;
-
     /// What a power multiplies a hit by, which is
     /// `ModifyDamageMultiplicative`.
     ///

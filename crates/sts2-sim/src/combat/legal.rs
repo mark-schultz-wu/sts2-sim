@@ -258,7 +258,7 @@ fn previewed<V: Rules>(
     };
     let dealer = super::board::player::<V>(creatures);
     let mut previewed = numbers.clone();
-    if let Some(damage) = previewed.get_mut(&V::damage_var()) {
+    if let Some(damage) = previewed.get_mut(&<V::CardVar as CardVars>::DAMAGE) {
         *damage = super::board::modified::<V>(creatures, dealer, at, *damage);
     }
     previewed

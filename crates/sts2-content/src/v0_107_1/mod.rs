@@ -177,10 +177,6 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(monster).initial
     }
 
-    fn damage_var() -> Self::CardVar {
-        generated::cards::CardVar::Damage
-    }
-
     fn damage_multiplier(power: Self::Power, holding: sts2_core::Holding) -> f64 {
         behaviour::powers::damage_multiplier(power, holding)
     }
