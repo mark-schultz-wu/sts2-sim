@@ -746,7 +746,9 @@ mod tests {
         run.fight_here(Encounter::SlimesWeak)
             .expect("the simulator can build this fight");
         let before = run.report().observation;
-        run.end_turn().expect("the simulator can end this turn");
+        run.end_turn()
+            .expect("the simulator can end this turn")
+            .expect("and the turn is not refused");
         let after = run.report().observation;
 
         assert!(
