@@ -30,6 +30,12 @@ pub(crate) struct State<V: Rules> {
     visited: Vec<Coord>,
     player: Player<V>,
     rngs: Rngs,
+    /// How many of this act's normal fights the run has walked into.
+    ///
+    /// The act's encounter list is dealt at the start of the run and met in
+    /// order, so this is where the next one is. Not in an observation: the
+    /// observation names the fight the run is in, not the queue behind it.
+    fought: usize,
     odds: Odds,
     phase: Phase<V>,
 }
@@ -145,6 +151,7 @@ impl<V: Rules> State<V> {
                 potion_slots: num_traits::cast(V::starting_potion_slots())
                     .expect("starting potion slots fit the build's count type"),
             },
+            fought: 0,
             odds: Odds::default(),
             rngs: Rngs {
                 run: run_counters,
@@ -216,6 +223,7 @@ impl<V: Rules> State<V> {
         ongoing: crate::combat::Ongoing<V>,
     ) {
         self.floor = self.floor + num_traits::one();
+        self.fought += 1;
         self.at = to;
         self.visited.push(to);
         self.drew(counters);
@@ -264,7 +272,7 @@ impl<V: Rules> State<V> {
             .opening
             .acts
             .get(act)
-            .and_then(|(_, rooms)| rooms.normal.first())
+            .and_then(|(_, rooms)| rooms.normal.get(self.fought))
             .copied()
     }
 
