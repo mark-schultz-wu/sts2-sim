@@ -10,8 +10,9 @@ mod play;
 mod start;
 mod stream;
 mod turn;
+pub(crate) use board::reported;
 pub(crate) use legal::belt;
-pub(crate) use play::{play, resolve};
+pub(crate) use play::{apply_power, play, resolve};
 pub(crate) use start::enter;
 pub(crate) use turn::end as end_turn;
 pub mod pile;
@@ -27,6 +28,9 @@ use sts2_core::{Combat, Rules};
 pub(crate) struct Ongoing<V: Rules> {
     pub(crate) combat: Combat<V>,
     pub(crate) machines: Vec<Machine<V>>,
+    /// The debuffs on the player whose next tick is skipped. See
+    /// [`board::Board::skipped`].
+    pub(crate) skipping: Vec<(sts2_core::CombatId, V::Power)>,
 }
 
 /// What one decision leaves behind.

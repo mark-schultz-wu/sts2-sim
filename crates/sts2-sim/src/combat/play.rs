@@ -91,6 +91,56 @@ pub(crate) fn resolve<V: Rules>(
     })
 }
 
+/// Put a power on a creature, with no card or move behind it.
+///
+/// Scenario construction. The command a card applies a power with, reached
+/// without a card, so the state it leaves is the state a card leaves.
+pub(crate) fn apply_power<V: Rules>(
+    ongoing: &super::Ongoing<V>,
+    at: CombatId,
+    power: V::Power,
+    amount: sts2_core::PowerAmount<V::Number>,
+    raw_seed: u32,
+    counters: &Counters<V>,
+) -> Result<super::Fought<V>, Error> {
+    let mut next = ongoing.combat.clone();
+    let mut counters = counters.clone();
+    // Nothing here draws. The stream is what a board is built with, and
+    // recording it back leaves the counter where it was.
+    let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
+
+    let mut board = Board::for_card(&mut next, &mut shuffle, None);
+    sts2_core::Fight::apply(&mut board, at, power, amount);
+    let won = board.won;
+    let skipped = std::mem::take(&mut board.skipped);
+
+    next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
+    stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
+    Ok(super::Fought {
+        ongoing: super::Ongoing {
+            combat: next,
+            machines: ongoing.machines.clone(),
+            skipping: merged::<V>(&ongoing.skipping, skipped),
+        },
+        counters,
+        won,
+    })
+}
+
+/// The skipped ticks a fight already held, and the ones an effect just added.
+pub(super) fn merged<V: Rules>(
+    held: &[(CombatId, V::Power)],
+    added: Vec<(CombatId, V::Power)>,
+) -> Vec<(CombatId, V::Power)> {
+    let mut out = held.to_vec();
+    for one in added {
+        if !out.contains(&one) {
+            out.push(one);
+        }
+    }
+    out
+}
+
 /// Make a resolved play, and give back the fight it leaves behind.
 ///
 /// Nothing is committed until this returns. It works on a copy, so a card
@@ -116,6 +166,7 @@ pub(crate) fn play<V: Rules>(
     let mut board = Board::for_card(&mut next, &mut shuffle, play.target);
     V::on_play(card.card, &mut board);
     let board_won = board.won;
+    let skipped = std::mem::take(&mut board.skipped);
 
     // `GetResultPileTypeForCardPlay`, once the effect is over.
     match card
@@ -142,6 +193,7 @@ pub(crate) fn play<V: Rules>(
         ongoing: super::Ongoing {
             combat: next,
             machines: ongoing.machines.clone(),
+            skipping: merged::<V>(&ongoing.skipping, skipped),
         },
         counters,
         won: board_won,

@@ -27,6 +27,14 @@ pub(super) struct Board<'a, V: Rules> {
     target: Option<CombatId>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
+    /// The debuffs this effect put on the player, whose next tick is skipped.
+    ///
+    /// `PowerCmd.Apply` sets `SkipNextDurationTick` on every debuff that lands
+    /// on the player. So a Weak applied during the enemy's turn lasts the
+    /// turns it says rather than one fewer. Per instance, and no observation
+    /// reports it, so the run keeps it beside the fight.
+    pub(super) skipped: Vec<(CombatId, V::Power)>,
+
     /// The last enemy left the fight while this effect was resolving.
     ///
     /// `CheckWinCondition` runs after the command that killed it, so this is
@@ -48,6 +56,7 @@ impl<'a, V: Rules> Board<'a, V> {
             actor,
             target,
             intent_damage: V::Number::zero(),
+            skipped: Vec::new(),
             won: false,
         }
     }
@@ -65,6 +74,7 @@ impl<'a, V: Rules> Board<'a, V> {
             actor,
             target: None,
             intent_damage,
+            skipped: Vec::new(),
             won: false,
         }
     }
@@ -106,9 +116,8 @@ impl<'a, V: Rules> Board<'a, V> {
         let Some(at) = self.at(at) else { return };
 
         // `PowerCmd.Apply` sets `SkipNextDurationTick` on a debuff that lands
-        // on the player, so the next tick passes it over. That is per-power
-        // state no observation reports, and nothing here keeps it. An endless
-        // power has no tick to skip.
+        // on the player, so the next tick passes it over. An endless power has
+        // no tick to skip, and nothing else keeps a flag it never reads.
         let counts_down = amount != PowerAmount::Endless
             && [
                 <V::CombatSide as SideKinds>::PLAYER,
@@ -117,7 +126,10 @@ impl<'a, V: Rules> Board<'a, V> {
             .into_iter()
             .any(|side| V::ticks_down(power, side));
         if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && counts_down {
-            unimplemented!("a debuff on the player that counts down");
+            let id = self.combat.creatures[at].id;
+            if !self.skipped.contains(&(id, power)) {
+                self.skipped.push((id, power));
+            }
         }
 
         // `FindExistingInstanceForStacking`: a counter stacks into the one
@@ -166,7 +178,7 @@ impl<'a, V: Rules> Board<'a, V> {
 /// The multipliers this build fields are halves and quarters. A binary float
 /// holds those exactly, so the truncation at the end lands where the game's
 /// own decimal arithmetic lands.
-pub(super) fn modified<V: Rules>(
+pub(crate) fn modified<V: Rules>(
     creatures: &[Creature<V>],
     dealer: CombatId,
     at: usize,
@@ -181,6 +193,45 @@ pub(super) fn modified<V: Rules>(
         }
     }
     num_traits::cast(amount.max(0.0).trunc()).expect("a modified hit is a game number")
+}
+
+/// The fight as it is reported, with every intent run through the modifiers.
+///
+/// `Attack::damage` is the number that will land rather than the one the move
+/// prints. The game works it out on every read, because a power applied after
+/// the intent was rolled changes it. So a fight keeps the move's own number
+/// and this is where the fight has its say.
+pub(crate) fn reported<V: Rules>(combat: &Combat<V>) -> Combat<V> {
+    let mut out = combat.clone();
+    let Some(target) = out
+        .creatures
+        .iter()
+        .position(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+    else {
+        return out;
+    };
+
+    for at in 0..out.creatures.len() {
+        let dealer = out.creatures[at].id;
+        let Some(next) = out.creatures[at].next_move.clone() else {
+            continue;
+        };
+        let intents = next
+            .intents
+            .into_iter()
+            .map(|mut intent| {
+                if let Some(attack) = &mut intent.attack {
+                    attack.damage = modified::<V>(&combat.creatures, dealer, target, attack.damage);
+                }
+                intent
+            })
+            .collect();
+        out.creatures[at].next_move = Some(sts2_core::NextMove {
+            id: next.id,
+            intents,
+        });
+    }
+    out
 }
 
 /// The player, which every fight has one of.

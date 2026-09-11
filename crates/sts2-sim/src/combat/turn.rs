@@ -29,6 +29,7 @@ pub(crate) fn end<V: Rules>(
 ) -> Result<super::Fought<V>, Error> {
     let mut next = ongoing.combat.clone();
     let mut machines = ongoing.machines.clone();
+    let mut skipping = ongoing.skipping.clone();
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
     let mut ai = stream::seek(raw_seed, &counters, V::monster_ai_rng(), "monster_ai")?;
@@ -36,14 +37,22 @@ pub(crate) fn end<V: Rules>(
     turn_end(&mut next);
     flush_hand(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
-    tick_powers::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
+    tick_powers::<V>(
+        &mut next,
+        &mut skipping,
+        <V::CombatSide as SideKinds>::PLAYER,
+    );
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
-    let won = enemy_turn(&mut next, &mut shuffle, &mut machines);
+    let won = enemy_turn(&mut next, &mut shuffle, &mut machines, &mut skipping);
 
-    tick_powers::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
+    tick_powers::<V>(
+        &mut next,
+        &mut skipping,
+        <V::CombatSide as SideKinds>::ENEMY,
+    );
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -67,6 +76,7 @@ pub(crate) fn end<V: Rules>(
         ongoing: Ongoing {
             combat: next,
             machines,
+            skipping,
         },
         counters,
         won,
@@ -110,18 +120,31 @@ fn clear_block<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
 ///
 /// Every creature in the fight, not only the ones on that side. Which side's
 /// turn ending counts a power down is the power's own rule.
-fn tick_powers<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
+fn tick_powers<V: Rules>(
+    combat: &mut Combat<V>,
+    skipping: &mut Vec<(CombatId, V::Power)>,
+    side: V::CombatSide,
+) {
     let one = num_traits::one();
     for creature in &mut combat.creatures {
+        let id = creature.id;
         for held in &mut creature.powers {
+            let power = held.power;
             // An endless power sits out every tick. There is no number to
             // count, which is the whole of what endless means.
             let PowerAmount::Counted(amount) = held.amount else {
                 continue;
             };
-            if V::ticks_down(held.power, side) {
-                held.amount = PowerAmount::Counted(amount - one);
+            if !V::ticks_down(power, side) {
+                continue;
             }
+            // `TickDownDuration` passes over an instance whose flag is set,
+            // and clears the flag rather than counting down twice later.
+            if let Some(at) = skipping.iter().position(|held| *held == (id, power)) {
+                skipping.remove(at);
+                continue;
+            }
+            held.amount = PowerAmount::Counted(amount - one);
         }
         creature
             .powers
@@ -137,6 +160,7 @@ fn enemy_turn<V: Rules>(
     combat: &mut Combat<V>,
     shuffle: &mut MegaRng,
     machines: &mut [Machine<V>],
+    skipping: &mut Vec<(CombatId, V::Power)>,
 ) -> bool {
     let mut won = false;
     let acting: Vec<CombatId> = combat
@@ -172,6 +196,7 @@ fn enemy_turn<V: Rules>(
         let mut board = Board::for_move(combat, shuffle, id, damage);
         V::perform_move(monster, next_move.id, &mut board);
         won |= board.won;
+        *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));
     }
     won
 }

@@ -325,6 +325,34 @@ impl<V: Rules> State<V> {
         Ok(self.report())
     }
 
+    /// Put a power on a creature in the fight.
+    ///
+    /// `ApplyPowerConsoleCmd`, which applies it through the command a card
+    /// applies one with. So a debuff put on the player here skips its next
+    /// tick, exactly as one a monster applied does.
+    pub(crate) fn apply_power(
+        &mut self,
+        at: sts2_core::CombatId,
+        power: V::Power,
+        amount: sts2_core::PowerAmount<V::Number>,
+    ) -> Result<Applied<V>, Error> {
+        let Some(ongoing) = self.fight() else {
+            unimplemented!("a power applied outside a fight");
+        };
+        let applied = crate::combat::apply_power(
+            ongoing,
+            at,
+            power,
+            amount,
+            self.raw_seed(),
+            &self.counters(),
+        )?;
+
+        self.drew(applied.counters);
+        self.fought(applied.ongoing);
+        Ok(self.report())
+    }
+
     /// Put a card, a relic or a potion straight into the run.
     ///
     /// `Driver.GrantCard`, `RelicCmd.Obtain` and `PotionCmd.TryToProcure`,
@@ -538,7 +566,12 @@ impl<V: Rules> State<V> {
                 };
                 (asking, Some(room), None, false)
             }
-            Phase::Combat(ongoing) => (None, None, Some(ongoing.combat.clone()), true),
+            Phase::Combat(ongoing) => (
+                None,
+                None,
+                Some(crate::combat::reported(&ongoing.combat)),
+                true,
+            ),
             Phase::Rewards { combat, offered } => (
                 offered
                     .iter()
