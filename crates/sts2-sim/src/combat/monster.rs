@@ -100,6 +100,42 @@ mod tests {
     use sts2_core::rng::stream_seed;
     use sts2_core::{Attack, Intent, NextMove, Seed};
 
+    /// `GenerateMonsters` refuses a number it already gave out. Three Inklets
+    /// share one range and so get three healths.
+    ///
+    /// The slimes above cannot show it. Their ranges barely overlap, so the
+    /// rule never sees a repeat.
+    ///
+    /// The numbers are the game's, off a `fight INKLETS_NORMAL` transcript.
+    /// Not a scenario: both act-one encounters with monsters of a kind flag
+    /// one of them, and branch its graph on the flag.
+    #[test]
+    fn monsters_of_a_kind_get_different_health() {
+        let seed = Seed::new("0RACLE1").unwrap();
+        let mut counters = Counters {
+            run: RunRngType::ALL.into_iter().map(|kind| (kind, 0)).collect(),
+            player: HashMap::<PlayerRngType, u32>::new(),
+        };
+        let inklets = [Monster::Inklet, Monster::Inklet, Monster::Inklet];
+
+        let roster = initialize::<V0_107_1>(
+            stream_seed(&seed),
+            AscensionLevel::None,
+            &mut counters,
+            &inklets,
+        )
+        .unwrap();
+
+        assert_eq!(
+            roster
+                .creatures
+                .iter()
+                .map(|c| c.max_hp)
+                .collect::<Vec<_>>(),
+            [13, 17, 12]
+        );
+    }
+
     #[test]
     fn the_oracle_weak_slimes_get_the_same_health_and_moves() {
         let seed = Seed::new("0RACLE1").unwrap();
