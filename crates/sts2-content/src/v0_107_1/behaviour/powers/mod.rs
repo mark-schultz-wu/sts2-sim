@@ -8,7 +8,7 @@
 //! because ported behaviour put it there. So an unported power reaching here
 //! is a gap in the port, and not a state a run can reach.
 
-use sts2_core::Holding;
+use sts2_core::{Holding, Modify, PowerAmount, SideTurnEnd};
 
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
@@ -23,47 +23,73 @@ const DAMAGE_DECREASE: f64 = 0.75;
 /// percentage taken off rather than as what is left.
 const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 
-/// What a power multiplies a hit by.
+/// What a power does to a hit, which is its `Hook.ModifyDamage`.
 ///
 /// # Panics
 ///
 /// A power nobody has ported.
-pub(crate) fn damage_multiplier(power: Power, holding: Holding) -> f64 {
+pub(crate) fn damage_hook(
+    power: Power,
+    holding: Holding,
+    _amount: PowerAmount<i32>,
+) -> Modify<i32> {
     match (power, holding) {
         // Vulnerable acts on the hits its owner takes.
-        (Power::VulnerablePower, Holding::Target) => DAMAGE_INCREASE,
+        (Power::VulnerablePower, Holding::Target) => Modify::Scaled(DAMAGE_INCREASE),
         // Weak acts on the hits its owner deals. So does Shrink, and only on a
         // powered attack. Every hit a fight deals here comes from a card or a
         // move, which is what powered means.
-        (Power::WeakPower, Holding::Dealer) => DAMAGE_DECREASE,
-        (Power::ShrinkPower, Holding::Dealer) => SHRUNK,
-        (Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower, _) => 1.0,
+        (Power::WeakPower, Holding::Dealer) => Modify::Scaled(DAMAGE_DECREASE),
+        (Power::ShrinkPower, Holding::Dealer) => Modify::Scaled(SHRUNK),
+        (Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower, _) => Modify::Nothing,
         // `EnergyNextTurnPower` has no `ModifyDamage`. It hands over an energy
-        // and leaves.
-        (Power::EnergyNextTurnPower, _) => 1.0,
+        // at the reset and goes.
+        (Power::EnergyNextTurnPower, _) => Modify::Nothing,
         (power, _) => unimplemented!("what {power:?} does to a hit"),
     }
 }
 
-/// Whether a power counts down when this side's turn ends.
+/// What a power does to a block gain, which is its `Hook.ModifyBlock`.
 ///
-/// Weak and Vulnerable both count down once the enemy side's turn ends. A
+/// None of them overrides it. The three debuffs take their share off a hit,
+/// and `EnergyNextTurnPower` touches the energy pool.
+///
+/// # Panics
+///
+/// A power nobody has ported.
+pub(crate) fn block_hook(power: Power, _amount: PowerAmount<i32>) -> Modify<i32> {
+    match power {
+        Power::VulnerablePower
+        | Power::WeakPower
+        | Power::ShrinkPower
+        | Power::EnergyNextTurnPower => Modify::Nothing,
+        power => unimplemented!("what {power:?} does to a block gain"),
+    }
+}
+
+/// What a power does when this side's turn ends, which is its
+/// `AfterSideTurnEnd`.
+///
+/// Weak and Vulnerable tick a duration down, and only at the enemy's end. So a
 /// debuff put on something at the start of a round lasts that round out.
 ///
 /// # Panics
 ///
 /// A power nobody has ported.
-pub(crate) fn ticks_down(power: Power, side: CombatSide) -> bool {
-    match power {
-        Power::VulnerablePower | Power::WeakPower => side == CombatSide::Enemy,
-        // `ShrinkPower.AfterSideTurnEnd` counts down on the side its owner is
-        // on. Only an endless one is in a fight so far, and an endless power
-        // has no number to count.
-        Power::ShrinkPower => unimplemented!("when a counted Shrink runs out"),
-        // It is spent rather than counted down. `AfterEnergyReset` gives the
-        // whole amount over and removes the instance.
-        Power::EnergyNextTurnPower => false,
-        power => unimplemented!("when {power:?} counts down"),
+pub(crate) fn side_turn_end(power: Power, side: CombatSide) -> SideTurnEnd {
+    match (power, side) {
+        (Power::VulnerablePower | Power::WeakPower, CombatSide::Enemy) => {
+            SideTurnEnd::TicksDownDuration
+        }
+        (Power::VulnerablePower | Power::WeakPower, _) => SideTurnEnd::Nothing,
+        // `ShrinkPower.AfterSideTurnEnd` decrements and removes, at either
+        // side's end. It is a different command from a duration tick, and only
+        // an endless Shrink is in a fight so far.
+        (Power::ShrinkPower, _) => unimplemented!("what a counted Shrink does when a turn ends"),
+        // `EnergyNextTurnPower` has no `AfterSideTurnEnd`. It is spent at the
+        // reset instead, which is a hook of its own.
+        (Power::EnergyNextTurnPower, _) => SideTurnEnd::Nothing,
+        (power, _) => unimplemented!("what {power:?} does when a turn ends"),
     }
 }
 

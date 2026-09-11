@@ -178,12 +178,23 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(monster).initial
     }
 
-    fn damage_multiplier(power: Self::Power, holding: sts2_core::Holding) -> f64 {
-        behaviour::powers::damage_multiplier(power, holding)
+    fn damage_hook(
+        power: Self::Power,
+        holding: sts2_core::Holding,
+        amount: sts2_core::PowerAmount<Self::Number>,
+    ) -> sts2_core::Modify<Self::Number> {
+        behaviour::powers::damage_hook(power, holding, amount)
     }
 
-    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool {
-        behaviour::powers::ticks_down(power, side)
+    fn block_hook(
+        power: Self::Power,
+        amount: sts2_core::PowerAmount<Self::Number>,
+    ) -> sts2_core::Modify<Self::Number> {
+        behaviour::powers::block_hook(power, amount)
+    }
+
+    fn side_turn_end(power: Self::Power, side: Self::CombatSide) -> sts2_core::SideTurnEnd {
+        behaviour::powers::side_turn_end(power, side)
     }
 
     fn spent_on_energy_reset(power: Self::Power) -> bool {

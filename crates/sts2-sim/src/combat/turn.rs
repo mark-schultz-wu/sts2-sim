@@ -165,7 +165,7 @@ fn tick_powers<V: Rules>(
             let PowerAmount::Counted(amount) = held.amount else {
                 continue;
             };
-            if !V::ticks_down(power, side) {
+            if V::side_turn_end(power, side) != sts2_core::SideTurnEnd::TicksDownDuration {
                 continue;
             }
             // `TickDownDuration` passes over an instance whose flag is set,

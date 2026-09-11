@@ -796,6 +796,44 @@ pub trait Fight<V: ContentVersion> {
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 }
 
+/// What a power does to a number a fight works out.
+///
+/// One shape for both of the game's modifier hooks. `ModifyDamage` and
+/// `ModifyBlock` hand a power different things to read, and take the same
+/// answer. Most powers override one, or neither.
+///
+/// One question rather than two. A power with no hook has neither an addition
+/// nor a share to name, and [`Modify::Nothing`] is how it says so.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Modify<N> {
+    /// No hook of this kind, or one that does not act here.
+    Nothing,
+    /// The `Additive` half, which lands before anything multiplies.
+    Added(N),
+    /// The `Multiplicative` half, over what the additions left.
+    Scaled(f64),
+}
+
+/// What a power does when one side's turn ends, which is its
+/// `AfterSideTurnEnd`.
+///
+/// Most powers have no override: two hundred of this build's two hundred and
+/// sixty. What the other sixty do varies, from `Decrement` and `Remove` to
+/// damage, healing and a draw.
+///
+/// So this names what the ported ones do. Three powers tick a duration down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SideTurnEnd {
+    /// No `AfterSideTurnEnd`, or one that does not act at this side's end.
+    Nothing,
+    /// `PowerCmd.TickDownDuration`: one off the amount, and the instance goes
+    /// once it reaches zero.
+    ///
+    /// Unlike `Decrement`, it passes over an instance whose
+    /// `SkipNextDurationTick` is set, and clears the flag instead.
+    TicksDownDuration,
+}
+
 /// Which side of a hit the creature holding a power is on.
 ///
 /// A power that modifies damage asks this. Vulnerable acts when its owner is
@@ -1255,27 +1293,41 @@ pub trait Rules: ContentVersion {
     /// Where a monster's graph starts, for a machine that has not walked.
     fn initial_monster_state(monster: Self::Monster) -> u8;
 
-    /// What a power multiplies a hit by, which is
-    /// `ModifyDamageMultiplicative`.
+    /// What a power does to a hit, which is its `Hook.ModifyDamage`.
     ///
-    /// One for a power that leaves this hit alone, including one that acts
-    /// only from the other side of it.
+    /// Every power on either side of the hit is asked, and most have no hook
+    /// at all.
     ///
     /// # Panics
     ///
     /// A power nobody has ported. One is only in a fight because ported
     /// behaviour put it there.
-    fn damage_multiplier(power: Self::Power, holding: Holding) -> f64;
+    fn damage_hook(
+        power: Self::Power,
+        holding: Holding,
+        amount: PowerAmount<Self::Number>,
+    ) -> Modify<Self::Number>;
 
-    /// Whether a power counts down when one side's turn ends, which is its
-    /// `AfterSideTurnEnd`.
+    /// What a power does to a block gain, which is its `Hook.ModifyBlock`.
     ///
-    /// An endless power never reaches this: there is no number to count.
+    /// No [`Holding`], because the hook names one creature. It is the one
+    /// gaining, and every power it holds is asked.
     ///
     /// # Panics
     ///
     /// A power nobody has ported.
-    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool;
+    fn block_hook(power: Self::Power, amount: PowerAmount<Self::Number>) -> Modify<Self::Number>;
+
+    /// What a power does when one side's turn ends, which is its
+    /// `AfterSideTurnEnd`.
+    ///
+    /// Every power in the fight is asked, at each side's end, and most have no
+    /// override at all.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported.
+    fn side_turn_end(power: Self::Power, side: Self::CombatSide) -> SideTurnEnd;
 
     /// Whether a power hands its amount to the player as energy resets, and
     /// then goes.

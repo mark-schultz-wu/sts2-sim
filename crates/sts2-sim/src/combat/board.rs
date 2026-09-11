@@ -11,8 +11,8 @@
 use num_traits::Zero;
 use sts2_core::rng::{GameRng, MegaRng};
 use sts2_core::{
-    CardIdent, CardTable, CardVars, CombatId, Creature, Fight, Holding, PowerAmount, Rules,
-    SideKinds, Stack,
+    CardIdent, CardTable, CardVars, CombatId, Creature, Fight, Holding, Modify, PowerAmount,
+    PowerTable, Rules, SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -125,17 +125,14 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let Some(at) = self.at(at) else { return };
 
-        // `PowerCmd.Apply` sets `SkipNextDurationTick` on a debuff that lands
-        // on the player, so the next tick passes it over. An endless power has
-        // no tick to skip, and nothing else keeps a flag it never reads.
-        let counts_down = amount != PowerAmount::Endless
-            && [
-                <V::CombatSide as SideKinds>::PLAYER,
-                <V::CombatSide as SideKinds>::ENEMY,
-            ]
-            .into_iter()
-            .any(|side| V::ticks_down(power, side));
-        if self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && counts_down {
+        // `PowerCmd.Apply` sets `SkipNextDurationTick` on every debuff that
+        // lands on a player-side creature, so the next tick passes it over.
+        // The power's own kind and the side it landed on, and nothing about
+        // what the power does when a turn ends.
+        let debuff = power
+            .debuff()
+            .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"));
+        if self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && debuff {
             let id = self.live.creatures[at].id;
             if !self.skipped.contains(&(id, power)) {
                 self.skipped.push((id, power));
@@ -177,15 +174,39 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 }
 
-/// One hit after every power on either side has multiplied it, which is
+/// `Hook.ModifyDamage` and `Hook.ModifyBlock` in the shape they share.
+///
+/// Every addition lands, then every share, then the result is floored at zero.
+///
+/// The game asks every listener in the fight and lets each read who is
+/// involved. The callers below ask only the creatures the hook is about, which
+/// is narrower. Nothing ported so far modifies a number it is not standing on
+/// one side of.
+fn hooked<V: Rules>(
+    amount: V::Number,
+    hooks: impl Iterator<Item = Modify<V::Number>>,
+) -> V::Number {
+    let (mut added, mut share) = (amount, 1.0f64);
+    for hook in hooks {
+        match hook {
+            Modify::Nothing => {}
+            Modify::Added(more) => added = added + more,
+            Modify::Scaled(by) => share *= by,
+        }
+    }
+
+    // The multipliers this build fields are halves and quarters. A binary
+    // float holds those exactly, so the truncation lands where the game's own
+    // decimal arithmetic lands.
+    let amount: f64 = num_traits::cast(added).expect("a number a fight works out fits a float");
+    num_traits::cast((amount * share).max(0.0).trunc()).expect("a modified number is a game number")
+}
+
+/// One hit after every power on either side has had its say, which is
 /// `Hook.ModifyDamage`.
 ///
 /// `dealer` is the creature swinging and `at` is where the one it hits sits.
-/// Nothing adds to a hit yet, and nothing caps one.
-///
-/// The multipliers this build fields are halves and quarters. A binary float
-/// holds those exactly, so the truncation at the end lands where the game's
-/// own decimal arithmetic lands.
+/// Nothing caps a hit.
 pub(crate) fn modified<V: Rules>(
     creatures: &[Creature<V>],
     dealer: CombatId,
@@ -193,14 +214,16 @@ pub(crate) fn modified<V: Rules>(
     damage: V::Number,
 ) -> V::Number {
     let dealer = creatures.iter().position(|creature| creature.id == dealer);
-    let mut amount: f64 = num_traits::cast(damage).expect("a hit is a number a float holds");
-    for (holder, holding) in [(Some(at), Holding::Target), (dealer, Holding::Dealer)] {
-        let Some(holder) = holder else { continue };
-        for held in &creatures[holder].powers {
-            amount *= V::damage_multiplier(held.power, holding);
-        }
-    }
-    num_traits::cast(amount.max(0.0).trunc()).expect("a modified hit is a game number")
+    let sides = [(Some(at), Holding::Target), (dealer, Holding::Dealer)];
+    hooked::<V>(
+        damage,
+        sides.into_iter().flat_map(|(holder, holding)| {
+            holder
+                .into_iter()
+                .flat_map(move |holder| &creatures[holder].powers)
+                .map(move |held| V::damage_hook(held.power, holding, held.amount))
+        }),
+    )
 }
 
 /// The player, which every fight has one of.
@@ -242,11 +265,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn gain_block(&mut self, amount: V::Number) {
-        // `GainBlock` clamps the modified amount at zero and only then adds.
-        let amount = amount.max(V::Number::zero());
+        // `CreatureCmd.GainBlock` runs the amount through `Hook.ModifyBlock`,
+        // clamps at zero, and adds nothing at all when nothing is left.
+        let actor = self.actor;
+        let Some(at) = self.at(actor) else { return };
+        let amount = hooked::<V>(
+            amount,
+            self.live.creatures[at]
+                .powers
+                .iter()
+                .map(|held| V::block_hook(held.power, held.amount)),
+        );
         if amount > V::Number::zero() {
-            let actor = self.actor;
-            let Some(at) = self.at(actor) else { return };
             self.live.creatures[at].block = self.live.creatures[at].block + amount;
         }
     }
