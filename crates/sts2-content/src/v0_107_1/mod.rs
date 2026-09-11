@@ -38,6 +38,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     const VERSION: Version = VERSION;
 
     type Number = i32;
+    type Health = i32;
     type Count = u32;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
@@ -91,8 +92,8 @@ impl sts2_core::Rules for V0_107_1 {
             .collect()
     }
 
-    fn starting_hp(character: Self::Character) -> u16 {
-        sts2_core::Table::data(character).starting_hp
+    fn starting_hp(character: Self::Character) -> Self::Health {
+        sts2_core::Table::data(character).starting_hp.into()
     }
 
     fn starting_gold(character: Self::Character) -> u16 {
@@ -156,11 +157,11 @@ impl sts2_core::Rules for V0_107_1 {
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
-    ) -> sts2_core::rng::Interval<u16> {
+    ) -> sts2_core::rng::Interval<Self::Health> {
         let data = sts2_core::Table::data(monster);
         sts2_core::rng::Interval::new(
-            data.min_hp.at(ascension as u8),
-            data.max_hp.at(ascension as u8),
+            data.min_hp.at(ascension as u8).into(),
+            data.max_hp.at(ascension as u8).into(),
         )
     }
 

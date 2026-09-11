@@ -111,9 +111,11 @@ pub trait GameRng: Sized {
         &choices.items()[self.next_int(choices.bound()) as usize]
     }
 
-    /// One integer from a nonempty closed `u16` interval.
-    fn next_u16_range(&mut self, range: Interval<u16>) -> u16 {
-        range.min() + self.next_int(range.cardinality()) as u16
+    /// One integer from a closed interval whose representation is an `i32`.
+    fn next_interval<T: Copy + From<i32> + Into<i32>>(&mut self, range: Interval<T>) -> T {
+        let min = range.min().into();
+        let width = range.max().into() as i64 - min as i64 + 1;
+        T::from((min as i64 + (self.next_double() * width as f64) as i64) as i32)
     }
 
     /// A span wider than `i32::MAX` takes the game's 64-bit branch, which is a

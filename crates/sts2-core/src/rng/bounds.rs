@@ -139,17 +139,10 @@ impl<T: Copy> Interval<T> {
     }
 }
 
-impl Interval<u16> {
+impl<T: Copy + From<i32> + Into<i32>> Interval<T> {
     /// Every integer in this closed interval, in order.
-    pub fn values(&self) -> core::ops::RangeInclusive<u16> {
-        self.min()..=self.max()
-    }
-
-    /// The number of integers in this closed interval.
-    pub const fn cardinality(&self) -> Bound {
-        // Every `u16` interval has between one and 65,536 members.
-        let count = self.max() as i32 - self.min() as i32 + 1;
-        Bound(count)
+    pub fn values(&self) -> impl Iterator<Item = T> {
+        (self.min().into()..=self.max().into()).map(T::from)
     }
 }
 
@@ -179,8 +172,11 @@ mod tests {
     }
 
     #[test]
-    fn a_u16_interval_iterates_over_its_members() {
-        assert_eq!(Interval::new(3, 5).values().collect::<Vec<_>>(), [3, 4, 5]);
+    fn an_integer_interval_iterates_over_its_members() {
+        assert_eq!(
+            Interval::new(3_i32, 5).values().collect::<Vec<_>>(),
+            [3, 4, 5]
+        );
     }
 
     #[test]

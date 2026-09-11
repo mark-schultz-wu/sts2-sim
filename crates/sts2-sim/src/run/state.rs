@@ -71,8 +71,8 @@ struct Player<V: Rules> {
     /// is resolved whole and thrown away if it cannot be. The creature is
     /// built from this and written back to it. A report reads the fight's
     /// while there is one.
-    hp: V::Number,
-    max_hp: V::Number,
+    hp: V::Health,
+    max_hp: V::Health,
     gold: V::Number,
     potion_slots: V::Count,
 }
@@ -157,10 +157,8 @@ impl<V: Rules> State<V> {
                     .into_iter()
                     .map(CardIdent::new)
                     .collect(),
-                hp: num_traits::cast(V::starting_hp(character))
-                    .expect("starting HP fits the build's game-number type"),
-                max_hp: num_traits::cast(V::starting_hp(character))
-                    .expect("starting HP fits the build's game-number type"),
+                hp: V::starting_hp(character),
+                max_hp: V::starting_hp(character),
                 gold: num_traits::cast(V::starting_gold(character))
                     .expect("starting gold fits the build's game-number type"),
                 potion_slots: num_traits::cast(V::starting_potion_slots())
@@ -650,8 +648,8 @@ impl<V: Rules> State<V> {
 
 /// Where the player stands, from whichever half of the run is holding it.
 struct Standing<V: Rules> {
-    hp: V::Number,
-    max_hp: V::Number,
+    hp: V::Health,
+    max_hp: V::Health,
     alive: bool,
 }
 

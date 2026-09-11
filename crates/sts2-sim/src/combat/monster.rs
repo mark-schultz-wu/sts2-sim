@@ -14,29 +14,21 @@ fn health<V: Rules>(
     ascension: V::AscensionLevel,
     creatures: &[Creature<V>],
     niche: &mut MegaRng,
-) -> u16 {
+) -> V::Health {
     let range = V::monster_hp_bounds(monster, ascension);
     let used = creatures
         .iter()
         .filter_map(|creature| match creature.model {
-            Some(ModelId::Monster(_)) => num_traits::cast(creature.max_hp),
+            Some(ModelId::Monster(_)) => Some(creature.max_hp),
             _ => None,
         });
-    let used: Vec<u16> = used.collect();
-    let available: Vec<u16> = range.values().filter(|hp| !used.contains(hp)).collect();
+    let used: Vec<V::Health> = used.collect();
+    let available: Vec<V::Health> = range.values().filter(|hp| !used.contains(hp)).collect();
     if let Ok(choices) = Choices::try_new(&available) {
         *niche.choose_from(choices)
     } else {
-        niche.next_u16_range(range)
+        niche.next_interval(range)
     }
-}
-
-/// A table's monster health in the number type that table chose.
-fn number<V: Rules>(hp: u16) -> V::Number {
-    let Some(hp) = num_traits::cast(hp) else {
-        unreachable!("a build's number type holds its generated monster HP");
-    };
-    hp
 }
 
 /// The enemy side of a fight, as it begins.
@@ -82,7 +74,7 @@ pub(crate) fn initialize<V: Rules>(
     let mut creatures = Vec::with_capacity(monsters.len());
     let mut machines = Vec::with_capacity(monsters.len());
     for (index, &monster) in monsters.iter().enumerate() {
-        let hp = number::<V>(health::<V>(monster, ascension, &creatures, &mut niche));
+        let hp = health::<V>(monster, ascension, &creatures, &mut niche);
 
         let position = u8::try_from(index)
             .ok()
@@ -162,7 +154,7 @@ pub(super) fn summon<V: Rules>(
     else {
         panic!("combat has too many creatures to assign an id");
     };
-    let hp = number::<V>(health::<V>(monster, live.ascension, &live.creatures, niche));
+    let hp = health::<V>(monster, live.ascension, &live.creatures, niche);
     let creature_at = live
         .creatures
         .iter()

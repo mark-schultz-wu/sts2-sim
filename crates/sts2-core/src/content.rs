@@ -944,6 +944,19 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// A signed amount in this build's live game state.
     type Number: num_traits::PrimInt
         + num_traits::Signed
+        + From<Self::Health>
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + std::fmt::Debug
+        + std::fmt::Display
+        + std::hash::Hash;
+
+    /// Hit points carried by players and creatures in this build.
+    type Health: num_traits::PrimInt
+        + num_traits::Signed
+        + From<i32>
+        + Into<i32>
+        + From<Self::Number>
         + serde::Serialize
         + serde::de::DeserializeOwned
         + std::fmt::Debug
@@ -1235,7 +1248,7 @@ pub trait Rules: ContentVersion {
     fn starting_relics(character: Self::Character) -> Vec<Self::Relic>;
 
     /// The unmodified hit points and gold a character opens a run with.
-    fn starting_hp(character: Self::Character) -> u16;
+    fn starting_hp(character: Self::Character) -> Self::Health;
     fn starting_gold(character: Self::Character) -> u16;
 
     /// How many potion slots an ordinary run opens with.
@@ -1292,7 +1305,7 @@ pub trait Rules: ContentVersion {
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
-    ) -> crate::rng::Interval<u16>;
+    ) -> crate::rng::Interval<Self::Health>;
 
     /// Walk a monster's state graph to the move it makes next, which is
     /// `MonsterMoveStateMachine.RollMove`.

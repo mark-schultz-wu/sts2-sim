@@ -40,6 +40,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     const VERSION: Version = VERSION;
 
     type Number = i32;
+    type Health = i32;
     type Count = u32;
 
     type AscensionLevel = generated::ascension::AscensionLevel;

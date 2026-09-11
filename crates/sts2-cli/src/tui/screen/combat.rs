@@ -178,7 +178,7 @@ fn enemy<V: ContentVersion>(frame: &mut Frame, area: Rect, creature: &Creature<V
         true => lines.push(widget::vitals(
             creature.hp,
             creature.max_hp,
-            creature.block,
+            creature.block.into(),
             width.saturating_sub(16).clamp(4, 18),
         )),
         false => lines.push(Line::styled("dead", theme::gone())),
@@ -289,7 +289,7 @@ fn you_row<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>)
         return;
     };
 
-    let mut first = widget::vitals(you.hp, you.max_hp, you.block, 16).spans;
+    let mut first = widget::vitals(you.hp, you.max_hp, you.block.into(), 16).spans;
     first.push(Span::raw("    "));
     first.push(Span::styled(
         format!("energy {}", combat.energy),

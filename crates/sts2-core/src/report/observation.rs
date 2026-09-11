@@ -16,8 +16,8 @@ use crate::{CardIdent, ContentVersion, Coord, Cost, MapPointKinds, ModelId};
 pub struct Observation<V: ContentVersion> {
     pub act: V::Count,
     pub floor: V::Count,
-    pub hp: V::Number,
-    pub max_hp: V::Number,
+    pub hp: V::Health,
+    pub max_hp: V::Health,
     pub alive: bool,
     /// The run has ended, won or lost.
     pub run_over: bool,
@@ -434,8 +434,8 @@ pub struct Creature<V: ContentVersion> {
     /// Not the same question as whether it is a monster: a charmed monster
     /// fights on the player's side and is still a monster.
     pub side: V::CombatSide,
-    pub hp: V::Number,
-    pub max_hp: V::Number,
+    pub hp: V::Health,
+    pub max_hp: V::Health,
     pub block: V::Number,
     pub alive: bool,
     pub powers: Vec<Stack<V>>,

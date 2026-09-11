@@ -270,8 +270,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let unblocked = (damage - blocked).max(zero);
 
         let hp = self.live.creatures[at].hp;
-        let killed = hp > zero && unblocked >= hp;
-        self.live.creatures[at].hp = (hp - unblocked).max(zero);
+        let health_zero = V::Health::zero();
+        let killed = hp > health_zero && unblocked >= V::Number::from(hp);
+        self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
         if killed {
             self.kill(at);
         }
