@@ -27,7 +27,8 @@ pub(crate) fn enter<V: Rules>(
     let mut counters = observation.rng.clone();
 
     let monsters = encounter::opening::<V>(raw_seed, observation.floor, encounter)?;
-    let enemies = monster::initialize::<V>(raw_seed, ascension, &mut counters, &monsters)?;
+    let enemies =
+        monster::initialize::<V>(raw_seed, ascension, encounter, &mut counters, &monsters)?;
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.
     let mut creatures = Vec::with_capacity(enemies.creatures.len() + 1);

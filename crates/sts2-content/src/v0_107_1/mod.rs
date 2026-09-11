@@ -167,10 +167,11 @@ impl sts2_core::Rules for V0_107_1 {
     fn roll_monster_move<R: sts2_core::rng::GameRng>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
+        spawn: sts2_core::MonsterSpawn<Self::Encounter>,
         machine: &mut sts2_core::MoveMachine,
         rng: &mut R,
     ) -> Result<sts2_core::NextMove<Self>, sts2_core::ContentError> {
-        roll_monster_move(monster, ascension as u8, machine, rng)
+        roll_monster_move(monster, ascension as u8, spawn, machine, rng)
     }
 
     fn initial_monster_state(monster: Self::Monster) -> u8 {
@@ -318,6 +319,7 @@ impl sts2_core::Rules for V0_107_1 {
 fn roll_monster_move<R: sts2_core::rng::GameRng>(
     monster: generated::monsters::Monster,
     ascension: u8,
+    spawn: sts2_core::MonsterSpawn<generated::encounters::Encounter>,
     machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
 ) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
@@ -340,7 +342,9 @@ fn roll_monster_move<R: sts2_core::rng::GameRng>(
                     FollowUp::Never => unimplemented!("a move with no follow-up"),
                 },
                 State::Random(branches) => branch(branches, machine, rng)?,
-                State::Conditional(_) => unimplemented!("a monster state the fight decides"),
+                State::Conditional(_) => {
+                    behaviour::monsters::conditional(monster, machine.at, spawn)?
+                }
             };
             machine.enter(next);
             if let State::Move(_) = state(machine.at)? {

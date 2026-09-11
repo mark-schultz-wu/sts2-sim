@@ -211,7 +211,8 @@ fn roll_moves<V: Rules>(
 ) -> Result<(), Error> {
     machines.retain(|held| combat.creatures.iter().any(|c| c.id == held.creature));
     for held in machines.iter_mut() {
-        let rolled = V::roll_monster_move(held.monster, ascension, &mut held.machine, ai)?;
+        let rolled =
+            V::roll_monster_move(held.monster, ascension, held.spawn, &mut held.machine, ai)?;
         if let Some(creature) = combat.creatures.iter_mut().find(|c| c.id == held.creature) {
             creature.next_move = Some(rolled);
         }

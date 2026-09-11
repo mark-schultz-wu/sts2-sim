@@ -1,12 +1,40 @@
 //! The first act's monsters.
 
-use sts2_core::{Fight, PowerAmount};
+use sts2_core::{ContentError, Fight, MonsterSpawn, PowerAmount};
 
 use super::super::super::generated::powers::Power;
 
 use super::super::super::generated::cards::{Cards, StatusCard};
-use super::super::super::generated::monsters::MoveId;
+use super::super::super::generated::encounters::Encounter;
+use super::super::super::generated::monsters::{Monster, MoveId};
 use super::V;
+
+/// `INIT_MOVE`, the one conditional a Nibbit has.
+///
+/// `NibbitsWeak` builds one Nibbit and sets `IsAlone`, so it butts.
+/// `NibbitsNormal` builds two and sets `IsFront` on the first, so the front
+/// one slices and the back one hisses.
+///
+/// The alone branch is not in the table. `NIBBIT` was dumped not alone, and a
+/// graph adds its branches from those same fields, so the dump holds the other
+/// two and nothing else.
+///
+/// # Panics
+///
+/// A Nibbit an unported encounter built.
+pub(super) fn nibbit_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentError> {
+    let state = |wanted| super::state_of(Monster::Nibbit, wanted, at);
+    match (
+        spawn.encounter,
+        spawn.roster_size.get(),
+        spawn.position.get(),
+    ) {
+        (Encounter::NibbitsWeak, 1, 0) => state(MoveId::ButtMove),
+        (Encounter::NibbitsNormal, 2, 0) => state(MoveId::SliceMove),
+        (Encounter::NibbitsNormal, 2, 1) => state(MoveId::HissMove),
+        _ => unimplemented!("a Nibbit spawned {spawn:?}"),
+    }
+}
 
 /// How many copies of Slimed each spitting move leaves behind.
 ///

@@ -1,0 +1,4 @@
+# The other side of the same conditional. `NibbitsNormal` builds two and marks
+# the first as the front, so the front slices and the back hisses.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}

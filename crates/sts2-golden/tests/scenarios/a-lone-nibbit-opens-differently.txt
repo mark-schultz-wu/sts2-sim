@@ -1,0 +1,8 @@
+# A Nibbit's graph opens on a conditional, and the encounter decides it.
+# `NibbitsWeak` builds one and marks it alone, so it butts.
+#
+# The branch it takes is not in the table. The dump was taken from a Nibbit
+# that was not alone, so its conditional lists the other two branches and the
+# alone one is only in the game's code.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
