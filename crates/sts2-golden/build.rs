@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 include!("src/suite.rs");
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::Play;
+use sts2_core::{ContentVersion, Play};
 use sts2_headless::{
     Cached, Config, FromTranscript, MOD_IDENTITY, Oracle, game_dir_from_env, recording,
 };
@@ -29,7 +29,7 @@ type V = V0_107_1;
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-changed=tests/golden");
-    println!("cargo::rerun-if-changed=tests/scenarios.txt");
+    println!("cargo::rerun-if-changed=tests/scenarios");
     println!("cargo::rerun-if-env-changed=STS2_GAME_DIR");
     println!("cargo::rerun-if-env-changed=STS2_GAME_VERSION");
 
@@ -65,8 +65,7 @@ fn cache_dir() -> PathBuf {
 /// Every recording a transcript is wanted for: the long runs, then the
 /// scenarios.
 ///
-/// A scenario is one entry of `tests/scenarios.txt` rather than a directory of
-/// its own. See `src/suite.rs`.
+/// A scenario is one file under `tests/scenarios/`. See `src/suite.rs`.
 fn every_recording() -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = runs()
         .into_iter()
@@ -83,11 +82,17 @@ fn every_recording() -> Vec<(String, String)> {
         })
         .collect();
 
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/scenarios.txt");
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
-    let written = read_suite(&text).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
-    out.extend(written.into_iter().map(|w| (w.name, w.recording)));
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/scenarios");
+    let written = read_suite(&dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()));
+    // A scenario file carries no build stamp. One goes in front of it here, so
+    // the recording reader can still refuse a build it does not describe.
+    let stamp =
+        serde_json::to_string(&sts2_headless::Stamp::of(&V::VERSION)).expect("a stamp is json");
+    out.extend(
+        written
+            .into_iter()
+            .map(|w| (w.name, format!("{stamp}\n{}", w.commands))),
+    );
     out
 }
 
