@@ -790,6 +790,23 @@ pub enum Holding {
     Dealer,
 }
 
+/// What an encounter fixed about a monster when it spawned one.
+///
+/// An encounter builds identical monsters and flags one. `NibbitsNormal` marks
+/// the front Nibbit, `InkletsNormal` the middle Inklet. A graph branches on
+/// that flag, and no table holds it.
+///
+/// The position is where the monster stood when the roster was built, which a
+/// death later makes ambiguous in the living list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MonsterSpawn<E> {
+    pub encounter: E,
+    /// Where it stood in the roster, counting from the front.
+    pub position: nonmax::NonMaxU8,
+    /// How many the encounter built. Never zero: a fight has a monster in it.
+    pub roster_size: nonmax::NonMaxU8,
+}
+
 /// Where a monster's move graph stands.
 ///
 /// `MonsterMoveStateMachine`, which no observation reports: an observation
@@ -1212,6 +1229,7 @@ pub trait Rules: ContentVersion {
     fn roll_monster_move<R: crate::rng::GameRng>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
+        spawn: MonsterSpawn<Self::Encounter>,
         machine: &mut MoveMachine,
         rng: &mut R,
     ) -> Result<crate::NextMove<Self>, ContentError>;

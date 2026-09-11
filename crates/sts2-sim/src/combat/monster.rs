@@ -21,6 +21,9 @@ pub(crate) struct Machine<V: Rules> {
     /// The creature in the fight this graph belongs to.
     pub(crate) creature: CombatId,
     pub(crate) monster: V::Monster,
+    /// What the encounter fixed when it built this one, which a conditional
+    /// state in the graph asks about.
+    pub(crate) spawn: sts2_core::MonsterSpawn<V::Encounter>,
     pub(crate) machine: MoveMachine,
 }
 
@@ -29,11 +32,18 @@ pub(crate) struct Machine<V: Rules> {
 pub(crate) fn initialize<V: Rules>(
     raw_seed: u32,
     ascension: V::AscensionLevel,
+    encounter: V::Encounter,
     counters: &mut Counters<V>,
     monsters: &[V::Monster],
 ) -> Result<Roster<V>, Error> {
     let mut niche = super::stream::seek(raw_seed, counters, V::niche_rng(), "niche")?;
     let mut ai = super::stream::seek(raw_seed, counters, V::monster_ai_rng(), "monster_ai")?;
+
+    // A fight the encounter builds nobody for is not a fight.
+    let roster_size = u8::try_from(monsters.len())
+        .ok()
+        .and_then(nonmax::NonMaxU8::new)
+        .ok_or(Error::CreatureIdOverflow)?;
 
     let mut health = Vec::with_capacity(monsters.len());
     let mut creatures = Vec::with_capacity(monsters.len());
@@ -52,18 +62,28 @@ pub(crate) fn initialize<V: Rules>(
         let hp = choices[niche.next_int(bound) as usize];
         health.push(hp);
 
-        // `CombatId` counts from the player, so the monsters start at one.
-        let id = u8::try_from(index)
+        let position = u8::try_from(index)
             .ok()
-            .and_then(|index| index.checked_add(1))
+            .and_then(nonmax::NonMaxU8::new)
+            .ok_or(Error::CreatureIdOverflow)?;
+        // `CombatId` counts from the player, so the monsters start at one.
+        let id = position
+            .get()
+            .checked_add(1)
             .and_then(nonmax::NonMaxU8::new)
             .map(CombatId::new)
             .ok_or(Error::CreatureIdOverflow)?;
+        let spawn = sts2_core::MonsterSpawn {
+            encounter,
+            position,
+            roster_size,
+        };
         let mut machine = MoveMachine::new(V::initial_monster_state(monster));
-        let opening = V::roll_monster_move(monster, ascension, &mut machine, &mut ai)?;
+        let opening = V::roll_monster_move(monster, ascension, spawn, &mut machine, &mut ai)?;
         machines.push(Machine {
             creature: id,
             monster,
+            spawn,
             machine,
         });
         creatures.push(Creature {
@@ -94,6 +114,7 @@ mod tests {
     use sts2_content::v0_107_1::{
         V0_107_1,
         ascension::AscensionLevel,
+        encounters::Encounter,
         monsters::{IntentKind, Monster, MoveId},
         runstate::{PlayerRngType, RunRngType},
     };
@@ -121,6 +142,7 @@ mod tests {
         let roster = initialize::<V0_107_1>(
             stream_seed(&seed),
             AscensionLevel::None,
+            Encounter::SlimesWeak,
             &mut counters,
             &inklets,
         )
@@ -152,6 +174,7 @@ mod tests {
         let roster = initialize::<V0_107_1>(
             stream_seed(&seed),
             AscensionLevel::None,
+            Encounter::SlimesWeak,
             &mut counters,
             &monsters,
         )
@@ -206,6 +229,7 @@ mod counter_tests {
     use sts2_content::v0_107_1::{
         V0_107_1,
         ascension::AscensionLevel,
+        encounters::Encounter,
         monsters::Monster,
         runstate::{PlayerRngType, RunRngType},
     };
@@ -229,6 +253,7 @@ mod counter_tests {
             let error = initialize::<V0_107_1>(
                 123,
                 AscensionLevel::None,
+                Encounter::SlimesWeak,
                 &mut counters,
                 &[Monster::TwigSlimeS],
             )
