@@ -16,6 +16,7 @@ use crate::event::Blessing;
 use crate::map::{ActMap, Layout};
 use crate::reward::{Odds, Offer};
 use crate::run::Opening;
+use sts2_core::Gift;
 
 /// The authoritative state of the run slice implemented so far.
 ///
@@ -31,10 +32,12 @@ pub(crate) struct State<V: Rules> {
     rngs: Rngs,
     /// How many of this act's normal fights the run has walked into.
     ///
-    /// The act's encounter list is dealt at the start of the run and met in
-    /// order, so this is where the next one is. Not in an observation: the
-    /// observation names the fight the run is in, not the queue behind it.
-    fought: usize,
+    /// The act's list is dealt at the start of the run and met in order, so
+    /// this is where the next one is. No observation reports it.
+    ///
+    /// A constructed fight does not move it. `EnterRoomDebug` is handed its
+    /// encounter and takes none from the list.
+    met: usize,
     odds: Odds,
     phase: Phase<V>,
 }
@@ -61,7 +64,14 @@ struct Player<V: Rules> {
     /// The belt, in the order the potions were taken.
     potions: SmallVec<[V::Potion; 3]>,
     deck: Vec<CardIdent<V>>,
+    /// What the run carries between fights.
+    ///
+    /// The game keeps one number. Here a fight holds a copy, because a fight
+    /// is resolved whole and thrown away if it cannot be. The creature is
+    /// built from this and written back to it. A report reads the fight's
+    /// while there is one.
     hp: V::Number,
+    max_hp: V::Number,
     gold: V::Number,
     potion_slots: V::Count,
 }
@@ -148,12 +158,14 @@ impl<V: Rules> State<V> {
                     .collect(),
                 hp: num_traits::cast(V::starting_hp(character))
                     .expect("starting HP fits the build's game-number type"),
+                max_hp: num_traits::cast(V::starting_hp(character))
+                    .expect("starting HP fits the build's game-number type"),
                 gold: num_traits::cast(V::starting_gold(character))
                     .expect("starting gold fits the build's game-number type"),
                 potion_slots: num_traits::cast(V::starting_potion_slots())
                     .expect("starting potion slots fit the build's count type"),
             },
-            fought: 0,
+            met: 0,
             odds: Odds::default(),
             rngs: Rngs {
                 run: run_counters,
@@ -198,8 +210,30 @@ impl<V: Rules> State<V> {
     }
 
     /// Park the run on the rewards a won fight left it.
+    ///
+    /// What the fight did to the player comes out with it. The creature was
+    /// built from the run's own numbers and is where they stood while the
+    /// fight lasted.
     pub(super) fn won(&mut self, combat: Combat<V>, offered: Vec<Offer<V>>) {
+        if let Some(player) = combat
+            .creatures
+            .iter()
+            .find(|c| c.id == self.player_id(&combat))
+        {
+            self.player.hp = player.hp;
+            self.player.max_hp = player.max_hp;
+        }
         self.phase = Phase::Rewards { combat, offered };
+    }
+
+    /// The player's own creature in a fight.
+    fn player_id(&self, combat: &Combat<V>) -> sts2_core::CombatId {
+        combat
+            .creatures
+            .iter()
+            .find(|c| c.side == <V::CombatSide as sts2_core::SideKinds>::PLAYER)
+            .expect("a fight has the player in it")
+            .id
     }
 
     /// The stream a reward draws from, and the pity counters it moves.
@@ -225,7 +259,7 @@ impl<V: Rules> State<V> {
         ongoing: crate::combat::Ongoing<V>,
     ) {
         self.floor = self.floor + num_traits::one();
-        self.fought += 1;
+        self.met += 1;
         self.at = to;
         self.visited.push(to);
         self.drew(counters);
@@ -269,12 +303,57 @@ impl<V: Rules> State<V> {
         Counters { run, player }
     }
 
+    /// Put the run into a named fight, rather than travel to one.
+    ///
+    /// `FightConsoleCmd`, which is `EnterRoomDebug` at
+    /// `MapPointType.Unassigned`. The floor advances and the map does not, so
+    /// map and room disagree by construction. That is what the command is for:
+    /// reaching a chosen fight without hunting for a seed that puts one on the
+    /// way. The encounter is named, so the act's own list is not drawn from.
+    pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
+        let (ongoing, counters) = crate::combat::enter::<V>(
+            self.raw_seed(),
+            self.character(),
+            self.ascension(),
+            encounter,
+            &self.report().observation,
+        )?;
+
+        self.floor = self.floor + num_traits::one();
+        self.drew(counters);
+        self.fought(ongoing);
+        Ok(self.report())
+    }
+
+    /// Put a card, a relic or a potion straight into the run.
+    ///
+    /// `Driver.GrantCard`, `RelicCmd.Obtain` and `PotionCmd.TryToProcure`,
+    /// which are the paths ordinary play uses. A relic arrives through the
+    /// command that runs its `AfterObtained`. The simulator runs no relic's
+    /// hooks, so it cannot answer for one.
+    pub(crate) fn grant(&mut self, gift: &Gift<V>) -> Result<Applied<V>, Error> {
+        match gift {
+            Gift::Card(card) => self.player.deck.push(CardIdent::new(*card)),
+            Gift::Potion(potion) => {
+                let slots: usize = num_traits::cast(self.player.potion_slots)
+                    .expect("the belt has an addressable number of slots");
+                // `TryToProcure` refuses a full belt rather than growing one,
+                // and the belt in the next observation says whether it landed.
+                if self.player.potions.len() < slots {
+                    self.player.potions.push(*potion);
+                }
+            }
+            Gift::Relic(relic) => unimplemented!("what {relic:?} does when it is obtained"),
+        }
+        Ok(self.report())
+    }
+
     pub(super) fn normal_encounter(&self, act: usize) -> Option<V::Encounter> {
         self.shared
             .opening
             .acts
             .get(act)
-            .and_then(|(_, rooms)| rooms.normal.get(self.fought))
+            .and_then(|(_, rooms)| rooms.normal.get(self.met))
             .copied()
     }
 
@@ -472,13 +551,38 @@ impl<V: Rules> State<V> {
                 false,
             ),
         };
+        // Where the player stands. A live fight holds it, because a card can
+        // move it and the fight is resolved on a copy; anywhere else the run
+        // does. See `Player::hp`.
+        let standing: Standing<V> = match &self.phase {
+            Phase::Combat(ongoing) => {
+                let at = self.player_id(&ongoing.combat);
+                let player = ongoing
+                    .combat
+                    .creatures
+                    .iter()
+                    .find(|c| c.id == at)
+                    .expect("a fight has the player in it");
+                Standing {
+                    hp: player.hp,
+                    max_hp: player.max_hp,
+                    alive: player.alive,
+                }
+            }
+            Phase::Neow { .. } | Phase::Rewards { .. } => Standing {
+                hp: self.player.hp,
+                max_hp: self.player.max_hp,
+                alive: true,
+            },
+        };
+
         Applied {
             observation: Observation {
                 act: num_traits::zero(),
                 floor: self.floor,
-                hp: self.player.hp,
-                max_hp: self.player.hp,
-                alive: true,
+                hp: standing.hp,
+                max_hp: standing.max_hp,
+                alive: standing.alive,
                 run_over: false,
                 victory: None,
                 gold: self.player.gold,
@@ -517,6 +621,13 @@ impl<V: Rules> State<V> {
             resolved: true,
         }
     }
+}
+
+/// Where the player stands, from whichever half of the run is holding it.
+struct Standing<V: Rules> {
+    hp: V::Number,
+    max_hp: V::Number,
+    alive: bool,
 }
 
 /// The rewards screen a won fight parks the run on.
@@ -599,6 +710,67 @@ mod tests {
         let run = opened();
         let branch = run.clone();
         assert!(Arc::ptr_eq(&run.shared, &branch.shared));
+    }
+
+    /// A constructed fight is not a move: the floor advances, the map does
+    /// not, and the act's own encounter list is not drawn from.
+    #[test]
+    fn a_fight_can_be_constructed_without_travelling_to_one() {
+        use sts2_content::v0_107_1::encounters::Encounter;
+
+        let mut run = opened();
+        let before = run.report().observation;
+        run.fight_here(Encounter::SlimesWeak)
+            .expect("the simulator can build this fight");
+        let after = run.report().observation;
+
+        assert_eq!(after.map.at, before.map.at, "the map does not move");
+        assert_eq!(after.map.visited, before.map.visited);
+        assert!(after.floor > before.floor, "the floor does");
+        assert!(after.room.is_none(), "the room it was in is abandoned");
+
+        let combat = after.combat.expect("the run is in the fight");
+        assert_eq!(combat.encounter, Some(Encounter::SlimesWeak));
+        assert_eq!(run.normal_encounter(0), before_next(&run));
+    }
+
+    /// A fight takes the player's hit points with it, and hands them back.
+    ///
+    /// The run and the fight each hold a number and the game holds one. So
+    /// this is the test that they are the same number.
+    #[test]
+    fn what_a_fight_costs_the_player_leaves_the_fight() {
+        use sts2_content::v0_107_1::encounters::Encounter;
+
+        let mut run = opened();
+        run.fight_here(Encounter::SlimesWeak)
+            .expect("the simulator can build this fight");
+        let before = run.report().observation;
+        run.end_turn()
+            .expect("the simulator can end this turn")
+            .expect("and the turn is not refused");
+        let after = run.report().observation;
+
+        assert!(
+            after.hp < before.hp,
+            "the slimes hit for something: {} then {}",
+            before.hp,
+            after.hp
+        );
+        assert_eq!(after.max_hp, before.max_hp, "and not for the maximum");
+        let combat = after.combat.expect("the run is still in the fight");
+        let player = &combat.creatures[0];
+        assert_eq!(
+            (player.hp, player.max_hp),
+            (after.hp, after.max_hp),
+            "the run says what the fight says"
+        );
+    }
+
+    /// The encounter a travelling run meets next, which a constructed fight
+    /// leaves where it was.
+    fn before_next(run: &State<V>) -> Option<<V as sts2_core::ContentVersion>::Encounter> {
+        run.shared.opening.acts[0].1.normal.first().copied()
     }
 
     #[test]

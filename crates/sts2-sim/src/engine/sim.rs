@@ -49,8 +49,17 @@ impl<V: Rules> Play<V> for Sim<V> {
 }
 
 impl<V: Rules> Construct<V> for Sim<V> {
-    fn setup(&mut self, _: &Setup<V>) -> Result<Answered<V>, Self::Error> {
-        unimplemented!("setup")
+    /// Reaching a position without playing to it.
+    ///
+    /// Every one of these is a debug command the game itself has, so a state
+    /// reached through them is a state the game reaches. That is what makes a
+    /// constructed scenario worth holding the simulator to.
+    fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Self::Error> {
+        match step {
+            Setup::Fight { encounter } => self.state.fight_here(*encounter).map(Ok),
+            Setup::Grant(gift) => self.state.grant(gift).map(Ok),
+            Setup::Event { event } => unimplemented!("jumping to {event:?}"),
+        }
     }
 }
 

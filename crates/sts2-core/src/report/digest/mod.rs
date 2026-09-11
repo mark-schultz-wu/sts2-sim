@@ -45,7 +45,10 @@
 //! function the bytes go into, and it is its own module because it is not about
 //! hashing an observation.
 
+mod section;
 mod xxhash;
+
+pub use section::Section;
 
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
@@ -74,6 +77,11 @@ impl Digest {
     /// The bytes, for a caller that wants to store or send them.
     pub const fn to_u64(self) -> u64 {
         self.0
+    }
+
+    /// One read back, which is what a stored comparison is made of.
+    pub const fn from_u64(bytes: u64) -> Digest {
+        Digest(bytes)
     }
 }
 
@@ -672,7 +680,12 @@ impl Sink {
         }
     }
 
-    fn combat<V: ContentVersion>(&mut self, combat: &Combat<V>) {
+    /// The fight's own scalars, which is everything about it that is not a
+    /// list of cards or creatures.
+    ///
+    /// Split out because a scenario hashes it on its own. See
+    /// [`crate::Section`].
+    fn fight_scalars<V: ContentVersion>(&mut self, combat: &Combat<V>) {
         let Combat {
             turn,
             phase,
@@ -680,13 +693,13 @@ impl Sink {
             stars,
             round,
             encounter,
-            hand,
-            draw,
-            discard,
-            exhaust,
-            creatures,
-            legal,
-            orbs,
+            orbs: _,
+            hand: _,
+            draw: _,
+            discard: _,
+            exhaust: _,
+            creatures: _,
+            legal: _,
         } = combat;
 
         self.number(turn);
@@ -695,11 +708,11 @@ impl Sink {
         self.number(stars);
         self.number(round);
         self.option(encounter, |sink, encounter| sink.id(encounter));
-        for pile in [hand, draw, discard, exhaust] {
-            self.list(pile, |sink, card| sink.card(card));
-        }
-        self.list(creatures, |sink, creature| sink.creature(creature));
-        self.list(legal, |sink, playable| sink.playable(playable));
+    }
+
+    /// The orb queue, which sits at the end of a fight's walk because that is
+    /// where it has always sat. Its own method so a section reaches it too.
+    fn orbs<V: ContentVersion>(&mut self, orbs: &Option<Orbs<V>>) {
         self.option(orbs, |sink, orbs| {
             let Orbs { capacity, queue } = orbs;
             sink.number(capacity);
@@ -714,6 +727,32 @@ impl Sink {
                 sink.number(evoke);
             });
         });
+    }
+
+    fn combat<V: ContentVersion>(&mut self, combat: &Combat<V>) {
+        let Combat {
+            hand,
+            draw,
+            discard,
+            exhaust,
+            creatures,
+            legal,
+            turn: _,
+            phase: _,
+            energy: _,
+            stars: _,
+            round: _,
+            encounter: _,
+            orbs,
+        } = combat;
+
+        self.fight_scalars(combat);
+        for pile in [hand, draw, discard, exhaust] {
+            self.list(pile, |sink, card| sink.card(card));
+        }
+        self.list(creatures, |sink, creature| sink.creature(creature));
+        self.list(legal, |sink, playable| sink.playable(playable));
+        self.orbs(orbs);
     }
 
     fn creature<V: ContentVersion>(&mut self, creature: &Creature<V>) {
