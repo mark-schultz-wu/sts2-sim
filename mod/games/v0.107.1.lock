@@ -22,9 +22,9 @@
 # `mod/game.sh publish <version>`, and write the hashes it prints in its lock.
 #
 # Not a build older than this one. v0.107.1 is where the game replaced its PRNG
-# with xoshiro256**, and sts2-sim owns that generator. Older builds drew
+# with xoshiro256**, and sts2-rng ports that generator alone. Older builds drew
 # from C# System.Random, so their mods can compile and still agree on no number.
-# The simulator's RNG ground truth says what porting one would take.
+# crates/sts2-rng/README.md says what porting one would take.
 #
 # package: sts2-game
 # version: 0.107.1-59260271
