@@ -78,7 +78,7 @@ pub(crate) fn initialize<V: Rules>(
             position,
             roster_size,
         };
-        let mut machine = MoveMachine::new(V::initial_monster_state(monster));
+        let mut machine = V::opening_move_machine(monster);
         let opening = V::roll_monster_move(monster, ascension, spawn, &mut machine, &mut ai)?;
         machines.push(Machine {
             creature: id,

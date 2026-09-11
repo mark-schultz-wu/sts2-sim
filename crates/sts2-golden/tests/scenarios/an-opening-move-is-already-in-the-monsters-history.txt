@@ -1,0 +1,5 @@
+# Twig Slime M opens on Sticky Shot. The move machine records that opening, so
+# the no-repeat branch bars another Sticky Shot after its first turn.
+{"cmd":"start","seed":"0RACLE2","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_NORMAL"}
+{"cmd":"end_turn"}

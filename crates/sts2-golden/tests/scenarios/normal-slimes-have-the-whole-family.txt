@@ -1,0 +1,4 @@
+# `SlimesNormal` always fields both medium slimes first. One random bit only
+# decides the order of the two small slimes behind them.
+{"cmd":"start","seed":"0RACLE2","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_NORMAL"}

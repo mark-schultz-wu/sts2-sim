@@ -42,7 +42,11 @@ pub(super) fn nibbit_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8,
 /// The move's own constant in the game. The intent beside it advertises the
 /// same number, and the table carries that, but a status intent's count is not
 /// what the move reads.
+///
+/// The two Sticky Shots are different moves that spit different amounts.
+/// `LeafSlimeM` spits two and `TwigSlimeM` one.
 const STICKY_CARDS: usize = 2;
+const TWIG_STICKY_CARDS: usize = 1;
 const GOOP_CARDS: usize = 1;
 
 /// The card every slime spits.
@@ -70,6 +74,19 @@ pub(super) fn leaf_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::TackleMove => attack(fight),
         MoveId::GoopMove => fight.give_cards(SLIMED, GOOP_CARDS),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `TwigSlimeM`. Pounces for a clump, or spits one card, never twice running.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+pub(super) fn twig_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::PokeyPounceMove => attack(fight),
+        MoveId::StickyShotMove => fight.give_cards(SLIMED, TWIG_STICKY_CARDS),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }

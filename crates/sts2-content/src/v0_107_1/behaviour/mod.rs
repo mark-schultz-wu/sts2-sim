@@ -8,5 +8,6 @@
 //! name as its row.
 
 pub(crate) mod cards;
+pub(crate) mod encounters;
 pub(crate) mod monsters;
 pub(crate) mod powers;
