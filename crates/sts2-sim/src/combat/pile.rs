@@ -57,25 +57,6 @@ impl<T> Piles<T> {
         &self.exhaust
     }
 
-    /// Draw up to `count` cards, reshuffling the discard pile when necessary.
-    ///
-    /// Returns how many cards were actually drawn. A combat with too few cards
-    /// gets a short draw rather than manufacturing cards.
-    pub fn draw_cards<R: GameRng>(&mut self, rng: &mut R, count: usize) -> usize {
-        let before = self.hand.len();
-        while self.hand.len() - before < count {
-            if self.draw.is_empty() {
-                if self.discard.is_empty() {
-                    break;
-                }
-                self.draw = std::mem::take(&mut self.discard);
-                rng.unstable_shuffle(&mut self.draw);
-            }
-            self.hand.push(self.draw.remove(0));
-        }
-        self.hand.len() - before
-    }
-
     /// Move one card from the hand to the discard pile.
     ///
     /// An index outside the current hand moves no card and says so.
@@ -199,21 +180,5 @@ mod tests {
         assert_eq!(piles.hand().len(), 2);
         assert!(piles.discard().is_empty());
         assert!(piles.exhaust().is_empty());
-    }
-
-    #[test]
-    fn drawing_reshuffles_discard_and_stops_when_every_card_is_in_hand() {
-        let mut rng = rng();
-        let mut piles = shuffle(&mut rng, vec![1, 2, 3, 4]).deal(3);
-        let after_initial_shuffle = rng.counter();
-        piles.discard_from_hand(0).expect("the hand holds three");
-        piles.discard_from_hand(0).expect("the hand holds two");
-
-        assert_eq!(piles.draw_cards(&mut rng, 4), 3);
-
-        assert_eq!(piles.hand().len(), 4);
-        assert!(piles.draw().is_empty());
-        assert!(piles.discard().is_empty());
-        assert_eq!(rng.counter() - after_initial_shuffle, 1);
     }
 }

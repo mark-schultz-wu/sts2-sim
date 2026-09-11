@@ -1,0 +1,8 @@
+# The belt says why a potion cannot be drunk, and in a fight the answer is
+# nothing. Out of one the suite only ever saw `OutOfCombat`, so every rule
+# behind that answer was unheld.
+#
+# A Vulnerable Potion takes an enemy, so the fight names three of them.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","potion":"VULNERABLE_POTION"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}

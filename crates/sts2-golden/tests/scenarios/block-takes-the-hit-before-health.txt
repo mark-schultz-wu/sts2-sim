@@ -1,0 +1,13 @@
+# Block takes a hit before health does, and what is left of it takes the next
+# one. Nothing else in the suite ever blocked a hit.
+#
+# It has to be a turn with more than one attacker. Block is cleared at the
+# start of the player's turn, so a single blocked hit leaves nothing an
+# observation can see: the block is gone either way and the health is whole
+# either way. On the second turn all three slimes swing, for four, eight and
+# three, into the five a Defend gives.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1,"target":null}
+{"cmd":"end_turn"}
