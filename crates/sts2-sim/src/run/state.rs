@@ -311,12 +311,14 @@ impl<V: Rules> State<V> {
     /// reaching a chosen fight without hunting for a seed that puts one on the
     /// way. The encounter is named, so the act's own list is not drawn from.
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
+        let mut observation = self.report().observation;
+        observation.floor = observation.floor + num_traits::one();
         let (ongoing, counters) = crate::combat::enter::<V>(
             self.raw_seed(),
             self.character(),
             self.ascension(),
             encounter,
-            &self.report().observation,
+            &observation,
         )?;
 
         self.floor = self.floor + num_traits::one();

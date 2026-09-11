@@ -174,8 +174,16 @@ impl sts2_core::Rules for V0_107_1 {
         roll_monster_move(monster, ascension as u8, spawn, machine, rng)
     }
 
-    fn initial_monster_state(monster: Self::Monster) -> u8 {
-        sts2_core::Table::data(monster).initial
+    fn opening_move_machine(monster: Self::Monster) -> sts2_core::MoveMachine {
+        let data = sts2_core::Table::data(monster);
+        let at = data.initial;
+        // `ShouldAppearInLogs`, which a branch state answers no to. A graph
+        // opening on a move has that move in its history already.
+        let logged = matches!(
+            data.states.get(usize::from(at)),
+            Some(generated::monsters::State::Move(_))
+        );
+        sts2_core::MoveMachine::new(at, logged)
     }
 
     fn damage_hook(
@@ -229,21 +237,7 @@ impl sts2_core::Rules for V0_107_1 {
         encounter: Self::Encounter,
         rng: &mut R,
     ) -> Result<Vec<Self::Monster>, sts2_core::ContentError> {
-        use generated::encounters::Encounter;
-        use generated::monsters::Monster;
-        use sts2_core::rng::Bound;
-
-        let Encounter::SlimesWeak = encounter else {
-            unimplemented!("the roster {encounter:?} rolls");
-        };
-
-        let small = [Monster::LeafSlimeS, Monster::TwigSlimeS];
-        let first = rng.next_int(Bound::new(2).expect("two small slimes")) as usize;
-        let second = rng.next_int(Bound::new(1).expect("one small slime remains"));
-        debug_assert_eq!(second, 0);
-        let medium = [Monster::LeafSlimeM, Monster::TwigSlimeM]
-            [rng.next_int(Bound::new(2).expect("two medium slimes")) as usize];
-        Ok(vec![small[first], medium, small[1 - first]])
+        Ok(behaviour::encounters::generate(encounter, rng))
     }
 
     fn encounters(act: Self::Act) -> &'static [Self::Encounter] {

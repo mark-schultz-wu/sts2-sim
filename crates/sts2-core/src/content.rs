@@ -895,9 +895,15 @@ pub struct MoveMachine {
 
 impl MoveMachine {
     /// Where a monster's graph starts, which is `initial` in its table.
-    pub fn new(at: u8) -> Self {
+    ///
+    /// `MonsterMoveStateMachine` records the state it starts on. A monster's
+    /// opening move is therefore in its history when the first branch reads
+    /// it. `logged` is that state's `ShouldAppearInLogs`. Branch states answer
+    /// false.
+    pub fn new(at: u8, logged: bool) -> Self {
         Self {
             at,
+            log: if logged { vec![at] } else { Vec::new() },
             ..Self::default()
         }
     }
@@ -1297,8 +1303,11 @@ pub trait Rules: ContentVersion {
         rng: &mut R,
     ) -> Result<crate::NextMove<Self>, ContentError>;
 
-    /// Where a monster's graph starts, for a machine that has not walked.
-    fn initial_monster_state(monster: Self::Monster) -> u8;
+    /// A monster's move graph, as it stands before the fight opens.
+    ///
+    /// The machine's constructor records its starting state. Only the table
+    /// says whether the log carries that state, so a bare index is not enough.
+    fn opening_move_machine(monster: Self::Monster) -> crate::MoveMachine;
 
     /// What a power does to a hit, which is its `Hook.ModifyDamage`.
     ///
