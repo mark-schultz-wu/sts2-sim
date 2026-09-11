@@ -58,6 +58,9 @@ impl<V: Rules> Construct<V> for Sim<V> {
         match step {
             Setup::Fight { encounter } => self.state.fight_here(*encounter).map(Ok),
             Setup::Grant(gift) => self.state.grant(gift).map(Ok),
+            Setup::Power { at, power, amount } => {
+                self.state.apply_power(*at, *power, *amount).map(Ok)
+            }
             Setup::Event { event } => unimplemented!("jumping to {event:?}"),
         }
     }

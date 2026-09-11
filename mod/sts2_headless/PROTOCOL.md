@@ -306,6 +306,7 @@ game.
 | `start` | `seed`, `character`, `ascension` — a level name such as `DeadlyEnemies` or a number, default `0`, matched case-insensitively; `modifiers` — an array of modifier entry names, matched case-insensitively |
 | `fight` | `encounter` — a model entry name such as `BOWLBUGS_WEAK` |
 | `event` | `event` — a model entry name such as `CRYSTAL_SPHERE` |
+| `power` | `power` — a model entry name such as `WEAK_POWER`; `amount` — an integer; `target` — a creature's `CombatId` |
 | `enter_room` | `type` — a `RoomType` name, case-insensitive |
 | `travel` | `col`, `row` — integers |
 | `play_card` | `index` — into the hand; `target` — a creature's `CombatId`, or absent |
@@ -353,6 +354,31 @@ Which means `grant` can answer with a **pending** rather than an observation.
 Royal Stamp's `AfterObtained` opens a one-card selection and enchants the
 answer, so granting it asks before it finishes. Treat `grant` like any other
 command that parks.
+
+### `power` is scenario construction too
+
+It puts a power on a creature in the fight, through the game's own
+`ApplyPowerConsoleCmd`. That reaches `PowerCmd.Apply`, or `ModifyAmount` when
+the creature already holds one, which is the path a card takes. So a debuff put
+on the player this way has its `SkipNextDurationTick` set, exactly as one a
+monster applied does. The position reached is one the game reaches.
+
+A fight has to be on. There is no creature to name outside one, and the command
+answers `This doesn't appear to be a combat!`.
+
+`amount` is the game's own overloaded number. It is a count for most powers.
+Below zero it is a single endless instance, for the one power that works its
+stacking out at the time. `SHRINK_POWER` at `-1` is the Shrinker Beetle's, and
+it never runs out. The client spells what it means and this passes the number
+through.
+
+`target` is a `CombatId`, the way every other command addresses a creature. The
+console command underneath addresses one by its position in the combat state's
+list. The mod translates, so a scenario names the creature an observation
+named.
+
+It exists because a position with two debuffs already on the player is an hour
+of play away. The alternative is a recording of a run that reaches one.
 
 ### `event` is scenario construction too
 

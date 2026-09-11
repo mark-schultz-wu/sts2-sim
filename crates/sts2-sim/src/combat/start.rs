@@ -56,6 +56,8 @@ pub(crate) fn enter<V: Rules>(
     Ok((
         super::Ongoing {
             machines: enemies.machines,
+            // Nothing has been applied to anyone yet.
+            skipping: Vec::new(),
             combat: Combat {
                 turn: num_traits::one(),
                 phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,

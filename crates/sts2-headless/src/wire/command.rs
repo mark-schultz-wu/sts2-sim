@@ -10,11 +10,15 @@
 //! counterpart. One reports state without advancing, and the other ends the
 //! session rather than the run.
 
+use num_traits::ToPrimitive as _;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeMap};
 use sts2_core::ContentVersion;
 use sts2_core::Seed;
-use sts2_core::{Answer, Coord, Decision, Gift, Setup, Start, Step, TakeReward, Tool};
+use sts2_core::{
+    Answer, Coord, Decision, Gift, PowerAmount, PowerTable as _, Setup, Start, Step, TakeReward,
+    Tool,
+};
 
 /// One request, in the protocol's own shape.
 ///
@@ -43,6 +47,14 @@ pub enum Command<V: ContentVersion> {
     },
     Event {
         event: V::Event,
+    },
+    /// The amount is the game's own overloaded number. Below zero is a single
+    /// endless instance for the one power that decides its stacking at the
+    /// time, and a count for every other. See [`PowerTable::endless_below_zero`].
+    Power {
+        power: V::Power,
+        amount: i32,
+        target: sts2_core::CombatId,
     },
     /// `type` is a Rust keyword, so this is the one field a derive has to
     /// rename. The generated id says `"Shop"`, which is the game enum's actual
@@ -128,6 +140,17 @@ impl<V: ContentVersion> From<&Setup<V>> for Command<V> {
                 encounter: *encounter,
             },
             Setup::Event { event } => Self::Event { event: *event },
+            Setup::Power { at, power, amount } => Self::Power {
+                power: *power,
+                amount: match amount {
+                    PowerAmount::Counted(amount) => amount
+                        .to_i32()
+                        .expect("a power's amount fits the width the game sends"),
+                    // What the game writes an endless instance down as.
+                    PowerAmount::Endless => -1,
+                },
+                target: *at,
+            },
             Setup::Grant(gift) => Self::Grant(gift.into()),
         }
     }
@@ -188,6 +211,23 @@ impl<V: ContentVersion> Command<V> {
             Self::Answer(WireAnswer(a)) => Decision::Answer(a).into(),
             Self::Fight { encounter } => Setup::Fight { encounter }.into(),
             Self::Event { event } => Setup::Event { event }.into(),
+            Self::Power {
+                power,
+                amount,
+                target,
+            } => Setup::Power {
+                at: target,
+                power,
+                amount: match amount < 0 && power.endless_below_zero() {
+                    true => PowerAmount::Endless,
+                    false => {
+                        PowerAmount::Counted(num_traits::NumCast::from(amount).unwrap_or_else(
+                            || unimplemented!("a power amount this build cannot hold"),
+                        ))
+                    }
+                },
+            }
+            .into(),
             Self::Grant(gift) => Setup::Grant(gift.into_domain()).into(),
             Self::Observe | Self::Quit => return None,
         })

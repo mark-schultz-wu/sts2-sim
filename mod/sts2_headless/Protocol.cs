@@ -83,7 +83,7 @@ internal static class Protocol
             // content change invalidates them. The game uses this exact value
             // to refuse a replay recorded against different content.
             ["contentHash"] = ModelIdSerializationCache.Hash,
-            ["commands"] = new[] { "start", "fight", "event", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
+            ["commands"] = new[] { "start", "fight", "event", "power", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
         });
 
         while (true)
@@ -172,6 +172,10 @@ internal static class Protocol
 
                 case "event":
                     await Event(req);
+                    return false;
+
+                case "power":
+                    await Power(req);
                     return false;
 
                 case "enter_room":
@@ -368,6 +372,55 @@ internal static class Protocol
 
         bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "event", resolved);
+    }
+
+    /// <summary>Puts a power on a creature in the fight.</summary>
+    /// <remarks>
+    /// Scenario construction, like <see cref="Fight"/>. A position with two
+    /// debuffs already on the player is an hour of play away, and four lines
+    /// here.
+    ///
+    /// The amount is the game's own overloaded number: a count for most
+    /// powers, and below zero a single endless instance for the one power that
+    /// decides its stacking at the time. The client spells what it means; this
+    /// passes the number through.
+    ///
+    /// Refused by the console command rather than validated here, for the
+    /// reason <see cref="Fight"/> gives: it knows the power list and this does
+    /// not.
+    /// </remarks>
+    private static async Task Power(JsonElement req)
+    {
+        string? power = Str(req, "power");
+        if (power == null)
+        {
+            await Error("power", Refusals.Malformed("power requires a 'power' entry name"));
+            return;
+        }
+
+        if (!req.TryGetProperty("amount", out JsonElement amountEl)
+            || !amountEl.TryGetInt32(out int amount))
+        {
+            await Error("power", Refusals.Malformed("power requires an integer 'amount'"));
+            return;
+        }
+
+        if (!req.TryGetProperty("target", out JsonElement targetEl)
+            || !targetEl.TryGetUInt32(out uint target))
+        {
+            await Error("power", Refusals.Malformed("power requires a creature id in 'target'"));
+            return;
+        }
+
+        string? refused = await Driver.ApplyPower(_state, power, amount, target);
+        if (refused != null)
+        {
+            await Error("power", Refusals.Console(refused));
+            return;
+        }
+
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "power", resolved);
     }
 
     private static async Task Grant(JsonElement req)

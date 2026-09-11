@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.DevConsole.ConsoleCommands;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -425,6 +426,62 @@ public static class Driver
     {
         Stage = "entering fight";
         CmdResult result = new FightConsoleCmd().Process(state.Players[0], new[] { encounter });
+        if (!result.success)
+        {
+            return result.msg;
+        }
+
+        if (result.task != null)
+        {
+            await result.task;
+        }
+
+        return null;
+    }
+
+    /// <summary>Puts a power on a creature in the fight.</summary>
+    /// <remarks>
+    /// Through <c>ApplyPowerConsoleCmd</c>, which goes to <c>PowerCmd.Apply</c>
+    /// or <c>ModifyAmount</c> the way a card does. So a constructed debuff gets
+    /// its <c>SkipNextDurationTick</c> set, and the state reached is a state the
+    /// game reaches -- which is the whole reason to hold a simulator to it.
+    ///
+    /// The console command addresses a creature by its position in the combat
+    /// state's list, and an observation addresses one by <c>CombatId</c>. The
+    /// translation belongs here, so a scenario names the creature the
+    /// observation named.
+    /// </remarks>
+    public static async Task<string?> ApplyPower(RunState state, string power, int amount, uint target)
+    {
+        Stage = "applying power";
+        CombatState? combat = (state.CurrentRoom as CombatRoom)?.CombatState;
+        if (combat == null)
+        {
+            return "This doesn't appear to be a combat!";
+        }
+
+        int at = -1;
+        for (int i = 0; i < combat.Creatures.Count; i++)
+        {
+            if (combat.Creatures[i].CombatId == target)
+            {
+                at = i;
+                break;
+            }
+        }
+        if (at < 0)
+        {
+            return $"No creature {target} in this combat.";
+        }
+
+        CmdResult result = new ApplyPowerConsoleCmd().Process(
+            state.Players[0],
+            new[]
+            {
+                power,
+                amount.ToString(CultureInfo.InvariantCulture),
+                at.ToString(CultureInfo.InvariantCulture),
+            });
         if (!result.success)
         {
             return result.msg;

@@ -5,7 +5,7 @@
 //! exposes the game's own debug commands, and a simulator gets them when it can
 //! build the same states.
 
-use crate::ContentVersion;
+use crate::{CombatId, ContentVersion, PowerAmount};
 
 /// One step of scenario construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +27,19 @@ pub enum Setup<V: ContentVersion> {
     Event { event: V::Event },
     /// Puts a card, a relic or a potion straight into the run.
     Grant(Gift<V>),
+    /// Puts a power on a creature in the fight.
+    ///
+    /// `ApplyPowerConsoleCmd`, which applies it the way a card does. So a
+    /// debuff put on the player this way skips its next tick, exactly as one a
+    /// monster applied does. The position reached is a position the game
+    /// reaches.
+    ///
+    /// A fight has to be on. There is no creature to name outside one.
+    Power {
+        at: CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+    },
 }
 
 /// What a [`Setup::Grant`] puts into the run.
