@@ -11,6 +11,9 @@
 //! that is the only thing here that launches one.
 //!
 //! Set `STS2_UPDATE` to write instead of assert.
+//!
+//! `tests/scenarios/README.md` says how to write one and what makes a scenario
+//! worth its bytes.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -26,8 +29,8 @@ fn updating() -> bool {
     std::env::var_os("STS2_UPDATE").is_some()
 }
 
-fn suite_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/scenarios.txt")
+fn suite_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/scenarios")
 }
 
 fn expected_path() -> PathBuf {
@@ -60,8 +63,10 @@ where
 
 #[test]
 fn the_simulator_reaches_the_positions_the_game_reaches() {
-    let text = std::fs::read_to_string(suite_path()).expect("the suite is readable");
-    let written = read_suite(&text).expect("the suite parses");
+    let written = read_suite(&suite_dir()).expect("the suite is readable");
+    // A scenario file carries no build stamp. See `suite.rs`.
+    let stamp =
+        serde_json::to_string(&sts2_headless::Stamp::of(&V::VERSION)).expect("a stamp is json");
 
     let held = match std::fs::read(expected_path()) {
         Ok(bytes) => Expected::decode(&bytes).expect("the answers parse"),
@@ -83,8 +88,9 @@ fn the_simulator_reaches_the_positions_the_game_reaches() {
 
     for entry in &written {
         let name = &entry.name;
+        let recording = format!("{stamp}\n{}", entry.commands);
         let recorded =
-            sts2_headless::recording::read::<V>(std::io::Cursor::new(entry.recording.as_bytes()))
+            sts2_headless::recording::read::<V>(std::io::Cursor::new(recording.as_bytes()))
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
 
         let mut sim = sts2_sim::Sim::<V>::begin((), recorded.start())

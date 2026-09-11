@@ -1,65 +1,62 @@
 // The scenarios, as they are written down.
 //
+// One file each, under `tests/scenarios/`, named for what the scenario pins.
+// The name is the file's, so a failure names a file somebody can open.
+//
+// A file is the commands, one JSON object per line, with `#` for the reader.
+// No build stamp: a recording file carries one so it cannot be replayed into
+// the wrong game, and a scenario is answered by whichever build the caller
+// names. The recorded answers carry the stamp instead, and the test refuses a
+// set from another build.
+//
 // Plain comments and not a module doc: the build script splices this file in
 // with `include!`, and an inner attribute cannot appear there.
-//
-// One file for the suite rather than a directory each. A scenario is a few
-// lines, and a tree of directories holding one recording apiece is a tree
-// nobody reads.
-//
-// `===` opens a scenario and names it. Everything above the first one is the
-// build stamp, which every scenario shares because they are all answered by
-// the same game. Blank lines and `#` are for the reader.
-//
-// Included by the build script as well as the crate, so the two cannot drift.
 
-/// One scenario: its name, and the recording that reaches it.
+/// One scenario: its name, and the commands that reach it.
 ///
 /// Text rather than parsed. The build script hashes it to decide whether the
 /// answer it holds is still the answer.
 pub struct Written {
     pub name: String,
-    pub recording: String,
+    pub commands: String,
 }
 
-/// Every scenario in a suite file.
-pub fn read_suite(text: &str) -> Result<Vec<Written>, String> {
-    let mut stamp = String::new();
-    let mut out: Vec<Written> = Vec::new();
+/// Every scenario in a directory, in name order.
+///
+/// Ordered, because a suite that reads differently on two machines writes a
+/// different file on each.
+pub fn read_suite(dir: &std::path::Path) -> Result<Vec<Written>, String> {
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| format!("reading {}: {e}", dir.display()))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|end| end == "txt"))
+        .collect();
+    files.sort();
 
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
+    let mut out = Vec::with_capacity(files.len());
+    for path in files {
+        let name = path
+            .file_stem()
+            .ok_or_else(|| format!("{} has no name", path.display()))?
+            .to_string_lossy()
+            .into_owned();
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| format!("reading {}: {e}", path.display()))?;
+
+        let mut commands = String::new();
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            commands.push_str(line);
+            commands.push('\n');
         }
-        if let Some(name) = trimmed.strip_prefix("===") {
-            let name = name.trim().to_string();
-            if name.is_empty() {
-                return Err("a scenario with no name".into());
-            }
-            if out.iter().any(|written| written.name == name) {
-                return Err(format!("two scenarios called {name}"));
-            }
-            if stamp.is_empty() {
-                return Err(format!("{name} comes before the build stamp"));
-            }
-            out.push(Written {
-                name,
-                recording: stamp.clone(),
-            });
-            continue;
+        if commands.is_empty() {
+            return Err(format!("{} has no commands in it", path.display()));
         }
-        match out.last_mut() {
-            Some(written) => {
-                written.recording.push_str(trimmed);
-                written.recording.push('\n');
-            }
-            None if stamp.is_empty() => {
-                stamp.push_str(trimmed);
-                stamp.push('\n');
-            }
-            None => return Err(format!("a line outside any scenario: {trimmed}")),
-        }
+        out.push(Written { name, commands });
     }
     Ok(out)
 }

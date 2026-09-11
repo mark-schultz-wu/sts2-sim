@@ -1,0 +1,11 @@
+# Shrink's own number, which `weak-and-shrunk` cannot see: a Strike for six
+# truncates to three whether the power takes thirty per cent or twenty-five. A
+# beetle chews for seven, and 4.9 and 5.25 do not.
+#
+# It pins the reported intent too. A shrunken beetle advertises the four it
+# will land rather than the seven its move prints.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"power","power":"SHRINK_POWER","amount":-1,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

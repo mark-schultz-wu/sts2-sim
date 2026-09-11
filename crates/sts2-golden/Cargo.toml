@@ -15,6 +15,8 @@ serde_json = { workspace = true }
 
 [build-dependencies]
 sts2-core = { workspace = true }
+# The stamp a scenario file does not carry, written in front of one.
+serde_json = { workspace = true }
 # The build script fills the oracle cache, which means launching a real game and
 # naming a build to launch it for.
 sts2-content = { workspace = true }
