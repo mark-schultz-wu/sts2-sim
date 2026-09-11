@@ -48,9 +48,8 @@ jobs:
           rustup component list --installed | grep -q '^clippy'
           rustup component list --installed | grep -q '^rustfmt'
 
-      # `just test`: the workspace, then every pinned build's tables by name.
-      # The workspace run compiles them all only because `sts2-cli` asks for
-      # them and cargo unifies features. This does not rely on that.
+      # Every pinned build's tables come with the crate, so the workspace run
+      # is the whole of it. There is no feature to name and no second pass.
       - name: Test
         run: |
           set -euo pipefail
@@ -58,11 +57,6 @@ jobs:
           # The scenarios read what the game answered from `scenarios.bin`, so
           # they hold the simulator to a real game without launching one.
           cargo test -p sts2-golden --test scenarios
-          features=""
-          for lock in mod/games/*.lock; do
-            features="$features,$(basename "$lock" .lock | tr . _)"
-          done
-          cargo test -p sts2-content --features "${features#,}"
 
       # What lets a review skip the generated tables. `codegen` runs for every
       # pinned build and the tree has to come back unchanged. A hand edit to a
