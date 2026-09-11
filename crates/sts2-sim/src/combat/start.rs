@@ -1,10 +1,11 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    Combat, CombatId, Counters, Creature, ModelId, Observation, Rules, SideKinds, TurnPhaseKinds,
+    CombatId, Counters, Creature, ModelId, Observation, Rules, SideKinds, TurnPhaseKinds,
 };
 
-use super::{Error, encounter, legal, monster, pile, stream};
+use super::live::{CardInstance, Live};
+use super::{Error, encounter, monster, pile, stream};
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
 const HAND_SIZE: usize = 5;
@@ -23,7 +24,7 @@ pub(crate) fn enter<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     observation: &Observation<V>,
-) -> Result<(super::Ongoing<V>, Counters<V>), Error> {
+) -> Result<(Live<V>, Counters<V>), Error> {
     let mut counters = observation.rng.clone();
 
     let monsters = encounter::opening::<V>(raw_seed, observation.floor, encounter)?;
@@ -45,37 +46,38 @@ pub(crate) fn enter<V: Rules>(
     });
     creatures.extend(enemies.creatures);
 
+    // The deck's own cards, each becoming a copy the fight can write on.
+    let deck: Vec<CardInstance<V>> = observation
+        .deck
+        .iter()
+        .map(|card| CardInstance::new(*card))
+        .collect();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
-    let piles = pile::shuffle(&mut shuffle, observation.deck.clone()).deal(HAND_SIZE);
+    let piles = pile::shuffle(&mut shuffle, deck).deal(HAND_SIZE);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
 
     let energy: V::Count = num_traits::cast(V::max_energy(character))
         .expect("the starting energy fits the build's count type");
-    let stars = stars_on_entry::<V>(observation);
-    let legal = legal::hand::<V>(piles.hand(), &creatures, energy, stars)?;
 
     Ok((
-        super::Ongoing {
+        Live {
+            turn: num_traits::one(),
+            phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
+            energy,
+            stars: stars_on_entry::<V>(observation),
+            round: num_traits::one(),
+            encounter: Some(encounter),
+            hand: piles.hand().to_vec(),
+            draw: piles.draw().to_vec(),
+            discard: piles.discard().to_vec(),
+            exhaust: piles.exhaust().to_vec(),
+            creatures,
+            // Absent rather than an empty queue: the subsystem is inert until
+            // something gives the player a slot.
+            orbs: None,
             machines: enemies.machines,
             // Nothing has been applied to anyone yet.
-            skipping: Vec::new(),
-            combat: Combat {
-                turn: num_traits::one(),
-                phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
-                energy,
-                stars,
-                round: num_traits::one(),
-                encounter: Some(encounter),
-                hand: piles.hand().to_vec(),
-                draw: piles.draw().to_vec(),
-                discard: piles.discard().to_vec(),
-                exhaust: piles.exhaust().to_vec(),
-                creatures,
-                legal,
-                // Absent rather than an empty queue: the subsystem is inert until
-                // something gives the player a slot.
-                orbs: None,
-            },
+            skip_tick: Vec::new(),
         },
         counters,
     ))

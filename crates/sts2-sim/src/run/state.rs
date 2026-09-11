@@ -93,7 +93,7 @@ enum Phase<V: Rules> {
         finished: bool,
         selection: Option<SmallVec<[V::Card; 4]>>,
     },
-    Combat(crate::combat::Ongoing<V>),
+    Combat(crate::combat::Live<V>),
     /// A fight that is over, and the rewards it has not handed out yet.
     ///
     /// The fight stays in the observation. It reports the state it ended in
@@ -194,9 +194,9 @@ impl<V: Rules> State<V> {
     }
 
     /// The fight the run is standing in, or nothing outside one.
-    pub(super) fn fight(&self) -> Option<&crate::combat::Ongoing<V>> {
+    pub(super) fn fight(&self) -> Option<&crate::combat::Live<V>> {
         match &self.phase {
-            Phase::Combat(ongoing) => Some(ongoing),
+            Phase::Combat(live) => Some(live),
             Phase::Neow { .. } | Phase::Rewards { .. } => None,
         }
     }
@@ -205,8 +205,8 @@ impl<V: Rules> State<V> {
     ///
     /// Whole, rather than edited where it stands. A decision the simulator
     /// cannot carry out never reaches this, so the run keeps the fight it had.
-    pub(super) fn fought(&mut self, ongoing: crate::combat::Ongoing<V>) {
-        self.phase = Phase::Combat(ongoing);
+    pub(super) fn fought(&mut self, live: crate::combat::Live<V>) {
+        self.phase = Phase::Combat(live);
     }
 
     /// Park the run on the rewards a won fight left it.
@@ -256,14 +256,14 @@ impl<V: Rules> State<V> {
         &mut self,
         to: Coord,
         counters: Counters<V>,
-        ongoing: crate::combat::Ongoing<V>,
+        live: crate::combat::Live<V>,
     ) {
         self.floor = self.floor + num_traits::one();
         self.met += 1;
         self.at = to;
         self.visited.push(to);
         self.drew(counters);
-        self.phase = Phase::Combat(ongoing);
+        self.phase = Phase::Combat(live);
     }
 
     /// Take back how far each stream a rule drew from now stands.
@@ -349,7 +349,7 @@ impl<V: Rules> State<V> {
         )?;
 
         self.drew(applied.counters);
-        self.fought(applied.ongoing);
+        self.fought(applied.live);
         Ok(self.report())
     }
 
@@ -566,12 +566,7 @@ impl<V: Rules> State<V> {
                 };
                 (asking, Some(room), None, false)
             }
-            Phase::Combat(ongoing) => (
-                None,
-                None,
-                Some(crate::combat::reported(&ongoing.combat)),
-                true,
-            ),
+            Phase::Combat(live) => (None, None, Some(live.report()), true),
             Phase::Rewards { combat, offered } => (
                 offered
                     .iter()
@@ -588,14 +583,8 @@ impl<V: Rules> State<V> {
         // move it and the fight is resolved on a copy; anywhere else the run
         // does. See `Player::hp`.
         let standing: Standing<V> = match &self.phase {
-            Phase::Combat(ongoing) => {
-                let at = self.player_id(&ongoing.combat);
-                let player = ongoing
-                    .combat
-                    .creatures
-                    .iter()
-                    .find(|c| c.id == at)
-                    .expect("a fight has the player in it");
+            Phase::Combat(live) => {
+                let player = live.player();
                 Standing {
                     hp: player.hp,
                     max_hp: player.max_hp,

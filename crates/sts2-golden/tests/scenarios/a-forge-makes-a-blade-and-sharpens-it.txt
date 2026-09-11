@@ -1,0 +1,14 @@
+# `ForgeCmd.Forge` writes on the card rather than on the fight. It makes a
+# Sovereign Blade when the fight holds none it can reach, and raises the damage
+# printed on every one it holds.
+#
+# The blade is made and forged by the same command, so it prints nineteen
+# rather than the ten its row carries. A forge kept as a per-fight total
+# reports ten here, and a forge that skips the card it just made does too.
+#
+# Two Refine Blades, because one leaves none in the opening hand.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":4}

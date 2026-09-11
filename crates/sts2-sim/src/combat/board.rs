@@ -11,13 +11,15 @@
 use num_traits::Zero;
 use sts2_core::rng::{GameRng, MegaRng};
 use sts2_core::{
-    CardIdent, CardTable, Combat, CombatId, Creature, Fight, Holding, PowerAmount, Rules,
-    SideKinds, Stack,
+    CardIdent, CardTable, CardVars, CombatId, Creature, Fight, Holding, Modify, PowerAmount,
+    PowerTable, Rules, SideKinds, Stack,
 };
+
+use super::live::{CardInstance, Live};
 
 /// The fight an effect is resolved against.
 pub(super) struct Board<'a, V: Rules> {
-    combat: &'a mut Combat<V>,
+    live: &'a mut Live<V>,
     /// The shuffle stream, because drawing a card can turn the discard pile
     /// back into a draw pile.
     shuffle: &'a mut MegaRng,
@@ -25,6 +27,11 @@ pub(super) struct Board<'a, V: Rules> {
     actor: CombatId,
     /// The creature a card was pointed at.
     target: Option<CombatId>,
+    /// The card being played, which is in no pile while its effect runs.
+    ///
+    /// `AddDuringManualCardPlay` holds it in the play pile. Nothing here for a
+    /// monster's move, which prints no numbers of its own.
+    playing: Option<&'a CardInstance<V>>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
     /// The debuffs this effect put on the player, whose next tick is skipped.
@@ -45,16 +52,18 @@ pub(super) struct Board<'a, V: Rules> {
 impl<'a, V: Rules> Board<'a, V> {
     /// A board for one card, played from the player.
     pub(super) fn for_card(
-        combat: &'a mut Combat<V>,
+        live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         target: Option<CombatId>,
+        playing: Option<&'a CardInstance<V>>,
     ) -> Self {
-        let actor = player::<V>(&combat.creatures);
+        let actor = live.player().id;
         Board {
-            combat,
+            live,
             shuffle,
             actor,
             target,
+            playing,
             intent_damage: V::Number::zero(),
             skipped: Vec::new(),
             won: false,
@@ -63,16 +72,17 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// A board for one move, made by a monster.
     pub(super) fn for_move(
-        combat: &'a mut Combat<V>,
+        live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         actor: CombatId,
         intent_damage: V::Number,
     ) -> Self {
         Board {
-            combat,
+            live,
             shuffle,
             actor,
             target: None,
+            playing: None,
             intent_damage,
             skipped: Vec::new(),
             won: false,
@@ -81,7 +91,7 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// Where a creature sits, or nothing for one no longer in the fight.
     fn at(&self, at: CombatId) -> Option<usize> {
-        self.combat
+        self.live
             .creatures
             .iter()
             .position(|creature| creature.id == at)
@@ -90,14 +100,14 @@ impl<'a, V: Rules> Board<'a, V> {
     /// Which side the acting creature fights on.
     fn side(&self) -> V::CombatSide {
         self.at(self.actor)
-            .map(|at| self.combat.creatures[at].side)
+            .map(|at| self.live.creatures[at].side)
             .unwrap_or(<V::CombatSide as SideKinds>::PLAYER)
     }
 
     /// Everything on the other side, which is `GetOpponentsOf`.
     fn opponents(&self) -> Vec<CombatId> {
         let side = self.side();
-        self.combat
+        self.live
             .creatures
             .iter()
             .filter(|creature| creature.side != side && creature.alive)
@@ -115,18 +125,15 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let Some(at) = self.at(at) else { return };
 
-        // `PowerCmd.Apply` sets `SkipNextDurationTick` on a debuff that lands
-        // on the player, so the next tick passes it over. An endless power has
-        // no tick to skip, and nothing else keeps a flag it never reads.
-        let counts_down = amount != PowerAmount::Endless
-            && [
-                <V::CombatSide as SideKinds>::PLAYER,
-                <V::CombatSide as SideKinds>::ENEMY,
-            ]
-            .into_iter()
-            .any(|side| V::ticks_down(power, side));
-        if self.combat.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && counts_down {
-            let id = self.combat.creatures[at].id;
+        // `PowerCmd.Apply` sets `SkipNextDurationTick` on every debuff that
+        // lands on a player-side creature, so the next tick passes it over.
+        // The power's own kind and the side it landed on, and nothing about
+        // what the power does when a turn ends.
+        let debuff = power
+            .debuff()
+            .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"));
+        if self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && debuff {
+            let id = self.live.creatures[at].id;
             if !self.skipped.contains(&(id, power)) {
                 self.skipped.push((id, power));
             }
@@ -135,7 +142,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // `FindExistingInstanceForStacking`: a counter stacks into the one
         // already there. An endless instance is one instance however many
         // times it lands.
-        let held = self.combat.creatures[at]
+        let held = self.live.creatures[at]
             .powers
             .iter_mut()
             .find(|held| held.power == power);
@@ -145,39 +152,61 @@ impl<'a, V: Rules> Board<'a, V> {
                 PowerAmount::Endless => unimplemented!("a count landing on an endless power"),
             },
             (Some(_), PowerAmount::Endless) => {}
-            (None, amount) => self.combat.creatures[at]
-                .powers
-                .push(Stack { power, amount }),
+            (None, amount) => self.live.creatures[at].powers.push(Stack { power, amount }),
         }
     }
 
     /// `KillWithoutCheckingWinCondition`, for a creature the damage killed.
     fn kill(&mut self, at: usize) {
-        self.combat.creatures[at].alive = false;
-        if self.combat.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
+        self.live.creatures[at].alive = false;
+        if self.live.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
             unimplemented!("a player dying in a fight");
         }
         // A dead monster is taken out of the fight, so nothing that reads it
         // afterwards can see it. That is why the observation stops reporting
         // it rather than reporting it dead.
-        self.combat.creatures.remove(at);
+        self.live.creatures.remove(at);
         self.won = !self
-            .combat
+            .live
             .creatures
             .iter()
             .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY);
     }
 }
 
-/// One hit after every power on either side has multiplied it, which is
+/// `Hook.ModifyDamage` and `Hook.ModifyBlock` in the shape they share.
+///
+/// Every addition lands, then every share, then the result is floored at zero.
+///
+/// The game asks every listener in the fight and lets each read who is
+/// involved. The callers below ask only the creatures the hook is about, which
+/// is narrower. Nothing ported so far modifies a number it is not standing on
+/// one side of.
+fn hooked<V: Rules>(
+    amount: V::Number,
+    hooks: impl Iterator<Item = Modify<V::Number>>,
+) -> V::Number {
+    let (mut added, mut share) = (amount, 1.0f64);
+    for hook in hooks {
+        match hook {
+            Modify::Nothing => {}
+            Modify::Added(more) => added = added + more,
+            Modify::Scaled(by) => share *= by,
+        }
+    }
+
+    // The multipliers this build fields are halves and quarters. A binary
+    // float holds those exactly, so the truncation lands where the game's own
+    // decimal arithmetic lands.
+    let amount: f64 = num_traits::cast(added).expect("a number a fight works out fits a float");
+    num_traits::cast((amount * share).max(0.0).trunc()).expect("a modified number is a game number")
+}
+
+/// One hit after every power on either side has had its say, which is
 /// `Hook.ModifyDamage`.
 ///
 /// `dealer` is the creature swinging and `at` is where the one it hits sits.
-/// Nothing adds to a hit yet, and nothing caps one.
-///
-/// The multipliers this build fields are halves and quarters. A binary float
-/// holds those exactly, so the truncation at the end lands where the game's
-/// own decimal arithmetic lands.
+/// Nothing caps a hit.
 pub(crate) fn modified<V: Rules>(
     creatures: &[Creature<V>],
     dealer: CombatId,
@@ -185,53 +214,16 @@ pub(crate) fn modified<V: Rules>(
     damage: V::Number,
 ) -> V::Number {
     let dealer = creatures.iter().position(|creature| creature.id == dealer);
-    let mut amount: f64 = num_traits::cast(damage).expect("a hit is a number a float holds");
-    for (holder, holding) in [(Some(at), Holding::Target), (dealer, Holding::Dealer)] {
-        let Some(holder) = holder else { continue };
-        for held in &creatures[holder].powers {
-            amount *= V::damage_multiplier(held.power, holding);
-        }
-    }
-    num_traits::cast(amount.max(0.0).trunc()).expect("a modified hit is a game number")
-}
-
-/// The fight as it is reported, with every intent run through the modifiers.
-///
-/// `Attack::damage` is the number that will land rather than the one the move
-/// prints. The game works it out on every read, because a power applied after
-/// the intent was rolled changes it. So a fight keeps the move's own number
-/// and this is where the fight has its say.
-pub(crate) fn reported<V: Rules>(combat: &Combat<V>) -> Combat<V> {
-    let mut out = combat.clone();
-    let Some(target) = out
-        .creatures
-        .iter()
-        .position(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-    else {
-        return out;
-    };
-
-    for at in 0..out.creatures.len() {
-        let dealer = out.creatures[at].id;
-        let Some(next) = out.creatures[at].next_move.clone() else {
-            continue;
-        };
-        let intents = next
-            .intents
-            .into_iter()
-            .map(|mut intent| {
-                if let Some(attack) = &mut intent.attack {
-                    attack.damage = modified::<V>(&combat.creatures, dealer, target, attack.damage);
-                }
-                intent
-            })
-            .collect();
-        out.creatures[at].next_move = Some(sts2_core::NextMove {
-            id: next.id,
-            intents,
-        });
-    }
-    out
+    let sides = [(Some(at), Holding::Target), (dealer, Holding::Dealer)];
+    hooked::<V>(
+        damage,
+        sides.into_iter().flat_map(|(holder, holding)| {
+            holder
+                .into_iter()
+                .flat_map(move |holder| &creatures[holder].powers)
+                .map(move |held| V::damage_hook(held.power, holding, held.amount))
+        }),
+    )
 }
 
 /// The player, which every fight has one of.
@@ -255,30 +247,37 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // `CreatureCmd.Damage`: block first, then hit points, then the death
         // the hit caused. Nothing modifies the amount on the way.
         let Some(at) = self.at(at) else { return };
-        if !self.combat.creatures[at].alive {
+        if !self.live.creatures[at].alive {
             return;
         }
-        let damage = modified::<V>(&self.combat.creatures, self.actor, at, damage);
+        let damage = modified::<V>(&self.live.creatures, self.actor, at, damage);
         let zero = V::Number::zero();
-        let blocked = self.combat.creatures[at].block.min(damage).max(zero);
-        self.combat.creatures[at].block = self.combat.creatures[at].block - blocked;
+        let blocked = self.live.creatures[at].block.min(damage).max(zero);
+        self.live.creatures[at].block = self.live.creatures[at].block - blocked;
         let unblocked = (damage - blocked).max(zero);
 
-        let hp = self.combat.creatures[at].hp;
+        let hp = self.live.creatures[at].hp;
         let killed = hp > zero && unblocked >= hp;
-        self.combat.creatures[at].hp = (hp - unblocked).max(zero);
+        self.live.creatures[at].hp = (hp - unblocked).max(zero);
         if killed {
             self.kill(at);
         }
     }
 
     fn gain_block(&mut self, amount: V::Number) {
-        // `GainBlock` clamps the modified amount at zero and only then adds.
-        let amount = amount.max(V::Number::zero());
+        // `CreatureCmd.GainBlock` runs the amount through `Hook.ModifyBlock`,
+        // clamps at zero, and adds nothing at all when nothing is left.
+        let actor = self.actor;
+        let Some(at) = self.at(actor) else { return };
+        let amount = hooked::<V>(
+            amount,
+            self.live.creatures[at]
+                .powers
+                .iter()
+                .map(|held| V::block_hook(held.power, held.amount)),
+        );
         if amount > V::Number::zero() {
-            let actor = self.actor;
-            let Some(at) = self.at(actor) else { return };
-            self.combat.creatures[at].block = self.combat.creatures[at].block + amount;
+            self.live.creatures[at].block = self.live.creatures[at].block + amount;
         }
     }
 
@@ -287,7 +286,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // rather than gaining. No card on this build does.
         let amount = num_traits::NumCast::from(amount)
             .unwrap_or_else(|| unimplemented!("a card spending stars as it plays"));
-        self.combat.stars = self.combat.stars + amount;
+        self.live.stars = self.live.stars + amount;
     }
 
     fn apply(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
@@ -316,7 +315,50 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn draw(&mut self, count: V::Number) {
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
-        draw(self.combat, self.shuffle, count);
+        draw(self.live, self.shuffle, count);
+    }
+
+    fn var(&self, key: V::CardVar) -> V::Number {
+        // A key the card does not print is a mistake in the port, the same way
+        // a card asking for a number no card prints is.
+        self.playing
+            .unwrap_or_else(|| unimplemented!("a number printed by no card being played"))
+            .vars
+            .iter()
+            .find(|var| var.id == key)
+            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
+            .base
+    }
+
+    fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
+        // `ForgeCmd.Forge` creates one when the fight holds none it can reach.
+        // The exhaust pile is not one it can reach, and is forged all the same.
+        let held = [&self.live.hand, &self.live.draw, &self.live.discard]
+            .into_iter()
+            .flatten()
+            .any(|held| held.ident.card == card);
+        if !held {
+            self.live.hand.push(CardInstance::new(CardIdent::new(card)));
+        }
+        for pile in [
+            &mut self.live.hand,
+            &mut self.live.draw,
+            &mut self.live.discard,
+            &mut self.live.exhaust,
+        ] {
+            for held in pile.iter_mut().filter(|held| held.ident.card == card) {
+                let var = held
+                    .vars
+                    .iter_mut()
+                    .find(|var| var.id == key)
+                    .unwrap_or_else(|| unimplemented!("the {} a forge raises", key.name()));
+                var.base = var.base + amount;
+            }
+        }
+    }
+
+    fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
+        self.land(self.actor, power, amount);
     }
 
     fn give_cards(&mut self, card: V::Card, count: usize) {
@@ -327,7 +369,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             unimplemented!("cards given to more than one player");
         }
         for _ in 0..count {
-            self.combat.discard.push(CardIdent::new(card));
+            self.live
+                .discard
+                .push(CardInstance::new(CardIdent::new(card)));
         }
     }
 }
@@ -336,15 +380,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 /// pile runs dry.
 ///
 /// A fight with every card in hand draws short rather than manufacture one.
-pub(super) fn draw<V: Rules>(combat: &mut Combat<V>, shuffle: &mut MegaRng, count: usize) {
+pub(super) fn draw<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng, count: usize) {
     for _ in 0..count {
-        if combat.draw.is_empty() {
-            if combat.discard.is_empty() {
+        if live.draw.is_empty() {
+            if live.discard.is_empty() {
                 return;
             }
-            reshuffle(combat, shuffle);
+            reshuffle(live, shuffle);
         }
-        combat.hand.push(combat.draw.remove(0));
+        live.hand.push(live.draw.remove(0));
     }
 }
 
@@ -354,9 +398,11 @@ pub(super) fn draw<V: Rules>(combat: &mut Combat<V>, shuffle: &mut MegaRng, coun
 /// A stable shuffle, unlike the one that deals a fight its opening hand. The
 /// two are different sequences over the same stream, so which one this is
 /// decides every card drawn after it.
-fn reshuffle<V: Rules>(combat: &mut Combat<V>, shuffle: &mut MegaRng) {
-    let mut shuffled = std::mem::take(&mut combat.discard);
-    shuffled.append(&mut combat.draw);
-    shuffle.stable_shuffle_by_key(&mut shuffled, |held| (held.card.order(), held.upgrade));
-    combat.draw = shuffled;
+fn reshuffle<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng) {
+    let mut shuffled = std::mem::take(&mut live.discard);
+    shuffled.append(&mut live.draw);
+    shuffle.stable_shuffle_by_key(&mut shuffled, |held| {
+        (held.ident.card.order(), held.ident.upgrade)
+    });
+    live.draw = shuffled;
 }

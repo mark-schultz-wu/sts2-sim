@@ -36,10 +36,10 @@ pub use play::recording;
 pub use content::{
     ActTable, AscensionKinds, CardTable, CardVars, CharacterTable, ContentError, ContentVersion,
     Cost, Drafted, EncounterRoster, EncounterTable, EventTable, Fight, Fixed, FlagSet, Holding,
-    Layout, MapPointKinds, MonsterSpawn, MonsterTable, MoveMachine, PotionTable, PotionUsage,
-    PowerAmount, PowerTable, Printed, RarityKinds, RelicPoolKinds, RelicTable, Rests, RewardRarity,
-    RoomKinds, Rules, SideKinds, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
-    UnplayableReasonKinds, Version,
+    Layout, MapPointKinds, Modify, MonsterSpawn, MonsterTable, MoveMachine, PotionTable,
+    PotionUsage, PowerAmount, PowerTable, Printed, RarityKinds, RelicPoolKinds, RelicTable, Rests,
+    RewardRarity, RoomKinds, Rules, SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds,
+    Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
 pub use ident::{CardIdent, Coord, ModelId, OutOfRange};
 pub use seed::Seed;

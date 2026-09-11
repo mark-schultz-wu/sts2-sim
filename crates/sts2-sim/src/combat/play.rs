@@ -9,9 +9,10 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
-use sts2_core::{CardTable, Combat, CombatId, Cost, Counters, HandIndex, Reason, Rules};
+use sts2_core::{CardTable, CombatId, Cost, Counters, FlagSet, HandIndex, Reason, Rules};
 
 use super::board::Board;
+use super::live::Live;
 use super::{Error, legal, stream};
 
 /// A play the fight allows, resolved but not yet made.
@@ -36,43 +37,54 @@ pub(crate) struct Play<V: Rules> {
 /// The order the game refuses in, which is `Protocol.PlayCard`: the hand
 /// index, then the creature id, then the card's own two rules.
 pub(crate) fn resolve<V: Rules>(
-    combat: &Combat<V>,
+    live: &Live<V>,
     index: HandIndex,
     target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
     let at = usize::from(index.get());
-    let playable = combat.legal.get(at).ok_or(Reason::OutOfRange {
-        index: i64::from(index.get()),
-        count: combat.hand.len(),
-    })?;
+    let card = live
+        .hand
+        .get(at)
+        .map(|held| held.ident)
+        .ok_or(Reason::OutOfRange {
+            index: i64::from(index.get()),
+            count: live.hand.len(),
+        })?;
 
     // The creature the play named has to still be in this fight. An id is
     // chosen against an observation, and a fight moves on from one.
     if let Some(id) = target
-        && !combat.creatures.iter().any(|creature| creature.id == id)
+        && !live.creatures.iter().any(|creature| creature.id == id)
     {
         return Err(Reason::NoSuchCreature { id });
     }
 
-    if let Some(why) = playable.reason {
+    // The same rules the reported hand carries, asked of the one card being
+    // played. Nothing here builds the rest of the hand, or its previews.
+    let takes = legal::target_type::<V>(card, &live.creatures);
+    let refusals = legal::reasons::<V>(card, &live.creatures, live.energy, live.stars);
+    if !refusals.is_empty() {
         return Err(Reason::Unplayable {
-            card: playable.card,
-            why,
-            preventer: playable.preventer,
+            card,
+            why: <V::UnplayableReasons as FlagSet>::from_members(&refusals),
+            // `BlockedByHook` is the only reason that names one, and nothing
+            // in a fight raises it yet.
+            preventer: None,
         });
     }
+    let targets = legal::targets::<V>(takes, &live.creatures, false);
 
     // `CanPlayTargeting`: the card is pointed at one of the creatures its own
     // target type accepts, and a card that names one is pointed at something.
-    if !target.is_some_and(|id| playable.targets.contains(&id)) && !playable.targets.is_empty() {
+    if !target.is_some_and(|id| targets.contains(&id)) && !targets.is_empty() {
         return Err(Reason::WrongTarget {
-            card: playable.card,
+            card,
             target,
-            takes: playable.target,
+            takes,
         });
     }
 
-    let star_cost = playable.card.card.star_cost();
+    let star_cost = card.card.star_cost();
     if star_cost == Cost::X {
         // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
         // on this build prices its stars at X.
@@ -86,8 +98,8 @@ pub(crate) fn resolve<V: Rules>(
     Ok(Play {
         index: at,
         target,
-        energy: legal::spend(playable.card.card.cost(), combat.energy).expect(PAYS),
-        stars: legal::spend(star_cost, combat.stars).expect(PAYS),
+        energy: legal::spend(card.card.cost(), live.energy).expect(PAYS),
+        stars: legal::spend(star_cost, live.stars).expect(PAYS),
     })
 }
 
@@ -96,32 +108,28 @@ pub(crate) fn resolve<V: Rules>(
 /// Scenario construction. The command a card applies a power with, reached
 /// without a card, so the state it leaves is the state a card leaves.
 pub(crate) fn apply_power<V: Rules>(
-    ongoing: &super::Ongoing<V>,
+    live: &Live<V>,
     at: CombatId,
     power: V::Power,
     amount: sts2_core::PowerAmount<V::Number>,
     raw_seed: u32,
     counters: &Counters<V>,
 ) -> Result<super::Fought<V>, Error> {
-    let mut next = ongoing.combat.clone();
+    let mut next = live.clone();
     let mut counters = counters.clone();
     // Nothing here draws. The stream is what a board is built with, and
     // recording it back leaves the counter where it was.
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
 
-    let mut board = Board::for_card(&mut next, &mut shuffle, None);
+    let mut board = Board::for_card(&mut next, &mut shuffle, None, None);
     sts2_core::Fight::apply(&mut board, at, power, amount);
     let won = board.won;
     let skipped = std::mem::take(&mut board.skipped);
 
-    next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
+    next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     Ok(super::Fought {
-        ongoing: super::Ongoing {
-            combat: next,
-            machines: ongoing.machines.clone(),
-            skipping: merged::<V>(&ongoing.skipping, skipped),
-        },
+        live: next,
         counters,
         won,
     })
@@ -146,13 +154,12 @@ pub(super) fn merged<V: Rules>(
 /// Nothing is committed until this returns. It works on a copy, so a card
 /// asking for a rule the simulator lacks costs the caller nothing.
 pub(crate) fn play<V: Rules>(
-    ongoing: &super::Ongoing<V>,
+    live: &Live<V>,
     play: Play<V>,
     raw_seed: u32,
     counters: &Counters<V>,
 ) -> Result<super::Fought<V>, Error> {
-    let combat = &ongoing.combat;
-    let mut next = combat.clone();
+    let mut next = live.clone();
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
 
@@ -163,38 +170,33 @@ pub(crate) fn play<V: Rules>(
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
-    let mut board = Board::for_card(&mut next, &mut shuffle, play.target);
-    V::on_play(card.card, &mut board);
+    let mut board = Board::for_card(&mut next, &mut shuffle, play.target, Some(&card));
+    V::on_play(card.ident.card, &mut board);
     let board_won = board.won;
     let skipped = std::mem::take(&mut board.skipped);
 
     // `GetResultPileTypeForCardPlay`, once the effect is over.
     match card
+        .ident
         .card
         .power()
         .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
     {
         // A power card leaves the fight rather than going to a pile.
         true => {}
-        false if card.card.exhausts() => next.exhaust.push(card),
+        false if card.ident.card.exhausts() => next.exhaust.push(card),
         false => next.discard.push(card),
     }
 
-    match board_won {
-        // `CheckWinCondition` after the card, so a card that killed the last
-        // enemy still finished what it was doing.
-        true => super::finish(&mut next),
-        false => {
-            next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
-        }
+    // `CheckWinCondition` after the card, so a card that killed the last
+    // enemy still finished what it was doing.
+    if board_won {
+        super::finish(&mut next);
     }
+    next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     Ok(super::Fought {
-        ongoing: super::Ongoing {
-            combat: next,
-            machines: ongoing.machines.clone(),
-            skipping: merged::<V>(&ongoing.skipping, skipped),
-        },
+        live: next,
         counters,
         won: board_won,
     })

@@ -776,6 +776,62 @@ pub trait Fight<V: ContentVersion> {
     /// One copy per count, into the discard pile of every creature on the
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
+
+    /// One of the numbers the card being played prints right now.
+    ///
+    /// This copy's own, not the table's. A fight writes on a card, so the card
+    /// that was forged twice prints more than the one beside it.
+    fn var(&self, key: V::CardVar) -> V::Number;
+
+    /// `ForgeCmd.Forge`: raise a number on every copy of one card.
+    ///
+    /// Every pile, the exhaust pile included, and one copy is created in hand
+    /// when the fight holds none outside exhaust.
+    fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number);
+
+    /// `PowerCmd.Apply<P>(Owner.Creature, ...)`, on whoever is acting.
+    ///
+    /// The player for a card and the monster for a move, which is the creature
+    /// a card saying "gain" means.
+    fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
+}
+
+/// What a power does to a number a fight works out.
+///
+/// One shape for both of the game's modifier hooks. `ModifyDamage` and
+/// `ModifyBlock` hand a power different things to read, and take the same
+/// answer. Most powers override one, or neither.
+///
+/// One question rather than two. A power with no hook has neither an addition
+/// nor a share to name, and [`Modify::Nothing`] is how it says so.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Modify<N> {
+    /// No hook of this kind, or one that does not act here.
+    Nothing,
+    /// The `Additive` half, which lands before anything multiplies.
+    Added(N),
+    /// The `Multiplicative` half, over what the additions left.
+    Scaled(f64),
+}
+
+/// What a power does when one side's turn ends, which is its
+/// `AfterSideTurnEnd`.
+///
+/// Most powers have no override: two hundred of this build's two hundred and
+/// sixty. What the other sixty do varies, from `Decrement` and `Remove` to
+/// damage, healing and a draw.
+///
+/// So this names what the ported ones do. Three powers tick a duration down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SideTurnEnd {
+    /// No `AfterSideTurnEnd`, or one that does not act at this side's end.
+    Nothing,
+    /// `PowerCmd.TickDownDuration`: one off the amount, and the instance goes
+    /// once it reaches zero.
+    ///
+    /// Unlike `Decrement`, it passes over an instance whose
+    /// `SkipNextDurationTick` is set, and clears the flag instead.
+    TicksDownDuration,
 }
 
 /// Which side of a hit the creature holding a power is on.
@@ -1237,27 +1293,78 @@ pub trait Rules: ContentVersion {
     /// Where a monster's graph starts, for a machine that has not walked.
     fn initial_monster_state(monster: Self::Monster) -> u8;
 
-    /// What a power multiplies a hit by, which is
-    /// `ModifyDamageMultiplicative`.
+    /// What a power does to a hit, which is its `Hook.ModifyDamage`.
     ///
-    /// One for a power that leaves this hit alone, including one that acts
-    /// only from the other side of it.
+    /// Every power on either side of the hit is asked, and most have no hook
+    /// at all.
     ///
     /// # Panics
     ///
     /// A power nobody has ported. One is only in a fight because ported
     /// behaviour put it there.
-    fn damage_multiplier(power: Self::Power, holding: Holding) -> f64;
+    fn damage_hook(
+        power: Self::Power,
+        holding: Holding,
+        amount: PowerAmount<Self::Number>,
+    ) -> Modify<Self::Number>;
 
-    /// Whether a power counts down when one side's turn ends, which is its
-    /// `AfterSideTurnEnd`.
+    /// What a power does to a block gain, which is its `Hook.ModifyBlock`.
     ///
-    /// An endless power never reaches this: there is no number to count.
+    /// No [`Holding`], because the hook names one creature. It is the one
+    /// gaining, and every power it holds is asked.
     ///
     /// # Panics
     ///
     /// A power nobody has ported.
-    fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool;
+    fn block_hook(power: Self::Power, amount: PowerAmount<Self::Number>) -> Modify<Self::Number>;
+
+    /// What a power does when one side's turn ends, which is its
+    /// `AfterSideTurnEnd`.
+    ///
+    /// Every power in the fight is asked, at each side's end, and most have no
+    /// override at all.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported.
+    fn side_turn_end(power: Self::Power, side: Self::CombatSide) -> SideTurnEnd;
+
+    /// Whether a power hands its amount to the player as energy resets, and
+    /// then goes.
+    ///
+    /// `PowerModel.AfterEnergyReset`. A turn starts by resetting the pool, and
+    /// this is the one thing in a fight that adds to it afterwards.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported.
+    fn spent_on_energy_reset(power: Self::Power) -> bool;
+
+    /// What a card that works its own target out from the fight names.
+    ///
+    /// `CardModel.TargetType`, overridden. The player's powers are what the
+    /// four cards doing this read, so they are what is handed over.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
+
+    /// What a card works out from the fight for a number it prints.
+    ///
+    /// `CalculatedVar.Calculate`, which is a base plus an extra times a
+    /// multiplier the card names. Both halves are on the card's own face, so
+    /// this is handed the copy's printed numbers rather than the table's.
+    ///
+    /// # Panics
+    ///
+    /// A number nobody has ported the calculation for.
+    fn calculated_card_var(
+        card: Self::Card,
+        key: Self::CardVar,
+        printed: &[Printed<Self::CardVar, Self::Number>],
+        powers: &[crate::Stack<Self>],
+    ) -> Self::Number;
 
     /// What one of a monster's moves does, which is its `onPerform`.
     ///

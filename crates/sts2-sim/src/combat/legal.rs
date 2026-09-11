@@ -14,26 +14,25 @@ use sts2_core::{
     UnplayableReasonKinds,
 };
 
-use super::Error;
+use super::live::CardInstance;
 
 /// Every card in hand, in hand order, with the reasons each cannot be played.
-pub(crate) fn hand<V: Rules>(
-    hand: &[CardIdent<V>],
+pub(super) fn hand<V: Rules>(
+    hand: &[CardInstance<V>],
     creatures: &[Creature<V>],
     energy: V::Count,
     stars: V::Count,
-) -> Result<Vec<Playable<V>>, Error> {
+) -> Vec<Playable<V>> {
     hand.iter()
         .map(|card| playable::<V>(card, creatures, energy, stars))
         .collect()
 }
 
-fn playable<V: Rules>(
-    card: &CardIdent<V>,
+/// What a card names as its target.
+pub(super) fn target_type<V: Rules>(
+    card: CardIdent<V>,
     creatures: &[Creature<V>],
-    energy: V::Count,
-    stars: V::Count,
-) -> Result<Playable<V>, Error> {
+) -> V::TargetType {
     if card.upgrade != 0 {
         // An upgraded card prints different numbers, and the tables carry the
         // unupgraded ones. See `OnUpgrade` on the card.
@@ -42,23 +41,29 @@ fn playable<V: Rules>(
     if card.affliction.is_some() || card.enchantment.is_some() {
         unimplemented!("what an afflicted or enchanted card prints");
     }
-
-    // One of the four cards that work their target out from the fight.
-    let target = card
-        .card
+    // One of the four cards that work their target out from the fight, which
+    // they do by reading the player's own powers.
+    card.card
         .target()
-        .unwrap_or_else(|| unimplemented!("a card that decides its own target"));
-    let cost = card.card.cost();
-    let star_cost = card.card.star_cost();
+        .unwrap_or_else(|| V::computed_card_target(card.card, powers(creatures)))
+}
 
+/// Why this card cannot be played, which is empty for one that can.
+pub(super) fn reasons<V: Rules>(
+    card: CardIdent<V>,
+    creatures: &[Creature<V>],
+    energy: V::Count,
+    stars: V::Count,
+) -> Vec<V::UnplayableReason> {
+    let target = target_type::<V>(card, creatures);
     let mut reasons = Vec::new();
     if card.card.unplayable() {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::HAS_UNPLAYABLE_KEYWORD);
     }
-    if spend(cost, energy).is_none_or(|spent| spent > energy) {
+    if spend(card.card.cost(), energy).is_none_or(|spent| spent > energy) {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::ENERGY_COST_TOO_HIGH);
     }
-    if spend(star_cost, stars).is_none_or(|spent| spent > stars) {
+    if spend(card.card.star_cost(), stars).is_none_or(|spent| spent > stars) {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::STAR_COST_TOO_HIGH);
     }
     // One player creature is the player's own, so a card pointed at an ally
@@ -72,21 +77,43 @@ fn playable<V: Rules>(
     {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::NO_LIVING_ALLIES);
     }
+    reasons
+}
 
-    // `CanPlayTargeting` is a valid target *and* a card that can be played, so
-    // a card refused for any reason names nobody, rather than naming who it
-    // was going to hit.
-    let targets: Vec<CombatId> = if reasons.is_empty() {
-        creatures
-            .iter()
-            .filter(|creature| valid_target::<V>(target, creature))
-            .map(|creature| creature.id)
-            .collect()
-    } else {
-        Vec::new()
-    };
+/// The creatures this card can be pointed at right now.
+///
+/// `CanPlayTargeting` is a valid target *and* a card that can be played. So a
+/// card refused for any reason names nobody. It does not name who it was going
+/// to hit.
+pub(super) fn targets<V: Rules>(
+    target: V::TargetType,
+    creatures: &[Creature<V>],
+    refused: bool,
+) -> Vec<CombatId> {
+    if refused {
+        return Vec::new();
+    }
+    creatures
+        .iter()
+        .filter(|creature| valid_target::<V>(target, creature))
+        .map(|creature| creature.id)
+        .collect()
+}
 
-    Ok(Playable {
+fn playable<V: Rules>(
+    held: &CardInstance<V>,
+    creatures: &[Creature<V>],
+    energy: V::Count,
+    stars: V::Count,
+) -> Playable<V> {
+    let card = &held.ident;
+    let target = target_type::<V>(*card, creatures);
+    let cost = card.card.cost();
+    let star_cost = card.card.star_cost();
+    let reasons = reasons::<V>(*card, creatures, energy, stars);
+    let targets = targets::<V>(target, creatures, !reasons.is_empty());
+
+    Playable {
         card: *card,
         cost,
         star_cost,
@@ -96,9 +123,9 @@ fn playable<V: Rules>(
         // `BlockedByHook` is the only reason that names one, and nothing in a
         // fight raises it yet.
         preventer: None,
-        effect: effect::<V>(card, creatures, &targets)?,
+        effect: effect::<V>(held, creatures, &targets),
         targets,
-    })
+    }
 }
 
 /// The belt, and why each potion in it cannot be drunk.
@@ -201,18 +228,18 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 /// target. Identical previews collapse into one with no target, which is what
 /// a card the fight moves no number of reports.
 fn effect<V: Rules>(
-    card: &CardIdent<V>,
+    held: &CardInstance<V>,
     creatures: &[Creature<V>],
     targets: &[CombatId],
-) -> Result<Vec<Preview<V>>, Error> {
+) -> Vec<Preview<V>> {
     let per_target = matches!(
-        card.card.target(),
+        Some(target_type::<V>(held.ident, creatures)),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
             || t == <V::TargetType as TargetKinds>::ANY_ALLY
             || t == <V::TargetType as TargetKinds>::ANY_PLAYER
     );
 
-    let numbers = numbers::<V>(card)?;
+    let numbers = numbers::<V>(held, creatures);
     let against: Vec<Option<CombatId>> = if per_target && !targets.is_empty() {
         targets.iter().copied().map(Some).collect()
     } else {
@@ -240,7 +267,7 @@ fn effect<V: Rules>(
         previews.truncate(1);
         previews[0].target = None;
     }
-    Ok(previews)
+    previews
 }
 
 /// The card's numbers after the fight has had its say, which is `Preview`'s
@@ -264,26 +291,37 @@ fn previewed<V: Rules>(
     previewed
 }
 
-/// The numbers the card prints, as they resolve right now.
+/// The numbers this copy of the card prints, as they resolve right now.
+///
+/// This copy's own, not the table's. A fight writes on a card, and what it
+/// wrote is what the card prints afterwards.
 fn numbers<V: Rules>(
-    card: &CardIdent<V>,
-) -> Result<std::collections::BTreeMap<V::CardVar, V::Number>, Error> {
-    card.card
-        .vars()
+    held: &CardInstance<V>,
+    creatures: &[Creature<V>],
+) -> std::collections::BTreeMap<V::CardVar, V::Number> {
+    held.vars
         .iter()
         .map(|var| {
-            if var.calculated {
-                // A `CalculatedVar` counts something in the live fight.
-                unimplemented!("the {} this card prints", var.id.name());
-            }
-            // A build can store exact fractions where this slice only
-            // evaluates whole-number effects.
-            let base = num_traits::NumCast::from(var.base).unwrap_or_else(|| {
-                unimplemented!("the fractional {} this card prints", var.id.name())
-            });
-            Ok((var.id, base))
+            // A `CalculatedVar` counts something in the live fight, and prints
+            // what it counted rather than the zero it was built with.
+            let value = match var.calculated {
+                false => var.base,
+                true => {
+                    V::calculated_card_var(held.ident.card, var.id, &held.vars, powers(creatures))
+                }
+            };
+            (var.id, value)
         })
         .collect()
+}
+
+/// The player's own powers, which is what a card reads about the fight.
+fn powers<V: Rules>(creatures: &[Creature<V>]) -> &[sts2_core::Stack<V>] {
+    creatures
+        .iter()
+        .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+        .map(|creature| creature.powers.as_slice())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -301,8 +339,8 @@ mod tests {
 
     type V = V0_107_1;
 
-    fn card(card: Cards) -> CardIdent<V> {
-        CardIdent::new(card)
+    fn card(card: Cards) -> CardInstance<V> {
+        CardInstance::new(CardIdent::new(card))
     }
 
     /// A player and one living enemy, which is the smallest fight.
@@ -336,11 +374,11 @@ mod tests {
     }
 
     fn only(
-        hand: &[CardIdent<V>],
+        hand: &[CardInstance<V>],
         energy: <V as sts2_core::ContentVersion>::Count,
         stars: <V as sts2_core::ContentVersion>::Count,
     ) -> Playable<V> {
-        let mut plays = super::hand::<V>(hand, &fight(), energy, stars).expect("the hand is known");
+        let mut plays = super::hand::<V>(hand, &fight(), energy, stars);
         assert_eq!(plays.len(), 1);
         plays.remove(0)
     }
@@ -350,18 +388,18 @@ mod tests {
         let strike = card(Cards::Regent(RegentCard::Strike));
         let falling_star = card(Cards::Regent(RegentCard::FallingStar));
 
-        assert_eq!(only(&[strike], 1, 0).reason, None);
+        assert_eq!(only(std::slice::from_ref(&strike), 1, 0).reason, None);
         assert_eq!(
-            only(&[strike], 0, 0).reason,
+            only(std::slice::from_ref(&strike), 0, 0).reason,
             Some(UnplayableReasons::new(&[
                 UnplayableReason::EnergyCostTooHigh
             ]))
         );
         // Falling Star costs no energy and two stars, so an empty energy pool
         // is not what stops it.
-        assert_eq!(only(&[falling_star], 0, 2).reason, None);
+        assert_eq!(only(std::slice::from_ref(&falling_star), 0, 2).reason, None);
         assert_eq!(
-            only(&[falling_star], 0, 1).reason,
+            only(std::slice::from_ref(&falling_star), 0, 1).reason,
             Some(UnplayableReasons::new(&[UnplayableReason::StarCostTooHigh]))
         );
     }
@@ -406,7 +444,7 @@ mod tests {
         let mut creatures = fight();
         creatures[1].alive = false;
 
-        let plays = super::hand::<V>(&[strike], &creatures, 3, 0).expect("the hand is known");
+        let plays = super::hand::<V>(&[strike], &creatures, 3, 0);
 
         assert!(plays[0].targets.is_empty());
         // Nothing to hit is not a reason the card cannot be played. The game
