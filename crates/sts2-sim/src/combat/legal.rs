@@ -28,8 +28,11 @@ pub(super) fn hand<V: Rules>(
         .collect()
 }
 
-/// What a card names as its target, which every card here prints.
-pub(super) fn target_type<V: Rules>(card: CardIdent<V>) -> V::TargetType {
+/// What a card names as its target.
+pub(super) fn target_type<V: Rules>(
+    card: CardIdent<V>,
+    creatures: &[Creature<V>],
+) -> V::TargetType {
     if card.upgrade != 0 {
         // An upgraded card prints different numbers, and the tables carry the
         // unupgraded ones. See `OnUpgrade` on the card.
@@ -38,10 +41,11 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>) -> V::TargetType {
     if card.affliction.is_some() || card.enchantment.is_some() {
         unimplemented!("what an afflicted or enchanted card prints");
     }
-    // One of the four cards that work their target out from the fight.
+    // One of the four cards that work their target out from the fight, which
+    // they do by reading the player's own powers.
     card.card
         .target()
-        .unwrap_or_else(|| unimplemented!("a card that decides its own target"))
+        .unwrap_or_else(|| V::computed_card_target(card.card, powers(creatures)))
 }
 
 /// Why this card cannot be played, which is empty for one that can.
@@ -51,7 +55,7 @@ pub(super) fn reasons<V: Rules>(
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<V::UnplayableReason> {
-    let target = target_type::<V>(card);
+    let target = target_type::<V>(card, creatures);
     let mut reasons = Vec::new();
     if card.card.unplayable() {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::HAS_UNPLAYABLE_KEYWORD);
@@ -103,7 +107,7 @@ fn playable<V: Rules>(
     stars: V::Count,
 ) -> Playable<V> {
     let card = &held.ident;
-    let target = target_type::<V>(*card);
+    let target = target_type::<V>(*card, creatures);
     let cost = card.card.cost();
     let star_cost = card.card.star_cost();
     let reasons = reasons::<V>(*card, creatures, energy, stars);
@@ -229,13 +233,13 @@ fn effect<V: Rules>(
     targets: &[CombatId],
 ) -> Vec<Preview<V>> {
     let per_target = matches!(
-        held.ident.card.target(),
+        Some(target_type::<V>(held.ident, creatures)),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
             || t == <V::TargetType as TargetKinds>::ANY_ALLY
             || t == <V::TargetType as TargetKinds>::ANY_PLAYER
     );
 
-    let numbers = numbers::<V>(held);
+    let numbers = numbers::<V>(held, creatures);
     let against: Vec<Option<CombatId>> = if per_target && !targets.is_empty() {
         targets.iter().copied().map(Some).collect()
     } else {
@@ -291,17 +295,33 @@ fn previewed<V: Rules>(
 ///
 /// This copy's own, not the table's. A fight writes on a card, and what it
 /// wrote is what the card prints afterwards.
-fn numbers<V: Rules>(held: &CardInstance<V>) -> std::collections::BTreeMap<V::CardVar, V::Number> {
+fn numbers<V: Rules>(
+    held: &CardInstance<V>,
+    creatures: &[Creature<V>],
+) -> std::collections::BTreeMap<V::CardVar, V::Number> {
     held.vars
         .iter()
         .map(|var| {
-            if var.calculated {
-                // A `CalculatedVar` counts something in the live fight.
-                unimplemented!("the {} this card prints", var.id.name());
-            }
-            (var.id, var.base)
+            // A `CalculatedVar` counts something in the live fight, and prints
+            // what it counted rather than the zero it was built with.
+            let value = match var.calculated {
+                false => var.base,
+                true => {
+                    V::calculated_card_var(held.ident.card, var.id, &held.vars, powers(creatures))
+                }
+            };
+            (var.id, value)
         })
         .collect()
+}
+
+/// The player's own powers, which is what a card reads about the fight.
+fn powers<V: Rules>(creatures: &[Creature<V>]) -> &[sts2_core::Stack<V>] {
+    creatures
+        .iter()
+        .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+        .map(|creature| creature.powers.as_slice())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

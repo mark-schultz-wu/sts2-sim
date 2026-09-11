@@ -61,7 +61,7 @@ pub(crate) fn resolve<V: Rules>(
 
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
-    let takes = legal::target_type::<V>(card);
+    let takes = legal::target_type::<V>(card, &live.creatures);
     let refusals = legal::reasons::<V>(card, &live.creatures, live.energy, live.stars);
     if !refusals.is_empty() {
         return Err(Reason::Unplayable {
@@ -121,7 +121,7 @@ pub(crate) fn apply_power<V: Rules>(
     // recording it back leaves the counter where it was.
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
 
-    let mut board = Board::for_card(&mut next, &mut shuffle, None);
+    let mut board = Board::for_card(&mut next, &mut shuffle, None, None);
     sts2_core::Fight::apply(&mut board, at, power, amount);
     let won = board.won;
     let skipped = std::mem::take(&mut board.skipped);
@@ -170,7 +170,7 @@ pub(crate) fn play<V: Rules>(
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
-    let mut board = Board::for_card(&mut next, &mut shuffle, play.target);
+    let mut board = Board::for_card(&mut next, &mut shuffle, play.target, Some(&card));
     V::on_play(card.ident.card, &mut board);
     let board_won = board.won;
     let skipped = std::mem::take(&mut board.skipped);

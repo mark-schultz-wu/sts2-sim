@@ -776,6 +776,24 @@ pub trait Fight<V: ContentVersion> {
     /// One copy per count, into the discard pile of every creature on the
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
+
+    /// One of the numbers the card being played prints right now.
+    ///
+    /// This copy's own, not the table's. A fight writes on a card, so the card
+    /// that was forged twice prints more than the one beside it.
+    fn var(&self, key: V::CardVar) -> V::Number;
+
+    /// `ForgeCmd.Forge`: raise a number on every copy of one card.
+    ///
+    /// Every pile, the exhaust pile included, and one copy is created in hand
+    /// when the fight holds none outside exhaust.
+    fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number);
+
+    /// `PowerCmd.Apply<P>(Owner.Creature, ...)`, on whoever is acting.
+    ///
+    /// The player for a card and the monster for a move, which is the creature
+    /// a card saying "gain" means.
+    fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 }
 
 /// Which side of a hit the creature holding a power is on.
@@ -1258,6 +1276,43 @@ pub trait Rules: ContentVersion {
     ///
     /// A power nobody has ported.
     fn ticks_down(power: Self::Power, side: Self::CombatSide) -> bool;
+
+    /// Whether a power hands its amount to the player as energy resets, and
+    /// then goes.
+    ///
+    /// `PowerModel.AfterEnergyReset`. A turn starts by resetting the pool, and
+    /// this is the one thing in a fight that adds to it afterwards.
+    ///
+    /// # Panics
+    ///
+    /// A power nobody has ported.
+    fn spent_on_energy_reset(power: Self::Power) -> bool;
+
+    /// What a card that works its own target out from the fight names.
+    ///
+    /// `CardModel.TargetType`, overridden. The player's powers are what the
+    /// four cards doing this read, so they are what is handed over.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
+
+    /// What a card works out from the fight for a number it prints.
+    ///
+    /// `CalculatedVar.Calculate`, which is a base plus an extra times a
+    /// multiplier the card names. Both halves are on the card's own face, so
+    /// this is handed the copy's printed numbers rather than the table's.
+    ///
+    /// # Panics
+    ///
+    /// A number nobody has ported the calculation for.
+    fn calculated_card_var(
+        card: Self::Card,
+        key: Self::CardVar,
+        printed: &[Printed<Self::CardVar, Self::Number>],
+        powers: &[crate::Stack<Self>],
+    ) -> Self::Number;
 
     /// What one of a monster's moves does, which is its `onPerform`.
     ///

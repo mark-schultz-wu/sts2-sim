@@ -64,6 +64,7 @@ pub(crate) fn end<V: Rules>(
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
     next.energy = max_energy;
+    spend_on_energy_reset(&mut next);
     draw(&mut next, &mut shuffle, HAND_DRAW);
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
@@ -98,11 +99,44 @@ fn turn_end<V: Rules>(live: &mut Live<V>) {
 
 /// `FlushPlayerHand`: what is left in hand goes to the discard pile.
 ///
-/// Nothing retains. No card in this build's table carries the keyword, and
-/// nothing in a fight sets it yet.
+/// A card that retains stays where it is. The keyword is all this reads:
+/// nothing in a fight sets it on a card that does not print it.
 fn flush_hand<V: Rules>(live: &mut Live<V>) {
-    let flushed = std::mem::take(&mut live.hand);
-    live.discard.extend(flushed);
+    let mut kept = Vec::new();
+    for held in std::mem::take(&mut live.hand) {
+        match held.ident.card.retains() {
+            true => kept.push(held),
+            false => live.discard.push(held),
+        }
+    }
+    live.hand = kept;
+}
+
+/// `Hook.AfterEnergyReset`: the powers that hand the player energy and go.
+///
+/// After the reset and before the hand is drawn, which is the order
+/// `SetupPlayerTurn` runs them in.
+fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
+    let player = live.player().id;
+    let Some(at) = live.creatures.iter().position(|c| c.id == player) else {
+        return;
+    };
+    let mut gained: V::Count = num_traits::zero();
+    live.creatures[at].powers.retain(|held| {
+        if !V::spent_on_energy_reset(held.power) {
+            return true;
+        }
+        // An endless instance has no amount to hand over. No power both
+        // grants energy and comes without a count.
+        let PowerAmount::Counted(amount) = held.amount else {
+            unimplemented!("an endless {:?} handing over energy", held.power);
+        };
+        let amount: V::Count = num_traits::cast(amount)
+            .unwrap_or_else(|| unimplemented!("a {:?} worth {amount:?} of energy", held.power));
+        gained = gained + amount;
+        false
+    });
+    live.energy = live.energy + gained;
 }
 
 /// `ClearBlock` on every creature of one side.

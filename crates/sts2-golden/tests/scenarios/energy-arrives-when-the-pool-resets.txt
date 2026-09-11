@@ -1,0 +1,10 @@
+# `EnergyNextTurnPower.AfterEnergyReset` hands its amount over and goes. So the
+# turn after it lands opens on four energy rather than three, and the power is
+# no longer on the player.
+#
+# Applied rather than played, because Refine Blade grants it and forging is a
+# rule of its own.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"ENERGY_NEXT_TURN_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

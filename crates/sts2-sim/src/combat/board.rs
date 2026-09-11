@@ -11,7 +11,8 @@
 use num_traits::Zero;
 use sts2_core::rng::{GameRng, MegaRng};
 use sts2_core::{
-    CardIdent, CardTable, CombatId, Creature, Fight, Holding, PowerAmount, Rules, SideKinds, Stack,
+    CardIdent, CardTable, CardVars, CombatId, Creature, Fight, Holding, PowerAmount, Rules,
+    SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -26,6 +27,11 @@ pub(super) struct Board<'a, V: Rules> {
     actor: CombatId,
     /// The creature a card was pointed at.
     target: Option<CombatId>,
+    /// The card being played, which is in no pile while its effect runs.
+    ///
+    /// `AddDuringManualCardPlay` holds it in the play pile. Nothing here for a
+    /// monster's move, which prints no numbers of its own.
+    playing: Option<&'a CardInstance<V>>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
     /// The debuffs this effect put on the player, whose next tick is skipped.
@@ -49,6 +55,7 @@ impl<'a, V: Rules> Board<'a, V> {
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         target: Option<CombatId>,
+        playing: Option<&'a CardInstance<V>>,
     ) -> Self {
         let actor = live.player().id;
         Board {
@@ -56,6 +63,7 @@ impl<'a, V: Rules> Board<'a, V> {
             shuffle,
             actor,
             target,
+            playing,
             intent_damage: V::Number::zero(),
             skipped: Vec::new(),
             won: false,
@@ -74,6 +82,7 @@ impl<'a, V: Rules> Board<'a, V> {
             shuffle,
             actor,
             target: None,
+            playing: None,
             intent_damage,
             skipped: Vec::new(),
             won: false,
@@ -277,6 +286,49 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
         draw(self.live, self.shuffle, count);
+    }
+
+    fn var(&self, key: V::CardVar) -> V::Number {
+        // A key the card does not print is a mistake in the port, the same way
+        // a card asking for a number no card prints is.
+        self.playing
+            .unwrap_or_else(|| unimplemented!("a number printed by no card being played"))
+            .vars
+            .iter()
+            .find(|var| var.id == key)
+            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
+            .base
+    }
+
+    fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
+        // `ForgeCmd.Forge` creates one when the fight holds none it can reach.
+        // The exhaust pile is not one it can reach, and is forged all the same.
+        let held = [&self.live.hand, &self.live.draw, &self.live.discard]
+            .into_iter()
+            .flatten()
+            .any(|held| held.ident.card == card);
+        if !held {
+            self.live.hand.push(CardInstance::new(CardIdent::new(card)));
+        }
+        for pile in [
+            &mut self.live.hand,
+            &mut self.live.draw,
+            &mut self.live.discard,
+            &mut self.live.exhaust,
+        ] {
+            for held in pile.iter_mut().filter(|held| held.ident.card == card) {
+                let var = held
+                    .vars
+                    .iter_mut()
+                    .find(|var| var.id == key)
+                    .unwrap_or_else(|| unimplemented!("the {} a forge raises", key.name()));
+                var.base = var.base + amount;
+            }
+        }
+    }
+
+    fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
+        self.land(self.actor, power, amount);
     }
 
     fn give_cards(&mut self, card: V::Card, count: usize) {

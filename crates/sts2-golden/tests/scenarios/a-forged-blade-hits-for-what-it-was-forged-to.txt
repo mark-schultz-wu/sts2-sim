@@ -1,0 +1,12 @@
+# A blade swings the damage on its own face rather than the ten its row
+# carries. Forged first, because an unforged copy prints the row's own number
+# and cannot tell the two apart.
+#
+# Refine Blade makes the blade and raises it to nineteen, and it lands in hand
+# where the played card left. Two energy are left, which is what it costs.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":4,"target":2}
