@@ -58,10 +58,10 @@ pub struct Choices<'a, T> {
 }
 
 impl<'a, T> Choices<'a, T> {
-    pub fn new(items: &'a [T]) -> Option<Self> {
-        let count = i32::try_from(items.len()).ok()?;
-        let bound = Bound::new(count)?;
-        Some(Choices { items, bound })
+    pub fn try_new(items: &'a [T]) -> Result<Self, Error> {
+        let count = i32::try_from(items.len()).map_err(|_| Error::Bound)?;
+        let bound = Bound::try_from(count)?;
+        Ok(Choices { items, bound })
     }
 
     pub(crate) const fn items(&self) -> &'a [T] {
@@ -175,8 +175,8 @@ mod tests {
 
     #[test]
     fn choices_must_be_nonempty() {
-        assert!(Choices::<u8>::new(&[]).is_none());
-        assert_eq!(Choices::new(&[10, 20]).unwrap().bound().get(), 2);
+        assert_eq!(Choices::<u8>::try_new(&[]).unwrap_err(), Error::Bound);
+        assert_eq!(Choices::try_new(&[10, 20]).unwrap().bound().get(), 2);
     }
 
     #[test]

@@ -25,7 +25,7 @@ fn health<V: Rules>(
         });
     let used: Vec<u16> = used.collect();
     let available: Vec<u16> = (min..=max).filter(|hp| !used.contains(hp)).collect();
-    if let Some(choices) = Choices::new(&available) {
+    if let Ok(choices) = Choices::try_new(&available) {
         *niche.choose_from(choices)
     } else {
         niche.next_u16_range(range)

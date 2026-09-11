@@ -103,9 +103,7 @@ pub trait GameRng: Sized {
     /// An empty slice or one too large for the game's signed 32-bit bound is
     /// an invalid draw. A successful selection consumes one draw.
     fn choose<'a, T>(&mut self, items: &'a [T]) -> Result<&'a T, Error> {
-        Choices::new(items)
-            .map(|items| self.choose_from(items))
-            .ok_or(Error::Bound)
+        Choices::try_new(items).map(|items| self.choose_from(items))
     }
 
     /// One item from a slice already known to be a valid choice list.
