@@ -10,6 +10,31 @@ use super::super::super::generated::encounters::Encounter;
 use super::super::super::generated::monsters::{Monster, MoveId};
 use super::V;
 
+/// Which branch an Overgrowth monster's conditional state takes.
+pub(super) fn conditional(
+    monster: Monster,
+    at: u8,
+    spawn: MonsterSpawn<Encounter>,
+) -> Result<u8, ContentError> {
+    match monster {
+        Monster::Nibbit => nibbit_opens(at, spawn),
+        monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
+    }
+}
+
+/// Perform one of an Overgrowth monster's moves.
+pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+    match monster {
+        Monster::LeafSlimeM => leaf_slime_m(move_id, fight),
+        Monster::ShrinkerBeetle => shrinker_beetle(move_id, fight),
+        Monster::LeafSlimeS => leaf_slime_s(move_id, fight),
+        Monster::TwigSlimeM => twig_slime_m(move_id, fight),
+        Monster::TwigSlimeS => twig_slime_s(move_id, fight),
+        Monster::Nibbit => nibbit(move_id, fight),
+        monster => unimplemented!("what {monster:?} does when it moves"),
+    }
+}
+
 /// `INIT_MOVE`, the one conditional a Nibbit has.
 ///
 /// `NibbitsWeak` builds one Nibbit and sets `IsAlone`, so it butts.
@@ -23,7 +48,7 @@ use super::V;
 /// # Panics
 ///
 /// A Nibbit an unported encounter built.
-pub(super) fn nibbit_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentError> {
+fn nibbit_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentError> {
     let state = |wanted| super::state_of(Monster::Nibbit, wanted, at);
     match (
         spawn.encounter,
@@ -57,7 +82,7 @@ const SLIMED: Cards = Cards::Status(StatusCard::Slimed);
 /// # Panics
 ///
 /// A move of its graph nobody has ported.
-pub(super) fn leaf_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+fn leaf_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ClumpShot => attack(fight),
         MoveId::StickyShot => fight.give_cards(SLIMED, STICKY_CARDS),
@@ -70,7 +95,7 @@ pub(super) fn leaf_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// # Panics
 ///
 /// A move of its graph nobody has ported.
-pub(super) fn leaf_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+fn leaf_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::TackleMove => attack(fight),
         MoveId::GoopMove => fight.give_cards(SLIMED, GOOP_CARDS),
@@ -83,7 +108,7 @@ pub(super) fn leaf_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// # Panics
 ///
 /// A move of its graph nobody has ported.
-pub(super) fn twig_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+fn twig_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::PokeyPounceMove => attack(fight),
         MoveId::StickyShotMove => fight.give_cards(SLIMED, TWIG_STICKY_CARDS),
@@ -96,7 +121,7 @@ pub(super) fn twig_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// # Panics
 ///
 /// A move of its graph nobody has ported.
-pub(super) fn twig_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+fn twig_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::TackleMove => attack(fight),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
@@ -108,7 +133,7 @@ pub(super) fn twig_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// # Panics
 ///
 /// A move of its graph nobody has ported.
-pub(super) fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ShrinkerMove => fight.apply_to_opponents(Power::ShrinkPower, PowerAmount::Endless),
         MoveId::ChompMove | MoveId::StompMove => attack(fight),
@@ -125,7 +150,7 @@ pub(super) fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// # Panics
 ///
 /// A move of its graph nobody has ported.
-pub(super) fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ButtMove => attack(fight),
         MoveId::SliceMove => {
