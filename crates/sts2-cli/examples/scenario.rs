@@ -18,9 +18,9 @@ use anyhow::bail;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
+use sts2_core::Seed;
 use sts2_core::{Applied, Construct, Decision, Gift, Play, Setup, Start, Step};
 use sts2_headless::{Config, Oracle};
-use sts2_rng::Seed;
 
 type V = V0_107_1;
 type AscensionLevel = <V as ContentVersion>::AscensionLevel;

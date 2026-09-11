@@ -19,7 +19,7 @@ cd "$STS2_GAME_DIR" && LD_PRELOAD=libgcc_s.so.1 STS2_HEADLESS_MODE=carddump \
 
 Every mode but `rngdump` lands in `crates/sts2-content/src/<build>/dumps/`,
 under the name in the last column. `rngdump` lands in
-`crates/sts2-rng/tests/rng/<build>.txt`, because rng ground truth is not
+`crates/sts2-sim/tests/rng/<build>.txt`, because RNG ground truth is not
 content. `cargo xtask dump` runs every mode and files what each prints, for the
 build `STS2_GAME_VERSION` names.
 
@@ -40,7 +40,7 @@ build `STS2_GAME_VERSION` names.
 | `powerdump` | every power's static data | `powers.txt` |
 | `relicdump` | every relic's rarity, price and pool | `relics.txt` |
 | `restsitedump` | the options a rest site can offer, by name | `restsite.txt` |
-| `rngdump` | 1024 draws per seed, every `Rng` method | `crates/sts2-rng/tests/megarandom.txt` |
+| `rngdump` | 1024 draws per seed, every `Rng` method | `crates/sts2-sim/tests/rng/<build>.txt` |
 | `runstatedump` | the enums a run's position is described in | `runstate.txt` |
 
 Then `cargo xtask codegen`.

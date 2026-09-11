@@ -36,7 +36,7 @@ prefix names the file it lives in.
 | `sts2-core` | the vocabulary both a game and a simulator answer in |
 | `sts2-content` | the game's content as Rust tables, generated from the dumps |
 | `sts2-headless` | a client for the headless mod: launch, handshake, one typed call per decision |
-| `sts2-rng` | the game's draw stream, checked against 1024 draws per seed of the real one |
+| `sts2-sim` | the game engine and its draw stream, checked against the real game |
 | [`sts2-cli`](crates/sts2-cli/README.md) | `sts2`, which plays a run at a terminal, and `sts2-fuzz`, which plays one at random |
 | `xtask` | `cargo xtask dump` asks the game for its tables, and `codegen` turns them into `sts2-content` |
 
@@ -66,7 +66,7 @@ from the same sources, with one adapter for each build under every mod's
 change that works only against the build you deployed fails.
 
 v0.107.1 is the floor. It is the build that replaced the game's PRNG with
-xoshiro256\*\*, and `sts2-rng` ports that generator alone.
+xoshiro256\*\*, and `sts2-sim` owns that generator.
 
 One hash alone is not enough. A rebalance that adds no content leaves the content
 hash equal and every generated number wrong. Codegen refuses to generate when two

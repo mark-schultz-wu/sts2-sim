@@ -1,12 +1,21 @@
 //! Replays `megarandom.txt`, dumped from the game, and requires an exact match.
+#![allow(clippy::disallowed_macros, clippy::disallowed_types)]
 //!
 //! Generic over [`GameRng`], so a replacement implementation has to pass the
 //! same fixture. Each block reseeds and draws in index order, so index `0`
 //! means reseed.
 
-use sts2_core::rng::{Bound, GameRng, Interval, MegaRng, Span};
+use sts2_core::rng::{Bound, GameRng, Interval, Span};
+use sts2_sim::rng::MegaRng;
 
-const FIXTURE: &str = include_str!("megarandom.txt");
+const FIXTURE: &str = include_str!("rng/megarandom.txt");
+
+#[test]
+fn choosing_from_nothing_is_an_invalid_draw() {
+    let mut rng = MegaRng::new(0);
+    assert_eq!(rng.choose::<u8>(&[]), Err(sts2_core::rng::Error::Bound));
+    assert_eq!(rng.counter(), 0);
+}
 
 fn num<T: std::str::FromStr>(field: &str) -> T
 where

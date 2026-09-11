@@ -1,6 +1,7 @@
 //! Turning an encounter id into the creatures that open its fight.
 
-use sts2_core::rng::{GameRng, MegaRng};
+use crate::rng::MegaRng;
+use sts2_core::rng::GameRng;
 use sts2_core::{EncounterRoster, EncounterTable, Rules};
 
 use super::Error;

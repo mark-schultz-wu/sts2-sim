@@ -1433,7 +1433,6 @@ dependencies = [
  "sts2-content",
  "sts2-core",
  "sts2-headless",
- "sts2-rng",
 ]
 
 [[package]]
@@ -1484,15 +1483,6 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sts2-content",
- "sts2-core",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "sts2-rng"
-version = "0.1.0"
-dependencies = [
- "serde",
  "sts2-core",
  "thiserror 2.0.20",
 ]

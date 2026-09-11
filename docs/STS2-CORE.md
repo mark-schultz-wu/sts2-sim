@@ -58,10 +58,9 @@ Two type parameters, not one: which build, and which implementation. The first
 is `ContentVersion`. The second needs a crate below both implementations.
 
 ```
-sts2-content ─┐
-              ├─→ sts2-core ─┬─→ sts2-headless   the real game, over a socket
-sts2-rng ─────┘              ├─→ sts2-sim        later
-                             └─→ sts2-cli        front end, generic over both
+sts2-content ──→ sts2-core ─┬─→ sts2-headless   the real game, over a socket
+                           ├─→ sts2-sim        the Rust engine and RNG
+                           └─→ sts2-cli        front end, generic over both
 ```
 
 Not `sts2-sim-core`. That crate holds the engine's insides: the mutable

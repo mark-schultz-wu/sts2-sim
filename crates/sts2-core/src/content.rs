@@ -777,6 +777,12 @@ pub trait Fight<V: ContentVersion> {
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
 
+    /// `CreatureCmd.Add<M>(CombatState, position)`.
+    ///
+    /// The monster rolls its hit points when it arrives. It does not advertise
+    /// a move until the enemy side next prepares for a turn.
+    fn summon(&mut self, monster: V::Monster, position: usize) -> crate::CombatId;
+
     /// What the run is being played at.
     ///
     /// A monster's move prints numbers the level moves, which the table only

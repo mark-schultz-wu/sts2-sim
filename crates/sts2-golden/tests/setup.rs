@@ -15,8 +15,9 @@ use std::path::Path;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::characters::Character;
-use sts2_core::rng::{GameRng, MegaRng, stream_seed};
+use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{ActTable as _, ContentVersion, Rules, Seed, Table};
+use sts2_sim::rng::MegaRng;
 use sts2_sim::run::{Opening, RelicBag};
 
 type V = V0_107_1;

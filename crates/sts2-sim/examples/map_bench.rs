@@ -9,8 +9,9 @@ use std::time::Instant;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
-use sts2_core::rng::{GameRng, MegaRng};
+use sts2_core::rng::GameRng;
 use sts2_sim::map::{ActMap, Layout};
+use sts2_sim::rng::MegaRng;
 
 struct CountingAllocator;
 

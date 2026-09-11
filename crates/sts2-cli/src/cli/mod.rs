@@ -12,10 +12,10 @@ use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use std::path::Path;
 use sts2_core::ContentVersion;
+use sts2_core::Seed;
 use sts2_core::{
     Answer as GameAnswer, Coord, Decision, Gift, Setup, Start, Step, TakeReward, Tool,
 };
-use sts2_rng::Seed;
 
 /// An ascension level by the game's own name for it, such as `None`.
 ///

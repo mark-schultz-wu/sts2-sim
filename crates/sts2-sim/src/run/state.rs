@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::rng::MegaRng;
 use num_traits::ToPrimitive as _;
 use smallvec::SmallVec;
 use sts2_core::ActMap as _;
-use sts2_core::rng::{GameRng, MegaRng, stream_seed};
+use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
     EventOption, EventOptionKey, EventOptionName, Map, Observation, Question, Reachable,

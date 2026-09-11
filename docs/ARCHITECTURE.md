@@ -38,7 +38,7 @@ Built:
 sts2-core       the shared vocabulary: decisions, observations, refusals, and
                 the traits an implementation of the game satisfies. Both the
                 oracle and the engine implement them. See STS2-CORE.md.
-sts2-rng        the game's draw stream, verified against 1024 draws per seed
+sts2-sim        the engine and concrete draw stream, verified against the game
 sts2-content    <build>/generated/    xtask writes this, never hand-edited
                 <build>/dumps/        what the game printed
 sts2-headless   a client for the headless mod, the oracle's transport

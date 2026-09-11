@@ -31,6 +31,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::TwigSlimeM => twig_slime_m(move_id, fight),
         Monster::TwigSlimeS => twig_slime_s(move_id, fight),
         Monster::Nibbit => nibbit(move_id, fight),
+        Monster::Fogmog => fogmog(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
 }
@@ -179,6 +180,24 @@ const SLICE_BLOCK_TOUGH: i32 = 6;
 /// `Nibbit.HissStrengthGain`, either side of `DeadlyEnemies`.
 const HISS_STRENGTH: i32 = 2;
 const HISS_STRENGTH_DEADLY: i32 = 3;
+
+/// `Fogmog`. Its illusion joins the front of the enemy roster. Both swipes
+/// hit and make the Fogmog stronger afterwards.
+fn fogmog<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::IllusionMove => {
+            let eye = fight.summon(Monster::EyeWithTeeth, 0);
+            fight.apply(eye, Power::IllusionPower, PowerAmount::Counted(1));
+            fight.apply(eye, Power::MinionPower, PowerAmount::Counted(1));
+        }
+        MoveId::SwipeMove | MoveId::SwipeRandomMove => {
+            attack(fight);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
+        }
+        MoveId::HeadbuttMove => attack(fight),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
 
 /// `DamageCmd.Attack(n).FromMonster(this)`, for the moves that are that and
 /// nothing else.

@@ -120,14 +120,23 @@ pub(crate) fn apply_power<V: Rules>(
     // Nothing here draws. The stream is what a board is built with, and
     // recording it back leaves the counter where it was.
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
+    let mut niche = stream::seek(raw_seed, &counters, V::niche_rng(), "niche")?;
 
-    let mut board = Board::for_card(&mut next, &mut shuffle, live.ascension, None, None);
+    let mut board = Board::for_card(
+        &mut next,
+        &mut shuffle,
+        &mut niche,
+        live.ascension,
+        None,
+        None,
+    );
     sts2_core::Fight::apply(&mut board, at, power, amount);
     let won = board.won;
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
+    stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
     Ok(super::Fought {
         live: next,
         counters,
@@ -162,6 +171,7 @@ pub(crate) fn play<V: Rules>(
     let mut next = live.clone();
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
+    let mut niche = stream::seek(raw_seed, &counters, V::niche_rng(), "niche")?;
 
     // `SpendResources`, before the card leaves the hand.
     next.energy = next.energy - play.energy;
@@ -173,6 +183,7 @@ pub(crate) fn play<V: Rules>(
     let mut board = Board::for_card(
         &mut next,
         &mut shuffle,
+        &mut niche,
         live.ascension,
         play.target,
         Some(&card),
@@ -194,13 +205,9 @@ pub(crate) fn play<V: Rules>(
         false => next.discard.push(card),
     }
 
-    // `CheckWinCondition` after the card, so a card that killed the last
-    // enemy still finished what it was doing.
-    if board_won {
-        super::finish(&mut next);
-    }
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
+    stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
     Ok(super::Fought {
         live: next,
         counters,

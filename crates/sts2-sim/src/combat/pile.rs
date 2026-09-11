@@ -108,8 +108,9 @@ pub fn shuffle<T, R: GameRng>(rng: &mut R, mut cards: Vec<T>) -> Shuffled<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::rng::MegaRng;
     use sts2_core::Seed;
-    use sts2_core::rng::{GameRng, MegaRng, stream_seed};
+    use sts2_core::rng::{GameRng, stream_seed};
 
     use super::{NotInHand, shuffle};
 

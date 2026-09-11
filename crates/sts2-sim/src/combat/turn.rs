@@ -7,12 +7,11 @@
 //! The whole of it happens on a copy, so a turn the simulator cannot finish
 //! leaves the fight where it stood.
 
-use sts2_core::rng::MegaRng;
+use crate::rng::MegaRng;
 use sts2_core::{CardTable, CombatId, Counters, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
 use super::board::{Board, draw};
 use super::live::Live;
-use super::monster::Machine;
 use super::{Error, stream};
 
 /// How many cards a hand is drawn to, which is `baseHandDrawCount`.
@@ -27,11 +26,11 @@ pub(crate) fn end<V: Rules>(
     max_energy: V::Count,
 ) -> Result<super::Fought<V>, Error> {
     let mut next = live.clone();
-    let mut machines = std::mem::take(&mut next.machines);
     let mut skipping = std::mem::take(&mut next.skip_tick);
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
     let mut ai = stream::seek(raw_seed, &counters, V::monster_ai_rng(), "monster_ai")?;
+    let mut niche = stream::seek(raw_seed, &counters, V::niche_rng(), "niche")?;
 
     turn_end(&mut next);
     flush_hand(&mut next);
@@ -45,7 +44,7 @@ pub(crate) fn end<V: Rules>(
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
-    let won = enemy_turn(&mut next, &mut shuffle, &mut machines, &mut skipping);
+    let won = enemy_turn(&mut next, &mut shuffle, &mut niche, &mut skipping);
 
     tick_powers::<V>(
         &mut next,
@@ -59,7 +58,7 @@ pub(crate) fn end<V: Rules>(
     next.turn = next.turn + num_traits::one();
 
     // `PrepareForNextTurn`, before the player draws anything.
-    roll_moves(&mut next, &mut machines, ascension, &mut ai)?;
+    roll_moves(&mut next, ascension, &mut ai)?;
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
@@ -71,7 +70,7 @@ pub(crate) fn end<V: Rules>(
 
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     stream::record(&mut counters, V::monster_ai_rng(), "monster_ai", &ai)?;
-    next.machines = machines;
+    stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
     next.skip_tick = skipping;
     Ok(super::Fought {
         live: next,
@@ -189,7 +188,7 @@ fn tick_powers<V: Rules>(
 fn enemy_turn<V: Rules>(
     live: &mut Live<V>,
     shuffle: &mut MegaRng,
-    machines: &mut [Machine<V>],
+    niche: &mut MegaRng,
     skipping: &mut Vec<(CombatId, V::Power)>,
 ) -> bool {
     let mut won = false;
@@ -208,7 +207,8 @@ fn enemy_turn<V: Rules>(
             .next_move
             .clone()
             .unwrap_or_else(|| unimplemented!("an enemy with no move to make"));
-        let held = machines
+        let held = live
+            .machines
             .iter_mut()
             .find(|held| held.creature == id)
             .unwrap_or_else(|| unimplemented!("an enemy with no move graph"));
@@ -224,7 +224,7 @@ fn enemy_turn<V: Rules>(
             .unwrap_or_else(num_traits::zero);
 
         let ascension = live.ascension;
-        let mut board = Board::for_move(live, shuffle, ascension, id, damage);
+        let mut board = Board::for_move(live, shuffle, niche, ascension, id, damage);
         V::perform_move(monster, next_move.id, &mut board);
         won |= board.won;
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));
@@ -236,12 +236,12 @@ fn enemy_turn<V: Rules>(
 /// move.
 fn roll_moves<V: Rules>(
     live: &mut Live<V>,
-    machines: &mut Vec<Machine<V>>,
     ascension: V::AscensionLevel,
     ai: &mut MegaRng,
 ) -> Result<(), Error> {
-    machines.retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
-    for held in machines.iter_mut() {
+    live.machines
+        .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
+    for held in live.machines.iter_mut() {
         let rolled =
             V::roll_monster_move(held.monster, ascension, held.spawn, &mut held.machine, ai)?;
         if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {
