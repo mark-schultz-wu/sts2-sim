@@ -31,10 +31,7 @@ pub(crate) fn conditional(
     at: u8,
     spawn: MonsterSpawn<Encounter>,
 ) -> Result<u8, ContentError> {
-    match monster {
-        Monster::Nibbit => overgrowth::nibbit_opens(at, spawn),
-        monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
-    }
+    overgrowth::conditional(monster, at, spawn)
 }
 
 /// Where a named move sits in a monster's own state list.
@@ -58,13 +55,5 @@ pub(super) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 ///
 /// A monster nobody has ported.
 pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
-    match monster {
-        Monster::LeafSlimeM => overgrowth::leaf_slime_m(move_id, fight),
-        Monster::ShrinkerBeetle => overgrowth::shrinker_beetle(move_id, fight),
-        Monster::LeafSlimeS => overgrowth::leaf_slime_s(move_id, fight),
-        Monster::TwigSlimeM => overgrowth::twig_slime_m(move_id, fight),
-        Monster::TwigSlimeS => overgrowth::twig_slime_s(move_id, fight),
-        Monster::Nibbit => overgrowth::nibbit(move_id, fight),
-        monster => unimplemented!("what {monster:?} does when it moves"),
-    }
+    overgrowth::perform(monster, move_id, fight);
 }
