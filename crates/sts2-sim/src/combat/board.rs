@@ -34,6 +34,8 @@ pub(super) struct Board<'a, V: Rules> {
     playing: Option<&'a CardInstance<V>>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
+    /// What the run is being played at, which a move's own constants scale by.
+    ascension: V::AscensionLevel,
     /// The debuffs this effect put on the player, whose next tick is skipped.
     ///
     /// `PowerCmd.Apply` sets `SkipNextDurationTick` on every debuff that lands
@@ -54,6 +56,7 @@ impl<'a, V: Rules> Board<'a, V> {
     pub(super) fn for_card(
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
+        ascension: V::AscensionLevel,
         target: Option<CombatId>,
         playing: Option<&'a CardInstance<V>>,
     ) -> Self {
@@ -65,6 +68,7 @@ impl<'a, V: Rules> Board<'a, V> {
             target,
             playing,
             intent_damage: V::Number::zero(),
+            ascension,
             skipped: Vec::new(),
             won: false,
         }
@@ -74,6 +78,7 @@ impl<'a, V: Rules> Board<'a, V> {
     pub(super) fn for_move(
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
+        ascension: V::AscensionLevel,
         actor: CombatId,
         intent_damage: V::Number,
     ) -> Self {
@@ -84,6 +89,7 @@ impl<'a, V: Rules> Board<'a, V> {
             target: None,
             playing: None,
             intent_damage,
+            ascension,
             skipped: Vec::new(),
             won: false,
         }
@@ -316,6 +322,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
         draw(self.live, self.shuffle, count);
+    }
+
+    fn ascension(&self) -> V::AscensionLevel {
+        self.ascension
     }
 
     fn var(&self, key: V::CardVar) -> V::Number {

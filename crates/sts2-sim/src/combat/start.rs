@@ -61,6 +61,7 @@ pub(crate) fn enter<V: Rules>(
 
     Ok((
         Live {
+            ascension,
             turn: num_traits::one(),
             phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
             energy,

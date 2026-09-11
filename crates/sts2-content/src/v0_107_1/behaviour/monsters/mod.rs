@@ -63,6 +63,7 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::ShrinkerBeetle => overgrowth::shrinker_beetle(move_id, fight),
         Monster::LeafSlimeS => overgrowth::leaf_slime_s(move_id, fight),
         Monster::TwigSlimeS => overgrowth::twig_slime_s(move_id, fight),
+        Monster::Nibbit => overgrowth::nibbit(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
 }
