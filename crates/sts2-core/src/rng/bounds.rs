@@ -50,6 +50,29 @@ impl Bound {
     }
 }
 
+/// A slice whose length is a valid bound for the game's choice operation.
+#[derive(Debug, Clone, Copy)]
+pub struct Choices<'a, T> {
+    items: &'a [T],
+    bound: Bound,
+}
+
+impl<'a, T> Choices<'a, T> {
+    pub fn new(items: &'a [T]) -> Option<Self> {
+        let count = i32::try_from(items.len()).ok()?;
+        let bound = Bound::new(count)?;
+        Some(Choices { items, bound })
+    }
+
+    pub(crate) const fn items(&self) -> &'a [T] {
+        self.items
+    }
+
+    pub(crate) const fn bound(&self) -> Bound {
+        self.bound
+    }
+}
+
 impl TryFrom<i32> for Bound {
     type Error = Error;
 
@@ -116,6 +139,15 @@ impl<T: Copy> Interval<T> {
     }
 }
 
+impl Interval<u16> {
+    /// The number of integers in this closed interval.
+    pub const fn cardinality(&self) -> Bound {
+        // Every `u16` interval has between one and 65,536 members.
+        let count = self.max() as i32 - self.min() as i32 + 1;
+        Bound(count)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,6 +171,12 @@ mod tests {
     fn an_interval_may_be_a_point_but_not_inverted() {
         assert_eq!(Interval::new(5, 5), Interval { bounds: (5, 5) });
         assert_eq!(Interval::try_new(5, 4).unwrap_err(), Error::Inverted);
+    }
+
+    #[test]
+    fn choices_must_be_nonempty() {
+        assert!(Choices::<u8>::new(&[]).is_none());
+        assert_eq!(Choices::new(&[10, 20]).unwrap().bound().get(), 2);
     }
 
     #[test]

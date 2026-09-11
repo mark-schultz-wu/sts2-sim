@@ -1,7 +1,7 @@
 //! Creating the enemy creatures that begin a combat.
 
 use crate::rng::MegaRng;
-use sts2_core::rng::GameRng;
+use sts2_core::rng::{Choices, GameRng};
 use sts2_core::{CombatId, Counters, Creature, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
@@ -25,15 +25,11 @@ fn health<V: Rules>(
         });
     let used: Vec<u16> = used.collect();
     let available: Vec<u16> = (min..=max).filter(|hp| !used.contains(hp)).collect();
-    let choices: Vec<u16> = if available.is_empty() {
-        (min..=max).collect()
+    if let Some(choices) = Choices::new(&available) {
+        *niche.choose_from(choices)
     } else {
-        available
-    };
-    let Ok(&hp) = niche.choose(&choices) else {
-        unreachable!("a generated monster HP interval has a choice");
-    };
-    hp
+        niche.next_u16_range(range)
+    }
 }
 
 /// A table's monster health in the number type that table chose.

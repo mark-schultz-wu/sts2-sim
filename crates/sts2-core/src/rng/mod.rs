@@ -26,7 +26,7 @@
 mod bounds;
 
 pub use crate::Seed;
-pub use bounds::{Bound, Error, Interval, Span};
+pub use bounds::{Bound, Choices, Error, Interval, Span};
 
 /// `next_bool` draws over two outcomes. Checked at compile time.
 const TWO: Bound = match Bound::new(2) {
@@ -103,9 +103,19 @@ pub trait GameRng: Sized {
     /// An empty slice or one too large for the game's signed 32-bit bound is
     /// an invalid draw. A successful selection consumes one draw.
     fn choose<'a, T>(&mut self, items: &'a [T]) -> Result<&'a T, Error> {
-        let count = i32::try_from(items.len()).map_err(|_| Error::Bound)?;
-        let bound = Bound::try_from(count)?;
-        Ok(&items[self.next_int(bound) as usize])
+        Choices::new(items)
+            .map(|items| self.choose_from(items))
+            .ok_or(Error::Bound)
+    }
+
+    /// One item from a slice already known to be a valid choice list.
+    fn choose_from<'a, T>(&mut self, choices: Choices<'a, T>) -> &'a T {
+        &choices.items()[self.next_int(choices.bound()) as usize]
+    }
+
+    /// One integer from a nonempty closed `u16` interval.
+    fn next_u16_range(&mut self, range: Interval<u16>) -> u16 {
+        range.min() + self.next_int(range.cardinality()) as u16
     }
 
     /// A span wider than `i32::MAX` takes the game's 64-bit branch, which is a
