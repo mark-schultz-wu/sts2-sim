@@ -121,7 +121,7 @@ pub(crate) fn apply_power<V: Rules>(
     // recording it back leaves the counter where it was.
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
 
-    let mut board = Board::for_card(&mut next, &mut shuffle, None, None);
+    let mut board = Board::for_card(&mut next, &mut shuffle, live.ascension, None, None);
     sts2_core::Fight::apply(&mut board, at, power, amount);
     let won = board.won;
     let skipped = std::mem::take(&mut board.skipped);
@@ -170,7 +170,13 @@ pub(crate) fn play<V: Rules>(
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
-    let mut board = Board::for_card(&mut next, &mut shuffle, play.target, Some(&card));
+    let mut board = Board::for_card(
+        &mut next,
+        &mut shuffle,
+        live.ascension,
+        play.target,
+        Some(&card),
+    );
     V::on_play(card.ident.card, &mut board);
     let board_won = board.won;
     let skipped = std::mem::take(&mut board.skipped);

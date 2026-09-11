@@ -4,6 +4,7 @@ use sts2_core::{ContentError, Fight, MonsterSpawn, PowerAmount};
 
 use super::super::super::generated::powers::Power;
 
+use super::super::super::generated::ascension::AscensionLevel;
 use super::super::super::generated::cards::{Cards, StatusCard};
 use super::super::super::generated::encounters::Encounter;
 use super::super::super::generated::monsters::{Monster, MoveId};
@@ -97,6 +98,45 @@ pub(super) fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
+
+/// `Nibbit`. Butts, or slices and blocks, or hisses itself stronger.
+///
+/// Slice's block and Hiss's Strength are constants in the moves themselves.
+/// The table carries the numbers an intent advertises, and a `DefendIntent`
+/// and a `BuffIntent` advertise none.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+pub(super) fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::ButtMove => attack(fight),
+        MoveId::SliceMove => {
+            attack(fight);
+            let block = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                true => SLICE_BLOCK_TOUGH,
+                false => SLICE_BLOCK,
+            };
+            fight.gain_block(block);
+        }
+        MoveId::HissMove => {
+            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => HISS_STRENGTH_DEADLY,
+                false => HISS_STRENGTH,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `Nibbit.SliceBlock`, either side of `ToughEnemies`.
+const SLICE_BLOCK: i32 = 5;
+const SLICE_BLOCK_TOUGH: i32 = 6;
+
+/// `Nibbit.HissStrengthGain`, either side of `DeadlyEnemies`.
+const HISS_STRENGTH: i32 = 2;
+const HISS_STRENGTH_DEADLY: i32 = 3;
 
 /// `DamageCmd.Attack(n).FromMonster(this)`, for the moves that are that and
 /// nothing else.

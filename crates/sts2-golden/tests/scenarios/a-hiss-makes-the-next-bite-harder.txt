@@ -1,0 +1,13 @@
+# `HissMove` gains Strength, and Strength adds its whole amount to the hits its
+# owner deals. So the butt after a hiss advertises fourteen rather than twelve.
+#
+# The addition happens before anything multiplies, which no fight here can
+# show yet: nothing weakens a Nibbit.
+#
+# A lone Nibbit butts, slices, hisses, and butts again. The slice on the way
+# is `a-nibbit-blocks-behind-its-slice`, which names that rule when it breaks.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

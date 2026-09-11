@@ -7,9 +7,9 @@
 //! What it holds beyond the snapshot is the move graphs and the skipped ticks.
 //! An observation says what a monster does next, not how its graph got there.
 //!
-//! What it does not hold is [`sts2_core::Playable`]. Every card in hand with its
-//! previews is derived from the fields below, so it is built where a report is
-//! made and nowhere else.
+//! What it does not hold is [`sts2_core::Playable`]. Every card in hand with
+//! its previews is derived from the fields below, so [`Live::report`] builds
+//! it and nothing else does.
 
 use sts2_core::{
     CardIdent, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Printed, Rules, SideKinds,
@@ -53,6 +53,9 @@ impl<V: Rules> CardInstance<V> {
 /// A fight in progress.
 #[derive(Debug, Clone)]
 pub(crate) struct Live<V: Rules> {
+    /// What the run is being played at, which a card or a move reads for the
+    /// numbers the level moves.
+    pub(super) ascension: V::AscensionLevel,
     pub(super) turn: V::Count,
     pub(super) phase: V::PlayerTurnPhase,
     pub(super) energy: V::Count,

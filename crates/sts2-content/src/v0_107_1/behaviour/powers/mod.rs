@@ -28,12 +28,15 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 /// # Panics
 ///
 /// A power nobody has ported.
-pub(crate) fn damage_hook(
-    power: Power,
-    holding: Holding,
-    _amount: PowerAmount<i32>,
-) -> Modify<i32> {
+pub(crate) fn damage_hook(power: Power, holding: Holding, amount: PowerAmount<i32>) -> Modify<i32> {
     match (power, holding) {
+        // `StrengthPower.ModifyDamageAdditive` adds its whole amount to the
+        // hits its owner deals, and does nothing to the ones it takes.
+        (Power::StrengthPower, Holding::Dealer) => match amount {
+            PowerAmount::Counted(amount) => Modify::Added(amount),
+            PowerAmount::Endless => unimplemented!("an endless Strength"),
+        },
+        (Power::StrengthPower, Holding::Target) => Modify::Nothing,
         // Vulnerable acts on the hits its owner takes.
         (Power::VulnerablePower, Holding::Target) => Modify::Scaled(DAMAGE_INCREASE),
         // Weak acts on the hits its owner deals. So does Shrink, and only on a
@@ -51,8 +54,8 @@ pub(crate) fn damage_hook(
 
 /// What a power does to a block gain, which is its `Hook.ModifyBlock`.
 ///
-/// None of them overrides it. The three debuffs take their share off a hit,
-/// and `EnergyNextTurnPower` touches the energy pool.
+/// None of them overrides it. The debuffs and Strength are an attack's
+/// numbers, and `EnergyNextTurnPower` touches the energy pool.
 ///
 /// # Panics
 ///
@@ -62,7 +65,8 @@ pub(crate) fn block_hook(power: Power, _amount: PowerAmount<i32>) -> Modify<i32>
         Power::VulnerablePower
         | Power::WeakPower
         | Power::ShrinkPower
-        | Power::EnergyNextTurnPower => Modify::Nothing,
+        | Power::EnergyNextTurnPower
+        | Power::StrengthPower => Modify::Nothing,
         power => unimplemented!("what {power:?} does to a block gain"),
     }
 }
@@ -86,9 +90,10 @@ pub(crate) fn side_turn_end(power: Power, side: CombatSide) -> SideTurnEnd {
         // side's end. It is a different command from a duration tick, and only
         // an endless Shrink is in a fight so far.
         (Power::ShrinkPower, _) => unimplemented!("what a counted Shrink does when a turn ends"),
-        // `EnergyNextTurnPower` has no `AfterSideTurnEnd`. It is spent at the
-        // reset instead, which is a hook of its own.
-        (Power::EnergyNextTurnPower, _) => SideTurnEnd::Nothing,
+        // Neither has an `AfterSideTurnEnd`. `EnergyNextTurnPower` is spent at
+        // the reset instead, which is a hook of its own, and Strength lasts
+        // the fight.
+        (Power::EnergyNextTurnPower | Power::StrengthPower, _) => SideTurnEnd::Nothing,
         (power, _) => unimplemented!("what {power:?} does when a turn ends"),
     }
 }
@@ -104,7 +109,9 @@ pub(crate) fn side_turn_end(power: Power, side: CombatSide) -> SideTurnEnd {
 pub(crate) fn spent_on_energy_reset(power: Power) -> bool {
     match power {
         Power::EnergyNextTurnPower => true,
-        Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower => false,
+        Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower | Power::StrengthPower => {
+            false
+        }
         power => unimplemented!("what {power:?} does as energy resets"),
     }
 }

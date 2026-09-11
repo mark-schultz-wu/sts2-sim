@@ -223,7 +223,8 @@ fn enemy_turn<V: Rules>(
             .find_map(|intent| intent.attack.map(|attack| attack.damage))
             .unwrap_or_else(num_traits::zero);
 
-        let mut board = Board::for_move(live, shuffle, id, damage);
+        let ascension = live.ascension;
+        let mut board = Board::for_move(live, shuffle, ascension, id, damage);
         V::perform_move(monster, next_move.id, &mut board);
         won |= board.won;
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));

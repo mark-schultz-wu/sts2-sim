@@ -1,0 +1,13 @@
+# `Hook.ModifyBlock` is not `Hook.ModifyDamage`. A power overrides one, the
+# other, or neither, and Weak overrides only the damage half.
+#
+# So a weakened Nibbit slices for less and still blocks five. A block gain that
+# reuses the damage modifiers blocks three.
+#
+# The one scenario that gains block while holding a power, which is what runs
+# the block hook at all.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"WEAK_POWER","amount":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

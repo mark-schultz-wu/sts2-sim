@@ -777,6 +777,13 @@ pub trait Fight<V: ContentVersion> {
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
 
+    /// What the run is being played at.
+    ///
+    /// A monster's move prints numbers the level moves, which the table only
+    /// carries for the ones an intent advertises. The rest are constants in
+    /// the move, behind `AscensionHelper.GetValueIfAscension`.
+    fn ascension(&self) -> V::AscensionLevel;
+
     /// One of the numbers the card being played prints right now.
     ///
     /// This copy's own, not the table's. A fight writes on a card, so the card
