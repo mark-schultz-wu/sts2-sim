@@ -23,15 +23,15 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let Some(ongoing) = self.fight() else {
+        let Some(live) = self.fight() else {
             return refused(Reason::NotInCombat);
         };
-        let play = match combat::resolve(&ongoing.combat, index, target) {
+        let play = match combat::resolve(live, index, target) {
             Ok(play) => play,
             Err(reason) => return refused(reason),
         };
 
-        let played = combat::play(ongoing, play, self.raw_seed(), &self.counters())?;
+        let played = combat::play(live, play, self.raw_seed(), &self.counters())?;
         Ok(Ok(self.settle(played)))
     }
 
@@ -39,7 +39,7 @@ impl<V: Rules> State<V> {
     ///
     /// On a copy of the fight and the graphs beside it, as playing a card is.
     pub(crate) fn end_turn(&mut self) -> Result<Answered<V>, Error> {
-        let Some(ongoing) = self.fight() else {
+        let Some(live) = self.fight() else {
             return Ok(Err(Refusal {
                 what: "end_turn".into(),
                 reason: Reason::NotInCombat,
@@ -49,7 +49,7 @@ impl<V: Rules> State<V> {
         let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
             .expect("the turn's energy fits the build's count type");
         let ended = combat::end_turn(
-            ongoing,
+            live,
             self.raw_seed(),
             self.ascension(),
             &self.counters(),
@@ -65,10 +65,11 @@ impl<V: Rules> State<V> {
     fn settle(&mut self, fought: combat::Fought<V>) -> sts2_core::Applied<V> {
         self.drew(fought.counters);
         match fought.won {
-            false => self.fought(fought.ongoing),
+            false => self.fought(fought.live),
             true => {
-                let offered = self.combat_rewards(&fought.ongoing.combat);
-                self.won(fought.ongoing.combat, offered);
+                let combat = fought.live.report();
+                let offered = self.combat_rewards(&combat);
+                self.won(combat, offered);
             }
         }
         let mut applied = self.report();

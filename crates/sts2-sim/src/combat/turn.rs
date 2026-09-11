@@ -8,28 +8,27 @@
 //! leaves the fight where it stood.
 
 use sts2_core::rng::MegaRng;
-use sts2_core::{
-    CardTable, Combat, CombatId, Counters, PowerAmount, Rules, SideKinds, TurnPhaseKinds,
-};
+use sts2_core::{CardTable, CombatId, Counters, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
 use super::board::{Board, draw};
+use super::live::Live;
 use super::monster::Machine;
-use super::{Error, Ongoing, legal, stream};
+use super::{Error, stream};
 
 /// How many cards a hand is drawn to, which is `baseHandDrawCount`.
 const HAND_DRAW: usize = 5;
 
 /// End the player's turn and set up the next one.
 pub(crate) fn end<V: Rules>(
-    ongoing: &Ongoing<V>,
+    live: &Live<V>,
     raw_seed: u32,
     ascension: V::AscensionLevel,
     counters: &Counters<V>,
     max_energy: V::Count,
 ) -> Result<super::Fought<V>, Error> {
-    let mut next = ongoing.combat.clone();
-    let mut machines = ongoing.machines.clone();
-    let mut skipping = ongoing.skipping.clone();
+    let mut next = live.clone();
+    let mut machines = std::mem::take(&mut next.machines);
+    let mut skipping = std::mem::take(&mut next.skip_tick);
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
     let mut ai = stream::seek(raw_seed, &counters, V::monster_ai_rng(), "monster_ai")?;
@@ -68,16 +67,13 @@ pub(crate) fn end<V: Rules>(
     draw(&mut next, &mut shuffle, HAND_DRAW);
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
-    next.legal = legal::hand::<V>(&next.hand, &next.creatures, next.energy, next.stars)?;
 
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     stream::record(&mut counters, V::monster_ai_rng(), "monster_ai", &ai)?;
+    next.machines = machines;
+    next.skip_tick = skipping;
     Ok(super::Fought {
-        ongoing: Ongoing {
-            combat: next,
-            machines,
-            skipping,
-        },
+        live: next,
         counters,
         won,
     })
@@ -87,16 +83,16 @@ pub(crate) fn end<V: Rules>(
 ///
 /// An ethereal card is exhausted. A card with a turn-end effect of its own
 /// runs it, and that arrives with the port of the card.
-fn turn_end<V: Rules>(combat: &mut Combat<V>) {
-    let ethereal: Vec<usize> = combat
+fn turn_end<V: Rules>(live: &mut Live<V>) {
+    let ethereal: Vec<usize> = live
         .hand
         .iter()
         .enumerate()
-        .filter(|(_, held)| held.card.ethereal())
+        .filter(|(_, held)| held.ident.card.ethereal())
         .map(|(at, _)| at)
         .collect();
     for at in ethereal.into_iter().rev() {
-        combat.exhaust.push(combat.hand.remove(at));
+        live.exhaust.push(live.hand.remove(at));
     }
 }
 
@@ -104,14 +100,14 @@ fn turn_end<V: Rules>(combat: &mut Combat<V>) {
 ///
 /// Nothing retains. No card in this build's table carries the keyword, and
 /// nothing in a fight sets it yet.
-fn flush_hand<V: Rules>(combat: &mut Combat<V>) {
-    let flushed = std::mem::take(&mut combat.hand);
-    combat.discard.extend(flushed);
+fn flush_hand<V: Rules>(live: &mut Live<V>) {
+    let flushed = std::mem::take(&mut live.hand);
+    live.discard.extend(flushed);
 }
 
 /// `ClearBlock` on every creature of one side.
-fn clear_block<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
-    for creature in combat.creatures.iter_mut().filter(|c| c.side == side) {
+fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
+    for creature in live.creatures.iter_mut().filter(|c| c.side == side) {
         creature.block = num_traits::zero();
     }
 }
@@ -121,12 +117,12 @@ fn clear_block<V: Rules>(combat: &mut Combat<V>, side: V::CombatSide) {
 /// Every creature in the fight, not only the ones on that side. Which side's
 /// turn ending counts a power down is the power's own rule.
 fn tick_powers<V: Rules>(
-    combat: &mut Combat<V>,
+    live: &mut Live<V>,
     skipping: &mut Vec<(CombatId, V::Power)>,
     side: V::CombatSide,
 ) {
     let one = num_traits::one();
-    for creature in &mut combat.creatures {
+    for creature in &mut live.creatures {
         let id = creature.id;
         for held in &mut creature.powers {
             let power = held.power;
@@ -157,13 +153,13 @@ fn tick_powers<V: Rules>(
 /// The list is taken first, and each is held against the fight again before it
 /// acts. An earlier move can take a later one out of the fight.
 fn enemy_turn<V: Rules>(
-    combat: &mut Combat<V>,
+    live: &mut Live<V>,
     shuffle: &mut MegaRng,
     machines: &mut [Machine<V>],
     skipping: &mut Vec<(CombatId, V::Power)>,
 ) -> bool {
     let mut won = false;
-    let acting: Vec<CombatId> = combat
+    let acting: Vec<CombatId> = live
         .creatures
         .iter()
         .filter(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
@@ -171,7 +167,7 @@ fn enemy_turn<V: Rules>(
         .collect();
 
     for id in acting {
-        let Some(creature) = combat.creatures.iter().find(|c| c.id == id) else {
+        let Some(creature) = live.creatures.iter().find(|c| c.id == id) else {
             continue;
         };
         let next_move = creature
@@ -193,7 +189,7 @@ fn enemy_turn<V: Rules>(
             .find_map(|intent| intent.attack.map(|attack| attack.damage))
             .unwrap_or_else(num_traits::zero);
 
-        let mut board = Board::for_move(combat, shuffle, id, damage);
+        let mut board = Board::for_move(live, shuffle, id, damage);
         V::perform_move(monster, next_move.id, &mut board);
         won |= board.won;
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));
@@ -204,16 +200,16 @@ fn enemy_turn<V: Rules>(
 /// `PrepareForNextTurn`: every enemy still in the fight advertises its next
 /// move.
 fn roll_moves<V: Rules>(
-    combat: &mut Combat<V>,
+    live: &mut Live<V>,
     machines: &mut Vec<Machine<V>>,
     ascension: V::AscensionLevel,
     ai: &mut MegaRng,
 ) -> Result<(), Error> {
-    machines.retain(|held| combat.creatures.iter().any(|c| c.id == held.creature));
+    machines.retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
     for held in machines.iter_mut() {
         let rolled =
             V::roll_monster_move(held.monster, ascension, held.spawn, &mut held.machine, ai)?;
-        if let Some(creature) = combat.creatures.iter_mut().find(|c| c.id == held.creature) {
+        if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {
             creature.next_move = Some(rolled);
         }
     }
