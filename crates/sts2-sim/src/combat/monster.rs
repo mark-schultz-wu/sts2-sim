@@ -16,7 +16,6 @@ fn health<V: Rules>(
     niche: &mut MegaRng,
 ) -> u16 {
     let range = V::monster_hp_bounds(monster, ascension);
-    let (min, max) = (range.min(), range.max());
     let used = creatures
         .iter()
         .filter_map(|creature| match creature.model {
@@ -24,7 +23,7 @@ fn health<V: Rules>(
             _ => None,
         });
     let used: Vec<u16> = used.collect();
-    let available: Vec<u16> = (min..=max).filter(|hp| !used.contains(hp)).collect();
+    let available: Vec<u16> = range.values().filter(|hp| !used.contains(hp)).collect();
     if let Ok(choices) = Choices::try_new(&available) {
         *niche.choose_from(choices)
     } else {

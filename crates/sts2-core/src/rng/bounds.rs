@@ -140,6 +140,11 @@ impl<T: Copy> Interval<T> {
 }
 
 impl Interval<u16> {
+    /// Every integer in this closed interval, in order.
+    pub fn values(&self) -> core::ops::RangeInclusive<u16> {
+        self.min()..=self.max()
+    }
+
     /// The number of integers in this closed interval.
     pub const fn cardinality(&self) -> Bound {
         // Every `u16` interval has between one and 65,536 members.
@@ -171,6 +176,11 @@ mod tests {
     fn an_interval_may_be_a_point_but_not_inverted() {
         assert_eq!(Interval::new(5, 5), Interval { bounds: (5, 5) });
         assert_eq!(Interval::try_new(5, 4).unwrap_err(), Error::Inverted);
+    }
+
+    #[test]
+    fn a_u16_interval_iterates_over_its_members() {
+        assert_eq!(Interval::new(3, 5).values().collect::<Vec<_>>(), [3, 4, 5]);
     }
 
     #[test]
