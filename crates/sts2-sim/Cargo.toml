@@ -16,4 +16,4 @@ thiserror = { workspace = true }
 # The `at` a test spells a creature with. See `sts2_core::fixture`.
 sts2-core = { workspace = true, features = ["fixture"] }
 # A unit test drives a rule, and a rule is written against one build's tables.
-sts2-content = { workspace = true, features = ["v0_107_1"] }
+sts2-content = { workspace = true }

@@ -32,6 +32,6 @@ sts2-core = { path = ".", features = ["fixture"] }
 # The tests do name a build, because spelling a decision means picking one.
 # A dev-dependency cycle, which cargo allows: `sts2-content` implements what
 # this crate declares, and these tests want a real build to spell.
-sts2-content = { workspace = true, features = ["v0_107_1"] }
+sts2-content = { workspace = true }
 # One test asks what an id serializes *to*, which needs a format to look at.
 serde_json = { workspace = true }

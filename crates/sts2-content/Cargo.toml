@@ -4,13 +4,17 @@ version = "0.1.0"
 edition = "2024"
 readme = "README.md"
 
-# One module per game build, each behind a feature. The types stay distinct, so
-# one binary can compare two versions. A caller that wants one version does not
-# compile 578 cards for the other.
-[features]
-default = ["v0_107_1"]
-v0_107_1 = []
-v0_111_0 = []
+# One module per game build. The types stay distinct, so one binary can compare
+# two versions.
+#
+# No feature per build. The point of one was to keep an unwanted build out of a
+# binary, and the linker already does that. A build nothing names has statics
+# nothing references, and dropping the second one measured at zero bytes.
+#
+# What a feature bought instead was compile time. Nothing here collects it:
+# `sts2-cli` dispatches on the version at run time, so it names every build and
+# the workspace compiles them all anyway. Add features back when a binary wants
+# one build out of many and the compile is what hurts.
 
 [dependencies]
 # The traits these tables implement. See docs/STS2-CORE.md.

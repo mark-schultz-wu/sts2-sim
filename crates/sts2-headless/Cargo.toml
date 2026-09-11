@@ -24,5 +24,5 @@ sts2-core = { workspace = true, features = ["fixture"] }
 anyhow = { workspace = true }
 # The tests and examples do name a build, because driving a real game means
 # picking one.
-sts2-content = { workspace = true, features = ["v0_107_1"] }
+sts2-content = { workspace = true }
 serial_test = { workspace = true }

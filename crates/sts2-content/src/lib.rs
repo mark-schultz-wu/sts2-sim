@@ -25,10 +25,7 @@
 //! exposes a row through an associated type, so what a row is made of is this
 //! crate's business.
 
-#[cfg(feature = "v0_107_1")]
 pub mod v0_107_1;
-
-#[cfg(feature = "v0_111_0")]
 pub mod v0_111_0;
 
 /// A field that is usually a constant, but which some content works out from
