@@ -22,6 +22,7 @@
 // `seed`). Every type is re-exported flat below, and that flat surface is the
 // API: the folders are how this crate is read, not how it is used.
 pub mod content;
+mod hook_response;
 mod ident;
 mod play;
 mod report;
@@ -36,12 +37,13 @@ pub use play::recording;
 pub use content::{
     ActTable, AscensionKinds, CardTable, CardVars, CharacterTable, ContentError, ContentVersion,
     Cost, DecisionHook, Drafted, EncounterRoster, EncounterTable, EventHook, EventTable, Fight,
-    Fixed, FlagSet, Holding, HookDecision, HookEffect, Hooks, Layout, MapPointKinds, Modify,
-    ModifyHook, MonsterSpawn, MonsterTable, MoveMachine, PotionTable, PotionUsage, PowerAmount,
-    PowerTable, Printed, RarityKinds, RelicPoolKinds, RelicTable, Rests, RewardRarity, RoomKinds,
-    Rules, SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
+    Fixed, FlagSet, Holding, HookEffect, Hooks, Layout, MapPointKinds, Modify, ModifyHook,
+    MonsterSpawn, MonsterTable, MoveMachine, PotionTable, PotionUsage, PowerAmount, PowerTable,
+    Printed, RarityKinds, RelicPoolKinds, RelicTable, Rests, RewardRarity, RoomKinds, Rules,
+    SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
     UnplayableReasonKinds, Version,
 };
+pub use hook_response::HookResponse;
 pub use ident::{CardIdent, Coord, ModelId, OutOfRange};
 pub use seed::Seed;
 

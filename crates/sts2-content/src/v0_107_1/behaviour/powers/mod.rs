@@ -90,12 +90,15 @@ pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modif
 }
 
 /// Answer a yes-or-no hook for one power.
-pub(crate) fn decide_hook(power: Power, hook: sts2_core::DecisionHook) -> sts2_core::HookDecision {
+pub(crate) fn decide_hook(
+    power: Power,
+    hook: sts2_core::DecisionHook,
+) -> sts2_core::HookResponse<bool> {
     match (power, hook) {
         (Power::IllusionPower, sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath) => {
-            sts2_core::HookDecision::No
+            sts2_core::HookResponse::Decision(false)
         }
-        _ => sts2_core::HookDecision::NoOpinion,
+        _ => sts2_core::HookResponse::DoesNotImplement,
     }
 }
 

@@ -845,15 +845,6 @@ pub enum DecisionHook {
     ShouldRemoveCreatureAfterDeath,
 }
 
-/// One listener's answer to a decision hook.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HookDecision {
-    /// This listener does not implement the hook.
-    NoOpinion,
-    Yes,
-    No,
-}
-
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
@@ -886,7 +877,8 @@ pub enum HookEffect<V: ContentVersion> {
 pub trait Hooks: ContentVersion {
     fn modify_hook(listener: crate::ModelId<Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
-    fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook) -> HookDecision;
+    fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook)
+    -> crate::HookResponse<bool>;
 
     fn event_hook(listener: crate::ModelId<Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
 }

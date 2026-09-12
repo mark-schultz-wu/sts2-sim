@@ -180,7 +180,8 @@ impl<'a, V: Rules> Board<'a, V> {
             <V as sts2_core::Hooks>::decide_hook(
                 sts2_core::ModelId::Power(held.power),
                 sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
-            ) == sts2_core::HookDecision::No
+            )
+            .is_decision_and(|remove| !remove)
         });
         if kept {
             let revival = powers
