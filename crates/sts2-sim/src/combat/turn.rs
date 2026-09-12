@@ -122,14 +122,18 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
     };
     let mut gained: V::Count = num_traits::zero();
     live.creatures[at].powers.retain(|held| {
-        if !V::spent_on_energy_reset(held.power) {
-            return true;
-        }
-        // An endless instance has no amount to hand over. No power both
-        // grants energy and comes without a count.
-        let PowerAmount::Counted(amount) = held.amount else {
-            unimplemented!("an endless {:?} handing over energy", held.power);
-        };
+        let amount = <V as sts2_core::Hooks>::event_hook(
+            sts2_core::ModelId::Power(held.power),
+            sts2_core::EventHook::EnergyReset {
+                amount: held.amount,
+            },
+        )
+        .into_iter()
+        .find_map(|effect| match effect {
+            sts2_core::HookEffect::GainEnergyAndRemove(amount) => Some(amount),
+            _ => None,
+        });
+        let Some(amount) = amount else { return true };
         let amount: V::Count = num_traits::cast(amount)
             .unwrap_or_else(|| unimplemented!("a {:?} worth {amount:?} of energy", held.power));
         gained = gained + amount;
@@ -144,12 +148,18 @@ fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
         creature.block = num_traits::zero();
         let mut gained: V::Number = num_traits::zero();
         creature.powers.retain(|held| {
-            let PowerAmount::Counted(amount) = held.amount else {
-                return true;
-            };
-            let Some(block) = V::block_after_clear(held.power, amount) else {
-                return true;
-            };
+            let block = <V as sts2_core::Hooks>::event_hook(
+                sts2_core::ModelId::Power(held.power),
+                sts2_core::EventHook::BlockCleared {
+                    amount: held.amount,
+                },
+            )
+            .into_iter()
+            .find_map(|effect| match effect {
+                sts2_core::HookEffect::GainBlockAndRemove(amount) => Some(amount),
+                _ => None,
+            });
+            let Some(block) = block else { return true };
             gained = gained + block;
             false
         });
@@ -176,7 +186,15 @@ fn tick_powers<V: Rules>(
             let PowerAmount::Counted(amount) = held.amount else {
                 continue;
             };
-            if V::side_turn_end(power, side) != sts2_core::SideTurnEnd::TicksDownDuration {
+            let ticks = <V as sts2_core::Hooks>::event_hook(
+                sts2_core::ModelId::Power(power),
+                sts2_core::EventHook::SideTurnEnd {
+                    side,
+                    amount: held.amount,
+                },
+            )
+            .contains(&sts2_core::HookEffect::TickDownDuration);
+            if !ticks {
                 continue;
             }
             // `TickDownDuration` passes over an instance whose flag is set,

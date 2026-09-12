@@ -827,6 +827,63 @@ pub enum Modify<N> {
     Scaled(f64),
 }
 
+/// A value-producing hook the simulator asks one content model to apply.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModifyHook<V: ContentVersion> {
+    /// The model can change a hit dealt or received by its owner.
+    Damage {
+        holding: Holding,
+        amount: PowerAmount<V::Number>,
+    },
+    /// The model can change block gained by its owner.
+    Block { amount: PowerAmount<V::Number> },
+}
+
+/// A yes-or-no hook the simulator asks one content model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecisionHook {
+    /// Whether a dead creature remains in the combat roster.
+    RemoveCreatureAfterDeath,
+}
+
+/// A notification delivered to one content model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventHook<V: ContentVersion> {
+    SideTurnEnd {
+        side: V::CombatSide,
+        amount: PowerAmount<V::Number>,
+    },
+    EnergyReset {
+        amount: PowerAmount<V::Number>,
+    },
+    BlockCleared {
+        amount: PowerAmount<V::Number>,
+    },
+    AfterDeath,
+}
+
+/// One command requested by a content model in response to an event hook.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HookEffect<V: ContentVersion> {
+    TickDownDuration,
+    GainEnergyAndRemove(V::Number),
+    GainBlockAndRemove(V::Number),
+    InstallMove(crate::NextMove<V>),
+}
+
+/// The build-specific behavior behind the game's hook dispatcher.
+///
+/// The enums begin with only the hook shapes the simulator can execute. They
+/// grow as behavior reaches another hook, without widening this trait.
+pub trait Hooks: ContentVersion {
+    fn modify_hook(listener: crate::ModelId<Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
+
+    /// `None` means the listener does not implement this decision hook.
+    fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook) -> Option<bool>;
+
+    fn event_hook(listener: crate::ModelId<Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
+}
+
 /// What a power does when one side's turn ends, which is its
 /// `AfterSideTurnEnd`.
 ///
@@ -1230,7 +1287,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
 ///
 /// A build pinned only for its tables implements `ContentVersion` and stops
 /// there. The simulator will not take it, which is the error worth having.
-pub trait Rules: ContentVersion {
+pub trait Rules: Hooks {
     /// The relic pool a character drafts from, beside the shared one.
     ///
     /// Here rather than on [`CharacterTable`], because the pool's type belongs
@@ -1324,59 +1381,6 @@ pub trait Rules: ContentVersion {
     /// The machine's constructor records its starting state. Only the table
     /// says whether the log carries that state, so a bare index is not enough.
     fn opening_move_machine(monster: Self::Monster) -> crate::MoveMachine;
-
-    /// What a power does to a hit, which is its `Hook.ModifyDamage`.
-    ///
-    /// Every power on either side of the hit is asked, and most have no hook
-    /// at all.
-    ///
-    /// # Panics
-    ///
-    /// A power nobody has ported. One is only in a fight because ported
-    /// behaviour put it there.
-    fn damage_hook(
-        power: Self::Power,
-        holding: Holding,
-        amount: PowerAmount<Self::Number>,
-    ) -> Modify<Self::Number>;
-
-    /// What a power does to a block gain, which is its `Hook.ModifyBlock`.
-    ///
-    /// No [`Holding`], because the hook names one creature. It is the one
-    /// gaining, and every power it holds is asked.
-    ///
-    /// # Panics
-    ///
-    /// A power nobody has ported.
-    fn block_hook(power: Self::Power, amount: PowerAmount<Self::Number>) -> Modify<Self::Number>;
-
-    /// What a power does when one side's turn ends, which is its
-    /// `AfterSideTurnEnd`.
-    ///
-    /// Every power in the fight is asked, at each side's end, and most have no
-    /// override at all.
-    ///
-    /// # Panics
-    ///
-    /// A power nobody has ported.
-    fn side_turn_end(power: Self::Power, side: Self::CombatSide) -> SideTurnEnd;
-
-    /// Whether a power hands its amount to the player as energy resets, and
-    /// then goes.
-    ///
-    /// `PowerModel.AfterEnergyReset`. A turn starts by resetting the pool, and
-    /// this is the one thing in a fight that adds to it afterwards.
-    ///
-    /// # Panics
-    ///
-    /// A power nobody has ported.
-    fn spent_on_energy_reset(power: Self::Power) -> bool;
-
-    /// Block a power grants after its owner's block is cleared, consuming it.
-    fn block_after_clear(power: Self::Power, amount: Self::Number) -> Option<Self::Number>;
-
-    /// The move a power installs when a lethal hit leaves its owner to revive.
-    fn revival_move(power: Self::Power) -> Option<crate::NextMove<Self>>;
 
     /// What a card that works its own target out from the fight names.
     ///

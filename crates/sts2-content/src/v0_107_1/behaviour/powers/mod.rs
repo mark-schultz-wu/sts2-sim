@@ -10,6 +10,7 @@
 
 use sts2_core::{Holding, Modify, PowerAmount, SideTurnEnd};
 
+use super::super::V0_107_1 as V;
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
 
@@ -142,7 +143,7 @@ pub(crate) fn block_after_clear(power: Power, amount: i32) -> Option<i32> {
 }
 
 /// The move Illusion installs instead of letting its owner leave the fight.
-pub(crate) fn revival_move(power: Power) -> Option<sts2_core::NextMove<super::super::V0_107_1>> {
+pub(crate) fn revival_move(power: Power) -> Option<sts2_core::NextMove<V>> {
     use super::super::generated::monsters::{IntentKind, MoveId};
 
     (power == Power::IllusionPower).then(|| sts2_core::NextMove {
@@ -154,4 +155,40 @@ pub(crate) fn revival_move(power: Power) -> Option<sts2_core::NextMove<super::su
         .into_iter()
         .collect(),
     })
+}
+
+/// Whether a power lets its dead owner be removed from the combat roster.
+pub(crate) fn remove_creature_after_death(power: Power) -> Option<bool> {
+    (power == Power::IllusionPower).then_some(false)
+}
+
+/// Dispatch one of the event hooks the simulator currently supports.
+pub(crate) fn event_hook(
+    power: Power,
+    hook: sts2_core::EventHook<V>,
+) -> Vec<sts2_core::HookEffect<V>> {
+    use sts2_core::{EventHook, HookEffect};
+
+    let effect = match hook {
+        EventHook::SideTurnEnd { side, .. }
+            if side_turn_end(power, side) == SideTurnEnd::TicksDownDuration =>
+        {
+            Some(HookEffect::TickDownDuration)
+        }
+        EventHook::EnergyReset { amount } if spent_on_energy_reset(power) => {
+            let PowerAmount::Counted(amount) = amount else {
+                unimplemented!("an endless {power:?} handing over energy")
+            };
+            Some(HookEffect::GainEnergyAndRemove(amount))
+        }
+        EventHook::BlockCleared { amount } => {
+            let PowerAmount::Counted(amount) = amount else {
+                return Vec::new();
+            };
+            block_after_clear(power, amount).map(HookEffect::GainBlockAndRemove)
+        }
+        EventHook::AfterDeath => revival_move(power).map(HookEffect::InstallMove),
+        _ => None,
+    };
+    effect.into_iter().collect()
 }
