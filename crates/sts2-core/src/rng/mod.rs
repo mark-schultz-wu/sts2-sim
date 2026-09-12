@@ -96,7 +96,7 @@ pub trait GameRng: Sized {
 
     /// One item selected by the game's bounded integer draw.
     ///
-    /// An empty slice or one too large for the game's signed 32-bit bound is
+    /// An empty slice or one too large for the RNG's integer bound is
     /// an invalid draw. A successful selection consumes one draw.
     fn choose<'a, T>(&mut self, items: &'a [T]) -> Result<&'a T, Error> {
         Choices::<T, Self::Int>::try_new(items).map(|items| self.choose_from(items))

@@ -952,10 +952,8 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash;
 
     /// Hit points carried by players and creatures in this build.
-    type Health: num_traits::PrimInt
-        + num_traits::Signed
+    type Health: crate::rng::RngInteger
         + From<Self::Number>
-        + crate::rng::RngInteger
         + serde::Serialize
         + serde::de::DeserializeOwned
         + std::fmt::Debug
