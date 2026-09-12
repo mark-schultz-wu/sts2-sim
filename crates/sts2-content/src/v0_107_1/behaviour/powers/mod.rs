@@ -13,6 +13,7 @@ use sts2_core::{Holding, Modify, ModifyHook, PowerAmount};
 use super::super::V0_107_1 as V;
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
+type Number = <V as sts2_core::ContentVersion>::Number;
 
 /// `VulnerablePower`'s `DamageIncrease`.
 const DAMAGE_INCREASE: f64 = 1.5;
@@ -25,7 +26,7 @@ const DAMAGE_DECREASE: f64 = 0.75;
 const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 
 /// Apply a value-producing hook for one power.
-pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modify<i32> {
+pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modify<Number> {
     match (power, hook) {
         (
             Power::StrengthPower,
