@@ -122,14 +122,18 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
     };
     let mut gained: V::Count = num_traits::zero();
     live.creatures[at].powers.retain(|held| {
-        if !V::spent_on_energy_reset(held.power) {
-            return true;
-        }
-        // An endless instance has no amount to hand over. No power both
-        // grants energy and comes without a count.
-        let PowerAmount::Counted(amount) = held.amount else {
-            unimplemented!("an endless {:?} handing over energy", held.power);
-        };
+        let amount = <V as sts2_core::Hooks>::event_hook(
+            sts2_core::ModelId::Power(held.power),
+            sts2_core::EventHook::EnergyReset {
+                amount: held.amount,
+            },
+        )
+        .into_iter()
+        .find_map(|effect| match effect {
+            sts2_core::HookEffect::GainEnergyAndRemove(amount) => Some(amount),
+            _ => None,
+        });
+        let Some(amount) = amount else { return true };
         let amount: V::Count = num_traits::cast(amount)
             .unwrap_or_else(|| unimplemented!("a {:?} worth {amount:?} of energy", held.power));
         gained = gained + amount;
@@ -142,6 +146,24 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
 fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
     for creature in live.creatures.iter_mut().filter(|c| c.side == side) {
         creature.block = num_traits::zero();
+        let mut gained: V::Number = num_traits::zero();
+        creature.powers.retain(|held| {
+            let block = <V as sts2_core::Hooks>::event_hook(
+                sts2_core::ModelId::Power(held.power),
+                sts2_core::EventHook::BlockCleared {
+                    amount: held.amount,
+                },
+            )
+            .into_iter()
+            .find_map(|effect| match effect {
+                sts2_core::HookEffect::GainBlockAndRemove(amount) => Some(amount),
+                _ => None,
+            });
+            let Some(block) = block else { return true };
+            gained = gained + block;
+            false
+        });
+        creature.block = creature.block + gained;
     }
 }
 
@@ -164,7 +186,15 @@ fn tick_powers<V: Rules>(
             let PowerAmount::Counted(amount) = held.amount else {
                 continue;
             };
-            if V::side_turn_end(power, side) != sts2_core::SideTurnEnd::TicksDownDuration {
+            let ticks = <V as sts2_core::Hooks>::event_hook(
+                sts2_core::ModelId::Power(power),
+                sts2_core::EventHook::SideTurnEnd {
+                    side,
+                    amount: held.amount,
+                },
+            )
+            .contains(&sts2_core::HookEffect::TickDownDuration);
+            if !ticks {
                 continue;
             }
             // `TickDownDuration` passes over an instance whose flag is set,
@@ -203,6 +233,21 @@ fn enemy_turn<V: Rules>(
         let Some(creature) = live.creatures.iter().find(|c| c.id == id) else {
             continue;
         };
+        let reviving = live
+            .machines
+            .iter()
+            .find(|held| held.creature == id)
+            .is_some_and(|held| held.resume.is_some());
+        if reviving && !creature.alive {
+            let creature = live
+                .creatures
+                .iter_mut()
+                .find(|creature| creature.id == id)
+                .expect("a reviving monster remains in the fight");
+            creature.hp = creature.max_hp;
+            creature.alive = true;
+            continue;
+        }
         let next_move = creature
             .next_move
             .clone()
@@ -242,6 +287,16 @@ fn roll_moves<V: Rules>(
     live.machines
         .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
     for held in live.machines.iter_mut() {
+        if let Some(resume) = held.resume.take() {
+            if let Some(creature) = live
+                .creatures
+                .iter_mut()
+                .find(|creature| creature.id == held.creature)
+            {
+                creature.next_move = Some(resume);
+            }
+            continue;
+        }
         let rolled =
             V::roll_monster_move(held.monster, ascension, held.spawn, &mut held.machine, ai)?;
         if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {

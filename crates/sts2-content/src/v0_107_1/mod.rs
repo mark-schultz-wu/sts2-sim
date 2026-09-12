@@ -74,6 +74,38 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type TargetType = generated::cards::TargetType;
 }
 
+/// Dispatch the hook shapes this simulator can execute.
+impl sts2_core::Hooks for V0_107_1 {
+    fn modify_hook(
+        listener: sts2_core::ModelId<Self>,
+        hook: sts2_core::ModifyHook<Self>,
+    ) -> sts2_core::Modify<Self::Number> {
+        let sts2_core::ModelId::Power(power) = listener else {
+            return sts2_core::Modify::Nothing;
+        };
+        behaviour::powers::modify_hook(power, hook)
+    }
+
+    fn decide_hook(
+        listener: sts2_core::ModelId<Self>,
+        hook: sts2_core::DecisionHook,
+    ) -> sts2_core::HookResponse<bool> {
+        let sts2_core::ModelId::Power(power) = listener else {
+            return sts2_core::HookResponse::DoesNotImplement;
+        };
+        behaviour::powers::decide_hook(power, hook)
+    }
+
+    fn event_hook(
+        listener: sts2_core::ModelId<Self>,
+        hook: sts2_core::EventHook<Self>,
+    ) -> Vec<sts2_core::HookEffect<Self>> {
+        let sts2_core::ModelId::Power(power) = listener else {
+            return Vec::new();
+        };
+        behaviour::powers::event_hook(power, hook)
+    }
+}
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
 /// Until then this build is its tables and no more.
 impl sts2_core::Rules for V0_107_1 {
@@ -185,29 +217,6 @@ impl sts2_core::Rules for V0_107_1 {
             Some(generated::monsters::State::Move(_))
         );
         sts2_core::MoveMachine::new(at, logged)
-    }
-
-    fn damage_hook(
-        power: Self::Power,
-        holding: sts2_core::Holding,
-        amount: sts2_core::PowerAmount<Self::Number>,
-    ) -> sts2_core::Modify<Self::Number> {
-        behaviour::powers::damage_hook(power, holding, amount)
-    }
-
-    fn block_hook(
-        power: Self::Power,
-        amount: sts2_core::PowerAmount<Self::Number>,
-    ) -> sts2_core::Modify<Self::Number> {
-        behaviour::powers::block_hook(power, amount)
-    }
-
-    fn side_turn_end(power: Self::Power, side: Self::CombatSide) -> sts2_core::SideTurnEnd {
-        behaviour::powers::side_turn_end(power, side)
-    }
-
-    fn spent_on_energy_reset(power: Self::Power) -> bool {
-        behaviour::powers::spent_on_energy_reset(power)
     }
 
     fn computed_card_target(

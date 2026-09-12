@@ -175,6 +175,39 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.live.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
             unimplemented!("a player dying in a fight");
         }
+        let powers = self.live.creatures[at].powers.clone();
+        let kept = powers.iter().any(|held| {
+            <V as sts2_core::Hooks>::decide_hook(
+                sts2_core::ModelId::Power(held.power),
+                sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
+            )
+            .is_decision_and(|remove| !remove)
+        });
+        if kept {
+            let revival = powers
+                .iter()
+                .flat_map(|held| {
+                    <V as sts2_core::Hooks>::event_hook(
+                        sts2_core::ModelId::Power(held.power),
+                        sts2_core::EventHook::AfterDeath,
+                    )
+                })
+                .find_map(|effect| match effect {
+                    sts2_core::HookEffect::InstallMove(next) => Some(next),
+                    _ => None,
+                })
+                .expect("a retained dead monster installs a move");
+            let id = self.live.creatures[at].id;
+            let resume = self.live.creatures[at].next_move.replace(revival);
+            let held = self
+                .live
+                .machines
+                .iter_mut()
+                .find(|held| held.creature == id)
+                .expect("a reviving monster has a move machine");
+            held.resume = resume;
+            return;
+        }
         // A dead monster is taken out of the fight, so nothing that reads it
         // afterwards can see it. That is why the observation stops reporting
         // it rather than reporting it dead.
@@ -234,7 +267,15 @@ pub(crate) fn modified<V: Rules>(
             holder
                 .into_iter()
                 .flat_map(move |holder| &creatures[holder].powers)
-                .map(move |held| V::damage_hook(held.power, holding, held.amount))
+                .map(move |held| {
+                    <V as sts2_core::Hooks>::modify_hook(
+                        sts2_core::ModelId::Power(held.power),
+                        sts2_core::ModifyHook::Damage {
+                            holding,
+                            amount: held.amount,
+                        },
+                    )
+                })
         }),
     )
 }
@@ -285,10 +326,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let Some(at) = self.at(actor) else { return };
         let amount = hooked::<V>(
             amount,
-            self.live.creatures[at]
-                .powers
-                .iter()
-                .map(|held| V::block_hook(held.power, held.amount)),
+            self.live.creatures[at].powers.iter().map(|held| {
+                <V as sts2_core::Hooks>::modify_hook(
+                    sts2_core::ModelId::Power(held.power),
+                    sts2_core::ModifyHook::Block {
+                        amount: held.amount,
+                    },
+                )
+            }),
         );
         if amount > V::Number::zero() {
             self.live.creatures[at].block = self.live.creatures[at].block + amount;
