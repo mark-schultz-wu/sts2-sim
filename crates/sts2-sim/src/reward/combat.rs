@@ -4,7 +4,7 @@
 //! roll, then three cards. Every draw comes off the rewards stream, and the
 //! order is what puts the stream where the next screen finds it.
 
-use sts2_core::rng::{GameRng, Interval, Span};
+use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
 use sts2_core::{AscensionKinds, Rules};
 
 use super::{Odds, Offer, card};
@@ -49,8 +49,8 @@ pub(crate) fn won<V: Rules, R: GameRng>(
 /// that hands out a part of a fight's gold sets it, and none is ported.
 fn purse<V: Rules, R: GameRng>(rng: &mut R, gold: Interval<u16>) -> V::Number {
     let min = num_traits::cast(gold.min()).expect("a gold minimum fits the RNG integer");
-    let max =
-        num_traits::cast(i32::from(gold.max()) + 1).expect("a gold maximum fits the RNG integer");
+    let max: R::Int = num_traits::cast(gold.max()).expect("a gold maximum fits the RNG integer");
+    let max = max + R::Int::ONE;
     let span = Span::new(min, max).expect("a gold range that ends above where it starts");
     num_traits::cast(rng.next_int_range(span)).expect("a fight's gold is a game number")
 }
