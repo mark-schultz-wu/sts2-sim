@@ -54,7 +54,6 @@ pub trait RngInteger: num_traits::PrimInt + num_traits::Signed {
     const ONE: Self;
     fn scaled(unit: f64, bound: Self) -> Self;
     fn in_half_open(unit: f64, min: Self, max: Self) -> Self;
-    fn from_f64(value: f64) -> Self;
 }
 
 impl RngInteger for i32 {
@@ -72,10 +71,6 @@ impl RngInteger for i32 {
         } else {
             (((unit * width as f64) as i64).wrapping_add(min as i64)) as i32
         }
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value as i32
     }
 }
 

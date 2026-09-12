@@ -224,7 +224,9 @@ pub trait GameRng: Sized {
             let mean = num_traits::cast::<_, f64>(mean).expect("an RNG integer converts to f64");
             let std_dev =
                 num_traits::cast::<_, f64>(std_dev).expect("an RNG integer converts to f64");
-            let value = Self::Int::from_f64((mean + std_dev * normal).round_ties_even());
+            let Some(value) = num_traits::cast((mean + std_dev * normal).round_ties_even()) else {
+                continue;
+            };
             if value >= accept.min() && value <= accept.max() {
                 return value;
             }
