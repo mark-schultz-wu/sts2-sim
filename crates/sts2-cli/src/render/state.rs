@@ -5,11 +5,10 @@ use super::prose::one_line;
 use super::{cards, ident, names, spelling};
 use std::fmt;
 use sts2_core::{
-    Blocked, ChestOption, ContentVersion, Counters, Entry, EventOption, Observation, RestOption,
-    Room, Stock, Take,
+    Blocked, ChestOption, Counters, Entry, EventOption, Observation, RestOption, Room, Stock, Take,
 };
 
-pub(super) fn state_of<V: ContentVersion>(
+pub(super) fn state_of<V: sts2_content_wire::WireContentVersion>(
     f: &mut fmt::Formatter<'_>,
     obs: &Observation<V>,
     rng: bool,
@@ -96,7 +95,10 @@ fn detail(f: &mut fmt::Formatter<'_>, text: Option<&String>) -> fmt::Result {
     }
 }
 
-fn room_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, room: &Room<V>) -> fmt::Result {
+fn room_of<V: sts2_content_wire::WireContentVersion>(
+    f: &mut fmt::Formatter<'_>,
+    room: &Room<V>,
+) -> fmt::Result {
     // The room's own name, and the thing it is a room *of* where there is one.
     // Only an event has an id; a shop and a rest site are the whole line, and a
     // blank id would leave a space hanging off the end of it.
@@ -133,7 +135,7 @@ fn room_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, room: &Room<V>) -> fmt
     }
 }
 
-fn rest_options<V: ContentVersion>(
+fn rest_options<V: sts2_content_wire::WireContentVersion>(
     f: &mut fmt::Formatter<'_>,
     options: &[RestOption<V>],
 ) -> fmt::Result {
@@ -146,7 +148,7 @@ fn rest_options<V: ContentVersion>(
     Ok(())
 }
 
-fn chest_options<V: ContentVersion>(
+fn chest_options<V: sts2_content_wire::WireContentVersion>(
     f: &mut fmt::Formatter<'_>,
     options: &[ChestOption<V>],
 ) -> fmt::Result {
@@ -163,7 +165,7 @@ fn chest_options<V: ContentVersion>(
     Ok(())
 }
 
-fn event_options<V: ContentVersion>(
+fn event_options<V: sts2_content_wire::WireContentVersion>(
     f: &mut fmt::Formatter<'_>,
     options: &[EventOption<V>],
 ) -> fmt::Result {
@@ -177,7 +179,7 @@ fn event_options<V: ContentVersion>(
             .map(|t| one_line(t))
             .filter(|t| !t.is_empty())
             .or_else(|| o.relic.as_ref().map(spelling))
-            .unwrap_or_else(|| super::option_key(&o.key));
+            .unwrap_or_else(|| super::option_key(o));
 
         let mut flags = Vec::new();
         if o.chosen {
@@ -197,7 +199,10 @@ fn event_options<V: ContentVersion>(
 
 /// A shop's stock: bought rather than chosen, so it is priced rather than
 /// described.
-fn shop<V: ContentVersion>(f: &mut fmt::Formatter<'_>, entries: &[Entry<V>]) -> fmt::Result {
+fn shop<V: sts2_content_wire::WireContentVersion>(
+    f: &mut fmt::Formatter<'_>,
+    entries: &[Entry<V>],
+) -> fmt::Result {
     for e in entries {
         // Card removal is a service rather than a thing, so it has nothing to
         // name. The kind beside it already says what it is, and a `?` would
@@ -241,7 +246,10 @@ fn shop<V: ContentVersion>(f: &mut fmt::Formatter<'_>, entries: &[Entry<V>]) -> 
 /// The two sets are printed as one list. The game keeps them apart because one
 /// is per run and the other per player. A reader looking for the stream that
 /// moved does not care which map it came out of.
-fn rng_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, rng: &Counters<V>) -> fmt::Result {
+fn rng_of<V: sts2_content_wire::WireContentVersion>(
+    f: &mut fmt::Formatter<'_>,
+    rng: &Counters<V>,
+) -> fmt::Result {
     let mut moved: Vec<String> = Vec::new();
     let mut idle = 0;
 

@@ -16,9 +16,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use sts2_core::{
-    Answered, Construct, ContentVersion, Decision, Play, Setup, Snapshot, Start, Step,
-};
+use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start, Step};
 
 use super::error::Error;
 use crate::wire::command::Command;
@@ -34,7 +32,7 @@ pub trait Transport {
     fn send_line(&mut self, line: &str) -> Result<String, Error>;
 }
 
-impl<V: ContentVersion> Transport for crate::Oracle<V> {
+impl<V: sts2_content_wire::WireContentVersion> Transport for crate::Oracle<V> {
     fn send_line(&mut self, line: &str) -> Result<String, Error> {
         crate::Oracle::send_line(self, line)
     }
@@ -139,7 +137,10 @@ impl<P> Cached<P> {
 
 impl<P: Transport> Cached<P> {
     /// The answer to one command, from the transcript or from the game.
-    fn answer<V: ContentVersion>(&mut self, cmd: Command<V>) -> Result<String, Error> {
+    fn answer<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        cmd: Command<V>,
+    ) -> Result<String, Error> {
         let line = serde_json::to_string(&cmd).map_err(|e| Error::Encode(format!("{cmd:?}"), e))?;
 
         if let Some(entry) = self.entries.get(self.cursor) {
@@ -169,7 +170,10 @@ impl<P: Transport> Cached<P> {
         Ok(reply)
     }
 
-    fn answered<V: ContentVersion>(&mut self, cmd: Command<V>) -> Result<Answered<V>, Error> {
+    fn answered<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        cmd: Command<V>,
+    ) -> Result<Answered<V>, Error> {
         let reply = self.answer::<V>(cmd)?;
         super::receive(parse_reply::<V>(&reply)?, &mut self.last)
     }
@@ -179,7 +183,10 @@ impl<P: Transport> Cached<P> {
     /// A step the game refuses is still an answer, and is recorded as one. A
     /// recording is what a real run did. A refusal in one is a fact about the
     /// game, worth keeping rather than raising here.
-    pub fn fill<V: ContentVersion>(&mut self, steps: &[Step<V>]) -> Result<(), Error> {
+    pub fn fill<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        steps: &[Step<V>],
+    ) -> Result<(), Error> {
         for step in steps {
             let _refusable = self.step(step)?;
         }
@@ -197,7 +204,7 @@ pub struct FromTranscript<P> {
     pub inner: Option<P>,
 }
 
-impl<V: ContentVersion, P: Transport> Play<V> for Cached<P> {
+impl<V: sts2_content_wire::WireContentVersion, P: Transport> Play<V> for Cached<P> {
     type Error = Error;
     type Host = FromTranscript<P>;
 
@@ -232,7 +239,7 @@ impl<V: ContentVersion, P: Transport> Play<V> for Cached<P> {
     }
 }
 
-impl<V: ContentVersion, P: Transport> Construct<V> for Cached<P> {
+impl<V: sts2_content_wire::WireContentVersion, P: Transport> Construct<V> for Cached<P> {
     fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
         self.answered(Command::from(step))
     }

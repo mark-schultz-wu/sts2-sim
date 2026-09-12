@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 # game generically over the build, so nothing here needs a build to exist. Only
 # the tests do, because they must pick one to spell a decision.
 sts2-core = { workspace = true }
+sts2-content-wire = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

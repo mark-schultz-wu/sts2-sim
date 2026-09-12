@@ -1,0 +1,8 @@
+[package]
+name = "sts2-content-wire"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sts2-content = { workspace = true }
+sts2-core = { workspace = true }

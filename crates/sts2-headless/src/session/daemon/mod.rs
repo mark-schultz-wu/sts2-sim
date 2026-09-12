@@ -33,7 +33,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use sts2_core::Step;
-use sts2_core::{ContentVersion, Version};
+use sts2_core::Version;
 
 /// The crate's error, not `anyhow`'s.
 ///
@@ -116,7 +116,7 @@ struct Tape {
 
 impl Tape {
     /// Begins a recording, replacing whatever was at the path.
-    fn open<V: ContentVersion>(path: &Path) -> Result<Self> {
+    fn open<V: sts2_content_wire::WireContentVersion>(path: &Path) -> Result<Self> {
         let mut file = File::create(path)
             .map_err(|e| failed_to(format!("creating {}: {e}", path.display())))?;
 
@@ -174,7 +174,10 @@ impl Tape {
     ///
     /// A failure ends the recording. A file missing a step in the middle
     /// replays as a different run, with nothing about it saying so.
-    fn write<V: ContentVersion>(&mut self, command: &serde_json::Value) -> Result<()> {
+    fn write<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        command: &serde_json::Value,
+    ) -> Result<()> {
         let wire: Command<V> = serde_json::from_value(command.clone())
             .map_err(|e| failed_to(format!("this build cannot replay {command}: {e}")))?;
         let step: Step<V> = wire
@@ -208,7 +211,10 @@ fn is_decision(command: &serde_json::Value) -> bool {
 /// so nothing observes the daemon's health and nothing tidies up after a client
 /// that crashed. Without it, a forgotten game sits holding memory until the
 /// machine reboots.
-pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Result<()> {
+pub fn serve<V: sts2_content_wire::WireContentVersion>(
+    config: Config,
+    idle_timeout: Duration,
+) -> Result<()> {
     let path = socket_path(&V::VERSION);
 
     // Bind first, and only clear the path once nobody has answered on it.
@@ -278,7 +284,7 @@ pub fn serve<V: ContentVersion>(config: Config, idle_timeout: Duration) -> Resul
 }
 
 /// Handles one connection. Returns `false` when the daemon is to stop.
-fn serve_one<V: ContentVersion>(
+fn serve_one<V: sts2_content_wire::WireContentVersion>(
     stream: UnixStream,
     config: &Config,
     game: &mut Option<Oracle<V>>,
@@ -354,7 +360,7 @@ fn answer_with(mut writer: UnixStream, answer: &Answer) -> Result<()> {
 }
 
 /// Starts, resumes or stops writing the run down.
-fn record<V: ContentVersion>(
+fn record<V: sts2_content_wire::WireContentVersion>(
     tape: &mut Option<Tape>,
     path: Option<PathBuf>,
     append: bool,
@@ -408,7 +414,7 @@ fn starts_a_run(command: &serde_json::Value) -> bool {
 /// Launching lazily means `sts2 run start` is the only command that pays the
 /// boot cost. A daemon spawned in the background is then useful the moment it
 /// binds, rather than twenty seconds later.
-fn relay<V: ContentVersion>(
+fn relay<V: sts2_content_wire::WireContentVersion>(
     config: &Config,
     game: &mut Option<Oracle<V>>,
     started: &mut bool,

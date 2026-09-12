@@ -19,15 +19,15 @@ use std::panic::{self, AssertUnwindSafe};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Combat, Construct, ContentVersion, Counters, Creature, Decided, Play, Playable, PowerAmount,
-    Rules, Snapshot, Step,
+    Combat, Construct, Counters, Creature, Decided, Play, Playable, PowerAmount, Rules, Snapshot,
+    Step,
 };
 use sts2_golden::{golden_dir, oracle_or_explain, recording};
 
 type V = V0_107_1;
 
 /// One run: the steps to replay, and how far they are known to get.
-struct Golden<V: ContentVersion> {
+struct Golden<V: sts2_content_wire::WireContentVersion> {
     name: String,
     /// What the run was started with, which `Play::begin` takes and no step
     /// spells.
@@ -38,14 +38,14 @@ struct Golden<V: ContentVersion> {
 }
 
 /// Every run to replay, in a fixed order so a failure reads the same twice.
-fn every_run<V: ContentVersion>() -> Vec<Golden<V>> {
+fn every_run<V: sts2_content_wire::WireContentVersion>() -> Vec<Golden<V>> {
     sts2_golden::every_run()
         .iter()
         .map(|name| golden(name))
         .collect()
 }
 
-fn golden<V: ContentVersion>(name: &str) -> Golden<V> {
+fn golden<V: sts2_content_wire::WireContentVersion>(name: &str) -> Golden<V> {
     let path = golden_dir().join(name).join("BASELINE");
     let baseline = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
@@ -82,7 +82,9 @@ enum Stopped {
 ///
 /// Both halves are driven with the same steps. The oracle's answers come from
 /// the transcript, so nothing here launches a game.
-fn replay<V: Rules>(golden: &Golden<V>) -> (usize, Option<Stopped>) {
+fn replay<V: Rules + sts2_content_wire::WireContentVersion>(
+    golden: &Golden<V>,
+) -> (usize, Option<Stopped>) {
     let mut oracle = oracle_or_explain(&golden.name, &golden.start);
 
     // Starting is not a step. `Play::begin` takes it, and is the one thing
@@ -107,7 +109,7 @@ fn replay<V: Rules>(golden: &Golden<V>) -> (usize, Option<Stopped>) {
 }
 
 /// What one step decided, and where it left the run, against the oracle's.
-fn compare<V: Rules, E: std::fmt::Display>(
+fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Display>(
     stepped: std::thread::Result<Result<sts2_core::Answered<V>, E>>,
     sim: &mut sts2_sim::Sim<V>,
     oracle: &mut impl Construct<V, Error = impl std::fmt::Display>,
@@ -173,7 +175,7 @@ fn panic_message(panicked: &Box<dyn std::any::Any + Send>) -> String {
 }
 
 /// The digest of what the step produced, spelled the way the golden file is.
-fn digest_of<V: ContentVersion>(applied: &Snapshot<V>) -> String {
+fn digest_of<V: sts2_content_wire::WireContentVersion>(applied: &Snapshot<V>) -> String {
     format!("{}", applied.observation.rules_digest())
 }
 
@@ -236,7 +238,7 @@ fn the_simulator_replays_real_runs() {
 ///
 /// Every field, rather than the first: one wrong number usually moves several,
 /// and the shortest list of them is what says which rule is missing.
-fn differences<V: ContentVersion>(
+fn differences<V: sts2_content_wire::WireContentVersion>(
     wanted: &Decided,
     want: &Snapshot<V>,
     made: &Decided,
@@ -364,7 +366,11 @@ fn differences<V: ContentVersion>(
     out
 }
 
-fn combat_differences<V: ContentVersion>(want: &Combat<V>, got: &Combat<V>, out: &mut Vec<String>) {
+fn combat_differences<V: sts2_content_wire::WireContentVersion>(
+    want: &Combat<V>,
+    got: &Combat<V>,
+    out: &mut Vec<String>,
+) {
     let mut note = |field: &str, want: String, got: String| {
         if want != got {
             out.push(format!(
@@ -460,7 +466,7 @@ fn combat_differences<V: ContentVersion>(want: &Combat<V>, got: &Combat<V>, out:
 
 /// A room, without the prose. The digest leaves the strings out, so a report
 /// that put them back names a difference that is not one.
-fn room<V: ContentVersion>(room: &Option<sts2_core::Room<V>>) -> String {
+fn room<V: sts2_content_wire::WireContentVersion>(room: &Option<sts2_core::Room<V>>) -> String {
     use sts2_core::Room;
     match room {
         None => "none".to_string(),

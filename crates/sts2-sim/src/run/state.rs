@@ -8,7 +8,7 @@ use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
-    EventOption, EventOptionKey, EventOptionName, Map, Observation, Question, Reachable,
+    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, Question, Reachable,
     RewardCard, RewardDetail, RewardKind, Room, Rules, Seed, Table, TakeReward,
 };
 
@@ -39,6 +39,9 @@ pub(crate) struct State<V: Rules> {
     /// A constructed fight does not move it. `EnterRoomDebug` is handed its
     /// encounter and takes none from the list.
     met: usize,
+    events_used: usize,
+    visited_events: Vec<V::Event>,
+    unknown_odds: [f32; 3],
     odds: Odds,
     phase: Phase<V>,
 }
@@ -87,6 +90,16 @@ struct Rngs {
 
 /// Exactly one room or pending action can own the run at a time.
 #[derive(Debug, Clone)]
+pub(super) struct EnteredEvent<V: Rules> {
+    pub event: V::Event,
+    pub state: V::EventState,
+    pub rng: MegaRng,
+    pub unknown_counter: u32,
+    pub events_used: usize,
+    pub unknown_odds: [f32; 3],
+}
+
+#[derive(Debug, Clone)]
 enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
@@ -102,6 +115,10 @@ enum Phase<V: Rules> {
     Rewards {
         combat: Combat<V>,
         offered: Vec<Offer<V>>,
+    },
+    Event {
+        state: V::EventState,
+        rng: MegaRng,
     },
 }
 
@@ -165,6 +182,9 @@ impl<V: Rules> State<V> {
                     .expect("starting potion slots fit the build's count type"),
             },
             met: 0,
+            events_used: 0,
+            visited_events: Vec::new(),
+            unknown_odds: [0.1, 0.02, 0.03],
             odds: Odds::default(),
             rngs: Rngs {
                 run: run_counters,
@@ -196,7 +216,7 @@ impl<V: Rules> State<V> {
     pub(super) fn fight(&self) -> Option<&crate::combat::Live<V>> {
         match &self.phase {
             Phase::Combat(live) => Some(live),
-            Phase::Neow { .. } | Phase::Rewards { .. } => None,
+            Phase::Neow { .. } | Phase::Rewards { .. } | Phase::Event { .. } => None,
         }
     }
 
@@ -249,6 +269,37 @@ impl<V: Rules> State<V> {
     /// nothing beats one yet.
     pub(super) fn act(&self) -> usize {
         0
+    }
+
+    pub(super) fn event_candidates(&self) -> &[V::Event] {
+        &self.shared.opening.acts[self.act()].1.events
+    }
+
+    pub(super) fn event_state(&self) -> (usize, &[V::Event], [f32; 3]) {
+        (self.events_used, &self.visited_events, self.unknown_odds)
+    }
+
+    pub(super) fn enter_event(&mut self, to: Coord, entered: EnteredEvent<V>) {
+        let EnteredEvent {
+            event,
+            state,
+            rng,
+            unknown_counter,
+            events_used,
+            unknown_odds,
+        } = entered;
+        self.floor = self.floor + num_traits::one();
+        self.at = to;
+        self.visited.push(to);
+        let at = V::run_rng_types()
+            .iter()
+            .position(|kind| *kind == V::unknown_map_rng())
+            .expect("unknown-map is a run RNG stream");
+        self.rngs.run[at] = unknown_counter;
+        self.events_used = events_used;
+        self.unknown_odds = unknown_odds;
+        self.visited_events.push(event);
+        self.phase = Phase::Event { state, rng };
     }
 
     pub(super) fn enter_combat(
@@ -387,6 +438,28 @@ impl<V: Rules> State<V> {
     }
 
     pub(crate) fn choose(&mut self, index: u8) -> Result<Applied<V>, Error> {
+        if matches!(self.phase, Phase::Event { .. }) {
+            let room = match &self.phase {
+                Phase::Event { state, .. } => V::observe_event(state, self),
+                _ => unreachable!(),
+            };
+            let option = match room {
+                Room::Event { options, .. } => options.get(index as usize).cloned(),
+                _ => None,
+            }
+            .unwrap_or_else(|| unimplemented!("an option the event does not offer"));
+            if option.locked {
+                unimplemented!("a locked event option");
+            }
+            let (phase, player) = (&mut self.phase, &mut self.player);
+            let Phase::Event { state, rng } = phase else {
+                unreachable!()
+            };
+            match V::choose_event(state, index, player, rng) {
+                sts2_core::EventFlow::Finished => return Ok(self.report()),
+                _ => unimplemented!("an event choice that does not finish"),
+            }
+        }
         let Phase::Neow {
             options,
             chosen,
@@ -532,7 +605,7 @@ impl<V: Rules> State<V> {
                             index,
                             key: EventOptionKey {
                                 event: V::neow_event(),
-                                option: EventOptionName::Relic(relic),
+                                option: V::EventOptionId::from_relic(relic),
                             },
                             title: None,
                             text: None,
@@ -579,6 +652,7 @@ impl<V: Rules> State<V> {
                 // not left the room it was fought in.
                 false,
             ),
+            Phase::Event { state, .. } => (None, Some(V::observe_event(state, self)), None, false),
         };
         // Where the player stands. A live fight holds it, because a card can
         // move it and the fight is resolved on a copy; anywhere else the run
@@ -592,7 +666,7 @@ impl<V: Rules> State<V> {
                     alive: player.alive,
                 }
             }
-            Phase::Neow { .. } | Phase::Rewards { .. } => Standing {
+            Phase::Neow { .. } | Phase::Rewards { .. } | Phase::Event { .. } => Standing {
                 hp: self.player.hp,
                 max_hp: self.player.max_hp,
                 alive: true,
@@ -643,6 +717,38 @@ impl<V: Rules> State<V> {
             asking,
             resolved: true,
         }
+    }
+}
+
+impl<V: Rules> sts2_core::EventView<V> for State<V> {
+    fn act(&self) -> V::Count {
+        num_traits::cast(self.act()).expect("an act index fits the build count")
+    }
+
+    fn gold(&self) -> V::Number {
+        self.player.gold
+    }
+
+    fn has_potion(&self) -> bool {
+        !self.player.potions.is_empty()
+    }
+}
+
+impl<V: Rules> sts2_core::EventContext<V> for Player<V> {
+    fn gold(&self) -> V::Number {
+        self.gold
+    }
+
+    fn spend_gold(&mut self, amount: V::Number) -> bool {
+        if self.gold < amount {
+            return false;
+        }
+        self.gold = self.gold - amount;
+        true
+    }
+
+    fn obtain_relic(&mut self, relic: V::Relic) {
+        self.relics.push(relic);
     }
 }
 

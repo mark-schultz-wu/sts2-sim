@@ -13,8 +13,8 @@ use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
-    Answer, BeltIndex, CombatId, ContentVersion, Cost, Decided, Decision, HandIndex, Observation,
-    Play, Question, Room, Snapshot, TakeReward,
+    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Observation, Play, Question,
+    Room, Snapshot, TakeReward,
 };
 
 use super::keys::{self, Action};
@@ -53,7 +53,7 @@ enum Stage {
 /// keyboard can be driven with no game behind it, and a fault part way through
 /// a handler cannot leave the screen half-changed.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Intent<V: ContentVersion> {
+pub enum Intent<V: sts2_content_wire::WireContentVersion> {
     /// The key moved a cursor, opened a panel, or meant nothing here.
     Nothing,
     /// A fresh look, which advances nothing.
@@ -100,7 +100,7 @@ pub enum Ended {
     NoRun,
 }
 
-pub struct App<V: ContentVersion, G: Play<V>> {
+pub struct App<V: sts2_content_wire::WireContentVersion, G: Play<V>> {
     game: G,
     /// Why the loop will stop, read once it has.
     ended: Ended,
@@ -117,7 +117,7 @@ pub struct App<V: ContentVersion, G: Play<V>> {
 
 impl<V, G> App<V, G>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -824,7 +824,10 @@ where
 }
 
 /// The card at an index in the hand, played at a creature or at nothing.
-fn play_card<V: ContentVersion>(index: usize, target: Option<CombatId>) -> Intent<V> {
+fn play_card<V: sts2_content_wire::WireContentVersion>(
+    index: usize,
+    target: Option<CombatId>,
+) -> Intent<V> {
     // A hand that long is no hand the game deals, so the key meant nothing.
     let Some(index) = hand_index(index) else {
         return Intent::Nothing;
@@ -847,7 +850,10 @@ fn belt_index(index: usize) -> Option<BeltIndex> {
 }
 
 /// The potion at an index in the belt, drunk at a creature or at nothing.
-fn drink<V: ContentVersion>(index: usize, target: Option<CombatId>) -> Intent<V> {
+fn drink<V: sts2_content_wire::WireContentVersion>(
+    index: usize,
+    target: Option<CombatId>,
+) -> Intent<V> {
     // As in [`play_card`]: a belt that long is no belt the game gives.
     let Some(index) = belt_index(index) else {
         return Intent::Nothing;
@@ -856,7 +862,7 @@ fn drink<V: ContentVersion>(index: usize, target: Option<CombatId>) -> Intent<V>
 }
 
 /// Which kind of screen this is.
-fn stage_of<V: ContentVersion>(standing: &Snapshot<V>) -> Stage {
+fn stage_of<V: sts2_content_wire::WireContentVersion>(standing: &Snapshot<V>) -> Stage {
     if let Some(question) = &standing.asking {
         return match question {
             Question::SelectCards { .. } => Stage::AskingCards,

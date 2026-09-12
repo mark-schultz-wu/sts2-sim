@@ -20,7 +20,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use sts2_core::CardTable as _;
 use sts2_core::Cost;
-use sts2_core::{CardIdent, CombatId, ContentVersion, Playable};
+use sts2_core::{CardIdent, CombatId, Playable};
 
 use crate::render::{self, Pool, spelling};
 use crate::tui::names;
@@ -51,7 +51,7 @@ pub fn height(rows: u16) -> u16 {
 /// `Bash+1`, the name and then what has been done to it. Anything attached is
 /// shown in full rather than as a mark, because a player who has never seen the
 /// affliction cannot look up a symbol.
-pub fn ident<V: ContentVersion>(card: &CardIdent<V>) -> String {
+pub fn ident<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> String {
     let mut out = names::pretty(&spelling(&card.card));
     if card.upgrade > 0 {
         out.push_str(&format!("+{}", card.upgrade));
@@ -104,7 +104,7 @@ impl Face {
     /// `aimed` is the creature it is currently pointed at, which decides which
     /// of the previews is shown. The game computes one per creature the card
     /// reaches, because that is where the numbers differ.
-    pub fn playable<V: ContentVersion>(
+    pub fn playable<V: sts2_content_wire::WireContentVersion>(
         card: &Playable<V>,
         at: usize,
         aimed: Option<CombatId>,
@@ -165,7 +165,7 @@ impl Face {
     }
 
     /// A card with the printed cost shown by a reward screen.
-    pub fn plain_with_cost<V: ContentVersion>(
+    pub fn plain_with_cost<V: sts2_content_wire::WireContentVersion>(
         card: &CardIdent<V>,
         energy: Cost,
         stars: Cost,
@@ -179,12 +179,12 @@ impl Face {
     ///
     /// For a reward, where no fight has had a say and the game reports no
     /// price. An upgrade moves a price, and no reward offers an upgraded card.
-    pub fn printed<V: ContentVersion>(card: &CardIdent<V>) -> Face {
+    pub fn printed<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> Face {
         Self::plain_with_cost(card, card.card.cost(), card.card.star_cost())
     }
 
     /// A card with nothing computed about it: a pile listing, a reward.
-    pub fn plain<V: ContentVersion>(card: &CardIdent<V>) -> Face {
+    pub fn plain<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> Face {
         Face {
             cost: None,
             name: ident(card),

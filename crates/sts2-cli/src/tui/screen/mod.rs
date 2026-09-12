@@ -23,7 +23,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-use sts2_core::{ContentVersion, Observation, Play, Question};
+use sts2_core::{Observation, Play, Question};
 
 use super::app::App;
 use super::names;
@@ -47,7 +47,7 @@ pub(crate) fn log_rows(height: u16) -> u16 {
 
 pub fn draw<V, G>(frame: &mut Frame, app: &App<V, G>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -83,7 +83,7 @@ where
 }
 
 /// What the run is carrying, on one line, always in the same order.
-fn run_strip<V: ContentVersion>(
+fn run_strip<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
     observed: &Observation<V>,
@@ -155,7 +155,7 @@ fn run_strip<V: ContentVersion>(
 
 fn body_of<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, observed: &Observation<V>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -178,7 +178,11 @@ where
     }
 }
 
-fn over<V: ContentVersion>(frame: &mut Frame, area: Rect, observed: &Observation<V>) {
+fn over<V: sts2_content_wire::WireContentVersion>(
+    frame: &mut Frame,
+    area: Rect,
+    observed: &Observation<V>,
+) {
     let (word, style) = match observed.victory {
         Some(true) => ("the spire is yours", theme::better()),
         _ => ("the run ends here", theme::hurt()),
@@ -202,7 +206,7 @@ fn over<V: ContentVersion>(frame: &mut Frame, area: Rect, observed: &Observation
 /// What has just happened, oldest at the top.
 fn scrollback<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -248,7 +252,7 @@ where
 /// The name of the potion being aimed, for the bar to say what it drinks.
 fn drinking<V, G>(app: &App<V, G>) -> Option<String>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -264,7 +268,7 @@ where
 
 fn key_bar<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {

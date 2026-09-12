@@ -58,7 +58,7 @@ use xxhash::XxHash64;
 
 use crate::{
     Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, Combat, ContentVersion,
-    Coord, Cost, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet,
+    Coord, Cost, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, FlagSet,
     Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
     Reachable, RestOption, Room, Stack, Stock, Take,
 };
@@ -399,18 +399,15 @@ impl Sink {
     }
 
     /// Which option an event offers, by the parts its key names.
-    fn event_key<V: ContentVersion>(&mut self, key: &EventOptionKey<V>) {
+    fn event_key<V: ContentVersion>(&mut self, key: &EventOptionKey<V>, locked: bool) {
         let EventOptionKey { event, option } = key;
         self.id(event);
-        match option {
-            EventOptionName::Relic(relic) => {
-                self.u8(EVENT_OPTION_RELIC);
-                self.id(relic);
-            }
-            EventOptionName::Said(name) => {
-                self.u8(EVENT_OPTION_SAID);
-                self.str(name);
-            }
+        if !locked && let Some(relic) = option.relic() {
+            self.u8(EVENT_OPTION_RELIC);
+            self.id(&relic);
+        } else {
+            self.u8(EVENT_OPTION_SAID);
+            self.id(option);
         }
     }
 
@@ -624,7 +621,7 @@ impl Sink {
                     sink.u8(*index);
                     // The key is an id, not prose: it names the option without
                     // saying anything about it, and two options never share one.
-                    sink.event_key(key);
+                    sink.event_key(key, *locked);
                     sink.prose_option(title);
                     sink.prose_option(text);
                     sink.bool(*locked);

@@ -4,9 +4,9 @@ use super::prose::one_line;
 use super::{cards, entry, flags, ident, spelling};
 use num_traits::Zero;
 use std::fmt;
-use sts2_core::{CardIdent, CardVars, Combat, ContentVersion, Creature, Orbs, Playable, Preview};
+use sts2_core::{CardIdent, CardVars, Combat, Creature, Orbs, Playable, Preview};
 
-pub(super) fn combat_of<V: ContentVersion>(
+pub(super) fn combat_of<V: sts2_content_wire::WireContentVersion>(
     f: &mut fmt::Formatter<'_>,
     combat: &Combat<V>,
 ) -> fmt::Result {
@@ -74,7 +74,10 @@ pub(super) fn combat_of<V: ContentVersion>(
     Ok(())
 }
 
-fn creature<V: ContentVersion>(f: &mut fmt::Formatter<'_>, c: &Creature<V>) -> fmt::Result {
+fn creature<V: sts2_content_wire::WireContentVersion>(
+    f: &mut fmt::Formatter<'_>,
+    c: &Creature<V>,
+) -> fmt::Result {
     // The category prefix is redundant next to the side, which says the same
     // thing more usefully — so the entry name alone.
     let model = match &c.model {
@@ -140,7 +143,10 @@ fn creature<V: ContentVersion>(f: &mut fmt::Formatter<'_>, c: &Creature<V>) -> f
 
 /// The orb queue, which is a queue. The same orbs in another order evoke
 /// differently, so this is printed in order and empty slots are shown.
-fn orbs_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, orbs: &Orbs<V>) -> fmt::Result {
+fn orbs_of<V: sts2_content_wire::WireContentVersion>(
+    f: &mut fmt::Formatter<'_>,
+    orbs: &Orbs<V>,
+) -> fmt::Result {
     let mut slots: Vec<String> = orbs
         .queue
         .iter()
@@ -171,7 +177,10 @@ struct Row {
 ///
 /// Order is first appearance, so the indices stay roughly ascending and a hand
 /// does not reshuffle itself between turns for cosmetic reasons.
-fn same_cards<V: ContentVersion>(hand: &[CardIdent<V>], legal: &[Playable<V>]) -> Vec<Row> {
+fn same_cards<V: sts2_content_wire::WireContentVersion>(
+    hand: &[CardIdent<V>],
+    legal: &[Playable<V>],
+) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
 
     for (i, card) in hand.iter().enumerate() {
@@ -198,7 +207,7 @@ fn same_cards<V: ContentVersion>(hand: &[CardIdent<V>], legal: &[Playable<V>]) -
 }
 
 /// The cost and what it can be aimed at, or why it cannot be played.
-fn playing<V: ContentVersion>(l: &Playable<V>) -> String {
+fn playing<V: sts2_content_wire::WireContentVersion>(l: &Playable<V>) -> String {
     let mut line = format!(" {}", super::costs(l.cost, l.star_cost));
 
     // `reason` present is the whole of "unplayable" — `CardModel.CanPlay`
@@ -232,7 +241,7 @@ fn playing<V: ContentVersion>(l: &Playable<V>) -> String {
 ///
 /// The oracle reports the game.s computed values. Distinct target outcomes get
 /// separate prefixed lines. A single outcome has no prefix.
-fn effects_of<V: ContentVersion>(previews: &[Preview<V>]) -> Vec<String> {
+fn effects_of<V: sts2_content_wire::WireContentVersion>(previews: &[Preview<V>]) -> Vec<String> {
     let many = previews.len() > 1;
 
     previews
@@ -258,7 +267,7 @@ fn effects_of<V: ContentVersion>(previews: &[Preview<V>]) -> Vec<String> {
 ///
 /// This compares the oracle.s two maps. Colour is insufficient because `[red]`
 /// also styles ordinary event prose.
-fn moved_in<V: ContentVersion>(preview: &Preview<V>) -> String {
+fn moved_in<V: sts2_content_wire::WireContentVersion>(preview: &Preview<V>) -> String {
     let changed: Vec<String> = preview
         .base
         .iter()

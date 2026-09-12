@@ -26,9 +26,8 @@ pub fn display<T: Serialize + std::fmt::Debug>(id: &T) -> String {
 mod tests {
     use super::*;
     use sts2_content::v0_107_1::V0_107_1;
-    use sts2_core::ContentVersion;
 
-    type Card = <V0_107_1 as ContentVersion>::Card;
+    type Card = <V0_107_1 as sts2_core::ContentVersion>::Card;
 
     #[test]
     fn an_id_round_trips_through_its_game_spelling() {

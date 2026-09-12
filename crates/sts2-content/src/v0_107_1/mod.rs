@@ -20,8 +20,11 @@
 //! costs one method, and the reverse costs a divergence nobody can see.
 
 mod behaviour;
+mod event_options;
 mod generated;
 
+pub use behaviour::events::State as EventState;
+pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
 pub use generated::*;
 
 use sts2_core::Version;
@@ -36,6 +39,7 @@ pub struct V0_107_1;
 
 impl sts2_core::ContentVersion for V0_107_1 {
     const VERSION: Version = VERSION;
+    type EventOptionId = event_options::EventOptionId;
 
     type Number = i32;
     type Health = i32;
@@ -270,6 +274,36 @@ impl sts2_core::Rules for V0_107_1 {
         &generated::events::SHARED_ANCIENTS
     }
 
+    type EventState = EventState;
+
+    fn event_allowed(event: Self::Event, run: &impl sts2_core::EventView<Self>) -> bool {
+        behaviour::events::allowed(event, run)
+    }
+
+    fn enter_event<R: sts2_core::rng::GameRng>(
+        event: Self::Event,
+        run: &impl sts2_core::EventView<Self>,
+        rng: &mut R,
+    ) -> Self::EventState {
+        behaviour::events::enter(event, run, rng)
+    }
+
+    fn observe_event(
+        state: &Self::EventState,
+        run: &impl sts2_core::EventView<Self>,
+    ) -> sts2_core::Room<Self> {
+        behaviour::events::observe(state, run)
+    }
+
+    fn choose_event<R: sts2_core::rng::GameRng, C: sts2_core::EventContext<Self>>(
+        state: &mut Self::EventState,
+        option: u8,
+        run: &mut C,
+        rng: &mut R,
+    ) -> sts2_core::EventFlow<Self> {
+        behaviour::events::choose(state, option, run, rng)
+    }
+
     fn neow_curses() -> &'static [Self::Relic] {
         &generated::events::NEOW_CURSES
     }
@@ -330,6 +364,10 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn up_front_rng() -> Self::RunRngType {
         generated::runstate::RunRngType::UpFront
+    }
+
+    fn unknown_map_rng() -> Self::RunRngType {
+        generated::runstate::RunRngType::UnknownMapPoint
     }
 
     fn player_rng_types() -> &'static [Self::PlayerRngType] {

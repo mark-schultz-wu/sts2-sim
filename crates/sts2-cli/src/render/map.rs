@@ -12,14 +12,14 @@
 
 use super::spelling;
 use std::fmt::Write as _;
-use sts2_core::{ContentVersion, Coord, Map};
+use sts2_core::{Coord, Map};
 
 /// The act as a picture, or nothing if the observation carried no graph.
 ///
 /// Returns a `String` rather than writing through a formatter, because the whole
 /// grid has to be laid out before any of it can be printed. A row's connectors
 /// are decided by the row below it.
-pub fn drawn<V: ContentVersion>(map: &Map<V>) -> Option<String> {
+pub fn drawn<V: sts2_content_wire::WireContentVersion>(map: &Map<V>) -> Option<String> {
     if map.points.is_empty() {
         return None;
     }
@@ -93,10 +93,10 @@ pub fn drawn<V: ContentVersion>(map: &Map<V>) -> Option<String> {
 mod tests {
     use super::drawn;
     use sts2_content::v0_107_1::V0_107_1;
-    use sts2_core::{ContentVersion, Coord, Map, Node, Reachable};
+    use sts2_core::{Coord, Map, Node, Reachable};
 
     type V = V0_107_1;
-    type MapPointType = <V as ContentVersion>::MapPointType;
+    type MapPointType = <V as sts2_core::ContentVersion>::MapPointType;
 
     /// A point type by the game's own name for it.
     ///

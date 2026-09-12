@@ -12,22 +12,22 @@
 
 use super::{entry, flags, ident, spelling};
 use std::fmt;
-use sts2_core::{Blocked, ContentVersion, Reason, Refusal};
+use sts2_core::{Blocked, Reason, Refusal};
 
 /// What was refused, and why.
-pub fn refusal<V: ContentVersion>(refused: &Refusal<V>) -> String {
+pub fn refusal<V: sts2_content_wire::WireContentVersion>(refused: &Refusal<V>) -> String {
     format!("refused {}: {}", refused.what, reason(&refused.reason))
 }
 
 /// Why, on its own.
-pub fn reason<V: ContentVersion>(why: &Reason<V>) -> String {
+pub fn reason<V: sts2_content_wire::WireContentVersion>(why: &Reason<V>) -> String {
     Prose(why).to_string()
 }
 
 /// A wrapper because both `Reason` and `Display` belong to somebody else.
-struct Prose<'a, V: ContentVersion>(&'a Reason<V>);
+struct Prose<'a, V: sts2_content_wire::WireContentVersion>(&'a Reason<V>);
 
-impl<V: ContentVersion> fmt::Display for Prose<'_, V> {
+impl<V: sts2_content_wire::WireContentVersion> fmt::Display for Prose<'_, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         /// A room by the name its build gives it, or `nowhere`.
         fn room<T: serde::Serialize + fmt::Debug>(kind: &Option<T>) -> String {

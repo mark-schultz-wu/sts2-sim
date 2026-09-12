@@ -27,7 +27,6 @@ use sts2_cli::cli::{Play, StartArgs};
 use sts2_cli::control::{self, Outcome};
 use sts2_cli::oracle::{self, Held};
 use sts2_cli::tui;
-use sts2_core::ContentVersion;
 use sts2_core::Play as _;
 use sts2_headless::Session;
 use sts2_headless::daemon::DEFAULT_IDLE_TIMEOUT;
@@ -316,7 +315,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn drive<V: ContentVersion>(cli: Cli) -> Result<()> {
+fn drive<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
     let show = Show { rng: cli.rng };
     let held: Host<V> = Held::new(serving);
 
@@ -351,7 +350,11 @@ fn drive<V: ContentVersion>(cli: Cli) -> Result<()> {
 }
 
 /// Starts a run and prints the state it opened on.
-fn start<V: ContentVersion>(held: &Host<V>, args: &StartArgs, show: Show) -> Result<()> {
+fn start<V: sts2_content_wire::WireContentVersion>(
+    held: &Host<V>,
+    args: &StartArgs,
+    show: Show,
+) -> Result<()> {
     // Read before anything is brought up, so a mistyped seed or character
     // leaves behind neither a daemon nor an empty recording.
     let opening = args.start::<V>()?;
@@ -381,7 +384,7 @@ fn start<V: ContentVersion>(held: &Host<V>, args: &StartArgs, show: Show) -> Res
 /// which is one line and says what it does. Bringing the game up on a bare
 /// `sts2` means twenty seconds of nothing, followed by a screen with no run in
 /// it. It also gives the player no way to say which seed they wanted.
-fn play<V: ContentVersion>(held: &Host<V>, show: Show) -> Result<()> {
+fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>, show: Show) -> Result<()> {
     // The daemon comes up. The *game* does not, so a bare `sts2` opens on the
     // setup screen straight away and the game boots while the player is picking
     // a character.
@@ -441,7 +444,11 @@ fn said(words: String) -> Result<()> {
 /// The warning is the session failing rather than the game. A recording that
 /// stopped means the move happened and the file did not. Saying nothing about
 /// that is how a run gets played out under the belief it was being kept.
-fn report<V: ContentVersion>(game: &Game<V>, outcome: Outcome<V>, show: Show) -> Result<()> {
+fn report<V: sts2_content_wire::WireContentVersion>(
+    game: &Game<V>,
+    outcome: Outcome<V>,
+    show: Show,
+) -> Result<()> {
     if let Some(warning) = game.warned() {
         eprintln!("(warning: {warning})");
     }
@@ -491,7 +498,7 @@ fn same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// Sends a recorded run's steps into a fresh game, and prints where it ended.
-fn replay<V: ContentVersion>(
+fn replay<V: sts2_content_wire::WireContentVersion>(
     held: &Host<V>,
     file: &Path,
     stop_after: Option<usize>,

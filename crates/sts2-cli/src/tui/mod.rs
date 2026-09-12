@@ -28,7 +28,7 @@ mod theme;
 
 use anyhow::Result;
 use ratatui::DefaultTerminal;
-use sts2_core::{ContentVersion, Play};
+use sts2_core::Play;
 
 pub use app::Ended;
 pub use state::Options;
@@ -40,7 +40,7 @@ pub use state::Options;
 /// it ended.
 pub fn play<V, G>(terminal: &mut DefaultTerminal, game: G, options: Options) -> Result<app::Ended>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {

@@ -12,7 +12,6 @@ use std::marker::PhantomData;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::process::{Child, Command as Proc, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use sts2_core::ContentVersion;
 use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start};
 
 /// A running game, and the process behind it.
@@ -24,7 +23,7 @@ use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start};
 /// Dropping this closes the connection, which the game treats as a normal
 /// shutdown, and then reaps the process. There is no `quit`: the protocol's is
 /// what `Drop` sends.
-pub struct Oracle<V: ContentVersion> {
+pub struct Oracle<V: sts2_content_wire::WireContentVersion> {
     version: PhantomData<V>,
     child: Child,
     writer: TcpStream,
@@ -35,7 +34,7 @@ pub struct Oracle<V: ContentVersion> {
     last: Option<Response>,
 }
 
-impl<V: ContentVersion> Oracle<V> {
+impl<V: sts2_content_wire::WireContentVersion> Oracle<V> {
     /// Launches the game and waits for it to connect back.
     ///
     /// The game dials out. This binds an ephemeral port first and passes it to
@@ -244,7 +243,7 @@ impl<V: ContentVersion> Oracle<V> {
     }
 }
 
-impl<V: ContentVersion> Play<V> for Oracle<V> {
+impl<V: sts2_content_wire::WireContentVersion> Play<V> for Oracle<V> {
     type Error = Error;
 
     /// Where the game is. This holder owns the process, so it has to be told.
@@ -283,14 +282,14 @@ impl<V: ContentVersion> Play<V> for Oracle<V> {
     }
 }
 
-impl<V: ContentVersion> Construct<V> for Oracle<V> {
+impl<V: sts2_content_wire::WireContentVersion> Construct<V> for Oracle<V> {
     fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
         let reply = self.dispatch(step)?;
         super::receive(reply, &mut self.last)
     }
 }
 
-impl<V: ContentVersion> Drop for Oracle<V> {
+impl<V: sts2_content_wire::WireContentVersion> Drop for Oracle<V> {
     fn drop(&mut self) {
         // Closing the socket is the documented shutdown: the game sees EOF and
         // exits. Shutting down explicitly rather than relying on field drop
@@ -300,7 +299,7 @@ impl<V: ContentVersion> Drop for Oracle<V> {
     }
 }
 
-impl<V: ContentVersion> fmt::Debug for Oracle<V> {
+impl<V: sts2_content_wire::WireContentVersion> fmt::Debug for Oracle<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Oracle")
             .field("pid", &self.child.id())
@@ -381,7 +380,9 @@ fn read_line(reader: &mut BufReader<TcpStream>) -> Result<String, Error> {
 /// reads it must decide response-or-refusal the same way.
 ///
 /// A `fault` is neither half of the pair, and comes back as an [`Error`].
-pub fn parse_reply<V: ContentVersion>(line: &str) -> Result<Reply<V>, Error> {
+pub fn parse_reply<V: sts2_content_wire::WireContentVersion>(
+    line: &str,
+) -> Result<Reply<V>, Error> {
     let decode = |e| Error::Decode(line.to_string(), e);
     let value: Value = serde_json::from_str(line).map_err(decode)?;
 

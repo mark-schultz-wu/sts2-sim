@@ -16,7 +16,7 @@
 
 use serde::Deserialize;
 use serde_json::Value;
-use sts2_core::{Applied, ContentVersion};
+use sts2_core::Applied;
 
 use super::observation::{Error as ObservationError, observation};
 use super::question::WireQuestion;
@@ -111,7 +111,9 @@ impl Response {
     /// is dropped here: the sequence number, the command name, and the game's
     /// own digest. None of it is carried into a type a simulator also fills
     /// in.
-    pub fn applied<V: ContentVersion>(&self) -> Result<Option<Applied<V>>, ObservationError> {
+    pub fn applied<V: sts2_content_wire::WireContentVersion>(
+        &self,
+    ) -> Result<Option<Applied<V>>, ObservationError> {
         let (state, resolved, asking) = match self {
             Self::Observation {
                 state, resolved, ..

@@ -1,6 +1,7 @@
 //! Moving to a map point, and entering what waits there.
 
-use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules};
+use sts2_core::rng::GameRng;
+use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, StreamKinds};
 
 use super::State;
 use crate::combat;
@@ -56,8 +57,55 @@ impl<V: Rules> State<V> {
     /// caller still holds the run it had.
     pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Applied<V>, crate::combat::Error> {
         let Move { to, destination } = moving;
+        if let Destination::Other(kind) = destination {
+            if kind != V::MapPointType::UNKNOWN {
+                unimplemented!("entering {destination:?}");
+            }
+            let (mut events_used, visited, mut odds) = self.event_state();
+            let stream = V::unknown_map_rng();
+            let counter = self.counters().run[&stream];
+            let mut rng = crate::rng::MegaRng::named(self.raw_seed(), stream.name());
+            rng.fast_forward(counter as i32)
+                .expect("a stored RNG counter moves forward");
+            let roll = rng.next_double() as f32;
+            let mut cumulative = 0.0;
+            for probability in odds {
+                cumulative += probability;
+                if roll <= cumulative {
+                    unimplemented!("a non-event unknown room");
+                }
+            }
+            for (probability, increase) in odds.iter_mut().zip([0.1, 0.02, 0.03]) {
+                *probability += increase;
+            }
+            let events = self.event_candidates();
+            let event = (0..events.len())
+                .find_map(|_| {
+                    let candidate = events[events_used % events.len()];
+                    events_used += 1;
+                    (!visited.contains(&candidate)
+                        && V::event_allowed(candidate, &self.report().observation))
+                    .then_some(candidate)
+                })
+                .unwrap_or_else(|| unimplemented!("an exhausted event queue"));
+            let mut event_rng =
+                crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
+            let state = V::enter_event(event, self, &mut event_rng);
+            self.enter_event(
+                to,
+                super::state::EnteredEvent {
+                    event,
+                    state,
+                    rng: event_rng,
+                    unknown_counter: rng.counter() as u32,
+                    events_used,
+                    unknown_odds: odds,
+                },
+            );
+            return Ok(self.report());
+        }
         let Destination::Monster(encounter) = destination else {
-            unimplemented!("entering {destination:?}");
+            unreachable!()
         };
 
         let (combat, counters) = combat::enter::<V>(

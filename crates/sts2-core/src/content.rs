@@ -998,6 +998,8 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// The build these types were generated from.
     const VERSION: Version;
 
+    type EventOptionId: crate::EventOptionKinds<Self>;
+
     /// A signed amount in this build's live game state.
     type Number: num_traits::PrimInt
         + num_traits::Signed
@@ -1445,6 +1447,28 @@ pub trait Rules: Hooks {
     /// The ancients the run deals out to the acts after the first.
     fn shared_ancients() -> &'static [Self::Event];
 
+    type EventState: Clone + std::fmt::Debug;
+
+    fn event_allowed(event: Self::Event, run: &impl crate::EventView<Self>) -> bool;
+
+    fn enter_event<R: crate::rng::GameRng>(
+        event: Self::Event,
+        run: &impl crate::EventView<Self>,
+        rng: &mut R,
+    ) -> Self::EventState;
+
+    fn observe_event(
+        state: &Self::EventState,
+        run: &impl crate::EventView<Self>,
+    ) -> crate::Room<Self>;
+
+    fn choose_event<R: crate::rng::GameRng, C: crate::EventContext<Self>>(
+        state: &mut Self::EventState,
+        option: u8,
+        run: &mut C,
+        rng: &mut R,
+    ) -> crate::EventFlow<Self>;
+
     /// The curses Neow offers, in the game's own order.
     fn neow_curses() -> &'static [Self::Relic];
 
@@ -1476,6 +1500,9 @@ pub trait Rules: Hooks {
 
     /// The run stream consumed while the run is built.
     fn up_front_rng() -> Self::RunRngType;
+
+    /// The stream that decides what an unknown map point becomes.
+    fn unknown_map_rng() -> Self::RunRngType;
 
     /// Every per-player stream, in the order the game creates them.
     fn player_rng_types() -> &'static [Self::PlayerRngType];

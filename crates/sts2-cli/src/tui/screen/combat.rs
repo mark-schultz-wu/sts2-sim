@@ -23,7 +23,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use sts2_core::{Combat, CombatId, ContentVersion, Creature, Play};
+use sts2_core::{Combat, CombatId, Creature, Play};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -49,7 +49,7 @@ const AIR_MAX: u16 = 8;
 
 pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &Combat<V>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -108,7 +108,9 @@ where
 /// Splits on `side`, since pets and charmed monsters can fight opposite their
 /// model category. The player gets a separate row and appears in neither list.
 /// If no player exists, every creature is treated as an enemy.
-fn sides<V: ContentVersion>(combat: &Combat<V>) -> (Vec<&Creature<V>>, Vec<&Creature<V>>) {
+fn sides<V: sts2_content_wire::WireContentVersion>(
+    combat: &Combat<V>,
+) -> (Vec<&Creature<V>>, Vec<&Creature<V>>) {
     let Some(you) = combat.creatures.iter().find(|c| is_player(c)) else {
         return (Vec::new(), combat.creatures.iter().collect());
     };
@@ -121,7 +123,7 @@ fn sides<V: ContentVersion>(combat: &Combat<V>) -> (Vec<&Creature<V>>, Vec<&Crea
 }
 
 /// One side of the fight, as a row of panels under a rule.
-fn creature_row<V: ContentVersion>(
+fn creature_row<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
     title: &str,
@@ -149,7 +151,12 @@ fn creature_row<V: ContentVersion>(
     }
 }
 
-fn enemy<V: ContentVersion>(frame: &mut Frame, area: Rect, creature: &Creature<V>, aimed: bool) {
+fn enemy<V: sts2_content_wire::WireContentVersion>(
+    frame: &mut Frame,
+    area: Rect,
+    creature: &Creature<V>,
+    aimed: bool,
+) {
     let style = match (aimed, creature.alive) {
         (true, _) => theme::aimed(),
         (false, false) => theme::gone(),
@@ -193,7 +200,10 @@ fn enemy<V: ContentVersion>(frame: &mut Frame, area: Rect, creature: &Creature<V
 /// The numbers first, because that is what the turn is planned against. The
 /// move's name comes after in grey, so a name nobody recognises is not
 /// competing with the damage.
-fn intent_line<V: ContentVersion>(creature: &Creature<V>, width: usize) -> Line<'static> {
+fn intent_line<V: sts2_content_wire::WireContentVersion>(
+    creature: &Creature<V>,
+    width: usize,
+) -> Line<'static> {
     let Some(next) = &creature.next_move else {
         return Line::styled("??", theme::dim());
     };
@@ -258,7 +268,10 @@ fn kind_of<T: serde::Serialize + std::fmt::Debug>(kind: &T) -> String {
 ///
 /// Uses the game.s power table rather than a hardcoded list of debuffs. Powers
 /// marked `dynamic` decide at runtime and remain neutral here.
-fn powers<V: ContentVersion>(creature: &Creature<V>, width: usize) -> Line<'static> {
+fn powers<V: sts2_content_wire::WireContentVersion>(
+    creature: &Creature<V>,
+    width: usize,
+) -> Line<'static> {
     let made = creature
         .powers
         .iter()
@@ -277,7 +290,11 @@ fn powers<V: ContentVersion>(creature: &Creature<V>, width: usize) -> Line<'stat
 // You.
 // ---------------------------------------------------------------------------
 
-fn you_row<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>) {
+fn you_row<V: sts2_content_wire::WireContentVersion>(
+    frame: &mut Frame,
+    area: Rect,
+    combat: &Combat<V>,
+) {
     let block = titled("you");
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -320,7 +337,7 @@ fn you_row<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>)
 
 fn hand_row<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, combat: &Combat<V>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -373,7 +390,11 @@ where
     }
 }
 
-fn pile_bar<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>) {
+fn pile_bar<V: sts2_content_wire::WireContentVersion>(
+    frame: &mut Frame,
+    area: Rect,
+    combat: &Combat<V>,
+) {
     let spans = vec![
         Span::raw(" "),
         Span::styled("draw ", theme::dim()),
@@ -391,7 +412,7 @@ fn pile_bar<V: ContentVersion>(frame: &mut Frame, area: Rect, combat: &Combat<V>
 /// Side alone is insufficient because a charmed monster can fight for you. A
 /// missing model is also insufficient because real players have character model
 /// ids. The model category identifies the player.
-fn is_player<V: ContentVersion>(creature: &Creature<V>) -> bool {
+fn is_player<V: sts2_content_wire::WireContentVersion>(creature: &Creature<V>) -> bool {
     match &creature.model {
         Some(model) => matches!(model, sts2_core::ModelId::Character(_)),
         // A creature that is neither a monster nor a player. Nothing in this

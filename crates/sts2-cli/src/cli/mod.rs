@@ -11,7 +11,6 @@ pub mod moves;
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use std::path::Path;
-use sts2_core::ContentVersion;
 use sts2_core::Seed;
 use sts2_core::{
     Answer as GameAnswer, Coord, Decision, Gift, Setup, Start, Step, TakeReward, Tool,
@@ -22,7 +21,9 @@ use sts2_core::{
 /// Public because the front end has to name one for a run started anywhere but
 /// the command line. `V::AscensionLevel` is an associated type with no default,
 /// and there is no way to spell "the lowest one" except by naming it.
-pub fn ascension<V: ContentVersion>(spelling: &str) -> Result<V::AscensionLevel> {
+pub fn ascension<V: sts2_content_wire::WireContentVersion>(
+    spelling: &str,
+) -> Result<V::AscensionLevel> {
     id("ascension level", spelling)
 }
 
@@ -86,7 +87,7 @@ fn belt_index(index: u8) -> anyhow::Result<sts2_core::BeltIndex> {
 
 impl StartArgs {
     /// The typed run this command line asks to start.
-    pub fn start<V: ContentVersion>(&self) -> Result<Start<V>> {
+    pub fn start<V: sts2_content_wire::WireContentVersion>(&self) -> Result<Start<V>> {
         Ok(Start {
             seed: Seed::fold(&self.seed).context("that is not a seed")?,
             character: id("character", &self.character)?,
@@ -303,7 +304,7 @@ pub enum Play {
 
 impl Play {
     /// The step this asks for.
-    pub fn step<V: ContentVersion>(&self) -> Result<Step<V>> {
+    pub fn step<V: sts2_content_wire::WireContentVersion>(&self) -> Result<Step<V>> {
         Ok(match self {
             Play::Fight { encounter } => Setup::Fight {
                 encounter: id("encounter", encounter)?,

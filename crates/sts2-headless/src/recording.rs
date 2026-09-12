@@ -12,7 +12,6 @@ use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use sts2_core::ContentVersion;
 use sts2_core::{Recording, Start, Step, Tape};
 
 /// Writes the stamp and every step.
@@ -20,7 +19,10 @@ use sts2_core::{Recording, Start, Step, Tape};
 /// For a recording taken all at once. A caller writing as it plays uses
 /// [`open`] and [`append`] instead, which is what makes a killed session still
 /// leave a replayable file.
-pub fn write<V: ContentVersion>(recording: &Recording<V>, mut out: impl Write) -> io::Result<()> {
+pub fn write<V: sts2_content_wire::WireContentVersion>(
+    recording: &Recording<V>,
+    mut out: impl Write,
+) -> io::Result<()> {
     open::<V>(&mut out)?;
     began(&mut out, recording.start())?;
     for step in recording.steps() {
@@ -33,13 +35,16 @@ pub fn write<V: ContentVersion>(recording: &Recording<V>, mut out: impl Write) -
 ///
 /// Its own function rather than a case inside [`append`], because a [`Start`]
 /// is not a [`Step`]. A file has exactly one of these, and it comes first.
-pub fn began<V: ContentVersion>(mut out: impl Write, start: &Start<V>) -> io::Result<()> {
+pub fn began<V: sts2_content_wire::WireContentVersion>(
+    mut out: impl Write,
+    start: &Start<V>,
+) -> io::Result<()> {
     let wire: Command<V> = start.into();
     writeln!(out, "{}", serde_json::to_string(&wire)?)
 }
 
 /// Writes the stamp line that opens a recording of this build.
-pub fn open<V: ContentVersion>(mut out: impl Write) -> io::Result<()> {
+pub fn open<V: sts2_content_wire::WireContentVersion>(mut out: impl Write) -> io::Result<()> {
     writeln!(out, "{}", serde_json::to_string(&Stamp::of(&V::VERSION))?)
 }
 
@@ -47,7 +52,10 @@ pub fn open<V: ContentVersion>(mut out: impl Write) -> io::Result<()> {
 ///
 /// Nothing here buffers across calls, so a process that dies between two steps
 /// has written the first.
-pub fn append<V: ContentVersion>(mut out: impl Write, step: &Step<V>) -> io::Result<()> {
+pub fn append<V: sts2_content_wire::WireContentVersion>(
+    mut out: impl Write,
+    step: &Step<V>,
+) -> io::Result<()> {
     let wire: Command<V> = step.into();
     writeln!(out, "{}", serde_json::to_string(&wire)?)
 }
@@ -61,14 +69,14 @@ pub fn append<V: ContentVersion>(mut out: impl Write, step: &Step<V>) -> io::Res
 /// Parameterised by the build, because the stamp is. A writer opened for one
 /// build and fed another's steps produces a file whose header lies.
 #[derive(Debug)]
-pub struct Writer<V: ContentVersion> {
+pub struct Writer<V: sts2_content_wire::WireContentVersion> {
     path: PathBuf,
     file: File,
     steps: usize,
     build: PhantomData<V>,
 }
 
-impl<V: ContentVersion> Writer<V> {
+impl<V: sts2_content_wire::WireContentVersion> Writer<V> {
     /// Begins a recording of `start`, replacing whatever was at the path.
     ///
     /// The run is named at the top rather than recorded as it goes. A
@@ -135,7 +143,7 @@ impl<V: ContentVersion> Writer<V> {
     }
 }
 
-impl<V: ContentVersion> Tape<V> for Writer<V> {
+impl<V: sts2_content_wire::WireContentVersion> Tape<V> for Writer<V> {
     type Error = io::Error;
 
     fn record(&mut self, step: &Step<V>) -> Result<(), io::Error> {
@@ -156,7 +164,9 @@ impl<V: ContentVersion> Tape<V> for Writer<V> {
 /// different things. A recording from another version replays without complaint
 /// and produces a different run, which is the failure this project exists to
 /// make impossible.
-pub fn read<V: ContentVersion>(input: impl BufRead) -> Result<Recording<V>, Error> {
+pub fn read<V: sts2_content_wire::WireContentVersion>(
+    input: impl BufRead,
+) -> Result<Recording<V>, Error> {
     let mut lines = input.lines();
 
     let head = lines.next().transpose()?.ok_or(Error::Empty)?;
@@ -271,8 +281,8 @@ mod tests {
     use sts2_core::{Coord, Decision, Start};
 
     type V = V0_107_1;
-    type Character = <V as ContentVersion>::Character;
-    type AscensionLevel = <V as ContentVersion>::AscensionLevel;
+    type Character = <V as sts2_core::ContentVersion>::Character;
+    type AscensionLevel = <V as sts2_core::ContentVersion>::AscensionLevel;
 
     fn recorded() -> Recording<V> {
         let mut r = Recording::new(Start {
@@ -352,7 +362,9 @@ mod tests {
     #[test]
     fn a_recording_from_another_build_is_refused() {
         let text = written(&recorded()).replace(
-            &<V as ContentVersion>::VERSION.content_hash.to_string(),
+            &<V as sts2_core::ContentVersion>::VERSION
+                .content_hash
+                .to_string(),
             "1234567",
         );
 
@@ -367,7 +379,9 @@ mod tests {
     #[test]
     fn a_rebalanced_build_is_refused_too() {
         let text = written(&recorded()).replace(
-            &<V as ContentVersion>::VERSION.assembly_hash.to_string(),
+            &<V as sts2_core::ContentVersion>::VERSION
+                .assembly_hash
+                .to_string(),
             "999",
         );
 
@@ -419,7 +433,7 @@ mod tests {
             modifiers: vec![],
         });
         r.push(sts2_core::Setup::Fight {
-            encounter: <V as ContentVersion>::Encounter::ShrinkerBeetleWeak,
+            encounter: <V as sts2_core::ContentVersion>::Encounter::ShrinkerBeetleWeak,
         });
 
         let text = written(&r);

@@ -16,7 +16,7 @@
 //!
 //! ```no_run
 //! use sts2_content::v0_107_1::V0_107_1;
-//! use sts2_core::{ContentVersion, Play, Seed, Start};
+//! use sts2_core::{Play, Seed, Start};
 //! use sts2_headless::{Config, Oracle};
 //!
 //! // The build is named once and every id is reached through the trait, so
@@ -24,8 +24,8 @@
 //! // game whose content or assembly hash disagrees with the tables, and one
 //! // running a mod this client was not built against.
 //! type V = V0_107_1;
-//! type Character = <V as ContentVersion>::Character;
-//! type AscensionLevel = <V as ContentVersion>::AscensionLevel;
+//! type Character = <V as sts2_core::ContentVersion>::Character;
+//! type AscensionLevel = <V as sts2_core::ContentVersion>::AscensionLevel;
 //!
 //! // Starting a run is how a game is reached. There is no oracle without one,
 //! // so nothing here has to answer for a run that never started.

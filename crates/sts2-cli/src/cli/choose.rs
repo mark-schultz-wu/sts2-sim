@@ -10,7 +10,6 @@
 
 use super::Taking;
 use anyhow::{Result, bail};
-use sts2_core::ContentVersion;
 use sts2_core::{Answer as GameAnswer, Decision, Question, Room, Snapshot};
 
 /// What the game is currently waiting to be told.
@@ -30,7 +29,7 @@ pub enum Awaiting {
 ///
 /// Shops use [`buyable`](self::buyable) and a different command. The renderer
 /// shares this function, so its advice cannot drift from the action.
-pub(crate) fn choosable<V: ContentVersion>(room: &Room<V>) -> Vec<u8> {
+pub(crate) fn choosable<V: sts2_content_wire::WireContentVersion>(room: &Room<V>) -> Vec<u8> {
     match room {
         Room::RestSite { options } => options
             .iter()
@@ -62,7 +61,7 @@ pub(crate) fn choosable<V: ContentVersion>(room: &Room<V>) -> Vec<u8> {
 /// One you cannot afford is still there to come back for. A potion offered to a
 /// full belt is stocked, affordable, and refused. That last one was found by
 /// playing at random: the shop said yes twice and the game said no.
-pub(crate) fn buyable<V: ContentVersion>(room: &Room<V>) -> Vec<u8> {
+pub(crate) fn buyable<V: sts2_content_wire::WireContentVersion>(room: &Room<V>) -> Vec<u8> {
     match room {
         Room::Shop { entries } => entries
             .iter()
@@ -74,7 +73,9 @@ pub(crate) fn buyable<V: ContentVersion>(room: &Room<V>) -> Vec<u8> {
 }
 
 /// Reads one reply and says which mechanism a choice goes through.
-pub fn awaiting<V: ContentVersion>(standing: &Snapshot<V>) -> Result<Awaiting> {
+pub fn awaiting<V: sts2_content_wire::WireContentVersion>(
+    standing: &Snapshot<V>,
+) -> Result<Awaiting> {
     if let Some(question) = &standing.asking {
         return Ok(match question {
             Question::SelectCards { .. } => Awaiting::Cards,
@@ -103,7 +104,10 @@ pub fn awaiting<V: ContentVersion>(standing: &Snapshot<V>) -> Result<Awaiting> {
 /// `N.M` form and the other two do not. A card selection or a room option given
 /// a dotted index is a misunderstanding worth naming: nothing there has an
 /// inside.
-pub fn command<V: ContentVersion>(awaiting: &Awaiting, indices: &[Taking]) -> Result<Decision<V>> {
+pub fn command<V: sts2_content_wire::WireContentVersion>(
+    awaiting: &Awaiting,
+    indices: &[Taking],
+) -> Result<Decision<V>> {
     let flat = |what: &str| -> Result<Vec<usize>> {
         indices
             .iter()

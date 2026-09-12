@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/sts2-cli",
     "crates/sts2-content",
+    "crates/sts2-content-wire",
     "crates/sts2-core",
     "crates/sts2-golden",
     "crates/sts2-headless",
@@ -33,6 +34,7 @@ serial_test = "4.0.1"
 # Default features off here, so a dependent takes the trait with no build
 # attached. Anything that needs the tables opts in with `features`.
 sts2-content = { path = "crates/sts2-content", default-features = false }
+sts2-content-wire = { path = "crates/sts2-content-wire" }
 sts2-core = { path = "crates/sts2-core" }
 sts2-headless = { path = "crates/sts2-headless" }
 sts2-sim = { path = "crates/sts2-sim" }
