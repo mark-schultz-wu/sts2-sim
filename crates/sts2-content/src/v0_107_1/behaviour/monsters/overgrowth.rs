@@ -32,6 +32,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::TwigSlimeS => twig_slime_s(move_id, fight),
         Monster::Nibbit => nibbit(move_id, fight),
         Monster::Fogmog => fogmog(move_id, fight),
+        Monster::EyeWithTeeth => eye_with_teeth(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
 }
@@ -195,6 +196,14 @@ fn fogmog<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
         }
         MoveId::HeadbuttMove => attack(fight),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `EyeWithTeeth`. Distracts by putting three Dazed into the discard pile.
+fn eye_with_teeth<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::DistractMove => fight.give_cards(Cards::Status(StatusCard::Dazed), 3),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
