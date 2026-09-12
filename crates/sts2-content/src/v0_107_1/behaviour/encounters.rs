@@ -32,11 +32,11 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Mon
 fn slimes_weak<R: GameRng>(rng: &mut R) -> Vec<Monster> {
     let small = [Monster::LeafSlimeS, Monster::TwigSlimeS];
     let first = rng
-        .next_int(Bound::new(R::Int::from_i32(2)).expect("two small slimes"))
+        .next_int(Bound::new(R::Int::ONE + R::Int::ONE).expect("two small slimes"))
         .to_usize();
     rng.next_int(Bound::new(R::Int::ONE).expect("one small slime remains"));
     let medium = [Monster::LeafSlimeM, Monster::TwigSlimeM][rng
-        .next_int(Bound::new(R::Int::from_i32(2)).expect("two medium slimes"))
+        .next_int(Bound::new(R::Int::ONE + R::Int::ONE).expect("two medium slimes"))
         .to_usize()];
     vec![small[first], medium, small[1 - first]]
 }
