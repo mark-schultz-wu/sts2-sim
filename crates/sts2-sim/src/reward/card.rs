@@ -25,9 +25,11 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
             RewardRarity::Common
         };
         let choices = available::<V>(cards, &drawn, wanted);
-        let left = choices.iter().filter(|card| !drawn.contains(card)).count() as i32;
-        let bound = Bound::new(left).expect("an available rarity has a card");
-        let at = rng.next_int(bound) as usize;
+        let left = choices.iter().filter(|card| !drawn.contains(card)).count();
+        let left = num_traits::cast(left).expect("an available rarity fits the RNG integer");
+        let bound = Bound::try_new(left).expect("an available rarity has a card");
+        let at =
+            num_traits::cast(rng.next_int(bound)).expect("a bounded draw is a valid card index");
         drawn.push(
             choices
                 .iter()
@@ -117,9 +119,11 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     for _ in 0..count {
         let wanted = rarity(rng, odds);
         let choices = available::<V>(cards, &drawn, wanted);
-        let left = choices.iter().filter(|card| !drawn.contains(card)).count() as i32;
-        let bound = Bound::new(left).expect("an available rarity has a card");
-        let at = rng.next_int(bound) as usize;
+        let left = choices.iter().filter(|card| !drawn.contains(card)).count();
+        let left = num_traits::cast(left).expect("an available rarity fits the RNG integer");
+        let bound = Bound::try_new(left).expect("an available rarity has a card");
+        let at =
+            num_traits::cast(rng.next_int(bound)).expect("a bounded draw is a valid card index");
         drawn.push(
             choices
                 .iter()

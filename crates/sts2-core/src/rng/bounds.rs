@@ -11,9 +11,8 @@
 /// Why an argument was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    /// A bound outside `1..=i32::MAX`. Zero makes a draw's range empty, and
-    /// the game throws on it.
-    #[error("a draw bound must be in 1..=i32::MAX")]
+    /// A bound that is not positive or does not fit the RNG integer type.
+    #[error("a draw bound must be positive and fit the RNG integer type")]
     Bound,
 
     /// A half-open span with nothing in it: `min >= max`, or a `NaN`.
@@ -31,36 +30,61 @@ pub enum Error {
     Rewind { from: i32, to: i32 },
 }
 
-/// An exclusive upper bound in `1..=i32::MAX`.
-///
-/// Not [`core::num::NonZeroU32`], which still admits values above `i32::MAX`.
-/// The game's parameter is an `int`, and scaling a double by something larger
-/// truncates to nonsense rather than failing.
+/// A positive exclusive upper bound in the RNG's integer type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Bound(i32);
+pub struct Bound<I>(I);
 
-impl Bound {
-    /// `const`, so a literal bound is checked at compile time.
-    pub const fn new(value: i32) -> Option<Self> {
-        if value >= 1 { Some(Bound(value)) } else { None }
+impl<I: RngInteger> Bound<I> {
+    pub fn try_new(value: I) -> Result<Self, Error> {
+        if value > I::zero() {
+            Ok(Bound(value))
+        } else {
+            Err(Error::Bound)
+        }
     }
 
-    pub const fn get(self) -> i32 {
+    pub const fn get(self) -> I {
         self.0
+    }
+}
+
+/// Arithmetic required by the game's integer RNG operations.
+pub trait RngInteger: num_traits::PrimInt + num_traits::Signed {
+    const ZERO: Self;
+    const ONE: Self;
+    fn scaled(unit: f64, bound: Self) -> Self;
+    fn in_half_open(unit: f64, min: Self, max: Self) -> Self;
+}
+
+impl RngInteger for i32 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+
+    fn scaled(unit: f64, bound: Self) -> Self {
+        (unit * bound as f64) as i32
+    }
+
+    fn in_half_open(unit: f64, min: Self, max: Self) -> Self {
+        let width = max as i64 - min as i64;
+        if width <= i32::MAX as i64 {
+            ((unit * width as f64) as i32).wrapping_add(min)
+        } else {
+            (((unit * width as f64) as i64).wrapping_add(min as i64)) as i32
+        }
     }
 }
 
 /// A slice whose length is a valid bound for the game's choice operation.
 #[derive(Debug, Clone, Copy)]
-pub struct Choices<'a, T> {
+pub struct Choices<'a, T, I> {
     items: &'a [T],
-    bound: Bound,
+    bound: Bound<I>,
 }
 
-impl<'a, T> Choices<'a, T> {
+impl<'a, T, I: RngInteger> Choices<'a, T, I> {
     pub fn try_new(items: &'a [T]) -> Result<Self, Error> {
-        let count = i32::try_from(items.len()).map_err(|_| Error::Bound)?;
-        let bound = Bound::try_from(count)?;
+        let count = num_traits::cast(items.len()).ok_or(Error::Bound)?;
+        let bound = Bound::try_new(count)?;
         Ok(Choices { items, bound })
     }
 
@@ -68,16 +92,8 @@ impl<'a, T> Choices<'a, T> {
         self.items
     }
 
-    pub(crate) const fn bound(&self) -> Bound {
+    pub(crate) const fn bound(&self) -> Bound<I> {
         self.bound
-    }
-}
-
-impl TryFrom<i32> for Bound {
-    type Error = Error;
-
-    fn try_from(value: i32) -> Result<Self, Error> {
-        Bound::new(value).ok_or(Error::Bound)
     }
 }
 
@@ -139,10 +155,33 @@ impl<T: Copy> Interval<T> {
     }
 }
 
-impl<T: Copy + From<i32> + Into<i32>> Interval<T> {
+impl<T: num_traits::PrimInt> Interval<T> {
     /// Every integer in this closed interval, in order.
-    pub fn values(&self) -> impl Iterator<Item = T> {
-        (self.min().into()..=self.max().into()).map(T::from)
+    pub fn values(&self) -> IntervalValues<T> {
+        IntervalValues {
+            next: Some(self.min()),
+            max: self.max(),
+        }
+    }
+}
+
+/// The integers in a closed interval.
+pub struct IntervalValues<T> {
+    next: Option<T>,
+    max: T,
+}
+
+impl<T: num_traits::PrimInt> Iterator for IntervalValues<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        let value = self.next?;
+        self.next = if value == self.max {
+            None
+        } else {
+            value.checked_add(&T::one())
+        };
+        Some(value)
     }
 }
 
@@ -152,10 +191,10 @@ mod tests {
 
     #[test]
     fn a_bound_must_be_positive_and_fit_an_i32() {
-        assert!(Bound::new(1).is_some());
-        assert!(Bound::new(i32::MAX).is_some());
-        assert!(Bound::new(0).is_none());
-        assert!(Bound::new(-1).is_none());
+        assert!(Bound::try_new(1).is_ok());
+        assert!(Bound::try_new(i32::MAX).is_ok());
+        assert_eq!(Bound::try_new(0), Err(Error::Bound));
+        assert_eq!(Bound::try_new(-1), Err(Error::Bound));
     }
 
     #[test]
@@ -181,8 +220,11 @@ mod tests {
 
     #[test]
     fn choices_must_be_nonempty() {
-        assert_eq!(Choices::<u8>::try_new(&[]).unwrap_err(), Error::Bound);
-        assert_eq!(Choices::try_new(&[10, 20]).unwrap().bound().get(), 2);
+        assert_eq!(Choices::<u8, i32>::try_new(&[]).unwrap_err(), Error::Bound);
+        assert_eq!(
+            Choices::<_, i32>::try_new(&[10, 20]).unwrap().bound().get(),
+            2
+        );
     }
 
     #[test]

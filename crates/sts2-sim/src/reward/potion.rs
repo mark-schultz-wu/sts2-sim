@@ -36,7 +36,9 @@ fn at<V: Rules, R: GameRng>(
     rng: &mut R,
 ) -> V::Potion {
     let choices = pool.at(wanted);
-    let count = i32::try_from(choices.len()).expect("a potion pool fits an i32");
-    let bound = Bound::new(count).unwrap_or_else(|| unimplemented!("a rarity with no potion"));
-    choices[rng.next_int(bound) as usize]
+    let count = num_traits::cast(choices.len()).expect("a potion pool fits the RNG integer");
+    let bound = Bound::try_new(count).unwrap_or_else(|_| unimplemented!("a rarity with no potion"));
+    let at: usize =
+        num_traits::cast(rng.next_int(bound)).expect("a bounded draw is a valid potion index");
+    choices[at]
 }

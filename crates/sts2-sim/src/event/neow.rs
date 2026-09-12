@@ -9,7 +9,7 @@
 //! it from the run's seed, the player's slot and the event's own id, so no
 //! draw here moves any counter an observation reports.
 
-use sts2_core::rng::{GameRng, Span, name_hash};
+use sts2_core::rng::{GameRng, name_hash};
 use sts2_core::{ContentVersion, Rules};
 
 /// The relics Neow offers, in the order the room lists them.
@@ -78,6 +78,5 @@ impl<V: Rules> Blessing<V> {
 
 /// One item of a list, which is `Rng.NextItem`.
 fn next_item<T: Copy, R: GameRng>(rng: &mut R, items: &[T]) -> Option<T> {
-    let span = Span::new(0, i32::try_from(items.len()).ok()?).ok()?;
-    items.get(rng.next_int_range(span) as usize).copied()
+    rng.choose(items).ok().copied()
 }

@@ -11,7 +11,7 @@
 
 use std::collections::VecDeque;
 
-use sts2_core::rng::{GameRng, Interval, Span};
+use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
 
 use sts2_core::{AscensionKinds, MapPointKinds, Rules};
 
@@ -34,9 +34,9 @@ pub(crate) struct Counts {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rests {
     /// `NextGaussianInt(mean, 1, min, max)`, which three of the four acts use.
-    Around { mean: i32, min: i32, max: i32 },
+    Around { mean: usize, min: usize, max: usize },
     /// `NextInt(min, max)`, which the last act uses.
-    Between { min: i32, max: i32 },
+    Between { min: usize, max: usize },
 }
 
 /// What one act's map is made of, before any of it is rolled.
@@ -49,7 +49,7 @@ pub struct Layout {
     pub rooms: usize,
     pub rests: Rests,
     /// Taken off the standard question mark roll. Zero in the first act.
-    pub fewer_unknowns: i32,
+    pub fewer_unknowns: usize,
 }
 
 impl Layout {
@@ -82,18 +82,19 @@ impl Counts {
     ) -> Self {
         let rests = match layout.rests {
             Rests::Around { mean, min, max } => {
-                let accept = Interval::new(min, max);
-                rng.next_gaussian_int(mean, 1, accept)
+                let accept = Interval::new(rng_int::<R>(min), rng_int::<R>(max));
+                count(rng.next_gaussian_int(rng_int::<R>(mean), R::Int::ONE, accept))
             }
             Rests::Between { min, max } => {
-                let span = Span::new(min, max).expect("an act's rest range holds something");
-                rng.next_int_range(span)
+                let span = Span::new(rng_int::<R>(min), rng_int::<R>(max))
+                    .expect("an act's rest range holds something");
+                count(rng.next_int_range(span))
             }
         };
-        let unknowns = standard_unknowns(rng) - layout.fewer_unknowns;
+        let unknowns = standard_unknowns(rng).saturating_sub(layout.fewer_unknowns);
         Counts {
-            unknowns: unknowns.max(0) as usize,
-            rests: rests.max(0) as usize,
+            unknowns,
+            rests,
             elites: elites(ascension),
             shops: 3,
         }
@@ -116,9 +117,17 @@ fn elites<A: AscensionKinds>(ascension: A) -> usize {
 
 /// `MapPointTypeCounts.StandardRandomUnknownCount`, which every act starts
 /// from.
-fn standard_unknowns<R: GameRng>(rng: &mut R) -> i32 {
-    let accept = Interval::new(10, 14);
-    rng.next_gaussian_int(12, 1, accept)
+fn standard_unknowns<R: GameRng>(rng: &mut R) -> usize {
+    let accept = Interval::new(rng_int::<R>(10), rng_int::<R>(14));
+    count(rng.next_gaussian_int(rng_int::<R>(12), R::Int::ONE, accept))
+}
+
+fn rng_int<R: GameRng>(value: usize) -> R::Int {
+    num_traits::cast(value).expect("a map parameter fits the RNG integer")
+}
+
+fn count<I: RngInteger>(value: I) -> usize {
+    num_traits::cast(value).expect("a map draw is a nonnegative count")
 }
 
 impl<V: Rules> ActMapBuilder<V> {

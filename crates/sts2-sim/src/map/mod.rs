@@ -20,7 +20,7 @@ mod types;
 
 use std::sync::Arc;
 
-use sts2_core::rng::{GameRng, Span};
+use sts2_core::rng::{GameRng, RngInteger, Span};
 use sts2_core::{Coord, MapPointKinds, NoNode, Node, Rules};
 
 use set::Order;
@@ -316,12 +316,17 @@ impl<V: Rules> ActMapBuilder<V> {
     /// The second of the seven is redrawn until it starts somewhere the first
     /// did not, so a map always offers at least two openings.
     fn walk_paths<R: GameRng>(&mut self, rng: &mut R) {
-        let span = Span::new(0, COLS as i32).expect("seven columns is not an empty span");
+        let columns = num_traits::cast(COLS).expect("the map width fits the RNG integer");
+        let span = Span::new(R::Int::ZERO, columns).expect("seven columns is not an empty span");
         for path in 0..PATHS {
-            let mut start = self.get_or_create(rng.next_int_range(span) as usize, 1);
+            let column = num_traits::cast(rng.next_int_range(span))
+                .expect("a map-column draw is a valid index");
+            let mut start = self.get_or_create(column, 1);
             if path == 1 {
                 while self.starts.contains(start) {
-                    start = self.get_or_create(rng.next_int_range(span) as usize, 1);
+                    let column = num_traits::cast(rng.next_int_range(span))
+                        .expect("a map-column draw is a valid index");
+                    start = self.get_or_create(column, 1);
                 }
             }
             self.starts.insert(start);

@@ -11,6 +11,8 @@ pub struct MegaRng {
 }
 
 impl GameRng for MegaRng {
+    type Int = i32;
+
     fn new(seed: u32) -> Self {
         let mut x = u64::from(seed);
         Self {

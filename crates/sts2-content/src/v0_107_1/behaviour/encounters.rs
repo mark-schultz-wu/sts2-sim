@@ -7,7 +7,7 @@
 //! subclasses override it. An encounter nobody has ported panics naming
 //! itself.
 
-use sts2_core::rng::{Bound, GameRng};
+use sts2_core::rng::{Bound, GameRng, RngInteger};
 
 use super::super::generated::encounters::Encounter;
 use super::super::generated::monsters::Monster;
@@ -31,11 +31,16 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Mon
 /// draw is over one item and takes it.
 fn slimes_weak<R: GameRng>(rng: &mut R) -> Vec<Monster> {
     let small = [Monster::LeafSlimeS, Monster::TwigSlimeS];
-    let first = rng.next_int(Bound::new(2).expect("two small slimes")) as usize;
-    let second = rng.next_int(Bound::new(1).expect("one small slime remains"));
-    debug_assert_eq!(second, 0);
-    let medium = [Monster::LeafSlimeM, Monster::TwigSlimeM]
-        [rng.next_int(Bound::new(2).expect("two medium slimes")) as usize];
+    let first: usize = num_traits::cast(
+        rng.next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two small slimes")),
+    )
+    .expect("a two-way draw is zero or one");
+    rng.next_int(Bound::try_new(R::Int::ONE).expect("one small slime remains"));
+    let medium_at: usize = num_traits::cast(
+        rng.next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two medium slimes")),
+    )
+    .expect("a two-way draw is zero or one");
+    let medium = [Monster::LeafSlimeM, Monster::TwigSlimeM][medium_at];
     vec![small[first], medium, small[1 - first]]
 }
 
