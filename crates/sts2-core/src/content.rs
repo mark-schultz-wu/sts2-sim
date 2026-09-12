@@ -843,6 +843,7 @@ pub enum ModifyHook<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecisionHook {
     ShouldRemoveCreatureAfterDeath,
+    ShouldCountForCombatEnd,
 }
 
 /// A notification delivered to one content model.
