@@ -842,8 +842,16 @@ pub enum ModifyHook<V: ContentVersion> {
 /// A yes-or-no hook the simulator asks one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecisionHook {
-    /// Whether a dead creature remains in the combat roster.
-    RemoveCreatureAfterDeath,
+    ShouldRemoveCreatureAfterDeath,
+}
+
+/// One listener's answer to a decision hook.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookDecision {
+    /// This listener does not implement the hook.
+    NoOpinion,
+    Yes,
+    No,
 }
 
 /// A notification delivered to one content model.
@@ -878,8 +886,7 @@ pub enum HookEffect<V: ContentVersion> {
 pub trait Hooks: ContentVersion {
     fn modify_hook(listener: crate::ModelId<Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
-    /// `None` means the listener does not implement this decision hook.
-    fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook) -> Option<bool>;
+    fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook) -> HookDecision;
 
     fn event_hook(listener: crate::ModelId<Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
 }

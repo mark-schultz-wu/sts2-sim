@@ -89,9 +89,9 @@ impl sts2_core::Hooks for V0_107_1 {
     fn decide_hook(
         listener: sts2_core::ModelId<Self>,
         hook: sts2_core::DecisionHook,
-    ) -> Option<bool> {
+    ) -> sts2_core::HookDecision {
         let sts2_core::ModelId::Power(power) = listener else {
-            return None;
+            return sts2_core::HookDecision::NoOpinion;
         };
         behaviour::powers::decide_hook(power, hook)
     }

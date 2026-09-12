@@ -179,8 +179,8 @@ impl<'a, V: Rules> Board<'a, V> {
         let kept = powers.iter().any(|held| {
             <V as sts2_core::Hooks>::decide_hook(
                 sts2_core::ModelId::Power(held.power),
-                sts2_core::DecisionHook::RemoveCreatureAfterDeath,
-            ) == Some(false)
+                sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
+            ) == sts2_core::HookDecision::No
         });
         if kept {
             let revival = powers
