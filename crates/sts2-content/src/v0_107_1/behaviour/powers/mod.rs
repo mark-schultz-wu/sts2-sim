@@ -137,11 +137,6 @@ pub(crate) fn spent_on_energy_reset(power: Power) -> bool {
     }
 }
 
-/// Block granted by a power immediately after its owner's block is cleared.
-pub(crate) fn block_after_clear(power: Power, amount: i32) -> Option<i32> {
-    (power == Power::BlockNextTurnPower).then_some(amount)
-}
-
 /// The move Illusion installs instead of letting its owner leave the fight.
 pub(crate) fn revival_move(power: Power) -> Option<sts2_core::NextMove<V>> {
     use super::super::generated::monsters::{IntentKind, MoveId};
@@ -181,12 +176,9 @@ pub(crate) fn event_hook(
             };
             Some(HookEffect::GainEnergyAndRemove(amount))
         }
-        EventHook::BlockCleared { amount } => {
-            let PowerAmount::Counted(amount) = amount else {
-                return Vec::new();
-            };
-            block_after_clear(power, amount).map(HookEffect::GainBlockAndRemove)
-        }
+        EventHook::BlockCleared {
+            amount: PowerAmount::Counted(amount),
+        } if power == Power::BlockNextTurnPower => Some(HookEffect::GainBlockAndRemove(amount)),
         EventHook::AfterDeath => revival_move(power).map(HookEffect::InstallMove),
         _ => None,
     };
