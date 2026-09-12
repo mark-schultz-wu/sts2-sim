@@ -83,12 +83,7 @@ impl sts2_core::Hooks for V0_107_1 {
         let sts2_core::ModelId::Power(power) = listener else {
             return sts2_core::Modify::Nothing;
         };
-        match hook {
-            sts2_core::ModifyHook::Damage { holding, amount } => {
-                behaviour::powers::damage_hook(power, holding, amount)
-            }
-            sts2_core::ModifyHook::Block { amount } => behaviour::powers::block_hook(power, amount),
-        }
+        behaviour::powers::modify_hook(power, hook)
     }
 
     fn decide_hook(
@@ -98,11 +93,7 @@ impl sts2_core::Hooks for V0_107_1 {
         let sts2_core::ModelId::Power(power) = listener else {
             return None;
         };
-        match hook {
-            sts2_core::DecisionHook::RemoveCreatureAfterDeath => {
-                behaviour::powers::remove_creature_after_death(power)
-            }
-        }
+        behaviour::powers::decide_hook(power, hook)
     }
 
     fn event_hook(
