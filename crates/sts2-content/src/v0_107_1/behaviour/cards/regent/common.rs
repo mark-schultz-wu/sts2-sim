@@ -22,6 +22,21 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
     );
 }
 
+/// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.
+pub(super) fn know_thy_place<F: Fight<V>>(fight: &mut F) {
+    let target = fight.target();
+    fight.apply(
+        target,
+        Power::WeakPower,
+        PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+    );
+    fight.apply(
+        target,
+        Power::VulnerablePower,
+        PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
+    );
+}
+
 /// `RefineBlade`. Forge every Sovereign Blade, then gain energy next turn.
 ///
 /// `ForgeCmd.Forge` creates a blade when the fight holds none it can reach,
