@@ -53,9 +53,9 @@ pub trait ActTable: Table {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rests {
     /// `NextGaussianInt(mean, 1, min, max)`, which three of the four acts use.
-    Around { mean: i32, min: i32, max: i32 },
+    Around { mean: usize, min: usize, max: usize },
     /// `NextInt(min, max)`, which the last act uses.
-    Between { min: i32, max: i32 },
+    Between { min: usize, max: usize },
 }
 
 /// What one act's map is made of, before any of it is rolled.
@@ -70,7 +70,7 @@ pub struct Layout {
     pub rooms: usize,
     pub rests: Rests,
     /// Taken off the standard question mark roll. Zero in the first act.
-    pub fewer_unknowns: i32,
+    pub fewer_unknowns: usize,
 }
 
 /// A content rule that cannot produce a value from static state.

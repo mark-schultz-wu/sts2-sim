@@ -316,8 +316,7 @@ impl<V: Rules> ActMapBuilder<V> {
     /// The second of the seven is redrawn until it starts somewhere the first
     /// did not, so a map always offers at least two openings.
     fn walk_paths<R: GameRng>(&mut self, rng: &mut R) {
-        let columns =
-            num_traits::cast(COLS).unwrap_or_else(|| panic!("the map width fits the RNG integer"));
+        let columns = num_traits::cast(COLS).expect("the map width fits the RNG integer");
         let span = Span::new(R::Int::ZERO, columns).expect("seven columns is not an empty span");
         for path in 0..PATHS {
             let column = num_traits::cast(rng.next_int_range(span))
