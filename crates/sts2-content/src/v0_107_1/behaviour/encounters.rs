@@ -34,12 +34,12 @@ fn slimes_weak<R: GameRng>(rng: &mut R) -> Vec<Monster> {
     let first: usize = num_traits::cast(
         rng.next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two small slimes")),
     )
-    .unwrap_or_else(|| unreachable!("a two-way draw is zero or one"));
+    .expect("a two-way draw is zero or one");
     rng.next_int(Bound::try_new(R::Int::ONE).expect("one small slime remains"));
     let medium_at: usize = num_traits::cast(
         rng.next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two medium slimes")),
     )
-    .unwrap_or_else(|| unreachable!("a two-way draw is zero or one"));
+    .expect("a two-way draw is zero or one");
     let medium = [Monster::LeafSlimeM, Monster::TwigSlimeM][medium_at];
     vec![small[first], medium, small[1 - first]]
 }

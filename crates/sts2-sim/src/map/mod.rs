@@ -321,12 +321,12 @@ impl<V: Rules> ActMapBuilder<V> {
         let span = Span::new(R::Int::ZERO, columns).expect("seven columns is not an empty span");
         for path in 0..PATHS {
             let column = num_traits::cast(rng.next_int_range(span))
-                .unwrap_or_else(|| unreachable!("a map-column draw is a valid index"));
+                .expect("a map-column draw is a valid index");
             let mut start = self.get_or_create(column, 1);
             if path == 1 {
                 while self.starts.contains(start) {
                     let column = num_traits::cast(rng.next_int_range(span))
-                        .unwrap_or_else(|| unreachable!("a map-column draw is a valid index"));
+                        .expect("a map-column draw is a valid index");
                     start = self.get_or_create(column, 1);
                 }
             }

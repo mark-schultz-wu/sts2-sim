@@ -108,7 +108,7 @@ pub trait GameRng: Sized {
     /// One item from a slice already known to be a valid choice list.
     fn choose_from<'a, T>(&mut self, choices: Choices<'a, T, Self::Int>) -> &'a T {
         let at: usize = num_traits::cast(self.next_int(choices.bound()))
-            .unwrap_or_else(|| unreachable!("a bounded draw is a valid slice index"));
+            .expect("a bounded draw is a valid slice index");
         &choices.items()[at]
     }
 
@@ -164,7 +164,7 @@ pub trait GameRng: Sized {
                 unreachable!("a bound of {} is not zero", at + 1)
             };
             let with = num_traits::cast(self.next_int(bound))
-                .unwrap_or_else(|| unreachable!("a shuffle draw is a valid slice index"));
+                .expect("a shuffle draw is a valid slice index");
             items.swap(at, with);
         }
     }
@@ -221,10 +221,9 @@ pub trait GameRng: Sized {
             let a = 1.0 - self.next_double();
             let b = 1.0 - self.next_double();
             let normal = (-2.0 * libm::log(a)).sqrt() * libm::sin(TAU * b);
-            let mean = num_traits::cast::<_, f64>(mean)
-                .unwrap_or_else(|| unreachable!("an RNG integer converts to f64"));
-            let std_dev = num_traits::cast::<_, f64>(std_dev)
-                .unwrap_or_else(|| unreachable!("an RNG integer converts to f64"));
+            let mean = num_traits::cast::<_, f64>(mean).expect("an RNG integer converts to f64");
+            let std_dev =
+                num_traits::cast::<_, f64>(std_dev).expect("an RNG integer converts to f64");
             let value = Self::Int::from_f64((mean + std_dev * normal).round_ties_even());
             if value >= accept.min() && value <= accept.max() {
                 return value;

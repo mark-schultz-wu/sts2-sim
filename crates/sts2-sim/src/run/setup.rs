@@ -347,7 +347,7 @@ impl<V: Rules> Opening<V> {
                 .unwrap_or_else(|| panic!("an ancient pool fits the RNG integer"));
             let bound = Bound::try_new(count).expect("a count plus one is positive");
             let taken: usize = num_traits::cast(rng.next_int(bound))
-                .unwrap_or_else(|| unreachable!("a bounded draw is a valid ancient index"));
+                .expect("a bounded draw is a valid ancient index");
             dealt.push(pool.drain(..taken).collect());
         }
 

@@ -127,7 +127,7 @@ fn rng_int<R: GameRng>(value: i32) -> R::Int {
 }
 
 fn domain_int<I: RngInteger>(value: I) -> i32 {
-    num_traits::cast(value).unwrap_or_else(|| unreachable!("a map draw fits its parameter type"))
+    num_traits::cast(value).expect("a map draw fits its parameter type")
 }
 
 impl<V: Rules> ActMapBuilder<V> {
