@@ -32,12 +32,14 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Mon
 fn slimes_weak<R: GameRng>(rng: &mut R) -> Vec<Monster> {
     let small = [Monster::LeafSlimeS, Monster::TwigSlimeS];
     let first = rng
-        .next_int(Bound::new(R::Int::ONE + R::Int::ONE).expect("two small slimes"))
-        .to_usize();
-    rng.next_int(Bound::new(R::Int::ONE).expect("one small slime remains"));
+        .next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two small slimes"))
+        .try_into()
+        .unwrap_or_else(|_| unreachable!("a two-way draw is zero or one"));
+    rng.next_int(Bound::try_new(R::Int::ONE).expect("one small slime remains"));
     let medium = [Monster::LeafSlimeM, Monster::TwigSlimeM][rng
-        .next_int(Bound::new(R::Int::ONE + R::Int::ONE).expect("two medium slimes"))
-        .to_usize()];
+        .next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two medium slimes"))
+        .try_into()
+        .unwrap_or_else(|_| unreachable!("a two-way draw is zero or one"))];
     vec![small[first], medium, small[1 - first]]
 }
 

@@ -80,16 +80,16 @@ impl Counts {
         layout: Layout,
         ascension: A,
     ) -> Self {
-        let rests = match layout.rests {
+        let rests: i32 = match layout.rests {
             Rests::Around { mean, min, max } => {
-                let accept = Interval::new(R::Int::from_i32(min), R::Int::from_i32(max));
-                rng.next_gaussian_int(R::Int::from_i32(mean), R::Int::ONE, accept)
-                    .to_i32()
+                let accept = Interval::new(R::Int::from(min), R::Int::from(max));
+                rng.next_gaussian_int(R::Int::from(mean), R::Int::ONE, accept)
+                    .into()
             }
             Rests::Between { min, max } => {
-                let span = Span::new(R::Int::from_i32(min), R::Int::from_i32(max))
+                let span = Span::new(R::Int::from(min), R::Int::from(max))
                     .expect("an act's rest range holds something");
-                rng.next_int_range(span).to_i32()
+                rng.next_int_range(span).into()
             }
         };
         let unknowns = standard_unknowns(rng) - layout.fewer_unknowns;
@@ -119,9 +119,9 @@ fn elites<A: AscensionKinds>(ascension: A) -> usize {
 /// `MapPointTypeCounts.StandardRandomUnknownCount`, which every act starts
 /// from.
 fn standard_unknowns<R: GameRng>(rng: &mut R) -> i32 {
-    let accept = Interval::new(R::Int::from_i32(10), R::Int::from_i32(14));
-    rng.next_gaussian_int(R::Int::from_i32(12), R::Int::ONE, accept)
-        .to_i32()
+    let accept = Interval::new(R::Int::from(10), R::Int::from(14));
+    rng.next_gaussian_int(R::Int::from(12), R::Int::ONE, accept)
+        .into()
 }
 
 impl<V: Rules> ActMapBuilder<V> {

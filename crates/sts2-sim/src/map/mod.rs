@@ -316,13 +316,21 @@ impl<V: Rules> ActMapBuilder<V> {
     /// The second of the seven is redrawn until it starts somewhere the first
     /// did not, so a map always offers at least two openings.
     fn walk_paths<R: GameRng>(&mut self, rng: &mut R) {
-        let span = Span::new(R::Int::ZERO, R::Int::from_i32(COLS as i32))
+        let span = Span::new(R::Int::ZERO, R::Int::from(COLS as i32))
             .expect("seven columns is not an empty span");
         for path in 0..PATHS {
-            let mut start = self.get_or_create(rng.next_int_range(span).to_usize(), 1);
+            let column = rng
+                .next_int_range(span)
+                .try_into()
+                .unwrap_or_else(|_| unreachable!("a map-column draw is a valid index"));
+            let mut start = self.get_or_create(column, 1);
             if path == 1 {
                 while self.starts.contains(start) {
-                    start = self.get_or_create(rng.next_int_range(span).to_usize(), 1);
+                    let column = rng
+                        .next_int_range(span)
+                        .try_into()
+                        .unwrap_or_else(|_| unreachable!("a map-column draw is a valid index"));
+                    start = self.get_or_create(column, 1);
                 }
             }
             self.starts.insert(start);

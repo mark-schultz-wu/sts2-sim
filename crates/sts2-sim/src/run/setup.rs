@@ -9,7 +9,7 @@
 //! `cargo xtask dump setupdump`. Each line is a place this has to reach.
 
 use indexmap::IndexMap;
-use sts2_core::rng::{Bound, GameRng, RngInteger};
+use sts2_core::rng::{Bound, GameRng};
 use sts2_core::{
     ActTable, ContentVersion, EncounterTable, RarityKinds, RelicPoolKinds, RelicTable,
     RoomKinds as _, Rules, Table,
@@ -343,10 +343,13 @@ impl<V: Rules> Opening<V> {
 
         let mut dealt: Vec<Vec<V::Event>> = vec![Vec::new()];
         for _ in acts.iter().skip(1) {
-            let count = R::Int::try_from_usize(pool.len() + 1)
-                .expect("an ancient pool fits the RNG integer");
-            let bound = Bound::new(count).expect("a count plus one is positive");
-            let taken = rng.next_int(bound).to_usize();
+            let count = R::Int::try_from(pool.len() + 1)
+                .unwrap_or_else(|_| panic!("an ancient pool fits the RNG integer"));
+            let bound = Bound::try_new(count).expect("a count plus one is positive");
+            let taken = rng
+                .next_int(bound)
+                .try_into()
+                .unwrap_or_else(|_| unreachable!("a bounded draw is a valid ancient index"));
             dealt.push(pool.drain(..taken).collect());
         }
 

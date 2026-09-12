@@ -85,7 +85,10 @@ pub trait GameRng: Sized {
     /// `next_int(2) == 0`: a scaled double against zero, not a bit test.
     #[inline]
     fn next_bool(&mut self) -> bool {
-        self.next_int(Bound::<Self::Int>::two()) == Self::Int::ZERO
+        self.next_int(
+            Bound::try_new(Self::Int::ONE + Self::Int::ONE)
+                .expect("one plus one is a positive RNG bound"),
+        ) == Self::Int::ZERO
     }
 
     /// `[0, max)`, by scaling a double and truncating.
@@ -104,7 +107,11 @@ pub trait GameRng: Sized {
 
     /// One item from a slice already known to be a valid choice list.
     fn choose_from<'a, T>(&mut self, choices: Choices<'a, T, Self::Int>) -> &'a T {
-        &choices.items()[self.next_int(choices.bound()).to_usize()]
+        let at = self
+            .next_int(choices.bound())
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("a bounded draw is a valid slice index"));
+        &choices.items()[at]
     }
 
     /// One integer from a closed interval in an RNG integer representation.
@@ -151,14 +158,17 @@ pub trait GameRng: Sized {
         let mut at = items.len();
         while at > 1 {
             at -= 1;
-            let Ok(count) = Self::Int::try_from_usize(at + 1) else {
+            let Ok(count) = Self::Int::try_from(at + 1) else {
                 panic!("a shuffle is too large for the RNG's integer bound")
             };
-            let Some(bound) = Bound::new(count) else {
+            let Ok(bound) = Bound::try_new(count) else {
                 // `at` is at least one here, so the bound is at least two.
                 unreachable!("a bound of {} is not zero", at + 1)
             };
-            let with = self.next_int(bound).to_usize();
+            let with = self
+                .next_int(bound)
+                .try_into()
+                .unwrap_or_else(|_| unreachable!("a shuffle draw is a valid slice index"));
             items.swap(at, with);
         }
     }
@@ -215,8 +225,9 @@ pub trait GameRng: Sized {
             let a = 1.0 - self.next_double();
             let b = 1.0 - self.next_double();
             let normal = (-2.0 * libm::log(a)).sqrt() * libm::sin(TAU * b);
-            let value =
-                Self::Int::from_f64((mean.to_f64() + std_dev.to_f64() * normal).round_ties_even());
+            let value = Self::Int::from_f64(
+                (Into::<f64>::into(mean) + Into::<f64>::into(std_dev) * normal).round_ties_even(),
+            );
             if value >= accept.min() && value <= accept.max() {
                 return value;
             }

@@ -25,7 +25,7 @@ where
 }
 
 fn bound(field: &str) -> Bound<i32> {
-    Bound::new(num(field)).expect("fixture bounds are positive")
+    Bound::try_new(num(field)).expect("fixture bounds are positive")
 }
 
 fn rows(prefix: &str) -> impl Iterator<Item = (usize, Vec<&'static str>)> {

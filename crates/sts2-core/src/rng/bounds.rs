@@ -35,56 +35,39 @@ pub enum Error {
 pub struct Bound<I>(I);
 
 impl<I: RngInteger> Bound<I> {
-    pub fn new(value: I) -> Option<Self> {
+    pub fn try_new(value: I) -> Result<Self, Error> {
         if value > I::zero() {
-            Some(Bound(value))
+            Ok(Bound(value))
         } else {
-            None
+            Err(Error::Bound)
         }
     }
 
     pub const fn get(self) -> I {
         self.0
     }
-
-    pub fn two() -> Self {
-        Bound(I::ONE + I::ONE)
-    }
 }
 
 /// Arithmetic required by the game's integer RNG operations.
-pub trait RngInteger: num_traits::PrimInt + num_traits::Signed {
+pub trait RngInteger:
+    num_traits::PrimInt
+    + num_traits::Signed
+    + From<i32>
+    + Into<i32>
+    + Into<f64>
+    + TryFrom<usize>
+    + TryInto<usize>
+{
     const ZERO: Self;
     const ONE: Self;
-    fn try_from_usize(value: usize) -> Result<Self, Error>;
-    fn from_i32(value: i32) -> Self;
-    fn to_i32(self) -> i32;
-    fn to_usize(self) -> usize;
     fn scaled(unit: f64, bound: Self) -> Self;
     fn in_half_open(unit: f64, min: Self, max: Self) -> Self;
-    fn to_f64(self) -> f64;
     fn from_f64(value: f64) -> Self;
 }
 
 impl RngInteger for i32 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
-
-    fn try_from_usize(value: usize) -> Result<Self, Error> {
-        i32::try_from(value).map_err(|_| Error::Bound)
-    }
-
-    fn from_i32(value: i32) -> Self {
-        value
-    }
-
-    fn to_i32(self) -> i32 {
-        self
-    }
-
-    fn to_usize(self) -> usize {
-        self as usize
-    }
 
     fn scaled(unit: f64, bound: Self) -> Self {
         (unit * bound as f64) as i32
@@ -97,10 +80,6 @@ impl RngInteger for i32 {
         } else {
             (((unit * width as f64) as i64).wrapping_add(min as i64)) as i32
         }
-    }
-
-    fn to_f64(self) -> f64 {
-        self as f64
     }
 
     fn from_f64(value: f64) -> Self {
@@ -117,8 +96,8 @@ pub struct Choices<'a, T, I> {
 
 impl<'a, T, I: RngInteger> Choices<'a, T, I> {
     pub fn try_new(items: &'a [T]) -> Result<Self, Error> {
-        let count = I::try_from_usize(items.len())?;
-        let bound = Bound::new(count).ok_or(Error::Bound)?;
+        let count = I::try_from(items.len()).map_err(|_| Error::Bound)?;
+        let bound = Bound::try_new(count)?;
         Ok(Choices { items, bound })
     }
 
@@ -225,10 +204,10 @@ mod tests {
 
     #[test]
     fn a_bound_must_be_positive_and_fit_an_i32() {
-        assert!(Bound::new(1).is_some());
-        assert!(Bound::new(i32::MAX).is_some());
-        assert!(Bound::new(0).is_none());
-        assert!(Bound::new(-1).is_none());
+        assert!(Bound::try_new(1).is_ok());
+        assert!(Bound::try_new(i32::MAX).is_ok());
+        assert_eq!(Bound::try_new(0), Err(Error::Bound));
+        assert_eq!(Bound::try_new(-1), Err(Error::Bound));
     }
 
     #[test]
