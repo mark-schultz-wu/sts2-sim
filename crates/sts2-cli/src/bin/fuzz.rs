@@ -16,9 +16,9 @@ use std::path::{Path, PathBuf};
 use sts2_cli::cli::moves;
 use sts2_cli::coverage::Coverage;
 use sts2_core::ContentVersion;
+use sts2_core::Seed;
 use sts2_core::{Construct, Gift, Play, Setup, Snapshot, Start, Step};
 use sts2_headless::{Config, Oracle, recording};
-use sts2_rng::{Seed, Seeding};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -136,7 +136,7 @@ fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
     // fuzzer's own and never the game's, so fidelity is not the point, and the
     // same name has to pick the same moves on both builds for two runs to be
     // worth putting side by side.
-    let mut dice = Dice::from(sts2_rng::Interleaved::stream_seed(&seed));
+    let mut dice = Dice::from(&seed);
 
     let mut cover = Coverage::default();
     cover.started::<V>(character);
@@ -310,7 +310,7 @@ fn made_up_seed() -> Result<Seed> {
         .context("reading the clock")?
         .as_nanos() as u64;
 
-    let mut dice = Dice::from(now as u32);
+    let mut dice = Dice::from(now);
     let typed: String = (0..8)
         .map(|_| {
             Seed::ALPHABET
@@ -331,10 +331,23 @@ fn made_up_seed() -> Result<Seed> {
 /// small enough that a dependency costs more than it saves.
 struct Dice(u64);
 
-impl From<u32> for Dice {
-    fn from(seed: u32) -> Self {
+impl From<u64> for Dice {
+    fn from(seed: u64) -> Self {
         // Zero is the one state xorshift cannot leave.
-        Self(u64::from(seed) | 1)
+        Self(seed | 1)
+    }
+}
+
+impl From<&Seed> for Dice {
+    /// Folded here rather than through the game's seeding, which this must not
+    /// share. What is needed is only that the same name picks the same moves.
+    fn from(seed: &Seed) -> Self {
+        let mut state: u64 = 0xcbf2_9ce4_8422_2325;
+        for byte in seed.as_str().bytes() {
+            state ^= u64::from(byte);
+            state = state.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        Self::from(state)
     }
 }
 

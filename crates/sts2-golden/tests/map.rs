@@ -18,9 +18,10 @@ use std::path::Path;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
-use sts2_core::rng::{GameRng, MegaRng, stream_seed};
+use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{ActMap as _, Seed};
 use sts2_sim::map::{ActMap, Layout};
+use sts2_sim::rng::MegaRng;
 
 type V = V0_107_1;
 

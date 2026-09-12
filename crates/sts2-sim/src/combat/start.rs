@@ -67,7 +67,7 @@ pub(crate) fn enter<V: Rules>(
             energy,
             stars: stars_on_entry::<V>(observation),
             round: num_traits::one(),
-            encounter: Some(encounter),
+            encounter,
             hand: piles.hand().to_vec(),
             draw: piles.draw().to_vec(),
             discard: piles.discard().to_vec(),

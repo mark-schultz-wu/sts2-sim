@@ -47,7 +47,9 @@ pub(crate) fn damage_hook(power: Power, holding: Holding, amount: PowerAmount<i3
         (Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower, _) => Modify::Nothing,
         // `EnergyNextTurnPower` has no `ModifyDamage`. It hands over an energy
         // at the reset and goes.
-        (Power::EnergyNextTurnPower, _) => Modify::Nothing,
+        (Power::EnergyNextTurnPower | Power::IllusionPower | Power::MinionPower, _) => {
+            Modify::Nothing
+        }
         (power, _) => unimplemented!("what {power:?} does to a hit"),
     }
 }
@@ -66,7 +68,9 @@ pub(crate) fn block_hook(power: Power, _amount: PowerAmount<i32>) -> Modify<i32>
         | Power::WeakPower
         | Power::ShrinkPower
         | Power::EnergyNextTurnPower
-        | Power::StrengthPower => Modify::Nothing,
+        | Power::StrengthPower
+        | Power::IllusionPower
+        | Power::MinionPower => Modify::Nothing,
         power => unimplemented!("what {power:?} does to a block gain"),
     }
 }
@@ -93,7 +97,13 @@ pub(crate) fn side_turn_end(power: Power, side: CombatSide) -> SideTurnEnd {
         // Neither has an `AfterSideTurnEnd`. `EnergyNextTurnPower` is spent at
         // the reset instead, which is a hook of its own, and Strength lasts
         // the fight.
-        (Power::EnergyNextTurnPower | Power::StrengthPower, _) => SideTurnEnd::Nothing,
+        (
+            Power::EnergyNextTurnPower
+            | Power::StrengthPower
+            | Power::IllusionPower
+            | Power::MinionPower,
+            _,
+        ) => SideTurnEnd::Nothing,
         (power, _) => unimplemented!("what {power:?} does when a turn ends"),
     }
 }
@@ -109,9 +119,12 @@ pub(crate) fn side_turn_end(power: Power, side: CombatSide) -> SideTurnEnd {
 pub(crate) fn spent_on_energy_reset(power: Power) -> bool {
     match power {
         Power::EnergyNextTurnPower => true,
-        Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower | Power::StrengthPower => {
-            false
-        }
+        Power::VulnerablePower
+        | Power::WeakPower
+        | Power::ShrinkPower
+        | Power::StrengthPower
+        | Power::IllusionPower
+        | Power::MinionPower => false,
         power => unimplemented!("what {power:?} does as energy resets"),
     }
 }

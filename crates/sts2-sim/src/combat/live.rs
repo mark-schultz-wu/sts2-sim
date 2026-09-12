@@ -61,7 +61,8 @@ pub(crate) struct Live<V: Rules> {
     pub(super) energy: V::Count,
     pub(super) stars: V::Count,
     pub(super) round: V::Count,
-    pub(super) encounter: Option<V::Encounter>,
+    /// The encounter this active fight belongs to.
+    pub(super) encounter: V::Encounter,
     pub(super) hand: Vec<CardInstance<V>>,
     pub(super) draw: Vec<CardInstance<V>>,
     pub(super) discard: Vec<CardInstance<V>>,
@@ -122,7 +123,7 @@ impl<V: Rules> Live<V> {
             energy: self.energy,
             stars: self.stars,
             round: self.round,
-            encounter: self.encounter,
+            encounter: Some(self.encounter),
             hand: self.hand.iter().map(|card| card.ident).collect(),
             draw: self.draw.iter().map(|card| card.ident).collect(),
             discard: self.discard.iter().map(|card| card.ident).collect(),
@@ -131,5 +132,20 @@ impl<V: Rules> Live<V> {
             legal: super::legal::hand::<V>(&self.hand, &self.creatures, self.energy, self.stars),
             orbs: self.orbs.clone(),
         }
+    }
+
+    /// Consume a won fight into the report that remains on its reward screen.
+    pub(crate) fn finish(mut self) -> Combat<V> {
+        self.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
+        self.energy = num_traits::zero();
+        self.hand.clear();
+        self.draw.clear();
+        self.discard.clear();
+        self.exhaust.clear();
+        for creature in &mut self.creatures {
+            creature.powers.clear();
+            creature.block = num_traits::zero();
+        }
+        self.report()
     }
 }

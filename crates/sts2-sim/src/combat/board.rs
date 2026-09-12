@@ -8,8 +8,9 @@
 //! build's fights hold no power, relic or card that hooks any of them yet. A
 //! command that needs one stops the run where it stands.
 
+use crate::rng::MegaRng;
 use num_traits::Zero;
-use sts2_core::rng::{GameRng, MegaRng};
+use sts2_core::rng::GameRng;
 use sts2_core::{
     CardIdent, CardTable, CardVars, CombatId, Creature, Fight, Holding, Modify, PowerAmount,
     PowerTable, Rules, SideKinds, Stack,
@@ -23,6 +24,8 @@ pub(super) struct Board<'a, V: Rules> {
     /// The shuffle stream, because drawing a card can turn the discard pile
     /// back into a draw pile.
     shuffle: &'a mut MegaRng,
+    /// The stream monsters use when they roll their hit points.
+    niche: &'a mut MegaRng,
     /// Whose effect this is. The player for a card, the monster for a move.
     actor: CombatId,
     /// The creature a card was pointed at.
@@ -56,6 +59,7 @@ impl<'a, V: Rules> Board<'a, V> {
     pub(super) fn for_card(
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
+        niche: &'a mut MegaRng,
         ascension: V::AscensionLevel,
         target: Option<CombatId>,
         playing: Option<&'a CardInstance<V>>,
@@ -64,6 +68,7 @@ impl<'a, V: Rules> Board<'a, V> {
         Board {
             live,
             shuffle,
+            niche,
             actor,
             target,
             playing,
@@ -78,6 +83,7 @@ impl<'a, V: Rules> Board<'a, V> {
     pub(super) fn for_move(
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
+        niche: &'a mut MegaRng,
         ascension: V::AscensionLevel,
         actor: CombatId,
         intent_damage: V::Number,
@@ -85,6 +91,7 @@ impl<'a, V: Rules> Board<'a, V> {
         Board {
             live,
             shuffle,
+            niche,
             actor,
             target: None,
             playing: None,
@@ -263,8 +270,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let unblocked = (damage - blocked).max(zero);
 
         let hp = self.live.creatures[at].hp;
-        let killed = hp > zero && unblocked >= hp;
-        self.live.creatures[at].hp = (hp - unblocked).max(zero);
+        let health_zero = V::Health::zero();
+        let killed = hp > health_zero && unblocked >= V::Number::from(hp);
+        self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
         if killed {
             self.kill(at);
         }
@@ -383,6 +391,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 .discard
                 .push(CardInstance::new(CardIdent::new(card)));
         }
+    }
+
+    fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
+        super::monster::summon(self.live, monster, position, self.niche)
     }
 }
 

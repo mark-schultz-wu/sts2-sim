@@ -7,7 +7,8 @@
 //! Seeking and recording are separate calls. Every seek happens before any
 //! record, so a combat that cannot be built leaves the counters alone.
 
-use sts2_core::rng::{GameRng, MegaRng};
+use crate::rng::MegaRng;
+use sts2_core::rng::GameRng;
 use sts2_core::{Counters, Rules};
 
 use super::Error;

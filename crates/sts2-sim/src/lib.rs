@@ -8,6 +8,7 @@ mod engine;
 pub mod event;
 pub mod map;
 mod reward;
+pub mod rng;
 pub mod run;
 
 pub use combat::Error;

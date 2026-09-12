@@ -67,7 +67,7 @@ impl<V: Rules> State<V> {
         match fought.won {
             false => self.fought(fought.live),
             true => {
-                let combat = fought.live.report();
+                let combat = fought.live.finish();
                 let offered = self.combat_rewards(&combat);
                 self.won(combat, offered);
             }

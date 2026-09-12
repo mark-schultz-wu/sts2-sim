@@ -30,8 +30,8 @@ Two builds are here now:
 | `v0_111_0` | `v0_111_0` | v0.111.0, the beta line |
 
 `v0_107_1` is the oldest build this repository can model. v0.107.1 replaced the
-game's PRNG with xoshiro256\*\*, and `sts2-rng` ports that generator alone.
-`crates/sts2-rng/README.md` says what it takes to pin an older one.
+game's PRNG with xoshiro256\*\*, and `sts2-sim` owns that generator.
+The simulator's RNG tests say what it takes to pin an older one.
 
 A build is known by its hashes, not by its name. The same name can appear in more
 than one build, and a name says nothing about whether the ids still agree. There are two

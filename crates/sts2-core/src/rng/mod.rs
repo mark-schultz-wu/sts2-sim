@@ -26,7 +26,7 @@
 mod bounds;
 
 pub use crate::Seed;
-pub use bounds::{Bound, Error, Interval, Span};
+pub use bounds::{Bound, Choices, Error, Interval, Span};
 
 /// `next_bool` draws over two outcomes. Checked at compile time.
 const TWO: Bound = match Bound::new(2) {
@@ -96,6 +96,26 @@ pub trait GameRng: Sized {
     #[inline]
     fn next_int(&mut self, max: Bound) -> i32 {
         (self.next_double() * max.get() as f64) as i32
+    }
+
+    /// One item selected by the game's bounded integer draw.
+    ///
+    /// An empty slice or one too large for the game's signed 32-bit bound is
+    /// an invalid draw. A successful selection consumes one draw.
+    fn choose<'a, T>(&mut self, items: &'a [T]) -> Result<&'a T, Error> {
+        Choices::try_new(items).map(|items| self.choose_from(items))
+    }
+
+    /// One item from a slice already known to be a valid choice list.
+    fn choose_from<'a, T>(&mut self, choices: Choices<'a, T>) -> &'a T {
+        &choices.items()[self.next_int(choices.bound()) as usize]
+    }
+
+    /// One integer from a closed interval whose representation is an `i32`.
+    fn next_interval<T: Copy + From<i32> + Into<i32>>(&mut self, range: Interval<T>) -> T {
+        let min = range.min().into();
+        let width = range.max().into() as i64 - min as i64 + 1;
+        T::from((min as i64 + (self.next_double() * width as f64) as i64) as i32)
     }
 
     /// A span wider than `i32::MAX` takes the game's 64-bit branch, which is a
@@ -212,68 +232,6 @@ const TAU: f64 = core::f64::consts::PI * 2.0;
 
 /// `(u64 >> 11) * this` is the game's `NextDouble`. 2⁻⁵³.
 const INCR_DOUBLE: f64 = 1.110_223_024_625_156_5e-16;
-
-/// xoshiro256** seeded through splitmix64, counted.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MegaRng {
-    s: [u64; 4],
-    seed: u32,
-    counter: i32,
-}
-
-impl GameRng for MegaRng {
-    fn new(seed: u32) -> Self {
-        let mut x = seed as u64;
-        MegaRng {
-            s: [
-                splitmix64(&mut x),
-                splitmix64(&mut x),
-                splitmix64(&mut x),
-                splitmix64(&mut x),
-            ],
-            seed,
-            counter: 0,
-        }
-    }
-
-    fn seed(&self) -> u32 {
-        self.seed
-    }
-
-    fn counter(&self) -> i32 {
-        self.counter
-    }
-
-    #[inline]
-    fn next_u64(&mut self) -> u64 {
-        self.counter += 1;
-        let [s0, s1, s2, s3] = self.s;
-
-        // Scrambled from s1 *before* the state advances, not after.
-        let result = (s1.wrapping_mul(5)).rotate_left(7).wrapping_mul(9);
-
-        let t = s1 << 17;
-        let s2 = s2 ^ s0;
-        let s3 = s3 ^ s1;
-        let s1 = s1 ^ s2;
-        let s0 = s0 ^ s3;
-        let s2 = s2 ^ t;
-        let s3 = s3.rotate_left(45);
-
-        self.s = [s0, s1, s2, s3];
-        result
-    }
-}
-
-/// The seeding mixer. Advances `x`, which is how four state words come out of
-/// one seed.
-fn splitmix64(x: &mut u64) -> u64 {
-    *x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *x;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
 
 /// `StringHelper.GetDeterministicHashCode`: two interleaved lanes over UTF-16
 /// code units, in wrapping `i32`.

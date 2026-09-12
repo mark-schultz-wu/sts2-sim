@@ -7,7 +7,7 @@ Two commands.
 `dump` runs the game's dump modes and files what each one prints. Sixteen modes
 describe content and land under `crates/sts2-content/src/<version>/dumps/`. The
 seventeenth is rng ground truth, which is not content, and lands in
-`crates/sts2-rng/tests/rng/<version>.txt`.
+`crates/sts2-sim/tests/rng/<version>.txt`.
 
 `codegen` turns those dumps into `sts2-content`'s tables, one domain per dump,
 and fails the build if two dumps came from different builds.

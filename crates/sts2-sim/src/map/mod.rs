@@ -397,11 +397,12 @@ impl<V: Rules> ActMapBuilder<V> {
 
 #[cfg(test)]
 mod tests {
+    use crate::rng::MegaRng;
     use sts2_content::v0_107_1::V0_107_1;
     use sts2_content::v0_107_1::ascension::AscensionLevel;
     use sts2_core::ActMap as _;
     use sts2_core::Seed;
-    use sts2_core::rng::{MegaRng, stream_seed};
+    use sts2_core::rng::stream_seed;
 
     use super::*;
 
