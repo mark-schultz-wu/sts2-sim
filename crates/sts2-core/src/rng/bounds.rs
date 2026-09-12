@@ -49,15 +49,7 @@ impl<I: RngInteger> Bound<I> {
 }
 
 /// Arithmetic required by the game's integer RNG operations.
-pub trait RngInteger:
-    num_traits::PrimInt
-    + num_traits::Signed
-    + From<i32>
-    + Into<i32>
-    + Into<f64>
-    + TryFrom<usize>
-    + TryInto<usize>
-{
+pub trait RngInteger: num_traits::PrimInt + num_traits::Signed {
     const ZERO: Self;
     const ONE: Self;
     fn scaled(unit: f64, bound: Self) -> Self;
@@ -96,7 +88,7 @@ pub struct Choices<'a, T, I> {
 
 impl<'a, T, I: RngInteger> Choices<'a, T, I> {
     pub fn try_new(items: &'a [T]) -> Result<Self, Error> {
-        let count = I::try_from(items.len()).map_err(|_| Error::Bound)?;
+        let count = num_traits::cast(items.len()).ok_or(Error::Bound)?;
         let bound = Bound::try_new(count)?;
         Ok(Choices { items, bound })
     }

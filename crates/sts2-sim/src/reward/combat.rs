@@ -48,13 +48,12 @@ pub(crate) fn won<V: Rules, R: GameRng>(
 /// The room's `GoldProportion` is one for every fight the map deals. An event
 /// that hands out a part of a fight's gold sets it, and none is ported.
 fn purse<V: Rules, R: GameRng>(rng: &mut R, gold: Interval<u16>) -> V::Number {
-    let span = Span::new(
-        R::Int::from(i32::from(gold.min())),
-        R::Int::from(i32::from(gold.max()) + 1),
-    )
-    .expect("a gold range that ends above where it starts");
-    num_traits::cast(Into::<i32>::into(rng.next_int_range(span)))
-        .expect("a fight's gold is a game number")
+    let min = num_traits::cast(gold.min())
+        .unwrap_or_else(|| panic!("a gold minimum fits the RNG integer"));
+    let max = num_traits::cast(i32::from(gold.max()) + 1)
+        .unwrap_or_else(|| panic!("a gold maximum fits the RNG integer"));
+    let span = Span::new(min, max).expect("a gold range that ends above where it starts");
+    num_traits::cast(rng.next_int_range(span)).expect("a fight's gold is a game number")
 }
 
 /// `PotionRewardOdds.Roll`, which draws whether or not a potion follows.

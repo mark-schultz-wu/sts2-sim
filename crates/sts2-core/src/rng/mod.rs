@@ -107,10 +107,8 @@ pub trait GameRng: Sized {
 
     /// One item from a slice already known to be a valid choice list.
     fn choose_from<'a, T>(&mut self, choices: Choices<'a, T, Self::Int>) -> &'a T {
-        let at = self
-            .next_int(choices.bound())
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("a bounded draw is a valid slice index"));
+        let at: usize = num_traits::cast(self.next_int(choices.bound()))
+            .unwrap_or_else(|| unreachable!("a bounded draw is a valid slice index"));
         &choices.items()[at]
     }
 
@@ -158,17 +156,15 @@ pub trait GameRng: Sized {
         let mut at = items.len();
         while at > 1 {
             at -= 1;
-            let Ok(count) = Self::Int::try_from(at + 1) else {
+            let Some(count) = num_traits::cast(at + 1) else {
                 panic!("a shuffle is too large for the RNG's integer bound")
             };
             let Ok(bound) = Bound::try_new(count) else {
                 // `at` is at least one here, so the bound is at least two.
                 unreachable!("a bound of {} is not zero", at + 1)
             };
-            let with = self
-                .next_int(bound)
-                .try_into()
-                .unwrap_or_else(|_| unreachable!("a shuffle draw is a valid slice index"));
+            let with = num_traits::cast(self.next_int(bound))
+                .unwrap_or_else(|| unreachable!("a shuffle draw is a valid slice index"));
             items.swap(at, with);
         }
     }
@@ -225,9 +221,11 @@ pub trait GameRng: Sized {
             let a = 1.0 - self.next_double();
             let b = 1.0 - self.next_double();
             let normal = (-2.0 * libm::log(a)).sqrt() * libm::sin(TAU * b);
-            let value = Self::Int::from_f64(
-                (Into::<f64>::into(mean) + Into::<f64>::into(std_dev) * normal).round_ties_even(),
-            );
+            let mean = num_traits::cast::<_, f64>(mean)
+                .unwrap_or_else(|| unreachable!("an RNG integer converts to f64"));
+            let std_dev = num_traits::cast::<_, f64>(std_dev)
+                .unwrap_or_else(|| unreachable!("an RNG integer converts to f64"));
+            let value = Self::Int::from_f64((mean + std_dev * normal).round_ties_even());
             if value >= accept.min() && value <= accept.max() {
                 return value;
             }

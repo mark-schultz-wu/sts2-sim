@@ -343,13 +343,11 @@ impl<V: Rules> Opening<V> {
 
         let mut dealt: Vec<Vec<V::Event>> = vec![Vec::new()];
         for _ in acts.iter().skip(1) {
-            let count = R::Int::try_from(pool.len() + 1)
-                .unwrap_or_else(|_| panic!("an ancient pool fits the RNG integer"));
+            let count = num_traits::cast(pool.len() + 1)
+                .unwrap_or_else(|| panic!("an ancient pool fits the RNG integer"));
             let bound = Bound::try_new(count).expect("a count plus one is positive");
-            let taken = rng
-                .next_int(bound)
-                .try_into()
-                .unwrap_or_else(|_| unreachable!("a bounded draw is a valid ancient index"));
+            let taken: usize = num_traits::cast(rng.next_int(bound))
+                .unwrap_or_else(|| unreachable!("a bounded draw is a valid ancient index"));
             dealt.push(pool.drain(..taken).collect());
         }
 
