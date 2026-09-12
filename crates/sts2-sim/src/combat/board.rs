@@ -169,8 +169,42 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// `KillWithoutCheckingWinCondition`, for a creature the damage killed.
+    /// Resolve a death, then end the fight if no primary enemy remains.
     fn kill(&mut self, at: usize) {
+        if self.die(at) {
+            return;
+        }
+        let primary_enemy_remains = self.live.creatures.iter().any(|creature| {
+            creature.side == <V::CombatSide as SideKinds>::ENEMY
+                && !creature.powers.iter().any(|held| {
+                    <V as sts2_core::Hooks>::decide_hook(
+                        sts2_core::ModelId::Power(held.power),
+                        sts2_core::DecisionHook::ShouldCountForCombatEnd,
+                    )
+                    .is_decision_and(|counts| !counts)
+                })
+        });
+        if primary_enemy_remains {
+            return;
+        }
+
+        // `EndCombat`: everything left on the enemy side is secondary. It
+        // dies through the same hooks, but cannot keep the fight open.
+        for at in (0..self.live.creatures.len()).rev() {
+            if self.live.creatures[at].side == <V::CombatSide as SideKinds>::ENEMY
+                && self.live.creatures[at].alive
+            {
+                self.live.creatures[at].hp = V::Health::zero();
+                self.die(at);
+            }
+        }
+        self.won = true;
+    }
+
+    /// `KillWithoutCheckingWinCondition`, including a power's revival hook.
+    ///
+    /// Returns whether a hook keeps the dead creature in the fight.
+    fn die(&mut self, at: usize) -> bool {
         self.live.creatures[at].alive = false;
         if self.live.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
             unimplemented!("a player dying in a fight");
@@ -206,17 +240,13 @@ impl<'a, V: Rules> Board<'a, V> {
                 .find(|held| held.creature == id)
                 .expect("a reviving monster has a move machine");
             held.resume = resume;
-            return;
+            return true;
         }
         // A dead monster is taken out of the fight, so nothing that reads it
         // afterwards can see it. That is why the observation stops reporting
         // it rather than reporting it dead.
         self.live.creatures.remove(at);
-        self.won = !self
-            .live
-            .creatures
-            .iter()
-            .any(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY);
+        false
     }
 }
 

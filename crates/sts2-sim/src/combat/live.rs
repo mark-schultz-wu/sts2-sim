@@ -137,15 +137,17 @@ impl<V: Rules> Live<V> {
     /// Consume a won fight into the report that remains on its reward screen.
     pub(crate) fn finish(mut self) -> Combat<V> {
         self.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
-        self.energy = num_traits::zero();
         self.hand.clear();
         self.draw.clear();
         self.discard.clear();
         self.exhaust.clear();
-        for creature in &mut self.creatures {
-            creature.powers.clear();
-            creature.block = num_traits::zero();
-        }
+        let player = self
+            .creatures
+            .iter_mut()
+            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+            .expect("a fight has the player in it");
+        player.powers.clear();
+        player.block = num_traits::zero();
         self.report()
     }
 }

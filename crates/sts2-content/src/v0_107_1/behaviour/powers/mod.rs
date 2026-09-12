@@ -98,6 +98,9 @@ pub(crate) fn decide_hook(
         (Power::IllusionPower, sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath) => {
             sts2_core::HookResponse::Decision(false)
         }
+        (Power::MinionPower, sts2_core::DecisionHook::ShouldCountForCombatEnd) => {
+            sts2_core::HookResponse::Decision(false)
+        }
         _ => sts2_core::HookResponse::DoesNotImplement,
     }
 }
