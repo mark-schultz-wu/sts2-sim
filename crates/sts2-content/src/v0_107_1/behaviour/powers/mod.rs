@@ -47,9 +47,13 @@ pub(crate) fn damage_hook(power: Power, holding: Holding, amount: PowerAmount<i3
         (Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower, _) => Modify::Nothing,
         // `EnergyNextTurnPower` has no `ModifyDamage`. It hands over an energy
         // at the reset and goes.
-        (Power::EnergyNextTurnPower | Power::IllusionPower | Power::MinionPower, _) => {
-            Modify::Nothing
-        }
+        (
+            Power::BlockNextTurnPower
+            | Power::EnergyNextTurnPower
+            | Power::IllusionPower
+            | Power::MinionPower,
+            _,
+        ) => Modify::Nothing,
         (power, _) => unimplemented!("what {power:?} does to a hit"),
     }
 }
@@ -67,6 +71,7 @@ pub(crate) fn block_hook(power: Power, _amount: PowerAmount<i32>) -> Modify<i32>
         Power::VulnerablePower
         | Power::WeakPower
         | Power::ShrinkPower
+        | Power::BlockNextTurnPower
         | Power::EnergyNextTurnPower
         | Power::StrengthPower
         | Power::IllusionPower
@@ -99,6 +104,7 @@ pub(crate) fn side_turn_end(power: Power, side: CombatSide) -> SideTurnEnd {
         // the fight.
         (
             Power::EnergyNextTurnPower
+            | Power::BlockNextTurnPower
             | Power::StrengthPower
             | Power::IllusionPower
             | Power::MinionPower,
@@ -122,11 +128,17 @@ pub(crate) fn spent_on_energy_reset(power: Power) -> bool {
         Power::VulnerablePower
         | Power::WeakPower
         | Power::ShrinkPower
+        | Power::BlockNextTurnPower
         | Power::StrengthPower
         | Power::IllusionPower
         | Power::MinionPower => false,
         power => unimplemented!("what {power:?} does as energy resets"),
     }
+}
+
+/// Block granted by a power immediately after its owner's block is cleared.
+pub(crate) fn block_after_clear(power: Power, amount: i32) -> Option<i32> {
+    (power == Power::BlockNextTurnPower).then_some(amount)
 }
 
 /// The move Illusion installs instead of letting its owner leave the fight.

@@ -13,6 +13,15 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
     fight.draw(fight.var(CardVar::Cards));
 }
 
+/// `Glitterstream`. Gain block now and after the next block clear.
+pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
+    fight.gain_block(fight.var(CardVar::Block));
+    fight.apply_to_actor(
+        Power::BlockNextTurnPower,
+        PowerAmount::Counted(fight.var(CardVar::BlockNextTurn)),
+    );
+}
+
 /// `RefineBlade`. Forge every Sovereign Blade, then gain energy next turn.
 ///
 /// `ForgeCmd.Forge` creates a blade when the fight holds none it can reach,

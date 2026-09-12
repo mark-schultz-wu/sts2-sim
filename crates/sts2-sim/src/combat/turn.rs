@@ -142,6 +142,18 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
 fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
     for creature in live.creatures.iter_mut().filter(|c| c.side == side) {
         creature.block = num_traits::zero();
+        let mut gained: V::Number = num_traits::zero();
+        creature.powers.retain(|held| {
+            let PowerAmount::Counted(amount) = held.amount else {
+                return true;
+            };
+            let Some(block) = V::block_after_clear(held.power, amount) else {
+                return true;
+            };
+            gained = gained + block;
+            false
+        });
+        creature.block = creature.block + gained;
     }
 }
 

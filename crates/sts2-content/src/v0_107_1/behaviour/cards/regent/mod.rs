@@ -15,6 +15,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
         RegentCard::FallingStar => basic::falling_star(fight),
         RegentCard::Venerate => basic::venerate(fight),
         RegentCard::GuidingStar => common::guiding_star(fight),
+        RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::RefineBlade => common::refine_blade(fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }

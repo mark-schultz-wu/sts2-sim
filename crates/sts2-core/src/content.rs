@@ -1372,6 +1372,9 @@ pub trait Rules: ContentVersion {
     /// A power nobody has ported.
     fn spent_on_energy_reset(power: Self::Power) -> bool;
 
+    /// Block a power grants after its owner's block is cleared, consuming it.
+    fn block_after_clear(power: Self::Power, amount: Self::Number) -> Option<Self::Number>;
+
     /// The move a power installs when a lethal hit leaves its owner to revive.
     fn revival_move(power: Self::Power) -> Option<crate::NextMove<Self>>;
 

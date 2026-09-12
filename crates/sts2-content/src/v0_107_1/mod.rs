@@ -210,6 +210,10 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::powers::spent_on_energy_reset(power)
     }
 
+    fn block_after_clear(power: Self::Power, amount: Self::Number) -> Option<Self::Number> {
+        behaviour::powers::block_after_clear(power, amount)
+    }
+
     fn revival_move(power: Self::Power) -> Option<sts2_core::NextMove<Self>> {
         behaviour::powers::revival_move(power)
     }
