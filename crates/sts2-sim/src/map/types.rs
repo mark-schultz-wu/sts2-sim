@@ -11,7 +11,7 @@
 
 use std::collections::VecDeque;
 
-use sts2_core::rng::{GameRng, Interval, Span};
+use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
 
 use sts2_core::{AscensionKinds, MapPointKinds, Rules};
 
@@ -82,12 +82,14 @@ impl Counts {
     ) -> Self {
         let rests = match layout.rests {
             Rests::Around { mean, min, max } => {
-                let accept = Interval::new(min, max);
-                rng.next_gaussian_int(mean, 1, accept)
+                let accept = Interval::new(R::Int::from_i32(min), R::Int::from_i32(max));
+                rng.next_gaussian_int(R::Int::from_i32(mean), R::Int::ONE, accept)
+                    .to_i32()
             }
             Rests::Between { min, max } => {
-                let span = Span::new(min, max).expect("an act's rest range holds something");
-                rng.next_int_range(span)
+                let span = Span::new(R::Int::from_i32(min), R::Int::from_i32(max))
+                    .expect("an act's rest range holds something");
+                rng.next_int_range(span).to_i32()
             }
         };
         let unknowns = standard_unknowns(rng) - layout.fewer_unknowns;
@@ -117,8 +119,9 @@ fn elites<A: AscensionKinds>(ascension: A) -> usize {
 /// `MapPointTypeCounts.StandardRandomUnknownCount`, which every act starts
 /// from.
 fn standard_unknowns<R: GameRng>(rng: &mut R) -> i32 {
-    let accept = Interval::new(10, 14);
-    rng.next_gaussian_int(12, 1, accept)
+    let accept = Interval::new(R::Int::from_i32(10), R::Int::from_i32(14));
+    rng.next_gaussian_int(R::Int::from_i32(12), R::Int::ONE, accept)
+        .to_i32()
 }
 
 impl<V: Rules> ActMapBuilder<V> {

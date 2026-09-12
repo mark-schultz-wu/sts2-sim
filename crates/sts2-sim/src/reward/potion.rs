@@ -3,7 +3,7 @@
 //! `PotionFactory.CreateRandomPotion`, which is two draws: a rarity, and one
 //! of the pool's potions at it.
 
-use sts2_core::rng::{Bound, GameRng};
+use sts2_core::rng::{Bound, GameRng, RngInteger};
 use sts2_core::{Drafted, RewardRarity, Rules};
 
 /// A roll at or under this is rare, and at or under the second is uncommon.
@@ -36,7 +36,7 @@ fn at<V: Rules, R: GameRng>(
     rng: &mut R,
 ) -> V::Potion {
     let choices = pool.at(wanted);
-    let count = i32::try_from(choices.len()).expect("a potion pool fits an i32");
+    let count = R::Int::try_from_usize(choices.len()).expect("a potion pool fits the RNG integer");
     let bound = Bound::new(count).unwrap_or_else(|| unimplemented!("a rarity with no potion"));
-    choices[rng.next_int(bound) as usize]
+    choices[rng.next_int(bound).to_usize()]
 }

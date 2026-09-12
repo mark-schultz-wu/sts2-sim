@@ -1,6 +1,6 @@
 //! Card rewards drawn from a player's reward stream.
 
-use sts2_core::rng::{Bound, GameRng};
+use sts2_core::rng::{Bound, GameRng, RngInteger};
 use sts2_core::{Drafted, RewardRarity, Rules};
 
 use super::Odds;
@@ -25,9 +25,10 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
             RewardRarity::Common
         };
         let choices = available::<V>(cards, &drawn, wanted);
-        let left = choices.iter().filter(|card| !drawn.contains(card)).count() as i32;
+        let left = choices.iter().filter(|card| !drawn.contains(card)).count();
+        let left = R::Int::try_from_usize(left).expect("an available rarity fits the RNG integer");
         let bound = Bound::new(left).expect("an available rarity has a card");
-        let at = rng.next_int(bound) as usize;
+        let at = rng.next_int(bound).to_usize();
         drawn.push(
             choices
                 .iter()
@@ -117,9 +118,10 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     for _ in 0..count {
         let wanted = rarity(rng, odds);
         let choices = available::<V>(cards, &drawn, wanted);
-        let left = choices.iter().filter(|card| !drawn.contains(card)).count() as i32;
+        let left = choices.iter().filter(|card| !drawn.contains(card)).count();
+        let left = R::Int::try_from_usize(left).expect("an available rarity fits the RNG integer");
         let bound = Bound::new(left).expect("an available rarity has a card");
-        let at = rng.next_int(bound) as usize;
+        let at = rng.next_int(bound).to_usize();
         drawn.push(
             choices
                 .iter()

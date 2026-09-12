@@ -9,8 +9,7 @@
 //! `cargo xtask dump setupdump`. Each line is a place this has to reach.
 
 use indexmap::IndexMap;
-use sts2_core::rng::GameRng;
-use sts2_core::rng::{Bound, Span};
+use sts2_core::rng::{Bound, GameRng, RngInteger};
 use sts2_core::{
     ActTable, ContentVersion, EncounterTable, RarityKinds, RelicPoolKinds, RelicTable,
     RoomKinds as _, Rules, Table,
@@ -311,8 +310,7 @@ impl<V: Rules> Rooms<V> {
 /// A two-argument `NextInt`, which is a different draw from the one-argument
 /// one even over the same range.
 fn next_item<T: Copy, R: GameRng>(rng: &mut R, items: &[T]) -> Option<T> {
-    let span = Span::new(0, i32::try_from(items.len()).ok()?).ok()?;
-    items.get(rng.next_int_range(span) as usize).copied()
+    rng.choose(items).ok().copied()
 }
 
 /// Everything a run draws before the player does anything.
@@ -345,8 +343,10 @@ impl<V: Rules> Opening<V> {
 
         let mut dealt: Vec<Vec<V::Event>> = vec![Vec::new()];
         for _ in acts.iter().skip(1) {
-            let bound = Bound::new(pool.len() as i32 + 1).expect("a count plus one is positive");
-            let taken = rng.next_int(bound) as usize;
+            let count = R::Int::try_from_usize(pool.len() + 1)
+                .expect("an ancient pool fits the RNG integer");
+            let bound = Bound::new(count).expect("a count plus one is positive");
+            let taken = rng.next_int(bound).to_usize();
             dealt.push(pool.drain(..taken).collect());
         }
 

@@ -26,16 +26,12 @@
 mod bounds;
 
 pub use crate::Seed;
-pub use bounds::{Bound, Choices, Error, Interval, Span};
-
-/// `next_bool` draws over two outcomes. Checked at compile time.
-const TWO: Bound = match Bound::new(2) {
-    Some(bound) => bound,
-    None => unreachable!(),
-};
+pub use bounds::{Bound, Choices, Error, Interval, RngInteger, Span};
 
 /// A counted stream producing the game's sequence.
 pub trait GameRng: Sized {
+    type Int: RngInteger;
+
     /// Seeded, at counter zero.
     fn new(seed: u32) -> Self;
 
@@ -89,13 +85,13 @@ pub trait GameRng: Sized {
     /// `next_int(2) == 0`: a scaled double against zero, not a bit test.
     #[inline]
     fn next_bool(&mut self) -> bool {
-        self.next_int(TWO) == 0
+        self.next_int(Bound::<Self::Int>::two()) == Self::Int::ZERO
     }
 
     /// `[0, max)`, by scaling a double and truncating.
     #[inline]
-    fn next_int(&mut self, max: Bound) -> i32 {
-        (self.next_double() * max.get() as f64) as i32
+    fn next_int(&mut self, max: Bound<Self::Int>) -> Self::Int {
+        Self::Int::scaled(self.next_double(), max.get())
     }
 
     /// One item selected by the game's bounded integer draw.
@@ -103,31 +99,23 @@ pub trait GameRng: Sized {
     /// An empty slice or one too large for the game's signed 32-bit bound is
     /// an invalid draw. A successful selection consumes one draw.
     fn choose<'a, T>(&mut self, items: &'a [T]) -> Result<&'a T, Error> {
-        Choices::try_new(items).map(|items| self.choose_from(items))
+        Choices::<T, Self::Int>::try_new(items).map(|items| self.choose_from(items))
     }
 
     /// One item from a slice already known to be a valid choice list.
-    fn choose_from<'a, T>(&mut self, choices: Choices<'a, T>) -> &'a T {
-        &choices.items()[self.next_int(choices.bound()) as usize]
+    fn choose_from<'a, T>(&mut self, choices: Choices<'a, T, Self::Int>) -> &'a T {
+        &choices.items()[self.next_int(choices.bound()).to_usize()]
     }
 
-    /// One integer from a closed interval whose representation is an `i32`.
-    fn next_interval<T: Copy + From<i32> + Into<i32>>(&mut self, range: Interval<T>) -> T {
-        let min = range.min().into();
-        let width = range.max().into() as i64 - min as i64 + 1;
-        T::from((min as i64 + (self.next_double() * width as f64) as i64) as i32)
+    /// One integer from a closed interval in an RNG integer representation.
+    fn next_interval<I: RngInteger>(&mut self, range: Interval<I>) -> I {
+        I::in_half_open(self.next_double(), range.min(), range.max() + I::ONE)
     }
 
-    /// A span wider than `i32::MAX` takes the game's 64-bit branch, which is a
-    /// different computation and not just a wider one.
+    /// A wide span can take a different computation from an ordinary span.
     #[inline]
-    fn next_int_range(&mut self, range: Span<i32>) -> i32 {
-        let width = range.max() as i64 - range.min() as i64;
-        if width <= i32::MAX as i64 {
-            ((self.next_double() * width as f64) as i32).wrapping_add(range.min())
-        } else {
-            (((self.next_double() * width as f64) as i64).wrapping_add(range.min() as i64)) as i32
-        }
+    fn next_int_range(&mut self, range: Span<Self::Int>) -> Self::Int {
+        Self::Int::in_half_open(self.next_double(), range.min(), range.max())
     }
 
     /// The width is computed in unsigned arithmetic before scaling, so this is
@@ -163,11 +151,14 @@ pub trait GameRng: Sized {
         let mut at = items.len();
         while at > 1 {
             at -= 1;
-            let Some(bound) = Bound::new(at as i32 + 1) else {
+            let Ok(count) = Self::Int::try_from_usize(at + 1) else {
+                panic!("a shuffle is too large for the RNG's integer bound")
+            };
+            let Some(bound) = Bound::new(count) else {
                 // `at` is at least one here, so the bound is at least two.
                 unreachable!("a bound of {} is not zero", at + 1)
             };
-            let with = self.next_int(bound) as usize;
+            let with = self.next_int(bound).to_usize();
             items.swap(at, with);
         }
     }
@@ -214,12 +205,18 @@ pub trait GameRng: Sized {
     ///
     /// The game has no guard here at all: an inverted interval spins forever
     /// rather than throwing. [`Interval`] is what makes that unreachable.
-    fn next_gaussian_int(&mut self, mean: i32, std_dev: i32, accept: Interval<i32>) -> i32 {
+    fn next_gaussian_int(
+        &mut self,
+        mean: Self::Int,
+        std_dev: Self::Int,
+        accept: Interval<Self::Int>,
+    ) -> Self::Int {
         loop {
             let a = 1.0 - self.next_double();
             let b = 1.0 - self.next_double();
             let normal = (-2.0 * libm::log(a)).sqrt() * libm::sin(TAU * b);
-            let value = (mean as f64 + std_dev as f64 * normal).round_ties_even() as i32;
+            let value =
+                Self::Int::from_f64((mean.to_f64() + std_dev.to_f64() * normal).round_ties_even());
             if value >= accept.min() && value <= accept.max() {
                 return value;
             }

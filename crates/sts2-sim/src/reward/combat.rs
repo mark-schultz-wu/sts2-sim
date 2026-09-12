@@ -4,7 +4,7 @@
 //! roll, then three cards. Every draw comes off the rewards stream, and the
 //! order is what puts the stream where the next screen finds it.
 
-use sts2_core::rng::{GameRng, Interval, Span};
+use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
 use sts2_core::{AscensionKinds, Rules};
 
 use super::{Odds, Offer, card};
@@ -48,9 +48,12 @@ pub(crate) fn won<V: Rules, R: GameRng>(
 /// The room's `GoldProportion` is one for every fight the map deals. An event
 /// that hands out a part of a fight's gold sets it, and none is ported.
 fn purse<V: Rules, R: GameRng>(rng: &mut R, gold: Interval<u16>) -> V::Number {
-    let span = Span::new(i32::from(gold.min()), i32::from(gold.max()) + 1)
-        .expect("a gold range that ends above where it starts");
-    num_traits::cast(rng.next_int_range(span)).expect("a fight's gold is a game number")
+    let span = Span::new(
+        R::Int::from_i32(i32::from(gold.min())),
+        R::Int::from_i32(i32::from(gold.max()) + 1),
+    )
+    .expect("a gold range that ends above where it starts");
+    num_traits::cast(rng.next_int_range(span).to_i32()).expect("a fight's gold is a game number")
 }
 
 /// `PotionRewardOdds.Roll`, which draws whether or not a potion follows.

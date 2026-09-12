@@ -24,7 +24,7 @@ where
     field.parse().expect("fixture field should parse")
 }
 
-fn bound(field: &str) -> Bound {
+fn bound(field: &str) -> Bound<i32> {
     Bound::new(num(field)).expect("fixture bounds are positive")
 }
 
@@ -35,7 +35,7 @@ fn rows(prefix: &str) -> impl Iterator<Item = (usize, Vec<&'static str>)> {
     })
 }
 
-fn draws<G: GameRng>() -> usize {
+fn draws<G: GameRng<Int = i32>>() -> usize {
     let mut rng = G::new(0);
     let mut checked = 0usize;
 
