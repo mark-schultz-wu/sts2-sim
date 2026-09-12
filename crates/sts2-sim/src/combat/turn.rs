@@ -203,6 +203,21 @@ fn enemy_turn<V: Rules>(
         let Some(creature) = live.creatures.iter().find(|c| c.id == id) else {
             continue;
         };
+        let reviving = live
+            .machines
+            .iter()
+            .find(|held| held.creature == id)
+            .is_some_and(|held| held.resume.is_some());
+        if reviving && !creature.alive {
+            let creature = live
+                .creatures
+                .iter_mut()
+                .find(|creature| creature.id == id)
+                .expect("a reviving monster remains in the fight");
+            creature.hp = creature.max_hp;
+            creature.alive = true;
+            continue;
+        }
         let next_move = creature
             .next_move
             .clone()
@@ -242,6 +257,16 @@ fn roll_moves<V: Rules>(
     live.machines
         .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
     for held in live.machines.iter_mut() {
+        if let Some(resume) = held.resume.take() {
+            if let Some(creature) = live
+                .creatures
+                .iter_mut()
+                .find(|creature| creature.id == held.creature)
+            {
+                creature.next_move = Some(resume);
+            }
+            continue;
+        }
         let rolled =
             V::roll_monster_move(held.monster, ascension, held.spawn, &mut held.machine, ai)?;
         if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {

@@ -128,3 +128,18 @@ pub(crate) fn spent_on_energy_reset(power: Power) -> bool {
         power => unimplemented!("what {power:?} does as energy resets"),
     }
 }
+
+/// The move Illusion installs instead of letting its owner leave the fight.
+pub(crate) fn revival_move(power: Power) -> Option<sts2_core::NextMove<super::super::V0_107_1>> {
+    use super::super::generated::monsters::{IntentKind, MoveId};
+
+    (power == Power::IllusionPower).then(|| sts2_core::NextMove {
+        id: MoveId::ReviveMove,
+        intents: [sts2_core::Intent {
+            kind: IntentKind::Heal,
+            attack: None,
+        }]
+        .into_iter()
+        .collect(),
+    })
+}

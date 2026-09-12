@@ -175,6 +175,25 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.live.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
             unimplemented!("a player dying in a fight");
         }
+        let revival = self.live.creatures[at]
+            .powers
+            .iter()
+            .find_map(|held| V::revival_move(held.power));
+        if let Some(revival) = revival {
+            // `ShouldDie` keeps the monster in the roster at zero health. It
+            // spends its next action reviving, then returns to the move that
+            // was interrupted by the lethal hit.
+            let id = self.live.creatures[at].id;
+            let resume = self.live.creatures[at].next_move.replace(revival);
+            let held = self
+                .live
+                .machines
+                .iter_mut()
+                .find(|held| held.creature == id)
+                .expect("a reviving monster has a move machine");
+            held.resume = resume;
+            return;
+        }
         // A dead monster is taken out of the fight, so nothing that reads it
         // afterwards can see it. That is why the observation stops reporting
         // it rather than reporting it dead.

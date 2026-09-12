@@ -51,6 +51,8 @@ pub(crate) struct Machine<V: Rules> {
     /// state in the graph asks about.
     pub(crate) spawn: sts2_core::MonsterSpawn<V::Encounter>,
     pub(crate) machine: MoveMachine,
+    /// The move restored after this monster spends one turn reviving.
+    pub(crate) resume: Option<sts2_core::NextMove<V>>,
 }
 
 /// Roll health and the first move in encounter order, advancing the two run
@@ -99,6 +101,7 @@ pub(crate) fn initialize<V: Rules>(
             monster,
             spawn,
             machine,
+            resume: None,
         });
         creatures.push(Creature {
             id,
@@ -189,6 +192,7 @@ pub(super) fn summon<V: Rules>(
                 roster_size,
             },
             machine: V::opening_move_machine(monster),
+            resume: None,
         },
     );
     for (position, held) in live.machines.iter_mut().enumerate() {

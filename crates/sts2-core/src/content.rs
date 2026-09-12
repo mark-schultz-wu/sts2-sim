@@ -1372,6 +1372,9 @@ pub trait Rules: ContentVersion {
     /// A power nobody has ported.
     fn spent_on_energy_reset(power: Self::Power) -> bool;
 
+    /// The move a power installs when a lethal hit leaves its owner to revive.
+    fn revival_move(power: Self::Power) -> Option<crate::NextMove<Self>>;
+
     /// What a card that works its own target out from the fight names.
     ///
     /// `CardModel.TargetType`, overridden. The player's powers are what the
