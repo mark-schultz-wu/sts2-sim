@@ -13,6 +13,9 @@ use super::super::V0_107_1;
 use super::super::generated::encounters::Encounter;
 use super::super::generated::monsters::{Monster, MoveId, State};
 
+/// What a move's own numbers are held as.
+pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
+
 mod overgrowth;
 
 type V = V0_107_1;
@@ -27,7 +30,7 @@ pub(crate) fn starting_powers(
     monster: Monster,
 ) -> Option<(
     super::super::generated::powers::Power,
-    sts2_core::PowerAmount<i32>,
+    sts2_core::PowerAmount<Number>,
 )> {
     overgrowth::starting_powers(monster)
 }

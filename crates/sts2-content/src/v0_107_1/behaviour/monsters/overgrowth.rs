@@ -8,13 +8,13 @@ use super::super::super::generated::ascension::AscensionLevel;
 use super::super::super::generated::cards::{Cards, StatusCard};
 use super::super::super::generated::encounters::Encounter;
 use super::super::super::generated::monsters::{Monster, MoveId};
-use super::V;
+use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
 /// One monster of this act has an `AfterAddedToRoom`: Byrdonis, which opens
 /// territorial.
-pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<i32>)> {
+pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<Number>)> {
     match monster {
         Monster::Byrdonis => Some((Power::TerritorialPower, PowerAmount::Counted(1))),
         _ => None,
@@ -187,12 +187,12 @@ fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 }
 
 /// `Nibbit.SliceBlock`, either side of `ToughEnemies`.
-const SLICE_BLOCK: i32 = 5;
-const SLICE_BLOCK_TOUGH: i32 = 6;
+const SLICE_BLOCK: Number = 5;
+const SLICE_BLOCK_TOUGH: Number = 6;
 
 /// `Nibbit.HissStrengthGain`, either side of `DeadlyEnemies`.
-const HISS_STRENGTH: i32 = 2;
-const HISS_STRENGTH_DEADLY: i32 = 3;
+const HISS_STRENGTH: Number = 2;
+const HISS_STRENGTH_DEADLY: Number = 3;
 
 /// `Fogmog`. Its illusion joins the front of the enemy roster. Both swipes
 /// hit and make the Fogmog stronger afterwards.

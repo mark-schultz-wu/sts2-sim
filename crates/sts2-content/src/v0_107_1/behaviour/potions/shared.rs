@@ -5,9 +5,10 @@ use sts2_core::{Fight, PowerAmount};
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::potions::Potion;
 use super::super::super::generated::powers::Power;
+use super::Number;
 
 /// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
-const DEXTERITY: i32 = 2;
+const DEXTERITY: Number = 2;
 
 /// What one of the shared potions does when it is drunk.
 ///

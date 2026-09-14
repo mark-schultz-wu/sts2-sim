@@ -14,6 +14,9 @@ use sts2_core::{Fight, PotionTable};
 use super::super::V0_107_1 as V;
 use super::super::generated::potions::{Potion, PotionPool};
 
+/// What a potion's own numbers are held as.
+pub(crate) type Number = <V as sts2_core::ContentVersion>::Number;
+
 /// What a potion does when it is drunk.
 ///
 /// # Panics
