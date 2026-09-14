@@ -88,9 +88,11 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::ModifyHook<Self>,
     ) -> sts2_core::Modify<Self::Number> {
         match listener {
-            sts2_core::Listener::Power { power, amount } => {
-                behaviour::powers::modify_hook(power, amount, hook)
-            }
+            sts2_core::Listener::Power {
+                power,
+                amount,
+                owner,
+            } => behaviour::powers::modify_hook(power, amount, owner, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
         }
     }
@@ -110,9 +112,11 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
         match listener {
-            sts2_core::Listener::Power { power, amount } => {
-                behaviour::powers::event_hook(power, amount, hook)
-            }
+            sts2_core::Listener::Power {
+                power,
+                amount,
+                owner,
+            } => behaviour::powers::event_hook(power, amount, owner, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
         }
     }
@@ -178,6 +182,10 @@ impl sts2_core::Rules for V0_107_1 {
         printed: &mut [sts2_core::Printed<Self::CardVar, Self::Number>],
     ) {
         behaviour::cards::upgrade(card, printed);
+    }
+
+    fn on_use<F: sts2_core::Fight<Self>>(potion: Self::Potion, fight: &mut F) {
+        behaviour::potions::on_use(potion, fight);
     }
 
     fn on_play<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
@@ -528,8 +536,10 @@ fn intents(
                 unimplemented!("a move whose repeats the fight decides");
             };
             Some(sts2_core::Attack {
+                // The table holds each column's own width, and a fight counts
+                // in the build's own types. Widening here is where they meet.
                 damage: i32::from(damage.at(ascension)),
-                repeats: repeats.at(ascension),
+                repeats: u32::from(repeats.at(ascension)),
             })
         }
     };

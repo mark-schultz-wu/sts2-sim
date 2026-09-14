@@ -531,7 +531,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "}}\n").unwrap();
 
     writeln!(out, "impl sts2_core::CardVars for CardVar {{").unwrap();
-    writeln!(out, "    const DAMAGE: CardVar = CardVar::Damage;\n").unwrap();
+    writeln!(out, "    const DAMAGE: CardVar = CardVar::Damage;").unwrap();
+    writeln!(out, "    const BLOCK: CardVar = CardVar::Block;\n").unwrap();
     writeln!(out, "    const ALL: &'static [CardVar] = &[").unwrap();
     for key in &keys {
         writeln!(out, "        CardVar::{},", sanitize(key)).unwrap();

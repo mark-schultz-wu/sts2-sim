@@ -454,10 +454,14 @@ pub struct Stack<V: ContentVersion> {
 impl<V: crate::Hooks> Stack<V> {
     /// This power as a hook's listener, which is the instance the game gives
     /// the hook to.
-    pub fn listener(&self) -> crate::Listener<'_, V> {
+    ///
+    /// `owner` is the side of the creature carrying it. A stack is held by a
+    /// creature and does not know which, so the caller that found it says.
+    pub fn listener(&self, owner: V::CombatSide) -> crate::Listener<'_, V> {
         crate::Listener::Power {
             power: self.power,
             amount: self.amount,
+            owner,
         }
     }
 }
@@ -497,7 +501,10 @@ pub struct Attack<V: ContentVersion> {
     /// After `Hook.ModifyDamage`, so this is the number that will land rather
     /// than the move's base value.
     pub damage: V::Number,
-    pub repeats: u8,
+    /// How many times it lands, which is `WithHitCount`. A count and not a
+    /// number: an attack lands a whole number of times, and never fewer than
+    /// none.
+    pub repeats: V::Count,
 }
 
 /// One relic the player is carrying, and what it says.

@@ -461,7 +461,7 @@ struct WireIntent<V: sts2_content_wire::WireContentVersion> {
     #[serde(default)]
     damage: Option<i32>,
     #[serde(default)]
-    repeats: Option<u8>,
+    repeats: Option<V::Count>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

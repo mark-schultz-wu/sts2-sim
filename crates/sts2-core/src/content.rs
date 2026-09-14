@@ -375,12 +375,14 @@ pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
     /// Every key, once each.
     const ALL: &'static [Self];
 
-    /// The one key the engine's own rules name.
+    /// The two keys the engine's own rules name.
     ///
-    /// Damage is the only printed number a fight modifies before a card runs.
-    /// A preview against a target has to find it without naming a build. Every
-    /// other key is named by the ported behaviour that reads it.
+    /// Damage and block are the printed numbers a fight modifies before a card
+    /// runs, through `Hook.ModifyDamage` and `Hook.ModifyBlock`. A preview has
+    /// to find them without naming a build. Every other key is named by the
+    /// ported behaviour that reads it.
     const DAMAGE: Self;
+    const BLOCK: Self;
 
     /// The game's own key for it, which is what an observation carries.
     fn name(self) -> &'static str;
@@ -757,6 +759,12 @@ pub trait Fight<V: ContentVersion> {
     /// reads it here rather than print it a second time.
     fn intent_damage(&self) -> V::Number;
 
+    /// How many times that hit lands, which is `WithHitCount`.
+    ///
+    /// The same count the intent advertises, for the same reason the damage
+    /// is. A move that hits once reads one.
+    fn intent_repeats(&self) -> V::Count;
+
     /// `DamageCmd.Attack(damage).FromMonster(this)`, which hits every creature
     /// on the other side.
     fn attack_opponents(&mut self, damage: V::Number);
@@ -891,6 +899,9 @@ pub enum HookEffect<V: ContentVersion> {
     GainBlock(V::Number),
     /// `CardCmd.Upgrade` over every card in the hand.
     UpgradeHand,
+    /// `PowerCmd.Apply<P>(Owner, amount, Owner)`, on the creature the listener
+    /// is carried by.
+    ApplyToOwner(V::Power, PowerAmount<V::Number>),
     TickDownDuration,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
@@ -931,6 +942,9 @@ pub enum Listener<'a, V: Hooks> {
     Power {
         power: V::Power,
         amount: PowerAmount<V::Number>,
+        /// The side its owner is on, which is `Owner.Creature.Side`. A hook
+        /// naming a side asks the instance whether it is one of them.
+        owner: V::CombatSide,
     },
     Relic(&'a mut V::RelicState),
 }
@@ -1454,6 +1468,15 @@ pub trait Rules: Hooks {
     fn monster_starting_powers(
         monster: Self::Monster,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
+
+    /// What one potion does when it is drunk, which is `PotionModel.OnUse`.
+    ///
+    /// `OnUseWrapper` calls `RemoveBeforeUse` first, so the potion has left
+    /// the belt before this runs and does not see itself in it.
+    ///
+    /// Panics for a potion nobody has ported, as [`Rules::on_play`] does for a
+    /// card.
+    fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F);
 
     /// What a card that works its own target out from the fight names.
     ///

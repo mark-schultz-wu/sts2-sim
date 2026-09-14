@@ -37,6 +37,8 @@ pub(super) struct Board<'a, V: Rules> {
     playing: Option<&'a CardInstance<V>>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
+    /// How many times it advertises hitting, which is `WithHitCount`.
+    intent_repeats: V::Count,
     /// What the run is being played at, which a move's own constants scale by.
     ascension: V::AscensionLevel,
     /// The debuffs this effect put on the player, whose next tick is skipped.
@@ -73,6 +75,8 @@ impl<'a, V: Rules> Board<'a, V> {
             target,
             playing,
             intent_damage: V::Number::zero(),
+            // Nothing a card does reads an intent, and a card is not one.
+            intent_repeats: num_traits::zero(),
             ascension,
             skipped: Vec::new(),
             won: false,
@@ -87,6 +91,7 @@ impl<'a, V: Rules> Board<'a, V> {
         ascension: V::AscensionLevel,
         actor: CombatId,
         intent_damage: V::Number,
+        intent_repeats: V::Count,
     ) -> Self {
         Board {
             live,
@@ -96,6 +101,7 @@ impl<'a, V: Rules> Board<'a, V> {
             target: None,
             playing: None,
             intent_damage,
+            intent_repeats,
             ascension,
             skipped: Vec::new(),
             won: false,
@@ -178,7 +184,7 @@ impl<'a, V: Rules> Board<'a, V> {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
                 && !creature.powers.iter().any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
-                        held.listener(),
+                        held.listener(creature.side),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
                     )
                     .is_decision_and(|counts| !counts)
@@ -209,10 +215,11 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.live.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
             unimplemented!("a player dying in a fight");
         }
+        let owner = self.live.creatures[at].side;
         let powers = self.live.creatures[at].powers.clone();
         let kept = powers.iter().any(|held| {
             <V as sts2_core::Hooks>::decide_hook(
-                held.listener(),
+                held.listener(owner),
                 sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
             )
             .is_decision_and(|remove| !remove)
@@ -222,7 +229,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 .iter()
                 .flat_map(|held| {
                     <V as sts2_core::Hooks>::event_hook(
-                        held.listener(),
+                        held.listener(owner),
                         sts2_core::EventHook::AfterDeath,
                     )
                 })
@@ -296,13 +303,35 @@ pub(crate) fn modified<V: Rules>(
         sides.into_iter().flat_map(|(holder, holding)| {
             holder
                 .into_iter()
-                .flat_map(move |holder| &creatures[holder].powers)
-                .map(move |held| {
+                .flat_map(move |holder| {
+                    let side = creatures[holder].side;
+                    creatures[holder]
+                        .powers
+                        .iter()
+                        .map(move |held| (held, side))
+                })
+                .map(move |(held, side)| {
                     <V as sts2_core::Hooks>::modify_hook(
-                        held.listener(),
+                        held.listener(side),
                         sts2_core::ModifyHook::Damage { holding },
                     )
                 })
+        }),
+    )
+}
+
+/// One block gain after every power on the creature gaining it has had its
+/// say, which is `Hook.ModifyBlock`.
+///
+/// The same hook whether the block is previewed or gained, as damage's is.
+pub(super) fn blocked<V: Rules>(creature: &Creature<V>, amount: V::Number) -> V::Number {
+    hooked::<V>(
+        amount,
+        creature.powers.iter().map(|held| {
+            <V as sts2_core::Hooks>::modify_hook(
+                held.listener(creature.side),
+                sts2_core::ModifyHook::Block,
+            )
         }),
     )
 }
@@ -351,12 +380,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // clamps at zero, and adds nothing at all when nothing is left.
         let actor = self.actor;
         let Some(at) = self.at(actor) else { return };
-        let amount = hooked::<V>(
-            amount,
-            self.live.creatures[at].powers.iter().map(|held| {
-                <V as sts2_core::Hooks>::modify_hook(held.listener(), sts2_core::ModifyHook::Block)
-            }),
-        );
+        let amount = blocked::<V>(&self.live.creatures[at], amount);
         if amount > V::Number::zero() {
             self.live.creatures[at].block = self.live.creatures[at].block + amount;
         }
@@ -383,6 +407,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn intent_damage(&self) -> V::Number {
         self.intent_damage
+    }
+
+    fn intent_repeats(&self) -> V::Count {
+        self.intent_repeats
     }
 
     fn attack_opponents(&mut self, damage: V::Number) {

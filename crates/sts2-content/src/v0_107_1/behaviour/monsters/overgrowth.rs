@@ -8,13 +8,13 @@ use super::super::super::generated::ascension::AscensionLevel;
 use super::super::super::generated::cards::{Cards, StatusCard};
 use super::super::super::generated::encounters::Encounter;
 use super::super::super::generated::monsters::{Monster, MoveId};
-use super::V;
+use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
 /// One monster of this act has an `AfterAddedToRoom`: Byrdonis, which opens
 /// territorial.
-pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<i32>)> {
+pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<Number>)> {
     match monster {
         Monster::Byrdonis => Some((Power::TerritorialPower, PowerAmount::Counted(1))),
         _ => None,
@@ -44,6 +44,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::Nibbit => nibbit(move_id, fight),
         Monster::Fogmog => fogmog(move_id, fight),
         Monster::EyeWithTeeth => eye_with_teeth(move_id, fight),
+        Monster::Byrdonis => byrdonis(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
 }
@@ -186,12 +187,12 @@ fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 }
 
 /// `Nibbit.SliceBlock`, either side of `ToughEnemies`.
-const SLICE_BLOCK: i32 = 5;
-const SLICE_BLOCK_TOUGH: i32 = 6;
+const SLICE_BLOCK: Number = 5;
+const SLICE_BLOCK_TOUGH: Number = 6;
 
 /// `Nibbit.HissStrengthGain`, either side of `DeadlyEnemies`.
-const HISS_STRENGTH: i32 = 2;
-const HISS_STRENGTH_DEADLY: i32 = 3;
+const HISS_STRENGTH: Number = 2;
+const HISS_STRENGTH_DEADLY: Number = 3;
 
 /// `Fogmog`. Its illusion joins the front of the enemy roster. Both swipes
 /// hit and make the Fogmog stronger afterwards.
@@ -219,9 +220,28 @@ fn eye_with_teeth<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     }
 }
 
-/// `DamageCmd.Attack(n).FromMonster(this)`, for the moves that are that and
-/// nothing else.
+/// `Byrdonis`. Pecks three times, then swoops, and back again.
+///
+/// Both moves are an attack and nothing else. The peck's hit count is the
+/// `PeckRepeat` its intent advertises.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+fn byrdonis<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::PeckMove | MoveId::SwoopMove => attack(fight),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `DamageCmd.Attack(n).WithHitCount(k).FromMonster(this)`, for the moves that
+/// are that and nothing else.
 fn attack<F: Fight<V>>(fight: &mut F) {
     let damage = fight.intent_damage();
-    fight.attack_opponents(damage);
+    let repeats: usize = num_traits::cast(fight.intent_repeats())
+        .unwrap_or_else(|| unimplemented!("a move that hits more times than a fight can count"));
+    for _ in 0..repeats {
+        fight.attack_opponents(damage);
+    }
 }

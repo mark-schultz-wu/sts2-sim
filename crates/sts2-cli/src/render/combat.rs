@@ -109,7 +109,9 @@ fn creature<V: sts2_content_wire::WireContentVersion>(
             .map(|i| {
                 let kind = spelling(&i.kind).to_lowercase();
                 match i.attack {
-                    Some(a) if a.repeats > 1 => format!("{kind} {}×{}", a.damage, a.repeats),
+                    Some(a) if a.repeats > num_traits::one() => {
+                        format!("{kind} {}×{}", a.damage, a.repeats)
+                    }
                     Some(a) => format!("{kind} {}", a.damage),
                     None => kind,
                 }

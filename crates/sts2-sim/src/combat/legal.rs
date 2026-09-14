@@ -266,21 +266,28 @@ fn effect<V: Rules>(
 }
 
 /// The card's numbers after the fight has had its say, which is `Preview`'s
-/// own half of `Hook.ModifyDamage`.
+/// own half of `Hook.ModifyDamage` and `Hook.ModifyBlock`.
 ///
-/// Only the damage moves. The modifiers run over the same hook whether the
-/// hit is previewed or dealt.
+/// Damage moves against the creature the card is pointed at, and block against
+/// the player about to gain it. The modifiers run over the same hooks whether
+/// the card is previewed or played.
 fn previewed<V: Rules>(
     numbers: &std::collections::BTreeMap<V::CardVar, V::Number>,
     creatures: &[Creature<V>],
     target: Option<CombatId>,
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
-    let Some(at) = target.and_then(|id| creatures.iter().position(|c| c.id == id)) else {
-        return numbers.clone();
-    };
-    let dealer = super::board::player::<V>(creatures);
     let mut previewed = numbers.clone();
-    if let Some(damage) = previewed.get_mut(&<V::CardVar as CardVars>::DAMAGE) {
+    let dealer = super::board::player::<V>(creatures);
+
+    if let Some(block) = previewed.get_mut(&<V::CardVar as CardVars>::BLOCK)
+        && let Some(player) = creatures.iter().find(|creature| creature.id == dealer)
+    {
+        *block = super::board::blocked::<V>(player, *block);
+    }
+
+    if let Some(at) = target.and_then(|id| creatures.iter().position(|c| c.id == id))
+        && let Some(damage) = previewed.get_mut(&<V::CardVar as CardVars>::DAMAGE)
+    {
         *damage = super::board::modified::<V>(creatures, dealer, at, *damage);
     }
     previewed

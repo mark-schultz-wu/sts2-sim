@@ -254,6 +254,7 @@ pub enum CardVar {
 
 impl sts2_core::CardVars for CardVar {
     const DAMAGE: CardVar = CardVar::Damage;
+    const BLOCK: CardVar = CardVar::Block;
 
     const ALL: &'static [CardVar] = &[
         CardVar::Accelerant,
