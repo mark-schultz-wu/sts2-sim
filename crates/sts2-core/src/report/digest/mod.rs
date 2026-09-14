@@ -792,7 +792,7 @@ impl Sink {
                 sink.option(attack, |sink, attack| {
                     let Attack { damage, repeats } = attack;
                     sink.number(damage);
-                    sink.u8(*repeats);
+                    sink.number(repeats);
                 });
             });
         });

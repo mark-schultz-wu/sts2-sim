@@ -38,7 +38,7 @@ pub(super) struct Board<'a, V: Rules> {
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
     /// How many times it advertises hitting, which is `WithHitCount`.
-    intent_repeats: u8,
+    intent_repeats: V::Count,
     /// What the run is being played at, which a move's own constants scale by.
     ascension: V::AscensionLevel,
     /// The debuffs this effect put on the player, whose next tick is skipped.
@@ -76,7 +76,7 @@ impl<'a, V: Rules> Board<'a, V> {
             playing,
             intent_damage: V::Number::zero(),
             // Nothing a card does reads an intent, and a card is not one.
-            intent_repeats: 0,
+            intent_repeats: num_traits::zero(),
             ascension,
             skipped: Vec::new(),
             won: false,
@@ -91,7 +91,7 @@ impl<'a, V: Rules> Board<'a, V> {
         ascension: V::AscensionLevel,
         actor: CombatId,
         intent_damage: V::Number,
-        intent_repeats: u8,
+        intent_repeats: V::Count,
     ) -> Self {
         Board {
             live,
@@ -409,7 +409,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.intent_damage
     }
 
-    fn intent_repeats(&self) -> u8 {
+    fn intent_repeats(&self) -> V::Count {
         self.intent_repeats
     }
 

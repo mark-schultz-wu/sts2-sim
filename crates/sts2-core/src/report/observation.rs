@@ -501,7 +501,10 @@ pub struct Attack<V: ContentVersion> {
     /// After `Hook.ModifyDamage`, so this is the number that will land rather
     /// than the move's base value.
     pub damage: V::Number,
-    pub repeats: u8,
+    /// How many times it lands, which is `WithHitCount`. A count and not a
+    /// number: an attack lands a whole number of times, and never fewer than
+    /// none.
+    pub repeats: V::Count,
 }
 
 /// One relic the player is carrying, and what it says.

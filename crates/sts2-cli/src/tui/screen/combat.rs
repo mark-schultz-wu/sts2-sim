@@ -215,7 +215,7 @@ fn intent_line<V: sts2_content_wire::WireContentVersion>(
         }
         match intent.attack {
             Some(attack) => {
-                let repeats = match attack.repeats > 1 {
+                let repeats = match attack.repeats > num_traits::one() {
                     true => format!(" x{}", attack.repeats),
                     false => String::new(),
                 };
@@ -223,7 +223,7 @@ fn intent_line<V: sts2_content_wire::WireContentVersion>(
                     format!("/! {}{repeats}", attack.damage),
                     theme::hurt().bold(),
                 ));
-                if attack.repeats > 1 {
+                if attack.repeats > num_traits::one() {
                     spans.push(Span::styled(
                         format!(
                             " ({})",

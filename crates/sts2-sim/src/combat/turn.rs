@@ -302,7 +302,7 @@ fn enemy_turn<V: Rules>(
 
         let attack = next_move.intents.iter().find_map(|intent| intent.attack);
         let damage = attack.map_or_else(num_traits::zero, |attack| attack.damage);
-        let repeats = attack.map_or(0, |attack| attack.repeats);
+        let repeats = attack.map_or_else(num_traits::zero, |attack| attack.repeats);
 
         let ascension = live.ascension;
         let mut board = Board::for_move(live, shuffle, niche, ascension, id, damage, repeats);

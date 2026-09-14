@@ -239,7 +239,9 @@ fn byrdonis<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// are that and nothing else.
 fn attack<F: Fight<V>>(fight: &mut F) {
     let damage = fight.intent_damage();
-    for _ in 0..fight.intent_repeats() {
+    let repeats: usize = num_traits::cast(fight.intent_repeats())
+        .unwrap_or_else(|| unimplemented!("a move that hits more times than a fight can count"));
+    for _ in 0..repeats {
         fight.attack_opponents(damage);
     }
 }

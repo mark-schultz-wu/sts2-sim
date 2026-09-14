@@ -761,9 +761,9 @@ pub trait Fight<V: ContentVersion> {
 
     /// How many times that hit lands, which is `WithHitCount`.
     ///
-    /// The same number the intent advertises, for the same reason the damage
+    /// The same count the intent advertises, for the same reason the damage
     /// is. A move that hits once reads one.
-    fn intent_repeats(&self) -> u8;
+    fn intent_repeats(&self) -> V::Count;
 
     /// `DamageCmd.Attack(damage).FromMonster(this)`, which hits every creature
     /// on the other side.

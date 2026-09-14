@@ -536,8 +536,10 @@ fn intents(
                 unimplemented!("a move whose repeats the fight decides");
             };
             Some(sts2_core::Attack {
+                // The table holds each column's own width, and a fight counts
+                // in the build's own types. Widening here is where they meet.
                 damage: i32::from(damage.at(ascension)),
-                repeats: repeats.at(ascension),
+                repeats: u32::from(repeats.at(ascension)),
             })
         }
     };
