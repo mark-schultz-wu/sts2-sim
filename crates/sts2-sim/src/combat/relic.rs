@@ -5,7 +5,7 @@
 //! notification writes the state the run carries for it, and a value hook
 //! reads that state and leaves it.
 
-use sts2_core::{EventHook, HookEffect, ModifyHook, Rules};
+use sts2_core::{EventHook, Fight, HookEffect, ModifyHook, Rules};
 
 use crate::run::HeldRelic;
 
@@ -19,7 +19,7 @@ pub(crate) fn notify<V: Rules>(
 ) -> Vec<HookEffect<V>> {
     relics
         .iter_mut()
-        .flat_map(|held| V::relic_event_hook(held.relic, &mut held.state, hook))
+        .flat_map(|held| V::relic_event_hook(&mut held.state, hook))
         .collect()
 }
 
@@ -33,7 +33,7 @@ pub(crate) fn modified<V: Rules>(
         amount,
         relics
             .iter()
-            .map(|held| V::relic_modify_hook(held.relic, &held.state, hook)),
+            .map(|held| V::relic_modify_hook(&held.state, hook)),
     )
 }
 
@@ -46,10 +46,24 @@ pub(crate) fn combat_ended<V: Rules>(relics: &mut [HeldRelic<V>]) {
 }
 
 /// `AfterCardPlayed`, for a card the player has just finished playing.
-pub(crate) fn card_played<V: Rules>(relics: &mut [HeldRelic<V>]) {
+pub(crate) fn card_played<V: Rules>(
+    relics: &mut [HeldRelic<V>],
+    card: V::Card,
+) -> Vec<HookEffect<V>> {
+    notify::<V>(relics, EventHook::CardPlayed { card })
+}
+
+/// `BeforeCombatStart`, once the fight is built and before it opens.
+pub(crate) fn combat_starting<V: Rules>(relics: &mut [HeldRelic<V>]) -> Vec<HookEffect<V>> {
+    notify::<V>(relics, EventHook::CombatStarting)
+}
+
+/// `AfterObtained`, which `RelicCmd.Obtain` gives the relic it just handed
+/// over and to no other.
+pub(crate) fn obtained<V: Rules>(held: &mut HeldRelic<V>) {
     asks_for_nothing::<V>(
-        notify::<V>(relics, EventHook::CardPlayed),
-        "as a card is played",
+        notify::<V>(std::slice::from_mut(held), EventHook::Obtained),
+        "as it is obtained",
     );
 }
 
@@ -92,4 +106,18 @@ pub(crate) fn turn_started<V: Rules>(
             turn,
         },
     )
+}
+
+/// Carry out what a relic asked for, through the fight it asked in.
+///
+/// # Panics
+///
+/// An effect no fight can carry out here.
+pub(crate) fn apply<V: Rules, F: Fight<V>>(fight: &mut F, asked: Vec<HookEffect<V>>) {
+    for effect in asked {
+        match effect {
+            HookEffect::GainBlock(block) => fight.gain_block(block),
+            other => unimplemented!("a relic asking for {other:?} inside a fight"),
+        }
+    }
 }

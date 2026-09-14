@@ -8,7 +8,7 @@ mod legal;
 mod live;
 mod monster;
 mod play;
-mod relic;
+pub(crate) mod relic;
 mod start;
 mod stream;
 mod turn;

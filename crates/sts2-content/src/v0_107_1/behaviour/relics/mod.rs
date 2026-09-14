@@ -1,75 +1,82 @@
 //! What a relic does, ported.
 //!
 //! One module per relic, the way `RelicModel`'s subclasses are one file each,
-//! and one function here per hook. A relic gets an arm when a run can carry it
-//! into the state the hook fires from.
+//! and one function here per hook. A relic is ported when a run can pick it
+//! up. The game gives hooks to every relic in the belt.
 //!
-//! A relic with no arm asks for nothing and saves nothing. A run carries every
-//! relic it picks up, so an unported one sits in the belt and does nothing.
-//! The golden replay is what catches the fight where that silence is wrong.
+//! [`new`] is the one place a relic becomes a model, and a relic nobody has
+//! ported panics there. The belt a run carries is then the list of relics
+//! this tree has read.
+//!
+//! Every hook dispatches on the state alone. The state names the relic that
+//! saved it, so no caller can pair a relic with another relic's model.
 
+mod anchor;
 mod bone_tea;
 mod divine_right;
+mod lead_paperweight;
 mod pocketwatch;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
 
-use crate::Field;
-
 use super::super::V0_107_1 as V;
 use super::super::generated::relics::Relic;
+
+use crate::Field;
 
 pub(crate) type Number = <V as sts2_core::ContentVersion>::Number;
 type Effects = Vec<sts2_core::HookEffect<V>>;
 
-/// What one relic's own model saves.
+/// One relic's own model, as the run carries it.
 ///
-/// One variant per relic that saves anything, holding the fields that relic's
-/// `[SavedProperty]` declares. `Nothing` is every other relic, which is most
-/// of them.
+/// A variant per ported relic, holding what that relic's `[SavedProperty]`
+/// fields hold. A relic that saves nothing still has a variant of its own.
+/// That variant is what says the port has read the relic and found no state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
-    Nothing,
+    Anchor,
     BoneTea(bone_tea::State),
+    DivineRight,
+    LeadPaperweight,
     Pocketwatch(pocketwatch::State),
 }
 
 /// One relic's model as the run picks it up.
+///
+/// # Panics
+///
+/// A relic nobody has ported. Every later hook skips such a relic in silence,
+/// which is a divergence with no name on it.
 pub(crate) fn new(relic: Relic) -> State {
     match relic {
+        Relic::Anchor => State::Anchor,
         Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
+        Relic::DivineRight => State::DivineRight,
+        Relic::LeadPaperweight => State::LeadPaperweight,
         Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
-        _ => State::Nothing,
+        relic => unimplemented!("what {relic:?} does in a run that carries it"),
     }
 }
 
 /// Deliver a notification to one relic.
-///
-/// A relic with no module of its own saves nothing and asks for nothing. One
-/// that reaches here holding another relic's state is this file disagreeing
-/// with itself, and it panics rather than acting on it.
-pub(crate) fn event_hook(relic: Relic, state: &mut State, hook: EventHook<V>) -> Effects {
-    match (relic, state) {
-        (Relic::DivineRight, State::Nothing) => divine_right::event_hook(hook),
-        (Relic::BoneTea, State::BoneTea(state)) => bone_tea::event_hook(state, hook),
-        (Relic::Pocketwatch, State::Pocketwatch(state)) => pocketwatch::event_hook(state, hook),
-        (_, State::Nothing) => Vec::new(),
-        (relic, state) => unimplemented!("{relic:?} carrying {state:?}"),
+pub(crate) fn event_hook(state: &mut State, hook: EventHook<V>) -> Effects {
+    match state {
+        State::Anchor => anchor::event_hook(hook),
+        State::BoneTea(state) => bone_tea::event_hook(state, hook),
+        State::DivineRight => divine_right::event_hook(hook),
+        State::LeadPaperweight => lead_paperweight::event_hook(hook),
+        State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
     }
 }
 
 /// Ask one relic to change a value.
-///
-/// `Modify::Nothing` is what a relic with no override answers, which is what
-/// a relic with no module of its own has. A mismatched state panics, as it
-/// does above.
-pub(crate) fn modify_hook(relic: Relic, state: &State, hook: ModifyHook<V>) -> Modify<Number> {
-    match (relic, state) {
-        (Relic::Pocketwatch, State::Pocketwatch(state)) => pocketwatch::modify_hook(state, hook),
-        // Bone Tea saves a count and changes no value with it.
-        (Relic::BoneTea, State::BoneTea(_)) => Modify::Nothing,
-        (_, State::Nothing) => Modify::Nothing,
-        (relic, state) => unimplemented!("{relic:?} carrying {state:?}"),
+pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
+    match state {
+        State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
+        // The rest change no value a hook asks about.
+        State::Anchor | State::BoneTea(_) | State::DivineRight | State::LeadPaperweight => {
+            Modify::Nothing
+        }
     }
 }
 
@@ -86,10 +93,10 @@ pub(crate) fn display_amount(relic: Relic, state: &State) -> Number {
         // The table holds the column's own width, and a relic counts in the
         // build's game number. Widening here is the only place the two meet.
         Field::Constant(amount) => Number::from(amount),
-        Field::Computed => match (relic, state) {
-            (Relic::BoneTea, State::BoneTea(state)) => bone_tea::display_amount(state),
-            (Relic::Pocketwatch, State::Pocketwatch(state)) => pocketwatch::display_amount(state),
-            (relic, _) => unimplemented!("the number {relic:?} shows"),
+        Field::Computed => match state {
+            State::BoneTea(state) => bone_tea::display_amount(state),
+            State::Pocketwatch(state) => pocketwatch::display_amount(state),
+            _ => unimplemented!("the number {relic:?} shows"),
         },
     }
 }

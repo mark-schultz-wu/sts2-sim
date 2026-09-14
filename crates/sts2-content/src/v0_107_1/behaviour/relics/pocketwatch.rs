@@ -28,7 +28,7 @@ pub struct State {
 /// answers it.
 pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) -> Vec<HookEffect<V>> {
     match hook {
-        EventHook::CardPlayed => state.played_this_turn += 1,
+        EventHook::CardPlayed { .. } => state.played_this_turn += 1,
         EventHook::BeforeSideTurnStart {
             side: CombatSide::Player,
             ..

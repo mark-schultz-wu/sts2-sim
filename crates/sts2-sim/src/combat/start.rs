@@ -62,6 +62,15 @@ pub(crate) fn enter<V: Rules>(
             other => unimplemented!("a relic asking for {other:?} as a room opens"),
         }
     }
+    // `BeforeCombatStart`, after the room and before the fight opens. The
+    // player carries no power yet, so block gained here is what was asked for
+    // and passes no modifier.
+    for effect in relic::combat_starting::<V>(relics) {
+        match effect {
+            HookEffect::GainBlock(block) => creatures[0].block = creatures[0].block + block,
+            other => unimplemented!("a relic asking for {other:?} as a fight starts"),
+        }
+    }
     relic::turn_starting::<V>(relics, turn);
 
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;

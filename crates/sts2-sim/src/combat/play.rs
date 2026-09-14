@@ -188,6 +188,7 @@ pub(crate) fn play<V: Rules>(
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
+    let card_played = card.ident.card;
     let mut board = Board::for_card(
         &mut next,
         &mut shuffle,
@@ -214,11 +215,27 @@ pub(crate) fn play<V: Rules>(
     }
 
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+
+    // `AfterCardPlayed`, once the card has left the play pile. A relic that
+    // answers it acts through the board a card acts through, and draws from
+    // the same stream, so this is before the streams are written back.
+    let asked = relic::card_played::<V>(&mut relics, card_played);
+    if !asked.is_empty() {
+        let mut board = Board::for_card(
+            &mut next,
+            &mut shuffle,
+            &mut niche,
+            live.ascension,
+            None,
+            None,
+        );
+        relic::apply::<V, _>(&mut board, asked);
+        let skipped = std::mem::take(&mut board.skipped);
+        next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+    }
+
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
-
-    // `AfterCardPlayed`, once the card has left the play pile.
-    relic::card_played::<V>(&mut relics);
     if board_won {
         relic::combat_ended::<V>(&mut relics);
     }

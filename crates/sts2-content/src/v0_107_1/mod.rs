@@ -118,19 +118,17 @@ impl sts2_core::Hooks for V0_107_1 {
     }
 
     fn relic_event_hook(
-        relic: Self::Relic,
         state: &mut Self::RelicState,
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
-        behaviour::relics::event_hook(relic, state, hook)
+        behaviour::relics::event_hook(state, hook)
     }
 
     fn relic_modify_hook(
-        relic: Self::Relic,
         state: &Self::RelicState,
         hook: sts2_core::ModifyHook<Self>,
     ) -> sts2_core::Modify<Self::Number> {
-        behaviour::relics::modify_hook(relic, state, hook)
+        behaviour::relics::modify_hook(state, hook)
     }
 
     fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> Self::Number {

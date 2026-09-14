@@ -1,0 +1,5 @@
+# `Anchor.BeforeCombatStart`: ten block on the player before the first turn,
+# which no card in the opening hand can account for.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"ANCHOR"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}

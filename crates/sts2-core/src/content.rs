@@ -857,10 +857,16 @@ pub enum DecisionHook {
 pub enum EventHook<V: ContentVersion> {
     /// `AfterRoomEntered`, for a room the run fights in.
     CombatRoomEntered,
+    /// `BeforeCombatStart`, once the fight is built and before it opens.
+    CombatStarting,
     /// `AfterCombatEnd`, for the fight the run has just finished.
     CombatEnd,
-    /// `AfterCardPlayed`, for a card its owner played.
-    CardPlayed,
+    /// `AfterObtained`, as the run picks the model up.
+    Obtained,
+    /// `AfterCardPlayed`, carrying the card its owner just played.
+    CardPlayed {
+        card: V::Card,
+    },
     /// `BeforeSideTurnStart`, which runs before the side draws anything.
     BeforeSideTurnStart {
         side: V::CombatSide,
@@ -889,6 +895,8 @@ pub enum EventHook<V: ContentVersion> {
 pub enum HookEffect<V: ContentVersion> {
     /// `PlayerCmd.GainStars`.
     GainStars(V::Number),
+    /// `CreatureCmd.GainBlock` on the listener's owner.
+    GainBlock(V::Number),
     /// `CardCmd.Upgrade` over every card in the hand.
     UpgradeHand,
     TickDownDuration,
@@ -923,20 +931,16 @@ pub trait Hooks: ContentVersion {
     /// Deliver a notification to one relic, which answers as its own model.
     ///
     /// The state is the relic's to write, the way an override writes the
-    /// fields of the instance it runs on.
+    /// fields of the instance it runs on. It is also which relic this is: the
+    /// model [`Hooks::new_relic`] built names the relic that saved it.
     fn relic_event_hook(
-        relic: Self::Relic,
         state: &mut Self::RelicState,
         hook: EventHook<Self>,
     ) -> Vec<HookEffect<Self>>;
 
     /// Ask one relic to change a value, which is the same question
     /// [`Hooks::modify_hook`] asks a power.
-    fn relic_modify_hook(
-        relic: Self::Relic,
-        state: &Self::RelicState,
-        hook: ModifyHook<Self>,
-    ) -> Modify<Self::Number>;
+    fn relic_modify_hook(state: &Self::RelicState, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
     /// The number a relic shows, which is `RelicModel.DisplayAmount`.
     ///

@@ -497,7 +497,11 @@ impl<V: Rules> State<V> {
                     self.player.potions.push(*potion);
                 }
             }
-            Gift::Relic(relic) => unimplemented!("what {relic:?} does when it is obtained"),
+            Gift::Relic(relic) => {
+                let mut held = HeldRelic::new(*relic);
+                crate::combat::relic::obtained::<V>(&mut held);
+                self.player.relics.push(held);
+            }
         }
         Ok(self.report())
     }
