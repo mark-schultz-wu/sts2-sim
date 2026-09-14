@@ -17,6 +17,18 @@ mod overgrowth;
 
 type V = V0_107_1;
 
+/// Powers a monster applies to itself as it enters combat.
+pub(crate) fn starting_powers(
+    monster: Monster,
+) -> Option<(
+    super::super::generated::powers::Power,
+    sts2_core::PowerAmount<i32>,
+)> {
+    use super::super::generated::powers::Power;
+    (monster == Monster::Byrdonis)
+        .then_some((Power::TerritorialPower, sts2_core::PowerAmount::Counted(1)))
+}
+
 /// Which branch a monster's conditional state takes.
 ///
 /// `ConditionalBranchState`, whose predicates read fields an encounter set on

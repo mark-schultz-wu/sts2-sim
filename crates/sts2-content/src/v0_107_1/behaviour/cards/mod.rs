@@ -26,6 +26,26 @@ mod token;
 
 type V = V0_107_1;
 
+/// Apply the printed-number changes from a card's first upgrade.
+pub(crate) fn upgrade(card: Cards, printed: &mut [Printed]) {
+    use super::super::generated::cards::{RegentCard, TokenCard};
+    let changes: &[(CardVar, Number)] = match card {
+        Cards::Regent(RegentCard::Strike) => &[(CardVar::Damage, 3)],
+        Cards::Regent(RegentCard::Defend) => &[(CardVar::Block, 3)],
+        Cards::Regent(RegentCard::GuidingStar) => &[(CardVar::Damage, 1), (CardVar::Cards, 1)],
+        Cards::Regent(RegentCard::Begone) => &[],
+        Cards::Token(TokenCard::MinionStrike) => &[(CardVar::Damage, 3)],
+        _ => unimplemented!("card upgrade: {card:?}"),
+    };
+    for &(key, amount) in changes {
+        printed
+            .iter_mut()
+            .find(|var| var.id == key)
+            .expect("an upgraded variable belongs to the card")
+            .base += amount;
+    }
+}
+
 /// What a card that works its own target out from the fight names.
 pub(crate) fn computed_target(
     card: Cards,

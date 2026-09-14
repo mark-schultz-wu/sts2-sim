@@ -70,6 +70,7 @@ pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modif
             | Power::ShrinkPower
             | Power::BlockNextTurnPower
             | Power::EnergyNextTurnPower
+            | Power::TerritorialPower
             | Power::IllusionPower
             | Power::MinionPower,
             ModifyHook::Damage { .. },
@@ -81,6 +82,7 @@ pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modif
             | Power::BlockNextTurnPower
             | Power::EnergyNextTurnPower
             | Power::StrengthPower
+            | Power::TerritorialPower
             | Power::IllusionPower
             | Power::MinionPower,
             ModifyHook::Block { .. },

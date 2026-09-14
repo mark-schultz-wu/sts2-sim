@@ -1331,6 +1331,12 @@ pub trait Rules: Hooks {
     /// The Regent's starting relic, which opens every fight with three stars.
     fn divine_right() -> Self::Relic;
 
+    /// Whether this relic upgrades every card in the opening hand.
+    fn upgrades_opening_hand(relic: Self::Relic) -> bool;
+
+    /// Apply a card's first upgrade to this combat copy's printed values.
+    fn upgrade_card(card: Self::Card, printed: &mut [Printed<Self::CardVar, Self::Number>]);
+
     /// What one card does when it is played, which is `CardModel.OnPlay`.
     ///
     /// Generic over the fight rather than a trait object, because playing a
@@ -1386,6 +1392,11 @@ pub trait Rules: Hooks {
     /// The machine's constructor records its starting state. Only the table
     /// says whether the log carries that state, so a bare index is not enough.
     fn opening_move_machine(monster: Self::Monster) -> crate::MoveMachine;
+
+    /// Powers a monster applies to itself when it enters combat.
+    fn monster_starting_powers(
+        monster: Self::Monster,
+    ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
     /// What a card that works its own target out from the fight names.
     ///

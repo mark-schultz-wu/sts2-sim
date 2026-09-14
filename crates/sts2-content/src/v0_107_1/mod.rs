@@ -170,6 +170,17 @@ impl sts2_core::Rules for V0_107_1 {
         generated::relics::Relic::DivineRight
     }
 
+    fn upgrades_opening_hand(relic: Self::Relic) -> bool {
+        relic == generated::relics::Relic::BoneTea
+    }
+
+    fn upgrade_card(
+        card: Self::Card,
+        printed: &mut [sts2_core::Printed<Self::CardVar, Self::Number>],
+    ) {
+        behaviour::cards::upgrade(card, printed);
+    }
+
     fn on_play<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
         behaviour::cards::on_play(card, fight)
     }
@@ -221,6 +232,12 @@ impl sts2_core::Rules for V0_107_1 {
             Some(generated::monsters::State::Move(_))
         );
         sts2_core::MoveMachine::new(at, logged)
+    }
+
+    fn monster_starting_powers(
+        monster: Self::Monster,
+    ) -> impl Iterator<Item = (Self::Power, sts2_core::PowerAmount<Self::Number>)> {
+        behaviour::monsters::starting_powers(monster).into_iter()
     }
 
     fn computed_card_target(

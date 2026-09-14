@@ -38,12 +38,23 @@ pub(crate) struct State<V: Rules> {
     ///
     /// A constructed fight does not move it. `EnterRoomDebug` is handed its
     /// encounter and takes none from the list.
-    met: usize,
+    normal_fights: usize,
+    /// How many of this act's elite fights the run has walked into.
+    ///
+    /// Elite encounters have their own dealt list and position. Entering one
+    /// must not consume the next normal encounter.
+    elite_fights: usize,
     events_used: usize,
     visited_events: Vec<V::Event>,
     unknown_odds: [f32; 3],
     odds: Odds,
     phase: Phase<V>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum EncounterQueue {
+    Normal,
+    Elite,
 }
 
 /// Data generated once and shared by every branch of this run.
@@ -181,7 +192,8 @@ impl<V: Rules> State<V> {
                 potion_slots: num_traits::cast(V::starting_potion_slots())
                     .expect("starting potion slots fit the build's count type"),
             },
-            met: 0,
+            normal_fights: 0,
+            elite_fights: 0,
             events_used: 0,
             visited_events: Vec::new(),
             unknown_odds: [0.1, 0.02, 0.03],
@@ -305,11 +317,15 @@ impl<V: Rules> State<V> {
     pub(super) fn enter_combat(
         &mut self,
         to: Coord,
+        queue: EncounterQueue,
         counters: Counters<V>,
         live: crate::combat::Live<V>,
     ) {
         self.floor = self.floor + num_traits::one();
-        self.met += 1;
+        match queue {
+            EncounterQueue::Normal => self.normal_fights += 1,
+            EncounterQueue::Elite => self.elite_fights += 1,
+        }
         self.at = to;
         self.visited.push(to);
         self.drew(counters);
@@ -433,7 +449,16 @@ impl<V: Rules> State<V> {
             .opening
             .acts
             .get(act)
-            .and_then(|(_, rooms)| rooms.normal.get(self.met))
+            .and_then(|(_, rooms)| rooms.normal.get(self.normal_fights))
+            .copied()
+    }
+
+    pub(super) fn elite_encounter(&self, act: usize) -> Option<V::Encounter> {
+        self.shared
+            .opening
+            .acts
+            .get(act)
+            .and_then(|(_, rooms)| rooms.elite.get(self.elite_fights))
             .copied()
     }
 

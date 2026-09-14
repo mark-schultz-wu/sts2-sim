@@ -4,12 +4,16 @@ use sts2_core::rng::GameRng;
 use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, StreamKinds};
 
 use super::State;
+use super::state::EncounterQueue;
 use crate::combat;
 
 /// What waits at a reachable map point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Destination<V: Rules> {
-    Monster(V::Encounter),
+    Combat {
+        encounter: V::Encounter,
+        queue: EncounterQueue,
+    },
     Other(V::MapPointType),
 }
 
@@ -37,13 +41,25 @@ impl<V: Rules> State<V> {
             .iter()
             .find(|reachable| reachable.at == to)
             .ok_or(Reason::NotTravelable { at: to })?;
-        let destination = if reachable.kind == V::MapPointType::MONSTER {
+        let destination = if reachable.kind == V::MapPointType::MONSTER
+            || reachable.kind == V::MapPointType::ELITE
+        {
             let act: usize = num_traits::cast(reported.observation.act)
                 .expect("an act number fits an addressable list");
-            let encounter = self
-                .normal_encounter(act)
-                .expect("a reachable monster room has a rolled encounter");
-            Destination::Monster(encounter)
+            let (encounter, queue) = if reachable.kind == V::MapPointType::MONSTER {
+                (
+                    self.normal_encounter(act)
+                        .expect("a reachable monster room has a rolled encounter"),
+                    EncounterQueue::Normal,
+                )
+            } else {
+                (
+                    self.elite_encounter(act)
+                        .expect("a reachable elite room has a rolled encounter"),
+                    EncounterQueue::Elite,
+                )
+            };
+            Destination::Combat { encounter, queue }
         } else {
             Destination::Other(reachable.kind)
         };
@@ -104,7 +120,7 @@ impl<V: Rules> State<V> {
             );
             return Ok(self.report());
         }
-        let Destination::Monster(encounter) = destination else {
+        let Destination::Combat { encounter, queue } = destination else {
             unreachable!()
         };
 
@@ -116,7 +132,7 @@ impl<V: Rules> State<V> {
             &self.report().observation,
         )?;
 
-        self.enter_combat(to, counters, combat);
+        self.enter_combat(to, queue, counters, combat);
         Ok(self.report())
     }
 }

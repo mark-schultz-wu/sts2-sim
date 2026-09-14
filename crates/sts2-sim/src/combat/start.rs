@@ -56,6 +56,17 @@ pub(crate) fn enter<V: Rules>(
     let piles = pile::shuffle(&mut shuffle, deck).deal(HAND_SIZE);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
 
+    let mut hand = piles.hand().to_vec();
+    if observation
+        .relics
+        .iter()
+        .any(|held| V::upgrades_opening_hand(held.relic))
+    {
+        for card in &mut hand {
+            card.upgrade();
+        }
+    }
+
     let energy: V::Count = num_traits::cast(V::max_energy(character))
         .expect("the starting energy fits the build's count type");
 
@@ -68,7 +79,7 @@ pub(crate) fn enter<V: Rules>(
             stars: stars_on_entry::<V>(observation),
             round: num_traits::one(),
             encounter,
-            hand: piles.hand().to_vec(),
+            hand,
             draw: piles.draw().to_vec(),
             discard: piles.discard().to_vec(),
             exhaust: piles.exhaust().to_vec(),
