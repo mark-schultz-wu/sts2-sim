@@ -59,7 +59,7 @@ public static class CardDump
         // rather than quietly replacing the table.
         output.Append(Stamp.Header("card"));
         output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords>\n");
-        output.Append("# var <card> <name> <base> <calculated>\n");
+        output.Append("# var <card> <name> <base> <calculated> <class>\n");
         output.Append("# pool <pool> <index> <card>\n");
         output.Append("# rewardpool <character> <index> <card>\n");
 
@@ -130,6 +130,7 @@ public static class CardDump
                     entry.Key,
                     entry.Value.BaseValue.ToString(CultureInfo.InvariantCulture),
                     entry.Value is CalculatedVar ? "1" : "0",
+                    VarClass(entry.Value),
                 }));
                 output.Append('\n');
             }
@@ -156,6 +157,26 @@ public static class CardDump
 
         Log.Info("[carddump] begin\n" + output);
         Log.Info("[carddump] end");
+    }
+
+    /// <summary>
+    /// The <c>DynamicVar</c> subclass this number is, by its own name.
+    /// </summary>
+    /// <remarks>
+    /// The class is what decides the number's rules, and the key it is filed
+    /// under says nothing: <c>SovereignBlade</c>'s block is a
+    /// <c>CalculatedBlockVar</c> named <c>CalculatedBlock</c>, and its preview
+    /// runs the block hooks exactly as a <c>BlockVar</c> named <c>Block</c>
+    /// does.
+    ///
+    /// A generic var prints without the arity C# spells it with, so
+    /// <c>PowerVar`1</c> is dumped as <c>PowerVar</c>.
+    /// </remarks>
+    private static string VarClass(DynamicVar var)
+    {
+        string name = var.GetType().Name;
+        int arity = name.IndexOf('`');
+        return arity < 0 ? name : name.Substring(0, arity);
     }
 
     /// <summary>

@@ -361,6 +361,29 @@ pub struct Printed<K, N> {
     /// base alone, so an implementation that reads it and stops reports a
     /// number the game does not print. It has to run the card's own rule.
     pub calculated: bool,
+    /// Which of the fight's own hooks the number runs through.
+    ///
+    /// `DynamicVar`'s subclass decides it, and the key the number is filed
+    /// under says nothing. Sovereign Blade's block is a `CalculatedBlockVar`
+    /// named `CalculatedBlock`, and it runs the block hooks exactly as a
+    /// `BlockVar` named `Block` does.
+    pub previewed: Previewed,
+}
+
+/// What one printed number runs through before a card shows it.
+///
+/// `DynamicVar.UpdateCardPreview`, which each subclass overrides. The same
+/// hooks run when the card is played, so this is not a display rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Previewed {
+    /// Nothing. The number is what the card prints.
+    Printed,
+    /// `Hook.ModifyDamage`, against the creature the card is pointed at.
+    Damage,
+    /// The same, for the owner's Osty rather than the owner.
+    OstyDamage,
+    /// `Hook.ModifyBlock`, for the creature about to gain it.
+    Block,
 }
 
 /// The numbers a build's cards can print, as one set.
@@ -374,15 +397,6 @@ pub struct Printed<K, N> {
 pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
     /// Every key, once each.
     const ALL: &'static [Self];
-
-    /// The two keys the engine's own rules name.
-    ///
-    /// Damage and block are the printed numbers a fight modifies before a card
-    /// runs, through `Hook.ModifyDamage` and `Hook.ModifyBlock`. A preview has
-    /// to find them without naming a build. Every other key is named by the
-    /// ported behaviour that reads it.
-    const DAMAGE: Self;
-    const BLOCK: Self;
 
     /// The game's own key for it, which is what an observation carries.
     fn name(self) -> &'static str;

@@ -9,8 +9,8 @@
 //! powers, no relic that listens, and no card that overrides it.
 
 use sts2_core::{
-    CardIdent, CardTable, CardVars, Combat, CombatId, Cost, Creature, FlagSet, Held, Playable,
-    PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable,
+    CardIdent, CardTable, Combat, CombatId, Cost, Creature, FlagSet, Held, Playable, PotionTable,
+    PotionUsage, Preview, Previewed, Rules, SideKinds, TargetKinds, Undrinkable,
     UnplayableReasonKinds,
 };
 
@@ -249,7 +249,7 @@ fn effect<V: Rules>(
             // simulator does not have. `Observation::rules_digest` leaves it
             // out for that reason, and a front end reads the numbers.
             text: None,
-            vars: previewed::<V>(&numbers, creatures, target),
+            vars: previewed::<V>(held, &numbers, creatures, target),
             base: numbers.clone(),
         })
         .collect();
@@ -265,30 +265,45 @@ fn effect<V: Rules>(
     previews
 }
 
-/// The card's numbers after the fight has had its say, which is `Preview`'s
-/// own half of `Hook.ModifyDamage` and `Hook.ModifyBlock`.
+/// The card's numbers after the fight has had its say, which is
+/// `DynamicVar.UpdateCardPreview` for each of them.
 ///
-/// Damage moves against the creature the card is pointed at, and block against
-/// the player about to gain it. The modifiers run over the same hooks whether
-/// the card is previewed or played.
+/// Each number runs through the hooks its own class names. Damage runs against
+/// the creature the card is pointed at, and block for the player about to gain
+/// it. The same hooks run whether the card is previewed or played.
+///
+/// # Panics
+///
+/// A number whose class the simulator has nowhere to run, which is the Osty's
+/// damage. No character the simulator plays has one.
 fn previewed<V: Rules>(
+    held: &CardInstance<V>,
     numbers: &std::collections::BTreeMap<V::CardVar, V::Number>,
     creatures: &[Creature<V>],
     target: Option<CombatId>,
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
     let mut previewed = numbers.clone();
     let dealer = super::board::player::<V>(creatures);
+    let at = target.and_then(|id| creatures.iter().position(|c| c.id == id));
 
-    if let Some(block) = previewed.get_mut(&<V::CardVar as CardVars>::BLOCK)
-        && let Some(player) = creatures.iter().find(|creature| creature.id == dealer)
-    {
-        *block = super::board::blocked::<V>(player, *block);
-    }
-
-    if let Some(at) = target.and_then(|id| creatures.iter().position(|c| c.id == id))
-        && let Some(damage) = previewed.get_mut(&<V::CardVar as CardVars>::DAMAGE)
-    {
-        *damage = super::board::modified::<V>(creatures, dealer, at, *damage);
+    for var in &held.vars {
+        let Some(value) = previewed.get_mut(&var.id) else {
+            continue;
+        };
+        match var.previewed {
+            Previewed::Printed => {}
+            Previewed::Damage => {
+                if let Some(at) = at {
+                    *value = super::board::modified::<V>(creatures, dealer, at, *value);
+                }
+            }
+            Previewed::Block => {
+                if let Some(player) = creatures.iter().find(|creature| creature.id == dealer) {
+                    *value = super::board::blocked::<V>(player, *value);
+                }
+            }
+            Previewed::OstyDamage => unimplemented!("a card previewing the Osty's damage"),
+        }
     }
     previewed
 }

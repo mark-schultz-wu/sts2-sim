@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
-use sts2_core::Printed;
+use sts2_core::{Previewed, Printed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -62,6 +62,7 @@ static ROWS: [CardData; 4] = [
             id: CardVar::Rooms,
             base: CardNumber::new(5, 0),
             calculated: false,
+            previewed: Previewed::Printed,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -86,6 +87,7 @@ static ROWS: [CardData; 4] = [
             id: CardVar::Gold,
             base: CardNumber::new(600, 0),
             calculated: false,
+            previewed: Previewed::Printed,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),

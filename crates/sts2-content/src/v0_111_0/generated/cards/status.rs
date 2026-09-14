@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
-use sts2_core::Printed;
+use sts2_core::{Previewed, Printed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -68,6 +68,7 @@ static ROWS: [CardData; 12] = [
             id: CardVar::HpLoss,
             base: CardNumber::new(6, 0),
             calculated: false,
+            previewed: Previewed::Printed,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[]),
@@ -82,6 +83,7 @@ static ROWS: [CardData; 12] = [
             id: CardVar::Damage,
             base: CardNumber::new(2, 0),
             calculated: false,
+            previewed: Previewed::Damage,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -126,6 +128,7 @@ static ROWS: [CardData; 12] = [
             id: CardVar::Damage,
             base: CardNumber::new(3, 0),
             calculated: false,
+            previewed: Previewed::Damage,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -140,6 +143,7 @@ static ROWS: [CardData; 12] = [
             id: CardVar::Cards,
             base: CardNumber::new(1, 0),
             calculated: false,
+            previewed: Previewed::Printed,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
@@ -164,6 +168,7 @@ static ROWS: [CardData; 12] = [
             id: CardVar::Damage,
             base: CardNumber::new(5, 0),
             calculated: false,
+            previewed: Previewed::Damage,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
@@ -178,6 +183,7 @@ static ROWS: [CardData; 12] = [
             id: CardVar::Energy,
             base: CardNumber::new(1, 0),
             calculated: false,
+            previewed: Previewed::Printed,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Unplayable]),
@@ -192,6 +198,7 @@ static ROWS: [CardData; 12] = [
             id: CardVar::Damage,
             base: CardNumber::new(3, 0),
             calculated: false,
+            previewed: Previewed::Damage,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),

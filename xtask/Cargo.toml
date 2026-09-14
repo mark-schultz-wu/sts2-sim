@@ -8,5 +8,7 @@ publish = false
 # Reading the dumps and generating tables from them. Nothing here launches a
 # game: `dump` drives one through a shell, and everything that needs the game as
 # a library lives in `sts2-golden`.
-sts2-content = { workspace = true }
+#
+# Not `sts2-content`, which is what this writes. A generator that has to
+# compile its own output cannot regenerate a tree its last change broke.
 sts2-core = { workspace = true }

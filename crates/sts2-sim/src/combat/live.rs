@@ -44,6 +44,7 @@ impl<V: Rules> CardInstance<V> {
                     unimplemented!("the fractional {} this card prints", var.id.name())
                 }),
                 calculated: var.calculated,
+                previewed: var.previewed,
             })
             .collect();
         let mut card = Self { ident, vars };

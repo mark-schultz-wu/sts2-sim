@@ -1,6 +1,6 @@
 //! The Regent's common cards.
 
-use sts2_core::{Effect, Fight, PowerAmount};
+use sts2_core::{Effect, EffectResolution, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
@@ -30,15 +30,22 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
 }
 
 /// `Glitterstream`. Gain block now and after the next block clear.
+///
+/// The number the power carries runs through `Hook.ModifyBlock` first, which
+/// this card does itself rather than leave to the gain. It reads the hook
+/// before the block it gains lands, as the game's own order does.
 pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
+    let next_turn = fight.resolve(Effect::GainBlock {
+        amount: fight.var(CardVar::BlockNextTurn),
+    });
+    let next_turn = next_turn
+        .amount()
+        .expect("one block gain resolves to one amount");
     let block = fight.resolve(Effect::GainBlock {
         amount: fight.var(CardVar::Block),
     });
     fight.apply(block);
-    fight.apply_to_actor(
-        Power::BlockNextTurnPower,
-        PowerAmount::Counted(fight.var(CardVar::BlockNextTurn)),
-    );
+    fight.apply_to_actor(Power::BlockNextTurnPower, PowerAmount::Counted(next_turn));
 }
 
 /// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.

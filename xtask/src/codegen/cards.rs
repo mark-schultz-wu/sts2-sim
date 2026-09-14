@@ -74,8 +74,43 @@ struct Card {
     star_costs_x: bool,
     max_upgrade: String,
     keywords: Vec<String>,
-    /// Name, printed value, and whether the game recomputes it in a fight.
-    vars: Vec<(String, String, bool)>,
+    /// Name, printed value, whether the game recomputes it in a fight, and
+    /// the `DynamicVar` subclass it is.
+    vars: Vec<(String, String, bool, String)>,
+}
+
+/// What a var of this class runs through before a card shows it.
+///
+/// `DynamicVar.UpdateCardPreview`, read class by class. A damage var runs
+/// `Hook.ModifyDamage` and a block var runs `Hook.ModifyBlock`, whatever key
+/// either is filed under. The rest preview the number they print.
+///
+/// `None` for a class nobody has read, which fails generation naming it. A
+/// build that adds one is a build whose previews nobody has checked.
+fn previewed(class: &str) -> Option<&'static str> {
+    Some(match class {
+        "DamageVar" | "CalculatedDamageVar" => "Previewed::Damage",
+        "OstyDamageVar" => "Previewed::OstyDamage",
+        "BlockVar" | "CalculatedBlockVar" => "Previewed::Block",
+        "CalculationBaseVar"
+        | "CalculationExtraVar"
+        | "CalculatedVar"
+        | "CardsVar"
+        | "DynamicVar"
+        | "EnergyVar"
+        | "ExtraDamageVar"
+        | "ForgeVar"
+        | "GoldVar"
+        | "HealVar"
+        | "HpLossVar"
+        | "IntVar"
+        | "MaxHpVar"
+        | "PowerVar"
+        | "RepeatVar"
+        | "StarsVar"
+        | "SummonVar" => "Previewed::Printed",
+        _ => return None,
+    })
 }
 
 /// The pool one relic draws from, which is held by no character.
@@ -222,12 +257,14 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     // A card's own lines follow it in the dump, and are attached by id rather
     // than by position, so a reordered dump generates the same table.
-    let mut by_id: BTreeMap<String, Vec<(String, String, bool)>> = BTreeMap::new();
+    let mut by_id: BTreeMap<String, Vec<(String, String, bool, String)>> = BTreeMap::new();
     for f in dump.of("var") {
-        by_id
-            .entry(f[1].clone())
-            .or_default()
-            .push((f[2].clone(), f[3].clone(), f[4] == "1"));
+        by_id.entry(f[1].clone()).or_default().push((
+            f[2].clone(),
+            f[3].clone(),
+            f[4] == "1",
+            f[5].clone(),
+        ));
     }
     let mut cards = cards;
     for card in &mut cards {
@@ -240,7 +277,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     let fixed_numbers = cards
         .iter()
         .flat_map(|card| &card.vars)
-        .any(|(_, base, _)| base.contains('.'));
+        .any(|(_, base, _, _)| base.contains('.'));
 
     // Runtime order inside each CardPoolModel. Reward generation filters this
     // list by rarity and indexes it with RNG, so the table's id order is not a
@@ -411,7 +448,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             writeln!(row, "        cost: {},", cost(card)?).unwrap();
             writeln!(row, "        star_cost: {},", star_cost(card)?).unwrap();
             writeln!(row, "        vars: &[").unwrap();
-            for (name, base, calculated) in &card.vars {
+            for (name, base, calculated, class) in &card.vars {
                 let base = if fixed_numbers {
                     let (whole, fraction) = base.split_once('.').unwrap_or((base, ""));
                     let scale = u8::try_from(fraction.len())
@@ -428,8 +465,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 };
                 writeln!(
                     row,
-                    "            Printed {{ id: CardVar::{}, base: {base}, calculated: {calculated} }},",
-                    sanitize(name)
+                    "            Printed {{ id: CardVar::{}, base: {base}, calculated: {calculated}, previewed: {} }},",
+                    sanitize(name),
+                    previewed(class).ok_or_else(|| format!(
+                        "{}: {name} is a {class}, which nobody has read the preview of",
+                        card.id
+                    ))?
                 )
                 .unwrap();
             }
@@ -500,7 +541,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // and the string stays at the edges that spell it.
     let mut keys: Vec<&str> = cards
         .iter()
-        .flat_map(|card| card.vars.iter().map(|(name, _, _)| name.as_str()))
+        .flat_map(|card| card.vars.iter().map(|(name, _, _, _)| name.as_str()))
         .collect();
     keys.sort_unstable();
     keys.dedup();
@@ -531,8 +572,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "}}\n").unwrap();
 
     writeln!(out, "impl sts2_core::CardVars for CardVar {{").unwrap();
-    writeln!(out, "    const DAMAGE: CardVar = CardVar::Damage;").unwrap();
-    writeln!(out, "    const BLOCK: CardVar = CardVar::Block;\n").unwrap();
+
     writeln!(out, "    const ALL: &'static [CardVar] = &[").unwrap();
     for key in &keys {
         writeln!(out, "        CardVar::{},", sanitize(key)).unwrap();
@@ -1006,7 +1046,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 ],
             ),
             ("crate", &["Cost", "Field"]),
-            ("sts2_core", &["Printed"]),
+            ("sts2_core", &["Previewed", "Printed"]),
             ("serde", &["Deserialize", "Serialize"]),
         ],
     )?;
