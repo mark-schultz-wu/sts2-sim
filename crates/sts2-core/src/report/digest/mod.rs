@@ -799,8 +799,14 @@ impl Sink {
     }
 
     fn carried<V: ContentVersion>(&mut self, carried: &Carried<V>) {
-        let Carried { relic, title, text } = carried;
+        let Carried {
+            relic,
+            amount,
+            title,
+            text,
+        } = carried;
         self.id(relic);
+        self.number(amount);
         self.prose_option(title);
         self.prose_option(text);
     }

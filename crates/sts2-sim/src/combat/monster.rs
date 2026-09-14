@@ -111,7 +111,9 @@ pub(crate) fn initialize<V: Rules>(
             max_hp: hp,
             block: num_traits::zero(),
             alive: true,
-            powers: Vec::new(),
+            powers: V::monster_starting_powers(monster)
+                .map(|(power, amount)| sts2_core::Stack { power, amount })
+                .collect(),
             next_move: Some(opening),
         });
     }

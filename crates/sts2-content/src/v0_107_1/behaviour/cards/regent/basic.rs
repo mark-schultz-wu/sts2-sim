@@ -2,9 +2,19 @@
 
 use sts2_core::{Fight, PowerAmount};
 
-use super::super::super::super::generated::cards::CardVar;
+use super::super::super::super::generated::cards::{CardVar, RegentCard};
 use super::super::super::super::generated::powers::Power;
-use super::super::V;
+use super::super::{Number, Printed, V, raise};
+
+/// `Upgrade`, which raises what these cards print.
+pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
+    let changes: &[(CardVar, Number)] = match card {
+        RegentCard::Strike => &[(CardVar::Damage, 3)],
+        RegentCard::Defend => &[(CardVar::Block, 3)],
+        card => unimplemented!("card upgrade: {card:?}"),
+    };
+    raise(printed, changes);
+}
 
 /// `StrikeRegent`. Deal damage.
 pub(super) fn strike<F: Fight<V>>(fight: &mut F) {

@@ -328,13 +328,18 @@ public static class Observation
     ///
     /// The two <c>HoverTip</c> wrappers are deliberately not mirrored. A melted
     /// or used-up relic reads <em>"&lt;description&gt; (Melted)"</em> on screen,
-    /// which is a fact already in <c>flags</c> and does not belong glued to the
-    /// prose as well.
+    /// which is a fact the prose does not need glued to it twice.
+    ///
+    /// <c>DisplayAmount</c> is the number the relic itself counts: Bone Tea's
+    /// combats left, Pocketwatch's cards played this turn. It is a rule and
+    /// not a decoration, so it is reported whether or not <c>ShowCounter</c>
+    /// puts it on screen. A relic that counts nothing reports zero.
     /// </remarks>
     private static Dictionary<string, object?> Carried(RelicModel relic) =>
         new()
         {
             ["id"] = relic.Id.Entry,
+            ["amount"] = relic.DisplayAmount,
             ["title"] = Words(relic.Title),
             ["text"] = Words(relic.DynamicDescription),
         };

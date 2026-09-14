@@ -10,6 +10,17 @@ use super::super::super::generated::encounters::Encounter;
 use super::super::super::generated::monsters::{Monster, MoveId};
 use super::V;
 
+/// The powers an Overgrowth monster applies to itself as it spawns.
+///
+/// One monster of this act has an `AfterAddedToRoom`: Byrdonis, which opens
+/// territorial.
+pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<i32>)> {
+    match monster {
+        Monster::Byrdonis => Some((Power::TerritorialPower, PowerAmount::Counted(1))),
+        _ => None,
+    }
+}
+
 /// Which branch an Overgrowth monster's conditional state takes.
 pub(super) fn conditional(
     monster: Monster,

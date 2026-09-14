@@ -6,6 +6,15 @@ use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
 use super::{Number, Printed, V, face};
 
+/// `Upgrade`, which raises what these cards print.
+pub(super) fn upgrade(card: TokenCard, printed: &mut [Printed]) {
+    let changes: &[(CardVar, Number)] = match card {
+        TokenCard::MinionStrike => &[(CardVar::Damage, 3)],
+        card => unimplemented!("card upgrade: {card:?}"),
+    };
+    super::raise(printed, changes);
+}
+
 /// What a card works out from the fight for a number it prints.
 pub(super) fn calculated(
     card: TokenCard,

@@ -26,6 +26,33 @@ mod token;
 
 type V = V0_107_1;
 
+/// Apply the printed-number changes from a card's first upgrade.
+///
+/// `CardModel.Upgrade`, which each card overrides to raise the numbers it
+/// prints. Filed the way the play is: by pool here, then by the card's own
+/// rarity. An upgrade then sits beside the play of the same card.
+pub(crate) fn upgrade(card: Cards, printed: &mut [Printed]) {
+    match card {
+        Cards::Regent(card) => regent::upgrade(card, printed),
+        Cards::Token(card) => token::upgrade(card, printed),
+        card => unimplemented!("card upgrade: {card:?}"),
+    }
+}
+
+/// Raise the numbers one card's upgrade raises.
+///
+/// A card that raises nothing it prints passes an empty list. A card nobody
+/// has ported never reaches this.
+fn raise(printed: &mut [Printed], changes: &[(CardVar, Number)]) {
+    for &(key, amount) in changes {
+        printed
+            .iter_mut()
+            .find(|var| var.id == key)
+            .expect("an upgraded variable belongs to the card")
+            .base += amount;
+    }
+}
+
 /// What a card that works its own target out from the fight names.
 pub(crate) fn computed_target(
     card: Cards,

@@ -17,6 +17,21 @@ mod overgrowth;
 
 type V = V0_107_1;
 
+/// Powers a monster applies to itself as it enters combat.
+///
+/// `AfterAddedToRoom`, where a monster that has one `PowerCmd.Apply`s on its
+/// own creature. Most monsters do not override it, and enter with none.
+///
+/// Filed by act beside the moves, so a monster's whole port is one file.
+pub(crate) fn starting_powers(
+    monster: Monster,
+) -> Option<(
+    super::super::generated::powers::Power,
+    sts2_core::PowerAmount<i32>,
+)> {
+    overgrowth::starting_powers(monster)
+}
+
 /// Which branch a monster's conditional state takes.
 ///
 /// `ConditionalBranchState`, whose predicates read fields an encounter set on

@@ -24,6 +24,7 @@ mod event_options;
 mod generated;
 
 pub use behaviour::events::State as EventState;
+pub use behaviour::relics::State as RelicState;
 pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
 pub use generated::*;
 
@@ -80,34 +81,40 @@ impl sts2_core::ContentVersion for V0_107_1 {
 
 /// Dispatch the hook shapes this simulator can execute.
 impl sts2_core::Hooks for V0_107_1 {
+    type RelicState = behaviour::relics::State;
+
     fn modify_hook(
-        listener: sts2_core::ModelId<Self>,
+        listener: sts2_core::Listener<'_, Self>,
         hook: sts2_core::ModifyHook<Self>,
     ) -> sts2_core::Modify<Self::Number> {
-        let sts2_core::ModelId::Power(power) = listener else {
-            return sts2_core::Modify::Nothing;
-        };
-        behaviour::powers::modify_hook(power, hook)
+        match listener {
+            sts2_core::Listener::Power { power, amount } => {
+                behaviour::powers::modify_hook(power, amount, hook)
+            }
+            sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
+        }
     }
 
     fn decide_hook(
-        listener: sts2_core::ModelId<Self>,
+        listener: sts2_core::Listener<'_, Self>,
         hook: sts2_core::DecisionHook,
     ) -> sts2_core::HookResponse<bool> {
-        let sts2_core::ModelId::Power(power) = listener else {
-            return sts2_core::HookResponse::DoesNotImplement;
-        };
-        behaviour::powers::decide_hook(power, hook)
+        match listener {
+            sts2_core::Listener::Power { power, .. } => behaviour::powers::decide_hook(power, hook),
+            sts2_core::Listener::Relic(_) => sts2_core::HookResponse::DoesNotImplement,
+        }
     }
 
     fn event_hook(
-        listener: sts2_core::ModelId<Self>,
+        listener: sts2_core::Listener<'_, Self>,
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
-        let sts2_core::ModelId::Power(power) = listener else {
-            return Vec::new();
-        };
-        behaviour::powers::event_hook(power, hook)
+        match listener {
+            sts2_core::Listener::Power { power, amount } => {
+                behaviour::powers::event_hook(power, amount, hook)
+            }
+            sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
+        }
     }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
@@ -166,8 +173,11 @@ impl sts2_core::Rules for V0_107_1 {
         generated::relics::Relic::LeadPaperweight
     }
 
-    fn divine_right() -> Self::Relic {
-        generated::relics::Relic::DivineRight
+    fn upgrade_card(
+        card: Self::Card,
+        printed: &mut [sts2_core::Printed<Self::CardVar, Self::Number>],
+    ) {
+        behaviour::cards::upgrade(card, printed);
     }
 
     fn on_play<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
@@ -221,6 +231,12 @@ impl sts2_core::Rules for V0_107_1 {
             Some(generated::monsters::State::Move(_))
         );
         sts2_core::MoveMachine::new(at, logged)
+    }
+
+    fn monster_starting_powers(
+        monster: Self::Monster,
+    ) -> impl Iterator<Item = (Self::Power, sts2_core::PowerAmount<Self::Number>)> {
+        behaviour::monsters::starting_powers(monster).into_iter()
     }
 
     fn computed_card_target(

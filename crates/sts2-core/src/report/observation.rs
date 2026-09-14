@@ -451,6 +451,17 @@ pub struct Stack<V: ContentVersion> {
     pub amount: crate::PowerAmount<V::Number>,
 }
 
+impl<V: crate::Hooks> Stack<V> {
+    /// This power as a hook's listener, which is the instance the game gives
+    /// the hook to.
+    pub fn listener(&self) -> crate::Listener<'_, V> {
+        crate::Listener::Power {
+            power: self.power,
+            amount: self.amount,
+        }
+    }
+}
+
 /// The move a monster has chosen, and what it amounts to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NextMove<V: ContentVersion> {
@@ -500,6 +511,12 @@ pub struct Attack<V: ContentVersion> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Carried<V: ContentVersion> {
     pub relic: V::Relic,
+    /// The number it shows, which is `RelicModel.DisplayAmount`.
+    ///
+    /// A relic that counts something a rule reads counts it here: Bone Tea's
+    /// combats left, Pocketwatch's cards played this turn. A relic that counts
+    /// nothing reports zero, which is what the game reports for it.
+    pub amount: V::Number,
     /// Its name, as the game shows it. Absent where the localisation table has
     /// no key. That is a fault, and it says so by being absent rather than by
     /// falling back to the id.

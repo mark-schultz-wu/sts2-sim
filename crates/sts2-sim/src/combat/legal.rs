@@ -33,11 +33,6 @@ pub(super) fn target_type<V: Rules>(
     card: CardIdent<V>,
     creatures: &[Creature<V>],
 ) -> V::TargetType {
-    if card.upgrade != 0 {
-        // An upgraded card prints different numbers, and the tables carry the
-        // unupgraded ones. See `OnUpgrade` on the card.
-        unimplemented!("what an upgraded card prints");
-    }
     if card.affliction.is_some() || card.enchantment.is_some() {
         unimplemented!("what an afflicted or enchanted card prints");
     }

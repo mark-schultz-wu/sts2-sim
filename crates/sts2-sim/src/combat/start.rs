@@ -1,17 +1,16 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CombatId, Counters, Creature, ModelId, Observation, Rules, SideKinds, TurnPhaseKinds,
+    CombatId, Counters, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules,
+    SideKinds, TurnPhaseKinds,
 };
 
 use super::live::{CardInstance, Live};
-use super::{Error, encounter, monster, pile, stream};
+use super::{Error, encounter, monster, pile, relic, stream};
+use crate::run::HeldRelic;
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
 const HAND_SIZE: usize = 5;
-
-/// Divine Right's three stars.
-const DIVINE_RIGHT_STARS: u8 = 3;
 
 /// The fight this run opens on the encounter it just travelled into.
 ///
@@ -24,6 +23,7 @@ pub(crate) fn enter<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     observation: &Observation<V>,
+    relics: &mut [HeldRelic<V>],
 ) -> Result<(Live<V>, Counters<V>), Error> {
     let mut counters = observation.rng.clone();
 
@@ -52,9 +52,34 @@ pub(crate) fn enter<V: Rules>(
         .iter()
         .map(|card| CardInstance::new(*card))
         .collect();
+    // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
+    // turn the fight is about to begin on. Both run before anything is drawn.
+    let turn: V::Count = num_traits::one();
+    let mut stars: V::Count = num_traits::zero();
+    for effect in relic::notify::<V>(relics, EventHook::CombatRoomEntered) {
+        match effect {
+            HookEffect::GainStars(gained) => stars = stars + count::<V>(gained),
+            other => unimplemented!("a relic asking for {other:?} as a room opens"),
+        }
+    }
+    // `BeforeCombatStart`, after the room and before the fight opens. The
+    // player carries no power yet, so block gained here is what was asked for
+    // and passes no modifier.
+    for effect in relic::combat_starting::<V>(relics) {
+        match effect {
+            HookEffect::GainBlock(block) => creatures[0].block = creatures[0].block + block,
+            other => unimplemented!("a relic asking for {other:?} as a fight starts"),
+        }
+    }
+    relic::turn_starting::<V>(relics, turn);
+
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
-    let piles = pile::shuffle(&mut shuffle, deck).deal(HAND_SIZE);
+    let drawn = hand_size::<V>(relics, turn);
+    let piles = pile::shuffle(&mut shuffle, deck).deal(drawn);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
+
+    let mut hand = piles.hand().to_vec();
+    upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));
 
     let energy: V::Count = num_traits::cast(V::max_energy(character))
         .expect("the starting energy fits the build's count type");
@@ -65,10 +90,10 @@ pub(crate) fn enter<V: Rules>(
             turn: num_traits::one(),
             phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
             energy,
-            stars: stars_on_entry::<V>(observation),
+            stars,
             round: num_traits::one(),
             encounter,
-            hand: piles.hand().to_vec(),
+            hand,
             draw: piles.draw().to_vec(),
             discard: piles.discard().to_vec(),
             exhaust: piles.exhaust().to_vec(),
@@ -84,20 +109,32 @@ pub(crate) fn enter<V: Rules>(
     ))
 }
 
-/// The stars a fight begins with.
+/// How many cards the fight's first hand is drawn to.
 ///
-/// One relic gives any: Divine Right, the Regent's starter, whose text is "At
-/// the start of each combat, gain three stars". Every other source is a card
-/// or a power inside the fight.
-fn stars_on_entry<V: Rules>(observation: &Observation<V>) -> V::Count {
-    let held = observation
-        .relics
-        .iter()
-        .filter(|carried| carried.relic == V::divine_right())
-        .count();
-    let held: V::Count =
-        num_traits::cast(held).expect("the relics held fit the build's count type");
-    let each: V::Count =
-        num_traits::cast(DIVINE_RIGHT_STARS).expect("a relic's stars fit the build's count type");
-    held * each
+/// `ModifyHandDraw` over the belt, from `baseHandDrawCount`. The relics that
+/// answer it read the turn, and the first turn of a fight follows no other.
+pub(super) fn hand_size<V: Rules>(relics: &mut [HeldRelic<V>], turn: V::Count) -> usize {
+    let base: V::Number =
+        num_traits::cast(HAND_SIZE).expect("the printed hand size fits the build's game number");
+    let drawn = relic::modified::<V>(relics, ModifyHook::HandDraw { count: base, turn }, base);
+    num_traits::cast(drawn).unwrap_or_else(|| unimplemented!("a hand of {drawn:?} cards"))
+}
+
+/// One number a relic gave, as the count the fight keeps it in.
+fn count<V: Rules>(amount: V::Number) -> V::Count {
+    num_traits::cast(amount).unwrap_or_else(|| unimplemented!("a relic worth {amount:?}"))
+}
+
+/// Apply what the relics asked for once a hand was dealt to them.
+pub(super) fn upgraded<V: Rules>(hand: &mut [CardInstance<V>], effects: Vec<HookEffect<V>>) {
+    for effect in effects {
+        match effect {
+            HookEffect::UpgradeHand => {
+                for card in hand.iter_mut() {
+                    card.upgrade();
+                }
+            }
+            other => unimplemented!("a relic asking for {other:?} as a turn starts"),
+        }
+    }
 }

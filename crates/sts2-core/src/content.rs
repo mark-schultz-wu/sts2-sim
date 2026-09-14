@@ -834,12 +834,12 @@ pub enum Modify<N> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModifyHook<V: ContentVersion> {
     /// The model can change a hit dealt or received by its owner.
-    Damage {
-        holding: Holding,
-        amount: PowerAmount<V::Number>,
-    },
+    Damage { holding: Holding },
     /// The model can change block gained by its owner.
-    Block { amount: PowerAmount<V::Number> },
+    Block,
+    /// The model can change how many cards its owner draws to open a turn,
+    /// which is `ModifyHandDraw`.
+    HandDraw { count: V::Number, turn: V::Count },
 }
 
 /// A yes-or-no hook the simulator asks one content model.
@@ -852,26 +852,87 @@ pub enum DecisionHook {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    /// `AfterRoomEntered`, for a room the run fights in.
+    CombatRoomEntered,
+    /// `BeforeCombatStart`, once the fight is built and before it opens.
+    CombatStarting,
+    /// `AfterCombatEnd`, for the fight the run has just finished.
+    CombatEnd,
+    /// `AfterObtained`, as the run picks the model up.
+    Obtained,
+    /// `AfterCardPlayed`, carrying the card its owner just played.
+    CardPlayed {
+        card: V::Card,
+    },
+    /// `BeforeSideTurnStart`, which runs before the side draws anything.
+    BeforeSideTurnStart {
+        side: V::CombatSide,
+        turn: V::Count,
+    },
+    /// `AfterSideTurnStart`, which runs once the side has drawn.
+    SideTurnStart {
+        side: V::CombatSide,
+        turn: V::Count,
+    },
     SideTurnEnd {
         side: V::CombatSide,
-        amount: PowerAmount<V::Number>,
     },
-    EnergyReset {
-        amount: PowerAmount<V::Number>,
-    },
-    BlockCleared {
-        amount: PowerAmount<V::Number>,
-    },
+    EnergyReset,
+    BlockCleared,
     AfterDeath,
 }
 
 /// One command requested by a content model in response to an event hook.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HookEffect<V: ContentVersion> {
+    /// `PlayerCmd.GainStars`.
+    GainStars(V::Number),
+    /// `CreatureCmd.GainBlock` on the listener's owner.
+    GainBlock(V::Number),
+    /// `CardCmd.Upgrade` over every card in the hand.
+    UpgradeHand,
     TickDownDuration,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
     InstallMove(crate::NextMove<V>),
+}
+
+/// One build's relic models, which is what a run holds a relic as.
+///
+/// `RelicModel` is an instance per relic held, and this is the type of that
+/// instance. The two things a run asks one without giving it a hook: build it,
+/// and read the number it shows.
+pub trait RelicModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
+    /// The model as `RelicCmd.Obtain` builds it.
+    ///
+    /// # Panics
+    ///
+    /// A relic nobody has ported. A run carrying one skips it at every later
+    /// hook, which is a divergence with no name on it.
+    fn new(relic: V::Relic) -> Self;
+
+    /// `RelicModel.DisplayAmount`, which is the number the relic shows.
+    ///
+    /// # Panics
+    ///
+    /// A relic that works its number out and nobody has ported.
+    fn display_amount(&self, relic: V::Relic) -> V::Number;
+}
+
+/// One model instance a hook is delivered to, with what that instance saves.
+///
+/// `AbstractModel`'s subclasses read their own fields off `this`. A power's
+/// are the stack the creature carries it as, a relic's are the model the run
+/// carries. The hook carries what the fight knows, and this carries the rest.
+///
+/// A kind of model gets a variant when something asks it a hook.
+#[derive(Debug)]
+pub enum Listener<'a, V: Hooks> {
+    Power {
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+    },
+    Relic(&'a mut V::RelicState),
 }
 
 /// The build-specific behavior behind the game's hook dispatcher.
@@ -879,12 +940,14 @@ pub enum HookEffect<V: ContentVersion> {
 /// The enums begin with only the hook shapes the simulator can execute. They
 /// grow as behavior reaches another hook, without widening this trait.
 pub trait Hooks: ContentVersion {
-    fn modify_hook(listener: crate::ModelId<Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
+    /// What one relic's own model saves, which the run carries for it.
+    type RelicState: RelicModel<Self>;
 
-    fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook)
-    -> crate::HookResponse<bool>;
+    fn modify_hook(listener: Listener<'_, Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
-    fn event_hook(listener: crate::ModelId<Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
+    fn decide_hook(listener: Listener<'_, Self>, hook: DecisionHook) -> crate::HookResponse<bool>;
+
+    fn event_hook(listener: Listener<'_, Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
 }
 
 /// What a power does when one side's turn ends, which is its
@@ -1328,8 +1391,8 @@ pub trait Rules: Hooks {
     /// The relic whose pickup opens the two-card colorless choice.
     fn lead_paperweight() -> Self::Relic;
 
-    /// The Regent's starting relic, which opens every fight with three stars.
-    fn divine_right() -> Self::Relic;
+    /// Apply a card's first upgrade to this combat copy's printed values.
+    fn upgrade_card(card: Self::Card, printed: &mut [Printed<Self::CardVar, Self::Number>]);
 
     /// What one card does when it is played, which is `CardModel.OnPlay`.
     ///
@@ -1386,6 +1449,11 @@ pub trait Rules: Hooks {
     /// The machine's constructor records its starting state. Only the table
     /// says whether the log carries that state, so a bare index is not enough.
     fn opening_move_machine(monster: Self::Monster) -> crate::MoveMachine;
+
+    /// Powers a monster applies to itself when it enters combat.
+    fn monster_starting_powers(
+        monster: Self::Monster,
+    ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
     /// What a card that works its own target out from the fight names.
     ///

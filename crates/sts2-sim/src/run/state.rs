@@ -9,7 +9,7 @@ use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
     EventOption, EventOptionKey, EventOptionKinds, Map, Observation, Question, Reachable,
-    RewardCard, RewardDetail, RewardKind, Room, Rules, Seed, Table, TakeReward,
+    RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, Seed, Table, TakeReward,
 };
 
 use crate::combat::Error;
@@ -38,12 +38,23 @@ pub(crate) struct State<V: Rules> {
     ///
     /// A constructed fight does not move it. `EnterRoomDebug` is handed its
     /// encounter and takes none from the list.
-    met: usize,
+    normal_fights: usize,
+    /// How many of this act's elite fights the run has walked into.
+    ///
+    /// Elite encounters have their own dealt list and position. Entering one
+    /// must not consume the next normal encounter.
+    elite_fights: usize,
     events_used: usize,
     visited_events: Vec<V::Event>,
     unknown_odds: [f32; 3],
     odds: Odds,
     phase: Phase<V>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum EncounterQueue {
+    Normal,
+    Elite,
 }
 
 /// Data generated once and shared by every branch of this run.
@@ -61,10 +72,36 @@ struct RunData<V: Rules> {
     ascension: V::AscensionLevel,
 }
 
+/// One relic the run carries, and what its own model saves.
+///
+/// `RelicModel` is an instance per relic held, and its saved fields outlive
+/// the fight they were written in. So the run carries them, and hands them
+/// back whenever a hook asks that relic something.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HeldRelic<V: Rules> {
+    pub(crate) relic: V::Relic,
+    pub(crate) state: V::RelicState,
+}
+
+impl<V: Rules> HeldRelic<V> {
+    /// The relic as a run picks it up, with its model as new as it is.
+    pub(crate) fn new(relic: V::Relic) -> Self {
+        Self {
+            relic,
+            state: <V::RelicState as sts2_core::RelicModel<V>>::new(relic),
+        }
+    }
+
+    /// The number it shows, which is `RelicModel.DisplayAmount`.
+    pub(crate) fn amount(&self) -> V::Number {
+        self.state.display_amount(self.relic)
+    }
+}
+
 /// The small, mutable part of one player's run state.
 #[derive(Debug, Clone)]
 struct Player<V: Rules> {
-    relics: SmallVec<[V::Relic; 8]>,
+    relics: SmallVec<[HeldRelic<V>; 8]>,
     /// The belt, in the order the potions were taken.
     potions: SmallVec<[V::Potion; 3]>,
     deck: Vec<CardIdent<V>>,
@@ -168,7 +205,10 @@ impl<V: Rules> State<V> {
             floor: num_traits::one(),
             visited: vec![at],
             player: Player {
-                relics: V::starting_relics(character).into_iter().collect(),
+                relics: V::starting_relics(character)
+                    .into_iter()
+                    .map(HeldRelic::new)
+                    .collect(),
                 potions: SmallVec::new(),
                 deck: V::starting_deck(character)
                     .into_iter()
@@ -181,7 +221,8 @@ impl<V: Rules> State<V> {
                 potion_slots: num_traits::cast(V::starting_potion_slots())
                     .expect("starting potion slots fit the build's count type"),
             },
-            met: 0,
+            normal_fights: 0,
+            elite_fights: 0,
             events_used: 0,
             visited_events: Vec::new(),
             unknown_odds: [0.1, 0.02, 0.03],
@@ -218,6 +259,16 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => Some(live),
             Phase::Neow { .. } | Phase::Rewards { .. } | Phase::Event { .. } => None,
         }
+    }
+
+    /// The belt as the relics in it stand, which a fight hands back written.
+    pub(super) fn relics(&self) -> &[HeldRelic<V>] {
+        &self.player.relics
+    }
+
+    /// Put the belt a fight handed back in place of the one it was given.
+    pub(super) fn hold(&mut self, relics: Vec<HeldRelic<V>>) {
+        self.player.relics = relics.into_iter().collect();
     }
 
     /// Put the fight a decision left behind in place of the one it acted on.
@@ -305,11 +356,15 @@ impl<V: Rules> State<V> {
     pub(super) fn enter_combat(
         &mut self,
         to: Coord,
+        queue: EncounterQueue,
         counters: Counters<V>,
         live: crate::combat::Live<V>,
     ) {
         self.floor = self.floor + num_traits::one();
-        self.met += 1;
+        match queue {
+            EncounterQueue::Normal => self.normal_fights += 1,
+            EncounterQueue::Elite => self.elite_fights += 1,
+        }
         self.at = to;
         self.visited.push(to);
         self.drew(counters);
@@ -353,6 +408,29 @@ impl<V: Rules> State<V> {
         Counters { run, player }
     }
 
+    /// Build the fight the run is walking into, and let its relics act.
+    ///
+    /// The relics act on a copy, which is kept only once the fight is built.
+    /// A fight that cannot be built leaves the run where it stood. A relic
+    /// that spent a charge on such a fight has spent nothing.
+    pub(super) fn open_combat(
+        &mut self,
+        encounter: V::Encounter,
+        observation: &Observation<V>,
+    ) -> Result<(crate::combat::Live<V>, Counters<V>), Error> {
+        let mut relics = self.player.relics.clone();
+        let opened = crate::combat::enter::<V>(
+            self.raw_seed(),
+            self.character(),
+            self.ascension(),
+            encounter,
+            observation,
+            &mut relics,
+        )?;
+        self.player.relics = relics;
+        Ok(opened)
+    }
+
     /// Put the run into a named fight, rather than travel to one.
     ///
     /// `FightConsoleCmd`, which is `EnterRoomDebug` at
@@ -363,13 +441,7 @@ impl<V: Rules> State<V> {
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
         let mut observation = self.report().observation;
         observation.floor = observation.floor + num_traits::one();
-        let (ongoing, counters) = crate::combat::enter::<V>(
-            self.raw_seed(),
-            self.character(),
-            self.ascension(),
-            encounter,
-            &observation,
-        )?;
+        let (ongoing, counters) = self.open_combat(encounter, &observation)?;
 
         self.floor = self.floor + num_traits::one();
         self.drew(counters);
@@ -398,9 +470,11 @@ impl<V: Rules> State<V> {
             amount,
             self.raw_seed(),
             &self.counters(),
+            self.relics(),
         )?;
 
         self.drew(applied.counters);
+        self.hold(applied.relics);
         self.fought(applied.live);
         Ok(self.report())
     }
@@ -423,7 +497,11 @@ impl<V: Rules> State<V> {
                     self.player.potions.push(*potion);
                 }
             }
-            Gift::Relic(relic) => unimplemented!("what {relic:?} does when it is obtained"),
+            Gift::Relic(relic) => {
+                let mut held = HeldRelic::new(*relic);
+                crate::combat::obtained::<V>(&mut held);
+                self.player.relics.push(held);
+            }
         }
         Ok(self.report())
     }
@@ -433,7 +511,16 @@ impl<V: Rules> State<V> {
             .opening
             .acts
             .get(act)
-            .and_then(|(_, rooms)| rooms.normal.get(self.met))
+            .and_then(|(_, rooms)| rooms.normal.get(self.normal_fights))
+            .copied()
+    }
+
+    pub(super) fn elite_encounter(&self, act: usize) -> Option<V::Encounter> {
+        self.shared
+            .opening
+            .acts
+            .get(act)
+            .and_then(|(_, rooms)| rooms.elite.get(self.elite_fights))
             .copied()
     }
 
@@ -477,7 +564,9 @@ impl<V: Rules> State<V> {
         }
 
         *chosen = Some(index);
-        self.player.relics.push(V::lead_paperweight());
+        self.player
+            .relics
+            .push(HeldRelic::new(V::lead_paperweight()));
         *selection = Some(
             crate::reward::card::regular::<V, _>(&mut self.rngs.rewards, V::colorless_cards(), 2)
                 .into_iter()
@@ -687,9 +776,9 @@ impl<V: Rules> State<V> {
                     .player
                     .relics
                     .iter()
-                    .copied()
-                    .map(|relic| Carried {
-                        relic,
+                    .map(|held| Carried {
+                        relic: held.relic,
+                        amount: held.amount(),
                         title: None,
                         text: None,
                     })
@@ -748,7 +837,7 @@ impl<V: Rules> sts2_core::EventContext<V> for Player<V> {
     }
 
     fn obtain_relic(&mut self, relic: V::Relic) {
-        self.relics.push(relic);
+        self.relics.push(HeldRelic::new(relic));
     }
 }
 
@@ -861,6 +950,112 @@ mod tests {
         let combat = after.combat.expect("the run is in the fight");
         assert_eq!(combat.encounter, Some(Encounter::SlimesWeak));
         assert_eq!(run.normal_encounter(0), before_next(&run));
+    }
+
+    /// `BoneTea` opens at one combat and spends it on the first hand it sees.
+    ///
+    /// The relic stays in the belt after that, as it does on screen, and the
+    /// second fight's hand is dealt as printed.
+    #[test]
+    fn bone_tea_upgrades_the_one_opening_hand_it_counted() {
+        use sts2_content::v0_107_1::cards::{Cards, RegentCard};
+        use sts2_content::v0_107_1::encounters::Encounter;
+        use sts2_content::v0_107_1::relics::Relic;
+
+        let mut run = opened();
+        run.player.relics.push(HeldRelic::new(Relic::BoneTea));
+        // A deck of the one card whose upgrade is ported. What upgrading does
+        // to a card is the card's own rule, and this is about the relic that
+        // asks for it.
+        run.player.deck =
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 10).collect();
+
+        let mut opening_hands = Vec::new();
+        for _ in 0..2 {
+            run.fight_here(Encounter::SlimesWeak)
+                .expect("the simulator can build this fight");
+            let combat = run
+                .report()
+                .observation
+                .combat
+                .expect("the run is in the fight");
+            opening_hands.push(
+                combat
+                    .hand
+                    .iter()
+                    .map(|card| card.upgrade)
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        let [first, second] = opening_hands.as_slice() else {
+            unreachable!("two fights were entered")
+        };
+        assert!(
+            first.iter().all(|upgrade| *upgrade == 1),
+            "the first hand is upgraded: {first:?}"
+        );
+        assert!(
+            second.iter().all(|upgrade| *upgrade == 0),
+            "and the second is not: {second:?}"
+        );
+        assert!(
+            run.player
+                .relics
+                .iter()
+                .any(|held| held.relic == Relic::BoneTea),
+            "a spent relic stays in the belt"
+        );
+    }
+
+    /// `Pocketwatch` counts the cards a turn plays, and pays the quiet ones.
+    ///
+    /// Three more cards next turn for a turn that played at most three, which
+    /// is `ModifyHandDraw` reading the count this rotates at every turn start.
+    #[test]
+    fn pocketwatch_counts_a_turns_plays_and_draws_on_a_quiet_one() {
+        use sts2_content::v0_107_1::cards::{Cards, RegentCard};
+        use sts2_content::v0_107_1::encounters::Encounter;
+        use sts2_content::v0_107_1::relics::Relic;
+        use sts2_core::fixture::{at, hand};
+
+        let mut run = opened();
+        run.player.relics.push(HeldRelic::new(Relic::Pocketwatch));
+        run.player.deck =
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20).collect();
+        run.fight_here(Encounter::SlimesWeak)
+            .expect("the simulator can build this fight");
+
+        let shown = |run: &State<V>| {
+            let observation = run.report().observation;
+            let relic = observation
+                .relics
+                .iter()
+                .find(|carried| carried.relic == Relic::Pocketwatch)
+                .expect("the belt holds the relic");
+            relic.amount
+        };
+        assert_eq!(shown(&run), 0, "nothing has been played yet");
+
+        run.play_card(hand(0), Some(at(1)))
+            .expect("a Strike is ported")
+            .expect("and is legal here");
+        assert_eq!(shown(&run), 1, "one card played this turn");
+
+        run.end_turn()
+            .expect("the simulator can end this turn")
+            .expect("and the turn is not refused");
+        let combat = run
+            .report()
+            .observation
+            .combat
+            .expect("the run is still in the fight");
+        assert_eq!(
+            combat.hand.len(),
+            8,
+            "five printed, three for the quiet turn"
+        );
+        assert_eq!(shown(&run), 0, "the new turn has played nothing");
     }
 
     /// A fight takes the player's hit points with it, and hands them back.

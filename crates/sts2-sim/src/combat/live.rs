@@ -46,7 +46,19 @@ impl<V: Rules> CardInstance<V> {
                 calculated: var.calculated,
             })
             .collect();
-        Self { ident, vars }
+        let mut card = Self { ident, vars };
+        if card.ident.upgrade != 0 {
+            assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
+            V::upgrade_card(card.ident.card, &mut card.vars);
+        }
+        card
+    }
+
+    pub(super) fn upgrade(&mut self) {
+        if self.ident.upgrade == 0 {
+            V::upgrade_card(self.ident.card, &mut self.vars);
+            self.ident.upgrade = 1;
+        }
     }
 }
 

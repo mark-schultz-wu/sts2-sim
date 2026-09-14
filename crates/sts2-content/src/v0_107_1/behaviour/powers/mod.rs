@@ -26,42 +26,49 @@ const DAMAGE_DECREASE: f64 = 0.75;
 const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 
 /// Apply a value-producing hook for one power.
-pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modify<Number> {
-    match (power, hook) {
+///
+/// `amount` is the stack the creature carries this power as, which is what an
+/// override reads off itself.
+pub(crate) fn modify_hook(
+    power: Power,
+    amount: PowerAmount<Number>,
+    hook: sts2_core::ModifyHook<V>,
+) -> Modify<Number> {
+    match (power, amount, hook) {
         (
             Power::StrengthPower,
+            PowerAmount::Counted(amount),
             ModifyHook::Damage {
                 holding: Holding::Dealer,
-                amount: PowerAmount::Counted(amount),
             },
         ) => Modify::Added(amount),
         (
             Power::StrengthPower,
+            PowerAmount::Endless,
             ModifyHook::Damage {
                 holding: Holding::Dealer,
-                amount: PowerAmount::Endless,
             },
         ) => unimplemented!("an endless Strength"),
-        (Power::StrengthPower, ModifyHook::Damage { .. }) => Modify::Nothing,
+        (Power::StrengthPower, _, ModifyHook::Damage { .. }) => Modify::Nothing,
         (
             Power::VulnerablePower,
+            _,
             ModifyHook::Damage {
                 holding: Holding::Target,
-                ..
             },
         ) => Modify::Scaled(DAMAGE_INCREASE),
         (
             Power::WeakPower,
+            _,
             ModifyHook::Damage {
                 holding: Holding::Dealer,
-                ..
             },
         ) => Modify::Scaled(DAMAGE_DECREASE),
         (
             Power::ShrinkPower,
+            _,
             ModifyHook::Damage {
                 holding: Holding::Dealer,
-                ..
             },
         ) => Modify::Scaled(SHRUNK),
         (
@@ -70,8 +77,10 @@ pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modif
             | Power::ShrinkPower
             | Power::BlockNextTurnPower
             | Power::EnergyNextTurnPower
+            | Power::TerritorialPower
             | Power::IllusionPower
             | Power::MinionPower,
+            _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
         (
@@ -81,11 +90,13 @@ pub(crate) fn modify_hook(power: Power, hook: sts2_core::ModifyHook<V>) -> Modif
             | Power::BlockNextTurnPower
             | Power::EnergyNextTurnPower
             | Power::StrengthPower
+            | Power::TerritorialPower
             | Power::IllusionPower
             | Power::MinionPower,
-            ModifyHook::Block { .. },
+            _,
+            ModifyHook::Block,
         ) => Modify::Nothing,
-        (power, hook) => unimplemented!("what {power:?} does for {hook:?}"),
+        (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     }
 }
 
@@ -106,22 +117,25 @@ pub(crate) fn decide_hook(
 }
 
 /// Dispatch one of the event hooks the simulator currently supports.
+///
+/// `amount` is the stack the creature carries this power as.
 pub(crate) fn event_hook(
     power: Power,
+    amount: PowerAmount<Number>,
     hook: sts2_core::EventHook<V>,
 ) -> Vec<sts2_core::HookEffect<V>> {
     use super::super::generated::monsters::{IntentKind, MoveId};
     use sts2_core::{EventHook, HookEffect};
 
-    let effect = match (power, hook) {
+    let effect = match (power, amount, hook) {
         (
             Power::VulnerablePower | Power::WeakPower,
+            _,
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
-                ..
             },
         ) => Some(HookEffect::TickDownDuration),
-        (Power::ShrinkPower, EventHook::SideTurnEnd { .. }) => {
+        (Power::ShrinkPower, _, EventHook::SideTurnEnd { .. }) => {
             unimplemented!("what a counted Shrink does when a turn ends")
         }
         (
@@ -132,15 +146,13 @@ pub(crate) fn event_hook(
             | Power::StrengthPower
             | Power::IllusionPower
             | Power::MinionPower,
+            _,
             EventHook::SideTurnEnd { .. },
         ) => None,
-        (
-            Power::EnergyNextTurnPower,
-            EventHook::EnergyReset {
-                amount: PowerAmount::Counted(amount),
-            },
-        ) => Some(HookEffect::GainEnergyAndRemove(amount)),
-        (Power::EnergyNextTurnPower, EventHook::EnergyReset { .. }) => {
+        (Power::EnergyNextTurnPower, PowerAmount::Counted(amount), EventHook::EnergyReset) => {
+            Some(HookEffect::GainEnergyAndRemove(amount))
+        }
+        (Power::EnergyNextTurnPower, PowerAmount::Endless, EventHook::EnergyReset) => {
             unimplemented!("an endless EnergyNextTurnPower handing over energy")
         }
         (
@@ -151,15 +163,13 @@ pub(crate) fn event_hook(
             | Power::StrengthPower
             | Power::IllusionPower
             | Power::MinionPower,
-            EventHook::EnergyReset { .. },
+            _,
+            EventHook::EnergyReset,
         ) => None,
-        (
-            Power::BlockNextTurnPower,
-            EventHook::BlockCleared {
-                amount: PowerAmount::Counted(amount),
-            },
-        ) => Some(HookEffect::GainBlockAndRemove(amount)),
-        (Power::IllusionPower, EventHook::AfterDeath) => {
+        (Power::BlockNextTurnPower, PowerAmount::Counted(amount), EventHook::BlockCleared) => {
+            Some(HookEffect::GainBlockAndRemove(amount))
+        }
+        (Power::IllusionPower, _, EventHook::AfterDeath) => {
             Some(HookEffect::InstallMove(sts2_core::NextMove {
                 id: MoveId::ReviveMove,
                 intents: [sts2_core::Intent {
@@ -170,8 +180,8 @@ pub(crate) fn event_hook(
                 .collect(),
             }))
         }
-        (_, EventHook::BlockCleared { .. } | EventHook::AfterDeath) => None,
-        (power, hook) => unimplemented!("what {power:?} does for {hook:?}"),
+        (_, _, EventHook::BlockCleared | EventHook::AfterDeath) => None,
+        (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };
     effect.into_iter().collect()
 }

@@ -13,7 +13,7 @@ use sts2_core::{CardTable, CombatId, Cost, Counters, FlagSet, HandIndex, Reason,
 
 use super::board::Board;
 use super::live::Live;
-use super::{Error, legal, stream};
+use super::{Error, legal, relic, stream};
 
 /// A play the fight allows, resolved but not yet made.
 ///
@@ -114,8 +114,10 @@ pub(crate) fn apply_power<V: Rules>(
     amount: sts2_core::PowerAmount<V::Number>,
     raw_seed: u32,
     counters: &Counters<V>,
+    relics: &[crate::run::HeldRelic<V>],
 ) -> Result<super::Fought<V>, Error> {
     let mut next = live.clone();
+    let mut relics = relics.to_vec();
     let mut counters = counters.clone();
     // Nothing here draws. The stream is what a board is built with, and
     // recording it back leaves the counter where it was.
@@ -137,9 +139,13 @@ pub(crate) fn apply_power<V: Rules>(
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
+    if won {
+        relic::combat_ended::<V>(&mut relics);
+    }
     Ok(super::Fought {
         live: next,
         counters,
+        relics,
         won,
     })
 }
@@ -167,8 +173,10 @@ pub(crate) fn play<V: Rules>(
     play: Play<V>,
     raw_seed: u32,
     counters: &Counters<V>,
+    relics: &[crate::run::HeldRelic<V>],
 ) -> Result<super::Fought<V>, Error> {
     let mut next = live.clone();
+    let mut relics = relics.to_vec();
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
     let mut niche = stream::seek(raw_seed, &counters, V::niche_rng(), "niche")?;
@@ -180,6 +188,7 @@ pub(crate) fn play<V: Rules>(
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
     let card = next.hand.remove(play.index);
+    let card_played = card.ident.card;
     let mut board = Board::for_card(
         &mut next,
         &mut shuffle,
@@ -206,11 +215,34 @@ pub(crate) fn play<V: Rules>(
     }
 
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+
+    // `AfterCardPlayed`, once the card has left the play pile. A relic that
+    // answers it acts through the board a card acts through, and draws from
+    // the same stream, so this is before the streams are written back.
+    let asked = relic::card_played::<V>(&mut relics, card_played);
+    if !asked.is_empty() {
+        let mut board = Board::for_card(
+            &mut next,
+            &mut shuffle,
+            &mut niche,
+            live.ascension,
+            None,
+            None,
+        );
+        relic::apply::<V, _>(&mut board, asked);
+        let skipped = std::mem::take(&mut board.skipped);
+        next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+    }
+
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
     stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
+    if board_won {
+        relic::combat_ended::<V>(&mut relics);
+    }
     Ok(super::Fought {
         live: next,
         counters,
+        relics,
         won: board_won,
     })
 }

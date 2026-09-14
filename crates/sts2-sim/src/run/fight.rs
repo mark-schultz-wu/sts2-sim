@@ -31,7 +31,7 @@ impl<V: Rules> State<V> {
             Err(reason) => return refused(reason),
         };
 
-        let played = combat::play(live, play, self.raw_seed(), &self.counters())?;
+        let played = combat::play(live, play, self.raw_seed(), &self.counters(), self.relics())?;
         Ok(Ok(self.settle(played)))
     }
 
@@ -54,6 +54,7 @@ impl<V: Rules> State<V> {
             self.ascension(),
             &self.counters(),
             max_energy,
+            self.relics(),
         )?;
         Ok(Ok(self.settle(ended)))
     }
@@ -64,6 +65,10 @@ impl<V: Rules> State<V> {
     /// `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
     fn settle(&mut self, fought: combat::Fought<V>) -> sts2_core::Applied<V> {
         self.drew(fought.counters);
+        // The belt the fight wrote, beside the streams it drew from. Neither
+        // is committed until the decision is one the simulator could carry
+        // out whole.
+        self.hold(fought.relics);
         match fought.won {
             false => self.fought(fought.live),
             true => {
