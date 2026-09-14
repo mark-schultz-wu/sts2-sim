@@ -104,10 +104,11 @@ impl sts2_core::Hooks for V0_107_1 {
         listener: sts2_core::ModelId<Self>,
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
-        let sts2_core::ModelId::Power(power) = listener else {
-            return Vec::new();
-        };
-        behaviour::powers::event_hook(power, hook)
+        match listener {
+            sts2_core::ModelId::Power(power) => behaviour::powers::event_hook(power, hook),
+            sts2_core::ModelId::Relic(relic) => behaviour::relics::event_hook(relic, hook),
+            _ => Vec::new(),
+        }
     }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
@@ -168,10 +169,6 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn divine_right() -> Self::Relic {
         generated::relics::Relic::DivineRight
-    }
-
-    fn upgrades_opening_hand(relic: Self::Relic) -> bool {
-        relic == generated::relics::Relic::BoneTea
     }
 
     fn upgrade_card(

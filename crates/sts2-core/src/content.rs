@@ -852,6 +852,10 @@ pub enum DecisionHook {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    SideTurnStart {
+        side: V::CombatSide,
+        turn: V::Count,
+    },
     SideTurnEnd {
         side: V::CombatSide,
         amount: PowerAmount<V::Number>,
@@ -868,6 +872,7 @@ pub enum EventHook<V: ContentVersion> {
 /// One command requested by a content model in response to an event hook.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HookEffect<V: ContentVersion> {
+    UpgradeHand,
     TickDownDuration,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
@@ -1330,9 +1335,6 @@ pub trait Rules: Hooks {
 
     /// The Regent's starting relic, which opens every fight with three stars.
     fn divine_right() -> Self::Relic;
-
-    /// Whether this relic upgrades every card in the opening hand.
-    fn upgrades_opening_hand(relic: Self::Relic) -> bool;
 
     /// Apply a card's first upgrade to this combat copy's printed values.
     fn upgrade_card(card: Self::Card, printed: &mut [Printed<Self::CardVar, Self::Number>]);

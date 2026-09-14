@@ -57,11 +57,23 @@ pub(crate) fn enter<V: Rules>(
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
 
     let mut hand = piles.hand().to_vec();
-    if observation
+    // `AfterSideTurnStart` for the player's first turn, which is the hook the
+    // relics that change an opening hand override. The fight has not been
+    // built yet, so the turn it names is the one `Live` is about to open on.
+    let upgrade_hand = observation
         .relics
         .iter()
-        .any(|held| V::upgrades_opening_hand(held.relic))
-    {
+        .flat_map(|held| {
+            <V as sts2_core::Hooks>::event_hook(
+                ModelId::Relic(held.relic),
+                sts2_core::EventHook::SideTurnStart {
+                    side: <V::CombatSide as SideKinds>::PLAYER,
+                    turn: num_traits::one(),
+                },
+            )
+        })
+        .any(|effect| matches!(effect, sts2_core::HookEffect::UpgradeHand));
+    if upgrade_hand {
         for card in &mut hand {
             card.upgrade();
         }
