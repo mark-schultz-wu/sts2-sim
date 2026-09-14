@@ -44,20 +44,32 @@ pub(crate) fn new(relic: Relic) -> State {
 }
 
 /// Deliver a notification to one relic.
+///
+/// A relic with no module of its own saves nothing and asks for nothing. One
+/// that reaches here holding another relic's state is this file disagreeing
+/// with itself, and it panics rather than acting on it.
 pub(crate) fn event_hook(relic: Relic, state: &mut State, hook: EventHook<V>) -> Effects {
     match (relic, state) {
-        (Relic::DivineRight, _) => divine_right::event_hook(hook),
+        (Relic::DivineRight, State::Nothing) => divine_right::event_hook(hook),
         (Relic::BoneTea, State::BoneTea(state)) => bone_tea::event_hook(state, hook),
         (Relic::Pocketwatch, State::Pocketwatch(state)) => pocketwatch::event_hook(state, hook),
-        _ => Vec::new(),
+        (_, State::Nothing) => Vec::new(),
+        (relic, state) => unimplemented!("{relic:?} carrying {state:?}"),
     }
 }
 
 /// Ask one relic to change a value.
+///
+/// `Modify::Nothing` is what a relic with no override answers, which is what
+/// a relic with no module of its own has. A mismatched state panics, as it
+/// does above.
 pub(crate) fn modify_hook(relic: Relic, state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match (relic, state) {
         (Relic::Pocketwatch, State::Pocketwatch(state)) => pocketwatch::modify_hook(state, hook),
-        _ => Modify::Nothing,
+        // Bone Tea saves a count and changes no value with it.
+        (Relic::BoneTea, State::BoneTea(_)) => Modify::Nothing,
+        (_, State::Nothing) => Modify::Nothing,
+        (relic, state) => unimplemented!("{relic:?} carrying {state:?}"),
     }
 }
 
@@ -74,10 +86,10 @@ pub(crate) fn display_amount(relic: Relic, state: &State) -> Number {
         // The table holds the column's own width, and a relic counts in the
         // build's game number. Widening here is the only place the two meet.
         Field::Constant(amount) => Number::from(amount),
-        Field::Computed => match state {
-            State::BoneTea(state) => bone_tea::display_amount(state),
-            State::Pocketwatch(state) => pocketwatch::display_amount(state),
-            State::Nothing => unimplemented!("the number {relic:?} shows"),
+        Field::Computed => match (relic, state) {
+            (Relic::BoneTea, State::BoneTea(state)) => bone_tea::display_amount(state),
+            (Relic::Pocketwatch, State::Pocketwatch(state)) => pocketwatch::display_amount(state),
+            (relic, _) => unimplemented!("the number {relic:?} shows"),
         },
     }
 }
