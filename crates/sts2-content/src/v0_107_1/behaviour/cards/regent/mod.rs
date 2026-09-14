@@ -1,12 +1,25 @@
 //! The Regent's cards, filed by rarity.
 
-use sts2_core::Fight;
+use sts2_core::{CardTable, Fight};
 
-use super::super::super::generated::cards::RegentCard;
-use super::V;
+use super::super::super::generated::cards::{CardRarity, Cards, RegentCard};
+use super::{Printed, V};
 
 mod basic;
 mod common;
+
+/// `Upgrade` for the Regent's cards, under the rarity the table files each
+/// one by.
+///
+/// A rarity gets a module when its first card is upgraded. A card from a
+/// rarity nobody has reached stops here instead.
+pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
+    match Cards::Regent(card).rarity() {
+        CardRarity::Basic => basic::upgrade(card, printed),
+        CardRarity::Common => common::upgrade(card, printed),
+        _ => unimplemented!("card upgrade: {card:?}"),
+    }
+}
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
     match card {
