@@ -110,6 +110,10 @@ impl sts2_core::Hooks for V0_107_1 {
             _ => Vec::new(),
         }
     }
+
+    fn relic_counter(relic: Self::Relic) -> Option<Self::Number> {
+        behaviour::relics::counter(relic)
+    }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
 /// Until then this build is its tables and no more.
@@ -165,10 +169,6 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn lead_paperweight() -> Self::Relic {
         generated::relics::Relic::LeadPaperweight
-    }
-
-    fn divine_right() -> Self::Relic {
-        generated::relics::Relic::DivineRight
     }
 
     fn upgrade_card(

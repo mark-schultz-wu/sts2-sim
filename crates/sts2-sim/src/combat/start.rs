@@ -1,17 +1,16 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CombatId, Counters, Creature, ModelId, Observation, Rules, SideKinds, TurnPhaseKinds,
+    CombatId, Counters, Creature, EventHook, HookEffect, ModelId, Observation, Rules, SideKinds,
+    TurnPhaseKinds,
 };
 
 use super::live::{CardInstance, Live};
 use super::{Error, encounter, monster, pile, stream};
+use crate::run::HeldRelic;
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
 const HAND_SIZE: usize = 5;
-
-/// Divine Right's three stars.
-const DIVINE_RIGHT_STARS: u8 = 3;
 
 /// The fight this run opens on the encounter it just travelled into.
 ///
@@ -24,6 +23,7 @@ pub(crate) fn enter<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     observation: &Observation<V>,
+    relics: &mut [HeldRelic<V>],
 ) -> Result<(Live<V>, Counters<V>), Error> {
     let mut counters = observation.rng.clone();
 
@@ -57,23 +57,8 @@ pub(crate) fn enter<V: Rules>(
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
 
     let mut hand = piles.hand().to_vec();
-    // `AfterSideTurnStart` for the player's first turn, which is the hook the
-    // relics that change an opening hand override. The fight has not been
-    // built yet, so the turn it names is the one `Live` is about to open on.
-    let upgrade_hand = observation
-        .relics
-        .iter()
-        .flat_map(|held| {
-            <V as sts2_core::Hooks>::event_hook(
-                ModelId::Relic(held.relic),
-                sts2_core::EventHook::SideTurnStart {
-                    side: <V::CombatSide as SideKinds>::PLAYER,
-                    turn: num_traits::one(),
-                },
-            )
-        })
-        .any(|effect| matches!(effect, sts2_core::HookEffect::UpgradeHand));
-    if upgrade_hand {
+    let opened = opening_hooks::<V>(relics);
+    if opened.upgrade_hand {
         for card in &mut hand {
             card.upgrade();
         }
@@ -88,7 +73,7 @@ pub(crate) fn enter<V: Rules>(
             turn: num_traits::one(),
             phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
             energy,
-            stars: stars_on_entry::<V>(observation),
+            stars: opened.stars,
             round: num_traits::one(),
             encounter,
             hand,
@@ -107,20 +92,52 @@ pub(crate) fn enter<V: Rules>(
     ))
 }
 
-/// The stars a fight begins with.
+/// What the relics a run carries do as it walks into a fight.
 ///
-/// One relic gives any: Divine Right, the Regent's starter, whose text is "At
-/// the start of each combat, gain three stars". Every other source is a card
-/// or a power inside the fight.
-fn stars_on_entry<V: Rules>(observation: &Observation<V>) -> V::Count {
-    let held = observation
-        .relics
-        .iter()
-        .filter(|carried| carried.relic == V::divine_right())
-        .count();
-    let held: V::Count =
-        num_traits::cast(held).expect("the relics held fit the build's count type");
-    let each: V::Count =
-        num_traits::cast(DIVINE_RIGHT_STARS).expect("a relic's stars fit the build's count type");
-    held * each
+/// Two hooks, in the order the game runs them: `AfterRoomEntered` as the room
+/// opens, then `AfterSideTurnStart` for the player's first turn. The fight is
+/// not built yet, so that turn is the one [`Live`] opens on.
+///
+/// A relic that acts writes its own counter back. That is why this takes the
+/// run's relics and not the observation's.
+fn opening_hooks<V: Rules>(relics: &mut [HeldRelic<V>]) -> Opened<V> {
+    let mut opened = Opened {
+        stars: num_traits::zero(),
+        upgrade_hand: false,
+    };
+    for held in relics {
+        let hooks = [
+            EventHook::CombatRoomEntered,
+            EventHook::SideTurnStart {
+                side: <V::CombatSide as SideKinds>::PLAYER,
+                turn: num_traits::one(),
+                counter: held.counter,
+            },
+        ];
+        for effect in hooks
+            .into_iter()
+            .flat_map(|hook| <V as sts2_core::Hooks>::event_hook(ModelId::Relic(held.relic), hook))
+        {
+            match effect {
+                HookEffect::GainStars(stars) => {
+                    let stars: V::Count = num_traits::cast(stars).unwrap_or_else(|| {
+                        unimplemented!("a {:?} worth {stars:?} stars", held.relic)
+                    });
+                    opened.stars = opened.stars + stars;
+                }
+                HookEffect::UpgradeHand => opened.upgrade_hand = true,
+                HookEffect::SetCounter(counter) => held.counter = Some(counter),
+                other => unimplemented!("a relic asking for {other:?} as a fight opens"),
+            }
+        }
+    }
+    opened
+}
+
+/// What the opening hooks did, as the fight being built reads it.
+struct Opened<V: Rules> {
+    /// `PlayerCmd.GainStars`, summed over the relics that gave any.
+    stars: V::Count,
+    /// Whether the opening hand is upgraded before the player sees it.
+    upgrade_hand: bool,
 }

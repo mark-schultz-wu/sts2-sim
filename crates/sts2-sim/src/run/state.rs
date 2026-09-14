@@ -72,10 +72,31 @@ struct RunData<V: Rules> {
     ascension: V::AscensionLevel,
 }
 
+/// One relic the run carries, and what its own model saves.
+///
+/// `RelicModel` is an instance per relic held, and the saved number is the
+/// state a hook reads and writes. A relic whose model saves nothing carries
+/// `None` for the whole run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HeldRelic<V: Rules> {
+    pub(crate) relic: V::Relic,
+    pub(crate) counter: Option<V::Number>,
+}
+
+impl<V: Rules> HeldRelic<V> {
+    /// The relic as a run picks it up, counting what its model counts.
+    pub(crate) fn new(relic: V::Relic) -> Self {
+        Self {
+            relic,
+            counter: V::relic_counter(relic),
+        }
+    }
+}
+
 /// The small, mutable part of one player's run state.
 #[derive(Debug, Clone)]
 struct Player<V: Rules> {
-    relics: SmallVec<[V::Relic; 8]>,
+    relics: SmallVec<[HeldRelic<V>; 8]>,
     /// The belt, in the order the potions were taken.
     potions: SmallVec<[V::Potion; 3]>,
     deck: Vec<CardIdent<V>>,
@@ -179,7 +200,10 @@ impl<V: Rules> State<V> {
             floor: num_traits::one(),
             visited: vec![at],
             player: Player {
-                relics: V::starting_relics(character).into_iter().collect(),
+                relics: V::starting_relics(character)
+                    .into_iter()
+                    .map(HeldRelic::new)
+                    .collect(),
                 potions: SmallVec::new(),
                 deck: V::starting_deck(character)
                     .into_iter()
@@ -369,6 +393,29 @@ impl<V: Rules> State<V> {
         Counters { run, player }
     }
 
+    /// Build the fight the run is walking into, and let its relics act.
+    ///
+    /// The relics act on a copy, which is kept only once the fight is built.
+    /// A fight that cannot be built leaves the run where it stood. A relic
+    /// that spent a charge on such a fight has spent nothing.
+    pub(super) fn open_combat(
+        &mut self,
+        encounter: V::Encounter,
+        observation: &Observation<V>,
+    ) -> Result<(crate::combat::Live<V>, Counters<V>), Error> {
+        let mut relics = self.player.relics.clone();
+        let opened = crate::combat::enter::<V>(
+            self.raw_seed(),
+            self.character(),
+            self.ascension(),
+            encounter,
+            observation,
+            &mut relics,
+        )?;
+        self.player.relics = relics;
+        Ok(opened)
+    }
+
     /// Put the run into a named fight, rather than travel to one.
     ///
     /// `FightConsoleCmd`, which is `EnterRoomDebug` at
@@ -379,13 +426,7 @@ impl<V: Rules> State<V> {
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
         let mut observation = self.report().observation;
         observation.floor = observation.floor + num_traits::one();
-        let (ongoing, counters) = crate::combat::enter::<V>(
-            self.raw_seed(),
-            self.character(),
-            self.ascension(),
-            encounter,
-            &observation,
-        )?;
+        let (ongoing, counters) = self.open_combat(encounter, &observation)?;
 
         self.floor = self.floor + num_traits::one();
         self.drew(counters);
@@ -502,7 +543,9 @@ impl<V: Rules> State<V> {
         }
 
         *chosen = Some(index);
-        self.player.relics.push(V::lead_paperweight());
+        self.player
+            .relics
+            .push(HeldRelic::new(V::lead_paperweight()));
         *selection = Some(
             crate::reward::card::regular::<V, _>(&mut self.rngs.rewards, V::colorless_cards(), 2)
                 .into_iter()
@@ -712,9 +755,8 @@ impl<V: Rules> State<V> {
                     .player
                     .relics
                     .iter()
-                    .copied()
-                    .map(|relic| Carried {
-                        relic,
+                    .map(|held| Carried {
+                        relic: held.relic,
                         title: None,
                         text: None,
                     })
@@ -773,7 +815,7 @@ impl<V: Rules> sts2_core::EventContext<V> for Player<V> {
     }
 
     fn obtain_relic(&mut self, relic: V::Relic) {
-        self.relics.push(relic);
+        self.relics.push(HeldRelic::new(relic));
     }
 }
 
@@ -886,6 +928,62 @@ mod tests {
         let combat = after.combat.expect("the run is in the fight");
         assert_eq!(combat.encounter, Some(Encounter::SlimesWeak));
         assert_eq!(run.normal_encounter(0), before_next(&run));
+    }
+
+    /// `BoneTea` opens at one combat and spends it on the first hand it sees.
+    ///
+    /// The relic stays in the belt after that, as it does on screen, and the
+    /// second fight's hand is dealt as printed.
+    #[test]
+    fn bone_tea_upgrades_the_one_opening_hand_it_counted() {
+        use sts2_content::v0_107_1::cards::{Cards, RegentCard};
+        use sts2_content::v0_107_1::encounters::Encounter;
+        use sts2_content::v0_107_1::relics::Relic;
+
+        let mut run = opened();
+        run.player.relics.push(HeldRelic::new(Relic::BoneTea));
+        // A deck of the one card whose upgrade is ported. What upgrading does
+        // to a card is the card's own rule, and this is about the relic that
+        // asks for it.
+        run.player.deck =
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 10).collect();
+
+        let mut opening_hands = Vec::new();
+        for _ in 0..2 {
+            run.fight_here(Encounter::SlimesWeak)
+                .expect("the simulator can build this fight");
+            let combat = run
+                .report()
+                .observation
+                .combat
+                .expect("the run is in the fight");
+            opening_hands.push(
+                combat
+                    .hand
+                    .iter()
+                    .map(|card| card.upgrade)
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        let [first, second] = opening_hands.as_slice() else {
+            unreachable!("two fights were entered")
+        };
+        assert!(
+            first.iter().all(|upgrade| *upgrade == 1),
+            "the first hand is upgraded: {first:?}"
+        );
+        assert!(
+            second.iter().all(|upgrade| *upgrade == 0),
+            "and the second is not: {second:?}"
+        );
+        assert!(
+            run.player
+                .relics
+                .iter()
+                .any(|held| held.relic == Relic::BoneTea),
+            "a spent relic stays in the belt"
+        );
     }
 
     /// A fight takes the player's hit points with it, and hands them back.

@@ -5,7 +5,6 @@ use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, StreamKinds};
 
 use super::State;
 use super::state::EncounterQueue;
-use crate::combat;
 
 /// What waits at a reachable map point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,13 +123,7 @@ impl<V: Rules> State<V> {
             unreachable!()
         };
 
-        let (combat, counters) = combat::enter::<V>(
-            self.raw_seed(),
-            self.character(),
-            self.ascension(),
-            encounter,
-            &self.report().observation,
-        )?;
+        let (combat, counters) = self.open_combat(encounter, &self.report().observation)?;
 
         self.enter_combat(to, queue, counters, combat);
         Ok(self.report())

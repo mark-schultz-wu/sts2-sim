@@ -852,9 +852,14 @@ pub enum DecisionHook {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    /// `AfterRoomEntered`, for a room the run fights in.
+    CombatRoomEntered,
     SideTurnStart {
         side: V::CombatSide,
         turn: V::Count,
+        /// What the listener's own model has counted down to, which is
+        /// [`Hooks::relic_counter`] as this fight found it.
+        counter: Option<V::Number>,
     },
     SideTurnEnd {
         side: V::CombatSide,
@@ -872,7 +877,12 @@ pub enum EventHook<V: ContentVersion> {
 /// One command requested by a content model in response to an event hook.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HookEffect<V: ContentVersion> {
+    /// `PlayerCmd.GainStars`.
+    GainStars(V::Number),
+    /// `CardCmd.Upgrade` over every card in the hand.
     UpgradeHand,
+    /// What the listener's own model has counted down to, after it acted.
+    SetCounter(V::Number),
     TickDownDuration,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
@@ -890,6 +900,15 @@ pub trait Hooks: ContentVersion {
     -> crate::HookResponse<bool>;
 
     fn event_hook(listener: crate::ModelId<Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
+
+    /// What a relic's own model saves, as the run picks it up.
+    ///
+    /// `RelicModel`'s `[SavedProperty]` fields, of which the simulator models
+    /// the one number a relic counts. Bone Tea opens at the one combat it
+    /// upgrades a hand for, and spends it there.
+    ///
+    /// `None` is a relic whose model saves nothing, which is most of them.
+    fn relic_counter(relic: Self::Relic) -> Option<Self::Number>;
 }
 
 /// What a power does when one side's turn ends, which is its
@@ -1332,9 +1351,6 @@ pub trait Rules: Hooks {
 
     /// The relic whose pickup opens the two-card colorless choice.
     fn lead_paperweight() -> Self::Relic;
-
-    /// The Regent's starting relic, which opens every fight with three stars.
-    fn divine_right() -> Self::Relic;
 
     /// Apply a card's first upgrade to this combat copy's printed values.
     fn upgrade_card(card: Self::Card, printed: &mut [Printed<Self::CardVar, Self::Number>]);
