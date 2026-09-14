@@ -266,6 +266,12 @@ impl<V: Rules> State<V> {
         &self.player.relics
     }
 
+    /// Take the potion at this index out of the belt, which is
+    /// `RemoveBeforeUse`.
+    pub(super) fn drank(&mut self, at: usize) {
+        self.player.potions.remove(at);
+    }
+
     /// Put the belt a fight handed back in place of the one it was given.
     pub(super) fn hold(&mut self, relics: Vec<HeldRelic<V>>) {
         self.player.relics = relics.into_iter().collect();

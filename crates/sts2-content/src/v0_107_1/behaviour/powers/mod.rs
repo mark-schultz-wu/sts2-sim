@@ -32,6 +32,7 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 pub(crate) fn modify_hook(
     power: Power,
     amount: PowerAmount<Number>,
+    _owner: CombatSide,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     match (power, amount, hook) {
@@ -79,10 +80,22 @@ pub(crate) fn modify_hook(
             | Power::EnergyNextTurnPower
             | Power::TerritorialPower
             | Power::IllusionPower
-            | Power::MinionPower,
+            | Power::MinionPower
+            | Power::DexterityPower,
             _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
+        // `ModifyBlockAdditive`, which pays only a powered card's block or a
+        // monster move's. Every block this hook is asked about is one of
+        // those, so the condition is the call site and not an arm here. An
+        // unpowered source, such as a relic's, will need the props that say
+        // so.
+        (Power::DexterityPower, PowerAmount::Counted(amount), ModifyHook::Block) => {
+            Modify::Added(amount)
+        }
+        (Power::DexterityPower, PowerAmount::Endless, ModifyHook::Block) => {
+            unimplemented!("an endless Dexterity")
+        }
         (
             Power::VulnerablePower
             | Power::WeakPower
@@ -122,6 +135,7 @@ pub(crate) fn decide_hook(
 pub(crate) fn event_hook(
     power: Power,
     amount: PowerAmount<Number>,
+    owner: CombatSide,
     hook: sts2_core::EventHook<V>,
 ) -> Vec<sts2_core::HookEffect<V>> {
     use super::super::generated::monsters::{IntentKind, MoveId};
@@ -138,6 +152,20 @@ pub(crate) fn event_hook(
         (Power::ShrinkPower, _, EventHook::SideTurnEnd { .. }) => {
             unimplemented!("what a counted Shrink does when a turn ends")
         }
+        // `AfterSideTurnEnd` for the side its owner is among the participants
+        // of, which is its owner's own side.
+        (
+            Power::TerritorialPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnEnd { side },
+        ) if side == owner => Some(HookEffect::ApplyToOwner(
+            Power::StrengthPower,
+            PowerAmount::Counted(amount),
+        )),
+        (Power::TerritorialPower, PowerAmount::Endless, EventHook::SideTurnEnd { .. }) => {
+            unimplemented!("an endless Territorial")
+        }
+        (Power::TerritorialPower, _, EventHook::SideTurnEnd { .. }) => None,
         (
             Power::VulnerablePower
             | Power::WeakPower
@@ -145,7 +173,10 @@ pub(crate) fn event_hook(
             | Power::BlockNextTurnPower
             | Power::StrengthPower
             | Power::IllusionPower
-            | Power::MinionPower,
+            | Power::MinionPower
+            // `PowerStackType.Counter` with no `AfterSideTurnEnd`, so it
+            // stays for the fight.
+            | Power::DexterityPower,
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,
@@ -162,7 +193,8 @@ pub(crate) fn event_hook(
             | Power::BlockNextTurnPower
             | Power::StrengthPower
             | Power::IllusionPower
-            | Power::MinionPower,
+            | Power::MinionPower
+            | Power::DexterityPower,
             _,
             EventHook::EnergyReset,
         ) => None,

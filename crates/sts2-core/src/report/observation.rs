@@ -454,10 +454,14 @@ pub struct Stack<V: ContentVersion> {
 impl<V: crate::Hooks> Stack<V> {
     /// This power as a hook's listener, which is the instance the game gives
     /// the hook to.
-    pub fn listener(&self) -> crate::Listener<'_, V> {
+    ///
+    /// `owner` is the side of the creature carrying it. A stack is held by a
+    /// creature and does not know which, so the caller that found it says.
+    pub fn listener(&self, owner: V::CombatSide) -> crate::Listener<'_, V> {
         crate::Listener::Power {
             power: self.power,
             amount: self.amount,
+            owner,
         }
     }
 }

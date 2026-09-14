@@ -36,22 +36,24 @@ pub(crate) fn end<V: Rules>(
     turn_end(&mut next);
     flush_hand(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
-    tick_powers::<V>(
+    let asked = tick_powers::<V>(
         &mut next,
         &mut skipping,
         <V::CombatSide as SideKinds>::PLAYER,
     );
+    applied::<V>(&mut next, &mut shuffle, &mut niche, ascension, asked);
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
     let won = enemy_turn(&mut next, &mut shuffle, &mut niche, &mut skipping);
 
-    tick_powers::<V>(
+    let asked = tick_powers::<V>(
         &mut next,
         &mut skipping,
         <V::CombatSide as SideKinds>::ENEMY,
     );
+    applied::<V>(&mut next, &mut shuffle, &mut niche, ascension, asked);
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -134,13 +136,15 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
     };
     let mut gained: V::Count = num_traits::zero();
     live.creatures[at].powers.retain(|held| {
-        let amount =
-            <V as sts2_core::Hooks>::event_hook(held.listener(), sts2_core::EventHook::EnergyReset)
-                .into_iter()
-                .find_map(|effect| match effect {
-                    sts2_core::HookEffect::GainEnergyAndRemove(amount) => Some(amount),
-                    _ => None,
-                });
+        let amount = <V as sts2_core::Hooks>::event_hook(
+            held.listener(<V::CombatSide as SideKinds>::PLAYER),
+            sts2_core::EventHook::EnergyReset,
+        )
+        .into_iter()
+        .find_map(|effect| match effect {
+            sts2_core::HookEffect::GainEnergyAndRemove(amount) => Some(amount),
+            _ => None,
+        });
         let Some(amount) = amount else { return true };
         let amount: V::Count = num_traits::cast(amount)
             .unwrap_or_else(|| unimplemented!("a {:?} worth {amount:?} of energy", held.power));
@@ -157,7 +161,7 @@ fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
         let mut gained: V::Number = num_traits::zero();
         creature.powers.retain(|held| {
             let block = <V as sts2_core::Hooks>::event_hook(
-                held.listener(),
+                held.listener(side),
                 sts2_core::EventHook::BlockCleared,
             )
             .into_iter()
@@ -181,10 +185,12 @@ fn tick_powers<V: Rules>(
     live: &mut Live<V>,
     skipping: &mut Vec<(CombatId, V::Power)>,
     side: V::CombatSide,
-) {
+) -> Vec<(CombatId, V::Power, PowerAmount<V::Number>)> {
     let one = num_traits::one();
+    let mut applying = Vec::new();
     for creature in &mut live.creatures {
         let id = creature.id;
+        let owner = creature.side;
         for held in &mut creature.powers {
             let power = held.power;
             // An endless power sits out every tick. There is no number to
@@ -192,12 +198,22 @@ fn tick_powers<V: Rules>(
             let PowerAmount::Counted(amount) = held.amount else {
                 continue;
             };
-            let ticks = <V as sts2_core::Hooks>::event_hook(
-                held.listener(),
+            let asked = <V as sts2_core::Hooks>::event_hook(
+                held.listener(owner),
                 sts2_core::EventHook::SideTurnEnd { side },
-            )
-            .contains(&sts2_core::HookEffect::TickDownDuration);
-            if !ticks {
+            );
+            for effect in &asked {
+                match effect {
+                    sts2_core::HookEffect::TickDownDuration => {}
+                    // `PowerCmd.Apply` on the creature carrying the power,
+                    // which is what a power that grows its owner asks for.
+                    sts2_core::HookEffect::ApplyToOwner(power, amount) => {
+                        applying.push((id, *power, *amount));
+                    }
+                    other => unimplemented!("a power asking for {other:?} as a turn ends"),
+                }
+            }
+            if !asked.contains(&sts2_core::HookEffect::TickDownDuration) {
                 continue;
             }
             // `TickDownDuration` passes over an instance whose flag is set,
@@ -211,6 +227,25 @@ fn tick_powers<V: Rules>(
         creature
             .powers
             .retain(|held| held.amount != PowerAmount::Counted(num_traits::zero()));
+    }
+    applying
+}
+
+/// `PowerCmd.Apply` for what the powers that just ticked asked for.
+///
+/// After the tick rather than inside it, because a power applying one is
+/// holding the creature it sits on. The order is the belt's, which is the
+/// order they were asked in.
+fn applied<V: Rules>(
+    live: &mut Live<V>,
+    shuffle: &mut MegaRng,
+    niche: &mut MegaRng,
+    ascension: V::AscensionLevel,
+    asked: Vec<(CombatId, V::Power, PowerAmount<V::Number>)>,
+) {
+    for (at, power, amount) in asked {
+        let mut board = Board::for_card(live, shuffle, niche, ascension, None, None);
+        sts2_core::Fight::apply(&mut board, at, power, amount);
     }
 }
 
@@ -265,14 +300,12 @@ fn enemy_turn<V: Rules>(
         // happens beside `PerformMove` rather than after what the move does.
         held.machine.performed();
 
-        let damage = next_move
-            .intents
-            .iter()
-            .find_map(|intent| intent.attack.map(|attack| attack.damage))
-            .unwrap_or_else(num_traits::zero);
+        let attack = next_move.intents.iter().find_map(|intent| intent.attack);
+        let damage = attack.map_or_else(num_traits::zero, |attack| attack.damage);
+        let repeats = attack.map_or(0, |attack| attack.repeats);
 
         let ascension = live.ascension;
-        let mut board = Board::for_move(live, shuffle, niche, ascension, id, damage);
+        let mut board = Board::for_move(live, shuffle, niche, ascension, id, damage, repeats);
         V::perform_move(monster, next_move.id, &mut board);
         won |= board.won;
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));

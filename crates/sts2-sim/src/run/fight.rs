@@ -1,6 +1,6 @@
 //! Driving the fight the run is standing in.
 
-use sts2_core::{Answered, CombatId, HandIndex, Reason, Refusal, Rules};
+use sts2_core::{Answered, BeltIndex, CombatId, HandIndex, PotionTable, Reason, Refusal, Rules};
 
 use super::State;
 use crate::combat;
@@ -33,6 +33,72 @@ impl<V: Rules> State<V> {
 
         let played = combat::play(live, play, self.raw_seed(), &self.counters(), self.relics())?;
         Ok(Ok(self.settle(played)))
+    }
+
+    /// Drink one potion from the belt.
+    ///
+    /// `OnUseWrapper` takes the potion out of the belt before its effect runs.
+    /// The belt and the fight are written back together or neither.
+    ///
+    /// What can be drunk is the belt's own question, and the observation
+    /// carries that answer beside every potion. This holds the decision to it
+    /// rather than working out a second answer.
+    pub(crate) fn use_potion(
+        &mut self,
+        index: BeltIndex,
+        target: Option<CombatId>,
+    ) -> Result<Answered<V>, Error> {
+        let refused = |reason| {
+            Ok(Err(Refusal {
+                what: "use_potion".into(),
+                reason,
+            }))
+        };
+
+        let belt = self.report().observation.potions;
+        let at = usize::from(index.get());
+        let Some(held) = belt.get(at) else {
+            return refused(Reason::OutOfRange {
+                index: i64::from(index.get()),
+                count: belt.len(),
+            });
+        };
+        if let Some(why) = held.reason {
+            return refused(Reason::Undrinkable {
+                potion: held.potion,
+                why,
+            });
+        }
+        if let Some(id) = target
+            && !held.targets.contains(&id)
+        {
+            return refused(Reason::NoSuchCreature { id });
+        }
+        if !held.targets.is_empty() && target.is_none() {
+            return refused(Reason::WrongPotionTarget {
+                potion: held.potion,
+                target,
+                takes: held
+                    .potion
+                    .target()
+                    .unwrap_or_else(|| unimplemented!("a potion that decides its own target")),
+            });
+        }
+
+        let potion = held.potion;
+        let Some(live) = self.fight() else {
+            unimplemented!("a potion drunk outside a fight");
+        };
+        let drunk = combat::drink(
+            live,
+            potion,
+            target,
+            self.raw_seed(),
+            &self.counters(),
+            self.relics(),
+        )?;
+        self.drank(at);
+        Ok(Ok(self.settle(drunk)))
     }
 
     /// End the player's turn, and set up the next one.

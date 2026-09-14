@@ -44,6 +44,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::Nibbit => nibbit(move_id, fight),
         Monster::Fogmog => fogmog(move_id, fight),
         Monster::EyeWithTeeth => eye_with_teeth(move_id, fight),
+        Monster::Byrdonis => byrdonis(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
 }
@@ -219,9 +220,26 @@ fn eye_with_teeth<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     }
 }
 
-/// `DamageCmd.Attack(n).FromMonster(this)`, for the moves that are that and
-/// nothing else.
+/// `Byrdonis`. Pecks three times, then swoops, and back again.
+///
+/// Both moves are an attack and nothing else. The peck's hit count is the
+/// `PeckRepeat` its intent advertises.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+fn byrdonis<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::PeckMove | MoveId::SwoopMove => attack(fight),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `DamageCmd.Attack(n).WithHitCount(k).FromMonster(this)`, for the moves that
+/// are that and nothing else.
 fn attack<F: Fight<V>>(fight: &mut F) {
     let damage = fight.intent_damage();
-    fight.attack_opponents(damage);
+    for _ in 0..fight.intent_repeats() {
+        fight.attack_opponents(damage);
+    }
 }
