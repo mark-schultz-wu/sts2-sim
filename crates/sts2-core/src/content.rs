@@ -834,12 +834,9 @@ pub enum Modify<N> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModifyHook<V: ContentVersion> {
     /// The model can change a hit dealt or received by its owner.
-    Damage {
-        holding: Holding,
-        amount: PowerAmount<V::Number>,
-    },
+    Damage { holding: Holding },
     /// The model can change block gained by its owner.
-    Block { amount: PowerAmount<V::Number> },
+    Block,
     /// The model can change how many cards its owner draws to open a turn,
     /// which is `ModifyHandDraw`.
     HandDraw { count: V::Number, turn: V::Count },
@@ -879,14 +876,9 @@ pub enum EventHook<V: ContentVersion> {
     },
     SideTurnEnd {
         side: V::CombatSide,
-        amount: PowerAmount<V::Number>,
     },
-    EnergyReset {
-        amount: PowerAmount<V::Number>,
-    },
-    BlockCleared {
-        amount: PowerAmount<V::Number>,
-    },
+    EnergyReset,
+    BlockCleared,
     AfterDeath,
 }
 
@@ -905,6 +897,22 @@ pub enum HookEffect<V: ContentVersion> {
     InstallMove(crate::NextMove<V>),
 }
 
+/// One model instance a hook is delivered to, with what that instance saves.
+///
+/// `AbstractModel`'s subclasses read their own fields off `this`. A power's
+/// are the stack the creature carries it as, a relic's are the model the run
+/// carries. The hook carries what the fight knows, and this carries the rest.
+///
+/// A kind of model gets a variant when something asks it a hook.
+#[derive(Debug)]
+pub enum Listener<'a, V: Hooks> {
+    Power {
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+    },
+    Relic(&'a mut V::RelicState),
+}
+
 /// The build-specific behavior behind the game's hook dispatcher.
 ///
 /// The enums begin with only the hook shapes the simulator can execute. They
@@ -913,34 +921,19 @@ pub trait Hooks: ContentVersion {
     /// What one relic's own model saves, which the run carries for it.
     type RelicState: Clone + std::fmt::Debug + PartialEq + Eq;
 
-    fn modify_hook(listener: crate::ModelId<Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
+    fn modify_hook(listener: Listener<'_, Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
-    fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook)
-    -> crate::HookResponse<bool>;
+    fn decide_hook(listener: Listener<'_, Self>, hook: DecisionHook) -> crate::HookResponse<bool>;
 
-    fn event_hook(listener: crate::ModelId<Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
+    fn event_hook(listener: Listener<'_, Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
 
     /// One relic's model as the run picks it up.
     ///
-    /// A relic is the one model the simulator keeps state for. A `RelicModel`
+    /// A relic is the one model the run keeps between fights. A `RelicModel`
     /// is an instance per relic held, and its `[SavedProperty]` fields outlive
-    /// the fight they were written in. Every other model is handed what it
-    /// holds: a power's amount arrives in the hook.
+    /// the fight they were written in. A power's stack is the creature's, and
+    /// dies with the fight.
     fn new_relic(relic: Self::Relic) -> Self::RelicState;
-
-    /// Deliver a notification to one relic, which answers as its own model.
-    ///
-    /// The state is the relic's to write, the way an override writes the
-    /// fields of the instance it runs on. It is also which relic this is: the
-    /// model [`Hooks::new_relic`] built names the relic that saved it.
-    fn relic_event_hook(
-        state: &mut Self::RelicState,
-        hook: EventHook<Self>,
-    ) -> Vec<HookEffect<Self>>;
-
-    /// Ask one relic to change a value, which is the same question
-    /// [`Hooks::modify_hook`] asks a power.
-    fn relic_modify_hook(state: &Self::RelicState, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
     /// The number a relic shows, which is `RelicModel.DisplayAmount`.
     ///

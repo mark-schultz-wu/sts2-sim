@@ -74,7 +74,8 @@ pub(crate) fn enter<V: Rules>(
     relic::turn_starting::<V>(relics, turn);
 
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
-    let piles = pile::shuffle(&mut shuffle, deck).deal(hand_size::<V>(relics, turn));
+    let drawn = hand_size::<V>(relics, turn);
+    let piles = pile::shuffle(&mut shuffle, deck).deal(drawn);
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
 
     let mut hand = piles.hand().to_vec();
@@ -112,7 +113,7 @@ pub(crate) fn enter<V: Rules>(
 ///
 /// `ModifyHandDraw` over the belt, from `baseHandDrawCount`. The relics that
 /// answer it read the turn, and the first turn of a fight follows no other.
-pub(super) fn hand_size<V: Rules>(relics: &[HeldRelic<V>], turn: V::Count) -> usize {
+pub(super) fn hand_size<V: Rules>(relics: &mut [HeldRelic<V>], turn: V::Count) -> usize {
     let base: V::Number =
         num_traits::cast(HAND_SIZE).expect("the printed hand size fits the build's game number");
     let drawn = relic::modified::<V>(relics, ModifyHook::HandDraw { count: base, turn }, base);

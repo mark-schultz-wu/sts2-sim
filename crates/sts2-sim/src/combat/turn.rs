@@ -69,7 +69,7 @@ pub(crate) fn end<V: Rules>(
     // `BeforeSideTurnStart`, which is where a relic counting a turn's plays
     // moves the count on, then the draw that reads it.
     relic::turn_starting::<V>(&mut relics, next.turn);
-    let drawn = hand_size::<V>(&relics, next.turn);
+    let drawn = hand_size::<V>(&mut relics, next.turn);
     draw(&mut next, &mut shuffle, drawn);
     let started = relic::turn_started::<V>(&mut relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
@@ -134,17 +134,13 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
     };
     let mut gained: V::Count = num_traits::zero();
     live.creatures[at].powers.retain(|held| {
-        let amount = <V as sts2_core::Hooks>::event_hook(
-            sts2_core::ModelId::Power(held.power),
-            sts2_core::EventHook::EnergyReset {
-                amount: held.amount,
-            },
-        )
-        .into_iter()
-        .find_map(|effect| match effect {
-            sts2_core::HookEffect::GainEnergyAndRemove(amount) => Some(amount),
-            _ => None,
-        });
+        let amount =
+            <V as sts2_core::Hooks>::event_hook(held.listener(), sts2_core::EventHook::EnergyReset)
+                .into_iter()
+                .find_map(|effect| match effect {
+                    sts2_core::HookEffect::GainEnergyAndRemove(amount) => Some(amount),
+                    _ => None,
+                });
         let Some(amount) = amount else { return true };
         let amount: V::Count = num_traits::cast(amount)
             .unwrap_or_else(|| unimplemented!("a {:?} worth {amount:?} of energy", held.power));
@@ -161,10 +157,8 @@ fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
         let mut gained: V::Number = num_traits::zero();
         creature.powers.retain(|held| {
             let block = <V as sts2_core::Hooks>::event_hook(
-                sts2_core::ModelId::Power(held.power),
-                sts2_core::EventHook::BlockCleared {
-                    amount: held.amount,
-                },
+                held.listener(),
+                sts2_core::EventHook::BlockCleared,
             )
             .into_iter()
             .find_map(|effect| match effect {
@@ -199,11 +193,8 @@ fn tick_powers<V: Rules>(
                 continue;
             };
             let ticks = <V as sts2_core::Hooks>::event_hook(
-                sts2_core::ModelId::Power(power),
-                sts2_core::EventHook::SideTurnEnd {
-                    side,
-                    amount: held.amount,
-                },
+                held.listener(),
+                sts2_core::EventHook::SideTurnEnd { side },
             )
             .contains(&sts2_core::HookEffect::TickDownDuration);
             if !ticks {

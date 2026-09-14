@@ -84,51 +84,41 @@ impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
 
     fn modify_hook(
-        listener: sts2_core::ModelId<Self>,
+        listener: sts2_core::Listener<'_, Self>,
         hook: sts2_core::ModifyHook<Self>,
     ) -> sts2_core::Modify<Self::Number> {
-        let sts2_core::ModelId::Power(power) = listener else {
-            return sts2_core::Modify::Nothing;
-        };
-        behaviour::powers::modify_hook(power, hook)
+        match listener {
+            sts2_core::Listener::Power { power, amount } => {
+                behaviour::powers::modify_hook(power, amount, hook)
+            }
+            sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
+        }
     }
 
     fn decide_hook(
-        listener: sts2_core::ModelId<Self>,
+        listener: sts2_core::Listener<'_, Self>,
         hook: sts2_core::DecisionHook,
     ) -> sts2_core::HookResponse<bool> {
-        let sts2_core::ModelId::Power(power) = listener else {
-            return sts2_core::HookResponse::DoesNotImplement;
-        };
-        behaviour::powers::decide_hook(power, hook)
+        match listener {
+            sts2_core::Listener::Power { power, .. } => behaviour::powers::decide_hook(power, hook),
+            sts2_core::Listener::Relic(_) => sts2_core::HookResponse::DoesNotImplement,
+        }
     }
 
     fn event_hook(
-        listener: sts2_core::ModelId<Self>,
+        listener: sts2_core::Listener<'_, Self>,
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
-        let sts2_core::ModelId::Power(power) = listener else {
-            return Vec::new();
-        };
-        behaviour::powers::event_hook(power, hook)
+        match listener {
+            sts2_core::Listener::Power { power, amount } => {
+                behaviour::powers::event_hook(power, amount, hook)
+            }
+            sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
+        }
     }
 
     fn new_relic(relic: Self::Relic) -> Self::RelicState {
         behaviour::relics::new(relic)
-    }
-
-    fn relic_event_hook(
-        state: &mut Self::RelicState,
-        hook: sts2_core::EventHook<Self>,
-    ) -> Vec<sts2_core::HookEffect<Self>> {
-        behaviour::relics::event_hook(state, hook)
-    }
-
-    fn relic_modify_hook(
-        state: &Self::RelicState,
-        hook: sts2_core::ModifyHook<Self>,
-    ) -> sts2_core::Modify<Self::Number> {
-        behaviour::relics::modify_hook(state, hook)
     }
 
     fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> Self::Number {

@@ -178,7 +178,7 @@ impl<'a, V: Rules> Board<'a, V> {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
                 && !creature.powers.iter().any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
-                        sts2_core::ModelId::Power(held.power),
+                        held.listener(),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
                     )
                     .is_decision_and(|counts| !counts)
@@ -212,7 +212,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let powers = self.live.creatures[at].powers.clone();
         let kept = powers.iter().any(|held| {
             <V as sts2_core::Hooks>::decide_hook(
-                sts2_core::ModelId::Power(held.power),
+                held.listener(),
                 sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
             )
             .is_decision_and(|remove| !remove)
@@ -222,7 +222,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 .iter()
                 .flat_map(|held| {
                     <V as sts2_core::Hooks>::event_hook(
-                        sts2_core::ModelId::Power(held.power),
+                        held.listener(),
                         sts2_core::EventHook::AfterDeath,
                     )
                 })
@@ -299,11 +299,8 @@ pub(crate) fn modified<V: Rules>(
                 .flat_map(move |holder| &creatures[holder].powers)
                 .map(move |held| {
                     <V as sts2_core::Hooks>::modify_hook(
-                        sts2_core::ModelId::Power(held.power),
-                        sts2_core::ModifyHook::Damage {
-                            holding,
-                            amount: held.amount,
-                        },
+                        held.listener(),
+                        sts2_core::ModifyHook::Damage { holding },
                     )
                 })
         }),
@@ -357,12 +354,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let amount = hooked::<V>(
             amount,
             self.live.creatures[at].powers.iter().map(|held| {
-                <V as sts2_core::Hooks>::modify_hook(
-                    sts2_core::ModelId::Power(held.power),
-                    sts2_core::ModifyHook::Block {
-                        amount: held.amount,
-                    },
-                )
+                <V as sts2_core::Hooks>::modify_hook(held.listener(), sts2_core::ModifyHook::Block)
             }),
         );
         if amount > V::Number::zero() {

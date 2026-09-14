@@ -451,6 +451,17 @@ pub struct Stack<V: ContentVersion> {
     pub amount: crate::PowerAmount<V::Number>,
 }
 
+impl<V: crate::Hooks> Stack<V> {
+    /// This power as a hook's listener, which is the instance the game gives
+    /// the hook to.
+    pub fn listener(&self) -> crate::Listener<'_, V> {
+        crate::Listener::Power {
+            power: self.power,
+            amount: self.amount,
+        }
+    }
+}
+
 /// The move a monster has chosen, and what it amounts to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NextMove<V: ContentVersion> {

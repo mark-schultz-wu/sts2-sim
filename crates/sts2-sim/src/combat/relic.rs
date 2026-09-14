@@ -5,7 +5,7 @@
 //! notification writes the state the run carries for it, and a value hook
 //! reads that state and leaves it.
 
-use sts2_core::{EventHook, Fight, HookEffect, ModifyHook, Rules};
+use sts2_core::{EventHook, Fight, HookEffect, Listener, ModifyHook, Rules};
 
 use crate::run::HeldRelic;
 
@@ -19,21 +19,21 @@ pub(crate) fn notify<V: Rules>(
 ) -> Vec<HookEffect<V>> {
     relics
         .iter_mut()
-        .flat_map(|held| V::relic_event_hook(&mut held.state, hook))
+        .flat_map(|held| V::event_hook(Listener::Relic(&mut held.state), hook))
         .collect()
 }
 
 /// Ask every relic to change one number.
 pub(crate) fn modified<V: Rules>(
-    relics: &[HeldRelic<V>],
+    relics: &mut [HeldRelic<V>],
     hook: ModifyHook<V>,
     amount: V::Number,
 ) -> V::Number {
     super::board::hooked::<V>(
         amount,
         relics
-            .iter()
-            .map(|held| V::relic_modify_hook(&held.state, hook)),
+            .iter_mut()
+            .map(|held| V::modify_hook(Listener::Relic(&mut held.state), hook)),
     )
 }
 
