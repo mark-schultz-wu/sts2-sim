@@ -47,7 +47,9 @@ pub fn every_run() -> Vec<String> {
 }
 
 /// One run's recording, as the steps that made it.
-pub fn recording<V: sts2_core::ContentVersion>(run: &str) -> sts2_core::recording::Recording<V> {
+pub fn recording<V: sts2_content_wire::WireContentVersion>(
+    run: &str,
+) -> sts2_core::recording::Recording<V> {
     let path = golden_dir().join(run).join("run.jsonl");
     let file =
         std::fs::File::open(&path).unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
@@ -84,7 +86,7 @@ pub fn oracle(run: &str) -> Option<Cached<NoGame>> {
 ///
 /// Starting is the transcript's first entry and not a step. A caller that only
 /// opens the cache gets the start's answer for its first decision.
-pub fn oracle_or_explain<V: sts2_core::ContentVersion>(
+pub fn oracle_or_explain<V: sts2_content_wire::WireContentVersion>(
     run: &str,
     start: &sts2_core::Start<V>,
 ) -> Cached<NoGame> {
@@ -122,7 +124,7 @@ fn explain(run: &str) -> Cached<NoGame> {
 /// The map test generates the same act from the same seed and compares
 /// against this. The first step, because that is where a run stands before it
 /// has changed anything, and act one is what the generator does so far.
-pub fn render_map<V: sts2_core::ContentVersion>(map: &sts2_core::Map<V>) -> String {
+pub fn render_map<V: sts2_content_wire::WireContentVersion>(map: &sts2_core::Map<V>) -> String {
     let mut out = String::new();
     for node in map.points.iter() {
         let edges: Vec<String> = node.to.iter().map(ToString::to_string).collect();
@@ -145,12 +147,18 @@ fn spelled<T: serde::Serialize>(id: &T) -> String {
 }
 
 /// An option's key as the game spells it, put back together from its parts.
-fn option_key<V: sts2_core::ContentVersion>(key: &sts2_core::EventOptionKey<V>) -> String {
-    let option = match &key.option {
-        sts2_core::EventOptionName::Relic(relic) => spelled(relic),
-        sts2_core::EventOptionName::Said(name) => name.clone(),
-    };
-    format!("{}.pages.INITIAL.options.{option}", spelled(&key.event))
+fn option_key<V: sts2_content_wire::WireContentVersion>(
+    option: &sts2_core::EventOption<V>,
+) -> String {
+    use sts2_core::EventOptionKinds;
+    let name = V::event_option_name(option.key.option, option.locked)
+        .map(str::to_owned)
+        .or_else(|| option.key.option.relic().map(|relic| spelled(&relic)))
+        .expect("a comparable event option has a boundary spelling");
+    format!(
+        "{}.pages.INITIAL.options.{name}",
+        spelled(&option.key.event)
+    )
 }
 
 /// The room a run opens in, as its ids.
@@ -161,7 +169,9 @@ fn option_key<V: sts2_core::ContentVersion>(key: &sts2_core::EventOptionKey<V>) 
 ///
 /// Prose is left out. The titles come from the game's localisation, and the
 /// rules digest does not compare them either.
-pub fn render_room<V: sts2_core::ContentVersion>(room: Option<&sts2_core::Room<V>>) -> String {
+pub fn render_room<V: sts2_content_wire::WireContentVersion>(
+    room: Option<&sts2_core::Room<V>>,
+) -> String {
     let mut out = String::new();
     match room {
         Some(sts2_core::Room::Event {
@@ -176,7 +186,7 @@ pub fn render_room<V: sts2_core::ContentVersion>(room: Option<&sts2_core::Room<V
                     out,
                     "option {} {} locked={} proceed={} chosen={} relic={:?}",
                     option.index,
-                    option_key(&option.key),
+                    option_key(option),
                     option.locked,
                     option.proceed,
                     option.chosen,

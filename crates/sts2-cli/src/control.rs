@@ -9,7 +9,7 @@
 //! no orchestration, because the orchestration is here and generic.
 
 use anyhow::{Context, Result};
-use sts2_core::{Answered, Applied, Construct, ContentVersion, Decided, Play, Snapshot, Step};
+use sts2_core::{Answered, Applied, Construct, Decided, Play, Snapshot, Step};
 
 use crate::cli::{Taking, choose};
 
@@ -36,7 +36,7 @@ pub enum Command {
 /// renderer, which the caller owns. The oracle adds a protocol envelope and a
 /// game log to it, and a simulator has neither.
 #[derive(Debug)]
-pub enum Outcome<V: ContentVersion> {
+pub enum Outcome<V: sts2_content_wire::WireContentVersion> {
     /// A state to print, and what the decision that reached it decided.
     ///
     /// Boxed because a whole observation dwarfs a drawn map, and this is one
@@ -66,7 +66,7 @@ impl<E: std::error::Error + Send + Sync + 'static> Fault for E {}
 /// where it stood in the first two cases.
 pub fn perform<V, G>(game: &mut G, command: &Command) -> Result<Outcome<V>>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Construct<V>,
     G::Error: Fault,
 {
@@ -119,7 +119,7 @@ where
 /// A refusal, or a fault. See [`accepted`] for why a refusal is one here.
 pub fn send<V, G>(game: &mut G, step: &Step<V>) -> Result<(Decided, Snapshot<V>)>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Construct<V>,
     G::Error: Fault,
 {
@@ -137,7 +137,7 @@ where
 /// A fault. Observing decides nothing, so there is nothing to refuse.
 pub fn look<V, G>(game: &mut G) -> Result<Snapshot<V>>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: Fault,
 {
@@ -155,7 +155,9 @@ where
 /// # Errors
 ///
 /// The refusal, worded by this crate.
-pub fn accepted<V: ContentVersion>(answered: Answered<V>) -> Result<Applied<V>> {
+pub fn accepted<V: sts2_content_wire::WireContentVersion>(
+    answered: Answered<V>,
+) -> Result<Applied<V>> {
     // Worded here rather than through `Display`: `sts2-core` carries the
     // refusal as data and does not name a card, which is this crate's job.
     answered.map_err(|refused| anyhow::anyhow!("{}", crate::render::refusal::refusal(&refused)))
@@ -172,7 +174,7 @@ pub fn accepted<V: ContentVersion>(answered: Answered<V>) -> Result<Applied<V>> 
 /// move rather than at whatever came after.
 pub fn replay<V, G>(game: &mut G, steps: &[Step<V>]) -> Result<Option<(Decided, Snapshot<V>)>>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Construct<V>,
     G::Error: Fault,
 {

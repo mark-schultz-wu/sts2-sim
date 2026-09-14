@@ -14,8 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use sts2_core::{
-    Answer, Answered, ContentVersion, Decision, Play, Question, RewardKind, Room, Snapshot, Start,
-    TakeReward,
+    Answer, Answered, Decision, Play, Question, RewardKind, Room, Snapshot, Start, TakeReward,
 };
 
 use super::app::App;
@@ -61,7 +60,7 @@ impl Position {
 /// The oracle reaches one by constructing it. A scripted double is handed one,
 /// and a simulator adopts one. What they have in common is all this trait asks
 /// for.
-pub trait Stage<V: ContentVersion> {
+pub trait Stage<V: sts2_content_wire::WireContentVersion> {
     type Game: Play<V>;
 
     /// A game standing in that position, or why it cannot be.
@@ -76,7 +75,7 @@ pub trait Stage<V: ContentVersion> {
 /// Shared with the [`Spy`] rather than read back off it. The front end owns the
 /// game it is driving, and a test cannot reach through it.
 #[derive(Debug)]
-pub struct Sent<V: ContentVersion>(Rc<RefCell<Watched<V>>>);
+pub struct Sent<V: sts2_content_wire::WireContentVersion>(Rc<RefCell<Watched<V>>>);
 
 /// What the spy saw: the run it was started with, and every decision since.
 ///
@@ -84,12 +83,12 @@ pub struct Sent<V: ContentVersion>(Rc<RefCell<Watched<V>>>);
 /// is not one. It reaches the game through
 /// [`Play::begin`](sts2_core::Play::begin), so the spy notes it there.
 #[derive(Debug)]
-struct Watched<V: ContentVersion> {
+struct Watched<V: sts2_content_wire::WireContentVersion> {
     started: Option<Start<V>>,
     decisions: Vec<Decision<V>>,
 }
 
-impl<V: ContentVersion> Default for Watched<V> {
+impl<V: sts2_content_wire::WireContentVersion> Default for Watched<V> {
     fn default() -> Watched<V> {
         Watched {
             started: None,
@@ -98,19 +97,19 @@ impl<V: ContentVersion> Default for Watched<V> {
     }
 }
 
-impl<V: ContentVersion> Clone for Sent<V> {
+impl<V: sts2_content_wire::WireContentVersion> Clone for Sent<V> {
     fn clone(&self) -> Sent<V> {
         Sent(Rc::clone(&self.0))
     }
 }
 
-impl<V: ContentVersion> Default for Sent<V> {
+impl<V: sts2_content_wire::WireContentVersion> Default for Sent<V> {
     fn default() -> Sent<V> {
         Sent(Rc::new(RefCell::new(Watched::default())))
     }
 }
 
-impl<V: ContentVersion> Sent<V> {
+impl<V: sts2_content_wire::WireContentVersion> Sent<V> {
     pub fn all(&self) -> Vec<Decision<V>> {
         self.0.borrow().decisions.clone()
     }
@@ -146,12 +145,12 @@ impl<V: ContentVersion> Sent<V> {
 /// Wraps rather than replaces. The game underneath is the real one, so a check
 /// asserts about a decision that actually happened, rather than one that was
 /// intercepted.
-pub struct Spy<V: ContentVersion, G: Play<V>> {
+pub struct Spy<V: sts2_content_wire::WireContentVersion, G: Play<V>> {
     game: G,
     sent: Sent<V>,
 }
 
-impl<V: ContentVersion, G: Play<V>> Spy<V, G> {
+impl<V: sts2_content_wire::WireContentVersion, G: Play<V>> Spy<V, G> {
     pub fn new(game: G) -> (Spy<V, G>, Sent<V>) {
         let sent = Sent::default();
         (
@@ -164,7 +163,7 @@ impl<V: ContentVersion, G: Play<V>> Spy<V, G> {
     }
 }
 
-impl<V: ContentVersion, G: Play<V>> Play<V> for Spy<V, G> {
+impl<V: sts2_content_wire::WireContentVersion, G: Play<V>> Play<V> for Spy<V, G> {
     type Error = G::Error;
 
     /// What the game underneath needs, and where to note what is sent.
@@ -211,7 +210,7 @@ pub struct Check {
 /// Everything this suite claims, run against one implementation.
 pub fn run<V, S>(stage: &mut S) -> Vec<Check>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     S: Stage<V>,
     <S::Game as Play<V>>::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -244,7 +243,7 @@ type Claimed<V, S> = (
 
 fn claims<V, S>() -> Vec<Claimed<V, S>>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     S: Stage<V>,
     <S::Game as Play<V>>::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -327,7 +326,7 @@ fn failed(what: impl Into<String>) -> Outcome {
 /// creature. A front end that plays on confirm never shows it.
 fn aiming_sends_nothing<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -348,7 +347,7 @@ where
 
 fn confirming_an_aim_plays_it<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -378,7 +377,7 @@ where
 
 fn cancelling_sends_nothing<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -400,7 +399,7 @@ where
 
 fn ending_the_turn<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -418,7 +417,7 @@ fn a_meaningless_key_does_nothing<V, G>(
     before: usize,
 ) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -443,7 +442,7 @@ fn an_unplayable_card_is_not_sent<V, G>(
     before: usize,
 ) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -470,7 +469,7 @@ where
 /// different pieces of code.
 fn a_digit_takes_that_option<V, G>(app: &mut App<V, G>, sent: &Sent<V>, _before: usize) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -508,7 +507,7 @@ where
 /// the run is stuck in it.
 fn a_spent_room_can_be_left<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -532,7 +531,7 @@ where
 /// to catch moves both answers together.
 fn a_digit_takes_that_reward<V, G>(app: &mut App<V, G>, sent: &Sent<V>, before: usize) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -575,7 +574,7 @@ fn aiming_a_potion_sends_nothing<V, G>(
     before: usize,
 ) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -600,7 +599,7 @@ fn confirming_a_potion_drinks_it<V, G>(
     before: usize,
 ) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -636,7 +635,7 @@ fn an_undrinkable_potion_is_not_sent<V, G>(
     before: usize,
 ) -> Outcome
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -670,7 +669,7 @@ where
 /// plays on confirm looks correct everywhere else. Ties go to the first card.
 fn first_targeted<V, G>(app: &App<V, G>) -> Option<usize>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -689,7 +688,7 @@ where
 /// Deliberately a second reading of the same rule, rather than a call into the
 /// front end's own. The whole claim is that two pieces of code number a list
 /// the same way.
-fn still_open<V: ContentVersion>(room: &Room<V>) -> Vec<u8> {
+fn still_open<V: sts2_content_wire::WireContentVersion>(room: &Room<V>) -> Vec<u8> {
     match room {
         Room::RestSite { options } => options
             .iter()
@@ -718,7 +717,7 @@ fn still_open<V: ContentVersion>(room: &Room<V>) -> Vec<u8> {
 /// target is where a front end that drinks on confirm looks correct.
 fn first_targeted_potion<V, G>(app: &App<V, G>) -> Option<usize>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -733,7 +732,7 @@ where
 
 fn first_undrinkable<V, G>(app: &App<V, G>) -> Option<usize>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -745,7 +744,7 @@ where
 
 fn first_unplayable<V, G>(app: &App<V, G>) -> Option<usize>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {

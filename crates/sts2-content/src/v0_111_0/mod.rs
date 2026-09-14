@@ -22,8 +22,10 @@
 //! them err the same way, towards computed. Marking a constant as computed
 //! costs one method, and the reverse costs a divergence nobody can see.
 
+mod event_options;
 mod generated;
 
+pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
 pub use generated::*;
 
 use sts2_core::Version;
@@ -38,6 +40,7 @@ pub struct V0_111_0;
 
 impl sts2_core::ContentVersion for V0_111_0 {
     const VERSION: Version = VERSION;
+    type EventOptionId = event_options::EventOptionId;
 
     type Number = i32;
     type Health = i32;

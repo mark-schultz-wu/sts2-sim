@@ -7,54 +7,63 @@ use super::super::encounters::Encounter;
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const ABYSSAL_BATHS: EventData = EventData {
+    event_id_hash: 1216885494u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const DOORS_OF_LIGHT_AND_DARK: EventData = EventData {
+    event_id_hash: 2070597801u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const DROWNING_BEACON: EventData = EventData {
+    event_id_hash: 2326613475u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const ENDLESS_CONVEYOR: EventData = EventData {
+    event_id_hash: 3894233490u32,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const PUNCH_OFF: EventData = EventData {
+    event_id_hash: 2976200140u32,
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers, EventFlag::Gated]),
     layout: EventLayoutType::Combat,
     encounter: Some(Encounter::PunchOffEventEncounter),
 };
 
 pub(super) const SPIRALING_WHIRLPOOL: EventData = EventData {
+    event_id_hash: 1668465020u32,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const SUNKEN_TREASURY: EventData = EventData {
+    event_id_hash: 1523733462u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TRASH_HEAP: EventData = EventData {
+    event_id_hash: 371692279u32,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const WATERLOGGED_SCRIPTORIUM: EventData = EventData {
+    event_id_hash: 3316048879u32,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,

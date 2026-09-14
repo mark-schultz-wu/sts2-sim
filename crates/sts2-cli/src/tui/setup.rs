@@ -13,19 +13,19 @@
 use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use sts2_core::{ContentVersion, Start};
+use sts2_core::Start;
 
 use super::screen::start;
 use super::state::{NewRun, SEED_MAX};
 
 /// The setup screen, and what has been typed into it.
 #[derive(Debug)]
-pub struct Screen<V: ContentVersion> {
+pub struct Screen<V: sts2_content_wire::WireContentVersion> {
     setting_up: NewRun,
     roster: Vec<V::Character>,
 }
 
-impl<V: ContentVersion> Default for Screen<V> {
+impl<V: sts2_content_wire::WireContentVersion> Default for Screen<V> {
     fn default() -> Screen<V> {
         Screen {
             setting_up: NewRun::default(),
@@ -35,7 +35,7 @@ impl<V: ContentVersion> Default for Screen<V> {
 }
 
 /// What one key press did.
-enum Typed<V: ContentVersion> {
+enum Typed<V: sts2_content_wire::WireContentVersion> {
     /// The screen changed, or the key meant nothing here.
     Nothing,
     /// The player asked to leave without starting anything.
@@ -45,7 +45,7 @@ enum Typed<V: ContentVersion> {
 }
 
 /// Every character this build lets a run be played as.
-pub fn playable<V: ContentVersion>() -> Vec<V::Character> {
+pub fn playable<V: sts2_content_wire::WireContentVersion>() -> Vec<V::Character> {
     <V::Character as sts2_core::Table>::ALL
         .iter()
         .copied()
@@ -53,7 +53,7 @@ pub fn playable<V: ContentVersion>() -> Vec<V::Character> {
         .collect()
 }
 
-impl<V: ContentVersion> Screen<V> {
+impl<V: sts2_content_wire::WireContentVersion> Screen<V> {
     /// Says why the last attempt started nothing, for the next frame to show.
     pub fn refused(&mut self, why: String) {
         self.setting_up.why = Some(why);
@@ -147,7 +147,7 @@ impl<V: ContentVersion> Screen<V> {
     }
 }
 
-impl<V: ContentVersion> Screen<V> {
+impl<V: sts2_content_wire::WireContentVersion> Screen<V> {
     /// Draws and reads keys until this describes a run, or the player leaves.
     ///
     /// `None` when they left. Blocked on rather than polled, the way the run

@@ -9,7 +9,7 @@
 
 use serde::de::DeserializeOwned;
 use serde::de::value::{Error as ValueError, StrDeserializer};
-use sts2_core::{CardIdent, ContentVersion, Coord, ModelId};
+use sts2_core::{CardIdent, Coord, ModelId};
 
 /// Why a packed string is not the thing it was read as.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -59,7 +59,9 @@ pub fn coord(text: &str) -> Result<Coord, Error> {
 ///
 /// Read right to left, because that is the order that cannot be confused.
 /// Taking the last separator first leaves each step one to find.
-pub fn card_ident<V: ContentVersion>(text: &str) -> Result<CardIdent<V>, Error> {
+pub fn card_ident<V: sts2_content_wire::WireContentVersion>(
+    text: &str,
+) -> Result<CardIdent<V>, Error> {
     let (head, enchantment) = match text.split_once('*') {
         Some((head, name)) => (head, Some(entry(text, "enchantment", name)?)),
         None => (text, None),
@@ -102,7 +104,7 @@ pub fn card_ident<V: ContentVersion>(text: &str) -> Result<CardIdent<V>, Error> 
 /// `CardPoolModel` is `CARD_POOL`. The thirteen below are the ones
 /// [`ContentVersion`] names a type for. The six it does not are refused by
 /// name.
-pub fn model_id<V: ContentVersion>(text: &str) -> Result<ModelId<V>, Error> {
+pub fn model_id<V: sts2_content_wire::WireContentVersion>(text: &str) -> Result<ModelId<V>, Error> {
     let (category, name) = text.split_once('/').ok_or_else(|| Error::Shape {
         text: text.to_string(),
         want: "a `CATEGORY/ENTRY` model id",
@@ -156,9 +158,9 @@ mod tests {
     use sts2_content::v0_107_1::V0_107_1;
 
     type V = V0_107_1;
-    type Card = <V as ContentVersion>::Card;
-    type Affliction = <V as ContentVersion>::Affliction;
-    type Enchantment = <V as ContentVersion>::Enchantment;
+    type Card = <V as sts2_core::ContentVersion>::Card;
+    type Affliction = <V as sts2_core::ContentVersion>::Affliction;
+    type Enchantment = <V as sts2_core::ContentVersion>::Enchantment;
 
     /// One id, read the way a generated table spells it.
     fn id<T: DeserializeOwned>(name: &str) -> T {

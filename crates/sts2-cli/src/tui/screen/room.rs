@@ -10,9 +10,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
-use sts2_core::{
-    ContentVersion, Decision, Play, Question, RewardKind, Room, Stock, Take, TakeReward,
-};
+use sts2_core::{Decision, Play, Question, RewardKind, Room, Stock, Take, TakeReward};
 
 use crate::render::{self, spelling};
 use crate::tui::app::App;
@@ -38,7 +36,7 @@ struct Choice {
 
 pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, room: &Room<V>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -150,7 +148,7 @@ where
                         .title
                         .clone()
                         .map(|t| crate::render::prose::plain(&t))
-                        .unwrap_or_else(|| names::pretty(&crate::render::option_key(&option.key))),
+                        .unwrap_or_else(|| names::pretty(&crate::render::option_key(option))),
                     // The relic an option hands over, *unless* the option's
                     // own title already names it — which at Neow every one of
                     // them does, and "Golden Pearl   Golden Pearl" is not a
@@ -188,7 +186,10 @@ where
 }
 
 /// Where a room's option sits in the list the keys act on.
-fn chose<V: ContentVersion>(moves: &[Decision<V>], index: u8) -> Option<usize> {
+fn chose<V: sts2_content_wire::WireContentVersion>(
+    moves: &[Decision<V>],
+    index: u8,
+) -> Option<usize> {
     moves
         .iter()
         .position(|m| m == &Decision::ChooseOption { index })
@@ -200,7 +201,7 @@ fn chose<V: ContentVersion>(moves: &[Decision<V>], index: u8) -> Option<usize> {
 /// the same time.
 fn leaving<V, G>(app: &App<V, G>, moves: &[Decision<V>]) -> Vec<Choice>
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -245,7 +246,7 @@ where
 
 pub fn asking<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, question: &Question<V>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -368,7 +369,7 @@ where
     }
 }
 
-fn reward_name<V: ContentVersion>(reward: &RewardKind<V>) -> String {
+fn reward_name<V: sts2_content_wire::WireContentVersion>(reward: &RewardKind<V>) -> String {
     match reward {
         RewardKind::Gold { amount } => format!("{amount} gold"),
         RewardKind::Card { .. } => "a card".into(),

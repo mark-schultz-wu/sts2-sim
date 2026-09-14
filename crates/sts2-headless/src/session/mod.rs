@@ -18,7 +18,7 @@ pub(crate) mod game;
 pub(crate) mod held;
 
 use error::Error;
-use sts2_core::{Answered, ContentVersion};
+use sts2_core::Answered;
 
 /// Turns one reply into the answer both implementations give.
 ///
@@ -28,7 +28,7 @@ use sts2_core::{Answered, ContentVersion};
 ///
 /// A `Bye` here is a fault rather than an answer: nothing the typed API sends
 /// can produce one.
-pub(crate) fn receive<V: ContentVersion>(
+pub(crate) fn receive<V: sts2_content_wire::WireContentVersion>(
     reply: crate::Reply<V>,
     last: &mut Option<crate::Response>,
 ) -> Result<Answered<V>, Error> {
@@ -52,7 +52,7 @@ pub(crate) fn receive<V: ContentVersion>(
 ///
 /// What [`crate::Cached`] answers a look with. Looking spends no transcript
 /// entry, because nothing moved.
-pub(crate) fn snapshot_of<V: ContentVersion>(
+pub(crate) fn snapshot_of<V: sts2_content_wire::WireContentVersion>(
     last: Option<&crate::Response>,
 ) -> Result<sts2_core::Snapshot<V>, Error> {
     let response = last.ok_or_else(|| {

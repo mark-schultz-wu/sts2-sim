@@ -13,7 +13,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use sts2_core::{Answered, Construct, ContentVersion, Decision, Play, Setup, Snapshot, Start};
+use sts2_core::{Answered, Construct, Decision, Play, Setup, Snapshot, Start};
 
 use super::daemon::{
     self,
@@ -31,7 +31,7 @@ use crate::wire::response::Response;
 /// does. The envelope and the game's own log are oracle-specific facts a front
 /// end wants, and [`sts2_core::Applied`] deliberately has no room for them.
 #[derive(Debug)]
-pub struct Session<V: ContentVersion> {
+pub struct Session<V: sts2_content_wire::WireContentVersion> {
     last: Option<Response>,
     warning: Option<String>,
     build: std::marker::PhantomData<V>,
@@ -61,13 +61,13 @@ pub struct Recorded {
 /// By hand, not derived. A derived one demands `V: Default`, and a build is a
 /// marker type nobody constructs. The derive compiles, and no caller ever
 /// reaches it.
-impl<V: ContentVersion> Default for Session<V> {
+impl<V: sts2_content_wire::WireContentVersion> Default for Session<V> {
     fn default() -> Session<V> {
         Session::new()
     }
 }
 
-impl<V: ContentVersion> Session<V> {
+impl<V: sts2_content_wire::WireContentVersion> Session<V> {
     /// A way of addressing the held game. Does not connect.
     ///
     /// Deliberately infallible. The failure a caller cares about is the one
@@ -170,7 +170,7 @@ impl<V: ContentVersion> Session<V> {
     }
 }
 
-impl<V: ContentVersion> Play<V> for Session<V> {
+impl<V: sts2_content_wire::WireContentVersion> Play<V> for Session<V> {
     type Error = Error;
 
     /// Nothing. The daemon is already holding a game, so there is nowhere to
@@ -202,7 +202,7 @@ impl<V: ContentVersion> Play<V> for Session<V> {
     }
 }
 
-impl<V: ContentVersion> Construct<V> for Session<V> {
+impl<V: sts2_content_wire::WireContentVersion> Construct<V> for Session<V> {
     fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Error> {
         self.dispatch(step)
     }
@@ -214,7 +214,7 @@ impl<V: ContentVersion> Construct<V> for Session<V> {
 /// the daemon saying it did not do the thing, which is what an `Err` means.
 /// Leaving it as a value gives every call site a second failure shape to forget
 /// about.
-fn ask<V: ContentVersion>(request: &Request) -> Result<Answer, Error> {
+fn ask<V: sts2_content_wire::WireContentVersion>(request: &Request) -> Result<Answer, Error> {
     let path = daemon::socket_path(&V::VERSION);
     let stream = UnixStream::connect(&path).map_err(|_| Error::NoDaemon(path))?;
 

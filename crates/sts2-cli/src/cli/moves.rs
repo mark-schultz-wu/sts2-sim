@@ -12,8 +12,7 @@
 use super::choose;
 use sts2_core::CombatId;
 use sts2_core::{
-    Answer, Combat, ContentVersion, Decision, Map, Observation, Question, RewardKind, Snapshot,
-    TakeReward, Tool,
+    Answer, Combat, Decision, Map, Observation, Question, RewardKind, Snapshot, TakeReward, Tool,
 };
 
 /// Every legal move, or an empty list when the game is waiting on nobody.
@@ -22,7 +21,7 @@ use sts2_core::{
 /// question blocks everything but an answer, and a room with options must be
 /// answered before the map opens again. Mixing categories produces moves that
 /// are legal in isolation and refused in place.
-pub fn legal<V: ContentVersion>(snapshot: &Snapshot<V>) -> Vec<Decision<V>> {
+pub fn legal<V: sts2_content_wire::WireContentVersion>(snapshot: &Snapshot<V>) -> Vec<Decision<V>> {
     match &snapshot.asking {
         Some(question) => answers(question),
         None => plays(&snapshot.observation, snapshot.observation.fight()),
@@ -30,7 +29,9 @@ pub fn legal<V: ContentVersion>(snapshot: &Snapshot<V>) -> Vec<Decision<V>> {
 }
 
 /// The ordinary numbered choices shared by terminal and automation frontends.
-pub fn navigation<V: ContentVersion>(snapshot: &Snapshot<V>) -> Vec<Decision<V>> {
+pub fn navigation<V: sts2_content_wire::WireContentVersion>(
+    snapshot: &Snapshot<V>,
+) -> Vec<Decision<V>> {
     legal(snapshot)
         .into_iter()
         .filter(|decision| {
@@ -46,7 +47,9 @@ pub fn navigation<V: ContentVersion>(snapshot: &Snapshot<V>) -> Vec<Decision<V>>
 }
 
 /// Every individual reward the pending set will still hand over.
-pub fn takeable<V: ContentVersion>(question: &Question<V>) -> Vec<TakeReward> {
+pub fn takeable<V: sts2_content_wire::WireContentVersion>(
+    question: &Question<V>,
+) -> Vec<TakeReward> {
     let Question::Rewards { rewards, .. } = question else {
         return Vec::new();
     };
@@ -69,7 +72,7 @@ pub fn takeable<V: ContentVersion>(question: &Question<V>) -> Vec<TakeReward> {
 }
 
 /// Every answer a parked game accepts.
-fn answers<V: ContentVersion>(question: &Question<V>) -> Vec<Decision<V>> {
+fn answers<V: sts2_content_wire::WireContentVersion>(question: &Question<V>) -> Vec<Decision<V>> {
     match question {
         // Every legal *size* of selection rather than every combination, which
         // is exponential and mostly the same question asked again. The indices
@@ -123,7 +126,7 @@ fn answers<V: ContentVersion>(question: &Question<V>) -> Vec<Decision<V>> {
 }
 
 /// Every move an idle game accepts, in the order the protocol allows them.
-fn plays<V: ContentVersion>(
+fn plays<V: sts2_content_wire::WireContentVersion>(
     observed: &Observation<V>,
     combat: Option<&Combat<V>>,
 ) -> Vec<Decision<V>> {
@@ -154,7 +157,9 @@ fn plays<V: ContentVersion>(
 ///
 /// The belt's own `reason` and `targets`, believed rather than re-derived. No
 /// rule about when a potion is drinkable lives in this crate.
-fn potion_moves<V: ContentVersion>(observed: &Observation<V>) -> Vec<Decision<V>> {
+fn potion_moves<V: sts2_content_wire::WireContentVersion>(
+    observed: &Observation<V>,
+) -> Vec<Decision<V>> {
     let mut moves: Vec<Decision<V>> = Vec::new();
 
     for (index, potion) in observed.potions.iter().enumerate() {
@@ -190,7 +195,9 @@ fn potion_moves<V: ContentVersion>(observed: &Observation<V>) -> Vec<Decision<V>
 ///
 /// Which of the two a room offers is the room's kind. So both lists come from
 /// [`choose`] rather than from reading the same option two ways.
-fn room_moves<V: ContentVersion>(room: &sts2_core::Room<V>) -> Vec<Decision<V>> {
+fn room_moves<V: sts2_content_wire::WireContentVersion>(
+    room: &sts2_core::Room<V>,
+) -> Vec<Decision<V>> {
     let options = choose::choosable(room)
         .into_iter()
         .map(|index| Decision::ChooseOption { index });
@@ -206,7 +213,7 @@ fn room_moves<V: ContentVersion>(room: &sts2_core::Room<V>) -> Vec<Decision<V>> 
 ///
 /// Ending the turn is always legal in the play phase, and it has to be in the
 /// list. Otherwise a fuzzer holding an unplayable hand has nothing to do.
-fn combat_moves<V: ContentVersion>(combat: &Combat<V>) -> Vec<Decision<V>> {
+fn combat_moves<V: sts2_content_wire::WireContentVersion>(combat: &Combat<V>) -> Vec<Decision<V>> {
     let mut moves: Vec<Decision<V>> = Vec::new();
 
     for (index, card) in combat.legal.iter().enumerate() {
@@ -245,7 +252,7 @@ fn combat_moves<V: ContentVersion>(combat: &Combat<V>) -> Vec<Decision<V>> {
 ///
 /// The two are exclusive by construction. A beaten boss has no children, so the
 /// travelable set is empty exactly when proceeding is the move.
-fn travel_moves<V: ContentVersion>(map: &Map<V>) -> Vec<Decision<V>> {
+fn travel_moves<V: sts2_content_wire::WireContentVersion>(map: &Map<V>) -> Vec<Decision<V>> {
     if map.proceed {
         return vec![Decision::Proceed];
     }
@@ -257,7 +264,7 @@ fn travel_moves<V: ContentVersion>(map: &Map<V>) -> Vec<Decision<V>> {
 }
 
 /// What a person-facing log says a decision did.
-pub fn describe<V: ContentVersion>(decision: &Decision<V>) -> String {
+pub fn describe<V: sts2_content_wire::WireContentVersion>(decision: &Decision<V>) -> String {
     match decision {
         Decision::PlayCard { index, target } => match target {
             Some(t) => format!("played card {index} at {t}"),

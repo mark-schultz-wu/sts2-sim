@@ -15,7 +15,6 @@ use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use sts2_cli::cli::moves;
 use sts2_cli::coverage::Coverage;
-use sts2_core::ContentVersion;
 use sts2_core::Seed;
 use sts2_core::{Construct, Gift, Play, Setup, Snapshot, Start, Step};
 use sts2_headless::{Config, Oracle, recording};
@@ -86,7 +85,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn fuzz<V: ContentVersion>(cli: Cli) -> Result<()> {
+fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
     let seed = match &cli.seed {
         Some(typed) => Seed::fold(typed).map_err(|e| anyhow::anyhow!("{e}"))?,
         None => made_up_seed()?,
@@ -231,7 +230,7 @@ fn keep(recording: &Path, cover: &Coverage) -> Result<()> {
 /// Written before it is sent, so a move that kills the game is in the file that
 /// reproduces it. A move the game refuses is in there too, which is what makes
 /// the file replay to the state the refusal was found in.
-fn send<V: ContentVersion>(
+fn send<V: sts2_content_wire::WireContentVersion>(
     game: &mut Oracle<V>,
     tape: &mut BufWriter<File>,
     step: &Step<V>,
@@ -278,7 +277,9 @@ fn note(recording: &Path, what: &str) {
 ///
 /// `victory` is only meaningful once the run is over, because winning kills
 /// every player too. The order of these two tests is the whole of it.
-fn finished<V: ContentVersion>(snapshot: &Snapshot<V>) -> Option<&'static str> {
+fn finished<V: sts2_content_wire::WireContentVersion>(
+    snapshot: &Snapshot<V>,
+) -> Option<&'static str> {
     if !snapshot.observation.run_over {
         return None;
     }
@@ -289,7 +290,7 @@ fn finished<V: ContentVersion>(snapshot: &Snapshot<V>) -> Option<&'static str> {
 }
 
 /// Enough of the state to watch progress without printing the whole thing.
-fn where_it_is<V: ContentVersion>(snapshot: &Snapshot<V>) -> String {
+fn where_it_is<V: sts2_content_wire::WireContentVersion>(snapshot: &Snapshot<V>) -> String {
     let o = &snapshot.observation;
     format!(
         "floor {} · act {} · hp {}/{}",

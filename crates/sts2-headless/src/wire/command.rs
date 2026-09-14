@@ -13,7 +13,6 @@
 use num_traits::ToPrimitive as _;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeMap};
-use sts2_core::ContentVersion;
 use sts2_core::Seed;
 use sts2_core::{
     Answer, Coord, Decision, Gift, PowerAmount, PowerTable as _, Setup, Start, Step, TakeReward,
@@ -30,7 +29,7 @@ use sts2_core::{
 // The associated types carry their own bounds, so serde does not need any on
 // `V` — which is a marker and implements neither.
 #[serde(tag = "cmd", rename_all = "snake_case", bound = "")]
-pub enum Command<V: ContentVersion> {
+pub enum Command<V: sts2_content_wire::WireContentVersion> {
     Start {
         #[serde(with = "seed")]
         seed: Seed,
@@ -96,7 +95,7 @@ pub enum Command<V: ContentVersion> {
     Quit,
 }
 
-impl<V: ContentVersion> From<&Start<V>> for Command<V> {
+impl<V: sts2_content_wire::WireContentVersion> From<&Start<V>> for Command<V> {
     /// The one command that is not a decision. See [`sts2_core::Start`].
     fn from(s: &Start<V>) -> Self {
         Self::Start {
@@ -108,7 +107,7 @@ impl<V: ContentVersion> From<&Start<V>> for Command<V> {
     }
 }
 
-impl<V: ContentVersion> From<&Decision<V>> for Command<V> {
+impl<V: sts2_content_wire::WireContentVersion> From<&Decision<V>> for Command<V> {
     fn from(d: &Decision<V>) -> Self {
         match d {
             Decision::EnterRoom { room } => Self::EnterRoom { room: *room },
@@ -133,7 +132,7 @@ impl<V: ContentVersion> From<&Decision<V>> for Command<V> {
     }
 }
 
-impl<V: ContentVersion> From<&Setup<V>> for Command<V> {
+impl<V: sts2_content_wire::WireContentVersion> From<&Setup<V>> for Command<V> {
     fn from(s: &Setup<V>) -> Self {
         match s {
             Setup::Fight { encounter } => Self::Fight {
@@ -156,7 +155,7 @@ impl<V: ContentVersion> From<&Setup<V>> for Command<V> {
     }
 }
 
-impl<V: ContentVersion> From<&Step<V>> for Command<V> {
+impl<V: sts2_content_wire::WireContentVersion> From<&Step<V>> for Command<V> {
     fn from(step: &Step<V>) -> Self {
         match step {
             Step::Decision(d) => d.into(),
@@ -165,7 +164,7 @@ impl<V: ContentVersion> From<&Step<V>> for Command<V> {
     }
 }
 
-impl<V: ContentVersion> Command<V> {
+impl<V: sts2_content_wire::WireContentVersion> Command<V> {
     /// The run this starts, for the first line of a recording.
     ///
     /// `None` for everything else, which is every command that needs a run to
@@ -449,13 +448,13 @@ impl WireTake {
 /// reads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged, bound = "")]
-pub enum WireGift<V: ContentVersion> {
+pub enum WireGift<V: sts2_content_wire::WireContentVersion> {
     Card { card: V::Card },
     Relic { relic: V::Relic },
     Potion { potion: V::Potion },
 }
 
-impl<V: ContentVersion> From<&Gift<V>> for WireGift<V> {
+impl<V: sts2_content_wire::WireContentVersion> From<&Gift<V>> for WireGift<V> {
     fn from(g: &Gift<V>) -> Self {
         match g {
             Gift::Card(card) => Self::Card { card: *card },
@@ -465,7 +464,7 @@ impl<V: ContentVersion> From<&Gift<V>> for WireGift<V> {
     }
 }
 
-impl<V: ContentVersion> WireGift<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireGift<V> {
     fn into_domain(self) -> Gift<V> {
         match self {
             Self::Card { card } => Gift::Card(card),
@@ -486,15 +485,15 @@ mod tests {
 
     type V = V0_107_1;
     type Wire = Command<V>;
-    type AscensionLevel = <V as ContentVersion>::AscensionLevel;
-    type Character = <V as ContentVersion>::Character;
-    type Card = <V as ContentVersion>::Card;
-    type Encounter = <V as ContentVersion>::Encounter;
-    type Event = <V as ContentVersion>::Event;
-    type Modifier = <V as ContentVersion>::Modifier;
-    type Potion = <V as ContentVersion>::Potion;
-    type Relic = <V as ContentVersion>::Relic;
-    type RoomType = <V as ContentVersion>::RoomType;
+    type AscensionLevel = <V as sts2_core::ContentVersion>::AscensionLevel;
+    type Character = <V as sts2_core::ContentVersion>::Character;
+    type Card = <V as sts2_core::ContentVersion>::Card;
+    type Encounter = <V as sts2_core::ContentVersion>::Encounter;
+    type Event = <V as sts2_core::ContentVersion>::Event;
+    type Modifier = <V as sts2_core::ContentVersion>::Modifier;
+    type Potion = <V as sts2_core::ContentVersion>::Potion;
+    type Relic = <V as sts2_core::ContentVersion>::Relic;
+    type RoomType = <V as sts2_core::ContentVersion>::RoomType;
 
     fn wire(step: impl Into<Step<V>>) -> serde_json::Value {
         let step = step.into();

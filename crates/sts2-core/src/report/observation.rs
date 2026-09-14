@@ -233,21 +233,18 @@ pub struct EventOptionKey<V: ContentVersion> {
     /// The event offering it, which is the key's first segment.
     pub event: V::Event,
     /// What the option is called within the page.
-    pub option: EventOptionName<V>,
+    pub option: V::EventOptionId,
 }
 
 /// The last segment of an event option's key.
 ///
-/// An event generates its own options in code, so what they are called is not
-/// table data. The ones that hand a relic over are named by that relic, and
-/// those are the only ones a simulator reports so far.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum EventOptionName<V: ContentVersion> {
-    /// Named by the relic it hands over.
-    Relic(V::Relic),
-    /// Named by the event itself, as the game spelled it. Read from an
-    /// observation, never built here.
-    Said(String),
+/// Each build owns this vocabulary. The wire adapter parses external names
+/// into it. The simulator only constructs typed identities.
+pub trait EventOptionKinds<V: ContentVersion>:
+    std::fmt::Debug + Copy + Eq + std::hash::Hash
+{
+    fn from_relic(relic: V::Relic) -> Self;
+    fn relic(self) -> Option<V::Relic>;
 }
 
 /// One thing an event offers.

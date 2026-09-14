@@ -14,7 +14,7 @@
 //! expected to reproduce someone else's stack trace.
 
 use serde::Deserialize;
-use sts2_core::{ContentVersion, FlagSet, QuestionKind, Reason, Refusal};
+use sts2_core::{FlagSet, QuestionKind, Reason, Refusal};
 
 use super::ident;
 use super::observation::{Error, blocked, ident as read_ident, name, reasons, unknown};
@@ -155,7 +155,9 @@ impl WireRefusal {
     /// The path a failure carries starts at `reason`, the way an observation's
     /// starts at `observation`. `reason.card` is actionable, and "a card
     /// identity did not parse" is not.
-    pub(crate) fn into_domain<V: ContentVersion>(self) -> Result<Refusal<V>, Error> {
+    pub(crate) fn into_domain<V: sts2_content_wire::WireContentVersion>(
+        self,
+    ) -> Result<Refusal<V>, Error> {
         Ok(Refusal {
             what: self.cmd,
             reason: self.reason.into_domain::<V>()?,
@@ -164,7 +166,7 @@ impl WireRefusal {
 }
 
 impl WireReason {
-    fn into_domain<V: ContentVersion>(self) -> Result<Reason<V>, Error> {
+    fn into_domain<V: sts2_content_wire::WireContentVersion>(self) -> Result<Reason<V>, Error> {
         Ok(match self {
             WireReason::NoRun {} => Reason::NoRun,
             WireReason::RunOver { victory } => Reason::RunOver { victory },
@@ -282,7 +284,9 @@ impl WireReason {
 ///
 /// Null for a room this protocol has no `RoomType` for, such as a combat room
 /// or no room at all. That is a fact, and not a failure to read one.
-fn room<V: ContentVersion>(found: Option<String>) -> Result<Option<V::RoomType>, Error> {
+fn room<V: sts2_content_wire::WireContentVersion>(
+    found: Option<String>,
+) -> Result<Option<V::RoomType>, Error> {
     found
         .map(|text| name(&p("found"), "room type", &text))
         .transpose()
@@ -325,10 +329,10 @@ mod tests {
     use sts2_core::{Blocked, Coord, ModelId};
 
     type V = V0_107_1;
-    type RoomType = <V as ContentVersion>::RoomType;
-    type TargetType = <V as ContentVersion>::TargetType;
-    type Reasons = <V as ContentVersion>::UnplayableReasons;
-    type UnplayableReason = <V as ContentVersion>::UnplayableReason;
+    type RoomType = <V as sts2_core::ContentVersion>::RoomType;
+    type TargetType = <V as sts2_core::ContentVersion>::TargetType;
+    type Reasons = <V as sts2_core::ContentVersion>::UnplayableReasons;
+    type UnplayableReason = <V as sts2_core::ContentVersion>::UnplayableReason;
 
     fn read(cmd: &str, reason: serde_json::Value) -> Result<Refusal<V>, Error> {
         let wire: WireRefusal =
@@ -345,7 +349,7 @@ mod tests {
     ///
     /// Serialized rather than parsed, so the assertion does not lean on the
     /// same reader it is checking.
-    fn spelled(card: &<V as ContentVersion>::Card) -> String {
+    fn spelled(card: &<V as sts2_core::ContentVersion>::Card) -> String {
         serde_json::to_value(card)
             .ok()
             .and_then(|v| v.as_str().map(str::to_string))

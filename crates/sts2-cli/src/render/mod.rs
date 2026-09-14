@@ -25,9 +25,7 @@ use prose::{asker as who_asked, one_line};
 use state::state_of;
 
 use std::fmt;
-use sts2_core::{
-    CardIdent, ContentVersion, Cost, Decided, FlagSet, ModelId, Question, RewardKind, Snapshot,
-};
+use sts2_core::{CardIdent, Cost, Decided, FlagSet, ModelId, Question, RewardKind, Snapshot};
 
 /// What one step produced, rendered for a person.
 ///
@@ -36,7 +34,7 @@ use sts2_core::{
 ///
 /// The wrapper permits this crate to implement `Display` without violating the
 /// orphan rule. It also carries whose choice is being rendered.
-pub struct Readable<'a, V: ContentVersion> {
+pub struct Readable<'a, V: sts2_content_wire::WireContentVersion> {
     snapshot: &'a Snapshot<V>,
     /// Absent for a look, which decided nothing to report on.
     decided: Option<Decided>,
@@ -56,7 +54,7 @@ struct Rule<'a> {
     digest: &'a str,
 }
 
-impl<'a, V: ContentVersion> Readable<'a, V> {
+impl<'a, V: sts2_content_wire::WireContentVersion> Readable<'a, V> {
     /// The player's view: what a person sitting down to play can see.
     pub fn new(snapshot: &'a Snapshot<V>) -> Self {
         Self {
@@ -94,7 +92,7 @@ impl<'a, V: ContentVersion> Readable<'a, V> {
     }
 }
 
-impl<V: ContentVersion> fmt::Display for Readable<'_, V> {
+impl<V: sts2_content_wire::WireContentVersion> fmt::Display for Readable<'_, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let snapshot = self.snapshot;
 
@@ -133,7 +131,7 @@ fn rule(f: &mut fmt::Formatter<'_>, seq: u64, cmd: &str, digest: &str) -> fmt::R
 /// `answer skip` applies is stuck. The two questions look alike until you know
 /// that one is a card selection and the other a reward screen. Naming the
 /// command inline is cheaper than expecting anyone to remember.
-fn question_of<V: ContentVersion>(
+fn question_of<V: sts2_content_wire::WireContentVersion>(
     f: &mut fmt::Formatter<'_>,
     question: &Question<V>,
 ) -> fmt::Result {
@@ -323,7 +321,7 @@ fn says(text: &Option<String>) -> String {
 }
 
 /// A reward that is not a card, in one line.
-fn plain<V: ContentVersion>(reward: &RewardKind<V>) -> String {
+fn plain<V: sts2_content_wire::WireContentVersion>(reward: &RewardKind<V>) -> String {
     match reward {
         RewardKind::Gold { amount } => format!("{amount} gold"),
         RewardKind::Relic { relic, rarity } => {
@@ -352,7 +350,7 @@ fn plain<V: ContentVersion>(reward: &RewardKind<V>) -> String {
 ///
 /// Order is the point for a draw pile. `STRIKE · BASH · 3x STRIKE` says
 /// something a global tally destroys.
-pub(super) fn cards<V: ContentVersion>(list: &[CardIdent<V>]) -> String {
+pub(super) fn cards<V: sts2_content_wire::WireContentVersion>(list: &[CardIdent<V>]) -> String {
     let mut out: Vec<String> = Vec::new();
     let mut run: Option<(String, usize)> = None;
 
@@ -390,12 +388,18 @@ pub use crate::id::display as spelling;
 ///
 /// The parts are typed, so this is the one place that puts the sentence back
 /// together. A front end is where a name becomes words.
-pub fn option_key<V: sts2_core::ContentVersion>(key: &sts2_core::EventOptionKey<V>) -> String {
-    let option = match &key.option {
-        sts2_core::EventOptionName::Relic(relic) => spelling(relic),
-        sts2_core::EventOptionName::Said(name) => name.clone(),
-    };
-    format!("{}.pages.INITIAL.options.{option}", spelling(&key.event))
+pub fn option_key<V: sts2_content_wire::WireContentVersion>(
+    option: &sts2_core::EventOption<V>,
+) -> String {
+    use sts2_core::EventOptionKinds;
+    let name = V::event_option_name(option.key.option, option.locked)
+        .map(str::to_owned)
+        .or_else(|| option.key.option.relic().map(|relic| spelling(&relic)))
+        .expect("a comparable event option has a boundary spelling");
+    format!(
+        "{}.pages.INITIAL.options.{name}",
+        spelling(&option.key.event)
+    )
 }
 
 /// A card identity, the way the observation spells one.
@@ -403,7 +407,7 @@ pub fn option_key<V: sts2_core::ContentVersion>(key: &sts2_core::EventOptionKey<
 /// `BASH+1/SMOG*ADROIT`: the card, then what it is carrying. A person reading a
 /// selection beside a deck listing sees the same card written the same way in
 /// both.
-pub fn ident<V: ContentVersion>(card: &CardIdent<V>) -> String {
+pub fn ident<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> String {
     let mut out = spelling(&card.card);
     if card.upgrade > 0 {
         out.push_str(&format!("+{}", card.upgrade));
@@ -423,7 +427,7 @@ pub fn ident<V: ContentVersion>(card: &CardIdent<V>) -> String {
 ///
 /// Half an identity and not one, because `BYRDPIP` is a monster *and* a relic.
 /// That is fine for a reader who has the category beside it.
-pub fn entry<V: ContentVersion>(model: &ModelId<V>) -> String {
+pub fn entry<V: sts2_content_wire::WireContentVersion>(model: &ModelId<V>) -> String {
     match model {
         ModelId::Act(id) => spelling(id),
         ModelId::Affliction(id) => spelling(id),
@@ -460,7 +464,10 @@ pub(super) fn names<T: serde::Serialize + std::fmt::Debug>(list: &[T]) -> String
 }
 
 /// The one line that says what to do next.
-fn next_of<V: ContentVersion>(f: &mut fmt::Formatter<'_>, snapshot: &Snapshot<V>) -> fmt::Result {
+fn next_of<V: sts2_content_wire::WireContentVersion>(
+    f: &mut fmt::Formatter<'_>,
+    snapshot: &Snapshot<V>,
+) -> fmt::Result {
     match next::next(snapshot) {
         Some(command) => writeln!(f, "next    {command}"),
         None => Ok(()),

@@ -1431,6 +1431,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sts2-content",
+ "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
 ]
@@ -1443,6 +1444,14 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_json",
+ "sts2-core",
+]
+
+[[package]]
+name = "sts2-content-wire"
+version = "0.1.0"
+dependencies = [
+ "sts2-content",
  "sts2-core",
 ]
 
@@ -1467,6 +1476,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sts2-content",
+ "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
  "sts2-sim",
@@ -1483,6 +1493,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sts2-content",
+ "sts2-content-wire",
  "sts2-core",
  "thiserror 2.0.20",
 ]

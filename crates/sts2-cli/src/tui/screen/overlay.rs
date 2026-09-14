@@ -7,7 +7,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
-use sts2_core::{CardIdent, ContentVersion, Play};
+use sts2_core::{CardIdent, Play};
 
 use crate::tui::app::App;
 use crate::tui::keys::HELP;
@@ -19,7 +19,7 @@ use super::{card, centred, map, widget};
 
 pub fn draw<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -109,7 +109,7 @@ fn detail(frame: &mut Frame, body: Rect, lines: &[String]) {
 /// reason beside it.
 fn belt<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -183,7 +183,7 @@ where
 /// does, either before it was picked up or after.
 fn relics<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -230,7 +230,7 @@ where
 /// looks, and an alphabetical sort throws it away.
 fn pile<V, G>(frame: &mut Frame, body: Rect, app: &App<V, G>, which: Pile)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -277,7 +277,7 @@ where
 }
 
 /// The same card several times is one line and a count.
-fn counted<V: ContentVersion>(cards: &[CardIdent<V>]) -> Vec<Line<'static>> {
+fn counted<V: sts2_content_wire::WireContentVersion>(cards: &[CardIdent<V>]) -> Vec<Line<'static>> {
     let mut tally: Vec<(String, usize)> = Vec::new();
     for card in cards {
         let name = card::ident(card);

@@ -22,6 +22,7 @@
 // `seed`). Every type is re-exported flat below, and that flat surface is the
 // API: the folders are how this crate is read, not how it is used.
 pub mod content;
+pub mod event;
 mod hook_response;
 mod ident;
 mod play;
@@ -43,6 +44,7 @@ pub use content::{
     SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
     UnplayableReasonKinds, Version,
 };
+pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;
 pub use ident::{CardIdent, Coord, ModelId, OutOfRange};
 pub use seed::Seed;
@@ -50,7 +52,7 @@ pub use seed::Seed;
 pub use report::digest::{Digest, Section};
 pub use report::observation::{
     ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, CombatId, Counters,
-    Creature, Entry, EventOption, EventOptionKey, EventOptionName, Held, Intent, Map, NextMove,
+    Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, Held, Intent, Map, NextMove,
     NoNode, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, ShopCard,
     Stack, Stock, Take, Undrinkable,
 };

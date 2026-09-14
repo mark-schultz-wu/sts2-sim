@@ -15,8 +15,7 @@
 
 use serde::Deserialize;
 use sts2_core::{
-    CardOption, Cell, ContentVersion, FoundItem, Question, RelicTable, RewardCard, RewardDetail,
-    RewardKind,
+    CardOption, Cell, FoundItem, Question, RelicTable, RewardCard, RewardDetail, RewardKind,
 };
 
 use super::command::WireReportedTool;
@@ -111,7 +110,9 @@ impl WireQuestion {
     /// The path a failure carries starts at `question`, the way an
     /// observation's starts at `observation`. `question.options[3].card` is
     /// actionable, and "a card identity did not parse" is not.
-    pub(crate) fn into_domain<V: ContentVersion>(self) -> Result<Question<V>, Error> {
+    pub(crate) fn into_domain<V: sts2_content_wire::WireContentVersion>(
+        self,
+    ) -> Result<Question<V>, Error> {
         Ok(match self {
             WireQuestion::SelectCards {
                 min,
@@ -181,7 +182,10 @@ impl WireQuestion {
 }
 
 impl WireRewardDetail {
-    fn into_domain<V: ContentVersion>(self, path: &str) -> Result<RewardDetail<V>, Error> {
+    fn into_domain<V: sts2_content_wire::WireContentVersion>(
+        self,
+        path: &str,
+    ) -> Result<RewardDetail<V>, Error> {
         // A known type missing the field that defines it is a protocol
         // disagreement, not something to paper over by falling back to `Other` —
         // that would turn a broken game into a reward the client silently cannot
@@ -279,7 +283,7 @@ impl WireRewardDetail {
 }
 
 /// The cards inside a reward, in the order they are addressed.
-fn read_cards<V: ContentVersion>(
+fn read_cards<V: sts2_content_wire::WireContentVersion>(
     path: &str,
     cards: Vec<WireRewardCard>,
 ) -> Result<Vec<RewardCard<V>>, Error> {
@@ -306,7 +310,7 @@ mod tests {
     use sts2_core::{Applied, Table, Tool};
 
     type V = V0_107_1;
-    type Relic = <V as ContentVersion>::Relic;
+    type Relic = <V as sts2_core::ContentVersion>::Relic;
     type RelicRarity = <Relic as RelicTable>::Rarity;
 
     /// A pending, wrapped in the smallest envelope and state that will carry it.

@@ -23,9 +23,9 @@ use sts2_core::{PowerAmount, Section};
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Cost, Counters, Creature, Digest, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet,
-    Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable,
-    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
+    Cost, Counters, Creature, Digest, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent,
+    Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption,
+    Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
 };
 
 type V = V0_107_1;
@@ -39,6 +39,7 @@ type Orb = <V as ContentVersion>::Orb;
 type Monster = <V as ContentVersion>::Monster;
 type Encounter = <V as ContentVersion>::Encounter;
 type Event = <V as ContentVersion>::Event;
+type EventOptionId = <V as ContentVersion>::EventOptionId;
 type Affliction = <V as ContentVersion>::Affliction;
 type Enchantment = <V as ContentVersion>::Enchantment;
 type MapPointType = <V as ContentVersion>::MapPointType;
@@ -203,8 +204,8 @@ fn rooms() -> Vec<Room<V>> {
     let event_option = || EventOption {
         index: 0,
         key: EventOptionKey {
-            event: nth::<Event>(0),
-            option: EventOptionName::Said("EAT".into()),
+            event: sts2_content::v0_107_1::events::Event::TeaMaster,
+            option: EventOptionId::TeaMaster(sts2_content::v0_107_1::TeaMasterOption::BoneTea),
         },
         title: Some("Eat".into()),
         text: Some("Swallow it whole.".into()),
@@ -368,8 +369,10 @@ fn rooms() -> Vec<Room<V>> {
             text: Some("Something stirs.".into()),
             options: vec![EventOption {
                 key: EventOptionKey {
-                    event: nth::<Event>(0),
-                    option: EventOptionName::Said("LEAVE".into()),
+                    event: sts2_content::v0_107_1::events::Event::TeaMaster,
+                    option: EventOptionId::TeaMaster(
+                        sts2_content::v0_107_1::TeaMasterOption::EmberTea,
+                    ),
                 },
                 ..event_option()
             }],

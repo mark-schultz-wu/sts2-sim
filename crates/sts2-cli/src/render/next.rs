@@ -11,10 +11,12 @@
 //! advice.
 
 use crate::cli::choose;
-use sts2_core::{Combat, ContentVersion, Map, Observation, Question, RewardKind, Room, Snapshot};
+use sts2_core::{Combat, Map, Observation, Question, RewardKind, Room, Snapshot};
 
 /// The command to run next, or nothing when the game is not waiting on anyone.
-pub(super) fn next<V: ContentVersion>(snapshot: &Snapshot<V>) -> Option<String> {
+pub(super) fn next<V: sts2_content_wire::WireContentVersion>(
+    snapshot: &Snapshot<V>,
+) -> Option<String> {
     match &snapshot.asking {
         Some(question) => Some(answering(question)),
         None => observing(&snapshot.observation, snapshot.observation.fight()),
@@ -22,7 +24,7 @@ pub(super) fn next<V: ContentVersion>(snapshot: &Snapshot<V>) -> Option<String> 
 }
 
 /// What answers the question a parked game is asking.
-fn answering<V: ContentVersion>(question: &Question<V>) -> String {
+fn answering<V: sts2_content_wire::WireContentVersion>(question: &Question<V>) -> String {
     match question {
         Question::SelectCards {
             min, max, options, ..
@@ -88,7 +90,7 @@ fn answering<V: ContentVersion>(question: &Question<V>) -> String {
 }
 
 /// What to do when nothing is pending, in the order the game allows it.
-fn observing<V: ContentVersion>(
+fn observing<V: sts2_content_wire::WireContentVersion>(
     observed: &Observation<V>,
     combat: Option<&Combat<V>>,
 ) -> Option<String> {
@@ -110,7 +112,7 @@ fn observing<V: ContentVersion>(
 /// Uses [`choose`] itself so advice cannot drift from action. This avoids
 /// suggesting disabled rest-site options. Shops join the search because their
 /// stock uses the same numeric input even though it is bought, not chosen.
-fn takeable<V: ContentVersion>(room: &Room<V>) -> Option<u8> {
+fn takeable<V: sts2_content_wire::WireContentVersion>(room: &Room<V>) -> Option<u8> {
     choose::choosable(room)
         .into_iter()
         .chain(choose::buyable(room))
@@ -118,7 +120,7 @@ fn takeable<V: ContentVersion>(room: &Room<V>) -> Option<u8> {
 }
 
 /// The first playable card, with a legal target where one is needed.
-fn playing<V: ContentVersion>(combat: &Combat<V>) -> String {
+fn playing<V: sts2_content_wire::WireContentVersion>(combat: &Combat<V>) -> String {
     for (index, card) in combat.legal.iter().enumerate() {
         if card.reason.is_some() {
             continue;
@@ -137,7 +139,7 @@ fn playing<V: ContentVersion>(combat: &Combat<V>) -> String {
 }
 
 /// Where the map can go from here.
-fn travelling<V: ContentVersion>(map: &Map<V>) -> Option<String> {
+fn travelling<V: sts2_content_wire::WireContentVersion>(map: &Map<V>) -> Option<String> {
     // A beaten boss has nowhere to travel to, so without this the run reads as
     // finished when it is one command from the next act.
     if map.proceed {

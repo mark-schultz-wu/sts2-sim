@@ -19,10 +19,10 @@ use sts2_core::{Cost, ShopCard};
 use num_traits::{NumCast, ToPrimitive};
 use serde::Deserialize;
 use sts2_core::{
-    Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, CombatId, ContentVersion,
-    Coord, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionName, FlagSet, Held,
-    Intent, Map, NextMove, Node, Observation, Orbs, Playable, PowerAmount, PowerTable, Preview,
-    Reachable, RestOption, Room, Stack, Stock, Take, Undrinkable,
+    Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, CombatId, Coord,
+    Counters, Creature, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent, Map, NextMove,
+    Node, Observation, Orbs, Playable, PowerAmount, PowerTable, Preview, Reachable, RestOption,
+    Room, Stack, Stock, Take, Undrinkable,
 };
 
 use super::ident::{self, named};
@@ -71,7 +71,9 @@ pub enum Why {
 /// built out of the state where it sits. Going through `from_value` deep clones
 /// every observation, which at a few hundred decisions a second is the whole
 /// point of the digest undone.
-pub fn observation<V: ContentVersion>(state: &serde_json::Value) -> Result<Observation<V>, Error> {
+pub fn observation<V: sts2_content_wire::WireContentVersion>(
+    state: &serde_json::Value,
+) -> Result<Observation<V>, Error> {
     let wire = WireObservation::<V>::deserialize(state).map_err(|e: serde_json::Error| Error {
         at: "observation".into(),
         why: Why::Unknown {
@@ -87,7 +89,7 @@ pub fn observation<V: ContentVersion>(state: &serde_json::Value) -> Result<Obser
 /// `NEOW.pages.INITIAL.options.NEOWS_TALISMAN`. The room already names the
 /// event, so the first segment is held to it rather than read again. The two
 /// disagreeing is the game saying two things at once.
-fn option_key<V: ContentVersion>(
+fn option_key<V: sts2_content_wire::WireContentVersion>(
     path: &str,
     event: V::Event,
     text: &str,
@@ -119,10 +121,8 @@ fn option_key<V: ContentVersion>(
     }
     Ok(EventOptionKey {
         event,
-        option: match named(rest) {
-            Some(relic) => EventOptionName::Relic(relic),
-            None => EventOptionName::Said(rest.to_string()),
-        },
+        option: V::event_option(event, rest, named(rest))
+            .unwrap_or_else(|| unimplemented!("event option {text}")),
     })
 }
 
@@ -152,7 +152,7 @@ pub(crate) fn ident<T>(
 /// The game overloads the sign. One power works its stacking out at the time,
 /// and below zero it is a single endless instance. This is where that spelling
 /// stops.
-fn power_amount<V: ContentVersion>(
+fn power_amount<V: sts2_content_wire::WireContentVersion>(
     path: &str,
     power: V::Power,
     amount: i32,
@@ -216,7 +216,7 @@ fn domain_count<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> R
 /// A key this build does not print is a divergence. The game printed a number
 /// under a name the tables do not have, and that is what the comparison exists
 /// to notice.
-fn domain_vars<V: ContentVersion, T: NumCast>(
+fn domain_vars<V: sts2_content_wire::WireContentVersion, T: NumCast>(
     path: &str,
     values: BTreeMap<String, i32>,
 ) -> Result<BTreeMap<V::CardVar, T>, Error> {
@@ -239,7 +239,7 @@ fn domain_vars<V: ContentVersion, T: NumCast>(
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase", bound = "")]
-struct WireObservation<V: ContentVersion> {
+struct WireObservation<V: sts2_content_wire::WireContentVersion> {
     act: i32,
     floor: i32,
     hp: i32,
@@ -266,7 +266,7 @@ struct WireObservation<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireMap<V: ContentVersion> {
+struct WireMap<V: sts2_content_wire::WireContentVersion> {
     at: Option<String>,
     visited: Vec<String>,
     travelable: Vec<WireReachable<V>>,
@@ -276,7 +276,7 @@ struct WireMap<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireReachable<V: ContentVersion> {
+struct WireReachable<V: sts2_content_wire::WireContentVersion> {
     at: String,
     #[serde(rename = "type")]
     kind: V::MapPointType,
@@ -284,7 +284,7 @@ struct WireReachable<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireNode<V: ContentVersion> {
+struct WireNode<V: sts2_content_wire::WireContentVersion> {
     at: String,
     #[serde(rename = "type")]
     kind: V::MapPointType,
@@ -293,7 +293,7 @@ struct WireNode<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", deny_unknown_fields, bound = "")]
-enum WireRoom<V: ContentVersion> {
+enum WireRoom<V: sts2_content_wire::WireContentVersion> {
     RestSite {
         options: Vec<WireRestOption<V>>,
     },
@@ -315,7 +315,7 @@ enum WireRoom<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireRestOption<V: ContentVersion> {
+struct WireRestOption<V: sts2_content_wire::WireContentVersion> {
     index: u8,
     id: V::RestSiteOption,
     enabled: bool,
@@ -323,7 +323,7 @@ struct WireRestOption<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireChestOption<V: ContentVersion> {
+struct WireChestOption<V: sts2_content_wire::WireContentVersion> {
     index: u8,
     /// The relic's own entry name, or `SKIP`. Declared because it is on the
     /// wire and checked against the two below, which are what is read.
@@ -337,7 +337,7 @@ struct WireChestOption<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireEventOption<V: ContentVersion> {
+struct WireEventOption<V: sts2_content_wire::WireContentVersion> {
     index: u8,
     key: String,
     title: Option<String>,
@@ -374,7 +374,7 @@ struct WireEntry {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireCarried<V: ContentVersion> {
+struct WireCarried<V: sts2_content_wire::WireContentVersion> {
     id: V::Relic,
     title: Option<String>,
     text: Option<String>,
@@ -382,7 +382,7 @@ struct WireCarried<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireHeld<V: ContentVersion> {
+struct WireHeld<V: sts2_content_wire::WireContentVersion> {
     id: V::Potion,
     title: Option<String>,
     text: Option<String>,
@@ -395,7 +395,7 @@ struct WireHeld<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireCombat<V: ContentVersion> {
+struct WireCombat<V: sts2_content_wire::WireContentVersion> {
     turn: i32,
     phase: V::PlayerTurnPhase,
     energy: i32,
@@ -413,14 +413,14 @@ struct WireCombat<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireOrbs<V: ContentVersion> {
+struct WireOrbs<V: sts2_content_wire::WireContentVersion> {
     capacity: i32,
     queue: Vec<WireChannelled<V>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireChannelled<V: ContentVersion> {
+struct WireChannelled<V: sts2_content_wire::WireContentVersion> {
     id: V::Orb,
     passive: i32,
     evoke: i32,
@@ -428,7 +428,7 @@ struct WireChannelled<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase", bound = "")]
-struct WireCreature<V: ContentVersion> {
+struct WireCreature<V: sts2_content_wire::WireContentVersion> {
     id: Option<u32>,
     model: Option<String>,
     side: V::CombatSide,
@@ -445,14 +445,14 @@ struct WireCreature<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireStack<V: ContentVersion> {
+struct WireStack<V: sts2_content_wire::WireContentVersion> {
     id: V::Power,
     amount: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WireIntent<V: ContentVersion> {
+struct WireIntent<V: sts2_content_wire::WireContentVersion> {
     #[serde(rename = "type")]
     kind: V::IntentKind,
     /// Both or neither: the oracle writes them inside one `if`.
@@ -464,7 +464,7 @@ struct WireIntent<V: ContentVersion> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, bound = "")]
-struct WirePlayable<V: ContentVersion> {
+struct WirePlayable<V: sts2_content_wire::WireContentVersion> {
     card: String,
     cost: WireCost,
     #[serde(rename = "starCost")]
@@ -488,7 +488,7 @@ struct WirePreview {
     base: BTreeMap<String, i32>,
 }
 
-impl<V: ContentVersion> WireObservation<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireObservation<V> {
     fn into_domain(self) -> Result<Observation<V>, Error> {
         Ok(Observation {
             act: domain_count("act", self.act)?,
@@ -522,7 +522,10 @@ impl<V: ContentVersion> WireObservation<V> {
 }
 
 /// A pile, with each card's path on a failure.
-fn cards<V: ContentVersion>(path: &str, texts: &[String]) -> Result<Vec<CardIdent<V>>, Error> {
+fn cards<V: sts2_content_wire::WireContentVersion>(
+    path: &str,
+    texts: &[String],
+) -> Result<Vec<CardIdent<V>>, Error> {
     texts
         .iter()
         .enumerate()
@@ -544,7 +547,9 @@ fn coords(path: &str, texts: &[String]) -> Result<Vec<Coord>, Error> {
 /// A key that is neither a run stream nor `player.` plus a player stream is a
 /// stream this build has no name for. That is a divergence rather than
 /// something to skip.
-fn counters<V: ContentVersion>(flat: &BTreeMap<String, u32>) -> Result<Counters<V>, Error> {
+fn counters<V: sts2_content_wire::WireContentVersion>(
+    flat: &BTreeMap<String, u32>,
+) -> Result<Counters<V>, Error> {
     let mut run = HashMap::new();
     let mut player = HashMap::new();
 
@@ -572,7 +577,7 @@ fn counters<V: ContentVersion>(flat: &BTreeMap<String, u32>) -> Result<Counters<
     Ok(Counters { run, player })
 }
 
-impl<V: ContentVersion> WireMap<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireMap<V> {
     fn into_domain(self) -> Result<Map<V>, Error> {
         Ok(Map {
             at: self
@@ -609,7 +614,7 @@ impl<V: ContentVersion> WireMap<V> {
     }
 }
 
-impl<V: ContentVersion> WireRoom<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireRoom<V> {
     fn into_domain(self) -> Result<Room<V>, Error> {
         Ok(match self {
             WireRoom::RestSite { options } => Room::RestSite {
@@ -701,7 +706,10 @@ impl<V: ContentVersion> WireRoom<V> {
 }
 
 impl WireEntry {
-    fn into_domain<V: ContentVersion>(self, i: usize) -> Result<Entry<V>, Error> {
+    fn into_domain<V: sts2_content_wire::WireContentVersion>(
+        self,
+        i: usize,
+    ) -> Result<Entry<V>, Error> {
         let path = format!("room.entries[{i}]");
 
         // `kind` is the C# class name, which is the only thing that says how to
@@ -748,7 +756,7 @@ impl WireEntry {
     }
 }
 
-impl<V: ContentVersion> WireCombat<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireCombat<V> {
     fn into_domain(self) -> Result<Combat<V>, Error> {
         Ok(Combat {
             turn: domain_count("combat.turn", self.turn)?,
@@ -822,7 +830,7 @@ impl<V: ContentVersion> WireCombat<V> {
     }
 }
 
-impl<V: ContentVersion> WireCreature<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireCreature<V> {
     fn into_domain(self, i: usize) -> Result<Creature<V>, Error> {
         let path = format!("combat.creatures[{i}]");
 
@@ -892,7 +900,7 @@ impl<V: ContentVersion> WireCreature<V> {
     }
 }
 
-impl<V: ContentVersion> WireCarried<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireCarried<V> {
     fn into_domain(self) -> Carried<V> {
         Carried {
             relic: self.id,
@@ -902,7 +910,7 @@ impl<V: ContentVersion> WireCarried<V> {
     }
 }
 
-impl<V: ContentVersion> WireHeld<V> {
+impl<V: sts2_content_wire::WireContentVersion> WireHeld<V> {
     fn into_domain(self, i: usize) -> Result<Held<V>, Error> {
         let path = format!("potions[{i}]");
 
@@ -931,7 +939,7 @@ impl<V: ContentVersion> WireHeld<V> {
     }
 }
 
-impl<V: ContentVersion> WirePlayable<V> {
+impl<V: sts2_content_wire::WireContentVersion> WirePlayable<V> {
     fn into_domain(self, i: usize) -> Result<Playable<V>, Error> {
         let path = format!("combat.legal[{i}]");
 
@@ -990,7 +998,7 @@ impl<V: ContentVersion> WirePlayable<V> {
 ///
 /// `None` never reaches here. The oracle writes null for it, and the empty set
 /// is what that becomes.
-pub(crate) fn reasons<V: ContentVersion>(
+pub(crate) fn reasons<V: sts2_content_wire::WireContentVersion>(
     path: &str,
     text: &str,
 ) -> Result<V::UnplayableReasons, Error> {
@@ -1339,18 +1347,12 @@ mod tests {
             read("NEOW.pages.INITIAL.options.NEOWS_TALISMAN"),
             EventOptionKey {
                 event: neow,
-                option: EventOptionName::Relic(
+                option: sts2_content::v0_107_1::EventOptionId::Relic(
                     sts2_content::v0_107_1::relics::Relic::NeowsTalisman
                 ),
             }
         );
-        assert_eq!(
-            read("NEOW.pages.INITIAL.options.LEAVE"),
-            EventOptionKey {
-                event: neow,
-                option: EventOptionName::Said("LEAVE".into()),
-            }
-        );
+        assert!(std::panic::catch_unwind(|| read("NEOW.pages.INITIAL.options.LEAVE")).is_err());
 
         // The room already says which event this is. A key naming another one
         // is the observation saying two things at once.

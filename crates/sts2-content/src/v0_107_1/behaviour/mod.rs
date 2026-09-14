@@ -9,5 +9,6 @@
 
 pub(crate) mod cards;
 pub(crate) mod encounters;
+pub mod events;
 pub(crate) mod monsters;
 pub(crate) mod powers;

@@ -8,7 +8,6 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use sts2_core::ContentVersion;
 
 use crate::render::spelling;
 use crate::tui::names;
@@ -17,7 +16,7 @@ use crate::tui::theme;
 
 use super::{centred, widget};
 
-pub fn draw<V: ContentVersion>(
+pub fn draw<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
     roster: &[V::Character],

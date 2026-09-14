@@ -270,3 +270,13 @@ fn an_event_round_trips_through_its_wire_form() {
 
     assert!(serde_json::from_str::<Event>("\"NOT_AN_EVENT\"").is_err());
 }
+
+#[test]
+fn event_id_hashes_are_generated_from_the_wire_ids() {
+    for event in Event::ALL {
+        assert_eq!(
+            event.event_id_hash(),
+            sts2_core::rng::name_hash(&wire(event)) as u32
+        );
+    }
+}

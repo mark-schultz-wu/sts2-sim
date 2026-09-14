@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use sts2_core::ActMap as _;
 use sts2_core::{
-    CardIdent, CardTable, CharacterTable, Combat, ContentVersion, Decision, EncounterTable,
-    EventTable, Map, ModelId, MonsterTable, PotionTable, Question, RelicTable, RewardKind, Room,
-    Snapshot, Stock, Table, Take,
+    CardIdent, CardTable, CharacterTable, Combat, Decision, EncounterTable, EventTable, Map,
+    ModelId, MonsterTable, PotionTable, Question, RelicTable, RewardKind, Room, Snapshot, Stock,
+    Table, Take,
 };
 
 /// Every id play has touched, by kind.
@@ -57,7 +57,7 @@ pub struct Coverage {
 
 impl Coverage {
     /// Folds in everything one reply reported.
-    pub fn saw<V: ContentVersion>(&mut self, snapshot: &Snapshot<V>) {
+    pub fn saw<V: sts2_content_wire::WireContentVersion>(&mut self, snapshot: &Snapshot<V>) {
         if let Some(question) = &snapshot.asking {
             self.question(question);
         }
@@ -85,7 +85,11 @@ impl Coverage {
     /// The command carries an index and not an id. `play_card 3` says nothing
     /// about which card that was, so the state it was chosen from is what turns
     /// it back into content.
-    pub fn did<V: ContentVersion>(&mut self, command: &Decision<V>, from: &Snapshot<V>) {
+    pub fn did<V: sts2_content_wire::WireContentVersion>(
+        &mut self,
+        command: &Decision<V>,
+        from: &Snapshot<V>,
+    ) {
         let Decision::PlayCard { index, .. } = command else {
             return;
         };
@@ -103,7 +107,7 @@ impl Coverage {
     }
 
     /// The character a run was started as, which no observation reports.
-    pub fn started<V: ContentVersion>(&mut self, character: V::Character) {
+    pub fn started<V: sts2_content_wire::WireContentVersion>(&mut self, character: V::Character) {
         if let Some(id) = spelling(&character) {
             self.characters.insert(id);
         }
@@ -139,7 +143,7 @@ impl Coverage {
         self.rooms.extend(rooms);
     }
 
-    fn question<V: ContentVersion>(&mut self, question: &Question<V>) {
+    fn question<V: sts2_content_wire::WireContentVersion>(&mut self, question: &Question<V>) {
         match question {
             Question::SelectCards { options, .. } => {
                 self.cards_seen
@@ -175,7 +179,7 @@ impl Coverage {
 
     /// The type of the point stood on, which the map graph names and the
     /// position does not.
-    fn map<V: ContentVersion>(&mut self, map: &Map<V>) {
+    fn map<V: sts2_content_wire::WireContentVersion>(&mut self, map: &Map<V>) {
         let Some(here) = map.at else {
             return;
         };
@@ -186,7 +190,7 @@ impl Coverage {
         }
     }
 
-    fn room<V: ContentVersion>(&mut self, room: &Room<V>) {
+    fn room<V: sts2_content_wire::WireContentVersion>(&mut self, room: &Room<V>) {
         match room {
             Room::Event { event, options, .. } => {
                 self.events.extend(spelling(event));
@@ -227,7 +231,7 @@ impl Coverage {
         }
     }
 
-    fn combat<V: ContentVersion>(&mut self, combat: &Combat<V>) {
+    fn combat<V: sts2_content_wire::WireContentVersion>(&mut self, combat: &Combat<V>) {
         self.encounters
             .extend(combat.encounter.as_ref().and_then(spelling));
 
@@ -256,7 +260,7 @@ impl Coverage {
 /// The id alone, without the upgrade level or the affliction the identity
 /// carries. An upgraded Bash is a Bash for the purpose of "has a run ever seen
 /// this card". And `BASH+1` is not a card any table lists.
-fn cards<'a, V: ContentVersion + 'a>(
+fn cards<'a, V: sts2_content_wire::WireContentVersion + 'a>(
     pile: impl IntoIterator<Item = &'a CardIdent<V>>,
 ) -> Vec<String> {
     pile.into_iter()
@@ -323,7 +327,7 @@ pub struct Slice {
 type Keys<T> = Box<dyn Fn(T) -> Vec<String>>;
 
 /// Every axis with a table behind it, measured.
-pub fn report<V: ContentVersion>(coverage: &Coverage) -> Vec<Axis> {
+pub fn report<V: sts2_content_wire::WireContentVersion>(coverage: &Coverage) -> Vec<Axis> {
     let acts_of = |e: V::Encounter| spellings(EncounterTable::acts(e));
     let room_of = |e: V::Encounter| spellings(&[e.room()]);
     let card_pool = |c: V::Card| spellings(&c.pool().into_iter().collect::<Vec<_>>());
@@ -599,7 +603,7 @@ mod tests {
         assert!(reachable < encounters.total);
         assert_eq!(
             encounters.total - reachable,
-            <<V as ContentVersion>::Encounter as Table>::ALL
+            <<V as sts2_core::ContentVersion>::Encounter as Table>::ALL
                 .iter()
                 .filter(|e| EncounterTable::acts(**e).is_empty())
                 .count()

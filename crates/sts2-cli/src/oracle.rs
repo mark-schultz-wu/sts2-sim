@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use sts2_core::{ContentVersion, Snapshot};
+use sts2_core::Snapshot;
 use sts2_headless::daemon::{self, DEFAULT_IDLE_TIMEOUT};
 use sts2_headless::{Config, Recorded, Session, recording};
 
@@ -29,12 +29,12 @@ use crate::Readable;
 pub type Serving = fn(Duration, &str) -> Result<std::process::Command>;
 
 /// The daemon-held oracle, and every command about the machinery.
-pub struct Held<V: ContentVersion> {
+pub struct Held<V: sts2_content_wire::WireContentVersion> {
     serving: Serving,
     version: PhantomData<V>,
 }
 
-impl<V: ContentVersion> Held<V> {
+impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     pub fn new(serving: Serving) -> Held<V> {
         Held {
             serving,
@@ -167,7 +167,7 @@ impl<V: ContentVersion> Held<V> {
 /// # Errors
 ///
 /// The session refused the file.
-pub fn begin_recording<V: ContentVersion>(
+pub fn begin_recording<V: sts2_content_wire::WireContentVersion>(
     game: &Session<V>,
     path: PathBuf,
     append: bool,
@@ -191,7 +191,9 @@ pub fn begin_recording<V: ContentVersion>(
 /// differs from the first step on. The reader refuses one, so there is no
 /// check here. A [`Recording`](sts2_core::Recording) holds the run it started,
 /// and a fragment cannot be read into one.
-pub fn recorded<V: ContentVersion>(file: &Path) -> Result<sts2_core::Recording<V>> {
+pub fn recorded<V: sts2_content_wire::WireContentVersion>(
+    file: &Path,
+) -> Result<sts2_core::Recording<V>> {
     let opened =
         std::fs::File::open(file).with_context(|| format!("opening {}", file.display()))?;
     recording::read::<V>(std::io::BufReader::new(opened))
@@ -203,7 +205,11 @@ pub fn recorded<V: ContentVersion>(file: &Path) -> Result<sts2_core::Recording<V
 /// The rule line and the game's log are the protocol's and not the run's. So
 /// they are handed to the renderer rather than reached for by it. A front end
 /// driving something else prints the same page without them.
-pub fn readable<V: ContentVersion>(game: &Session<V>, snapshot: &Snapshot<V>, rng: bool) -> String {
+pub fn readable<V: sts2_content_wire::WireContentVersion>(
+    game: &Session<V>,
+    snapshot: &Snapshot<V>,
+    rng: bool,
+) -> String {
     let mut view = Readable::new(snapshot).logging(game.logged());
     if let Some((seq, cmd, digest)) = game.reported().and_then(envelope) {
         view = view.in_reply(seq, cmd, digest);

@@ -6,60 +6,70 @@
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const BATTLEWORN_DUMMY: EventData = EventData {
+    event_id_hash: 2564945393u32,
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const GRAVE_OF_THE_FORGOTTEN: EventData = EventData {
+    event_id_hash: 690949760u32,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const HUNGRY_FOR_MUSHROOMS: EventData = EventData {
+    event_id_hash: 3155106003u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const NONUPEIPE: EventData = EventData {
+    event_id_hash: 185712139u32,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const REFLECTIONS: EventData = EventData {
+    event_id_hash: 3213209028u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const ROUND_TEA_PARTY: EventData = EventData {
+    event_id_hash: 1727237228u32,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TANX: EventData = EventData {
+    event_id_hash: 2479364619u32,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const TINKER_TIME: EventData = EventData {
+    event_id_hash: 3422039877u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TRIAL: EventData = EventData {
+    event_id_hash: 1775136834u32,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const VAKUU: EventData = EventData {
+    event_id_hash: 3838353314u32,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,

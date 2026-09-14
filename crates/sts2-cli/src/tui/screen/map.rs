@@ -9,7 +9,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use sts2_core::{ContentVersion, Coord, Decision, Map, Play};
+use sts2_core::{Coord, Decision, Map, Play};
 
 use crate::render::spelling;
 use crate::tui::app::App;
@@ -19,7 +19,7 @@ use super::titled;
 
 pub fn draw<V, G>(frame: &mut Frame, area: Rect, app: &App<V, G>, map: &Map<V>)
 where
-    V: ContentVersion,
+    V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -41,7 +41,12 @@ where
 /// Draws the far end of the act at the top. Colour marks room type. Shape marks
 /// state. `@` is the current room, a digit is its travel key, and visited rooms
 /// are dim. The function adds no heading because overlays supply one.
-pub fn grid_of<V: ContentVersion>(frame: &mut Frame, inner: Rect, map: &Map<V>, at: usize) {
+pub fn grid_of<V: sts2_content_wire::WireContentVersion>(
+    frame: &mut Frame,
+    inner: Rect,
+    map: &Map<V>,
+    at: usize,
+) {
     if map.points.is_empty() || inner.height == 0 {
         return;
     }
@@ -133,7 +138,7 @@ fn legend() -> Vec<Span<'static>> {
 ///
 /// Numbered off the same list the keys act on. The digit beside a room is the
 /// digit that goes there, whatever else is on the screen.
-fn where_to<V: ContentVersion>(
+fn where_to<V: sts2_content_wire::WireContentVersion>(
     frame: &mut Frame,
     area: Rect,
     map: &Map<V>,
