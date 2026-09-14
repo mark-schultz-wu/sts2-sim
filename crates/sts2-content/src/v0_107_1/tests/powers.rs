@@ -12,6 +12,8 @@ use super::{build, rows, wire};
 use crate::Field;
 use sts2_core::Table;
 
+type Number = <super::super::V0_107_1 as sts2_core::ContentVersion>::Number;
+
 fn power(id: &str) -> Power {
     *Power::ALL
         .iter()
@@ -344,7 +346,7 @@ fn a_negative_amount_can_flip_a_powers_type() {
         }
     }
 
-    fn type_for(power: Power, amount: i32) -> PowerType {
+    fn type_for(power: Power, amount: Number) -> PowerType {
         let d = power.data();
         let (Field::Constant(kind), Field::Constant(stack)) = (d.kind, d.stack) else {
             panic!("{}: computes what this test wants to derive", wire(&power));

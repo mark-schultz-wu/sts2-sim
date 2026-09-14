@@ -85,10 +85,12 @@ mod tests {
     use sts2_core::EventView;
     use sts2_core::rng::GameRng;
 
+    type Number = <V as sts2_core::ContentVersion>::Number;
+
     #[derive(Default)]
     struct Run {
         act: u32,
-        gold: i32,
+        gold: Number,
         relics: Vec<Relic>,
     }
 
@@ -96,7 +98,7 @@ mod tests {
         fn act(&self) -> u32 {
             self.act
         }
-        fn gold(&self) -> i32 {
+        fn gold(&self) -> Number {
             self.gold
         }
         fn has_potion(&self) -> bool {
@@ -105,10 +107,10 @@ mod tests {
     }
 
     impl EventContext<V> for Run {
-        fn gold(&self) -> i32 {
+        fn gold(&self) -> Number {
             self.gold
         }
-        fn spend_gold(&mut self, amount: i32) -> bool {
+        fn spend_gold(&mut self, amount: Number) -> bool {
             if self.gold < amount {
                 return false;
             }

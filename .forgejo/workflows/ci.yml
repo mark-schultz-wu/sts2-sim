@@ -76,6 +76,11 @@ jobs:
       - name: Lint prose structure
         run: ./tools/prose-lint.py
 
+      - name: Lint domain number types
+        run: |
+          ./tools/domain-type-lint.py --self-test
+          ./tools/domain-type-lint.py
+
       # The whole repository, not only the lines this branch changed. The rules
       # hold everywhere, so a file that no commit here touches still has to
       # pass. `--self-test` runs first, because a rule that matches nothing
