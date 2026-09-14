@@ -74,22 +74,27 @@ struct RunData<V: Rules> {
 
 /// One relic the run carries, and what its own model saves.
 ///
-/// `RelicModel` is an instance per relic held, and the saved number is the
-/// state a hook reads and writes. A relic whose model saves nothing carries
-/// `None` for the whole run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `RelicModel` is an instance per relic held, and its saved fields outlive
+/// the fight they were written in. So the run carries them, and hands them
+/// back whenever a hook asks that relic something.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HeldRelic<V: Rules> {
     pub(crate) relic: V::Relic,
-    pub(crate) counter: Option<V::Number>,
+    pub(crate) state: V::RelicState,
 }
 
 impl<V: Rules> HeldRelic<V> {
-    /// The relic as a run picks it up, counting what its model counts.
+    /// The relic as a run picks it up, with its model as new as it is.
     pub(crate) fn new(relic: V::Relic) -> Self {
         Self {
             relic,
-            counter: V::relic_counter(relic),
+            state: V::new_relic(relic),
         }
+    }
+
+    /// The number it shows, which is `RelicModel.DisplayAmount`.
+    pub(crate) fn amount(&self) -> u16 {
+        V::relic_display_amount(self.relic, &self.state)
     }
 }
 
@@ -254,6 +259,16 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => Some(live),
             Phase::Neow { .. } | Phase::Rewards { .. } | Phase::Event { .. } => None,
         }
+    }
+
+    /// The belt as the relics in it stand, which a fight hands back written.
+    pub(super) fn relics(&self) -> &[HeldRelic<V>] {
+        &self.player.relics
+    }
+
+    /// Put the belt a fight handed back in place of the one it was given.
+    pub(super) fn hold(&mut self, relics: Vec<HeldRelic<V>>) {
+        self.player.relics = relics.into_iter().collect();
     }
 
     /// Put the fight a decision left behind in place of the one it acted on.
@@ -455,9 +470,11 @@ impl<V: Rules> State<V> {
             amount,
             self.raw_seed(),
             &self.counters(),
+            self.relics(),
         )?;
 
         self.drew(applied.counters);
+        self.hold(applied.relics);
         self.fought(applied.live);
         Ok(self.report())
     }
@@ -757,6 +774,7 @@ impl<V: Rules> State<V> {
                     .iter()
                     .map(|held| Carried {
                         relic: held.relic,
+                        amount: held.amount(),
                         title: None,
                         text: None,
                     })
@@ -984,6 +1002,56 @@ mod tests {
                 .any(|held| held.relic == Relic::BoneTea),
             "a spent relic stays in the belt"
         );
+    }
+
+    /// `Pocketwatch` counts the cards a turn plays, and pays the quiet ones.
+    ///
+    /// Three more cards next turn for a turn that played at most three, which
+    /// is `ModifyHandDraw` reading the count this rotates at every turn start.
+    #[test]
+    fn pocketwatch_counts_a_turns_plays_and_draws_on_a_quiet_one() {
+        use sts2_content::v0_107_1::cards::{Cards, RegentCard};
+        use sts2_content::v0_107_1::encounters::Encounter;
+        use sts2_content::v0_107_1::relics::Relic;
+        use sts2_core::fixture::{at, hand};
+
+        let mut run = opened();
+        run.player.relics.push(HeldRelic::new(Relic::Pocketwatch));
+        run.player.deck =
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20).collect();
+        run.fight_here(Encounter::SlimesWeak)
+            .expect("the simulator can build this fight");
+
+        let shown = |run: &State<V>| {
+            let observation = run.report().observation;
+            let relic = observation
+                .relics
+                .iter()
+                .find(|carried| carried.relic == Relic::Pocketwatch)
+                .expect("the belt holds the relic");
+            relic.amount
+        };
+        assert_eq!(shown(&run), 0, "nothing has been played yet");
+
+        run.play_card(hand(0), Some(at(1)))
+            .expect("a Strike is ported")
+            .expect("and is legal here");
+        assert_eq!(shown(&run), 1, "one card played this turn");
+
+        run.end_turn()
+            .expect("the simulator can end this turn")
+            .expect("and the turn is not refused");
+        let combat = run
+            .report()
+            .observation
+            .combat
+            .expect("the run is still in the fight");
+        assert_eq!(
+            combat.hand.len(),
+            8,
+            "five printed, three for the quiet turn"
+        );
+        assert_eq!(shown(&run), 0, "the new turn has played nothing");
     }
 
     /// A fight takes the player's hit points with it, and hands them back.

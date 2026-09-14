@@ -12,10 +12,9 @@ use sts2_core::{CardTable, CombatId, Counters, PowerAmount, Rules, SideKinds, Tu
 
 use super::board::{Board, draw};
 use super::live::Live;
+use super::relic;
+use super::start::{hand_size, upgraded};
 use super::{Error, stream};
-
-/// How many cards a hand is drawn to, which is `baseHandDrawCount`.
-const HAND_DRAW: usize = 5;
 
 /// End the player's turn and set up the next one.
 pub(crate) fn end<V: Rules>(
@@ -24,8 +23,10 @@ pub(crate) fn end<V: Rules>(
     ascension: V::AscensionLevel,
     counters: &Counters<V>,
     max_energy: V::Count,
+    relics: &[crate::run::HeldRelic<V>],
 ) -> Result<super::Fought<V>, Error> {
     let mut next = live.clone();
+    let mut relics = relics.to_vec();
     let mut skipping = std::mem::take(&mut next.skip_tick);
     let mut counters = counters.clone();
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
@@ -64,7 +65,14 @@ pub(crate) fn end<V: Rules>(
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
     next.energy = max_energy;
     spend_on_energy_reset(&mut next);
-    draw(&mut next, &mut shuffle, HAND_DRAW);
+
+    // `BeforeSideTurnStart`, which is where a relic counting a turn's plays
+    // moves the count on, then the draw that reads it.
+    relic::turn_starting::<V>(&mut relics, next.turn);
+    let drawn = hand_size::<V>(&relics, next.turn);
+    draw(&mut next, &mut shuffle, drawn);
+    let started = relic::turn_started::<V>(&mut relics, next.turn);
+    upgraded::<V>(&mut next.hand, started);
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
@@ -72,9 +80,13 @@ pub(crate) fn end<V: Rules>(
     stream::record(&mut counters, V::monster_ai_rng(), "monster_ai", &ai)?;
     stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
     next.skip_tick = skipping;
+    if won {
+        relic::combat_ended::<V>(&mut relics);
+    }
     Ok(super::Fought {
         live: next,
         counters,
+        relics,
         won,
     })
 }

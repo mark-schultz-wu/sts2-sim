@@ -24,6 +24,7 @@ mod event_options;
 mod generated;
 
 pub use behaviour::events::State as EventState;
+pub use behaviour::relics::State as RelicState;
 pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
 pub use generated::*;
 
@@ -80,6 +81,8 @@ impl sts2_core::ContentVersion for V0_107_1 {
 
 /// Dispatch the hook shapes this simulator can execute.
 impl sts2_core::Hooks for V0_107_1 {
+    type RelicState = behaviour::relics::State;
+
     fn modify_hook(
         listener: sts2_core::ModelId<Self>,
         hook: sts2_core::ModifyHook<Self>,
@@ -104,15 +107,34 @@ impl sts2_core::Hooks for V0_107_1 {
         listener: sts2_core::ModelId<Self>,
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
-        match listener {
-            sts2_core::ModelId::Power(power) => behaviour::powers::event_hook(power, hook),
-            sts2_core::ModelId::Relic(relic) => behaviour::relics::event_hook(relic, hook),
-            _ => Vec::new(),
-        }
+        let sts2_core::ModelId::Power(power) = listener else {
+            return Vec::new();
+        };
+        behaviour::powers::event_hook(power, hook)
     }
 
-    fn relic_counter(relic: Self::Relic) -> Option<Self::Number> {
-        behaviour::relics::counter(relic)
+    fn new_relic(relic: Self::Relic) -> Self::RelicState {
+        behaviour::relics::new(relic)
+    }
+
+    fn relic_event_hook(
+        relic: Self::Relic,
+        state: &mut Self::RelicState,
+        hook: sts2_core::EventHook<Self>,
+    ) -> Vec<sts2_core::HookEffect<Self>> {
+        behaviour::relics::event_hook(relic, state, hook)
+    }
+
+    fn relic_modify_hook(
+        relic: Self::Relic,
+        state: &Self::RelicState,
+        hook: sts2_core::ModifyHook<Self>,
+    ) -> sts2_core::Modify<Self::Number> {
+        behaviour::relics::modify_hook(relic, state, hook)
+    }
+
+    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> u16 {
+        behaviour::relics::display_amount(relic, state)
     }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.

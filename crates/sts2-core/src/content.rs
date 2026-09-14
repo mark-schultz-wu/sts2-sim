@@ -840,6 +840,9 @@ pub enum ModifyHook<V: ContentVersion> {
     },
     /// The model can change block gained by its owner.
     Block { amount: PowerAmount<V::Number> },
+    /// The model can change how many cards its owner draws to open a turn,
+    /// which is `ModifyHandDraw`.
+    HandDraw { count: V::Number, turn: V::Count },
 }
 
 /// A yes-or-no hook the simulator asks one content model.
@@ -854,12 +857,19 @@ pub enum DecisionHook {
 pub enum EventHook<V: ContentVersion> {
     /// `AfterRoomEntered`, for a room the run fights in.
     CombatRoomEntered,
+    /// `AfterCombatEnd`, for the fight the run has just finished.
+    CombatEnd,
+    /// `AfterCardPlayed`, for a card its owner played.
+    CardPlayed,
+    /// `BeforeSideTurnStart`, which runs before the side draws anything.
+    BeforeSideTurnStart {
+        side: V::CombatSide,
+        turn: V::Count,
+    },
+    /// `AfterSideTurnStart`, which runs once the side has drawn.
     SideTurnStart {
         side: V::CombatSide,
         turn: V::Count,
-        /// What the listener's own model has counted down to, which is
-        /// [`Hooks::relic_counter`] as this fight found it.
-        counter: Option<V::Number>,
     },
     SideTurnEnd {
         side: V::CombatSide,
@@ -881,8 +891,6 @@ pub enum HookEffect<V: ContentVersion> {
     GainStars(V::Number),
     /// `CardCmd.Upgrade` over every card in the hand.
     UpgradeHand,
-    /// What the listener's own model has counted down to, after it acted.
-    SetCounter(V::Number),
     TickDownDuration,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
@@ -894,6 +902,9 @@ pub enum HookEffect<V: ContentVersion> {
 /// The enums begin with only the hook shapes the simulator can execute. They
 /// grow as behavior reaches another hook, without widening this trait.
 pub trait Hooks: ContentVersion {
+    /// What one relic's own model saves, which the run carries for it.
+    type RelicState: Clone + std::fmt::Debug + PartialEq + Eq;
+
     fn modify_hook(listener: crate::ModelId<Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
     fn decide_hook(listener: crate::ModelId<Self>, hook: DecisionHook)
@@ -901,14 +912,37 @@ pub trait Hooks: ContentVersion {
 
     fn event_hook(listener: crate::ModelId<Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
 
-    /// What a relic's own model saves, as the run picks it up.
+    /// One relic's model as the run picks it up.
     ///
-    /// `RelicModel`'s `[SavedProperty]` fields, of which the simulator models
-    /// the one number a relic counts. Bone Tea opens at the one combat it
-    /// upgrades a hand for, and spends it there.
+    /// A relic is the one model the simulator keeps state for. A `RelicModel`
+    /// is an instance per relic held, and its `[SavedProperty]` fields outlive
+    /// the fight they were written in. Every other model is handed what it
+    /// holds: a power's amount arrives in the hook.
+    fn new_relic(relic: Self::Relic) -> Self::RelicState;
+
+    /// Deliver a notification to one relic, which answers as its own model.
     ///
-    /// `None` is a relic whose model saves nothing, which is most of them.
-    fn relic_counter(relic: Self::Relic) -> Option<Self::Number>;
+    /// The state is the relic's to write, the way an override writes the
+    /// fields of the instance it runs on.
+    fn relic_event_hook(
+        relic: Self::Relic,
+        state: &mut Self::RelicState,
+        hook: EventHook<Self>,
+    ) -> Vec<HookEffect<Self>>;
+
+    /// Ask one relic to change a value, which is the same question
+    /// [`Hooks::modify_hook`] asks a power.
+    fn relic_modify_hook(
+        relic: Self::Relic,
+        state: &Self::RelicState,
+        hook: ModifyHook<Self>,
+    ) -> Modify<Self::Number>;
+
+    /// The number a relic shows, which is `RelicModel.DisplayAmount`.
+    ///
+    /// Every relic has one, and the table answers for the ones that print a
+    /// constant. A relic that works it out and nobody has ported panics here.
+    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> u16;
 }
 
 /// What a power does when one side's turn ends, which is its

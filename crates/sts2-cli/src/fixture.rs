@@ -73,7 +73,7 @@ fn fill(state: &mut Value) {
     // here into the shape the mod sends; a fixture that *is* about one writes
     // the object and keeps whatever it wrote.
     for relic in state["relics"].as_array_mut().into_iter().flatten() {
-        let mut base = json!({"id": null, "title": null, "text": null});
+        let mut base = json!({"id": null, "amount": 0, "title": null, "text": null});
         merge(&mut base, named(relic.take()));
         *relic = base;
     }

@@ -376,6 +376,8 @@ struct WireEntry {
 #[serde(deny_unknown_fields, bound = "")]
 struct WireCarried<V: sts2_content_wire::WireContentVersion> {
     id: V::Relic,
+    /// `RelicModel.DisplayAmount`, which is the number the relic shows.
+    amount: u16,
     title: Option<String>,
     text: Option<String>,
 }
@@ -904,6 +906,7 @@ impl<V: sts2_content_wire::WireContentVersion> WireCarried<V> {
     fn into_domain(self) -> Carried<V> {
         Carried {
             relic: self.id,
+            amount: self.amount,
             title: self.title,
             text: self.text,
         }
@@ -1076,7 +1079,8 @@ mod tests {
         json!({
             "act": 0, "floor": 1, "hp": 80, "maxHp": 80, "alive": true,
             "runOver": false, "victory": null, "gold": 99,
-            "relics": [{"id": "BURNING_BLOOD", "title": "Burning Blood",
+            "relics": [{"id": "BURNING_BLOOD", "amount": 0,
+                        "title": "Burning Blood",
                         "text": "At the end of combat, heal 6 HP."}],
             "potions": [{"id": "FIRE_POTION", "title": "Fire Potion",
                          "text": "Deal 20 damage.", "usable": false,
@@ -1178,6 +1182,7 @@ mod tests {
             panic!("one relic")
         };
         assert_eq!(relic.title.as_deref(), Some("Burning Blood"));
+        assert_eq!(relic.amount, 0, "a relic that counts nothing shows zero");
         assert_eq!(
             relic.text.as_deref(),
             Some("At the end of combat, heal 6 HP.")
@@ -1190,7 +1195,7 @@ mod tests {
     fn a_relic_with_no_words_keeps_its_id() {
         let state = with(
             "relics",
-            json!([{"id": "AKABEKO", "title": null, "text": null}]),
+            json!([{"id": "AKABEKO", "amount": 0, "title": null, "text": null}]),
         );
         let obs = parse(&state).expect("a nameless relic still parses");
 

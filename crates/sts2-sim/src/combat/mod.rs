@@ -8,6 +8,7 @@ mod legal;
 mod live;
 mod monster;
 mod play;
+mod relic;
 mod start;
 mod stream;
 mod turn;
@@ -27,6 +28,10 @@ use sts2_core::Rules;
 pub(crate) struct Fought<V: Rules> {
     pub(crate) live: Live<V>,
     pub(crate) counters: sts2_core::Counters<V>,
+    /// The belt as the relics in it left it. They are notified inside the
+    /// fight and their models save what they counted, so the run writes these
+    /// back beside the fight or neither.
+    pub(crate) relics: Vec<crate::run::HeldRelic<V>>,
     /// The last enemy left the fight, so this decision won it.
     pub(crate) won: bool,
 }

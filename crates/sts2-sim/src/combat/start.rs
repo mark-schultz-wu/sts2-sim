@@ -1,12 +1,12 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CombatId, Counters, Creature, EventHook, HookEffect, ModelId, Observation, Rules, SideKinds,
-    TurnPhaseKinds,
+    CombatId, Counters, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules,
+    SideKinds, TurnPhaseKinds,
 };
 
 use super::live::{CardInstance, Live};
-use super::{Error, encounter, monster, pile, stream};
+use super::{Error, encounter, monster, pile, relic, stream};
 use crate::run::HeldRelic;
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
@@ -52,17 +52,24 @@ pub(crate) fn enter<V: Rules>(
         .iter()
         .map(|card| CardInstance::new(*card))
         .collect();
+    // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
+    // turn the fight is about to begin on. Both run before anything is drawn.
+    let turn: V::Count = num_traits::one();
+    let mut stars: V::Count = num_traits::zero();
+    for effect in relic::notify::<V>(relics, EventHook::CombatRoomEntered) {
+        match effect {
+            HookEffect::GainStars(gained) => stars = stars + count::<V>(gained),
+            other => unimplemented!("a relic asking for {other:?} as a room opens"),
+        }
+    }
+    relic::turn_starting::<V>(relics, turn);
+
     let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
-    let piles = pile::shuffle(&mut shuffle, deck).deal(HAND_SIZE);
+    let piles = pile::shuffle(&mut shuffle, deck).deal(hand_size::<V>(relics, turn));
     stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
 
     let mut hand = piles.hand().to_vec();
-    let opened = opening_hooks::<V>(relics);
-    if opened.upgrade_hand {
-        for card in &mut hand {
-            card.upgrade();
-        }
-    }
+    upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));
 
     let energy: V::Count = num_traits::cast(V::max_energy(character))
         .expect("the starting energy fits the build's count type");
@@ -73,7 +80,7 @@ pub(crate) fn enter<V: Rules>(
             turn: num_traits::one(),
             phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
             energy,
-            stars: opened.stars,
+            stars,
             round: num_traits::one(),
             encounter,
             hand,
@@ -92,52 +99,32 @@ pub(crate) fn enter<V: Rules>(
     ))
 }
 
-/// What the relics a run carries do as it walks into a fight.
+/// How many cards the fight's first hand is drawn to.
 ///
-/// Two hooks, in the order the game runs them: `AfterRoomEntered` as the room
-/// opens, then `AfterSideTurnStart` for the player's first turn. The fight is
-/// not built yet, so that turn is the one [`Live`] opens on.
-///
-/// A relic that acts writes its own counter back. That is why this takes the
-/// run's relics and not the observation's.
-fn opening_hooks<V: Rules>(relics: &mut [HeldRelic<V>]) -> Opened<V> {
-    let mut opened = Opened {
-        stars: num_traits::zero(),
-        upgrade_hand: false,
-    };
-    for held in relics {
-        let hooks = [
-            EventHook::CombatRoomEntered,
-            EventHook::SideTurnStart {
-                side: <V::CombatSide as SideKinds>::PLAYER,
-                turn: num_traits::one(),
-                counter: held.counter,
-            },
-        ];
-        for effect in hooks
-            .into_iter()
-            .flat_map(|hook| <V as sts2_core::Hooks>::event_hook(ModelId::Relic(held.relic), hook))
-        {
-            match effect {
-                HookEffect::GainStars(stars) => {
-                    let stars: V::Count = num_traits::cast(stars).unwrap_or_else(|| {
-                        unimplemented!("a {:?} worth {stars:?} stars", held.relic)
-                    });
-                    opened.stars = opened.stars + stars;
-                }
-                HookEffect::UpgradeHand => opened.upgrade_hand = true,
-                HookEffect::SetCounter(counter) => held.counter = Some(counter),
-                other => unimplemented!("a relic asking for {other:?} as a fight opens"),
-            }
-        }
-    }
-    opened
+/// `ModifyHandDraw` over the belt, from `baseHandDrawCount`. The relics that
+/// answer it read the turn, and the first turn of a fight follows no other.
+pub(super) fn hand_size<V: Rules>(relics: &[HeldRelic<V>], turn: V::Count) -> usize {
+    let base: V::Number =
+        num_traits::cast(HAND_SIZE).expect("the printed hand size fits the build's game number");
+    let drawn = relic::modified::<V>(relics, ModifyHook::HandDraw { count: base, turn }, base);
+    num_traits::cast(drawn).unwrap_or_else(|| unimplemented!("a hand of {drawn:?} cards"))
 }
 
-/// What the opening hooks did, as the fight being built reads it.
-struct Opened<V: Rules> {
-    /// `PlayerCmd.GainStars`, summed over the relics that gave any.
-    stars: V::Count,
-    /// Whether the opening hand is upgraded before the player sees it.
-    upgrade_hand: bool,
+/// One number a relic gave, as the count the fight keeps it in.
+fn count<V: Rules>(amount: V::Number) -> V::Count {
+    num_traits::cast(amount).unwrap_or_else(|| unimplemented!("a relic worth {amount:?}"))
+}
+
+/// Apply what the relics asked for once a hand was dealt to them.
+pub(super) fn upgraded<V: Rules>(hand: &mut [CardInstance<V>], effects: Vec<HookEffect<V>>) {
+    for effect in effects {
+        match effect {
+            HookEffect::UpgradeHand => {
+                for card in hand.iter_mut() {
+                    card.upgrade();
+                }
+            }
+            other => unimplemented!("a relic asking for {other:?} as a turn starts"),
+        }
+    }
 }

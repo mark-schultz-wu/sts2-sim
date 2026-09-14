@@ -258,7 +258,7 @@ impl<'a, V: Rules> Board<'a, V> {
 /// involved. The callers below ask only the creatures the hook is about, which
 /// is narrower. Nothing ported so far modifies a number it is not standing on
 /// one side of.
-fn hooked<V: Rules>(
+pub(super) fn hooked<V: Rules>(
     amount: V::Number,
     hooks: impl Iterator<Item = Modify<V::Number>>,
 ) -> V::Number {
