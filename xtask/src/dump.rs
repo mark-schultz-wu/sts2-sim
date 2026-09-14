@@ -39,7 +39,7 @@ const DUMPS: &[(&str, Destination)] = &[
     ("relicdump", Content("relics.txt")),
     ("restsitedump", Content("restsite.txt")),
     ("runstatedump", Content("runstate.txt")),
-    ("rngdump", At("crates/sts2-core/tests/megarandom.txt")),
+    ("rngdump", At("crates/sts2-sim/tests/rng/megarandom.txt")),
     ("setupdump", At("crates/sts2-golden/tests/setup.txt")),
 ];
 

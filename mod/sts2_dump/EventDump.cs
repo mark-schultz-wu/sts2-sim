@@ -37,46 +37,95 @@ namespace Sts2Dump;
 /// </remarks>
 public static class EventDump
 {
+    /// <summary>Neow's own option lists, which are code and not a table.</summary>
+    /// <remarks>
+    /// <c>GenerateInitialOptions</c> picks one curse, drops the positive that
+    /// pairs with it, adds one of each of three pairs on a coin flip, shuffles,
+    /// and takes two. Which relics are in which list is hard-coded in the
+    /// event, so reflection is the only way to read it without retyping it.
+    ///
+    /// The lists are ordered because both are shuffled or indexed into.
+    /// </remarks>
+    private static void Neow(StringBuilder output)
+    {
+        EventModel neow = ModelDb.Event<MegaCrit.Sts2.Core.Models.Events.Neow>();
+        foreach (string list in new[]
+        {
+            "CurseOptions", "PositiveOptions", "LavaRockOption", "SmallCapsuleOption",
+            "NutritiousOysterOption", "StoneHumidifierOption", "NeowsTalismanOption",
+            "PomanderOption",
+        })
+        {
+            PropertyInfo property = typeof(MegaCrit.Sts2.Core.Models.Events.Neow).GetProperty(
+                list, BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException($"Neow has no {list} any more");
+
+            object? value = property.GetValue(neow);
+            IEnumerable<EventOption> options = value is EventOption one
+                ? new[] { one }
+                : (IEnumerable<EventOption>)value!;
+
+            int at = 0;
+            foreach (EventOption option in options)
+            {
+                RelicModel relic = option.Relic
+                    ?? throw new InvalidOperationException($"Neow's {list} holds a relicless option");
+                output.Append($"neow {list} {at} {relic.Id.Entry}\n");
+                at++;
+            }
+        }
+    }
+
+    /// <summary>One list, numbered, in the order the game holds it.</summary>
+    /// <remarks>
+    /// The index is what makes the order legible. A reader cannot tell an
+    /// ordered list from a sorted one by looking, and this one is load bearing.
+    /// </remarks>
+    private static void Ordered<T>(
+        StringBuilder output, string kind, string? act, IEnumerable<T> items)
+        where T : EventModel
+    {
+        int at = 0;
+        foreach (T item in items)
+        {
+            string where = act == null ? "" : act + " ";
+            output.Append($"{kind} {where}{at} {item.Id.Entry}\n");
+            at++;
+        }
+    }
+
     public static void Run()
     {
         var output = new StringBuilder();
 
         output.Append(Stamp.Header("event"));
-        output.Append("# act <act> <event>\n");
-        output.Append("# sharedpool <event>\n");
+        output.Append("# act <act> <index> <event> -- the act's own order, not sorted\n");
+        output.Append("# ancient <act> <index> <event> -- likewise, the act's ancients\n");
+        output.Append("# sharedpool <index> <event> -- the any-act pool, in order\n");
+        output.Append("# sharedancient <index> <event> -- the run's shared ancients\n");
         output.Append("# event <id> <ancient> <isShared> <isDeterministic> <layout> ");
         output.Append("<canonicalEncounter> <gated>\n");
+        output.Append("# neow <list> <index> <relic> -- Neow's option lists, in order\n");
 
         List<EventModel> events = AllEvents();
 
         // An act's two lists. `AllEvents` and `AllAncients` are separate on
-        // `ActModel`, and a map rolls from them separately, so the row says
-        // which act offers an event and the `ancient` column says from where.
+        // `ActModel`, and a map rolls from them separately, so they are two
+        // kinds of row here rather than one with a column saying which.
+        //
+        // In the act's own order, and not sorted. `GenerateRooms` shuffles the
+        // event list, and a shuffle is a permutation of what it was handed, so
+        // sorting these first is generating a different run.
         foreach (ActModel act in ModelDb.Acts)
         {
-            var offered = act.AllEvents
-                .Cast<EventModel>()
-                .Concat(act.AllAncients)
-                .Where(e => e != null)
-                .Select(e => e.Id.Entry)
-                .Distinct()
-                .OrderBy(id => id, StringComparer.Ordinal);
-
-            foreach (string id in offered)
-            {
-                output.Append($"act {act.Id.Entry} {id}\n");
-            }
+            Ordered(output, "act", act.Id.Entry, act.AllEvents.Where(e => e != null));
+            Ordered(output, "ancient", act.Id.Entry, act.AllAncients.Where(e => e != null));
         }
 
-        foreach (string id in ModelDb.AllSharedEvents
-            .Cast<EventModel>()
-            .Concat(ModelDb.AllSharedAncients)
-            .Select(e => e.Id.Entry)
-            .Distinct()
-            .OrderBy(id => id, StringComparer.Ordinal))
-        {
-            output.Append($"sharedpool {id}\n");
-        }
+        Ordered(output, "sharedpool", null, ModelDb.AllSharedEvents);
+        Ordered(output, "sharedancient", null, ModelDb.AllSharedAncients);
+
+        Neow(output);
 
         foreach (EventModel model in events)
         {

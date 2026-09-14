@@ -5,10 +5,14 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
+using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Unlocks;
 
 namespace Sts2Dump;
 
@@ -56,6 +60,30 @@ public static class CardDump
         output.Append(Stamp.Header("card"));
         output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords>\n");
         output.Append("# var <card> <name> <base> <calculated>\n");
+        output.Append("# pool <pool> <index> <card>\n");
+        output.Append("# rewardpool <character> <index> <card>\n");
+
+        foreach (CardPoolModel pool in ModelDb.AllCardPools.OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
+        {
+            int index = 0;
+            foreach (CardModel card in pool.AllCards)
+            {
+                output.Append($"pool {pool.Id.Entry} {index} {card.Id.Entry}\n");
+                index++;
+            }
+        }
+
+        foreach (CharacterModel character in ModelDb.AllCharacters.Where(c => c.IsPlayable))
+        {
+            Player player = Player.CreateForNewRun(character, UnlockState.all, 1uL);
+            CardCreationOptions options = CardCreationOptions.ForRoom(player, RoomType.Monster);
+            int index = 0;
+            foreach (CardModel card in options.GetPossibleCards(player))
+            {
+                output.Append($"rewardpool {character.Id.Entry} {index} {card.Id.Entry}\n");
+                index++;
+            }
+        }
 
         List<CardModel> cards = ModelDb.AllCards
             .OrderBy(c => c.Id.Entry, StringComparer.Ordinal)
