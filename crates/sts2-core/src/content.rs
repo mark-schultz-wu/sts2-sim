@@ -152,6 +152,9 @@ pub trait EventTable: Table {
     /// An act offers these and its ordinary events from two different lists,
     /// so room generation has to tell them apart.
     fn ancient(self) -> bool;
+
+    /// The event id's deterministic hash, already cast for seed arithmetic.
+    fn event_id_hash(self) -> u32;
 }
 
 /// What a table says about a monster, beyond its row.

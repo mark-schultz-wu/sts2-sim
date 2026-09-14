@@ -96,6 +96,7 @@ impl sts2_core::FlagSet for EventFlags {
 /// What is true of an event with no run in progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventData {
+    pub event_id_hash: u32,
     pub flags: EventFlags,
     /// Which layout the room draws. `Ancient` is the nine
     /// `AncientEventModel`s and `Combat` the three that open into a
@@ -527,6 +528,11 @@ impl sts2_core::EventTable for Event {
     /// One of the nine ancients, which an act draws separately.
     fn ancient(self) -> bool {
         <Self as sts2_core::Table>::data(self).layout == EventLayoutType::Ancient
+    }
+
+    /// The event id hash used by its private RNG.
+    fn event_id_hash(self) -> u32 {
+        <Self as sts2_core::Table>::data(self).event_id_hash
     }
 }
 /// Every event in an act's own events, in the act's own order.

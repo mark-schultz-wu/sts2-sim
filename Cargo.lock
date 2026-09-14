@@ -1505,7 +1505,6 @@ dependencies = [
  "indexmap",
  "nonmax",
  "num-traits",
- "serde_json",
  "smallvec",
  "sts2-content",
  "sts2-core",
