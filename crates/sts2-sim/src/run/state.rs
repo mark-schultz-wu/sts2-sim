@@ -9,7 +9,7 @@ use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
     EventOption, EventOptionKey, EventOptionKinds, Map, Observation, Question, Reachable,
-    RewardCard, RewardDetail, RewardKind, Room, Rules, Seed, Table, TakeReward,
+    RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, Seed, Table, TakeReward,
 };
 
 use crate::combat::Error;
@@ -88,13 +88,13 @@ impl<V: Rules> HeldRelic<V> {
     pub(crate) fn new(relic: V::Relic) -> Self {
         Self {
             relic,
-            state: V::new_relic(relic),
+            state: <V::RelicState as sts2_core::RelicModel<V>>::new(relic),
         }
     }
 
     /// The number it shows, which is `RelicModel.DisplayAmount`.
     pub(crate) fn amount(&self) -> V::Number {
-        V::relic_display_amount(self.relic, &self.state)
+        self.state.display_amount(self.relic)
     }
 }
 

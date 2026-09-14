@@ -116,14 +116,6 @@ impl sts2_core::Hooks for V0_107_1 {
             sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
         }
     }
-
-    fn new_relic(relic: Self::Relic) -> Self::RelicState {
-        behaviour::relics::new(relic)
-    }
-
-    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> Self::Number {
-        behaviour::relics::display_amount(relic, state)
-    }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
 /// Until then this build is its tables and no more.

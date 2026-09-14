@@ -897,6 +897,28 @@ pub enum HookEffect<V: ContentVersion> {
     InstallMove(crate::NextMove<V>),
 }
 
+/// One build's relic models, which is what a run holds a relic as.
+///
+/// `RelicModel` is an instance per relic held, and this is the type of that
+/// instance. The two things a run asks one without giving it a hook: build it,
+/// and read the number it shows.
+pub trait RelicModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
+    /// The model as `RelicCmd.Obtain` builds it.
+    ///
+    /// # Panics
+    ///
+    /// A relic nobody has ported. A run carrying one skips it at every later
+    /// hook, which is a divergence with no name on it.
+    fn new(relic: V::Relic) -> Self;
+
+    /// `RelicModel.DisplayAmount`, which is the number the relic shows.
+    ///
+    /// # Panics
+    ///
+    /// A relic that works its number out and nobody has ported.
+    fn display_amount(&self, relic: V::Relic) -> V::Number;
+}
+
 /// One model instance a hook is delivered to, with what that instance saves.
 ///
 /// `AbstractModel`'s subclasses read their own fields off `this`. A power's
@@ -919,27 +941,13 @@ pub enum Listener<'a, V: Hooks> {
 /// grow as behavior reaches another hook, without widening this trait.
 pub trait Hooks: ContentVersion {
     /// What one relic's own model saves, which the run carries for it.
-    type RelicState: Clone + std::fmt::Debug + PartialEq + Eq;
+    type RelicState: RelicModel<Self>;
 
     fn modify_hook(listener: Listener<'_, Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
     fn decide_hook(listener: Listener<'_, Self>, hook: DecisionHook) -> crate::HookResponse<bool>;
 
     fn event_hook(listener: Listener<'_, Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
-
-    /// One relic's model as the run picks it up.
-    ///
-    /// A relic is the one model the run keeps between fights. A `RelicModel`
-    /// is an instance per relic held, and its `[SavedProperty]` fields outlive
-    /// the fight they were written in. A power's stack is the creature's, and
-    /// dies with the fight.
-    fn new_relic(relic: Self::Relic) -> Self::RelicState;
-
-    /// The number a relic shows, which is `RelicModel.DisplayAmount`.
-    ///
-    /// Every relic has one, and the table answers for the ones that print a
-    /// constant. A relic that works it out and nobody has ported panics here.
-    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> Self::Number;
 }
 
 /// What a power does when one side's turn ends, which is its

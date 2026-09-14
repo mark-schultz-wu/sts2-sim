@@ -41,23 +41,6 @@ pub enum State {
     Pocketwatch(pocketwatch::State),
 }
 
-/// One relic's model as the run picks it up.
-///
-/// # Panics
-///
-/// A relic nobody has ported. Every later hook skips such a relic in silence,
-/// which is a divergence with no name on it.
-pub(crate) fn new(relic: Relic) -> State {
-    match relic {
-        Relic::Anchor => State::Anchor,
-        Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
-        Relic::DivineRight => State::DivineRight,
-        Relic::LeadPaperweight => State::LeadPaperweight,
-        Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
-        relic => unimplemented!("what {relic:?} does in a run that carries it"),
-    }
-}
-
 /// Deliver a notification to one relic.
 pub(crate) fn event_hook(state: &mut State, hook: EventHook<V>) -> Effects {
     match state {
@@ -80,23 +63,40 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
     }
 }
 
-/// The number a relic shows, which is `RelicModel.DisplayAmount`.
-///
-/// The table answers for a relic that prints a constant, and the rest work it
-/// out from what they saved.
-///
-/// # Panics
-///
-/// A relic that works its number out and nobody has ported.
-pub(crate) fn display_amount(relic: Relic, state: &State) -> Number {
-    match Table::data(relic).display_amount {
-        // The table holds the column's own width, and a relic counts in the
-        // build's game number. Widening here is the only place the two meet.
-        Field::Constant(amount) => Number::from(amount),
-        Field::Computed => match state {
-            State::BoneTea(state) => bone_tea::display_amount(state),
-            State::Pocketwatch(state) => pocketwatch::display_amount(state),
-            _ => unimplemented!("the number {relic:?} shows"),
-        },
+impl sts2_core::RelicModel<V> for State {
+    /// One relic's model as the run picks it up.
+    ///
+    /// # Panics
+    ///
+    /// A relic nobody has ported.
+    fn new(relic: Relic) -> Self {
+        match relic {
+            Relic::Anchor => State::Anchor,
+            Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
+            Relic::DivineRight => State::DivineRight,
+            Relic::LeadPaperweight => State::LeadPaperweight,
+            Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
+            relic => unimplemented!("what {relic:?} does in a run that carries it"),
+        }
+    }
+
+    /// `DisplayAmount`. The table answers for a relic that prints a constant,
+    /// and the rest work it out from what they saved.
+    ///
+    /// # Panics
+    ///
+    /// A relic that works its number out and nobody has ported.
+    fn display_amount(&self, relic: Relic) -> Number {
+        match Table::data(relic).display_amount {
+            // The table holds the column's own width, and a relic counts in
+            // the build's game number. Widening here is the only place the two
+            // meet.
+            Field::Constant(amount) => Number::from(amount),
+            Field::Computed => match self {
+                State::BoneTea(state) => bone_tea::display_amount(state),
+                State::Pocketwatch(state) => pocketwatch::display_amount(state),
+                _ => unimplemented!("the number {relic:?} shows"),
+            },
+        }
     }
 }
