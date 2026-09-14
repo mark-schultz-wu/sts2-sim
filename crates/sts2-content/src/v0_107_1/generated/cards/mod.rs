@@ -6,7 +6,7 @@
 use super::characters::{CardPool, Character};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
-use sts2_core::{Drafted, Printed, Table};
+use sts2_core::{Drafted, Table};
 
 mod colorless;
 mod curse;
@@ -665,7 +665,7 @@ pub struct CardData {
     /// The star pool, which only the Regent's cards are priced in.
     pub star_cost: Cost,
     /// The numbers printed on its face, in name order.
-    pub vars: &'static [Printed<CardVar, CardNumber>],
+    pub vars: &'static [sts2_core::CardNumber<CardVar, CardNumber>],
     /// How many times the card can be upgraded. 0 or 1 on this build,
     /// but `CardModel` branches on higher values, so it is not a flag.
     pub max_upgrade: u8,
@@ -2377,7 +2377,7 @@ impl sts2_core::CardTable for Cards {
         }
     }
 
-    fn vars(self) -> &'static [Printed<CardVar, CardNumber>] {
+    fn vars(self) -> &'static [sts2_core::CardNumber<CardVar, CardNumber>] {
         self.data().vars
     }
 }

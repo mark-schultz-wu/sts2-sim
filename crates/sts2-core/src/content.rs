@@ -285,7 +285,7 @@ pub trait CardTable: Table {
     /// What the card says with nothing modifying it, which is
     /// [`crate::Preview::base`]. `Preview::vars` is these after the fight has
     /// had its say, and that is not static data.
-    fn vars(self) -> &'static [Printed<Self::Var, Self::Number>];
+    fn vars(self) -> &'static [CardNumber<Self::Var, Self::Number>];
 }
 
 /// An exact finite decimal as the game writes it.
@@ -349,7 +349,7 @@ mod card_number_tests {
 /// build generates the set as an enum. So a card asking for one it does not
 /// print is a compile error, not a lookup that finds nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Printed<K, N> {
+pub struct CardNumber<K, N> {
     pub id: K,
     /// The value with nothing modifying the card, upgrades and enchantment
     /// included.
@@ -367,7 +367,7 @@ pub struct Printed<K, N> {
     /// under says nothing. Sovereign Blade's block is a `CalculatedBlockVar`
     /// named `CalculatedBlock`, and it runs the block hooks exactly as a
     /// `BlockVar` named `Block` does.
-    pub previewed: Previewed,
+    pub modifier: Option<CardNumberModifier>,
 }
 
 /// What one printed number runs through before a card shows it.
@@ -375,9 +375,7 @@ pub struct Printed<K, N> {
 /// `DynamicVar.UpdateCardPreview`, which each subclass overrides. The same
 /// hooks run when the card is played, so this is not a display rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Previewed {
-    /// Nothing. The number is what the card prints.
-    Printed,
+pub enum CardNumberModifier {
     /// `Hook.ModifyDamage`, against the creature the card is pointed at.
     Damage,
     /// The same, for the owner's Osty rather than the owner.
@@ -1444,7 +1442,7 @@ pub trait Rules: Hooks {
     fn lead_paperweight() -> Self::Relic;
 
     /// Apply a card's first upgrade to this combat copy's printed values.
-    fn upgrade_card(card: Self::Card, printed: &mut [Printed<Self::CardVar, Self::Number>]);
+    fn upgrade_card(card: Self::Card, numbers: &mut [CardNumber<Self::CardVar, Self::Number>]);
 
     /// What one card does when it is played, which is `CardModel.OnPlay`.
     ///
@@ -1538,7 +1536,7 @@ pub trait Rules: Hooks {
     fn calculated_card_var(
         card: Self::Card,
         key: Self::CardVar,
-        printed: &[Printed<Self::CardVar, Self::Number>],
+        numbers: &[CardNumber<Self::CardVar, Self::Number>],
         powers: &[crate::Stack<Self>],
     ) -> Self::Number;
 

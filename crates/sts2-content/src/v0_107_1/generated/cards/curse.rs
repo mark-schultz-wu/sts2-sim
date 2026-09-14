@@ -6,7 +6,7 @@
 use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TargetType};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
-use sts2_core::{Previewed, Printed};
+use sts2_core::CardNumberModifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -90,11 +90,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::HpLoss,
             base: 13,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
@@ -125,11 +125,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Gold,
             base: 10,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -140,11 +140,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
             base: 2,
             calculated: false,
-            previewed: Previewed::Damage,
+            modifier: Some(CardNumberModifier::Damage),
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -155,11 +155,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::WeakPower,
             base: 1,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -205,11 +205,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Combats,
             base: 5,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -231,23 +231,23 @@ static ROWS: [CardData; 18] = [
         cost: Cost::None,
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculatedCards,
                 base: 3,
                 calculated: true,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculationBase,
                 base: 3,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculationExtra,
                 base: -1,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 0,
@@ -279,11 +279,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Frail,
             base: 1,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),

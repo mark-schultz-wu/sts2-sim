@@ -179,9 +179,9 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn upgrade_card(
         card: Self::Card,
-        printed: &mut [sts2_core::Printed<Self::CardVar, Self::Number>],
+        numbers: &mut [sts2_core::CardNumber<Self::CardVar, Self::Number>],
     ) {
-        behaviour::cards::upgrade(card, printed);
+        behaviour::cards::upgrade(card, numbers);
     }
 
     fn on_use<F: sts2_core::Fight<Self>>(potion: Self::Potion, fight: &mut F) {
@@ -257,10 +257,10 @@ impl sts2_core::Rules for V0_107_1 {
     fn calculated_card_var(
         card: Self::Card,
         key: Self::CardVar,
-        printed: &[sts2_core::Printed<Self::CardVar, Self::Number>],
+        numbers: &[sts2_core::CardNumber<Self::CardVar, Self::Number>],
         powers: &[sts2_core::Stack<Self>],
     ) -> Self::Number {
-        behaviour::cards::calculated(card, key, printed, powers)
+        behaviour::cards::calculated(card, key, numbers, powers)
     }
 
     fn perform_move<F: sts2_core::Fight<Self>>(

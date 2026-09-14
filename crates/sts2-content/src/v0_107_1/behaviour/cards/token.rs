@@ -4,10 +4,10 @@ use sts2_core::{CardVars, Effect, Fight};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
-use super::{Number, Printed, V, face};
+use super::{CardNumber, Number, V, face};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: TokenCard, printed: &mut [Printed]) {
+pub(super) fn upgrade(card: TokenCard, printed: &mut [CardNumber]) {
     let changes: &[(CardVar, Number)] = match card {
         TokenCard::MinionStrike => &[(CardVar::Damage, 3)],
         card => unimplemented!("card upgrade: {card:?}"),
@@ -19,7 +19,7 @@ pub(super) fn upgrade(card: TokenCard, printed: &mut [Printed]) {
 pub(super) fn calculated(
     card: TokenCard,
     key: CardVar,
-    printed: &[Printed],
+    printed: &[CardNumber],
     powers: &[sts2_core::Stack<V>],
 ) -> Number {
     match (card, key) {

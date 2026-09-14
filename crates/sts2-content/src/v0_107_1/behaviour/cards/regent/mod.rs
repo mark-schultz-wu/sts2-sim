@@ -3,7 +3,7 @@
 use sts2_core::{CardTable, Fight};
 
 use super::super::super::generated::cards::{CardRarity, Cards, RegentCard};
-use super::{Printed, V};
+use super::{CardNumber, V};
 
 mod basic;
 mod common;
@@ -13,7 +13,7 @@ mod common;
 ///
 /// A rarity gets a module when its first card is upgraded. A card from a
 /// rarity nobody has reached stops here instead.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
+pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     match Cards::Regent(card).rarity() {
         CardRarity::Basic => basic::upgrade(card, printed),
         CardRarity::Common => common::upgrade(card, printed),

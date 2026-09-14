@@ -4,10 +4,10 @@ use sts2_core::{Effect, EffectResolution, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
-use super::super::{Number, Printed, V, raise};
+use super::super::{CardNumber, Number, V, raise};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
+pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     let changes: &[(CardVar, Number)] = match card {
         RegentCard::GuidingStar => &[(CardVar::Damage, 1), (CardVar::Cards, 1)],
         // `Begone` prints no number an upgrade raises. Upgraded, its own

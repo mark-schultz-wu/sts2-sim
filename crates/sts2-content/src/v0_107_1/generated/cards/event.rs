@@ -6,7 +6,7 @@
 use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TargetType};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
-use sts2_core::{Previewed, Printed};
+use sts2_core::CardNumberModifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -105,11 +105,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::SelfTarget),
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::IntangiblePower,
             base: 1,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Exhaust]),
@@ -121,23 +121,23 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(0),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Cards,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Energy,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::MaxHp,
                 base: 1,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -149,11 +149,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::AnyEnemy),
         cost: Cost::Fixed(0),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
             base: 14,
             calculated: false,
-            previewed: Previewed::Damage,
+            modifier: Some(CardNumberModifier::Damage),
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -164,11 +164,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::SelfTarget),
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::ThornsPower,
             base: 3,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -179,11 +179,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::AnyEnemy),
         cost: Cost::Fixed(0),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
             base: 14,
             calculated: false,
-            previewed: Previewed::Damage,
+            modifier: Some(CardNumberModifier::Damage),
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -204,11 +204,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::SelfTarget),
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
             base: 1,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -240,17 +240,17 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Damage,
                 base: 3,
                 calculated: false,
-                previewed: Previewed::Damage,
+                modifier: Some(CardNumberModifier::Damage),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Repeat,
                 base: 4,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -262,11 +262,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::SelfTarget),
         cost: Cost::Fixed(0),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::StrengthPower,
             base: 5,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -288,71 +288,71 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Block,
                 base: 8,
                 calculated: false,
-                previewed: Previewed::Block,
+                modifier: Some(CardNumberModifier::Block),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::ChokingDamage,
                 base: 6,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CuriousReduction,
                 base: 1,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Damage,
                 base: 12,
                 calculated: false,
-                previewed: Previewed::Damage,
+                modifier: Some(CardNumberModifier::Damage),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::EnergizedEnergy,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::ExpertiseDexterity,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::ExpertiseStrength,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::SappingVulnerable,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::SappingWeak,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::ViolenceHits,
                 base: 3,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::WisdomCards,
                 base: 3,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -365,17 +365,17 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Damage,
                 base: 5,
                 calculated: false,
-                previewed: Previewed::Damage,
+                modifier: Some(CardNumberModifier::Damage),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Increase,
                 base: 1,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -387,11 +387,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::SelfTarget),
         cost: Cost::Fixed(2),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
             base: 3,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
@@ -403,17 +403,17 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Cards,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Damage,
                 base: 10,
                 calculated: false,
-                previewed: Previewed::Damage,
+                modifier: Some(CardNumberModifier::Damage),
             },
         ],
         max_upgrade: 1,
@@ -425,11 +425,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::SelfTarget),
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Energy,
             base: 2,
             calculated: false,
-            previewed: Previewed::Printed,
+            modifier: None,
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -441,17 +441,17 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Damage,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Damage,
+                modifier: Some(CardNumberModifier::Damage),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Repeat,
                 base: 3,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -463,11 +463,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::AnyEnemy),
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
             base: 9,
             calculated: false,
-            previewed: Previewed::Damage,
+            modifier: Some(CardNumberModifier::Damage),
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -479,23 +479,23 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(3),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Block,
                 base: 15,
                 calculated: false,
-                previewed: Previewed::Block,
+                modifier: Some(CardNumberModifier::Block),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Cards,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Energy,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -507,11 +507,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::RandomEnemy),
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
             base: 7,
             calculated: false,
-            previewed: Previewed::Damage,
+            modifier: Some(CardNumberModifier::Damage),
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[]),
@@ -523,17 +523,17 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Damage,
                 base: 10,
                 calculated: false,
-                previewed: Previewed::Damage,
+                modifier: Some(CardNumberModifier::Damage),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::VulnerablePower,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -546,23 +546,23 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(1),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculatedBlock,
                 base: 0,
                 calculated: true,
-                previewed: Previewed::Block,
+                modifier: Some(CardNumberModifier::Block),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculationBase,
                 base: 0,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculationExtra,
                 base: 1,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -575,17 +575,17 @@ static ROWS: [CardData; 27] = [
         cost: Cost::Fixed(2),
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Block,
                 base: 5,
                 calculated: false,
-                previewed: Previewed::Block,
+                modifier: Some(CardNumberModifier::Block),
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::Turns,
                 base: 2,
                 calculated: false,
-                previewed: Previewed::Printed,
+                modifier: None,
             },
         ],
         max_upgrade: 1,
@@ -597,11 +597,11 @@ static ROWS: [CardData; 27] = [
         target: Field::Constant(TargetType::AnyEnemy),
         cost: Cost::Fixed(3),
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
             base: 33,
             calculated: false,
-            previewed: Previewed::Damage,
+            modifier: Some(CardNumberModifier::Damage),
         }],
         max_upgrade: 1,
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),

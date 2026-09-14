@@ -17,7 +17,7 @@ use super::super::generated::cards::{CardVar, Cards};
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
 /// One number on a card's face, as this copy of it prints one.
-type Printed = sts2_core::Printed<CardVar, Number>;
+type CardNumber = sts2_core::CardNumber<CardVar, Number>;
 
 mod colorless;
 mod regent;
@@ -31,7 +31,7 @@ type V = V0_107_1;
 /// `CardModel.Upgrade`, which each card overrides to raise the numbers it
 /// prints. Filed the way the play is: by pool here, then by the card's own
 /// rarity. An upgrade then sits beside the play of the same card.
-pub(crate) fn upgrade(card: Cards, printed: &mut [Printed]) {
+pub(crate) fn upgrade(card: Cards, printed: &mut [CardNumber]) {
     match card {
         Cards::Regent(card) => regent::upgrade(card, printed),
         Cards::Token(card) => token::upgrade(card, printed),
@@ -43,7 +43,7 @@ pub(crate) fn upgrade(card: Cards, printed: &mut [Printed]) {
 ///
 /// A card that raises nothing it prints passes an empty list. A card nobody
 /// has ported never reaches this.
-fn raise(printed: &mut [Printed], changes: &[(CardVar, Number)]) {
+fn raise(printed: &mut [CardNumber], changes: &[(CardVar, Number)]) {
     for &(key, amount) in changes {
         printed
             .iter_mut()
@@ -68,7 +68,7 @@ pub(crate) fn computed_target(
 pub(crate) fn calculated(
     card: Cards,
     key: CardVar,
-    printed: &[Printed],
+    printed: &[CardNumber],
     powers: &[sts2_core::Stack<V0_107_1>],
 ) -> Number {
     match card {
@@ -80,7 +80,7 @@ pub(crate) fn calculated(
 /// One of the numbers on a card's own face.
 ///
 /// A key the card does not print is a mistake in the port.
-fn face(printed: &[Printed], key: CardVar) -> Number {
+fn face(printed: &[CardNumber], key: CardVar) -> Number {
     printed
         .iter()
         .find(|var| var.id == key)

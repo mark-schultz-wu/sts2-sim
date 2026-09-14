@@ -89,9 +89,9 @@ struct Card {
 /// build that adds one is a build whose previews nobody has checked.
 fn previewed(class: &str) -> Option<&'static str> {
     Some(match class {
-        "DamageVar" | "CalculatedDamageVar" => "Previewed::Damage",
-        "OstyDamageVar" => "Previewed::OstyDamage",
-        "BlockVar" | "CalculatedBlockVar" => "Previewed::Block",
+        "DamageVar" | "CalculatedDamageVar" => "Some(CardNumberModifier::Damage)",
+        "OstyDamageVar" => "Some(CardNumberModifier::OstyDamage)",
+        "BlockVar" | "CalculatedBlockVar" => "Some(CardNumberModifier::Block)",
         "CalculationBaseVar"
         | "CalculationExtraVar"
         | "CalculatedVar"
@@ -108,7 +108,7 @@ fn previewed(class: &str) -> Option<&'static str> {
         | "PowerVar"
         | "RepeatVar"
         | "StarsVar"
-        | "SummonVar" => "Previewed::Printed",
+        | "SummonVar" => "None",
         _ => return None,
     })
 }
@@ -457,7 +457,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                     let coefficient = digits
                         .parse::<i32>()
                         .map_err(|e| format!("{}: {name} is {base}: {e}", card.id))?;
-                    format!("CardNumber::new({coefficient}, {scale})")
+                    format!("super::CardNumber::new({coefficient}, {scale})")
                 } else {
                     base.parse::<i32>()
                         .map(|base| base.to_string())
@@ -465,7 +465,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 };
                 writeln!(
                     row,
-                    "            Printed {{ id: CardVar::{}, base: {base}, calculated: {calculated}, previewed: {} }},",
+                    "            sts2_core::CardNumber {{ id: CardVar::{}, base: {base}, calculated: {calculated}, modifier: {} }},",
                     sanitize(name),
                     previewed(class).ok_or_else(|| format!(
                         "{}: {name} is a {class}, which nobody has read the preview of",
@@ -492,7 +492,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "\nuse super::characters::{{CardPool, Character}};").unwrap();
     writeln!(
         out,
-        "use crate::{{Cost, Field}};\nuse sts2_core::{{Drafted, Printed, Table}};"
+        "use crate::{{Cost, Field}};\nuse sts2_core::{{Drafted, Table}};"
     )
     .unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -684,7 +684,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     .unwrap();
     writeln!(
         out,
-        "    pub vars: &'static [Printed<CardVar, CardNumber>],"
+        "    pub vars: &'static [sts2_core::CardNumber<CardVar, CardNumber>],"
     )
     .unwrap();
     writeln!(
@@ -1015,7 +1015,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out).unwrap();
     writeln!(
         out,
-        "    fn vars(self) -> &'static [Printed<CardVar, CardNumber>] {{"
+        "    fn vars(self) -> &'static [sts2_core::CardNumber<CardVar, CardNumber>] {{"
     )
     .unwrap();
     writeln!(out, "        self.data().vars").unwrap();
@@ -1036,7 +1036,6 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 "super",
                 &[
                     "CardData",
-                    "CardNumber",
                     "CardKeyword",
                     "CardRarity",
                     "CardType",
@@ -1046,7 +1045,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 ],
             ),
             ("crate", &["Cost", "Field"]),
-            ("sts2_core", &["Previewed", "Printed"]),
+            ("sts2_core", &["CardNumberModifier"]),
             ("serde", &["Deserialize", "Serialize"]),
         ],
     )?;

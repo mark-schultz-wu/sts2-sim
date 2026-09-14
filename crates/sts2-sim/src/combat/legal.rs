@@ -9,8 +9,8 @@
 //! powers, no relic that listens, and no card that overrides it.
 
 use sts2_core::{
-    CardIdent, CardTable, Combat, CombatId, Cost, Creature, FlagSet, Held, Playable, PotionTable,
-    PotionUsage, Preview, Previewed, Rules, SideKinds, TargetKinds, Undrinkable,
+    CardIdent, CardNumberModifier, CardTable, Combat, CombatId, Cost, Creature, FlagSet, Held,
+    Playable, PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable,
     UnplayableReasonKinds,
 };
 
@@ -290,19 +290,21 @@ fn previewed<V: Rules>(
         let Some(value) = previewed.get_mut(&var.id) else {
             continue;
         };
-        match var.previewed {
-            Previewed::Printed => {}
-            Previewed::Damage => {
+        match var.modifier {
+            None => {}
+            Some(CardNumberModifier::Damage) => {
                 if let Some(at) = at {
                     *value = super::board::modified::<V>(creatures, dealer, at, *value);
                 }
             }
-            Previewed::Block => {
+            Some(CardNumberModifier::Block) => {
                 if let Some(player) = creatures.iter().find(|creature| creature.id == dealer) {
                     *value = super::board::blocked::<V>(player, *value);
                 }
             }
-            Previewed::OstyDamage => unimplemented!("a card previewing the Osty's damage"),
+            Some(CardNumberModifier::OstyDamage) => {
+                unimplemented!("a card previewing the Osty's damage")
+            }
         }
     }
     previewed
