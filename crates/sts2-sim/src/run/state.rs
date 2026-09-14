@@ -499,7 +499,7 @@ impl<V: Rules> State<V> {
             }
             Gift::Relic(relic) => {
                 let mut held = HeldRelic::new(*relic);
-                crate::combat::relic::obtained::<V>(&mut held);
+                crate::combat::obtained::<V>(&mut held);
                 self.player.relics.push(held);
             }
         }
