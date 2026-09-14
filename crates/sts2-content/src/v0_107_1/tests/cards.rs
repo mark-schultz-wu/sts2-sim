@@ -249,7 +249,7 @@ fn only_the_known_cards_are_dynamic() {
 /// generated table sorts by pool and the dump does not.
 #[test]
 fn every_printed_number_matches_the_dump() {
-    let mut dumped: std::collections::HashMap<&str, Vec<(&str, i32, bool, Previewed)>> =
+    let mut dumped: std::collections::HashMap<&str, Vec<(&str, CardNumber, bool, Previewed)>> =
         std::collections::HashMap::new();
     for row in rows(CARDS, "var") {
         assert_eq!(row.len(), 6, "a var row has six fields: {row:?}");
@@ -272,7 +272,7 @@ fn every_printed_number_matches_the_dump() {
 
     for card in Cards::ALL {
         let want = dumped.remove(wire(&card).as_str()).unwrap_or_default();
-        let got: Vec<(&str, i32, bool, Previewed)> = card
+        let got: Vec<(&str, CardNumber, bool, Previewed)> = card
             .vars()
             .iter()
             .map(|v| (v.id.name(), v.base, v.calculated, v.previewed))
