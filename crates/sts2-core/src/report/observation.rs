@@ -505,7 +505,7 @@ pub struct Carried<V: ContentVersion> {
     /// A relic that counts something a rule reads counts it here: Bone Tea's
     /// combats left, Pocketwatch's cards played this turn. A relic that counts
     /// nothing reports zero, which is what the game reports for it.
-    pub amount: u16,
+    pub amount: V::Number,
     /// Its name, as the game shows it. Absent where the localisation table has
     /// no key. That is a fault, and it says so by being absent rather than by
     /// falling back to the id.

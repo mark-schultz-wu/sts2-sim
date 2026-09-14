@@ -942,7 +942,7 @@ pub trait Hooks: ContentVersion {
     ///
     /// Every relic has one, and the table answers for the ones that print a
     /// constant. A relic that works it out and nobody has ported panics here.
-    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> u16;
+    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> Self::Number;
 }
 
 /// What a power does when one side's turn ends, which is its

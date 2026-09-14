@@ -133,7 +133,7 @@ impl sts2_core::Hooks for V0_107_1 {
         behaviour::relics::modify_hook(relic, state, hook)
     }
 
-    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> u16 {
+    fn relic_display_amount(relic: Self::Relic, state: &Self::RelicState) -> Self::Number {
         behaviour::relics::display_amount(relic, state)
     }
 }

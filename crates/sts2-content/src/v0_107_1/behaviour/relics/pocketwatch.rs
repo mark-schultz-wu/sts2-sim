@@ -57,6 +57,6 @@ pub(super) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
 }
 
 /// `DisplayAmount`, which is this turn's count.
-pub(super) fn display_amount(state: &State) -> u16 {
-    u16::try_from(state.played_this_turn).expect("a relic counts plays a screen can show")
+pub(super) fn display_amount(state: &State) -> Number {
+    state.played_this_turn
 }

@@ -93,7 +93,7 @@ impl<V: Rules> HeldRelic<V> {
     }
 
     /// The number it shows, which is `RelicModel.DisplayAmount`.
-    pub(crate) fn amount(&self) -> u16 {
+    pub(crate) fn amount(&self) -> V::Number {
         V::relic_display_amount(self.relic, &self.state)
     }
 }

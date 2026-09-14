@@ -69,9 +69,11 @@ pub(crate) fn modify_hook(relic: Relic, state: &State, hook: ModifyHook<V>) -> M
 /// # Panics
 ///
 /// A relic that works its number out and nobody has ported.
-pub(crate) fn display_amount(relic: Relic, state: &State) -> u16 {
+pub(crate) fn display_amount(relic: Relic, state: &State) -> Number {
     match Table::data(relic).display_amount {
-        Field::Constant(amount) => amount,
+        // The table holds the column's own width, and a relic counts in the
+        // build's game number. Widening here is the only place the two meet.
+        Field::Constant(amount) => Number::from(amount),
         Field::Computed => match state {
             State::BoneTea(state) => bone_tea::display_amount(state),
             State::Pocketwatch(state) => pocketwatch::display_amount(state),

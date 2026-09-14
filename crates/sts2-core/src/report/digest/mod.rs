@@ -806,7 +806,7 @@ impl Sink {
             text,
         } = carried;
         self.id(relic);
-        self.u32(u32::from(*amount));
+        self.number(amount);
         self.prose_option(title);
         self.prose_option(text);
     }

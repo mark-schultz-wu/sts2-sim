@@ -377,7 +377,7 @@ struct WireEntry {
 struct WireCarried<V: sts2_content_wire::WireContentVersion> {
     id: V::Relic,
     /// `RelicModel.DisplayAmount`, which is the number the relic shows.
-    amount: u16,
+    amount: V::Number,
     title: Option<String>,
     text: Option<String>,
 }

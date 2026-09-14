@@ -49,6 +49,6 @@ pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) -> Vec<HookEffec
 }
 
 /// `DisplayAmount`, which is `Math.Max(0, CombatsLeft)`.
-pub(super) fn display_amount(state: &State) -> u16 {
-    u16::try_from(state.combats_left.max(0)).expect("a relic counts combats a screen can show")
+pub(super) fn display_amount(state: &State) -> Number {
+    state.combats_left.max(0)
 }

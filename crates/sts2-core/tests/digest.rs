@@ -63,7 +63,7 @@ fn nth<T: Table + Copy>(n: usize) -> T {
 fn carried(n: usize) -> Carried<V> {
     Carried {
         relic: nth::<Relic>(n),
-        amount: n as u16,
+        amount: n as i32,
         title: Some(format!("Relic {n}")),
         text: Some(format!("It does thing {n}.")),
     }
