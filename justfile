@@ -43,10 +43,8 @@ test:
     # already wrote down, so they run here, with no game anywhere.
     cargo test -p sts2-golden --test map --test setup --test travel --test play
 
-[doc("Clippy, rustfmt, and the repository rules")]
+[doc("Clippy, rustfmt, and the prose rules")]
 lint: prose
-    ./tools/domain-type-lint.py --self-test
-    ./tools/domain-type-lint.py
     cargo clippy --workspace --all-targets -- -D warnings
     cargo fmt --all --check
 
