@@ -27,6 +27,55 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 
 /// Apply a value-producing hook for one power.
 ///
+/// `TemporaryStrengthPower`, which is Strength that gives itself back.
+///
+/// `BeforeApplied` lands the Strength, signed by `IsPositive`, before this
+/// power attaches. `AfterSideTurnEnd` for its owner's own side takes this
+/// power off and hands the same Strength back.
+///
+/// `positive` is `IsPositive`. Crush Under's is false, so it lands negative
+/// Strength and returns it.
+fn temporary_strength(
+    positive: bool,
+    amount: PowerAmount<Number>,
+    owner: CombatSide,
+    hook: sts2_core::EventHook<V>,
+) -> Vec<sts2_core::HookEffect<V>> {
+    use sts2_core::{EventHook, HookEffect};
+
+    // `Sign`, which every amount this power moves is multiplied by.
+    let signed = |amount: Number| match positive {
+        true => amount,
+        false => -amount,
+    };
+    match (amount, hook) {
+        (_, EventHook::BeforeApplied { landing }) => {
+            let PowerAmount::Counted(landing) = landing else {
+                unimplemented!("an endless temporary Strength landing")
+            };
+            vec![HookEffect::ApplyToOwner(
+                Power::StrengthPower,
+                PowerAmount::Counted(signed(landing)),
+            )]
+        }
+        (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side }) if side == owner => {
+            // `PowerCmd.Remove(this)` and then the Strength back, which is the
+            // order the game hands them over in.
+            vec![
+                HookEffect::Remove,
+                HookEffect::ApplyToOwner(
+                    Power::StrengthPower,
+                    PowerAmount::Counted(-signed(amount)),
+                ),
+            ]
+        }
+        (PowerAmount::Endless, EventHook::SideTurnEnd { .. }) => {
+            unimplemented!("an endless temporary Strength")
+        }
+        _ => Vec::new(),
+    }
+}
+
 /// `amount` is the stack the creature carries this power as, which is what an
 /// override reads off itself.
 pub(crate) fn modify_hook(
@@ -96,6 +145,9 @@ pub(crate) fn modify_hook(
         (Power::DexterityPower, PowerAmount::Endless, ModifyHook::Block) => {
             unimplemented!("an endless Dexterity")
         }
+        // A `TemporaryStrengthPower` moves no number itself. The Strength it
+        // lands is what a hit reads.
+        (Power::CrushUnderPower, _, _) => Modify::Nothing,
         (
             Power::VulnerablePower
             | Power::WeakPower
@@ -140,6 +192,12 @@ pub(crate) fn event_hook(
 ) -> Vec<sts2_core::HookEffect<V>> {
     use super::super::generated::monsters::{IntentKind, MoveId};
     use sts2_core::{EventHook, HookEffect};
+
+    // `TemporaryStrengthPower` asks for two things when a turn ends, and the
+    // match below spells one. Its subclasses answer there instead.
+    if let Power::CrushUnderPower = power {
+        return temporary_strength(false, amount, owner, hook);
+    }
 
     let effect = match (power, amount, hook) {
         (
@@ -212,7 +270,13 @@ pub(crate) fn event_hook(
                 .collect(),
             }))
         }
-        (_, _, EventHook::BlockCleared | EventHook::AfterDeath) => None,
+        // `BeforeApplied` is an override on an empty base, so a power with
+        // none does nothing on its way onto a creature.
+        (
+            _,
+            _,
+            EventHook::BlockCleared | EventHook::AfterDeath | EventHook::BeforeApplied { .. },
+        ) => None,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };
     effect.into_iter().collect()

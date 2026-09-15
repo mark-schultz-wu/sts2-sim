@@ -180,10 +180,42 @@ impl<'a, V: Rules> Board<'a, V> {
         // lands on a player-side creature, so the next tick passes it over.
         // The power's own kind and the side it landed on, and nothing about
         // what the power does when a turn ends.
-        let debuff = power
-            .debuff()
-            .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"));
-        if self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && debuff {
+        // `BeforeApplied`, which runs before the power attaches. What it asks
+        // for lands first, so a creature carries those powers ahead of this
+        // one.
+        // Not a `Stack`, because nothing carries it yet. The side is the
+        // creature it is landing on, which is the owner it is about to have.
+        let listener = sts2_core::Listener::Power {
+            power,
+            amount,
+            owner: self.live.creatures[at].side,
+        };
+        let asked = <V as sts2_core::Hooks>::event_hook(
+            listener,
+            sts2_core::EventHook::BeforeApplied { landing: amount },
+        );
+        for effect in asked {
+            match effect {
+                sts2_core::HookEffect::ApplyToOwner(power, amount) => {
+                    self.land(self.live.creatures[at].id, power, amount);
+                }
+                other => unimplemented!("a power asking for {other:?} as it lands"),
+            }
+        }
+        let Some(at) = self.at(self.live.creatures[at].id) else {
+            return;
+        };
+
+        // The game reads the power's type behind `&&`, so it asks only about
+        // one landing on the player. A power that works its own type out is
+        // never asked on the way onto a monster.
+        let on_player = self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER;
+        let debuff = || {
+            power
+                .debuff()
+                .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"))
+        };
+        if on_player && debuff() {
             let id = self.live.creatures[at].id;
             if !self.skipped.contains(&(id, power)) {
                 self.skipped.push((id, power));

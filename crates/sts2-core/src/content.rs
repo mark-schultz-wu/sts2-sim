@@ -1027,6 +1027,15 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayed {
         card: V::Card,
     },
+    /// `BeforeApplied`, asked of a power on its way onto a creature.
+    ///
+    /// The power is not held yet, so `landing` is what is about to land
+    /// rather than what the creature carries. A [`HookEffect::ApplyToOwner`]
+    /// from here lands on the creature this one is landing on, which is the
+    /// owner it is about to have.
+    BeforeApplied {
+        landing: PowerAmount<V::Number>,
+    },
     /// `BeforeSideTurnStart`, which runs before the side draws anything.
     BeforeSideTurnStart {
         side: V::CombatSide,
@@ -1060,6 +1069,11 @@ pub enum HookEffect<V: ContentVersion> {
     TickDownDuration,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
+    /// `PowerCmd.Remove(this)`: the power takes itself off its owner.
+    ///
+    /// Its own effect rather than a suffix on another. A power that acts and
+    /// then leaves asks for both, in the order it wants them.
+    Remove,
     InstallMove(crate::NextMove<V>),
 }
 
