@@ -27,17 +27,6 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 
 /// Apply a value-producing hook for one power.
 ///
-/// `PowerModel.Type`, for a power whose table leaves it computed.
-///
-/// `TemporaryStrengthPower` reads its own `IsPositive`, so a subclass is a
-/// debuff when it lands negative Strength and a buff when it lands positive.
-pub(crate) fn computed_debuff(power: Power) -> bool {
-    match power {
-        Power::CrushUnderPower => true,
-        power => unimplemented!("whether {power:?} is a debuff"),
-    }
-}
-
 /// `TemporaryStrengthPower`, which is Strength that gives itself back.
 ///
 /// `BeforeApplied` lands the Strength, signed by `IsPositive`, before this

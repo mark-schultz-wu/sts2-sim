@@ -1684,14 +1684,6 @@ pub trait Rules: Hooks {
     /// A card whose override nobody has ported.
     fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
 
-    /// `PowerModel.Type`, for a power that works its own out.
-    ///
-    /// The tables carry the type a power states, and [`PowerTable::debuff`]
-    /// answers from them. A subclass that computes it instead leaves that
-    /// absent, and this is what reads the rule. `TemporaryStrengthPower` is
-    /// one: it is a debuff or a buff by its own `IsPositive`.
-    fn computed_power_debuff(power: Self::Power) -> bool;
-
     /// What a card works out from the fight for a number it prints.
     ///
     /// `CalculatedVar.Calculate`, which is a base plus an extra times a

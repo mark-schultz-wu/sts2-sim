@@ -256,10 +256,6 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::computed_target(card, powers)
     }
 
-    fn computed_power_debuff(power: Self::Power) -> bool {
-        behaviour::powers::computed_debuff(power)
-    }
-
     fn calculated_card_var(
         card: Self::Card,
         key: Self::CardVar,

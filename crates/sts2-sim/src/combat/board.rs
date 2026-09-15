@@ -206,10 +206,16 @@ impl<'a, V: Rules> Board<'a, V> {
             return;
         };
 
-        let debuff = power
-            .debuff()
-            .unwrap_or_else(|| V::computed_power_debuff(power));
-        if self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER && debuff {
+        // The game reads the power's type behind `&&`, so it asks only about
+        // one landing on the player. A power that works its own type out is
+        // never asked on the way onto a monster.
+        let on_player = self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER;
+        let debuff = || {
+            power
+                .debuff()
+                .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"))
+        };
+        if on_player && debuff() {
             let id = self.live.creatures[at].id;
             if !self.skipped.contains(&(id, power)) {
                 self.skipped.push((id, power));
