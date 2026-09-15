@@ -231,6 +231,7 @@ pub(crate) fn event_hook(
             | Power::EnergyNextTurnPower
             | Power::BlockNextTurnPower
             | Power::StrengthPower
+            | Power::InfestedPower
             | Power::IllusionPower
             | Power::MinionPower
             // `PowerStackType.Counter` with no `AfterSideTurnEnd`, so it
