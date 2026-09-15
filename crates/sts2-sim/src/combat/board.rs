@@ -237,6 +237,12 @@ impl<'a, V: Rules> Board<'a, V> {
             (Some(_), PowerAmount::Endless) => {}
             (None, amount) => self.live.creatures[at].powers.push(Stack { power, amount }),
         }
+        // A counted power whose stack reaches zero is gone. Temporary
+        // Strength returns exactly what it took, so leaving a zero instance
+        // here would make a creature observably carry Strength.
+        self.live.creatures[at]
+            .powers
+            .retain(|held| held.amount != PowerAmount::Counted(V::Number::zero()));
     }
 
     /// Resolve a death, then end the fight if no primary enemy remains.
