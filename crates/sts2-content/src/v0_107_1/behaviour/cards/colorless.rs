@@ -18,7 +18,7 @@ fn flash_of_steel<F: Fight<V>>(fight: &mut F) {
     let attack = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
         target,
-        damage: Amount::Printed(CardVar::Damage),
+        damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));

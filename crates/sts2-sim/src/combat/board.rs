@@ -410,27 +410,28 @@ fn carried<V: Rules>(
     amount: Amount<V>,
 ) -> V::Number {
     match amount {
-        Amount::Flat(number) => number,
-        Amount::Printed(key) => printed::<V>(
-            playing.unwrap_or_else(|| unimplemented!("a printed number with no card printing it")),
+        Amount::Number(number) => number,
+        Amount::Var(key) => var::<V>(
+            playing
+                .unwrap_or_else(|| unimplemented!("a card's variable with no card being played")),
             key,
             creatures,
         ),
     }
 }
 
-/// What one copy of a card prints for `key` right now.
+/// What one of this copy's variables is worth right now.
 ///
-/// A `CalculatedVar` counts something in the live fight, and prints what it
-/// counted rather than the zero it was built with.
-pub(crate) fn printed<V: Rules>(
+/// A `CalculatedVar` counts something in the live fight. It is worth what it
+/// counted, rather than the zero it was built with.
+pub(crate) fn var<V: Rules>(
     held: &CardInstance<V>,
     key: V::CardVar,
     creatures: &[Creature<V>],
 ) -> V::Number {
-    let var = number::<V>(held, key);
-    match var.calculated {
-        false => var.base,
+    let number = number::<V>(held, key);
+    match number.calculated {
+        false => number.base,
         true => V::calculated_card_var(held.ident.card, key, &held.vars, powers::<V>(creatures)),
     }
 }
@@ -457,11 +458,12 @@ pub(super) fn powers<V: Rules>(creatures: &[Creature<V>]) -> &[Stack<V>] {
         .unwrap_or_default()
 }
 
-/// The effect one printed number becomes, for a card played at `target`.
+/// The effect one of a card's variables becomes, for a card played at
+/// `target`.
 ///
 /// `DynamicVar`'s subclass decides it: what the number runs through is the
 /// class the card filed it under, not the key it is filed by. A number that
-/// runs through nothing has no effect to build, and prints as it is.
+/// runs through nothing has no effect to build, and is worth what it reads.
 pub(crate) fn effect_of<V: Rules>(
     modifier: CardNumberModifier,
     key: V::CardVar,
@@ -472,11 +474,11 @@ pub(crate) fn effect_of<V: Rules>(
         CardNumberModifier::Damage => target.map(|target| Effect::Attack {
             dealer,
             target,
-            damage: Amount::Printed(key),
+            damage: Amount::Var(key),
         }),
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
-            amount: Amount::Printed(key),
+            amount: Amount::Var(key),
         }),
         CardNumberModifier::OstyDamage => unimplemented!("a card previewing the Osty's damage"),
     }
@@ -597,7 +599,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 key.name()
             );
         }
-        printed::<V>(held, key, &self.live.creatures)
+        var::<V>(held, key, &self.live.creatures)
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {

@@ -293,8 +293,7 @@ fn previewed<V: Rules>(
                 });
             // A number no hook reaches, and one whose target has left the
             // fight, both print what the card prints.
-            let value =
-                resolved.unwrap_or_else(|| super::board::printed::<V>(held, var.id, creatures));
+            let value = resolved.unwrap_or_else(|| super::board::var::<V>(held, var.id, creatures));
             (var.id, value)
         })
         .collect()
@@ -311,7 +310,7 @@ fn numbers<V: Rules>(
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
     held.vars
         .iter()
-        .map(|var| (var.id, super::board::printed::<V>(held, var.id, creatures)))
+        .map(|var| (var.id, super::board::var::<V>(held, var.id, creatures)))
         .collect()
 }
 

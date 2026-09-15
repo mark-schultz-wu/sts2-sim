@@ -22,7 +22,7 @@ pub(super) fn strike<F: Fight<V>>(fight: &mut F) {
     let attack = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
         target,
-        damage: Amount::Printed(CardVar::Damage),
+        damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
 }
@@ -31,7 +31,7 @@ pub(super) fn strike<F: Fight<V>>(fight: &mut F) {
 pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Printed(CardVar::Block),
+        amount: Amount::Var(CardVar::Block),
     });
     fight.apply(block);
 }
@@ -46,7 +46,7 @@ pub(super) fn falling_star<F: Fight<V>>(fight: &mut F) {
     let attack = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
         target,
-        damage: Amount::Printed(CardVar::Damage),
+        damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
     fight.apply_power(

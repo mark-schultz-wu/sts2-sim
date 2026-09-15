@@ -766,8 +766,8 @@ pub trait Fight<V: ContentVersion> {
     /// Work an effect's number out and run it through the listeners the
     /// effect names, without applying it.
     ///
-    /// One step, so no half-worked-out number is observable. A printed number
-    /// is calculated here, and the hooks run against the creatures the effect
+    /// One step, so no half-worked-out number is observable. A card's variable
+    /// is worked out here, and the hooks run against the creatures the effect
     /// already names. The caller reads the resolved amount, keeps it, applies
     /// it, or any two of those.
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect;
@@ -880,16 +880,16 @@ pub enum Effect<V: ContentVersion> {
 
 /// The number an effect carries, before the fight works it out.
 ///
-/// A card names one of its own printed numbers. A monster or a relic hands
-/// over a number it already holds. The two differ in what resolution does
-/// first. A printed number can be a `CalculatedVar`, which counts something in
-/// the live fight rather than reading the base it was built with.
+/// A card names one of its own variables. A monster or a relic hands over a
+/// number it already holds. The two differ in what resolution does first. A
+/// variable can be a `CalculatedVar`, which counts something in the live fight
+/// rather than reading the base it was built with.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Amount<V: ContentVersion> {
     /// A number whoever asked already holds.
-    Flat(V::Number),
+    Number(V::Number),
     /// One of the numbers on the card being played, by key.
-    Printed(V::CardVar),
+    Var(V::CardVar),
 }
 
 /// What content behavior can read from an effect resolved by a fight.

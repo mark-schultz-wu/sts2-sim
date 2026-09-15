@@ -119,7 +119,7 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(fight: &mut F, asked: Vec<HookEffect<
             HookEffect::GainBlock(amount) => {
                 let block = fight.resolve(sts2_core::Effect::GainBlock {
                     recipient: fight.actor(),
-                    amount: sts2_core::Amount::Flat(amount),
+                    amount: sts2_core::Amount::Number(amount),
                 });
                 fight.apply(block);
             }

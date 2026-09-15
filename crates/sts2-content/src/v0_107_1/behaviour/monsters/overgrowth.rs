@@ -175,7 +175,7 @@ fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
             };
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
-                amount: Amount::Flat(block),
+                amount: Amount::Number(block),
             });
             fight.apply(block);
         }
@@ -250,7 +250,7 @@ fn attack<F: Fight<V>>(fight: &mut F) {
             let attack = fight.resolve(Effect::Attack {
                 dealer: fight.actor(),
                 target,
-                damage: Amount::Flat(damage),
+                damage: Amount::Number(damage),
             });
             fight.apply(attack);
         }

@@ -24,7 +24,7 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
     let attack = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
         target,
-        damage: Amount::Printed(CardVar::Damage),
+        damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
@@ -38,14 +38,14 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
 pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
     let next_turn = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Printed(CardVar::BlockNextTurn),
+        amount: Amount::Var(CardVar::BlockNextTurn),
     });
     let next_turn = next_turn
         .amount()
         .expect("one block gain resolves to one amount");
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
-        amount: Amount::Printed(CardVar::Block),
+        amount: Amount::Var(CardVar::Block),
     });
     fight.apply(block);
     fight.apply_to_actor(Power::BlockNextTurnPower, PowerAmount::Counted(next_turn));
