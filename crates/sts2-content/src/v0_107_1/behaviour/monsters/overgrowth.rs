@@ -12,11 +12,12 @@ use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
-/// One monster of this act has an `AfterAddedToRoom`: Byrdonis, which opens
-/// territorial.
+/// Two monsters of this act have an `AfterAddedToRoom`: Byrdonis opens
+/// territorial, and the Phrog Parasite opens infested.
 pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<Number>)> {
     match monster {
         Monster::Byrdonis => Some((Power::TerritorialPower, PowerAmount::Counted(1))),
+        Monster::PhrogParasite => Some((Power::InfestedPower, PowerAmount::Counted(4))),
         _ => None,
     }
 }

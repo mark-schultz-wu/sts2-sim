@@ -7,6 +7,7 @@ use super::{CardNumber, V};
 
 mod basic;
 mod common;
+mod rare;
 
 /// Where a Regent card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,6 +25,7 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     match Cards::Regent(card).rarity() {
         CardRarity::Basic => basic::upgrade(card, printed),
         CardRarity::Common => common::upgrade(card, printed),
+        CardRarity::Rare => rare::upgrade(card, printed),
         _ => unimplemented!("card upgrade: {card:?}"),
     }
 }

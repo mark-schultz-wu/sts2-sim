@@ -128,6 +128,7 @@ pub(crate) fn modify_hook(
             | Power::BlockNextTurnPower
             | Power::EnergyNextTurnPower
             | Power::TerritorialPower
+            | Power::InfestedPower
             | Power::IllusionPower
             | Power::MinionPower
             | Power::DexterityPower,
