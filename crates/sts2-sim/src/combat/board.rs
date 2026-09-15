@@ -287,6 +287,15 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let owner = self.live.creatures[at].side;
         let powers = self.live.creatures[at].powers.clone();
+        let after_death: Vec<_> = powers
+            .iter()
+            .flat_map(|held| {
+                <V as sts2_core::Hooks>::event_hook(
+                    held.listener(owner),
+                    sts2_core::EventHook::AfterDeath,
+                )
+            })
+            .collect();
         let kept = powers.iter().any(|held| {
             <V as sts2_core::Hooks>::decide_hook(
                 held.listener(owner),
@@ -295,14 +304,8 @@ impl<'a, V: Rules> Board<'a, V> {
             .is_decision_and(|remove| !remove)
         });
         if kept {
-            let revival = powers
-                .iter()
-                .flat_map(|held| {
-                    <V as sts2_core::Hooks>::event_hook(
-                        held.listener(owner),
-                        sts2_core::EventHook::AfterDeath,
-                    )
-                })
+            let revival = after_death
+                .into_iter()
                 .find_map(|effect| match effect {
                     sts2_core::HookEffect::InstallMove(next) => Some(next),
                     _ => None,
@@ -319,10 +322,47 @@ impl<'a, V: Rules> Board<'a, V> {
             held.resume = resume;
             return true;
         }
-        // A dead monster is taken out of the fight, so nothing that reads it
-        // afterwards can see it. That is why the observation stops reporting
-        // it rather than reporting it dead.
-        self.live.creatures.remove(at);
+        let id = self.live.creatures[at].id;
+        let position = self.live.creatures[..at]
+            .iter()
+            .filter(|creature| creature.side == owner)
+            .count();
+        // Its move graph is finished, but the creature remains addressable
+        // until its death commands finish. Monsters those commands add must
+        // receive ids after its own rather than reuse the one being removed.
+        self.live.machines.retain(|held| held.creature != id);
+        for effect in after_death {
+            match effect {
+                sts2_core::HookEffect::SummonAfterOwnerDeath {
+                    monster,
+                    count,
+                    opening,
+                } => {
+                    let count = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("a death summoning {count:?} monsters"));
+                    for offset in 0..count {
+                        let id = super::monster::summon(
+                            self.live,
+                            monster,
+                            position + offset,
+                            self.niche,
+                        );
+                        let summoned = self
+                            .live
+                            .creatures
+                            .iter_mut()
+                            .find(|creature| creature.id == id)
+                            .expect("a summoned monster is in the fight");
+                        summoned.next_move = Some(opening.clone());
+                    }
+                }
+                other => unimplemented!("a dead power asking for {other:?}"),
+            }
+        }
+        // Nothing that reads the fight after the death commands can see the
+        // dead monster. The observation therefore omits it rather than
+        // reporting it dead.
+        self.live.creatures.retain(|creature| creature.id != id);
         false
     }
 }
