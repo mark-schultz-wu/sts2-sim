@@ -852,22 +852,6 @@ pub trait Fight<V: ContentVersion> {
     /// prints no number at all.
     fn upgraded(&self) -> bool;
 
-    /// `CardSelectCmd.FromHand(prefs, filter: null, source: this)`.
-    ///
-    /// [`Selection::Exactly`] over a hand no larger than it is taken whole,
-    /// and nothing is asked. That is the command's own short circuit for a
-    /// choice that is not one. An empty hand selects nothing.
-    ///
-    /// The card being played is not in the hand to select. It left for the
-    /// play pile before its own play began.
-    ///
-    /// # Panics
-    ///
-    /// Any selection that is a question, which a fight has nowhere to stop and
-    /// ask. Those are a hand larger than an [`Selection::Exactly`], and every
-    /// [`Selection::UpTo`].
-    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<crate::CardAt<V>>;
-
     /// `CardCmd.Transform(original, replacement)`.
     ///
     /// The replacement takes the original's place: the same pile, at the same
@@ -891,6 +875,27 @@ pub trait Fight<V: ContentVersion> {
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 }
 
+/// How far a card's play got.
+///
+/// `CardModel.OnPlay` is an `async Task`, and a card that selects awaits in the
+/// middle of one. Nothing here is a coroutine, so a card that has to ask says
+/// where it stopped and is called back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use = "a card play can stop on a question that must be carried"]
+pub enum Played<V: ContentVersion> {
+    /// The play ran to its end.
+    Done,
+    /// The play stopped on a `CardSelectCmd`, which is a question.
+    Asking {
+        /// The pile it selects from.
+        pile: crate::Pile,
+        /// How many it takes, which decides whether it asks at all.
+        selection: Selection,
+        /// Where the card stopped, in the card's own words.
+        at: V::Resume,
+    },
+}
+
 /// How many cards a selection takes, which is `CardSelectorPrefs`'s pair of
 /// counts.
 ///
@@ -911,6 +916,60 @@ pub enum Selection {
     /// Taking none is an answer, so the selector always asks. Even one card in
     /// the pile is a question, because leaving it is a choice.
     UpTo(nonmax::NonMaxUsize),
+}
+
+/// Cards returned by a [`Selection`] after its cardinality was checked.
+///
+/// The contents stay opaque so card behaviour cannot be resumed with an
+/// unchecked slice. The simulator constructs this at the boundary where it
+/// handles either a player's answer or a selection taken without asking.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectedCards<V: ContentVersion>(Box<[crate::CardAt<V>]>);
+
+impl Selection {
+    /// Validate a player's answer to this selection.
+    pub fn validate_answer<V: ContentVersion>(
+        self,
+        cards: Box<[crate::CardAt<V>]>,
+    ) -> Option<SelectedCards<V>> {
+        let allowed = match self {
+            Self::Exactly(count) => cards.len() == count.get(),
+            Self::UpTo(count) => cards.len() <= count.get(),
+        };
+        allowed.then_some(SelectedCards(cards))
+    }
+
+    /// Validate cards taken without asking.
+    ///
+    /// An exact selection takes a pile whole when it holds no more than the
+    /// requested count. An up-to selection always asks, including for none.
+    pub fn validate_automatic<V: ContentVersion>(
+        self,
+        cards: Box<[crate::CardAt<V>]>,
+    ) -> Option<SelectedCards<V>> {
+        match self {
+            Self::Exactly(count) if cards.len() <= count.get() => Some(SelectedCards(cards)),
+            Self::Exactly(_) | Self::UpTo(_) => None,
+        }
+    }
+}
+
+impl<V: ContentVersion> SelectedCards<V> {
+    /// The selected cards, after cardinality validation.
+    pub fn as_slice(&self) -> &[crate::CardAt<V>] {
+        &self.0
+    }
+
+    /// The selected card for a question that takes at most one.
+    ///
+    /// Panics when card behaviour asks this of a multi-card selection.
+    pub fn one_or_none(&self) -> Option<crate::CardAt<V>> {
+        assert!(
+            self.0.len() <= 1,
+            "a single-card continuation received multiple cards"
+        );
+        self.0.first().copied()
+    }
 }
 
 /// A combat operation before the fight's current listeners have modified it.
@@ -1291,6 +1350,13 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::fmt::Display
         + std::hash::Hash;
 
+    /// Where a card's own play stopped to ask something.
+    ///
+    /// One per card that stops, and nothing for a build whose cards never do.
+    /// A card names its own stopping points, so no card can be resumed at
+    /// another card's.
+    type Resume: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static;
+
     /// Where a card sits in one of a fight's piles.
     ///
     /// Named here so the repository picks the width once. A pile is as large
@@ -1604,15 +1670,21 @@ pub trait Rules: Hooks {
     /// Apply a card's first upgrade to this combat copy's printed values.
     fn upgrade_card(card: Self::Card, numbers: &mut [CardNumber<Self::CardVar, Self::Number>]);
 
-    /// What one card does when it is played, which is `CardModel.OnPlay`.
+    /// `CardModel.OnPlay`, as a direct call on the hot path.
     ///
-    /// Generic over the fight rather than a trait object, because playing a
-    /// card is the hot path.
+    /// A card either finishes or names the question on which it stopped.
+    /// Panics for a card nobody has ported.
+    fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F) -> Played<Self>;
+
+    /// Continue a card that stopped, with the answer it awaited.
     ///
-    /// Panics for a card nobody has ported. A simulator that plays a card
-    /// whose text it does not know is worse than one that stops. The run
-    /// carries on, and the divergence surfaces somewhere else.
-    fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F);
+    /// `at` identifies the card grouping and the point where it stopped.
+    /// `chosen` is what the selection took. A card that stops again says so.
+    fn resume_play<F: Fight<Self>>(
+        fight: &mut F,
+        at: Self::Resume,
+        chosen: SelectedCards<Self>,
+    ) -> Played<Self>;
 
     /// The cards a character's own pool offers, split by rarity.
     ///

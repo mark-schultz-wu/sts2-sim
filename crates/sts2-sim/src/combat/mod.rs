@@ -16,7 +16,7 @@ mod stream;
 mod turn;
 pub(crate) use legal::belt;
 pub(crate) use live::Live;
-pub(crate) use play::{apply_power, play, resolve};
+pub(crate) use play::{answer, apply_power, play, resolve};
 pub(crate) use potion::drink;
 pub(crate) use relic::obtained;
 pub(crate) use start::enter;

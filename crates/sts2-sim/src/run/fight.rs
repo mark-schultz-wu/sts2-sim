@@ -1,12 +1,32 @@
 //! Driving the fight the run is standing in.
 
-use sts2_core::{Answered, BeltIndex, CombatId, HandIndex, PotionTable, Reason, Refusal, Rules};
+use sts2_core::{
+    Answer, Answered, BeltIndex, CombatId, HandIndex, PotionTable, Reason, Refusal, Rules,
+};
 
 use super::State;
 use crate::combat;
 use crate::combat::Error;
 
 impl<V: Rules> State<V> {
+    /// Answer the selection on which a card play stopped.
+    pub(super) fn answer_fight(&mut self, answer: &Answer) -> Result<sts2_core::Applied<V>, Error> {
+        let Answer::Cards(chosen) = answer else {
+            unimplemented!("an answer that is not a card selection");
+        };
+        let Some(live) = self.fight() else {
+            unreachable!("a fight answer has a live fight");
+        };
+        let fought = combat::answer(
+            live,
+            chosen,
+            self.raw_seed(),
+            &self.counters(),
+            self.relics(),
+        )?;
+        Ok(self.settle(fought))
+    }
+
     /// Play one card from the hand.
     ///
     /// The fight is resolved on a copy and swapped in whole, so a card the

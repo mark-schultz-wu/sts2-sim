@@ -167,6 +167,20 @@ enum Phase<V: Rules> {
 }
 
 impl<V: Rules> State<V> {
+    /// The question that blocks every decision except its answer.
+    pub(crate) fn pending(&self) -> Option<sts2_core::QuestionKind> {
+        match &self.phase {
+            Phase::Combat(live) => live.question().map(|question| question.kind()),
+            Phase::Neow { selection, .. } if selection.is_some() => {
+                Some(sts2_core::QuestionKind::SelectCards)
+            }
+            Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
+                Some(sts2_core::QuestionKind::Rewards)
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn start(
         seed: &Seed,
         character: V::Character,
@@ -614,6 +628,9 @@ impl<V: Rules> State<V> {
         if let Phase::Rewards { .. } = self.phase {
             return self.take(answer);
         }
+        if matches!(&self.phase, Phase::Combat(live) if live.question().is_some()) {
+            return self.answer_fight(answer);
+        }
         let Phase::Neow {
             finished,
             selection,
@@ -767,7 +784,10 @@ impl<V: Rules> State<V> {
                 };
                 (asking, Some(room), None, false)
             }
-            Phase::Combat(live) => (None, None, Some(live.report()), true),
+            Phase::Combat(live) => {
+                let asking = live.question();
+                (asking, None, Some(live.report()), true)
+            }
             Phase::Rewards { combat, offered } => (
                 offered
                     .iter()

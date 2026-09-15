@@ -1,4 +1,6 @@
-use sts2_core::{Answered, Construct, Decision, Play, Refusal, Rules, Setup, Snapshot, Start};
+use sts2_core::{
+    Answered, Construct, Decision, Play, Reason, Refusal, Rules, Setup, Snapshot, Start,
+};
 
 use crate::run::State;
 
@@ -27,6 +29,21 @@ impl<V: Rules> Play<V> for Sim<V> {
     }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
+        let pending = self.state.pending();
+        if let Some(kind) = pending
+            && !matches!(decision, Decision::Answer(_))
+        {
+            return Ok(Err(Refusal {
+                what: name(decision).into(),
+                reason: Reason::Pending { kind },
+            }));
+        }
+        if pending.is_none() && matches!(decision, Decision::Answer(_)) {
+            return Ok(Err(Refusal {
+                what: "answer".into(),
+                reason: Reason::NothingPending,
+            }));
+        }
         match decision {
             Decision::ChooseOption { index } => self.state.choose(*index).map(Ok),
             Decision::Answer(answer) => self.state.answer(answer).map(Ok),

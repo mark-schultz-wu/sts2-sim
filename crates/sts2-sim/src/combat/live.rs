@@ -19,6 +19,26 @@ use sts2_core::{
 
 use super::monster::Machine;
 
+/// A card play that stopped on a question, and what it needs to go on.
+///
+/// The card is out of the hand and in the play pile, which is where
+/// `AddDuringManualCardPlay` put it. It stays there, held here rather than in
+/// a pile, until the question is answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Asking<V: Rules> {
+    pub(super) card: CardInstance<V>,
+    /// The creature the play was pointed at, which the rest of it still needs.
+    pub(super) target: Option<CombatId>,
+    /// Where the card stopped, in the card's own words.
+    pub(super) at: V::Resume,
+    /// The pile the selection reads.
+    pub(super) pile: sts2_core::Pile,
+    /// What the selection takes.
+    pub(super) selection: sts2_core::Selection,
+    /// Whether the fight was already won when the play stopped.
+    pub(super) won: bool,
+}
+
 /// Mints the ids a fight names its cards by.
 ///
 /// One counter, and nothing reuses a number it gave out. A fight that runs out
@@ -118,9 +138,44 @@ pub(crate) struct Live<V: Rules> {
     pub(super) skip_tick: Vec<(CombatId, V::Power)>,
     /// The ids this fight has given out, and the next one it will.
     pub(super) card_ids: CardIds<V>,
+    /// A card play waiting on an answer, which is the only thing the fight
+    /// will take while it is set.
+    pub(super) asking: Option<Asking<V>>,
 }
 
 impl<V: Rules> Live<V> {
+    /// The card-selection question on which this fight is parked.
+    pub(crate) fn question(&self) -> Option<sts2_core::Question<V>> {
+        let asked = self.asking.as_ref()?;
+        let (min, max) = match asked.selection {
+            sts2_core::Selection::Exactly(count) => {
+                let count = u32::try_from(count.get()).expect("a selection count fits the wire");
+                (count, count)
+            }
+            sts2_core::Selection::UpTo(count) => (
+                0,
+                u32::try_from(count.get()).expect("a selection count fits the wire"),
+            ),
+        };
+        Some(sts2_core::Question::SelectCards {
+            min,
+            max,
+            // The content id does not carry display text. The selector has no
+            // prompt either, so this stays absent as it does for other
+            // unattributed selections.
+            asker: None,
+            options: super::play::pile(self, asked.pile)
+                .iter()
+                .enumerate()
+                .map(|(index, card)| sts2_core::CardOption {
+                    index,
+                    card: card.ident,
+                    text: None,
+                })
+                .collect(),
+        })
+    }
+
     /// The player, which every fight has one of.
     pub(crate) fn player(&self) -> &Creature<V> {
         self.creatures
