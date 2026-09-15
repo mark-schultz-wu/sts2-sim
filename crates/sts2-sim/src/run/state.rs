@@ -141,7 +141,6 @@ enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
         chosen: Option<u8>,
-        finished: bool,
         selection: Option<SmallVec<[V::Card; 4]>>,
     },
     Combat(crate::combat::Live<V>),
@@ -170,8 +169,27 @@ enum Phase<V: Rules> {
         options: Vec<V::RestSiteOption>,
         /// Waiting for the card the smith upgrades.
         upgrading: bool,
-        finished: bool,
     },
+}
+
+impl<V: Rules> Phase<V> {
+    /// Whether the run can leave the room this phase stands in.
+    ///
+    /// A question rather than a flag, because two of the three rooms that
+    /// finish already say so in what they hold. Neow has chosen a blessing and
+    /// answered for it. A rest site has spent its options. Only the chest
+    /// needs a bit of its own, because it keeps the relic it offered either
+    /// way.
+    fn finished(&self) -> bool {
+        match self {
+            Phase::Neow {
+                chosen, selection, ..
+            } => chosen.is_some() && selection.is_none(),
+            Phase::Treasure { finished, .. } => *finished,
+            Phase::RestSite { options, .. } => options.is_empty(),
+            Phase::Combat(_) | Phase::Rewards { .. } | Phase::Event { .. } => false,
+        }
+    }
 }
 
 impl<V: Rules> State<V> {
@@ -256,7 +274,6 @@ impl<V: Rules> State<V> {
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
                 chosen: None,
-                finished: false,
                 selection: None,
             },
         }
@@ -451,7 +468,6 @@ impl<V: Rules> State<V> {
                 &deck,
             ),
             upgrading: false,
-            finished: false,
         };
     }
 
@@ -620,11 +636,8 @@ impl<V: Rules> State<V> {
             *finished = true;
             return Ok(self.report());
         }
-        if let Phase::RestSite {
-            options, finished, ..
-        } = &self.phase
-        {
-            if *finished {
+        if let Phase::RestSite { options, .. } = &self.phase {
+            if self.phase.finished() {
                 unimplemented!("choosing at a rest site that is spent");
             }
             let option = *options
@@ -713,12 +726,7 @@ impl<V: Rules> State<V> {
         if matches!(&self.phase, Phase::RestSite { upgrading, .. } if *upgrading) {
             return self.smith(answer);
         }
-        let Phase::Neow {
-            finished,
-            selection,
-            ..
-        } = &mut self.phase
-        else {
+        let Phase::Neow { selection, .. } = &mut self.phase else {
             unimplemented!("answering a question inside a fight");
         };
         let cards = selection
@@ -740,7 +748,6 @@ impl<V: Rules> State<V> {
 
         self.player.deck.extend(chosen);
         *selection = None;
-        *finished = true;
         Ok(self.report())
     }
 
@@ -772,16 +779,13 @@ impl<V: Rules> State<V> {
         card.upgrade += 1;
 
         let Phase::RestSite {
-            options,
-            upgrading,
-            finished,
+            options, upgrading, ..
         } = &mut self.phase
         else {
             unreachable!("the phase was a rest site when this began");
         };
         options.clear();
         *upgrading = false;
-        *finished = true;
         Ok(self.report())
     }
 
@@ -854,11 +858,11 @@ impl<V: Rules> State<V> {
                 kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect();
+        let finished = self.phase.finished();
         let (asking, room, combat, in_combat) = match &self.phase {
             Phase::Neow {
                 options: neow_options,
                 chosen: neow_chosen,
-                finished: neow_finished,
                 selection: card_selection,
             } => {
                 let options = neow_options
@@ -900,10 +904,10 @@ impl<V: Rules> State<V> {
                 });
                 let room = Room::Event {
                     event: V::neow_event(),
-                    finished: *neow_finished,
+                    finished,
                     title: None,
                     text: None,
-                    options: if *neow_finished { Vec::new() } else { options },
+                    options: if finished { Vec::new() } else { options },
                 };
                 (asking, Some(room), None, false)
             }
