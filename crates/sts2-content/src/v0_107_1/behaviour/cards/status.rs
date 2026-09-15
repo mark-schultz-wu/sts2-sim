@@ -1,9 +1,9 @@
 //! The cards a fight puts in a deck that nobody chose.
 
-use sts2_core::{Amount, Effect, Fight, Played, Scaling};
+use sts2_core::{Amount, Effect, EventHook, Fight, HookEffect, Played, Scaling};
 
-use super::super::super::generated::cards::{CardVar, StatusCard};
-use super::V;
+use super::super::super::generated::cards::{CardVar, Cards, StatusCard};
+use super::{CardNumber, V};
 
 pub(super) fn on_play<F: Fight<V>>(card: StatusCard, fight: &mut F) -> Played<V> {
     match card {
@@ -25,6 +25,30 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
     });
     fight.apply(damage);
     fight.discard_this();
+}
+
+/// Deliver a notification to one status card in the fight.
+pub(super) fn event_hook(
+    card: StatusCard,
+    printed: &[CardNumber],
+    hook: EventHook<V>,
+) -> Vec<HookEffect<V>> {
+    match (card, hook) {
+        // `Void.AfterCardDrawn`, which acts on the draw that brought it here
+        // and on no other card's.
+        (
+            StatusCard::Void,
+            EventHook::CardDrawn {
+                card: Cards::Status(StatusCard::Void),
+            },
+        ) => {
+            vec![HookEffect::LoseEnergy(super::face(
+                printed,
+                CardVar::Energy,
+            ))]
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// `Slimed`. Draws, for an energy, and exhausts.

@@ -9,7 +9,7 @@
 //! command that needs one stops the run where it stands.
 
 use crate::rng::MegaRng;
-use num_traits::Zero;
+use num_traits::{Saturating as _, Zero};
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
@@ -18,6 +18,7 @@ use sts2_core::{
 };
 
 use super::live::{CardInstance, Live};
+use crate::run::HeldRelic;
 
 /// The fight an effect is resolved against.
 pub(super) struct Board<'a, V: Rules> {
@@ -27,6 +28,8 @@ pub(super) struct Board<'a, V: Rules> {
     shuffle: &'a mut MegaRng,
     /// The stream monsters use when they roll their hit points.
     niche: &'a mut MegaRng,
+    /// The player's relic belt, for hooks raised while an effect resolves.
+    relics: &'a mut [HeldRelic<V>],
     /// Whose effect this is. The player for a card, the monster for a move.
     actor: CombatId,
     /// The creature a card was pointed at.
@@ -94,6 +97,7 @@ impl<'a, V: Rules> Board<'a, V> {
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         niche: &'a mut MegaRng,
+        relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
         target: Option<CombatId>,
         playing: Option<&'a CardInstance<V>>,
@@ -103,6 +107,7 @@ impl<'a, V: Rules> Board<'a, V> {
             live,
             shuffle,
             niche,
+            relics,
             actor,
             target,
             playing,
@@ -120,15 +125,17 @@ impl<'a, V: Rules> Board<'a, V> {
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         niche: &'a mut MegaRng,
+        relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
         actor: CombatId,
-        intent_damage: V::Number,
-        intent_repeats: V::Count,
+        intent: (V::Number, V::Count),
     ) -> Self {
+        let (intent_damage, intent_repeats) = intent;
         Board {
             live,
             shuffle,
             niche,
+            relics,
             actor,
             target: None,
             playing: None,
@@ -261,6 +268,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 })
         });
         if primary_enemy_remains {
+            self.after_enemy_death();
             return;
         }
 
@@ -364,6 +372,12 @@ impl<'a, V: Rules> Board<'a, V> {
         // reporting it dead.
         self.live.creatures.retain(|creature| creature.id != id);
         false
+    }
+
+    /// Notify the player's belt after a death that did not end combat.
+    fn after_enemy_death(&mut self) {
+        let asked = super::relic::notify::<V>(self.relics, sts2_core::EventHook::AfterDeath);
+        super::hook::apply::<V, _>(self, asked);
     }
 }
 
@@ -662,6 +676,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.stars = self.live.stars + amount;
     }
 
+    fn modify_energy(&mut self, amount: V::Number) {
+        let size = |amount: V::Number| {
+            num_traits::NumCast::from(amount)
+                .unwrap_or_else(|| unimplemented!("an energy change of {amount:?}"))
+        };
+        // `PlayerCombatState` holds the pool as a count and clamps it at zero.
+        match amount < V::Number::zero() {
+            true => self.live.energy = self.live.energy.saturating_sub(size(-amount)),
+            false => self.live.energy = self.live.energy + size(amount),
+        }
+    }
+
     fn apply_power(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
         self.land(at, power, amount);
     }
@@ -684,7 +710,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn draw(&mut self, count: V::Number) {
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
-        draw(self.live, self.shuffle, count);
+        draw(
+            self.live,
+            self.shuffle,
+            self.niche,
+            self.relics,
+            self.ascension,
+            count,
+        );
     }
 
     fn ascension(&self) -> V::AscensionLevel {
@@ -801,7 +834,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 /// pile runs dry.
 ///
 /// A fight with every card in hand draws short rather than manufacture one.
-pub(super) fn draw<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng, count: usize) {
+pub(super) fn draw<V: Rules>(
+    live: &mut Live<V>,
+    shuffle: &mut MegaRng,
+    niche: &mut MegaRng,
+    relics: &mut [HeldRelic<V>],
+    ascension: V::AscensionLevel,
+    count: usize,
+) {
     for _ in 0..count {
         if live.draw.is_empty() {
             if live.discard.is_empty() {
@@ -809,7 +849,26 @@ pub(super) fn draw<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng, count: u
             }
             reshuffle(live, shuffle);
         }
-        live.hand.push(live.draw.remove(0));
+        let drawn = live.draw.remove(0);
+        live.hand.push(drawn.clone());
+        // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
+        // than once for the whole draw. So a card that spends the pool as it
+        // arrives has spent it before the next card is taken.
+        //
+        // The game raises it on every listener in the fight. This asks the
+        // card that arrived, which is the only listener ported to answer it.
+        let asked = V::event_hook(
+            sts2_core::Listener::Card {
+                card: drawn.ident.card,
+                printed: &drawn.vars,
+            },
+            sts2_core::EventHook::CardDrawn {
+                card: drawn.ident.card,
+            },
+        );
+        let mut board =
+            Board::for_card(live, shuffle, niche, relics, ascension, None, Some(&drawn));
+        super::hook::apply::<V, _>(&mut board, asked);
     }
 }
 

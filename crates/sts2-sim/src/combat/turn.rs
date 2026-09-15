@@ -35,7 +35,7 @@ pub(crate) fn end<V: Rules>(
     let mut ai = streams.stream(V::RunRngType::MONSTER_AI);
     let mut niche = streams.stream(V::RunRngType::NICHE);
 
-    turn_end(&mut next, &mut shuffle, &mut niche, ascension);
+    turn_end(&mut next, &mut shuffle, &mut niche, &mut relics, ascension);
     flush_hand(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
     let asked = tick_powers::<V>(
@@ -43,19 +43,39 @@ pub(crate) fn end<V: Rules>(
         &mut skipping,
         <V::CombatSide as SideKinds>::PLAYER,
     );
-    applied::<V>(&mut next, &mut shuffle, &mut niche, ascension, asked);
+    applied::<V>(
+        &mut next,
+        &mut shuffle,
+        &mut niche,
+        &mut relics,
+        ascension,
+        asked,
+    );
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
-    let won = enemy_turn(&mut next, &mut shuffle, &mut niche, &mut skipping);
+    let won = enemy_turn(
+        &mut next,
+        &mut shuffle,
+        &mut niche,
+        &mut relics,
+        &mut skipping,
+    );
 
     let asked = tick_powers::<V>(
         &mut next,
         &mut skipping,
         <V::CombatSide as SideKinds>::ENEMY,
     );
-    applied::<V>(&mut next, &mut shuffle, &mut niche, ascension, asked);
+    applied::<V>(
+        &mut next,
+        &mut shuffle,
+        &mut niche,
+        &mut relics,
+        ascension,
+        asked,
+    );
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -74,7 +94,14 @@ pub(crate) fn end<V: Rules>(
     // moves the count on, then the draw that reads it.
     relic::turn_starting::<V>(&mut relics, next.turn);
     let drawn = hand_size::<V>(&mut relics, next.turn);
-    draw(&mut next, &mut shuffle, drawn);
+    draw(
+        &mut next,
+        &mut shuffle,
+        &mut niche,
+        &mut relics,
+        ascension,
+        drawn,
+    );
     let started = relic::turn_started::<V>(&mut relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
 
@@ -103,11 +130,12 @@ fn turn_end<V: Rules>(
     live: &mut Live<V>,
     shuffle: &mut MegaRng,
     niche: &mut MegaRng,
+    relics: &mut [crate::run::HeldRelic<V>],
     ascension: V::AscensionLevel,
 ) {
     let held = live.hand.clone();
     for card in &held {
-        let mut board = Board::for_card(live, shuffle, niche, ascension, None, Some(card));
+        let mut board = Board::for_card(live, shuffle, niche, relics, ascension, None, Some(card));
         V::on_card_turn_end(card.ident.card, &mut board);
     }
     let ethereal: Vec<usize> = live
@@ -262,11 +290,12 @@ fn applied<V: Rules>(
     live: &mut Live<V>,
     shuffle: &mut MegaRng,
     niche: &mut MegaRng,
+    relics: &mut [crate::run::HeldRelic<V>],
     ascension: V::AscensionLevel,
     asked: Vec<(CombatId, V::Power, PowerAmount<V::Number>)>,
 ) {
     for (at, power, amount) in asked {
-        let mut board = Board::for_card(live, shuffle, niche, ascension, None, None);
+        let mut board = Board::for_card(live, shuffle, niche, relics, ascension, None, None);
         sts2_core::Fight::apply_power(&mut board, at, power, amount);
     }
 }
@@ -279,6 +308,7 @@ fn enemy_turn<V: Rules>(
     live: &mut Live<V>,
     shuffle: &mut MegaRng,
     niche: &mut MegaRng,
+    relics: &mut [crate::run::HeldRelic<V>],
     skipping: &mut Vec<(CombatId, V::Power)>,
 ) -> bool {
     let mut won = false;
@@ -327,7 +357,15 @@ fn enemy_turn<V: Rules>(
         let repeats = attack.map_or_else(num_traits::zero, |attack| attack.repeats);
 
         let ascension = live.ascension;
-        let mut board = Board::for_move(live, shuffle, niche, ascension, id, damage, repeats);
+        let mut board = Board::for_move(
+            live,
+            shuffle,
+            niche,
+            relics,
+            ascension,
+            id,
+            (damage, repeats),
+        );
         V::perform_move(monster, next_move.id, &mut board);
         won |= board.won;
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));

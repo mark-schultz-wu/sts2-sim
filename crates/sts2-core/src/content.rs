@@ -843,6 +843,14 @@ pub trait Fight<V: ContentVersion> {
     /// A printed number, so signed. The pool it lands in is not.
     fn gain_stars(&mut self, amount: V::Number);
 
+    /// `PlayerCmd.GainEnergy(amount)`, or `PlayerCmd.LoseEnergy` for a
+    /// negative one.
+    ///
+    /// A printed number, so signed. The pool it lands in is not, and
+    /// `PlayerCombatState` clamps it at zero. A loss larger than the pool
+    /// empties the pool and leaves no debt.
+    fn modify_energy(&mut self, amount: V::Number);
+
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
     ///
     /// The power is the caller's to name. A rule knows which power it applies,
@@ -1153,6 +1161,14 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayed {
         card: V::Card,
     },
+    /// `AfterCardDrawn`, carrying the card that has just reached the hand.
+    ///
+    /// Raised once per card, inside the draw loop. A listener that is itself
+    /// the drawn card compares the two, which is what every card that answers
+    /// this hook does.
+    CardDrawn {
+        card: V::Card,
+    },
     /// `BeforeApplied`, asked of a power on its way onto a creature.
     ///
     /// The power is not held yet, so `landing` is what is about to land
@@ -1185,6 +1201,12 @@ pub enum EventHook<V: ContentVersion> {
 pub enum HookEffect<V: ContentVersion> {
     /// `PlayerCmd.GainStars`.
     GainStars(V::Number),
+    /// `PlayerCmd.GainEnergy`.
+    GainEnergy(V::Number),
+    /// `PlayerCmd.LoseEnergy`.
+    LoseEnergy(V::Number),
+    /// `CardPileCmd.Draw` for the player.
+    Draw(V::Number),
     /// `CreatureCmd.GainBlock` on the listener's owner.
     GainBlock(V::Number),
     /// `CardCmd.Upgrade` over every card in the hand.
@@ -1248,6 +1270,14 @@ pub enum Listener<'a, V: Hooks> {
         owner: V::CombatSide,
     },
     Relic(&'a mut V::RelicState),
+    /// A card in the fight, with the numbers this copy of it prints.
+    ///
+    /// `CardModel` saves its fields in those numbers: a card that raises its
+    /// own damage as it is drawn has raised what this slice carries.
+    Card {
+        card: V::Card,
+        printed: &'a [CardNumber<V::CardVar, V::Number>],
+    },
 }
 
 /// The build-specific behavior behind the game's hook dispatcher.

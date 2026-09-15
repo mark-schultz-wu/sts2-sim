@@ -1,0 +1,16 @@
+# Gremlin Horn gains its energy before it draws its card.
+#
+# Three Strikes and Defends spend the turn's three energy, and the last of them
+# kills the Twig Slime with the pool already empty. The horn's card is the Void
+# on top of the draw pile, which loses one energy as it arrives. So the pool
+# holds none afterwards, where drawing first would floor the loss at zero and
+# leave the gained energy standing.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"GREMLIN_HORN"}
+{"cmd":"grant","card":"VOID"}
+{"cmd":"grant","card":"VOID"}
+{"cmd":"grant","card":"VOID"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":2,"target":1}
