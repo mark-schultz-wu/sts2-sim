@@ -16,10 +16,11 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
 ) -> Vec<V::Card> {
     let mut drawn = Vec::with_capacity(count);
     for _ in 0..count {
+        let (rare, uncommon) = RarityOdds::Regular.bands();
         let roll = rng.next_double() as f32;
-        let wanted = if roll < 0.03 {
+        let wanted = if roll < rare {
             RewardRarity::Rare
-        } else if roll < 0.37 {
+        } else if roll < uncommon + rare {
             RewardRarity::Uncommon
         } else {
             RewardRarity::Common
@@ -73,13 +74,41 @@ fn available<'a, V: Rules>(
         .expect("a card pool has a drafted rarity")
 }
 
-/// The odds an encounter's own card reward rolls a rare at, before the run's
-/// running offset.
-const RARE: f32 = 0.03;
+/// `CardRarityOddsType`, as the bands each one rolls against.
+///
+/// `GetBaseOdds` names three numbers per type and the roll reads two. Those
+/// are the chance of a rare, and the chance of an uncommon added on top of it.
+/// The third is whatever is left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RarityOdds {
+    /// `RegularEncounter`, which a monster room's reward rolls.
+    Regular,
+    Elite,
+    Boss,
+}
 
-/// The odds of an uncommon, which the game adds to the rare threshold rather
-/// than reading on its own.
-const UNCOMMON: f32 = 0.37;
+impl RarityOdds {
+    /// The chance of a rare, then of an uncommon.
+    fn bands(self) -> (f32, f32) {
+        match self {
+            RarityOdds::Regular => (0.03, 0.37),
+            RarityOdds::Elite => (0.1, 0.4),
+            // A boss pays a rare and nothing else.
+            RarityOdds::Boss => (1.0, 0.0),
+        }
+    }
+
+    /// What the run's own offset adds to the chance of a rare.
+    ///
+    /// `Roll` passes zero for a boss, which is already paying one, and the
+    /// run's running value for every other.
+    fn offset(self, running: f32) -> f32 {
+        match self {
+            RarityOdds::Boss => 0.0,
+            _ => running,
+        }
+    }
+}
 
 /// Where the offset goes back to once a rare lands.
 const OFFSET_BASE: f32 = -0.05;
@@ -104,6 +133,7 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     character: V::Character,
     count: usize,
     act: usize,
+    bands: RarityOdds,
 ) -> Vec<V::Card> {
     if super::combat::scarce::<V>(ascension) {
         unimplemented!("the reward odds a scarce run rolls");
@@ -117,7 +147,7 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     let cards = V::reward_cards(character);
     let mut drawn = Vec::with_capacity(count);
     for _ in 0..count {
-        let wanted = rarity(rng, odds);
+        let wanted = rarity(rng, odds, bands);
         let choices = available::<V>(cards, &drawn, wanted);
         let left = choices.iter().filter(|card| !drawn.contains(card)).count();
         let left = num_traits::cast(left).expect("an available rarity fits the RNG integer");
@@ -138,12 +168,13 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
 }
 
 /// One rarity, and the offset it leaves behind.
-fn rarity<R: GameRng>(rng: &mut R, odds: &mut Odds) -> RewardRarity {
+fn rarity<R: GameRng>(rng: &mut R, odds: &mut Odds, bands: RarityOdds) -> RewardRarity {
+    let (rare, uncommon) = bands.bands();
     let rolled = rng.next_double() as f32;
-    let rare_below = RARE + odds.rarity;
+    let rare_below = rare + bands.offset(odds.rarity);
     let wanted = if rolled < rare_below {
         RewardRarity::Rare
-    } else if rolled < UNCOMMON + rare_below {
+    } else if rolled < uncommon + rare_below {
         RewardRarity::Uncommon
     } else {
         RewardRarity::Common

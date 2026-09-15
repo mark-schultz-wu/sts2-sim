@@ -63,6 +63,9 @@ pub(crate) struct State<V: Rules> {
 pub(super) enum EncounterQueue {
     Normal,
     Elite,
+    /// An act rolls one boss and fights it once, so a boss takes nothing from
+    /// a queue and moves no count on.
+    Boss,
 }
 
 /// Data generated once and shared by every branch of this run.
@@ -487,6 +490,7 @@ impl<V: Rules> State<V> {
         match queue {
             EncounterQueue::Normal => self.normal_fights += 1,
             EncounterQueue::Elite => self.elite_fights += 1,
+            EncounterQueue::Boss => {}
         }
         self.at = to;
         self.visited.push(to);
@@ -617,6 +621,15 @@ impl<V: Rules> State<V> {
             .get(act)
             .and_then(|(_, rooms)| rooms.elite.get(self.elite_fights))
             .copied()
+    }
+
+    /// The one boss an act rolled, which is the fight out of it.
+    pub(super) fn boss_encounter(&self, act: usize) -> Option<V::Encounter> {
+        self.shared
+            .opening
+            .acts
+            .get(act)
+            .map(|(_, rooms)| rooms.boss)
     }
 
     pub(crate) fn choose(&mut self, index: u8) -> Result<Applied<V>, Error> {
@@ -884,6 +897,8 @@ impl<V: Rules> State<V> {
                 kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect();
+        let at_boss = map.at(self.at).expect("the run stands on its own map").kind
+            == <V::MapPointType as sts2_core::MapPointKinds>::BOSS;
         let finished = self.phase.finished();
         let (asking, room, combat, in_combat) = match &self.phase {
             Phase::Neow {
@@ -1080,7 +1095,10 @@ impl<V: Rules> State<V> {
                     visited: self.visited.clone(),
                     travelable,
                     points: map.shared(),
-                    proceed: false,
+                    // `MapLegality.CanProceed`, and the fight it is standing
+                    // in being over. A boss room with its combat still running
+                    // is an ordinary fight, and leaving one is not a move.
+                    proceed: at_boss && !in_combat,
                 },
                 rng: self.positions(),
                 room,

@@ -165,13 +165,19 @@ impl<V: Rules> State<V> {
         let character = self.character();
         let gold = V::encounter_gold(encounter, ascension);
         let act = self.act();
-        // `RoomType.Elite` is what adds a relic and what moves the potion
-        // odds. The encounter carries the room it belongs to.
-        let elite =
-            <_ as sts2_core::EncounterTable>::room(encounter) == <_ as sts2_core::RoomKinds>::ELITE;
+        // `GenerateRewardsFor` switches on the room, which is what adds a
+        // relic, moves the potion odds, and prices the card reward's
+        // rarities. The encounter carries the room it belongs to.
+        let room = match <_ as sts2_core::EncounterTable>::room(encounter) {
+            room if room == <_ as sts2_core::RoomKinds>::ELITE => {
+                crate::reward::combat::Room::Elite
+            }
+            room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
+            _ => crate::reward::combat::Room::Monster,
+        };
         let (rng, odds) = self.rewarding();
         let (mut offered, rarity) =
-            crate::reward::combat::won::<V, _>(rng, odds, ascension, character, gold, act, elite);
+            crate::reward::combat::won::<V, _>(rng, odds, ascension, character, gold, act, room);
         if let Some(rarity) = rarity {
             // `PullNextRelicFromFront`, which the run's own bookkeeping covers.
             let relic = self.pull_relic(rarity);

@@ -403,11 +403,18 @@ pub(super) fn hooked<V: Rules>(
     hooks: impl Iterator<Item = Modify<V::Number>>,
 ) -> V::Number {
     let (mut added, mut share) = (amount, 1.0f64);
+    let mut ceiling: Option<V::Number> = None;
     for hook in hooks {
         match hook {
             Modify::Nothing => {}
             Modify::Added(more) => added = added + more,
             Modify::Scaled(by) => share *= by,
+            // Last, because a ceiling is a listener handing back a number of
+            // its own. Nothing this build fields both caps and scales, so the
+            // order between them is not one the game has had to settle.
+            Modify::AtMost(most) => {
+                ceiling = Some(ceiling.map_or(most, |held: V::Number| held.min(most)));
+            }
         }
     }
 
@@ -415,7 +422,41 @@ pub(super) fn hooked<V: Rules>(
     // float holds those exactly, so the truncation lands where the game's own
     // decimal arithmetic lands.
     let amount: f64 = num_traits::cast(added).expect("a number a fight works out fits a float");
-    num_traits::cast((amount * share).max(0.0).trunc()).expect("a modified number is a game number")
+    let amount: V::Number = num_traits::cast((amount * share).max(0.0).trunc())
+        .expect("a modified number is a game number");
+    match ceiling {
+        Some(most) => amount.min(most),
+        None => amount,
+    }
+}
+
+/// What a hit takes off the hit points, which is `Hook.ModifyHpLost`.
+///
+/// The block has already taken what it can. The game asks every listener in
+/// the fight, and each reads whether the creature hit is its own. This asks
+/// the powers on that creature, which is the same set answering.
+pub(super) fn hp_lost<V: Rules>(
+    creatures: &[Creature<V>],
+    counters: &[Counter<V>],
+    target: CombatId,
+    unblocked: V::Number,
+) -> V::Number {
+    let held = creatures
+        .iter()
+        .find(|creature| creature.id == target)
+        .into_iter()
+        .flat_map(|creature| {
+            creature.powers.iter().map(|held| {
+                <V as sts2_core::Hooks>::modify_hook(
+                    held.listener(
+                        creature.side,
+                        counted::<V>(counters, creature.id, held.power),
+                    ),
+                    sts2_core::ModifyHook::HpLost,
+                )
+            })
+        });
+    hooked::<V>(unblocked, held)
 }
 
 /// One hit after every power on either side has had its say, which is
@@ -669,12 +710,29 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 let zero = V::Number::zero();
                 let blocked = self.live.creatures[at].block.min(damage).max(zero);
                 self.live.creatures[at].block = self.live.creatures[at].block - blocked;
-                let unblocked = (damage - blocked).max(zero);
+                // `ModifyHpLost` over what the block left, which is where a
+                // power that caps a hit rather than shrinks it acts.
+                let unblocked = hp_lost::<V>(
+                    &self.live.creatures,
+                    &self.live.counted,
+                    target,
+                    (damage - blocked).max(zero),
+                );
 
                 let hp = self.live.creatures[at].hp;
                 let health_zero = V::Health::zero();
                 let killed = hp > health_zero && unblocked >= V::Number::from(hp);
                 self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
+                // `AfterDamageReceived` carries the `DamageResult`, so this is
+                // what the hit took off rather than what it was swung for.
+                let asked = super::power::notify_creature::<V>(
+                    self.live,
+                    target,
+                    sts2_core::EventHook::DamageReceived { unblocked },
+                );
+                if let Some(effect) = asked.first() {
+                    unimplemented!("a power asking for {effect:?} after a hit")
+                }
                 if killed {
                     self.kill(at);
                 }

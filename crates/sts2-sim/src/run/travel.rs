@@ -44,9 +44,12 @@ impl<V: Rules> State<V> {
             .iter()
             .find(|reachable| reachable.at == to)
             .ok_or(Reason::NotTravelable { at: to })?;
-        let destination = if reachable.kind == V::MapPointType::MONSTER
-            || reachable.kind == V::MapPointType::ELITE
-        {
+        let fights = [
+            V::MapPointType::MONSTER,
+            V::MapPointType::ELITE,
+            V::MapPointType::BOSS,
+        ];
+        let destination = if fights.contains(&reachable.kind) {
             let act: usize = num_traits::cast(reported.observation.act)
                 .expect("an act number fits an addressable list");
             let (encounter, queue) = if reachable.kind == V::MapPointType::MONSTER {
@@ -55,11 +58,17 @@ impl<V: Rules> State<V> {
                         .expect("a reachable monster room has a rolled encounter"),
                     EncounterQueue::Normal,
                 )
-            } else {
+            } else if reachable.kind == V::MapPointType::ELITE {
                 (
                     self.elite_encounter(act)
                         .expect("a reachable elite room has a rolled encounter"),
                     EncounterQueue::Elite,
+                )
+            } else {
+                (
+                    self.boss_encounter(act)
+                        .expect("an act rolled the boss that ends it"),
+                    EncounterQueue::Boss,
                 )
             };
             Destination::Combat { encounter, queue }
