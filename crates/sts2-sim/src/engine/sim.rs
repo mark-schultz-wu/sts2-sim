@@ -50,6 +50,7 @@ impl<V: Rules> Play<V> for Sim<V> {
             Decision::PlayCard { index, target } => self.state.play_card(*index, *target),
             Decision::EndTurn => self.state.end_turn(),
             Decision::UsePotion { index, target } => self.state.use_potion(*index, *target),
+            Decision::Proceed => self.state.proceed().map(Ok),
             Decision::Travel { to } => match self.state.resolve(*to) {
                 Err(reason) => Ok(Err(Refusal {
                     what: "travel".into(),

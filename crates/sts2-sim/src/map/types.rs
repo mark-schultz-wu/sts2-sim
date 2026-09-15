@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 
 use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
 
-use sts2_core::{AscensionKinds, MapPointKinds, Rules};
+use sts2_core::{AscensionKinds, Layout, MapPointKinds, Rests, Rules};
 
 use super::{ActMapBuilder, Id};
 
@@ -28,44 +28,6 @@ pub(crate) struct Counts {
     pub(crate) rests: usize,
     pub(crate) elites: usize,
     pub(crate) shops: usize,
-}
-
-/// How one act rolls the rest sites on its map.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Rests {
-    /// `NextGaussianInt(mean, 1, min, max)`, which three of the four acts use.
-    Around { mean: usize, min: usize, max: usize },
-    /// `NextInt(min, max)`, which the last act uses.
-    Between { min: usize, max: usize },
-}
-
-/// What one act's map is made of, before any of it is rolled.
-///
-/// The four acts differ in three numbers and in nothing else, so the generator
-/// takes them rather than knowing about acts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Layout {
-    /// `BaseNumberOfRooms`, which is one less than the grid's height.
-    pub rooms: usize,
-    pub rests: Rests,
-    /// Taken off the standard question mark roll. Zero in the first act.
-    pub fewer_unknowns: usize,
-}
-
-impl Layout {
-    /// The first act, which is the Underdocks or the Overgrowth.
-    ///
-    /// The two are the same map: fifteen rooms, rest sites around seven, and
-    /// the standard question mark roll untouched.
-    pub const ACT_ONE: Layout = Layout {
-        rooms: 15,
-        rests: Rests::Around {
-            mean: 7,
-            min: 6,
-            max: 7,
-        },
-        fewer_unknowns: 0,
-    };
 }
 
 impl Counts {

@@ -14,7 +14,7 @@ use sts2_core::{
 
 use crate::combat::Error;
 use crate::event::Blessing;
-use crate::map::{ActMap, Layout};
+use crate::map::ActMap;
 use crate::reward::{Odds, Offer};
 use crate::run::{Opening, Rarity};
 use crate::stream::Streams;
@@ -27,8 +27,16 @@ use sts2_core::Gift;
 #[derive(Debug, Clone)]
 pub(crate) struct State<V: Rules> {
     shared: Arc<RunData<V>>,
-    at: Coord,
+    /// The act's map, which is generated again for every act.
+    map: Arc<ActMap<V>>,
+    /// Which act the run stands in, counted from zero.
+    act: usize,
     floor: V::Count,
+    /// Every point this act's run has stood on, in order.
+    ///
+    /// Where the run stands is the last of them. An act that has just begun
+    /// has none, because `SetActInternal` clears them. Its map opens on its
+    /// own starting node rather than on a point the run stands at.
     visited: Vec<Coord>,
     player: Player<V>,
     streams: Streams<V>,
@@ -72,12 +80,22 @@ pub(super) enum EncounterQueue {
 ///
 /// Data generated once and shared by every branch of this run.
 ///
-/// The act's map settles when it is generated. It does not change while the
-/// act is played, so every branch and every report reads one copy.
+/// What each act's map stream is named, which is `act_{index + 1}_map`.
+///
+/// Spelled out rather than built, because this crate reports parts and never
+/// sentences. A run has four acts, and the game's own name for each is here.
+const MAP_STREAMS: [&str; 4] = ["act_1_map", "act_2_map", "act_3_map", "act_4_map"];
+
+/// `UnknownMapPointOdds`, as an act opens with them.
+///
+/// The three are what an unknown room resolves to, and they climb as a run
+/// walks into ones that stay events.
+const UNKNOWN_ODDS: [f32; 3] = [0.1, 0.02, 0.03];
+
+/// Every branch and every report reads one copy of it.
 #[derive(Debug)]
 struct RunData<V: Rules> {
     opening: Opening<V>,
-    map: ActMap<V>,
     raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
@@ -146,6 +164,8 @@ enum Phase<V: Rules> {
         chosen: Option<u8>,
         selection: Option<SmallVec<[V::Card; 4]>>,
     },
+    /// The map itself, which an act opens on and no room owns.
+    Map,
     Combat(crate::combat::Live<V>),
     /// A fight that is over, and the rewards it has not handed out yet.
     ///
@@ -190,7 +210,8 @@ impl<V: Rules> Phase<V> {
             } => chosen.is_some() && selection.is_none(),
             Phase::Treasure { finished, .. } => *finished,
             Phase::RestSite { options, .. } => options.is_empty(),
-            Phase::Combat(_) | Phase::Rewards { .. } | Phase::Event { .. } => false,
+            // The map is not a room, so there is nothing to leave.
+            Phase::Map | Phase::Combat(_) | Phase::Rewards { .. } | Phase::Event { .. } => false,
         }
     }
 }
@@ -213,6 +234,24 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// Generate one act's map, off the stream the act's own index names.
+    ///
+    /// `new Rng(seed, $"act_{CurrentActIndex + 1}_map")`, which is why the
+    /// second act's map is not the first act's under another name.
+    fn act_map(
+        raw_seed: u64,
+        act: V::Act,
+        index: usize,
+        ascension: V::AscensionLevel,
+    ) -> ActMap<V> {
+        let named = MAP_STREAMS
+            .get(index)
+            .unwrap_or_else(|| unimplemented!("the map stream a run's act {index} draws from"));
+        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(raw_seed, named);
+        ActMap::<V>::generate(&mut rng, V::act_layout(act), ascension)
+            .expect("an act's layout fits a packed map path")
+    }
+
     pub(crate) fn start(
         seed: &Seed,
         character: V::Character,
@@ -227,9 +266,7 @@ impl<V: Rules> State<V> {
         let mut streams = Streams::<V>::opening(raw_seed);
         let opening = Opening::draw(streams.run(V::RunRngType::UP_FRONT), character, &acts);
 
-        let mut map_rng: MegaRng = sts2_core::rng::named::<V, _>(raw_seed, "act_1_map");
-        let map = ActMap::<V>::generate(&mut map_rng, Layout::ACT_ONE, ascension)
-            .expect("the game's act-one layout fits a packed map path");
+        let map = Self::act_map(raw_seed, acts[0], 0, ascension);
         let at = map
             .ancient()
             .expect("a generated act map opens somewhere")
@@ -241,12 +278,12 @@ impl<V: Rules> State<V> {
         Self {
             shared: Arc::new(RunData {
                 opening,
-                map,
                 raw_seed,
                 character,
                 ascension,
             }),
-            at,
+            map: Arc::new(map),
+            act: 0,
             floor: num_traits::one(),
             visited: vec![at],
             player: Player {
@@ -270,7 +307,7 @@ impl<V: Rules> State<V> {
             elite_fights: 0,
             events_used: 0,
             visited_events: Vec::new(),
-            unknown_odds: [0.1, 0.02, 0.03],
+            unknown_odds: UNKNOWN_ODDS,
             odds: Odds::default(),
             dealt_relics: SmallVec::new(),
             streams,
@@ -298,7 +335,8 @@ impl<V: Rules> State<V> {
     pub(super) fn fight(&self) -> Option<&crate::combat::Live<V>> {
         match &self.phase {
             Phase::Combat(live) => Some(live),
-            Phase::Neow { .. }
+            Phase::Map
+            | Phase::Neow { .. }
             | Phase::Rewards { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
@@ -411,12 +449,51 @@ impl<V: Rules> State<V> {
             .front(rarity, &self.dealt_relics)
     }
 
-    /// Which act the run stands in.
-    ///
-    /// One, until the simulator leaves it. An act's own boss is the way out and
-    /// nothing beats one yet.
+    /// Which act the run stands in, counted from zero.
     pub(super) fn act(&self) -> usize {
-        0
+        self.act
+    }
+
+    /// `RunManager.EnterNextAct`, which the finished act's boss room offers.
+    ///
+    /// `SetActInternal` moves the index on and forgets the points the last act
+    /// visited. It puts the question mark odds back where they started, and
+    /// generates the new act's map. The run then stands on the map itself
+    /// rather than in a room, which is what an act with nothing visited is.
+    ///
+    /// # Panics
+    ///
+    /// A run that has beaten the last act's boss, which wins it.
+    pub(crate) fn proceed(&mut self) -> Result<Applied<V>, Error> {
+        let next = self.act + 1;
+        let (act, _) = *self
+            .shared
+            .opening
+            .acts
+            .get(next)
+            .unwrap_or_else(|| unimplemented!("a run that has no act left to enter"));
+        self.map = Arc::new(Self::act_map(
+            self.shared.raw_seed,
+            act,
+            next,
+            self.ascension(),
+        ));
+        self.act = next;
+        self.visited.clear();
+        // `Odds.UnknownMapPoint.ResetToBase`, which is the only one of the
+        // run's odds an act puts back.
+        self.unknown_odds = UNKNOWN_ODDS;
+        // Each act deals its own encounters and is met from the front of its
+        // own list.
+        self.normal_fights = 0;
+        self.elite_fights = 0;
+        self.phase = Phase::Map;
+        Ok(self.report())
+    }
+
+    /// The ancient this act opens on, which it rolled with its rooms.
+    pub(super) fn act_ancient(&self) -> V::Event {
+        self.shared.opening.acts[self.act()].1.ancient
     }
 
     pub(super) fn event_candidates(&self) -> &[V::Event] {
@@ -437,7 +514,6 @@ impl<V: Rules> State<V> {
             unknown_odds,
         } = entered;
         self.floor = self.floor + num_traits::one();
-        self.at = to;
         self.visited.push(to);
         self.streams = streams;
         self.events_used = events_used;
@@ -449,7 +525,6 @@ impl<V: Rules> State<V> {
     /// Enter a treasure room after resolving its relic and stream counter.
     pub(super) fn enter_treasure(&mut self, to: Coord, relic: V::Relic, streams: Streams<V>) {
         self.floor = self.floor + num_traits::one();
-        self.at = to;
         self.visited.push(to);
         self.streams = streams;
         self.dealt_relics.push(relic);
@@ -462,7 +537,6 @@ impl<V: Rules> State<V> {
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, to: Coord) {
         self.floor = self.floor + num_traits::one();
-        self.at = to;
         self.visited.push(to);
         let deck = self.player.deck.to_vec();
         self.phase = Phase::RestSite {
@@ -492,7 +566,6 @@ impl<V: Rules> State<V> {
             EncounterQueue::Elite => self.elite_fights += 1,
             EncounterQueue::Boss => {}
         }
-        self.at = to;
         self.visited.push(to);
         self.drew(streams);
         self.phase = Phase::Combat(live);
@@ -886,19 +959,31 @@ impl<V: Rules> State<V> {
 
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Applied<V> {
-        let map = &self.shared.map;
-        let travelable = map
-            .at(self.at)
-            .expect("the run stands on its own map")
-            .to
-            .iter()
-            .map(|&at| Reachable {
+        let map = &self.map;
+        let standing = self.visited.last().map(|&at| {
+            map.at(at)
+                .expect("the run stands on a point of its own map")
+        });
+        // `MapLegality.TravelableFrom`, which reads the last point visited
+        // rather than a room the run is in. An act with none visited has just
+        // begun, and its map opens on its own starting node.
+        let reachable: Vec<Coord> = match standing {
+            Some(point) => point.to.clone(),
+            None => vec![
+                map.ancient()
+                    .expect("a generated act map opens somewhere")
+                    .at,
+            ],
+        };
+        let travelable = reachable
+            .into_iter()
+            .map(|at| Reachable {
                 at,
                 kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect();
-        let at_boss = map.at(self.at).expect("the run stands on its own map").kind
-            == <V::MapPointType as sts2_core::MapPointKinds>::BOSS;
+        let at_boss = standing
+            .is_some_and(|point| point.kind == <V::MapPointType as sts2_core::MapPointKinds>::BOSS);
         let finished = self.phase.finished();
         let (asking, room, combat, in_combat) = match &self.phase {
             Phase::Neow {
@@ -967,6 +1052,8 @@ impl<V: Rules> State<V> {
                 // not left the room it was fought in.
                 false,
             ),
+            // An act opens on its map, which is no room and asks nothing.
+            Phase::Map => (None, None, None, false),
             Phase::Event { state, .. } => (None, Some(V::observe_event(state, self)), None, false),
             Phase::Treasure { relic, finished } => {
                 let options = if *finished {
@@ -1049,7 +1136,8 @@ impl<V: Rules> State<V> {
                     alive: player.alive,
                 }
             }
-            Phase::Neow { .. }
+            Phase::Map
+            | Phase::Neow { .. }
             | Phase::Rewards { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
@@ -1062,7 +1150,7 @@ impl<V: Rules> State<V> {
 
         Applied {
             observation: Observation {
-                act: num_traits::zero(),
+                act: num_traits::cast(self.act).expect("an act index is a game number"),
                 floor: self.floor,
                 hp: standing.hp,
                 max_hp: standing.max_hp,
@@ -1091,7 +1179,7 @@ impl<V: Rules> State<V> {
                 deck: self.player.deck.clone(),
                 in_combat,
                 map: Map {
-                    at: Some(self.at),
+                    at: self.visited.last().copied(),
                     visited: self.visited.clone(),
                     travelable,
                     points: map.shared(),

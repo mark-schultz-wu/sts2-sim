@@ -106,6 +106,30 @@ impl<V: Rules> State<V> {
                 self.enter_rest_site(to);
                 return Ok(self.report());
             }
+            if kind == V::MapPointType::ANCIENT {
+                // The act rolled which ancient it opens on when it rolled its
+                // rooms, so nothing is drawn for it here. The question mark
+                // odds and the event queue are the unknown rooms' own, and an
+                // ancient is not one of them.
+                let event = self.act_ancient();
+                let mut event_rng =
+                    crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
+                let state = V::enter_event(event, self, &mut event_rng);
+                let (events_used, _, unknown_odds) = self.event_state();
+                let streams = self.streams().clone();
+                self.enter_event(
+                    to,
+                    super::state::EnteredEvent {
+                        event,
+                        state,
+                        rng: event_rng,
+                        streams,
+                        events_used,
+                        unknown_odds,
+                    },
+                );
+                return Ok(self.report());
+            }
             if kind != V::MapPointType::UNKNOWN {
                 unimplemented!("entering {destination:?}");
             }

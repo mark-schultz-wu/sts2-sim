@@ -21,10 +21,9 @@ mod types;
 use std::sync::Arc;
 
 use sts2_core::rng::{GameRng, RngInteger, Span};
-use sts2_core::{Coord, MapPointKinds, NoNode, Node, Rules};
+use sts2_core::{Coord, Layout, MapPointKinds, NoNode, Node, Rules};
 
 use set::Order;
-pub use types::{Layout, Rests};
 
 /// Why the simulator failed to represent an act map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -417,7 +416,8 @@ mod tests {
     fn map() -> ActMap<V> {
         let seed = Seed::new("0RACLE1").expect("the fixture's seed is a seed");
         let mut rng: MegaRng = sts2_core::rng::named::<V, _>(stream_seed::<V>(&seed), "act_1_map");
-        ActMap::<V>::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::None)
+        let layout = <V as Rules>::act_layout(sts2_content::v0_107_1::acts::Act::Overgrowth);
+        ActMap::<V>::generate(&mut rng, layout, AscensionLevel::None)
             .expect("the fixture's map generates")
     }
 

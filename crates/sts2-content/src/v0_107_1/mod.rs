@@ -156,6 +156,10 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(character).relic_pool
     }
 
+    fn act_layout(act: Self::Act) -> sts2_core::Layout {
+        behaviour::acts::layout(act)
+    }
+
     fn starting_deck(character: Self::Character) -> Vec<Self::Card> {
         sts2_core::Table::data(character).deck.iter().collect()
     }

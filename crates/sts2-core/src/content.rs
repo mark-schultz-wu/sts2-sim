@@ -1820,6 +1820,10 @@ pub trait Rules: Hooks {
     /// The cards a character opens a run with, in deck order.
     fn starting_deck(character: Self::Character) -> Vec<Self::Card>;
 
+    /// What one act's map is made of, which is `ActModel.GetMapPointTypes`
+    /// together with the room count its table carries.
+    fn act_layout(act: Self::Act) -> Layout;
+
     /// The relics a character opens a run with, in panel order.
     fn starting_relics(character: Self::Character) -> Vec<Self::Relic>;
 
