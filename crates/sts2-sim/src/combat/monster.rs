@@ -2,13 +2,11 @@
 
 use crate::rng::MegaRng;
 use sts2_core::rng::{Choices, GameRng};
-use sts2_core::{
-    CombatId, Counters, Creature, ModelId, MoveMachine, Rules, RunStreamKinds, SideKinds,
-};
+use sts2_core::{CombatId, Creature, ModelId, MoveMachine, Rules, RunStreamKinds, SideKinds};
 
 use super::Error;
 use super::live::Live;
-use crate::stream;
+use crate::stream::Streams;
 
 /// Roll a monster's health, avoiding healths already rolled in this fight
 /// whenever its range leaves another choice.
@@ -61,14 +59,13 @@ pub(crate) struct Machine<V: Rules> {
 /// Roll health and the first move in encounter order, advancing the two run
 /// streams that own those draws.
 pub(crate) fn initialize<V: Rules>(
-    raw_seed: u32,
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
-    counters: &mut Counters<V>,
+    streams: &mut Streams<V>,
     monsters: &[V::Monster],
 ) -> Result<Roster<V>, Error> {
-    let mut niche = stream::seek(raw_seed, counters, V::RunRngType::NICHE)?;
-    let mut ai = stream::seek(raw_seed, counters, V::RunRngType::MONSTER_AI)?;
+    let mut niche = streams.stream(V::RunRngType::NICHE);
+    let mut ai = streams.stream(V::RunRngType::MONSTER_AI);
 
     // A fight the encounter builds nobody for is not a fight.
     let roster_size = u8::try_from(monsters.len())
@@ -121,8 +118,8 @@ pub(crate) fn initialize<V: Rules>(
         });
     }
 
-    stream::record(counters, V::RunRngType::NICHE, &niche)?;
-    stream::record(counters, V::RunRngType::MONSTER_AI, &ai)?;
+    streams.record(V::RunRngType::NICHE, niche);
+    streams.record(V::RunRngType::MONSTER_AI, ai);
     Ok(Roster {
         creatures,
         machines,
@@ -213,13 +210,12 @@ pub(super) fn summon<V: Rules>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use sts2_content::v0_107_1::{
         V0_107_1,
         ascension::AscensionLevel,
         encounters::Encounter,
         monsters::{IntentKind, Monster, MoveId},
-        runstate::{PlayerRngType, RunRngType},
+        runstate::RunRngType,
     };
     use sts2_core::rng::stream_seed;
     use sts2_core::{Attack, Intent, NextMove, Seed};
@@ -236,17 +232,13 @@ mod tests {
     #[test]
     fn monsters_of_a_kind_get_different_health() {
         let seed = Seed::new("0RACLE1").unwrap();
-        let mut counters = Counters {
-            run: RunRngType::ALL.into_iter().map(|kind| (kind, 0)).collect(),
-            player: HashMap::<PlayerRngType, u32>::new(),
-        };
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed(&seed));
         let inklets = [Monster::Inklet, Monster::Inklet, Monster::Inklet];
 
         let roster = initialize::<V0_107_1>(
-            stream_seed(&seed),
             AscensionLevel::None,
             Encounter::SlimesWeak,
-            &mut counters,
+            &mut streams,
             &inklets,
         )
         .unwrap();
@@ -264,10 +256,7 @@ mod tests {
     #[test]
     fn the_oracle_weak_slimes_get_the_same_health_and_moves() {
         let seed = Seed::new("0RACLE1").unwrap();
-        let mut counters = Counters {
-            run: RunRngType::ALL.into_iter().map(|kind| (kind, 0)).collect(),
-            player: HashMap::<PlayerRngType, u32>::new(),
-        };
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed(&seed));
         let monsters = [
             Monster::TwigSlimeS,
             Monster::LeafSlimeM,
@@ -275,10 +264,9 @@ mod tests {
         ];
 
         let roster = initialize::<V0_107_1>(
-            stream_seed(&seed),
             AscensionLevel::None,
             Encounter::SlimesWeak,
-            &mut counters,
+            &mut streams,
             &monsters,
         )
         .unwrap();
@@ -288,6 +276,7 @@ mod tests {
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),
             [8, 35, 12]
         );
+        let counters = streams.counters();
         assert_eq!(counters.run[&RunRngType::Niche], 3);
         assert_eq!(counters.run[&RunRngType::MonsterAi], 1);
         assert_eq!(
@@ -322,47 +311,5 @@ mod tests {
                 }),
             ]
         );
-    }
-}
-
-#[cfg(test)]
-mod counter_tests {
-    use super::*;
-    use std::collections::HashMap;
-    use sts2_content::v0_107_1::{
-        V0_107_1,
-        ascension::AscensionLevel,
-        encounters::Encounter,
-        monsters::Monster,
-        runstate::{PlayerRngType, RunRngType},
-    };
-
-    #[test]
-    fn a_missing_required_stream_is_not_counter_zero() {
-        for (missing, stream) in [
-            (RunRngType::Niche, "niche"),
-            (RunRngType::MonsterAi, "monster_ai"),
-        ] {
-            let mut counters = Counters {
-                run: RunRngType::ALL
-                    .into_iter()
-                    .filter(|kind| *kind != missing)
-                    .map(|kind| (kind, 0))
-                    .collect(),
-                player: HashMap::<PlayerRngType, u32>::new(),
-            };
-            let before = counters.clone();
-
-            let error = initialize::<V0_107_1>(
-                123,
-                AscensionLevel::None,
-                Encounter::SlimesWeak,
-                &mut counters,
-                &[Monster::TwigSlimeS],
-            )
-            .expect_err("a required counter is absent");
-            assert_eq!(error, Error::MissingCounter { stream });
-            assert_eq!(counters, before);
-        }
     }
 }

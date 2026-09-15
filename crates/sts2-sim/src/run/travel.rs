@@ -78,12 +78,10 @@ impl<V: Rules> State<V> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
-                let mut rng = crate::stream::seek(
-                    self.raw_seed(),
-                    &self.counters(),
-                    V::RunRngType::TREASURE_ROOM_RELICS,
-                )?;
-                let roll = rng.next_double();
+                let mut streams = self.streams().clone();
+                let roll = streams
+                    .run(V::RunRngType::TREASURE_ROOM_RELICS)
+                    .next_double();
                 let rarity = if roll < COMMON_RELIC_CHANCE {
                     <super::Rarity<V> as sts2_core::RarityKinds>::COMMON
                 } else if roll < COMMON_RELIC_CHANCE + UNCOMMON_RELIC_CHANCE {
@@ -92,19 +90,15 @@ impl<V: Rules> State<V> {
                     <super::Rarity<V> as sts2_core::RarityKinds>::RARE
                 };
                 let relic = self.next_shared_relic(rarity);
-                self.enter_treasure(to, relic, rng.counter() as u32);
+                self.enter_treasure(to, relic, streams);
                 return Ok(self.report());
             }
             if kind != V::MapPointType::UNKNOWN {
                 unimplemented!("entering {destination:?}");
             }
             let (mut events_used, visited, mut odds) = self.event_state();
-            let mut rng = crate::stream::seek(
-                self.raw_seed(),
-                &self.counters(),
-                V::RunRngType::UNKNOWN_MAP_POINT,
-            )?;
-            let roll = rng.next_double() as f32;
+            let mut streams = self.streams().clone();
+            let roll = streams.run(V::RunRngType::UNKNOWN_MAP_POINT).next_double() as f32;
             let mut cumulative = 0.0;
             for probability in odds {
                 cumulative += probability;
@@ -134,7 +128,7 @@ impl<V: Rules> State<V> {
                     event,
                     state,
                     rng: event_rng,
-                    unknown_counter: rng.counter() as u32,
+                    streams,
                     events_used,
                     unknown_odds: odds,
                 },

@@ -9,7 +9,7 @@
 
 use crate::rng::MegaRng;
 use sts2_core::{
-    CardTable, CombatId, Counters, PowerAmount, Rules, RunStreamKinds, SideKinds, TurnPhaseKinds,
+    CardTable, CombatId, PowerAmount, Rules, RunStreamKinds, SideKinds, TurnPhaseKinds,
 };
 
 use super::Error;
@@ -17,24 +17,23 @@ use super::board::{Board, draw};
 use super::live::Live;
 use super::relic;
 use super::start::{hand_size, upgraded};
-use crate::stream;
+use crate::stream::Streams;
 
 /// End the player's turn and set up the next one.
 pub(crate) fn end<V: Rules>(
     live: &Live<V>,
-    raw_seed: u32,
     ascension: V::AscensionLevel,
-    counters: &Counters<V>,
+    streams: &Streams<V>,
     max_energy: V::Count,
     relics: &[crate::run::HeldRelic<V>],
 ) -> Result<super::Fought<V>, Error> {
     let mut next = live.clone();
     let mut relics = relics.to_vec();
     let mut skipping = std::mem::take(&mut next.skip_tick);
-    let mut counters = counters.clone();
-    let mut shuffle = stream::seek(raw_seed, &counters, V::RunRngType::SHUFFLE)?;
-    let mut ai = stream::seek(raw_seed, &counters, V::RunRngType::MONSTER_AI)?;
-    let mut niche = stream::seek(raw_seed, &counters, V::RunRngType::NICHE)?;
+    let mut streams = streams.clone();
+    let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
+    let mut ai = streams.stream(V::RunRngType::MONSTER_AI);
+    let mut niche = streams.stream(V::RunRngType::NICHE);
 
     turn_end(&mut next);
     flush_hand(&mut next);
@@ -81,16 +80,16 @@ pub(crate) fn end<V: Rules>(
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
-    stream::record(&mut counters, V::RunRngType::SHUFFLE, &shuffle)?;
-    stream::record(&mut counters, V::RunRngType::MONSTER_AI, &ai)?;
-    stream::record(&mut counters, V::RunRngType::NICHE, &niche)?;
+    streams.record(V::RunRngType::SHUFFLE, shuffle);
+    streams.record(V::RunRngType::MONSTER_AI, ai);
+    streams.record(V::RunRngType::NICHE, niche);
     next.skip_tick = skipping;
     if won {
         relic::combat_ended::<V>(&mut relics);
     }
     Ok(super::Fought {
         live: next,
-        counters,
+        streams,
         relics,
         won,
     })

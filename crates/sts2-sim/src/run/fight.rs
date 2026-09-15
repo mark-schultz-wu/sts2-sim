@@ -17,13 +17,7 @@ impl<V: Rules> State<V> {
         let Some(live) = self.fight() else {
             unreachable!("a fight answer has a live fight");
         };
-        let fought = combat::answer(
-            live,
-            chosen,
-            self.raw_seed(),
-            &self.counters(),
-            self.relics(),
-        )?;
+        let fought = combat::answer(live, chosen, self.streams(), self.relics())?;
         Ok(self.settle(fought))
     }
 
@@ -51,7 +45,7 @@ impl<V: Rules> State<V> {
             Err(reason) => return refused(reason),
         };
 
-        let played = combat::play(live, play, self.raw_seed(), &self.counters(), self.relics())?;
+        let played = combat::play(live, play, self.streams(), self.relics())?;
         Ok(Ok(self.settle(played)))
     }
 
@@ -109,14 +103,7 @@ impl<V: Rules> State<V> {
         let Some(live) = self.fight() else {
             unimplemented!("a potion drunk outside a fight");
         };
-        let drunk = combat::drink(
-            live,
-            potion,
-            target,
-            self.raw_seed(),
-            &self.counters(),
-            self.relics(),
-        )?;
+        let drunk = combat::drink(live, potion, target, self.streams(), self.relics())?;
         self.drank(at);
         Ok(Ok(self.settle(drunk)))
     }
@@ -136,9 +123,8 @@ impl<V: Rules> State<V> {
             .expect("the turn's energy fits the build's count type");
         let ended = combat::end_turn(
             live,
-            self.raw_seed(),
             self.ascension(),
-            &self.counters(),
+            self.streams(),
             max_energy,
             self.relics(),
         )?;
@@ -150,7 +136,7 @@ impl<V: Rules> State<V> {
     /// A decision that won the fight goes on to the rewards, which is
     /// `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
     fn settle(&mut self, fought: combat::Fought<V>) -> sts2_core::Applied<V> {
-        self.drew(fought.counters);
+        self.drew(fought.streams);
         // The belt the fight wrote, beside the streams it drew from. Neither
         // is committed until the decision is one the simulator could carry
         // out whole.

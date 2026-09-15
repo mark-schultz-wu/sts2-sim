@@ -26,11 +26,11 @@ use sts2_core::Rules;
 
 /// What one decision leaves behind.
 ///
-/// The counters travel with the fight because a decision can draw, and the run
+/// The streams travel with the fight because a decision can draw, and the run
 /// writes both back together or neither.
 pub(crate) struct Fought<V: Rules> {
     pub(crate) live: Live<V>,
-    pub(crate) counters: sts2_core::Counters<V>,
+    pub(crate) streams: crate::stream::Streams<V>,
     /// The belt as the relics in it left it. They are notified inside the
     /// fight and their models save what they counted, so the run writes these
     /// back beside the fight or neither.

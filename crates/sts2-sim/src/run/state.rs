@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::rng::MegaRng;
@@ -18,6 +17,7 @@ use crate::event::Blessing;
 use crate::map::{ActMap, Layout};
 use crate::reward::{Odds, Offer};
 use crate::run::{Opening, Rarity};
+use crate::stream::Streams;
 use sts2_core::Gift;
 
 /// The authoritative state of the run slice implemented so far.
@@ -31,7 +31,7 @@ pub(crate) struct State<V: Rules> {
     floor: V::Count,
     visited: Vec<Coord>,
     player: Player<V>,
-    rngs: Rngs,
+    streams: Streams<V>,
     /// How many of this act's normal fights the run has walked into.
     ///
     /// The act's list is dealt at the start of the run and met in order, so
@@ -125,35 +125,13 @@ struct Player<V: Rules> {
     potion_slots: V::Count,
 }
 
-/// Mutable random streams and their compact counters.
-///
-/// The counters are held at the position their stream has in
-/// [`Rules::run_rng_types`], so a run carries twelve numbers and no keys.
-#[derive(Debug, Clone)]
-struct Rngs {
-    run: SmallVec<[u32; 16]>,
-    player: SmallVec<[u32; 4]>,
-    rewards: MegaRng,
-}
-
-/// Where in [`Rngs::run`] a stream's counter is kept.
-///
-/// Every run stream the build has is in that list, so a stream it does not hold
-/// is one the build did not generate.
-fn run_stream_at<V: Rules>(kind: V::RunRngType) -> usize {
-    V::run_rng_types()
-        .iter()
-        .position(|candidate| *candidate == kind)
-        .expect("a run stream is one of the build's own")
-}
-
 /// Exactly one room or pending action can own the run at a time.
 #[derive(Debug, Clone)]
 pub(super) struct EnteredEvent<V: Rules> {
     pub event: V::Event,
     pub state: V::EventState,
     pub rng: MegaRng,
-    pub unknown_counter: u32,
+    pub streams: Streams<V>,
     pub events_used: usize,
     pub unknown_odds: [f32; 3],
 }
@@ -211,8 +189,8 @@ impl<V: Rules> State<V> {
             .copied()
             .filter(|act| act.played())
             .collect();
-        let mut up_front = MegaRng::for_stream(raw_seed, V::RunRngType::UP_FRONT);
-        let opening = Opening::draw(&mut up_front, character, &acts);
+        let mut streams = Streams::<V>::opening(raw_seed);
+        let opening = Opening::draw(streams.run(V::RunRngType::UP_FRONT), character, &acts);
 
         let mut map_rng = MegaRng::named(raw_seed, "act_1_map");
         let map = ActMap::<V>::generate(&mut map_rng, Layout::ACT_ONE, ascension)
@@ -224,10 +202,6 @@ impl<V: Rules> State<V> {
 
         let mut neow_rng: MegaRng = Blessing::<V>::stream(raw_seed, 0);
         let neow_options = Blessing::<V>::roll(&mut neow_rng, 1).options;
-
-        let mut run_counters: SmallVec<[u32; 16]> =
-            smallvec::smallvec![0; V::run_rng_types().len()];
-        run_counters[run_stream_at::<V>(V::RunRngType::UP_FRONT)] = up_front.counter() as u32;
 
         Self {
             shared: Arc::new(RunData {
@@ -264,11 +238,7 @@ impl<V: Rules> State<V> {
             unknown_odds: [0.1, 0.02, 0.03],
             odds: Odds::default(),
             dealt_relics: SmallVec::new(),
-            rngs: Rngs {
-                run: run_counters,
-                player: smallvec::smallvec![0; V::player_rng_types().len()],
-                rewards: MegaRng::for_stream(raw_seed, V::PlayerRngType::REWARDS),
-            },
+            streams,
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
                 chosen: None,
@@ -357,7 +327,10 @@ impl<V: Rules> State<V> {
     /// Together, because a roll reads and writes both, and they are two fields
     /// of the same run.
     pub(super) fn rewarding(&mut self) -> (&mut MegaRng, &mut Odds) {
-        (&mut self.rngs.rewards, &mut self.odds)
+        (
+            self.streams.player(V::PlayerRngType::REWARDS),
+            &mut self.odds,
+        )
     }
 
     /// The run's two relic bags: the player's own, then the shared one.
@@ -408,14 +381,14 @@ impl<V: Rules> State<V> {
             event,
             state,
             rng,
-            unknown_counter,
+            streams,
             events_used,
             unknown_odds,
         } = entered;
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
-        self.rngs.run[run_stream_at::<V>(V::RunRngType::UNKNOWN_MAP_POINT)] = unknown_counter;
+        self.streams = streams;
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
         self.visited_events.push(event);
@@ -423,11 +396,11 @@ impl<V: Rules> State<V> {
     }
 
     /// Enter a treasure room after resolving its relic and stream counter.
-    pub(super) fn enter_treasure(&mut self, to: Coord, relic: V::Relic, counter: u32) {
+    pub(super) fn enter_treasure(&mut self, to: Coord, relic: V::Relic, streams: Streams<V>) {
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
-        self.rngs.run[run_stream_at::<V>(V::RunRngType::TREASURE_ROOM_RELICS)] = counter;
+        self.streams = streams;
         self.dealt_relics.push(relic);
         self.phase = Phase::Treasure {
             relic,
@@ -439,7 +412,7 @@ impl<V: Rules> State<V> {
         &mut self,
         to: Coord,
         queue: EncounterQueue,
-        counters: Counters<V>,
+        streams: Streams<V>,
         live: crate::combat::Live<V>,
     ) {
         self.floor = self.floor + num_traits::one();
@@ -449,44 +422,23 @@ impl<V: Rules> State<V> {
         }
         self.at = to;
         self.visited.push(to);
-        self.drew(counters);
+        self.drew(streams);
         self.phase = Phase::Combat(live);
     }
 
-    /// Take back how far each stream a rule drew from now stands.
-    pub(super) fn drew(&mut self, counters: Counters<V>) {
-        for (kind, counter) in counters.run {
-            self.rngs.run[run_stream_at::<V>(kind)] = counter;
-        }
-        for (kind, counter) in counters.player {
-            if kind == V::PlayerRngType::REWARDS {
-                continue;
-            }
-            let at = V::player_rng_types()
-                .iter()
-                .position(|candidate| *candidate == kind)
-                .expect("a reported player stream belongs to the player");
-            self.rngs.player[at] = counter;
-        }
+    /// Take back the streams a rule drew from.
+    pub(super) fn drew(&mut self, streams: Streams<V>) {
+        self.streams = streams;
     }
 
-    /// How far each stream has been drawn, as a rule reads it.
+    /// The streams as they stand, which a rule draws from a copy of.
+    pub(super) fn streams(&self) -> &Streams<V> {
+        &self.streams
+    }
+
+    /// How far each stream has been drawn, which is what a report carries.
     pub(super) fn counters(&self) -> Counters<V> {
-        let run: HashMap<_, _> = V::run_rng_types()
-            .iter()
-            .copied()
-            .zip(self.rngs.run.iter().copied())
-            .collect();
-        let mut player: HashMap<_, _> = V::player_rng_types()
-            .iter()
-            .copied()
-            .zip(self.rngs.player.iter().copied())
-            .collect();
-        player.insert(
-            V::PlayerRngType::REWARDS,
-            self.rngs.rewards.counter() as u32,
-        );
-        Counters { run, player }
+        self.streams.counters()
     }
 
     /// Build the fight the run is walking into, and let its relics act.
@@ -498,7 +450,7 @@ impl<V: Rules> State<V> {
         &mut self,
         encounter: V::Encounter,
         observation: &Observation<V>,
-    ) -> Result<(crate::combat::Live<V>, Counters<V>), Error> {
+    ) -> Result<(crate::combat::Live<V>, Streams<V>), Error> {
         let mut relics = self.player.relics.clone();
         let opened = crate::combat::enter::<V>(
             self.raw_seed(),
@@ -506,6 +458,7 @@ impl<V: Rules> State<V> {
             self.ascension(),
             encounter,
             observation,
+            &self.streams,
             &mut relics,
         )?;
         self.player.relics = relics;
@@ -522,10 +475,10 @@ impl<V: Rules> State<V> {
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
         let mut observation = self.report().observation;
         observation.floor = observation.floor + num_traits::one();
-        let (ongoing, counters) = self.open_combat(encounter, &observation)?;
+        let (ongoing, streams) = self.open_combat(encounter, &observation)?;
 
         self.floor = self.floor + num_traits::one();
-        self.drew(counters);
+        self.drew(streams);
         self.fought(ongoing);
         Ok(self.report())
     }
@@ -544,17 +497,10 @@ impl<V: Rules> State<V> {
         let Some(ongoing) = self.fight() else {
             unimplemented!("a power applied outside a fight");
         };
-        let applied = crate::combat::apply_power(
-            ongoing,
-            at,
-            power,
-            amount,
-            self.raw_seed(),
-            &self.counters(),
-            self.relics(),
-        )?;
+        let applied =
+            crate::combat::apply_power(ongoing, at, power, amount, self.streams(), self.relics())?;
 
-        self.drew(applied.counters);
+        self.drew(applied.streams);
         self.hold(applied.relics);
         self.fought(applied.live);
         Ok(self.report())
@@ -665,9 +611,13 @@ impl<V: Rules> State<V> {
             .relics
             .push(HeldRelic::new(V::lead_paperweight()));
         *selection = Some(
-            crate::reward::card::regular::<V, _>(&mut self.rngs.rewards, V::colorless_cards(), 2)
-                .into_iter()
-                .collect(),
+            crate::reward::card::regular::<V, _>(
+                self.streams.player(V::PlayerRngType::REWARDS),
+                V::colorless_cards(),
+                2,
+            )
+            .into_iter()
+            .collect(),
         );
         let mut applied = self.report();
         applied.resolved = false;
