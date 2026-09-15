@@ -23,6 +23,7 @@ pub(super) fn strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
         dealer: fight.actor(),
         target,
         damage: Amount::Var(CardVar::Damage),
+        scaling: Scaling::Dynamic,
     });
     fight.apply(attack);
     Played::Done
@@ -50,6 +51,7 @@ pub(super) fn falling_star<F: Fight<V>>(fight: &mut F) -> Played<V> {
         dealer: fight.actor(),
         target,
         damage: Amount::Var(CardVar::Damage),
+        scaling: Scaling::Dynamic,
     });
     fight.apply(attack);
     fight.apply_power(

@@ -1,6 +1,6 @@
 //! The cards no character's pool holds.
 
-use sts2_core::{Amount, Effect, Fight, Played};
+use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, ColorlessCard};
 use super::V;
@@ -19,6 +19,7 @@ fn flash_of_steel<F: Fight<V>>(fight: &mut F) -> Played<V> {
         dealer: fight.actor(),
         target,
         damage: Amount::Var(CardVar::Damage),
+        scaling: Scaling::Dynamic,
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));

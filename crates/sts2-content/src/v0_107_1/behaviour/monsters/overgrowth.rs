@@ -30,8 +30,18 @@ pub(super) fn conditional(
 ) -> Result<u8, ContentError> {
     match monster {
         Monster::Nibbit => nibbit_opens(at, spawn),
+        Monster::Wriggler => wriggler_opens(at, spawn),
         monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
     }
+}
+
+/// A Wriggler alternates its opening by its place in the four-creature row.
+fn wriggler_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentError> {
+    let wanted = match spawn.position.get() % 2 {
+        0 => MoveId::NastyBiteMove,
+        _ => MoveId::WriggleMove,
+    };
+    super::state_of(Monster::Wriggler, wanted, at)
 }
 
 /// Perform one of an Overgrowth monster's moves.
@@ -48,7 +58,22 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::Byrdonis => byrdonis(move_id, fight),
         Monster::Mawler => mawler(move_id, fight),
         Monster::PhrogParasite => phrog_parasite(move_id, fight),
+        Monster::Wriggler => wriggler(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
+    }
+}
+
+/// A newly hatched Wriggler spends its first move arriving. It then bites, or
+/// grows stronger and leaves an Infection behind.
+fn wriggler<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::SpawnedMove => {}
+        MoveId::NastyBiteMove => attack(fight),
+        MoveId::WriggleMove => {
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(WRIGGLE_STRENGTH));
+            fight.give_cards(Cards::Status(StatusCard::Infection), WRIGGLE_CARDS);
+        }
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
 
@@ -93,6 +118,10 @@ const GOOP_CARDS: usize = 1;
 
 /// How many Infections the Phrog Parasite leaves behind.
 const INFECTION_CARDS: usize = 3;
+
+/// What Wriggle adds to its owner and the other side.
+const WRIGGLE_STRENGTH: Number = 2;
+const WRIGGLE_CARDS: usize = 1;
 
 /// The card every slime spits.
 const SLIMED: Cards = Cards::Status(StatusCard::Slimed);
@@ -288,6 +317,7 @@ fn attack<F: Fight<V>>(fight: &mut F) {
                 dealer: fight.actor(),
                 target,
                 damage: Amount::Number(damage),
+                scaling: Scaling::Dynamic,
             });
             fight.apply(attack);
         }

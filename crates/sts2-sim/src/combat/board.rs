@@ -473,14 +473,16 @@ pub(crate) fn resolve<V: Rules>(
             dealer,
             target,
             damage,
+            scaling,
         } => Resolved::Attack {
             target,
-            damage: modified::<V>(
-                creatures,
-                dealer,
-                target,
-                carried::<V>(playing, creatures, damage),
-            ),
+            damage: {
+                let damage = carried::<V>(playing, creatures, damage);
+                match scaling {
+                    Scaling::Dynamic => modified::<V>(creatures, dealer, target, damage),
+                    Scaling::Static => damage,
+                }
+            },
         },
         Effect::GainBlock {
             recipient,
@@ -575,6 +577,7 @@ pub(crate) fn effect_of<V: Rules>(
             dealer,
             target,
             damage: Amount::Var(key),
+            scaling: Scaling::Dynamic,
         }),
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
@@ -781,6 +784,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn discard_this(&mut self) {
+        let playing = self.playing.expect("a card behavior has a card");
+        let Some(at) = self.live.hand.iter().position(|held| held.id == playing.id) else {
+            return;
+        };
+        self.live.discard.push(self.live.hand.remove(at));
+    }
+
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
         super::monster::summon(self.live, monster, position, self.niche)
     }
@@ -815,4 +826,63 @@ fn reshuffle<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng) {
         (held.ident.card.order(), held.ident.upgrade)
     });
     live.draw = shuffled;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sts2_content::v0_107_1::{
+        V0_107_1,
+        cards::{CardVar, Cards, StatusCard},
+        characters::Character,
+        powers::Power,
+        runstate::CombatSide,
+    };
+    use sts2_core::{CardId, EffectResolution, ModelId, fixture::at};
+
+    type V = V0_107_1;
+
+    fn infection_damage_with(power: Power) -> i32 {
+        let player = at(0);
+        let creatures = [Creature {
+            id: player,
+            model: Some(ModelId::Character(Character::Regent)),
+            side: CombatSide::Player,
+            hp: 10,
+            max_hp: 10,
+            block: 0,
+            alive: true,
+            powers: vec![Stack {
+                power,
+                amount: PowerAmount::Counted(2),
+            }],
+            next_move: None,
+        }];
+        let card = CardInstance::new(
+            CardIdent::new(Cards::Status(StatusCard::Infection)),
+            CardId::new(0),
+        );
+
+        resolve::<V>(
+            &creatures,
+            Some(&card),
+            Effect::Attack {
+                dealer: player,
+                target: player,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Static,
+            },
+        )
+        .amount()
+    }
+
+    #[test]
+    fn infection_damage_does_not_benefit_from_strength() {
+        assert_eq!(infection_damage_with(Power::StrengthPower), 3);
+    }
+
+    #[test]
+    fn infection_damage_does_not_benefit_from_vulnerable() {
+        assert_eq!(infection_damage_with(Power::VulnerablePower), 3);
+    }
 }

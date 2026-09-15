@@ -213,6 +213,10 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::on_play(card, fight)
     }
 
+    fn on_card_turn_end<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
+        behaviour::cards::on_turn_end(card, fight);
+    }
+
     fn resume_play<F: sts2_core::Fight<Self>>(
         fight: &mut F,
         at: Self::Resume,

@@ -1,6 +1,6 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{Amount, CardVars, Effect, Fight, Played};
+use sts2_core::{Amount, CardVars, Effect, Fight, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
@@ -75,6 +75,7 @@ fn minion_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
         dealer: fight.actor(),
         target,
         damage: Amount::Var(CardVar::Damage),
+        scaling: Scaling::Dynamic,
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
@@ -92,6 +93,7 @@ fn sovereign_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
             dealer: fight.actor(),
             target,
             damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
     }

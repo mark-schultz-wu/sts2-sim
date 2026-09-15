@@ -881,6 +881,9 @@ pub trait Fight<V: ContentVersion> {
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
 
+    /// `CardCmd.Discard(this)`, for the card whose behavior is running.
+    fn discard_this(&mut self);
+
     /// `CreatureCmd.Add<M>(CombatState, position)`.
     ///
     /// The monster rolls its hit points when it arrives. It does not advertise
@@ -1047,6 +1050,7 @@ pub enum Effect<V: ContentVersion> {
         dealer: crate::CombatId,
         target: crate::CombatId,
         damage: Amount<V>,
+        scaling: Scaling,
     },
     /// `CreatureCmd.GainBlock(recipient, amount, props, cardPlay)`.
     GainBlock {
@@ -1761,6 +1765,9 @@ pub trait Rules: Hooks {
     /// A card either finishes or names the question on which it stopped.
     /// Panics for a card nobody has ported.
     fn on_play<F: Fight<Self>>(card: Self::Card, fight: &mut F) -> Played<Self>;
+
+    /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
+    fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
     /// Continue a card that stopped, with the answer it awaited.
     ///
