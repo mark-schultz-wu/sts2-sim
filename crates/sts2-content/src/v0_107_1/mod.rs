@@ -388,27 +388,10 @@ impl sts2_core::Rules for V0_107_1 {
         &generated::runstate::RunRngType::ALL
     }
 
-    fn run_rng(kind: sts2_core::RunRng) -> Self::RunRngType {
-        use generated::runstate::RunRngType;
-        match kind {
-            sts2_core::RunRng::MonsterAi => RunRngType::MonsterAi,
-            sts2_core::RunRng::Niche => RunRngType::Niche,
-            sts2_core::RunRng::Shuffle => RunRngType::Shuffle,
-            sts2_core::RunRng::TreasureRoomRelics => RunRngType::TreasureRoomRelics,
-            sts2_core::RunRng::UnknownMapPoint => RunRngType::UnknownMapPoint,
-            sts2_core::RunRng::UpFront => RunRngType::UpFront,
-        }
-    }
-
     fn player_rng_types() -> &'static [Self::PlayerRngType] {
         &generated::runstate::PlayerRngType::ALL
     }
 
-    fn player_rng(kind: sts2_core::PlayerRng) -> Self::PlayerRngType {
-        match kind {
-            sts2_core::PlayerRng::Rewards => generated::runstate::PlayerRngType::Rewards,
-        }
-    }
     fn enemy_side() -> Self::CombatSide {
         generated::runstate::CombatSide::Enemy
     }

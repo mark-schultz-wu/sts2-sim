@@ -326,6 +326,21 @@ impl RunRngType {
     ];
 }
 
+impl sts2_core::RunStreamKinds for RunRngType {
+    const UP_FRONT: RunRngType = RunRngType::UpFront;
+    const SHUFFLE: RunRngType = RunRngType::Shuffle;
+    const UNKNOWN_MAP_POINT: RunRngType = RunRngType::UnknownMapPoint;
+    const COMBAT_CARD_GENERATION: RunRngType = RunRngType::CombatCardGeneration;
+    const COMBAT_POTION_GENERATION: RunRngType = RunRngType::CombatPotionGeneration;
+    const COMBAT_CARD_SELECTION: RunRngType = RunRngType::CombatCardSelection;
+    const COMBAT_ENERGY_COSTS: RunRngType = RunRngType::CombatEnergyCosts;
+    const COMBAT_TARGETS: RunRngType = RunRngType::CombatTargets;
+    const MONSTER_AI: RunRngType = RunRngType::MonsterAi;
+    const NICHE: RunRngType = RunRngType::Niche;
+    const COMBAT_ORBS: RunRngType = RunRngType::CombatOrbs;
+    const TREASURE_ROOM_RELICS: RunRngType = RunRngType::TreasureRoomRelics;
+}
+
 impl sts2_core::StreamKinds for RunRngType {
     fn name(self) -> &'static str {
         Self::STREAMS[self as usize].0
@@ -367,6 +382,12 @@ impl PlayerRngType {
             sts2_core::rng::name_hash("transformations") as u32,
         ),
     ];
+}
+
+impl sts2_core::PlayerStreamKinds for PlayerRngType {
+    const REWARDS: PlayerRngType = PlayerRngType::Rewards;
+    const SHOPS: PlayerRngType = PlayerRngType::Shops;
+    const TRANSFORMATIONS: PlayerRngType = PlayerRngType::Transformations;
 }
 
 impl sts2_core::StreamKinds for PlayerRngType {

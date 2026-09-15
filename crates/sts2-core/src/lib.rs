@@ -40,9 +40,9 @@ pub use content::{
     CharacterTable, ContentError, ContentVersion, Cost, DecisionHook, Drafted, Effect,
     EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Fight, Fixed,
     FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
-    MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerRng, PotionTable, PotionUsage,
+    MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerStreamKinds, PotionTable, PotionUsage,
     PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Rests,
-    RewardRarity, RoomKinds, Rules, RunRng, Scaling, SelectedCards, Selection, SideKinds,
+    RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds,
     SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds,
     Version,
 };

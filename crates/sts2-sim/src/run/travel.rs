@@ -1,7 +1,7 @@
 //! Moving to a map point, and entering what waits there.
 
 use sts2_core::rng::GameRng;
-use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, RunRng};
+use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, RunStreamKinds};
 
 use super::State;
 use super::state::EncounterQueue;
@@ -81,7 +81,7 @@ impl<V: Rules> State<V> {
                 let mut rng = crate::stream::seek(
                     self.raw_seed(),
                     &self.counters(),
-                    RunRng::TreasureRoomRelics,
+                    V::RunRngType::TREASURE_ROOM_RELICS,
                 )?;
                 let roll = rng.next_double();
                 let rarity = if roll < COMMON_RELIC_CHANCE {
@@ -99,8 +99,11 @@ impl<V: Rules> State<V> {
                 unimplemented!("entering {destination:?}");
             }
             let (mut events_used, visited, mut odds) = self.event_state();
-            let mut rng =
-                crate::stream::seek(self.raw_seed(), &self.counters(), RunRng::UnknownMapPoint)?;
+            let mut rng = crate::stream::seek(
+                self.raw_seed(),
+                &self.counters(),
+                V::RunRngType::UNKNOWN_MAP_POINT,
+            )?;
             let roll = rng.next_double() as f32;
             let mut cumulative = 0.0;
             for probability in odds {

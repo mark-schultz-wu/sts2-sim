@@ -2,7 +2,9 @@
 
 use crate::rng::MegaRng;
 use sts2_core::rng::{Choices, GameRng};
-use sts2_core::{CombatId, Counters, Creature, ModelId, MoveMachine, Rules, RunRng, SideKinds};
+use sts2_core::{
+    CombatId, Counters, Creature, ModelId, MoveMachine, Rules, RunStreamKinds, SideKinds,
+};
 
 use super::Error;
 use super::live::Live;
@@ -65,8 +67,8 @@ pub(crate) fn initialize<V: Rules>(
     counters: &mut Counters<V>,
     monsters: &[V::Monster],
 ) -> Result<Roster<V>, Error> {
-    let mut niche = stream::seek(raw_seed, counters, RunRng::Niche)?;
-    let mut ai = stream::seek(raw_seed, counters, RunRng::MonsterAi)?;
+    let mut niche = stream::seek(raw_seed, counters, V::RunRngType::NICHE)?;
+    let mut ai = stream::seek(raw_seed, counters, V::RunRngType::MONSTER_AI)?;
 
     // A fight the encounter builds nobody for is not a fight.
     let roster_size = u8::try_from(monsters.len())
@@ -119,8 +121,8 @@ pub(crate) fn initialize<V: Rules>(
         });
     }
 
-    stream::record(counters, RunRng::Niche, &niche)?;
-    stream::record(counters, RunRng::MonsterAi, &ai)?;
+    stream::record(counters, V::RunRngType::NICHE, &niche)?;
+    stream::record(counters, V::RunRngType::MONSTER_AI, &ai)?;
     Ok(Roster {
         creatures,
         machines,
@@ -338,8 +340,8 @@ mod counter_tests {
     #[test]
     fn a_missing_required_stream_is_not_counter_zero() {
         for (missing, stream) in [
-            (RunRngType::Niche, RunRng::Niche),
-            (RunRngType::MonsterAi, RunRng::MonsterAi),
+            (RunRngType::Niche, "niche"),
+            (RunRngType::MonsterAi, "monster_ai"),
         ] {
             let mut counters = Counters {
                 run: RunRngType::ALL

@@ -651,6 +651,39 @@ pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
     fn seed_offset(self) -> u32;
 }
 
+/// The streams a run keeps, as consts a rule can name.
+///
+/// The same bridge as [`MapPointKinds`]: a rule holding only a
+/// [`ContentVersion`] cannot write `RunRngType::Niche`.
+///
+/// All twelve, and not only the ones a ported rule draws from. The count is the
+/// game's, so a build that adds a stream stops codegen.
+pub trait RunStreamKinds: StreamKinds {
+    /// Drawn while a run or an act is set up, rather than while it is played.
+    const UP_FRONT: Self;
+    const SHUFFLE: Self;
+    const UNKNOWN_MAP_POINT: Self;
+    const COMBAT_CARD_GENERATION: Self;
+    const COMBAT_POTION_GENERATION: Self;
+    const COMBAT_CARD_SELECTION: Self;
+    const COMBAT_ENERGY_COSTS: Self;
+    const COMBAT_TARGETS: Self;
+    const MONSTER_AI: Self;
+    /// The stream for draws with no stream of their own.
+    const NICHE: Self;
+    const COMBAT_ORBS: Self;
+    const TREASURE_ROOM_RELICS: Self;
+}
+
+/// The streams each player keeps, as consts a rule can name.
+///
+/// Beside the run's twelve, not among them: a multiplayer run has a set each.
+pub trait PlayerStreamKinds: StreamKinds {
+    const REWARDS: Self;
+    const SHOPS: Self;
+    const TRANSFORMATIONS: Self;
+}
+
 /// How much of a power is on a creature.
 ///
 /// The game keeps one number and overloads its sign, so `PowerModel.Amount` is
@@ -1576,7 +1609,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + StreamKinds
+        + RunStreamKinds
         + 'static;
     /// One of the random streams each player keeps.
     type PlayerRngType: std::fmt::Debug
@@ -1585,7 +1618,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + StreamKinds
+        + PlayerStreamKinds
         + 'static;
     /// What a monster telegraphs before a move resolves.
     type IntentKind: std::fmt::Debug
@@ -1867,34 +1900,11 @@ pub trait Rules: Hooks {
     /// Every run stream, in the order the game creates them.
     fn run_rng_types() -> &'static [Self::RunRngType];
 
-    /// Find a run stream by the job it performs.
-    fn run_rng(kind: RunRng) -> Self::RunRngType;
-
     /// Every per-player stream, in the order the game creates them.
     fn player_rng_types() -> &'static [Self::PlayerRngType];
 
-    /// Find a per-player stream by the job it performs.
-    fn player_rng(kind: PlayerRng) -> Self::PlayerRngType;
-
     /// The side a monster fights on.
     fn enemy_side() -> Self::CombatSide;
-}
-
-/// A run RNG stream, named for the rule that consumes it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RunRng {
-    MonsterAi,
-    Niche,
-    Shuffle,
-    TreasureRoomRelics,
-    UnknownMapPoint,
-    UpFront,
-}
-
-/// A per-player RNG stream, named for the rule that consumes it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlayerRng {
-    Rewards,
 }
 
 /// Which build a content module came from.

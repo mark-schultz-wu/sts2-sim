@@ -9,7 +9,9 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
-use sts2_core::{CardTable, CombatId, Cost, Counters, FlagSet, HandIndex, Reason, Rules, RunRng};
+use sts2_core::{
+    CardTable, CombatId, Cost, Counters, FlagSet, HandIndex, Reason, Rules, RunStreamKinds,
+};
 
 use crate::rng::MegaRng;
 
@@ -124,8 +126,8 @@ pub(crate) fn apply_power<V: Rules>(
     let mut counters = counters.clone();
     // Nothing here draws. The stream is what a board is built with, and
     // recording it back leaves the counter where it was.
-    let mut shuffle = stream::seek(raw_seed, &counters, RunRng::Shuffle)?;
-    let mut niche = stream::seek(raw_seed, &counters, RunRng::Niche)?;
+    let mut shuffle = stream::seek(raw_seed, &counters, V::RunRngType::SHUFFLE)?;
+    let mut niche = stream::seek(raw_seed, &counters, V::RunRngType::NICHE)?;
 
     let mut board = Board::for_card(
         &mut next,
@@ -140,8 +142,8 @@ pub(crate) fn apply_power<V: Rules>(
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
-    stream::record(&mut counters, RunRng::Shuffle, &shuffle)?;
-    stream::record(&mut counters, RunRng::Niche, &niche)?;
+    stream::record(&mut counters, V::RunRngType::SHUFFLE, &shuffle)?;
+    stream::record(&mut counters, V::RunRngType::NICHE, &niche)?;
     if won {
         relic::combat_ended::<V>(&mut relics);
     }
@@ -181,8 +183,8 @@ pub(crate) fn play<V: Rules>(
     let mut next = live.clone();
     let relics = relics.to_vec();
     let counters = counters.clone();
-    let mut shuffle = stream::seek(raw_seed, &counters, RunRng::Shuffle)?;
-    let mut niche = stream::seek(raw_seed, &counters, RunRng::Niche)?;
+    let mut shuffle = stream::seek(raw_seed, &counters, V::RunRngType::SHUFFLE)?;
+    let mut niche = stream::seek(raw_seed, &counters, V::RunRngType::NICHE)?;
 
     // `SpendResources`, before the card leaves the hand.
     next.energy = next.energy - play.energy;
@@ -255,8 +257,8 @@ pub(crate) fn answer<V: Rules>(
         .validate_answer(cards.into_boxed_slice())
         .unwrap_or_else(|| unimplemented!("a selection with the wrong number of cards"));
 
-    let mut shuffle = stream::seek(raw_seed, counters, RunRng::Shuffle)?;
-    let mut niche = stream::seek(raw_seed, counters, RunRng::Niche)?;
+    let mut shuffle = stream::seek(raw_seed, counters, V::RunRngType::SHUFFLE)?;
+    let mut niche = stream::seek(raw_seed, counters, V::RunRngType::NICHE)?;
     let mut board = Board::for_card(
         &mut next,
         &mut shuffle,
@@ -311,8 +313,8 @@ fn carry_on<V: Rules>(
         // it holds no more than the selection, and an empty one selects
         // nothing. Neither is a question, so neither stops the fight.
         let Some(chosen) = taken::<V>(&next, pile, selection) else {
-            stream::record(&mut counters, RunRng::Shuffle, &shuffle)?;
-            stream::record(&mut counters, RunRng::Niche, &niche)?;
+            stream::record(&mut counters, V::RunRngType::SHUFFLE, &shuffle)?;
+            stream::record(&mut counters, V::RunRngType::NICHE, &niche)?;
             next.asking = Some(super::live::Asking {
                 card,
                 target,
@@ -368,8 +370,8 @@ fn carry_on<V: Rules>(
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
 
-    stream::record(&mut counters, RunRng::Shuffle, &shuffle)?;
-    stream::record(&mut counters, RunRng::Niche, &niche)?;
+    stream::record(&mut counters, V::RunRngType::SHUFFLE, &shuffle)?;
+    stream::record(&mut counters, V::RunRngType::NICHE, &niche)?;
     if won {
         relic::combat_ended::<V>(&mut relics);
     }

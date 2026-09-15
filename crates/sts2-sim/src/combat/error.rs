@@ -10,13 +10,13 @@
 pub enum Error {
     #[error(transparent)]
     Content(#[from] sts2_core::ContentError),
-    #[error("the {stream:?} RNG counter is missing")]
-    MissingCounter { stream: sts2_core::RunRng },
-    #[error("the {stream:?} RNG counter is outside the supported range")]
-    CounterOutOfRange { stream: sts2_core::RunRng },
-    #[error("seeking the {stream:?} RNG failed")]
+    #[error("the {stream} RNG counter is missing")]
+    MissingCounter { stream: &'static str },
+    #[error("the {stream} RNG counter is outside the supported range")]
+    CounterOutOfRange { stream: &'static str },
+    #[error("seeking the {stream} RNG failed")]
     Seek {
-        stream: sts2_core::RunRng,
+        stream: &'static str,
         #[source]
         source: sts2_core::rng::Error,
     },

@@ -353,8 +353,8 @@ fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result
     )
 }
 
-/// The three enums here the simulator names members of.
-const BRIDGES: [Bridge; 4] = [
+/// The five enums here the simulator names members of.
+const BRIDGES: [Bridge; 6] = [
     Bridge {
         enum_name: "MapPointType",
         trait_name: "MapPointKinds",
@@ -404,6 +404,38 @@ const BRIDGES: [Bridge; 4] = [
         // The zero is dropped on the way in: an empty set is how a playable
         // card is spelled here, so there is no const for it.
         unnamed: &["None"],
+    },
+    // Both stream enums name every member, and not only the ones a ported rule
+    // draws from. A stream the simulator does not draw from yet is still one
+    // the run keeps a counter for, and the count is the game's own.
+    Bridge {
+        enum_name: "RunRngType",
+        trait_name: "RunStreamKinds",
+        named: &[
+            ("UP_FRONT", "UpFront"),
+            ("SHUFFLE", "Shuffle"),
+            ("UNKNOWN_MAP_POINT", "UnknownMapPoint"),
+            ("COMBAT_CARD_GENERATION", "CombatCardGeneration"),
+            ("COMBAT_POTION_GENERATION", "CombatPotionGeneration"),
+            ("COMBAT_CARD_SELECTION", "CombatCardSelection"),
+            ("COMBAT_ENERGY_COSTS", "CombatEnergyCosts"),
+            ("COMBAT_TARGETS", "CombatTargets"),
+            ("MONSTER_AI", "MonsterAi"),
+            ("NICHE", "Niche"),
+            ("COMBAT_ORBS", "CombatOrbs"),
+            ("TREASURE_ROOM_RELICS", "TreasureRoomRelics"),
+        ],
+        unnamed: &[],
+    },
+    Bridge {
+        enum_name: "PlayerRngType",
+        trait_name: "PlayerStreamKinds",
+        named: &[
+            ("REWARDS", "Rewards"),
+            ("SHOPS", "Shops"),
+            ("TRANSFORMATIONS", "Transformations"),
+        ],
+        unnamed: &[],
     },
 ];
 

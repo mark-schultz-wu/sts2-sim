@@ -8,9 +8,9 @@ use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
-    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, PlayerRng, Question,
-    Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, RunRng, Seed,
-    Table, TakeReward,
+    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Question,
+    Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, RunStreamKinds,
+    Seed, Table, TakeReward,
 };
 
 use crate::combat::Error;
@@ -211,7 +211,7 @@ impl<V: Rules> State<V> {
             .copied()
             .filter(|act| act.played())
             .collect();
-        let mut up_front = MegaRng::for_stream(raw_seed, V::run_rng(RunRng::UpFront));
+        let mut up_front = MegaRng::for_stream(raw_seed, V::RunRngType::UP_FRONT);
         let opening = Opening::draw(&mut up_front, character, &acts);
 
         let mut map_rng = MegaRng::named(raw_seed, "act_1_map");
@@ -227,7 +227,7 @@ impl<V: Rules> State<V> {
 
         let mut run_counters: SmallVec<[u32; 16]> =
             smallvec::smallvec![0; V::run_rng_types().len()];
-        run_counters[run_stream_at::<V>(V::run_rng(RunRng::UpFront))] = up_front.counter() as u32;
+        run_counters[run_stream_at::<V>(V::RunRngType::UP_FRONT)] = up_front.counter() as u32;
 
         Self {
             shared: Arc::new(RunData {
@@ -267,7 +267,7 @@ impl<V: Rules> State<V> {
             rngs: Rngs {
                 run: run_counters,
                 player: smallvec::smallvec![0; V::player_rng_types().len()],
-                rewards: MegaRng::for_stream(raw_seed, V::player_rng(PlayerRng::Rewards)),
+                rewards: MegaRng::for_stream(raw_seed, V::PlayerRngType::REWARDS),
             },
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
@@ -415,7 +415,7 @@ impl<V: Rules> State<V> {
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
-        self.rngs.run[run_stream_at::<V>(V::run_rng(RunRng::UnknownMapPoint))] = unknown_counter;
+        self.rngs.run[run_stream_at::<V>(V::RunRngType::UNKNOWN_MAP_POINT)] = unknown_counter;
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
         self.visited_events.push(event);
@@ -427,7 +427,7 @@ impl<V: Rules> State<V> {
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
-        self.rngs.run[run_stream_at::<V>(V::run_rng(RunRng::TreasureRoomRelics))] = counter;
+        self.rngs.run[run_stream_at::<V>(V::RunRngType::TREASURE_ROOM_RELICS)] = counter;
         self.dealt_relics.push(relic);
         self.phase = Phase::Treasure {
             relic,
@@ -459,7 +459,7 @@ impl<V: Rules> State<V> {
             self.rngs.run[run_stream_at::<V>(kind)] = counter;
         }
         for (kind, counter) in counters.player {
-            if kind == V::player_rng(PlayerRng::Rewards) {
+            if kind == V::PlayerRngType::REWARDS {
                 continue;
             }
             let at = V::player_rng_types()
@@ -483,7 +483,7 @@ impl<V: Rules> State<V> {
             .zip(self.rngs.player.iter().copied())
             .collect();
         player.insert(
-            V::player_rng(PlayerRng::Rewards),
+            V::PlayerRngType::REWARDS,
             self.rngs.rewards.counter() as u32,
         );
         Counters { run, player }
