@@ -27,6 +27,13 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
     fight.discard_this();
 }
 
+/// A status card's effect as it is drawn.
+pub(super) fn on_drawn<F: Fight<V>>(card: StatusCard, fight: &mut F) {
+    if card == StatusCard::Void {
+        fight.lose_energy(fight.var(CardVar::Energy));
+    }
+}
+
 /// `Slimed`. Draws, for an energy, and exhausts.
 fn slimed<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.draw(fight.var(CardVar::Cards));

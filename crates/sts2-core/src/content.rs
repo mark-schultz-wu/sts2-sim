@@ -848,6 +848,13 @@ pub trait Fight<V: ContentVersion> {
     /// A printed number, so signed. The pool it lands in is not.
     fn gain_energy(&mut self, amount: V::Number);
 
+    /// `PlayerCmd.LoseEnergy(amount)`.
+    ///
+    /// A printed number, so signed. The pool it comes out of is not.
+    /// `PlayerCombatState.LoseEnergy` clamps it at zero, so a loss larger than
+    /// the pool empties it and leaves no debt.
+    fn lose_energy(&mut self, amount: V::Number);
+
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
     ///
     /// The power is the caller's to name. A rule knows which power it applies,
@@ -1777,6 +1784,13 @@ pub trait Rules: Hooks {
 
     /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
     fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
+
+    /// `CardModel.AfterCardDrawn`, for the card that has just been drawn.
+    ///
+    /// The game raises this on every listener in the fight and hands each the
+    /// card that arrived. This asks the drawn card alone, which is what the
+    /// cards ported so far read: each answers only when the card is itself.
+    fn on_card_drawn<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
     /// Continue a card that stopped, with the answer it awaited.
     ///

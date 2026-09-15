@@ -94,7 +94,14 @@ pub(crate) fn end<V: Rules>(
     // moves the count on, then the draw that reads it.
     relic::turn_starting::<V>(&mut relics, next.turn);
     let drawn = hand_size::<V>(&mut relics, next.turn);
-    draw(&mut next, &mut shuffle, drawn);
+    draw(
+        &mut next,
+        &mut shuffle,
+        &mut niche,
+        &mut relics,
+        ascension,
+        drawn,
+    );
     let started = relic::turn_started::<V>(&mut relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
 

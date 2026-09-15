@@ -121,6 +121,13 @@ pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
     }
 }
 
+/// What a card does as it arrives in the hand.
+pub(crate) fn on_drawn<F: Fight<V>>(card: Cards, fight: &mut F) {
+    if let Cards::Status(card) = card {
+        status::on_drawn(card, fight);
+    }
+}
+
 /// The rest of a play that stopped, once the fight has its answer.
 pub(crate) fn resume_play<F: Fight<V>>(
     fight: &mut F,

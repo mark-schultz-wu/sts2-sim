@@ -9,7 +9,7 @@
 //! command that needs one stops the run where it stands.
 
 use crate::rng::MegaRng;
-use num_traits::Zero;
+use num_traits::{Saturating as _, Zero};
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
@@ -682,6 +682,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.energy = self.live.energy + amount;
     }
 
+    fn lose_energy(&mut self, amount: V::Number) {
+        // `PlayerCmd.LoseEnergy` returns on an amount at or below zero, and
+        // the pool it takes from is clamped there.
+        let Some(amount) = num_traits::NumCast::from(amount) else {
+            return;
+        };
+        self.live.energy = self.live.energy.saturating_sub(amount);
+    }
+
     fn apply_power(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
         self.land(at, power, amount);
     }
@@ -704,7 +713,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn draw(&mut self, count: V::Number) {
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
-        draw(self.live, self.shuffle, count);
+        draw(
+            self.live,
+            self.shuffle,
+            self.niche,
+            self.relics,
+            self.ascension,
+            count,
+        );
     }
 
     fn ascension(&self) -> V::AscensionLevel {
@@ -821,7 +837,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 /// pile runs dry.
 ///
 /// A fight with every card in hand draws short rather than manufacture one.
-pub(super) fn draw<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng, count: usize) {
+pub(super) fn draw<V: Rules>(
+    live: &mut Live<V>,
+    shuffle: &mut MegaRng,
+    niche: &mut MegaRng,
+    relics: &mut [HeldRelic<V>],
+    ascension: V::AscensionLevel,
+    count: usize,
+) {
     for _ in 0..count {
         if live.draw.is_empty() {
             if live.discard.is_empty() {
@@ -829,7 +852,14 @@ pub(super) fn draw<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng, count: u
             }
             reshuffle(live, shuffle);
         }
-        live.hand.push(live.draw.remove(0));
+        let drawn = live.draw.remove(0);
+        live.hand.push(drawn.clone());
+        // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
+        // than once for the whole draw. So a card that spends the pool as it
+        // arrives has spent it before the next card is taken.
+        let mut board =
+            Board::for_card(live, shuffle, niche, relics, ascension, None, Some(&drawn));
+        V::on_card_drawn(drawn.ident.card, &mut board);
     }
 }
 
