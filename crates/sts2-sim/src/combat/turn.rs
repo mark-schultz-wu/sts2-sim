@@ -35,7 +35,7 @@ pub(crate) fn end<V: Rules>(
     let mut ai = streams.stream(V::RunRngType::MONSTER_AI);
     let mut niche = streams.stream(V::RunRngType::NICHE);
 
-    turn_end(&mut next);
+    turn_end(&mut next, &mut shuffle, &mut niche, ascension);
     flush_hand(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
     let asked = tick_powers::<V>(
@@ -99,7 +99,17 @@ pub(crate) fn end<V: Rules>(
 ///
 /// An ethereal card is exhausted. A card with a turn-end effect of its own
 /// runs it, and that arrives with the port of the card.
-fn turn_end<V: Rules>(live: &mut Live<V>) {
+fn turn_end<V: Rules>(
+    live: &mut Live<V>,
+    shuffle: &mut MegaRng,
+    niche: &mut MegaRng,
+    ascension: V::AscensionLevel,
+) {
+    let held = live.hand.clone();
+    for card in &held {
+        let mut board = Board::for_card(live, shuffle, niche, ascension, None, Some(card));
+        V::on_card_turn_end(card.ident.card, &mut board);
+    }
     let ethereal: Vec<usize> = live
         .hand
         .iter()

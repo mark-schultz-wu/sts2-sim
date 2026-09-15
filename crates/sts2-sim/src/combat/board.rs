@@ -781,6 +781,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn discard_this(&mut self) {
+        let playing = self.playing.expect("a card behavior has a card");
+        let Some(at) = self.live.hand.iter().position(|held| held.id == playing.id) else {
+            return;
+        };
+        self.live.discard.push(self.live.hand.remove(at));
+    }
+
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
         super::monster::summon(self.live, monster, position, self.niche)
     }
