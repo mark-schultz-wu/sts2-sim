@@ -45,6 +45,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::Fogmog => fogmog(move_id, fight),
         Monster::EyeWithTeeth => eye_with_teeth(move_id, fight),
         Monster::Byrdonis => byrdonis(move_id, fight),
+        Monster::Mawler => mawler(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
 }
@@ -236,6 +237,22 @@ fn eye_with_teeth<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 fn byrdonis<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::PeckMove | MoveId::SwoopMove => attack(fight),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `Mawler`. Both clawing moves attack. Its one roar leaves the player
+/// Vulnerable for three turns.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+fn mawler<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::ClawMove | MoveId::RipAndTearMove => attack(fight),
+        MoveId::RoarMove => {
+            fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(3));
+        }
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
