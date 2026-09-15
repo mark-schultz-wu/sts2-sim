@@ -205,11 +205,8 @@ impl sts2_core::Rules for V0_107_1 {
         generated::relics::Relic::LeadPaperweight
     }
 
-    fn upgrade_card(
-        card: Self::Card,
-        numbers: &mut [sts2_core::CardNumber<Self::CardVar, Self::Number>],
-    ) {
-        behaviour::cards::upgrade(card, numbers);
+    fn upgrade_card(card: Self::Card, face: sts2_core::Face<'_, Self>) {
+        behaviour::cards::upgrade(card, face);
     }
 
     fn on_use<F: sts2_core::Fight<Self>>(potion: Self::Potion, fight: &mut F) {
@@ -221,10 +218,6 @@ impl sts2_core::Rules for V0_107_1 {
         fight: &mut F,
     ) -> sts2_core::Played<Self> {
         behaviour::cards::on_play(card, fight)
-    }
-
-    fn card_cost(card: Self::Card, upgrade: u8) -> (sts2_core::Cost, sts2_core::Cost) {
-        behaviour::cards::cost(card, upgrade)
     }
 
     fn on_card_turn_end<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {

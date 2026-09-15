@@ -8,7 +8,7 @@
 //! list of what the simulator can play. A card outside it stops the run where
 //! it stands rather than playing as if it did nothing.
 
-use sts2_core::{CardTable as _, CardVars, Cost, Fight, Played};
+use sts2_core::{CardVars, Cost, Face, Fight, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::cards::{CardVar, Cards};
@@ -31,54 +31,50 @@ type V = V0_107_1;
 /// `CardModel.Upgrade`, which each card overrides to raise the numbers it
 /// prints. Filed the way the play is: by pool here, then by the card's own
 /// rarity. An upgrade then sits beside the play of the same card.
-pub(crate) fn upgrade(card: Cards, printed: &mut [CardNumber]) {
-    match card {
-        Cards::Regent(card) => regent::upgrade(card, printed),
-        Cards::Token(card) => token::upgrade(card, printed),
+pub(crate) fn upgrade(card: Cards, face: Face<'_, V0_107_1>) {
+    let changes = match card {
+        Cards::Regent(card) => regent::upgrade(card),
+        Cards::Token(card) => token::upgrade(card),
         card => unimplemented!("card upgrade: {card:?}"),
-    }
+    };
+    apply(face, changes);
 }
 
-/// What one copy of a card costs at the upgrade it is at.
-///
-/// `CardModel.EnergyCost` and `StarCost`. The table prints a fresh copy's, and
-/// an `OnUpgrade` that calls `UpgradeBy` moves it by that much per upgrade. A
-/// cost that is not a number stays what it is: `GetWithModifiers` returns
-/// early for one, so an upgrade moves nothing.
-pub(crate) fn cost(card: Cards, upgrade: u8) -> (Cost, Cost) {
-    if upgrade == 0 {
-        return (card.cost(), card.star_cost());
-    }
-    // A card upgraded in a fight went through `upgrade` to get here, and one
-    // upgraded outside a fight went through it as the fight built its copy.
-    // Both panic for a card nobody has ported, so a card reaching this is one
-    // whose pool is ported and whose costs stand where the table put them.
-    let (energy, star) = match card {
-        Cards::Regent(card) => regent::upgrade_cost(card),
-        Cards::Token(card) => token::upgrade_cost(card),
-        card => unimplemented!("what an upgraded {card:?} costs"),
-    };
-    let moved = |cost: Cost, by: i8| match cost {
-        // `GetWithModifiers` returns early for a cost that is not a number, so
-        // an upgrade moves nothing.
-        Cost::Fixed(fixed) => Cost::Fixed(fixed.saturating_add_signed(by)),
-        cost => cost,
-    };
-    let each = |cost, by: i8| (0..upgrade).fold(cost, |cost, _| moved(cost, by));
-    (each(card.cost(), energy), each(card.star_cost(), star))
+/// One thing a card's `OnUpgrade` changes about the copy it is upgrading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Change {
+    /// `DynamicVars[key].UpgradeValueBy(amount)`.
+    Raise(CardVar, Number),
+    /// `EnergyCost.UpgradeBy(amount)`.
+    ///
+    /// No card of this build calls `StarCost.UpgradeBy`, so an upgrade moves
+    /// the energy cost and no other.
+    Cost(i8),
 }
 
-/// Raise the numbers one card's upgrade raises.
+/// Write one card's upgrade onto the copy being upgraded.
 ///
-/// A card that raises nothing it prints passes an empty list. A card nobody
-/// has ported never reaches this.
-fn raise(printed: &mut [CardNumber], changes: &[(CardVar, Number)]) {
-    for &(key, amount) in changes {
-        printed
-            .iter_mut()
-            .find(|var| var.id == key)
-            .expect("an upgraded variable belongs to the card")
-            .base += amount;
+/// A card that changes nothing passes an empty list. A card nobody has ported
+/// never reaches this.
+fn apply(face: Face<'_, V0_107_1>, changes: &[Change]) {
+    // `GetWithModifiers` returns early for a cost that is not a number, so an
+    // upgrade moves that cost nowhere.
+    let moved = |cost: &mut Cost, by: i8| {
+        if let Cost::Fixed(fixed) = cost {
+            *cost = Cost::Fixed(fixed.saturating_add_signed(by));
+        }
+    };
+    for &change in changes {
+        match change {
+            Change::Raise(key, amount) => {
+                face.numbers
+                    .iter_mut()
+                    .find(|var| var.id == key)
+                    .expect("an upgraded variable belongs to the card")
+                    .base += amount;
+            }
+            Change::Cost(by) => moved(face.cost, by),
+        }
     }
 }
 

@@ -72,6 +72,12 @@ pub(super) struct CardInstance<V: Rules> {
     pub(super) ident: CardIdent<V>,
     /// The numbers this copy prints, which start as the table's and move.
     pub(super) vars: Vec<CardNumber<V::CardVar, V::Number>>,
+    /// `CardModel.EnergyCost` and `StarCost` for this copy.
+    ///
+    /// Per copy, because an upgrade writes on them. The table prices a fresh
+    /// one, and `UpgradeBy` moves the copy alone.
+    pub(super) cost: sts2_core::Cost,
+    pub(super) star_cost: sts2_core::Cost,
 }
 
 impl<V: Rules> CardInstance<V> {
@@ -92,19 +98,33 @@ impl<V: Rules> CardInstance<V> {
                 modifier: var.modifier,
             })
             .collect();
-        let mut card = Self { id, ident, vars };
+        let mut card = Self {
+            id,
+            ident,
+            vars,
+            cost: ident.card.cost(),
+            star_cost: ident.card.star_cost(),
+        };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
-            V::upgrade_card(card.ident.card, &mut card.vars);
+            V::upgrade_card(card.ident.card, card.face());
         }
         card
+    }
+
+    /// This copy's own face, which is what an upgrade writes on.
+    fn face(&mut self) -> sts2_core::Face<'_, V> {
+        sts2_core::Face {
+            numbers: &mut self.vars,
+            cost: &mut self.cost,
+        }
     }
 
     pub(super) fn upgrade(&mut self) {
         // `CardModel.IsUpgradable`, which a card already at its own maximum is
         // not. A status card prints no upgrade at all.
         if self.ident.upgrade < self.ident.card.max_upgrade() {
-            V::upgrade_card(self.ident.card, &mut self.vars);
+            V::upgrade_card(self.ident.card, self.face());
             self.ident.upgrade += 1;
         }
     }

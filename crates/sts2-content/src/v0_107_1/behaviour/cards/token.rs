@@ -4,28 +4,16 @@ use sts2_core::{Amount, CardVars, Effect, Fight, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
-use super::{CardNumber, Number, V, face};
+use super::{CardNumber, Change, Number, V, face};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: TokenCard, printed: &mut [CardNumber]) {
-    let changes: &[(CardVar, Number)] = match card {
-        TokenCard::MinionStrike => &[(CardVar::Damage, 3)],
-        // Its upgrade takes an energy off the cost and raises nothing it
-        // prints. See `upgrade_cost`.
-        TokenCard::SovereignBlade => &[],
-        card => unimplemented!("card upgrade: {card:?}"),
-    };
-    super::raise(printed, changes);
-}
-
-/// What one upgrade moves a token card's two costs by.
-///
-/// `SovereignBlade.OnUpgrade` is `EnergyCost.UpgradeBy(-1)`, and it is the one
-/// token card that changes a cost rather than a printed number.
-pub(super) fn upgrade_cost(card: TokenCard) -> (i8, i8) {
+pub(super) fn upgrade(card: TokenCard) -> &'static [Change] {
     match card {
-        TokenCard::SovereignBlade => (-1, 0),
-        _ => (0, 0),
+        TokenCard::MinionStrike => &[Change::Raise(CardVar::Damage, 3)],
+        // `SovereignBlade.OnUpgrade` is `EnergyCost.UpgradeBy(-1)`, and it
+        // raises nothing the card prints.
+        TokenCard::SovereignBlade => &[Change::Cost(-1)],
+        card => unimplemented!("card upgrade: {card:?}"),
     }
 }
 

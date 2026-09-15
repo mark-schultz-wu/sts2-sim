@@ -3,15 +3,17 @@
 use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
-use super::super::{CardNumber, Number, V, raise};
+use super::super::{Change, V};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
-    let changes: &[(CardVar, Number)] = match card {
-        RegentCard::Bulwark => &[(CardVar::Block, 3), (CardVar::Forge, 3)],
+pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
+    match card {
+        RegentCard::Bulwark => &[
+            Change::Raise(CardVar::Block, 3),
+            Change::Raise(CardVar::Forge, 3),
+        ],
         card => unimplemented!("card upgrade: {card:?}"),
-    };
-    raise(printed, changes);
+    }
 }
 
 /// `Bulwark`. Block, then forge the blade.

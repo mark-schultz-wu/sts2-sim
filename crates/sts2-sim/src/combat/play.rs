@@ -45,14 +45,12 @@ pub(crate) fn resolve<V: Rules>(
     target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
     let at = usize::from(index.get());
-    let card = live
-        .hand
-        .get(at)
-        .map(|held| held.ident)
-        .ok_or(Reason::OutOfRange {
-            index: i64::from(index.get()),
-            count: live.hand.len(),
-        })?;
+    let held = live.hand.get(at).ok_or(Reason::OutOfRange {
+        index: i64::from(index.get()),
+        count: live.hand.len(),
+    })?;
+    let card = held.ident;
+    let (cost, star_cost) = (held.cost, held.star_cost);
 
     // The creature the play named has to still be in this fight. An id is
     // chosen against an observation, and a fight moves on from one.
@@ -65,7 +63,14 @@ pub(crate) fn resolve<V: Rules>(
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
     let takes = legal::target_type::<V>(card, &live.creatures);
-    let refusals = legal::reasons::<V>(card, &live.creatures, live.energy, live.stars);
+    let refusals = legal::reasons::<V>(
+        card,
+        &live.creatures,
+        cost,
+        star_cost,
+        live.energy,
+        live.stars,
+    );
     if !refusals.is_empty() {
         return Err(Reason::Unplayable {
             card,
@@ -87,7 +92,6 @@ pub(crate) fn resolve<V: Rules>(
         });
     }
 
-    let (cost, star_cost) = V::card_cost(card.card, card.upgrade);
     if star_cost == Cost::X {
         // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
         // on this build prices its stars at X.

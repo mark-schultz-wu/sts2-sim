@@ -892,11 +892,17 @@ pub trait Fight<V: ContentVersion> {
     /// `CardCmd.Discard(this)`, for the card whose behavior is running.
     fn discard_this(&mut self);
 
-    /// `CardCmd.Upgrade` over every card in the hand.
+    /// `PileType.<pile>.GetPile(Owner).Cards`, as it holds them now.
     ///
-    /// A card already at its own maximum is not upgradable and is passed over,
-    /// which is what `CardModel.IsUpgradable` answers.
-    fn upgrade_hand(&mut self);
+    /// Each is named by where it was found, the way a selection names one. A
+    /// card that acts on a whole pile walks this.
+    fn cards_in(&self, pile: crate::Pile) -> Vec<crate::CardAt<V>>;
+
+    /// `CardCmd.Upgrade(card)`, for the card at one place in a pile.
+    ///
+    /// A card already at its own maximum is not upgradable and is left where
+    /// it is, which is what `CardModel.IsUpgradable` answers.
+    fn upgrade(&mut self, card: crate::CardAt<V>);
 
     /// `CreatureCmd.Add<M>(CombatState, position)`.
     ///
@@ -953,6 +959,20 @@ pub trait Fight<V: ContentVersion> {
     /// The player for a card and the monster for a move, which is the creature
     /// a card saying "gain" means.
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
+}
+
+/// The face of one copy of a card, as its own upgrade writes on it.
+///
+/// `CardModel` keeps its printed numbers and its cost apart, and an
+/// `OnUpgrade` writes to either. So an upgrade is handed both rather than the
+/// numbers alone.
+///
+/// `StarCost` is not here. No card of a ported build upgrades one, and the
+/// first that does adds it the way this one is written.
+pub struct Face<'a, V: ContentVersion> {
+    pub numbers: &'a mut [CardNumber<V::CardVar, V::Number>],
+    /// `CardModel.EnergyCost`, which `UpgradeBy` moves.
+    pub cost: &'a mut Cost,
 }
 
 /// How far a card's play got.
@@ -1803,14 +1823,8 @@ pub trait Rules: Hooks {
     /// The relic whose pickup opens the two-card colorless choice.
     fn lead_paperweight() -> Self::Relic;
 
-    /// Apply a card's first upgrade to this combat copy's printed values.
-    fn upgrade_card(card: Self::Card, numbers: &mut [CardNumber<Self::CardVar, Self::Number>]);
-
-    /// `CardModel.EnergyCost` and `StarCost`, at the upgrade this copy is at.
-    ///
-    /// The table prints what a fresh copy costs, and an `OnUpgrade` that calls
-    /// `EnergyCost.UpgradeBy` moves it from there.
-    fn card_cost(card: Self::Card, upgrade: u8) -> (Cost, Cost);
+    /// Apply a card's first upgrade to this combat copy's own face.
+    fn upgrade_card(card: Self::Card, face: Face<'_, Self>);
 
     /// `CardModel.OnPlay`, as a direct call on the hot path.
     ///

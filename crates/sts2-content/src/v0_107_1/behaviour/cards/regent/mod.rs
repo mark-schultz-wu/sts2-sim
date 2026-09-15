@@ -3,7 +3,7 @@
 use sts2_core::{CardTable, Fight, Played};
 
 use super::super::super::generated::cards::{CardRarity, Cards, RegentCard};
-use super::{CardNumber, V};
+use super::{Change, V};
 
 mod basic;
 mod common;
@@ -22,23 +22,14 @@ pub enum Resume {
 ///
 /// A rarity gets a module when its first card is upgraded. A card from a
 /// rarity nobody has reached stops here instead.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
+pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
     match Cards::Regent(card).rarity() {
-        CardRarity::Basic => basic::upgrade(card, printed),
-        CardRarity::Common => common::upgrade(card, printed),
-        CardRarity::Uncommon => uncommon::upgrade(card, printed),
-        CardRarity::Rare => rare::upgrade(card, printed),
+        CardRarity::Basic => basic::upgrade(card),
+        CardRarity::Common => common::upgrade(card),
+        CardRarity::Uncommon => uncommon::upgrade(card),
+        CardRarity::Rare => rare::upgrade(card),
         _ => unimplemented!("card upgrade: {card:?}"),
     }
-}
-
-/// What one upgrade moves a Regent card's two costs by.
-///
-/// No card of this pool that the simulator plays has an `OnUpgrade` that calls
-/// `EnergyCost.UpgradeBy` or `StarCost.UpgradeBy`. Each raises a number it
-/// prints instead, which [`upgrade`] is what applies.
-pub(super) fn upgrade_cost(_card: RegentCard) -> (i8, i8) {
-    (0, 0)
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {

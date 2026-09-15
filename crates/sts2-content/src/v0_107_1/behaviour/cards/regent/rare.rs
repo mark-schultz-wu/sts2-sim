@@ -3,15 +3,14 @@
 use sts2_core::{Fight, Played};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
-use super::super::{CardNumber, Number, V, raise};
+use super::super::{Change, V};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
-    let changes: &[(CardVar, Number)] = match card {
-        RegentCard::TheSmith => &[(CardVar::Forge, 10)],
+pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
+    match card {
+        RegentCard::TheSmith => &[Change::Raise(CardVar::Forge, 10)],
         card => unimplemented!("card upgrade: {card:?}"),
-    };
-    raise(printed, changes);
+    }
 }
 
 /// `TheSmith`. Forges the blade, and does nothing else.

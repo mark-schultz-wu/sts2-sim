@@ -837,10 +837,39 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
-    fn upgrade_hand(&mut self) {
-        for held in &mut self.live.hand {
-            held.upgrade();
-        }
+    fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {
+        let held = match pile {
+            Pile::Hand => &self.live.hand,
+            Pile::Draw => &self.live.draw,
+            Pile::Discard => &self.live.discard,
+            Pile::Exhaust => &self.live.exhaust,
+        };
+        held.iter()
+            .enumerate()
+            .map(|(at, held)| {
+                let at = num_traits::NumCast::from(at)
+                    .unwrap_or_else(|| unimplemented!("a pile of more cards than a fight counts"));
+                CardAt::new(held.id, pile, at)
+            })
+            .collect()
+    }
+
+    fn upgrade(&mut self, card: CardAt<V>) {
+        let pile = match card.pile() {
+            Pile::Hand => &mut self.live.hand,
+            Pile::Draw => &mut self.live.draw,
+            Pile::Discard => &mut self.live.discard,
+            Pile::Exhaust => &mut self.live.exhaust,
+        };
+        // The place came with the name, as a transform's does, so this looks
+        // once and says so if the card has moved since.
+        let at: usize = num_traits::NumCast::from(card.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
+        let held = pile.get_mut(at);
+        let Some(held) = held.filter(|held| held.id == card.id()) else {
+            unimplemented!("a card upgraded after the fight moved it");
+        };
+        held.upgrade();
     }
 
     fn discard_this(&mut self) {

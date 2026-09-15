@@ -1,6 +1,6 @@
 //! The potions every character's pool draws from.
 
-use sts2_core::{Fight, PowerAmount};
+use sts2_core::{Fight, Pile, PowerAmount};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::potions::Potion;
@@ -31,9 +31,13 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) {
                 PowerAmount::Counted(VULNERABLE),
             );
         }
-        // `AnyPlayer` again, and a run with one player upgrades that player's
-        // hand.
-        Potion::BlessingOfTheForge => fight.upgrade_hand(),
+        // `AnyPlayer` again, and a run with one player walks that player's
+        // hand. Every card in it that can be upgraded is.
+        Potion::BlessingOfTheForge => {
+            for card in fight.cards_in(Pile::Hand) {
+                fight.upgrade(card);
+            }
+        }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

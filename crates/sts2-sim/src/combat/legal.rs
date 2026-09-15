@@ -48,6 +48,8 @@ pub(super) fn target_type<V: Rules>(
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
     creatures: &[Creature<V>],
+    cost: Cost,
+    star_cost: Cost,
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<V::UnplayableReason> {
@@ -56,7 +58,6 @@ pub(super) fn reasons<V: Rules>(
     if card.card.unplayable() {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::HAS_UNPLAYABLE_KEYWORD);
     }
-    let (cost, star_cost) = V::card_cost(card.card, card.upgrade);
     if spend(cost, energy).is_none_or(|spent| spent > energy) {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::ENERGY_COST_TOO_HIGH);
     }
@@ -106,8 +107,8 @@ fn playable<V: Rules>(
 ) -> Playable<V> {
     let card = &held.ident;
     let target = target_type::<V>(*card, creatures);
-    let (cost, star_cost) = V::card_cost(card.card, card.upgrade);
-    let reasons = reasons::<V>(*card, creatures, energy, stars);
+    let (cost, star_cost) = (held.cost, held.star_cost);
+    let reasons = reasons::<V>(*card, creatures, cost, star_cost, energy, stars);
     let targets = targets::<V>(target, creatures, !reasons.is_empty());
 
     Playable {
