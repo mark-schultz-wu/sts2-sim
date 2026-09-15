@@ -16,7 +16,7 @@ use crate::combat::Error;
 use crate::event::Blessing;
 use crate::map::{ActMap, Layout};
 use crate::reward::{Odds, Offer};
-use crate::run::Opening;
+use crate::run::{Opening, Rarity};
 use sts2_core::Gift;
 
 /// The authoritative state of the run slice implemented so far.
@@ -48,6 +48,13 @@ pub(crate) struct State<V: Rules> {
     visited_events: Vec<V::Event>,
     unknown_odds: [f32; 3],
     odds: Odds,
+    /// Every relic this run has dealt out of a bag, in the order it dealt
+    /// them.
+    ///
+    /// The bags sit in the setup that every branch of a run shares. A branch
+    /// that deals a relic must not deal it to the other, so what moves lives
+    /// here. It is a handful over a run, not the whole table.
+    dealt_relics: SmallVec<[V::Relic; 8]>,
     phase: Phase<V>,
 }
 
@@ -227,6 +234,7 @@ impl<V: Rules> State<V> {
             visited_events: Vec::new(),
             unknown_odds: [0.1, 0.02, 0.03],
             odds: Odds::default(),
+            dealt_relics: SmallVec::new(),
             rngs: Rngs {
                 run: run_counters,
                 player: smallvec::smallvec![0; V::player_rng_types().len()],
@@ -318,6 +326,25 @@ impl<V: Rules> State<V> {
     /// of the same run.
     pub(super) fn rewarding(&mut self) -> (&mut MegaRng, &mut Odds) {
         (&mut self.rngs.rewards, &mut self.odds)
+    }
+
+    /// The run's two relic bags: the player's own, then the shared one.
+    ///
+    /// A relic dealt out of the first leaves the second with it, so whoever
+    /// pulls one reaches both.
+    /// `RelicFactory.PullNextRelicFromFront`, once the rarity is rolled.
+    ///
+    /// The player's bag deals it, and the run notes it as dealt. That note is
+    /// what `SharedRelicGrabBag.Remove` does on the other side, so the shared
+    /// bag needs no second one.
+    pub(super) fn pull_relic(&mut self, rarity: Rarity<V>) -> V::Relic {
+        let relic = self
+            .shared
+            .opening
+            .player_relics
+            .front(rarity, &self.dealt_relics);
+        self.dealt_relics.push(relic);
+        relic
     }
 
     /// Which act the run stands in.
@@ -660,6 +687,11 @@ impl<V: Rules> State<V> {
                     *taken = true;
                     self.player.deck.push(CardIdent::new(chosen));
                 }
+                (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
+                    let relic = *relic;
+                    *taken = true;
+                    self.player.relics.push(HeldRelic::new(relic));
+                }
                 _ => unimplemented!("a reward taken as the wrong kind"),
             }
         }
@@ -880,6 +912,12 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                     },
                     Offer::Potion { potion, .. } => RewardKind::Potion {
                         potion: Some(*potion),
+                    },
+                    // The slot picks no rarity of its own, so it reports
+                    // `RelicRarity.None` whatever the relic in it is.
+                    Offer::Relic { relic, .. } => RewardKind::Relic {
+                        relic: Some(*relic),
+                        rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                     },
                     Offer::Card { cards, .. } => RewardKind::Card {
                         cards: cards

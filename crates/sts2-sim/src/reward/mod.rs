@@ -25,14 +25,21 @@ pub(crate) enum Offer<V: Rules> {
         potion: V::Potion,
         taken: bool,
     },
+    /// An elite's relic. The slot picks no rarity of its own, so what it
+    /// reports is `RelicRarity.None`, whatever the relic in it is.
+    Relic {
+        relic: V::Relic,
+        taken: bool,
+    },
 }
 
 impl<V: Rules> Offer<V> {
     pub(crate) fn taken(&self) -> bool {
         match self {
-            Self::Gold { taken, .. } | Self::Card { taken, .. } | Self::Potion { taken, .. } => {
-                *taken
-            }
+            Self::Gold { taken, .. }
+            | Self::Card { taken, .. }
+            | Self::Potion { taken, .. }
+            | Self::Relic { taken, .. } => *taken,
         }
     }
 }

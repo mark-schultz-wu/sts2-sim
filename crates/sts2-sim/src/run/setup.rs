@@ -62,6 +62,41 @@ impl<V: Rules> RelicBag<V> {
         Self::populate(rng, relics, true)
     }
 
+    /// `RelicGrabBag.PullFromFront`, as a read rather than a write.
+    ///
+    /// The game only ever removes what it deals, and a deque's shuffle never
+    /// moves. So the deque less what a run dealt is the same sequence.
+    /// `dealt` is every relic this run handed out.
+    ///
+    /// Answers the deque for `rarity`, or the next up when it is spent: shop,
+    /// common, uncommon, rare. `RelicModel.IsAllowed` is not read, and 62
+    /// relics override it.
+    ///
+    /// # Panics
+    ///
+    /// A bag with nothing left at any rarity. The game refreshes a spent one
+    /// and falls back to a relic of its own, and neither is reached.
+    pub fn front(&self, rarity: Rarity<V>, dealt: &[V::Relic]) -> V::Relic {
+        let mut rarity = rarity;
+        loop {
+            if let Some(relic) = self
+                .deques
+                .get(&rarity)
+                .and_then(|relics| relics.iter().find(|relic| !dealt.contains(relic)))
+            {
+                return *relic;
+            }
+            rarity = match rarity {
+                r if r == <Rarity<V> as RarityKinds>::SHOP => <Rarity<V> as RarityKinds>::COMMON,
+                r if r == <Rarity<V> as RarityKinds>::COMMON => {
+                    <Rarity<V> as RarityKinds>::UNCOMMON
+                }
+                r if r == <Rarity<V> as RarityKinds>::UNCOMMON => <Rarity<V> as RarityKinds>::RARE,
+                _ => unimplemented!("a relic bag with nothing left to deal"),
+            };
+        }
+    }
+
     /// Every relic a pool holds, in the game's own order.
     fn pool(pool: Pool<V>) -> Vec<V::Relic> {
         V::Relic::ALL

@@ -5,5 +5,5 @@ mod setup;
 mod state;
 mod travel;
 
-pub use setup::{Opening, RelicBag};
+pub use setup::{Opening, Rarity, RelicBag};
 pub(crate) use state::{HeldRelic, State};
