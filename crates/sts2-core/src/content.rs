@@ -843,6 +843,11 @@ pub trait Fight<V: ContentVersion> {
     /// A printed number, so signed. The pool it lands in is not.
     fn gain_stars(&mut self, amount: V::Number);
 
+    /// `PlayerCmd.GainEnergy(amount)`.
+    ///
+    /// A printed number, so signed. The pool it lands in is not.
+    fn gain_energy(&mut self, amount: V::Number);
+
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
     ///
     /// The power is the caller's to name. A rule knows which power it applies,
@@ -1185,6 +1190,10 @@ pub enum EventHook<V: ContentVersion> {
 pub enum HookEffect<V: ContentVersion> {
     /// `PlayerCmd.GainStars`.
     GainStars(V::Number),
+    /// `PlayerCmd.GainEnergy`.
+    GainEnergy(V::Number),
+    /// `CardPileCmd.Draw` for the player.
+    Draw(V::Number),
     /// `CreatureCmd.GainBlock` on the listener's owner.
     GainBlock(V::Number),
     /// `CardCmd.Upgrade` over every card in the hand.

@@ -643,6 +643,18 @@ impl<V: Rules> State<V> {
             let option = *options
                 .get(usize::from(index))
                 .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
+            if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HEAL {
+                let max_hp: u64 = num_traits::cast(self.player.max_hp)
+                    .expect("maximum health fits an unsigned rest calculation");
+                let healed: V::Health = num_traits::cast(max_hp * 3 / 10)
+                    .expect("rest healing fits the build's health type");
+                self.player.hp = (self.player.hp + healed).min(self.player.max_hp);
+                let Phase::RestSite { options, .. } = &mut self.phase else {
+                    unreachable!("the phase was a rest site when this began");
+                };
+                options.clear();
+                return Ok(self.report());
+            }
             if option != <V::RestSiteOption as sts2_core::RestKinds<V>>::SMITH {
                 unimplemented!("the {option:?} rest site option");
             }
@@ -795,8 +807,22 @@ impl<V: Rules> State<V> {
     /// reward stays in the set once it is taken, because the indices an answer
     /// names never renumber.
     fn take(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+        if let Answer::Skip = answer {
+            let Phase::Rewards { offered, .. } = &mut self.phase else {
+                unreachable!("the phase was a reward screen when this began");
+            };
+            for offer in offered {
+                match offer {
+                    Offer::Gold { taken, .. }
+                    | Offer::Card { taken, .. }
+                    | Offer::Potion { taken, .. }
+                    | Offer::Relic { taken, .. } => *taken = true,
+                }
+            }
+            return Ok(self.report());
+        }
         let Answer::Take(taking) = answer else {
-            unimplemented!("an answer to a reward screen that takes nothing");
+            unimplemented!("an answer the reward screen does not accept");
         };
         let slots: usize = num_traits::cast(self.player.potion_slots)
             .expect("the belt has an addressable number of slots");

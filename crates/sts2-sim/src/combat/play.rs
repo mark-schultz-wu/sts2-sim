@@ -130,6 +130,7 @@ pub(crate) fn apply_power<V: Rules>(
         &mut next,
         &mut shuffle,
         &mut niche,
+        &mut relics,
         live.ascension,
         None,
         None,
@@ -177,7 +178,7 @@ pub(crate) fn play<V: Rules>(
     relics: &[crate::run::HeldRelic<V>],
 ) -> Result<super::Fought<V>, Error> {
     let mut next = live.clone();
-    let relics = relics.to_vec();
+    let mut relics = relics.to_vec();
     let streams = streams.clone();
     let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
     let mut niche = streams.stream(V::RunRngType::NICHE);
@@ -193,6 +194,7 @@ pub(crate) fn play<V: Rules>(
         &mut next,
         &mut shuffle,
         &mut niche,
+        &mut relics,
         live.ascension,
         play.target,
         Some(&card),
@@ -254,10 +256,12 @@ pub(crate) fn answer<V: Rules>(
 
     let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
     let mut niche = streams.stream(V::RunRngType::NICHE);
+    let mut relics = relics.to_vec();
     let mut board = Board::for_card(
         &mut next,
         &mut shuffle,
         &mut niche,
+        &mut relics,
         live.ascension,
         asking.target,
         Some(&asking.card),
@@ -271,7 +275,7 @@ pub(crate) fn answer<V: Rules>(
         shuffle,
         niche,
         streams.clone(),
-        relics.to_vec(),
+        relics,
         live.ascension,
         asking.card,
         asking.target,
@@ -330,6 +334,7 @@ fn carry_on<V: Rules>(
             &mut next,
             &mut shuffle,
             &mut niche,
+            &mut relics,
             ascension,
             target,
             Some(&card),
@@ -359,7 +364,15 @@ fn carry_on<V: Rules>(
     // the same stream, so this is before the streams are written back.
     let asked = relic::card_played::<V>(&mut relics, card_played);
     if !asked.is_empty() {
-        let mut board = Board::for_card(&mut next, &mut shuffle, &mut niche, ascension, None, None);
+        let mut board = Board::for_card(
+            &mut next,
+            &mut shuffle,
+            &mut niche,
+            &mut relics,
+            ascension,
+            None,
+            None,
+        );
         relic::apply::<V, _>(&mut board, asked);
         let skipped = std::mem::take(&mut board.skipped);
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);

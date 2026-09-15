@@ -31,6 +31,7 @@ pub(crate) fn drink<V: Rules>(
         &mut next,
         &mut shuffle,
         &mut niche,
+        &mut relics,
         live.ascension,
         target,
         None,

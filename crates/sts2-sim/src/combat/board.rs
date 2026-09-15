@@ -18,6 +18,7 @@ use sts2_core::{
 };
 
 use super::live::{CardInstance, Live};
+use crate::run::HeldRelic;
 
 /// The fight an effect is resolved against.
 pub(super) struct Board<'a, V: Rules> {
@@ -27,6 +28,8 @@ pub(super) struct Board<'a, V: Rules> {
     shuffle: &'a mut MegaRng,
     /// The stream monsters use when they roll their hit points.
     niche: &'a mut MegaRng,
+    /// The player's relic belt, for hooks raised while an effect resolves.
+    relics: &'a mut [HeldRelic<V>],
     /// Whose effect this is. The player for a card, the monster for a move.
     actor: CombatId,
     /// The creature a card was pointed at.
@@ -94,6 +97,7 @@ impl<'a, V: Rules> Board<'a, V> {
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         niche: &'a mut MegaRng,
+        relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
         target: Option<CombatId>,
         playing: Option<&'a CardInstance<V>>,
@@ -103,6 +107,7 @@ impl<'a, V: Rules> Board<'a, V> {
             live,
             shuffle,
             niche,
+            relics,
             actor,
             target,
             playing,
@@ -120,15 +125,17 @@ impl<'a, V: Rules> Board<'a, V> {
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         niche: &'a mut MegaRng,
+        relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
         actor: CombatId,
-        intent_damage: V::Number,
-        intent_repeats: V::Count,
+        intent: (V::Number, V::Count),
     ) -> Self {
+        let (intent_damage, intent_repeats) = intent;
         Board {
             live,
             shuffle,
             niche,
+            relics,
             actor,
             target: None,
             playing: None,
@@ -261,6 +268,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 })
         });
         if primary_enemy_remains {
+            self.after_enemy_death();
             return;
         }
 
@@ -364,6 +372,12 @@ impl<'a, V: Rules> Board<'a, V> {
         // reporting it dead.
         self.live.creatures.retain(|creature| creature.id != id);
         false
+    }
+
+    /// Notify the player's belt after a death that did not end combat.
+    fn after_enemy_death(&mut self) {
+        let asked = super::relic::notify::<V>(self.relics, sts2_core::EventHook::AfterDeath);
+        super::relic::apply::<V, _>(self, asked);
     }
 }
 
@@ -660,6 +674,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let amount = num_traits::NumCast::from(amount)
             .unwrap_or_else(|| unimplemented!("a card spending stars as it plays"));
         self.live.stars = self.live.stars + amount;
+    }
+
+    fn gain_energy(&mut self, amount: V::Number) {
+        let amount = num_traits::NumCast::from(amount)
+            .unwrap_or_else(|| unimplemented!("a relic spending energy as it triggers"));
+        self.live.energy = self.live.energy + amount;
     }
 
     fn apply_power(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
