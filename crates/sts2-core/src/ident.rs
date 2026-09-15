@@ -75,6 +75,83 @@ pub struct CardIdent<V: ContentVersion> {
     pub enchantment: Option<V::Enchantment>,
 }
 
+/// Which card instance a fight is talking about.
+///
+/// [`CardIdent`] says what a card is. This says which one. A fight moves its
+/// copies between piles, so a position names a card only until the next thing
+/// that touches one.
+///
+/// Minted per fight and never reused. A card transformed into another is a new
+/// card with a new id, as the game creates a new model for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct CardId<V: ContentVersion>(V::CardSerial);
+
+/// One of the piles a fight keeps its cards in, which is `PileType`.
+///
+/// The four a combat has. `Deck` is the run's, and no fight moves a card into
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Pile {
+    Hand,
+    Draw,
+    Discard,
+    Exhaust,
+}
+
+/// A card the fight named, and where it stood when it named it.
+///
+/// An id alone has no address, and finding one reads every pile. Playing a
+/// card is the hottest path there is, so the place travels with the name.
+///
+/// The place is a hint and the id is the answer. Whoever acts on this looks
+/// where it says, and checks the id it finds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CardAt<V: ContentVersion> {
+    id: CardId<V>,
+    pile: Pile,
+    index: V::Index,
+}
+
+impl<V: ContentVersion> CardAt<V> {
+    /// The card a fight found at `index` of `pile`.
+    pub fn new(id: CardId<V>, pile: Pile, index: V::Index) -> Self {
+        Self { id, pile, index }
+    }
+
+    /// Which card this is, whatever has moved since.
+    pub fn id(self) -> CardId<V> {
+        self.id
+    }
+
+    /// The pile it was in.
+    pub fn pile(self) -> Pile {
+        self.pile
+    }
+
+    /// Where it sat in that pile.
+    pub fn index(self) -> V::Index {
+        self.index
+    }
+}
+
+impl<V: ContentVersion> CardId<V> {
+    /// The card this number names.
+    pub fn new(serial: V::CardSerial) -> Self {
+        Self(serial)
+    }
+
+    /// The number it was minted as.
+    pub fn get(self) -> V::CardSerial {
+        self.0
+    }
+}
+
+impl<V: ContentVersion> std::fmt::Display for CardId<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl<V: ContentVersion> CardIdent<V> {
     /// A card as it comes out of a pool: nothing upgraded, nothing attached.
     pub const fn new(card: V::Card) -> CardIdent<V> {

@@ -12,8 +12,9 @@ use crate::rng::MegaRng;
 use num_traits::Zero;
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    Amount, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
-    EffectResolution, Fight, Holding, Modify, PowerAmount, PowerTable, Rules, SideKinds, Stack,
+    Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
+    EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, Selection,
+    SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -612,6 +613,54 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         var::<V>(held, key, &self.live.creatures)
     }
 
+    fn upgraded(&self) -> bool {
+        self.playing
+            .unwrap_or_else(|| unimplemented!("the upgrade of no card being played"))
+            .ident
+            .upgrade
+            != 0
+    }
+
+    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<CardAt<V>> {
+        // `FromHand` reads the pile it selects from, and the card being played
+        // is not in it: the play took it out before the card acted.
+        match select {
+            Selection::Exactly(count) if self.live.hand.len() <= count.get() => {}
+            _ => unimplemented!("a card selection the fight has to stop and ask"),
+        }
+        self.live
+            .hand
+            .iter()
+            .enumerate()
+            .map(|(index, held)| {
+                let index = num_traits::NumCast::from(index)
+                    .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+                CardAt::new(held.id, Pile::Hand, index)
+            })
+            .collect()
+    }
+
+    fn transform(&mut self, card: CardAt<V>, into: CardIdent<V>) {
+        // A new model for the replacement, so a new id. The original's own is
+        // gone with it.
+        let id = self.live.card_ids.mint();
+        let pile = match card.pile() {
+            Pile::Hand => &mut self.live.hand,
+            Pile::Draw => &mut self.live.draw,
+            Pile::Discard => &mut self.live.discard,
+            Pile::Exhaust => &mut self.live.exhaust,
+        };
+        // `Transform` puts the replacement where the original stood, in the
+        // pile it stood in. The place came with the name, so this looks once.
+        let at: usize = num_traits::NumCast::from(card.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
+        let held = pile.get_mut(at);
+        let Some(held) = held.filter(|held| held.id == card.id()) else {
+            unimplemented!("a card transformed after the fight moved it");
+        };
+        *held = CardInstance::new(into, id);
+    }
+
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
         // `ForgeCmd.Forge` creates one when the fight holds none it can reach.
         // The exhaust pile is not one it can reach, and is forged all the same.
@@ -620,7 +669,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .flatten()
             .any(|held| held.ident.card == card);
         if !held {
-            self.live.hand.push(CardInstance::new(CardIdent::new(card)));
+            let id = self.live.card_ids.mint();
+            self.live
+                .hand
+                .push(CardInstance::new(CardIdent::new(card), id));
         }
         for pile in [
             &mut self.live.hand,
@@ -651,9 +703,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             unimplemented!("cards given to more than one player");
         }
         for _ in 0..count {
+            let id = self.live.card_ids.mint();
             self.live
                 .discard
-                .push(CardInstance::new(CardIdent::new(card)));
+                .push(CardInstance::new(CardIdent::new(card), id));
         }
     }
 

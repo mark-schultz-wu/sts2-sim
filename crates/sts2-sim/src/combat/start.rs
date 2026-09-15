@@ -5,7 +5,7 @@ use sts2_core::{
     SideKinds, TurnPhaseKinds,
 };
 
-use super::live::{CardInstance, Live};
+use super::live::{CardIds, CardInstance, Live};
 use super::{Error, encounter, monster, pile, relic, stream};
 use crate::run::HeldRelic;
 
@@ -47,10 +47,11 @@ pub(crate) fn enter<V: Rules>(
     creatures.extend(enemies.creatures);
 
     // The deck's own cards, each becoming a copy the fight can write on.
+    let mut card_ids = CardIds::<V>::new();
     let deck: Vec<CardInstance<V>> = observation
         .deck
         .iter()
-        .map(|card| CardInstance::new(*card))
+        .map(|card| CardInstance::new(*card, card_ids.mint()))
         .collect();
     // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
     // turn the fight is about to begin on. Both run before anything is drawn.
@@ -104,6 +105,7 @@ pub(crate) fn enter<V: Rules>(
             machines: enemies.machines,
             // Nothing has been applied to anyone yet.
             skip_tick: Vec::new(),
+            card_ids,
         },
         counters,
     ))

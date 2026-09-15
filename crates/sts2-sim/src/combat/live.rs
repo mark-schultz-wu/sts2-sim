@@ -11,11 +11,34 @@
 //! its previews is derived from the fields below, so [`Live::report`] builds
 //! it and nothing else does.
 
+use num_traits::CheckedAdd;
 use sts2_core::{
-    CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Rules, SideKinds,
+    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Rules,
+    SideKinds,
 };
 
 use super::monster::Machine;
+
+/// Mints the ids a fight names its cards by.
+///
+/// One counter, and nothing reuses a number it gave out. A fight that runs out
+/// stops the run rather than name two cards the same.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct CardIds<V: Rules>(V::CardSerial);
+
+impl<V: Rules> CardIds<V> {
+    pub(super) fn new() -> Self {
+        Self(num_traits::zero())
+    }
+
+    pub(super) fn mint(&mut self) -> CardId<V> {
+        let next = self.0;
+        self.0 = next
+            .checked_add(&num_traits::one())
+            .unwrap_or_else(|| unimplemented!("a fight holding more cards than it can name"));
+        CardId::new(next)
+    }
+}
 
 /// One mutable card in a combat pile.
 ///
@@ -24,6 +47,8 @@ use super::monster::Machine;
 /// leaves the other where it was.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CardInstance<V: Rules> {
+    /// Which copy this is, for as long as the fight holds it.
+    pub(super) id: CardId<V>,
     pub(super) ident: CardIdent<V>,
     /// The numbers this copy prints, which start as the table's and move.
     pub(super) vars: Vec<CardNumber<V::CardVar, V::Number>>,
@@ -31,7 +56,7 @@ pub(super) struct CardInstance<V: Rules> {
 
 impl<V: Rules> CardInstance<V> {
     /// A fresh copy, printing what the table prints.
-    pub(super) fn new(ident: CardIdent<V>) -> Self {
+    pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {
         let vars = ident
             .card
             .vars()
@@ -47,7 +72,7 @@ impl<V: Rules> CardInstance<V> {
                 modifier: var.modifier,
             })
             .collect();
-        let mut card = Self { ident, vars };
+        let mut card = Self { id, ident, vars };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
             V::upgrade_card(card.ident.card, &mut card.vars);
@@ -91,6 +116,8 @@ pub(crate) struct Live<V: Rules> {
     /// instance. The observation's [`sts2_core::Stack`] is the game's own wire
     /// shape and carries no such field, so the fight keeps it beside them.
     pub(super) skip_tick: Vec<(CombatId, V::Power)>,
+    /// The ids this fight has given out, and the next one it will.
+    pub(super) card_ids: CardIds<V>,
 }
 
 impl<V: Rules> Live<V> {
