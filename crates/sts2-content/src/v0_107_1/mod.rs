@@ -110,7 +110,8 @@ impl sts2_core::Hooks for V0_107_1 {
                 power,
                 amount,
                 owner,
-            } => behaviour::powers::modify_hook(power, amount, owner, hook),
+                counted,
+            } => behaviour::powers::modify_hook(power, amount, owner, counted, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
             // No card modifies a number a hook carries. `CardModel` overrides
             // the numbers it prints instead, which the table already holds.
@@ -139,6 +140,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 power,
                 amount,
                 owner,
+                ..
             } => behaviour::powers::event_hook(power, amount, owner, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
             sts2_core::Listener::Card { card, printed } => {
@@ -203,11 +205,8 @@ impl sts2_core::Rules for V0_107_1 {
         generated::relics::Relic::LeadPaperweight
     }
 
-    fn upgrade_card(
-        card: Self::Card,
-        numbers: &mut [sts2_core::CardNumber<Self::CardVar, Self::Number>],
-    ) {
-        behaviour::cards::upgrade(card, numbers);
+    fn upgrade_card(card: Self::Card, face: sts2_core::Face<'_, Self>) {
+        behaviour::cards::upgrade(card, face);
     }
 
     fn on_use<F: sts2_core::Fight<Self>>(potion: Self::Potion, fight: &mut F) {

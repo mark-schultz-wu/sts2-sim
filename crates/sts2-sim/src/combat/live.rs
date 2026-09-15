@@ -72,6 +72,12 @@ pub(super) struct CardInstance<V: Rules> {
     pub(super) ident: CardIdent<V>,
     /// The numbers this copy prints, which start as the table's and move.
     pub(super) vars: Vec<CardNumber<V::CardVar, V::Number>>,
+    /// `CardModel.EnergyCost` and `StarCost` for this copy.
+    ///
+    /// Per copy, because an upgrade writes on them. The table prices a fresh
+    /// one, and `UpgradeBy` moves the copy alone.
+    pub(super) cost: sts2_core::Cost,
+    pub(super) star_cost: sts2_core::Cost,
 }
 
 impl<V: Rules> CardInstance<V> {
@@ -92,20 +98,56 @@ impl<V: Rules> CardInstance<V> {
                 modifier: var.modifier,
             })
             .collect();
-        let mut card = Self { id, ident, vars };
+        let mut card = Self {
+            id,
+            ident,
+            vars,
+            cost: ident.card.cost(),
+            star_cost: ident.card.star_cost(),
+        };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
-            V::upgrade_card(card.ident.card, &mut card.vars);
+            V::upgrade_card(card.ident.card, card.face());
         }
         card
     }
 
-    pub(super) fn upgrade(&mut self) {
-        if self.ident.upgrade == 0 {
-            V::upgrade_card(self.ident.card, &mut self.vars);
-            self.ident.upgrade = 1;
+    /// This copy's own face, which is what an upgrade writes on.
+    fn face(&mut self) -> sts2_core::Face<'_, V> {
+        sts2_core::Face {
+            numbers: &mut self.vars,
+            cost: &mut self.cost,
         }
     }
+
+    pub(super) fn upgrade(&mut self) {
+        // `CardModel.IsUpgradable`, which a card already at its own maximum is
+        // not. A status card prints no upgrade at all.
+        if self.ident.upgrade < self.ident.card.max_upgrade() {
+            V::upgrade_card(self.ident.card, self.face());
+            self.ident.upgrade += 1;
+        }
+    }
+}
+
+/// One number a power counts on itself, and the creature carrying it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Counter<V: Rules> {
+    pub(crate) creature: CombatId,
+    pub(crate) power: V::Power,
+    pub(crate) amount: V::Number,
+}
+
+/// What one power counts on itself, or zero for one counting nothing.
+pub(crate) fn counted<V: Rules>(
+    counters: &[Counter<V>],
+    creature: CombatId,
+    power: V::Power,
+) -> V::Number {
+    counters
+        .iter()
+        .find(|held| held.creature == creature && held.power == power)
+        .map_or_else(num_traits::zero, |held| held.amount)
 }
 
 /// A fight in progress.
@@ -136,6 +178,13 @@ pub(crate) struct Live<V: Rules> {
     /// instance. The observation's [`sts2_core::Stack`] is the game's own wire
     /// shape and carries no such field, so the fight keeps it beside them.
     pub(super) skip_tick: Vec<(CombatId, V::Power)>,
+    /// `PowerModel.DynamicVars`, as the powers counting on themselves.
+    ///
+    /// A power counts here rather than in the stack the creature carries it
+    /// as. The reason is `skip_tick`'s: the wire's [`sts2_core::Stack`]
+    /// carries the amount and nothing else. Slow counts the cards played
+    /// against it in one of these.
+    pub(super) counted: Vec<Counter<V>>,
     /// The ids this fight has given out, and the next one it will.
     pub(super) card_ids: CardIds<V>,
     /// A card play waiting on an answer, which is the only thing the fight
@@ -206,6 +255,7 @@ impl<V: Rules> Live<V> {
                 if let Some(attack) = &mut intent.attack {
                     attack.damage = super::board::modified::<V>(
                         &self.creatures,
+                        &self.counted,
                         creature.id,
                         player,
                         attack.damage,
@@ -225,7 +275,13 @@ impl<V: Rules> Live<V> {
             discard: self.discard.iter().map(|card| card.ident).collect(),
             exhaust: self.exhaust.iter().map(|card| card.ident).collect(),
             creatures,
-            legal: super::legal::hand::<V>(&self.hand, &self.creatures, self.energy, self.stars),
+            legal: super::legal::hand::<V>(
+                &self.hand,
+                &self.creatures,
+                &self.counted,
+                self.energy,
+                self.stars,
+            ),
             orbs: self.orbs.clone(),
         }
     }

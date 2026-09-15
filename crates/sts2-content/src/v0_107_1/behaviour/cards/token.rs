@@ -4,15 +4,17 @@ use sts2_core::{Amount, CardVars, Effect, Fight, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
-use super::{CardNumber, Number, V, face};
+use super::{CardNumber, Change, Number, V, face};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: TokenCard, printed: &mut [CardNumber]) {
-    let changes: &[(CardVar, Number)] = match card {
-        TokenCard::MinionStrike => &[(CardVar::Damage, 3)],
+pub(super) fn upgrade(card: TokenCard) -> &'static [Change] {
+    match card {
+        TokenCard::MinionStrike => &[Change::Raise(CardVar::Damage, 3)],
+        // `SovereignBlade.OnUpgrade` is `EnergyCost.UpgradeBy(-1)`, and it
+        // raises nothing the card prints.
+        TokenCard::SovereignBlade => &[Change::Cost(-1)],
         card => unimplemented!("card upgrade: {card:?}"),
-    };
-    super::raise(printed, changes);
+    }
 }
 
 /// What a card works out from the fight for a number it prints.

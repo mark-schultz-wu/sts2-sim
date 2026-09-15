@@ -15,7 +15,7 @@ use crate::rng::MegaRng;
 
 use super::board::Board;
 use super::live::{CardInstance, Live};
-use super::{Error, hook, legal, relic};
+use super::{Error, hook, legal, power, relic};
 use crate::stream::Streams;
 
 /// A play the fight allows, resolved but not yet made.
@@ -45,14 +45,12 @@ pub(crate) fn resolve<V: Rules>(
     target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
     let at = usize::from(index.get());
-    let card = live
-        .hand
-        .get(at)
-        .map(|held| held.ident)
-        .ok_or(Reason::OutOfRange {
-            index: i64::from(index.get()),
-            count: live.hand.len(),
-        })?;
+    let held = live.hand.get(at).ok_or(Reason::OutOfRange {
+        index: i64::from(index.get()),
+        count: live.hand.len(),
+    })?;
+    let card = held.ident;
+    let (cost, star_cost) = (held.cost, held.star_cost);
 
     // The creature the play named has to still be in this fight. An id is
     // chosen against an observation, and a fight moves on from one.
@@ -65,7 +63,14 @@ pub(crate) fn resolve<V: Rules>(
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
     let takes = legal::target_type::<V>(card, &live.creatures);
-    let refusals = legal::reasons::<V>(card, &live.creatures, live.energy, live.stars);
+    let refusals = legal::reasons::<V>(
+        card,
+        &live.creatures,
+        cost,
+        star_cost,
+        live.energy,
+        live.stars,
+    );
     if !refusals.is_empty() {
         return Err(Reason::Unplayable {
             card,
@@ -87,7 +92,6 @@ pub(crate) fn resolve<V: Rules>(
         });
     }
 
-    let star_cost = card.card.star_cost();
     if star_cost == Cost::X {
         // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
         // on this build prices its stars at X.
@@ -101,7 +105,7 @@ pub(crate) fn resolve<V: Rules>(
     Ok(Play {
         index: at,
         target,
-        energy: legal::spend(card.card.cost(), live.energy).expect(PAYS),
+        energy: legal::spend(cost, live.energy).expect(PAYS),
         stars: legal::spend(star_cost, live.stars).expect(PAYS),
     })
 }
@@ -362,7 +366,11 @@ fn carry_on<V: Rules>(
     // `AfterCardPlayed`, once the card has left the play pile. A relic that
     // answers it acts through the board a card acts through, and draws from
     // the same stream, so this is before the streams are written back.
-    let asked = relic::card_played::<V>(&mut relics, card_played);
+    let mut asked = relic::card_played::<V>(&mut relics, card_played);
+    asked.extend(power::notify::<V>(
+        &mut next,
+        sts2_core::EventHook::CardPlayed { card: card_played },
+    ));
     if !asked.is_empty() {
         let mut board = Board::for_card(
             &mut next,

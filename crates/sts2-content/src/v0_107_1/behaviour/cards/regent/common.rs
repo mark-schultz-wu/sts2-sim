@@ -7,20 +7,25 @@ use sts2_core::{
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
-use super::super::{CardNumber, Number, V, raise};
+use super::super::{Change, V};
 use super::Resume;
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
-    let changes: &[(CardVar, Number)] = match card {
-        RegentCard::GuidingStar => &[(CardVar::Damage, 1), (CardVar::Cards, 1)],
+pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
+    match card {
+        RegentCard::GuidingStar => &[
+            Change::Raise(CardVar::Damage, 1),
+            Change::Raise(CardVar::Cards, 1),
+        ],
         // `Begone` prints no number an upgrade raises. Upgraded, its own
         // `OnPlay` upgrades the Minion Strike it transforms a card into.
         RegentCard::Begone => &[],
-        RegentCard::CrushUnder => &[(CardVar::Damage, 1), (CardVar::StrengthLoss, 1)],
+        RegentCard::CrushUnder => &[
+            Change::Raise(CardVar::Damage, 1),
+            Change::Raise(CardVar::StrengthLoss, 1),
+        ],
         card => unimplemented!("card upgrade: {card:?}"),
-    };
-    raise(printed, changes);
+    }
 }
 
 /// `GuidingStar`. Deal damage, then draw.

@@ -17,7 +17,7 @@ use sts2_core::{
     SideKinds, Stack,
 };
 
-use super::live::{CardInstance, Live};
+use super::live::{CardInstance, Counter, Live, counted};
 use crate::run::HeldRelic;
 
 /// The fight an effect is resolved against.
@@ -196,6 +196,8 @@ impl<'a, V: Rules> Board<'a, V> {
             power,
             amount,
             owner: self.live.creatures[at].side,
+            // Nothing is counted on a power that is not on a creature yet.
+            counted: V::Number::zero(),
         };
         let asked = <V as sts2_core::Hooks>::event_hook(
             listener,
@@ -257,11 +259,15 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.die(at) {
             return;
         }
+        let counters = &self.live.counted;
         let primary_enemy_remains = self.live.creatures.iter().any(|creature| {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
                 && !creature.powers.iter().any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
-                        held.listener(creature.side),
+                        held.listener(
+                            creature.side,
+                            counted::<V>(counters, creature.id, held.power),
+                        ),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
                     )
                     .is_decision_and(|counts| !counts)
@@ -294,19 +300,21 @@ impl<'a, V: Rules> Board<'a, V> {
             unimplemented!("a player dying in a fight");
         }
         let owner = self.live.creatures[at].side;
+        let id = self.live.creatures[at].id;
         let powers = self.live.creatures[at].powers.clone();
+        let counters = self.live.counted.clone();
         let after_death: Vec<_> = powers
             .iter()
             .flat_map(|held| {
                 <V as sts2_core::Hooks>::event_hook(
-                    held.listener(owner),
+                    held.listener(owner, counted::<V>(&counters, id, held.power)),
                     sts2_core::EventHook::AfterDeath,
                 )
             })
             .collect();
         let kept = powers.iter().any(|held| {
             <V as sts2_core::Hooks>::decide_hook(
-                held.listener(owner),
+                held.listener(owner, counted::<V>(&counters, id, held.power)),
                 sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
             )
             .is_decision_and(|remove| !remove)
@@ -369,8 +377,9 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         // Nothing that reads the fight after the death commands can see the
         // dead monster. The observation therefore omits it rather than
-        // reporting it dead.
+        // reporting it dead, and the numbers its powers counted go with it.
         self.live.creatures.retain(|creature| creature.id != id);
+        self.live.counted.retain(|held| held.creature != id);
         false
     }
 
@@ -417,6 +426,7 @@ pub(super) fn hooked<V: Rules>(
 /// nothing and the hit still works out. Nothing caps a hit.
 pub(crate) fn modified<V: Rules>(
     creatures: &[Creature<V>],
+    counters: &[Counter<V>],
     dealer: CombatId,
     target: CombatId,
     damage: V::Number,
@@ -429,15 +439,15 @@ pub(crate) fn modified<V: Rules>(
             holder
                 .into_iter()
                 .flat_map(move |holder| {
-                    let side = creatures[holder].side;
-                    creatures[holder]
+                    let creature = &creatures[holder];
+                    creature
                         .powers
                         .iter()
-                        .map(move |held| (held, side))
+                        .map(move |held| (held, creature.side, creature.id))
                 })
-                .map(move |(held, side)| {
+                .map(move |(held, side, id)| {
                     <V as sts2_core::Hooks>::modify_hook(
-                        held.listener(side),
+                        held.listener(side, counted::<V>(counters, id, held.power)),
                         sts2_core::ModifyHook::Damage { holding },
                     )
                 })
@@ -453,6 +463,7 @@ pub(crate) fn modified<V: Rules>(
 /// do.
 pub(super) fn blocked<V: Rules>(
     creatures: &[Creature<V>],
+    counters: &[Counter<V>],
     recipient: CombatId,
     amount: V::Number,
 ) -> V::Number {
@@ -463,7 +474,10 @@ pub(super) fn blocked<V: Rules>(
         .flat_map(|creature| {
             creature.powers.iter().map(|held| {
                 <V as sts2_core::Hooks>::modify_hook(
-                    held.listener(creature.side),
+                    held.listener(
+                        creature.side,
+                        counted::<V>(counters, creature.id, held.power),
+                    ),
                     sts2_core::ModifyHook::Block,
                 )
             })
@@ -479,6 +493,7 @@ pub(super) fn blocked<V: Rules>(
 /// same effect, so the number a card shows is the number it deals.
 pub(crate) fn resolve<V: Rules>(
     creatures: &[Creature<V>],
+    counters: &[Counter<V>],
     playing: Option<&CardInstance<V>>,
     effect: Effect<V>,
 ) -> ResolvedEffect<V> {
@@ -493,7 +508,7 @@ pub(crate) fn resolve<V: Rules>(
             damage: {
                 let damage = carried::<V>(playing, creatures, damage);
                 match scaling {
-                    Scaling::Dynamic => modified::<V>(creatures, dealer, target, damage),
+                    Scaling::Dynamic => modified::<V>(creatures, counters, dealer, target, damage),
                     Scaling::Static => damage,
                 }
             },
@@ -510,7 +525,7 @@ pub(crate) fn resolve<V: Rules>(
                 // move's, and nothing else. A relic's block is asked of no
                 // listener this build fields.
                 amount: match scaling {
-                    Scaling::Dynamic => blocked::<V>(creatures, recipient, amount),
+                    Scaling::Dynamic => blocked::<V>(creatures, counters, recipient, amount),
                     Scaling::Static => amount,
                 },
             }
@@ -632,7 +647,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
-        resolve::<V>(&self.live.creatures, self.playing, effect)
+        resolve::<V>(
+            &self.live.creatures,
+            &self.live.counted,
+            self.playing,
+            effect,
+        )
     }
 
     fn apply(&mut self, effect: Self::ResolvedEffect) {
@@ -817,6 +837,41 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {
+        let held = match pile {
+            Pile::Hand => &self.live.hand,
+            Pile::Draw => &self.live.draw,
+            Pile::Discard => &self.live.discard,
+            Pile::Exhaust => &self.live.exhaust,
+        };
+        held.iter()
+            .enumerate()
+            .map(|(at, held)| {
+                let at = num_traits::NumCast::from(at)
+                    .unwrap_or_else(|| unimplemented!("a pile of more cards than a fight counts"));
+                CardAt::new(held.id, pile, at)
+            })
+            .collect()
+    }
+
+    fn upgrade(&mut self, card: CardAt<V>) {
+        let pile = match card.pile() {
+            Pile::Hand => &mut self.live.hand,
+            Pile::Draw => &mut self.live.draw,
+            Pile::Discard => &mut self.live.discard,
+            Pile::Exhaust => &mut self.live.exhaust,
+        };
+        // The place came with the name, as a transform's does, so this looks
+        // once and says so if the card has moved since.
+        let at: usize = num_traits::NumCast::from(card.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
+        let held = pile.get_mut(at);
+        let Some(held) = held.filter(|held| held.id == card.id()) else {
+            unimplemented!("a card upgraded after the fight moved it");
+        };
+        held.upgrade();
+    }
+
     fn discard_this(&mut self) {
         let playing = self.playing.expect("a card behavior has a card");
         let Some(at) = self.live.hand.iter().position(|held| held.id == playing.id) else {
@@ -924,6 +979,7 @@ mod tests {
 
         resolve::<V>(
             &creatures,
+            &[],
             Some(&card),
             Effect::Attack {
                 dealer: player,

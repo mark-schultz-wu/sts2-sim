@@ -14,17 +14,18 @@ use sts2_core::{
     UnplayableReasonKinds,
 };
 
-use super::live::CardInstance;
+use super::live::{CardInstance, Counter};
 
 /// Every card in hand, in hand order, with the reasons each cannot be played.
 pub(super) fn hand<V: Rules>(
     hand: &[CardInstance<V>],
     creatures: &[Creature<V>],
+    counters: &[Counter<V>],
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<Playable<V>> {
     hand.iter()
-        .map(|card| playable::<V>(card, creatures, energy, stars))
+        .map(|card| playable::<V>(card, creatures, counters, energy, stars))
         .collect()
 }
 
@@ -47,6 +48,8 @@ pub(super) fn target_type<V: Rules>(
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
     creatures: &[Creature<V>],
+    cost: Cost,
+    star_cost: Cost,
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<V::UnplayableReason> {
@@ -55,10 +58,10 @@ pub(super) fn reasons<V: Rules>(
     if card.card.unplayable() {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::HAS_UNPLAYABLE_KEYWORD);
     }
-    if spend(card.card.cost(), energy).is_none_or(|spent| spent > energy) {
+    if spend(cost, energy).is_none_or(|spent| spent > energy) {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::ENERGY_COST_TOO_HIGH);
     }
-    if spend(card.card.star_cost(), stars).is_none_or(|spent| spent > stars) {
+    if spend(star_cost, stars).is_none_or(|spent| spent > stars) {
         reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::STAR_COST_TOO_HIGH);
     }
     // One player creature is the player's own, so a card pointed at an ally
@@ -98,14 +101,14 @@ pub(super) fn targets<V: Rules>(
 fn playable<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Creature<V>],
+    counters: &[Counter<V>],
     energy: V::Count,
     stars: V::Count,
 ) -> Playable<V> {
     let card = &held.ident;
     let target = target_type::<V>(*card, creatures);
-    let cost = card.card.cost();
-    let star_cost = card.card.star_cost();
-    let reasons = reasons::<V>(*card, creatures, energy, stars);
+    let (cost, star_cost) = (held.cost, held.star_cost);
+    let reasons = reasons::<V>(*card, creatures, cost, star_cost, energy, stars);
     let targets = targets::<V>(target, creatures, !reasons.is_empty());
 
     Playable {
@@ -118,7 +121,7 @@ fn playable<V: Rules>(
         // `BlockedByHook` is the only reason that names one, and nothing in a
         // fight raises it yet.
         preventer: None,
-        effect: effect::<V>(held, creatures, &targets),
+        effect: effect::<V>(held, creatures, counters, &targets),
         targets,
     }
 }
@@ -225,6 +228,7 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 fn effect<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Creature<V>],
+    counters: &[Counter<V>],
     targets: &[CombatId],
 ) -> Vec<Preview<V>> {
     let per_target = matches!(
@@ -249,7 +253,7 @@ fn effect<V: Rules>(
             // simulator does not have. `Observation::rules_digest` leaves it
             // out for that reason, and a front end reads the numbers.
             text: None,
-            vars: previewed::<V>(held, creatures, target),
+            vars: previewed::<V>(held, creatures, counters, target),
             base: numbers.clone(),
         })
         .collect();
@@ -279,6 +283,7 @@ fn effect<V: Rules>(
 fn previewed<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Creature<V>],
+    counters: &[Counter<V>],
     target: Option<CombatId>,
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
     let dealer = super::board::player::<V>(creatures);
@@ -288,7 +293,9 @@ fn previewed<V: Rules>(
             let resolved = var
                 .modifier
                 .and_then(|modifier| super::board::effect_of::<V>(modifier, var.id, dealer, target))
-                .map(|effect| super::board::resolve::<V>(creatures, Some(held), effect).amount());
+                .map(|effect| {
+                    super::board::resolve::<V>(creatures, counters, Some(held), effect).amount()
+                });
             // A number no hook reaches, and a hit previewed against no target,
             // both read what the card reads.
             let value = resolved.unwrap_or_else(|| super::board::var::<V>(held, var.id, creatures));
@@ -368,7 +375,7 @@ mod tests {
         energy: <V as sts2_core::ContentVersion>::Count,
         stars: <V as sts2_core::ContentVersion>::Count,
     ) -> Playable<V> {
-        let mut plays = super::hand::<V>(hand, &fight(), energy, stars);
+        let mut plays = super::hand::<V>(hand, &fight(), &[], energy, stars);
         assert_eq!(plays.len(), 1);
         plays.remove(0)
     }
@@ -434,7 +441,7 @@ mod tests {
         let mut creatures = fight();
         creatures[1].alive = false;
 
-        let plays = super::hand::<V>(&[strike], &creatures, 3, 0);
+        let plays = super::hand::<V>(&[strike], &creatures, &[], 3, 0);
 
         assert!(plays[0].targets.is_empty());
         // Nothing to hit is not a reason the card cannot be played. The game

@@ -3,11 +3,12 @@
 use sts2_core::{CardTable, Fight, Played};
 
 use super::super::super::generated::cards::{CardRarity, Cards, RegentCard};
-use super::{CardNumber, V};
+use super::{Change, V};
 
 mod basic;
 mod common;
 mod rare;
+mod uncommon;
 
 /// Where a Regent card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,11 +22,12 @@ pub enum Resume {
 ///
 /// A rarity gets a module when its first card is upgraded. A card from a
 /// rarity nobody has reached stops here instead.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
+pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
     match Cards::Regent(card).rarity() {
-        CardRarity::Basic => basic::upgrade(card, printed),
-        CardRarity::Common => common::upgrade(card, printed),
-        CardRarity::Rare => rare::upgrade(card, printed),
+        CardRarity::Basic => basic::upgrade(card),
+        CardRarity::Common => common::upgrade(card),
+        CardRarity::Uncommon => uncommon::upgrade(card),
+        CardRarity::Rare => rare::upgrade(card),
         _ => unimplemented!("card upgrade: {card:?}"),
     }
 }
@@ -42,6 +44,8 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::RefineBlade => common::refine_blade(fight),
         RegentCard::Begone => common::begone(),
         RegentCard::CrushUnder => common::crush_under(fight),
+        RegentCard::Bulwark => uncommon::bulwark(fight),
+        RegentCard::TheSmith => rare::the_smith(fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
 }

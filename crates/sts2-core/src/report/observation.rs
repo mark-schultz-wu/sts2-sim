@@ -482,11 +482,14 @@ impl<V: crate::Hooks> Stack<V> {
     ///
     /// `owner` is the side of the creature carrying it. A stack is held by a
     /// creature and does not know which, so the caller that found it says.
-    pub fn listener(&self, owner: V::CombatSide) -> crate::Listener<'_, V> {
+    /// `counted` is the number this instance keeps on itself. It is zero for
+    /// a power that keeps none.
+    pub fn listener(&self, owner: V::CombatSide, counted: V::Number) -> crate::Listener<'_, V> {
         crate::Listener::Power {
             power: self.power,
             amount: self.amount,
             owner,
+            counted,
         }
     }
 }

@@ -14,7 +14,8 @@ use sts2_core::{
 
 use super::Error;
 use super::board::{Board, draw};
-use super::live::Live;
+use super::live::{Live, counted};
+use super::power;
 use super::relic;
 use super::start::{hand_size, upgraded};
 use crate::stream::Streams;
@@ -55,6 +56,10 @@ pub(crate) fn end<V: Rules>(
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
+    // `AfterSideTurnStart` for the enemy, which the block clear comes before
+    // and the moves come after. A power counting the cards played against its
+    // owner forgets the count here.
+    side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
     let won = enemy_turn(
         &mut next,
         &mut shuffle,
@@ -104,6 +109,7 @@ pub(crate) fn end<V: Rules>(
     );
     let started = relic::turn_started::<V>(&mut relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
+    side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
@@ -150,6 +156,19 @@ fn turn_end<V: Rules>(
     }
 }
 
+/// `AfterSideTurnStart`, as the powers of the side taking its turn answer it.
+///
+/// # Panics
+///
+/// A power asking for something no side turn start can carry out.
+fn side_turn_started<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
+    let turn = live.turn;
+    let asked = power::notify::<V>(live, sts2_core::EventHook::SideTurnStart { side, turn });
+    if let Some(effect) = asked.first() {
+        unimplemented!("a power asking for {effect:?} as a side turn starts")
+    }
+}
+
 /// `FlushPlayerHand`: what is left in hand goes to the discard pile.
 ///
 /// A card that retains stays where it is. The keyword is all this reads:
@@ -175,9 +194,13 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
         return;
     };
     let mut gained: V::Count = num_traits::zero();
+    let counters = live.counted.clone();
     live.creatures[at].powers.retain(|held| {
         let amount = <V as sts2_core::Hooks>::event_hook(
-            held.listener(<V::CombatSide as SideKinds>::PLAYER),
+            held.listener(
+                <V::CombatSide as SideKinds>::PLAYER,
+                counted::<V>(&counters, player, held.power),
+            ),
             sts2_core::EventHook::EnergyReset,
         )
         .into_iter()
@@ -196,12 +219,14 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
 
 /// `ClearBlock` on every creature of one side.
 fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
+    let counters = live.counted.clone();
     for creature in live.creatures.iter_mut().filter(|c| c.side == side) {
         creature.block = num_traits::zero();
         let mut gained: V::Number = num_traits::zero();
+        let id = creature.id;
         creature.powers.retain(|held| {
             let block = <V as sts2_core::Hooks>::event_hook(
-                held.listener(side),
+                held.listener(side, counted::<V>(&counters, id, held.power)),
                 sts2_core::EventHook::BlockCleared,
             )
             .into_iter()
@@ -229,6 +254,7 @@ fn tick_powers<V: Rules>(
     let one = num_traits::one();
     let mut applying = Vec::new();
     let mut leaving: Vec<(CombatId, V::Power)> = Vec::new();
+    let counters = live.counted.clone();
     for creature in &mut live.creatures {
         let id = creature.id;
         let owner = creature.side;
@@ -240,7 +266,7 @@ fn tick_powers<V: Rules>(
                 continue;
             };
             let asked = <V as sts2_core::Hooks>::event_hook(
-                held.listener(owner),
+                held.listener(owner, counted::<V>(&counters, id, held.power)),
                 sts2_core::EventHook::SideTurnEnd { side },
             );
             for effect in &asked {

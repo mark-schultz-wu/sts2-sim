@@ -38,7 +38,7 @@ pub use play::recording;
 pub use content::{
     ActTable, Amount, AscensionKinds, CardNumber, CardNumberModifier, CardTable, CardVars,
     CharacterTable, ContentError, ContentVersion, Cost, DecisionHook, Drafted, Effect,
-    EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Fight, Fixed,
+    EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Face, Fight, Fixed,
     FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
     MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerStreamKinds, PotionTable, PotionUsage,
     PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, RestKinds, Rests,
