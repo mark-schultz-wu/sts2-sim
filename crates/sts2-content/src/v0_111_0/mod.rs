@@ -24,6 +24,7 @@
 
 mod event_options;
 mod generated;
+mod rest_site;
 
 pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
 pub use generated::*;

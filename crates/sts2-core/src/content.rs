@@ -644,6 +644,36 @@ pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
     fn name(self) -> &'static str;
 }
 
+/// The things a rest site can offer, as consts a rule can name.
+///
+/// The same bridge as [`MapPointKinds`]. `RestSiteOption.Generate` names two
+/// of these, so a rule holding only a [`ContentVersion`] has to name them too.
+///
+/// All nine, and not only the two a single-player rest site opens with. A
+/// build that adds an option stops codegen.
+pub trait RestKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
+    const CLONE: Self;
+    const COOK: Self;
+    const DIG: Self;
+    const HATCH: Self;
+    /// Rest, for three tenths of maximum health.
+    const HEAL: Self;
+    const KINDLE: Self;
+    const LIFT: Self;
+    /// The second player's rest, which a single-player run never offers.
+    const MEND: Self;
+    /// Upgrade a card the deck can still upgrade.
+    const SMITH: Self;
+
+    /// What a rest site offers this run, in the game's own order.
+    ///
+    /// `RestSiteOption.Generate` opens with `HEAL` and `SMITH`, adds `MEND`
+    /// for a second player, and then runs `TryModifyRestSiteOptions`. That
+    /// hook is why the list is the build's answer and not a constant. Both the
+    /// belt and the deck listen on it.
+    fn offered(relics: &[V::Relic], deck: &[crate::CardIdent<V>]) -> Vec<Self>;
+}
+
 /// The streams a run keeps, as consts a rule can name.
 ///
 /// The same bridge as [`MapPointKinds`]: a rule holding only a
@@ -1660,6 +1690,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
+        + crate::RestKinds<Self>
         + 'static;
     /// What a card can be pointed at.
     type TargetType: std::fmt::Debug
