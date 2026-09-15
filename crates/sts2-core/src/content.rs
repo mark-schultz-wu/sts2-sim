@@ -843,17 +843,13 @@ pub trait Fight<V: ContentVersion> {
     /// A printed number, so signed. The pool it lands in is not.
     fn gain_stars(&mut self, amount: V::Number);
 
-    /// `PlayerCmd.GainEnergy(amount)`.
+    /// `PlayerCmd.GainEnergy(amount)`, or `PlayerCmd.LoseEnergy` for a
+    /// negative one.
     ///
-    /// A printed number, so signed. The pool it lands in is not.
-    fn gain_energy(&mut self, amount: V::Number);
-
-    /// `PlayerCmd.LoseEnergy(amount)`.
-    ///
-    /// A printed number, so signed. The pool it comes out of is not.
-    /// `PlayerCombatState.LoseEnergy` clamps it at zero, so a loss larger than
-    /// the pool empties it and leaves no debt.
-    fn lose_energy(&mut self, amount: V::Number);
+    /// A printed number, so signed. The pool it lands in is not, and
+    /// `PlayerCombatState` clamps it at zero. A loss larger than the pool
+    /// empties the pool and leaves no debt.
+    fn modify_energy(&mut self, amount: V::Number);
 
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
     ///

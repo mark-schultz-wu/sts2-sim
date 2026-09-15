@@ -676,19 +676,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.stars = self.live.stars + amount;
     }
 
-    fn gain_energy(&mut self, amount: V::Number) {
-        let amount = num_traits::NumCast::from(amount)
-            .unwrap_or_else(|| unimplemented!("a relic spending energy as it triggers"));
-        self.live.energy = self.live.energy + amount;
-    }
-
-    fn lose_energy(&mut self, amount: V::Number) {
-        // `PlayerCmd.LoseEnergy` returns on an amount at or below zero, and
-        // the pool it takes from is clamped there.
-        let Some(amount) = num_traits::NumCast::from(amount) else {
-            return;
+    fn modify_energy(&mut self, amount: V::Number) {
+        let size = |amount: V::Number| {
+            num_traits::NumCast::from(amount)
+                .unwrap_or_else(|| unimplemented!("an energy change of {amount:?}"))
         };
-        self.live.energy = self.live.energy.saturating_sub(amount);
+        // `PlayerCombatState` holds the pool as a count and clamps it at zero.
+        match amount < V::Number::zero() {
+            true => self.live.energy = self.live.energy.saturating_sub(size(-amount)),
+            false => self.live.energy = self.live.energy + size(amount),
+        }
     }
 
     fn apply_power(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {

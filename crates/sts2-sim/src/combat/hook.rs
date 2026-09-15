@@ -14,8 +14,8 @@ use sts2_core::{Fight, HookEffect, Rules};
 pub(crate) fn apply<V: Rules, F: Fight<V>>(fight: &mut F, asked: Vec<HookEffect<V>>) {
     for effect in asked {
         match effect {
-            HookEffect::GainEnergy(amount) => fight.gain_energy(amount),
-            HookEffect::LoseEnergy(amount) => fight.lose_energy(amount),
+            HookEffect::GainEnergy(amount) => fight.modify_energy(amount),
+            HookEffect::LoseEnergy(amount) => fight.modify_energy(-amount),
             HookEffect::Draw(amount) => fight.draw(amount),
             HookEffect::GainBlock(amount) => {
                 let block = fight.resolve(sts2_core::Effect::GainBlock {
