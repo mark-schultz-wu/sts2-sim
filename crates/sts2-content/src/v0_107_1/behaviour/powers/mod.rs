@@ -26,6 +26,13 @@ const DAMAGE_DECREASE: f64 = 0.75;
 /// percentage taken off rather than as what is left.
 const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 
+/// What one card played adds to what `SlowPower`'s owner takes.
+///
+/// The game works this out in decimal, where a tenth is exact. A binary float
+/// holds a tenth a hair high. So every product lands at or above the decimal
+/// one, and truncates to the same whole number.
+const SLOW_PER_CARD: f64 = 0.1;
+
 /// Apply a value-producing hook for one power.
 ///
 /// `TemporaryStrengthPower`, which is Strength that gives itself back.
@@ -83,9 +90,19 @@ pub(crate) fn modify_hook(
     power: Power,
     amount: PowerAmount<Number>,
     _owner: CombatSide,
+    counted: Number,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     match (power, amount, hook) {
+        // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
+        // since its owner's turn began and takes a tenth more for each.
+        (
+            Power::SlowPower,
+            _,
+            ModifyHook::Damage {
+                holding: Holding::Target,
+            },
+        ) => Modify::Scaled(1.0 + SLOW_PER_CARD * f64::from(counted)),
         (
             Power::StrengthPower,
             PowerAmount::Counted(amount),
@@ -132,7 +149,8 @@ pub(crate) fn modify_hook(
             | Power::InfestedPower
             | Power::IllusionPower
             | Power::MinionPower
-            | Power::DexterityPower,
+            | Power::DexterityPower
+            | Power::SlowPower,
             _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
@@ -159,7 +177,8 @@ pub(crate) fn modify_hook(
             | Power::StrengthPower
             | Power::TerritorialPower
             | Power::IllusionPower
-            | Power::MinionPower,
+            | Power::MinionPower
+            | Power::SlowPower,
             _,
             ModifyHook::Block,
         ) => Modify::Nothing,
@@ -201,6 +220,8 @@ pub(crate) fn event_hook(
         return temporary_strength(false, amount, owner, hook);
     }
 
+    let one: Number = num_traits::one();
+
     let effect = match (power, amount, hook) {
         (
             Power::VulnerablePower | Power::WeakPower,
@@ -235,9 +256,10 @@ pub(crate) fn event_hook(
             | Power::InfestedPower
             | Power::IllusionPower
             | Power::MinionPower
-            // `PowerStackType.Counter` with no `AfterSideTurnEnd`, so it
-            // stays for the fight.
-            | Power::DexterityPower,
+            // `PowerStackType.Counter` with no `AfterSideTurnEnd`, so they
+            // stay for the fight.
+            | Power::DexterityPower
+            | Power::SlowPower,
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,
@@ -293,12 +315,24 @@ pub(crate) fn event_hook(
         (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath) => {
             unimplemented!("an endless Infested power")
         }
-        // `BeforeApplied` is an override on an empty base, so a power with
-        // none does nothing on its way onto a creature.
+        // `SlowPower.AfterCardPlayed` counts every card anyone plays, and its
+        // `AfterSideTurnStart` forgets the count when the side its owner is
+        // among takes its turn.
+        (Power::SlowPower, _, EventHook::CardPlayed { .. }) => Some(HookEffect::Count(one)),
+        (Power::SlowPower, _, EventHook::SideTurnStart { side, .. }) if side == owner => {
+            Some(HookEffect::ClearCount)
+        }
+        (Power::SlowPower, _, EventHook::SideTurnStart { .. }) => None,
+        // Each of these is an override on an empty base, so a power that does
+        // not have one does nothing when the fight raises it.
         (
             _,
             _,
-            EventHook::BlockCleared | EventHook::AfterDeath | EventHook::BeforeApplied { .. },
+            EventHook::BlockCleared
+            | EventHook::AfterDeath
+            | EventHook::BeforeApplied { .. }
+            | EventHook::CardPlayed { .. }
+            | EventHook::SideTurnStart { .. },
         ) => None,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };

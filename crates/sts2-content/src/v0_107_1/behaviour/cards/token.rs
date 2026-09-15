@@ -10,9 +10,23 @@ use super::{CardNumber, Number, V, face};
 pub(super) fn upgrade(card: TokenCard, printed: &mut [CardNumber]) {
     let changes: &[(CardVar, Number)] = match card {
         TokenCard::MinionStrike => &[(CardVar::Damage, 3)],
+        // Its upgrade takes an energy off the cost and raises nothing it
+        // prints. See `upgrade_cost`.
+        TokenCard::SovereignBlade => &[],
         card => unimplemented!("card upgrade: {card:?}"),
     };
     super::raise(printed, changes);
+}
+
+/// What one upgrade moves a token card's two costs by.
+///
+/// `SovereignBlade.OnUpgrade` is `EnergyCost.UpgradeBy(-1)`, and it is the one
+/// token card that changes a cost rather than a printed number.
+pub(super) fn upgrade_cost(card: TokenCard) -> (i8, i8) {
+    match card {
+        TokenCard::SovereignBlade => (-1, 0),
+        _ => (0, 0),
+    }
 }
 
 /// What a card works out from the fight for a number it prints.

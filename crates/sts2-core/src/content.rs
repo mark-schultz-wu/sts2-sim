@@ -892,6 +892,12 @@ pub trait Fight<V: ContentVersion> {
     /// `CardCmd.Discard(this)`, for the card whose behavior is running.
     fn discard_this(&mut self);
 
+    /// `CardCmd.Upgrade` over every card in the hand.
+    ///
+    /// A card already at its own maximum is not upgradable and is passed over,
+    /// which is what `CardModel.IsUpgradable` answers.
+    fn upgrade_hand(&mut self);
+
     /// `CreatureCmd.Add<M>(CombatState, position)`.
     ///
     /// The monster rolls its hit points when it arrives. It does not advertise
@@ -1215,6 +1221,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// is carried by.
     ApplyToOwner(V::Power, PowerAmount<V::Number>),
     TickDownDuration,
+    /// `DynamicVars[..].BaseValue += amount`, on the power that asked.
+    ///
+    /// The number a power counts on itself, which is not the stack the
+    /// creature carries it as. Slow counts the cards played against it.
+    Count(V::Number),
+    /// `DynamicVars[..].BaseValue = 0`, on the power that asked.
+    ClearCount,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
     /// `PowerCmd.Remove(this)`: the power takes itself off its owner.
@@ -1268,6 +1281,9 @@ pub enum Listener<'a, V: Hooks> {
         /// The side its owner is on, which is `Owner.Creature.Side`. A hook
         /// naming a side asks the instance whether it is one of them.
         owner: V::CombatSide,
+        /// The one number this instance counts on itself, out of
+        /// `PowerModel.DynamicVars`. Zero for a power that counts none.
+        counted: V::Number,
     },
     Relic(&'a mut V::RelicState),
     /// A card in the fight, with the numbers this copy of it prints.
@@ -1789,6 +1805,12 @@ pub trait Rules: Hooks {
 
     /// Apply a card's first upgrade to this combat copy's printed values.
     fn upgrade_card(card: Self::Card, numbers: &mut [CardNumber<Self::CardVar, Self::Number>]);
+
+    /// `CardModel.EnergyCost` and `StarCost`, at the upgrade this copy is at.
+    ///
+    /// The table prints what a fresh copy costs, and an `OnUpgrade` that calls
+    /// `EnergyCost.UpgradeBy` moves it from there.
+    fn card_cost(card: Self::Card, upgrade: u8) -> (Cost, Cost);
 
     /// `CardModel.OnPlay`, as a direct call on the hot path.
     ///

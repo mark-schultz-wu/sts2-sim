@@ -12,12 +12,14 @@ use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
-/// Two monsters of this act have an `AfterAddedToRoom`: Byrdonis opens
-/// territorial, and the Phrog Parasite opens infested.
+/// Three monsters of this act have an `AfterAddedToRoom`: Byrdonis opens
+/// territorial, the Phrog Parasite opens infested, and the Bygone Effigy
+/// opens slow.
 pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<Number>)> {
     match monster {
         Monster::Byrdonis => Some((Power::TerritorialPower, PowerAmount::Counted(1))),
         Monster::PhrogParasite => Some((Power::InfestedPower, PowerAmount::Counted(4))),
+        Monster::BygoneEffigy => Some((Power::SlowPower, PowerAmount::Counted(1))),
         _ => None,
     }
 }
@@ -58,6 +60,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::Byrdonis => byrdonis(move_id, fight),
         Monster::Mawler => mawler(move_id, fight),
         Monster::PhrogParasite => phrog_parasite(move_id, fight),
+        Monster::BygoneEffigy => bygone_effigy(move_id, fight),
         Monster::Wriggler => wriggler(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
@@ -136,6 +139,28 @@ fn phrog_parasite<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
         MoveId::InfectMove => {
             fight.give_cards(Cards::Status(StatusCard::Infection), INFECTION_CARDS)
         }
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// What waking up adds to the Bygone Effigy.
+const WAKE_STRENGTH: Number = 10;
+
+/// `BygoneEffigy`. Sleeps, wakes far stronger, and slashes from then on.
+///
+/// Its two sleeps do nothing at all. The first is the move it enters the
+/// fight on, and the wake that follows is the only thing it does once.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+fn bygone_effigy<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::SleepMove | MoveId::SleepMove2 => {}
+        MoveId::WakeMove => {
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(WAKE_STRENGTH));
+        }
+        MoveId::SlashesMove => attack(fight),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }

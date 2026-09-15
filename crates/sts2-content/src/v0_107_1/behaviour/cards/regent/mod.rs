@@ -8,6 +8,7 @@ use super::{CardNumber, V};
 mod basic;
 mod common;
 mod rare;
+mod uncommon;
 
 /// Where a Regent card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,9 +26,19 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     match Cards::Regent(card).rarity() {
         CardRarity::Basic => basic::upgrade(card, printed),
         CardRarity::Common => common::upgrade(card, printed),
+        CardRarity::Uncommon => uncommon::upgrade(card, printed),
         CardRarity::Rare => rare::upgrade(card, printed),
         _ => unimplemented!("card upgrade: {card:?}"),
     }
+}
+
+/// What one upgrade moves a Regent card's two costs by.
+///
+/// No card of this pool that the simulator plays has an `OnUpgrade` that calls
+/// `EnergyCost.UpgradeBy` or `StarCost.UpgradeBy`. Each raises a number it
+/// prints instead, which [`upgrade`] is what applies.
+pub(super) fn upgrade_cost(_card: RegentCard) -> (i8, i8) {
+    (0, 0)
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
@@ -42,6 +53,8 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::RefineBlade => common::refine_blade(fight),
         RegentCard::Begone => common::begone(),
         RegentCard::CrushUnder => common::crush_under(fight),
+        RegentCard::Bulwark => uncommon::bulwark(fight),
+        RegentCard::TheSmith => rare::the_smith(fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
 }

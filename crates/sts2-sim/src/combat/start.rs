@@ -106,6 +106,7 @@ pub(crate) fn enter<V: Rules>(
             machines: enemies.machines,
             // Nothing has been applied to anyone yet.
             skip_tick: Vec::new(),
+            counted: Vec::new(),
             card_ids,
             asking: None,
         },

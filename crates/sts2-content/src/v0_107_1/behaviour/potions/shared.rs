@@ -31,6 +31,9 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) {
                 PowerAmount::Counted(VULNERABLE),
             );
         }
+        // `AnyPlayer` again, and a run with one player upgrades that player's
+        // hand.
+        Potion::BlessingOfTheForge => fight.upgrade_hand(),
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

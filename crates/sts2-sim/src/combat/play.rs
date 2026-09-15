@@ -15,7 +15,7 @@ use crate::rng::MegaRng;
 
 use super::board::Board;
 use super::live::{CardInstance, Live};
-use super::{Error, hook, legal, relic};
+use super::{Error, hook, legal, power, relic};
 use crate::stream::Streams;
 
 /// A play the fight allows, resolved but not yet made.
@@ -87,7 +87,7 @@ pub(crate) fn resolve<V: Rules>(
         });
     }
 
-    let star_cost = card.card.star_cost();
+    let (cost, star_cost) = V::card_cost(card.card, card.upgrade);
     if star_cost == Cost::X {
         // `GetStarCostWithModifiers` is a number, not a pool to drain. No card
         // on this build prices its stars at X.
@@ -101,7 +101,7 @@ pub(crate) fn resolve<V: Rules>(
     Ok(Play {
         index: at,
         target,
-        energy: legal::spend(card.card.cost(), live.energy).expect(PAYS),
+        energy: legal::spend(cost, live.energy).expect(PAYS),
         stars: legal::spend(star_cost, live.stars).expect(PAYS),
     })
 }
@@ -362,7 +362,11 @@ fn carry_on<V: Rules>(
     // `AfterCardPlayed`, once the card has left the play pile. A relic that
     // answers it acts through the board a card acts through, and draws from
     // the same stream, so this is before the streams are written back.
-    let asked = relic::card_played::<V>(&mut relics, card_played);
+    let mut asked = relic::card_played::<V>(&mut relics, card_played);
+    asked.extend(power::notify::<V>(
+        &mut next,
+        sts2_core::EventHook::CardPlayed { card: card_played },
+    ));
     if !asked.is_empty() {
         let mut board = Board::for_card(
             &mut next,

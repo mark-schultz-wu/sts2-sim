@@ -11,6 +11,7 @@ mod live;
 mod monster;
 mod play;
 mod potion;
+mod power;
 mod relic;
 mod start;
 mod turn;

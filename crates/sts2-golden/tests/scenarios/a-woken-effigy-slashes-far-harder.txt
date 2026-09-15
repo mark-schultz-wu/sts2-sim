@@ -1,0 +1,7 @@
+# The Bygone Effigy sleeps through its first turn, wakes into ten Strength,
+# and slashes from then on. The slash prints 13 and lands for 23.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

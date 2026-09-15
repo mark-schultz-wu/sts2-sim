@@ -11,6 +11,8 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     let changes: &[(CardVar, Number)] = match card {
         RegentCard::Strike => &[(CardVar::Damage, 3)],
         RegentCard::Defend => &[(CardVar::Block, 3)],
+        RegentCard::Venerate => &[(CardVar::Stars, 1)],
+        RegentCard::FallingStar => &[(CardVar::Damage, 4)],
         card => unimplemented!("card upgrade: {card:?}"),
     };
     raise(printed, changes);

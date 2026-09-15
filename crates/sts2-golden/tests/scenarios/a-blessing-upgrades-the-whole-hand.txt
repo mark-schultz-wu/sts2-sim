@@ -1,0 +1,7 @@
+# Blessing of the Forge upgrades every card in the hand and leaves the draw
+# pile alone. The Regent's opening hand prints 6, 2, 8 and 5, and upgrades to
+# 9, 3, 12 and 8.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","potion":"BLESSING_OF_THE_FORGE"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"use_potion","index":0,"target":null}

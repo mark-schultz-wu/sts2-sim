@@ -1,0 +1,9 @@
+# Sovereign Blade's upgrade takes an energy off the cost and raises no number
+# it prints. The blade is second in the draw pile, so the second turn's hand
+# holds it when the potion upgrades the hand.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"SOVEREIGN_BLADE"}
+{"cmd":"grant","potion":"BLESSING_OF_THE_FORGE"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"end_turn"}
+{"cmd":"use_potion","index":0,"target":null}

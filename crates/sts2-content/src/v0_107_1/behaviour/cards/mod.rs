@@ -8,7 +8,7 @@
 //! list of what the simulator can play. A card outside it stops the run where
 //! it stands rather than playing as if it did nothing.
 
-use sts2_core::{CardVars, Fight, Played};
+use sts2_core::{CardTable as _, CardVars, Cost, Fight, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::cards::{CardVar, Cards};
@@ -37,6 +37,35 @@ pub(crate) fn upgrade(card: Cards, printed: &mut [CardNumber]) {
         Cards::Token(card) => token::upgrade(card, printed),
         card => unimplemented!("card upgrade: {card:?}"),
     }
+}
+
+/// What one copy of a card costs at the upgrade it is at.
+///
+/// `CardModel.EnergyCost` and `StarCost`. The table prints a fresh copy's, and
+/// an `OnUpgrade` that calls `UpgradeBy` moves it by that much per upgrade. A
+/// cost that is not a number stays what it is: `GetWithModifiers` returns
+/// early for one, so an upgrade moves nothing.
+pub(crate) fn cost(card: Cards, upgrade: u8) -> (Cost, Cost) {
+    if upgrade == 0 {
+        return (card.cost(), card.star_cost());
+    }
+    // A card upgraded in a fight went through `upgrade` to get here, and one
+    // upgraded outside a fight went through it as the fight built its copy.
+    // Both panic for a card nobody has ported, so a card reaching this is one
+    // whose pool is ported and whose costs stand where the table put them.
+    let (energy, star) = match card {
+        Cards::Regent(card) => regent::upgrade_cost(card),
+        Cards::Token(card) => token::upgrade_cost(card),
+        card => unimplemented!("what an upgraded {card:?} costs"),
+    };
+    let moved = |cost: Cost, by: i8| match cost {
+        // `GetWithModifiers` returns early for a cost that is not a number, so
+        // an upgrade moves nothing.
+        Cost::Fixed(fixed) => Cost::Fixed(fixed.saturating_add_signed(by)),
+        cost => cost,
+    };
+    let each = |cost, by: i8| (0..upgrade).fold(cost, |cost, _| moved(cost, by));
+    (each(card.cost(), energy), each(card.star_cost(), star))
 }
 
 /// Raise the numbers one card's upgrade raises.
