@@ -15,6 +15,7 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
         // `Begone` prints no number an upgrade raises. Upgraded, its own
         // `OnPlay` upgrades the Minion Strike it transforms a card into.
         RegentCard::Begone => &[],
+        RegentCard::CrushUnder => &[(CardVar::Damage, 1), (CardVar::StrengthLoss, 1)],
         card => unimplemented!("card upgrade: {card:?}"),
     };
     raise(printed, changes);
@@ -73,6 +74,26 @@ pub(super) fn begone<F: Fight<V>>(fight: &mut F) {
     let mut into = CardIdent::new(Cards::Token(TokenCard::MinionStrike));
     into.upgrade = u8::from(fight.upgraded());
     fight.transform(card, into);
+}
+
+/// `CrushUnder`. Hit every enemy, then take a point of Strength off each.
+///
+/// The command takes the creatures across before its first hit lands, and the
+/// powers go to that same list. One the damage took out holds no combat state
+/// by then, and `PowerCmd.Apply` returns on such a creature.
+pub(super) fn crush_under<F: Fight<V>>(fight: &mut F) {
+    for target in fight.opponents() {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+        });
+        fight.apply(attack);
+    }
+    fight.apply_to_opponents(
+        Power::CrushUnderPower,
+        PowerAmount::Counted(fight.var(CardVar::StrengthLoss)),
+    );
 }
 
 /// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.

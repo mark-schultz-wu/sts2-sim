@@ -1027,6 +1027,15 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayed {
         card: V::Card,
     },
+    /// `BeforeApplied`, asked of a power on its way onto a creature.
+    ///
+    /// The power is not held yet, so `landing` is what is about to land
+    /// rather than what the creature carries. A [`HookEffect::ApplyToOwner`]
+    /// from here lands on the creature this one is landing on, which is the
+    /// owner it is about to have.
+    BeforeApplied {
+        landing: PowerAmount<V::Number>,
+    },
     /// `BeforeSideTurnStart`, which runs before the side draws anything.
     BeforeSideTurnStart {
         side: V::CombatSide,
@@ -1060,6 +1069,11 @@ pub enum HookEffect<V: ContentVersion> {
     TickDownDuration,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
+    /// `PowerCmd.Remove(this)`: the power takes itself off its owner.
+    ///
+    /// Its own effect rather than a suffix on another. A power that acts and
+    /// then leaves asks for both, in the order it wants them.
+    Remove,
     InstallMove(crate::NextMove<V>),
 }
 
@@ -1669,6 +1683,14 @@ pub trait Rules: Hooks {
     ///
     /// A card whose override nobody has ported.
     fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
+
+    /// `PowerModel.Type`, for a power that works its own out.
+    ///
+    /// The tables carry the type a power states, and [`PowerTable::debuff`]
+    /// answers from them. A subclass that computes it instead leaves that
+    /// absent, and this is what reads the rule. `TemporaryStrengthPower` is
+    /// one: it is a debuff or a buff by its own `IsPositive`.
+    fn computed_power_debuff(power: Self::Power) -> bool;
 
     /// What a card works out from the fight for a number it prints.
     ///

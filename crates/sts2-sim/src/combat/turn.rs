@@ -188,6 +188,7 @@ fn tick_powers<V: Rules>(
 ) -> Vec<(CombatId, V::Power, PowerAmount<V::Number>)> {
     let one = num_traits::one();
     let mut applying = Vec::new();
+    let mut leaving: Vec<(CombatId, V::Power)> = Vec::new();
     for creature in &mut live.creatures {
         let id = creature.id;
         let owner = creature.side;
@@ -210,6 +211,9 @@ fn tick_powers<V: Rules>(
                     sts2_core::HookEffect::ApplyToOwner(power, amount) => {
                         applying.push((id, *power, *amount));
                     }
+                    // `PowerCmd.Remove(this)`, taken after the belt is read
+                    // for the same reason a power it applies is.
+                    sts2_core::HookEffect::Remove => leaving.push((id, power)),
                     other => unimplemented!("a power asking for {other:?} as a turn ends"),
                 }
             }
@@ -227,6 +231,12 @@ fn tick_powers<V: Rules>(
         creature
             .powers
             .retain(|held| held.amount != PowerAmount::Counted(num_traits::zero()));
+    }
+    for (id, power) in leaving {
+        let Some(creature) = live.creatures.iter_mut().find(|creature| creature.id == id) else {
+            continue;
+        };
+        creature.powers.retain(|held| held.power != power);
     }
     applying
 }

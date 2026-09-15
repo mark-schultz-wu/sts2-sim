@@ -32,6 +32,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
         RegentCard::KnowThyPlace => common::know_thy_place(fight),
         RegentCard::RefineBlade => common::refine_blade(fight),
         RegentCard::Begone => common::begone(fight),
+        RegentCard::CrushUnder => common::crush_under(fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
 }
