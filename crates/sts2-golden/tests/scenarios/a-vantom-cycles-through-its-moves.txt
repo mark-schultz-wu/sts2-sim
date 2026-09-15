@@ -1,0 +1,11 @@
+# The Vantom blots, lances twice, dismembers, prepares, and starts again.
+#
+# Each turn is one move: 7, then 6 twice, then 26 with three Wounds into the
+# discard pile, then two Strength. The blot it comes back to advertises 9,
+# which is what the Strength it prepared adds.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"VANTOM_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

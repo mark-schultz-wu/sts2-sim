@@ -17,12 +17,40 @@ use super::live::{Counter, Live, counted};
 /// that. Everything else comes back in creature order, which is the order the
 /// game asks them in.
 pub(crate) fn notify<V: Rules>(live: &mut Live<V>, hook: EventHook<V>) -> Vec<HookEffect<V>> {
+    asked_of::<V>(live, None, hook)
+}
+
+/// Deliver one notification to the powers on one creature.
+///
+/// `AfterDamageReceived` is raised on every listener in the fight, and each
+/// reads whether the creature it names is its own. The powers on that creature
+/// are the same set answering.
+pub(crate) fn notify_creature<V: Rules>(
+    live: &mut Live<V>,
+    creature: sts2_core::CombatId,
+    hook: EventHook<V>,
+) -> Vec<HookEffect<V>> {
+    asked_of::<V>(live, Some(creature), hook)
+}
+
+/// The body both of those share, over every creature or over one.
+fn asked_of<V: Rules>(
+    live: &mut Live<V>,
+    only: Option<sts2_core::CombatId>,
+    hook: EventHook<V>,
+) -> Vec<HookEffect<V>> {
     let counters = live.counted.clone();
     let mut asked = Vec::new();
     let mut counted_now: Vec<Counter<V>> = Vec::new();
     let mut cleared: Vec<(sts2_core::CombatId, V::Power)> = Vec::new();
 
-    for creature in &live.creatures {
+    let mut decremented: Vec<(sts2_core::CombatId, V::Power)> = Vec::new();
+
+    for creature in live
+        .creatures
+        .iter()
+        .filter(|creature| only.is_none_or(|id| creature.id == id))
+    {
         for held in &creature.powers {
             let listener = held.listener(
                 creature.side,
@@ -36,10 +64,30 @@ pub(crate) fn notify<V: Rules>(live: &mut Live<V>, hook: EventHook<V>) -> Vec<Ho
                         amount,
                     }),
                     HookEffect::ClearCount => cleared.push((creature.id, held.power)),
+                    HookEffect::Decrement => decremented.push((creature.id, held.power)),
                     effect => asked.push(effect),
                 }
             }
         }
+    }
+
+    // `PowerCmd.Decrement`, which takes the instance off at zero the way a
+    // duration tick does.
+    let one = num_traits::one();
+    for (id, power) in decremented {
+        let Some(creature) = live.creatures.iter_mut().find(|creature| creature.id == id) else {
+            continue;
+        };
+        for held in creature.powers.iter_mut() {
+            if held.power == power
+                && let sts2_core::PowerAmount::Counted(amount) = held.amount
+            {
+                held.amount = sts2_core::PowerAmount::Counted(amount - one);
+            }
+        }
+        creature
+            .powers
+            .retain(|held| held.amount != sts2_core::PowerAmount::Counted(num_traits::zero()));
     }
 
     live.counted

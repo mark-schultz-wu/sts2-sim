@@ -12,14 +12,21 @@ use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
-/// Three monsters of this act have an `AfterAddedToRoom`: Byrdonis opens
-/// territorial, the Phrog Parasite opens infested, and the Bygone Effigy
-/// opens slow.
-pub(super) fn starting_powers(monster: Monster) -> Option<(Power, PowerAmount<Number>)> {
+/// Four monsters of this act have an `AfterAddedToRoom`. Byrdonis opens
+/// territorial, the Phrog Parasite opens infested, the Bygone Effigy opens
+/// slow, and the Vantom opens slippery.
+pub(super) fn starting_powers(
+    monster: Monster,
+    ascension: AscensionLevel,
+) -> Option<(Power, PowerAmount<Number>)> {
     match monster {
         Monster::Byrdonis => Some((Power::TerritorialPower, PowerAmount::Counted(1))),
         Monster::PhrogParasite => Some((Power::InfestedPower, PowerAmount::Counted(4))),
         Monster::BygoneEffigy => Some((Power::SlowPower, PowerAmount::Counted(1))),
+        Monster::Vantom => Some((
+            Power::SlipperyPower,
+            PowerAmount::Counted(slippery(ascension)),
+        )),
         _ => None,
     }
 }
@@ -61,6 +68,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::Mawler => mawler(move_id, fight),
         Monster::PhrogParasite => phrog_parasite(move_id, fight),
         Monster::BygoneEffigy => bygone_effigy(move_id, fight),
+        Monster::Vantom => vantom(move_id, fight),
         Monster::Wriggler => wriggler(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
@@ -161,6 +169,42 @@ fn bygone_effigy<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(WAKE_STRENGTH));
         }
         MoveId::SlashesMove => attack(fight),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `Vantom.SlipperyAmt`, either side of `ToughEnemies`.
+fn slippery(ascension: AscensionLevel) -> Number {
+    match ascension.has(AscensionLevel::ToughEnemies) {
+        true => SLIPPERY_TOUGH,
+        false => SLIPPERY,
+    }
+}
+
+const SLIPPERY: Number = 8;
+const SLIPPERY_TOUGH: Number = 9;
+
+/// What one Prepare adds to the Vantom.
+const PREPARE_STRENGTH: Number = 2;
+
+/// How many Wounds a Dismember leaves behind.
+const DISMEMBER_WOUNDS: usize = 3;
+
+/// `Vantom`. Blots, lances twice, dismembers, prepares, and round again.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+fn vantom<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::InkBlotMove | MoveId::InkyLanceMove => attack(fight),
+        MoveId::DismemberMove => {
+            attack(fight);
+            fight.give_cards(Cards::Status(StatusCard::Wound), DISMEMBER_WOUNDS);
+        }
+        MoveId::PrepareMove => {
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(PREPARE_STRENGTH));
+        }
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }

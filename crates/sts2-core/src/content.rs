@@ -1151,6 +1151,12 @@ pub enum Modify<N> {
     Added(N),
     /// The `Multiplicative` half, over what the additions left.
     Scaled(f64),
+    /// A ceiling on what is left. The listener returns a number of its own
+    /// rather than a share of the one it was handed.
+    ///
+    /// `ModifyHpLost` is folded that way: each listener is handed what the one
+    /// before it returned. Slippery hands back one, whatever it was given.
+    AtMost(N),
 }
 
 /// A value-producing hook the simulator asks one content model to apply.
@@ -1160,6 +1166,9 @@ pub enum ModifyHook<V: ContentVersion> {
     Damage { holding: Holding },
     /// The model can change block gained by its owner.
     Block,
+    /// The model can change the hit points its owner is about to lose, which
+    /// is `ModifyHpLost` over what the block did not take.
+    HpLost,
     /// The model can change how many cards its owner draws to open a turn,
     /// which is `ModifyHandDraw`.
     HandDraw { count: V::Number, turn: V::Count },
@@ -1186,6 +1195,13 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCardPlayed`, carrying the card its owner just played.
     CardPlayed {
         card: V::Card,
+    },
+    /// `AfterDamageReceived`, for the creature that has just been hit.
+    ///
+    /// `unblocked` is the `DamageResult`'s own, which is what came off the hit
+    /// points after the block and the hooks that cap them.
+    DamageReceived {
+        unblocked: V::Number,
     },
     /// `AfterCardDrawn`, carrying the card that has just reached the hand.
     ///
@@ -1248,6 +1264,12 @@ pub enum HookEffect<V: ContentVersion> {
     Count(V::Number),
     /// `DynamicVars[..].BaseValue = 0`, on the power that asked.
     ClearCount,
+    /// `PowerCmd.Decrement(this)`: one off the amount, and the instance goes
+    /// once it reaches zero.
+    ///
+    /// Unlike [`HookEffect::TickDownDuration`], nothing is skipped. A power
+    /// that counts down outside a turn's own tick asks for this.
+    Decrement,
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
     /// `PowerCmd.Remove(this)`: the power takes itself off its owner.
@@ -1892,8 +1914,12 @@ pub trait Rules: Hooks {
     fn opening_move_machine(monster: Self::Monster) -> crate::MoveMachine;
 
     /// Powers a monster applies to itself when it enters combat.
+    ///
+    /// The level is read the way a move's own numbers are: a monster whose
+    /// `AfterAddedToRoom` scales what it applies asks for it.
     fn monster_starting_powers(
         monster: Self::Monster,
+        ascension: Self::AscensionLevel,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
     /// What one potion does when it is drunk, which is `PotionModel.OnUse`.

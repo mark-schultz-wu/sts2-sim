@@ -93,6 +93,7 @@ pub(crate) fn modify_hook(
     counted: Number,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
+    let one: Number = num_traits::one();
     match (power, amount, hook) {
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
         // since its owner's turn began and takes a tenth more for each.
@@ -150,10 +151,17 @@ pub(crate) fn modify_hook(
             | Power::IllusionPower
             | Power::MinionPower
             | Power::DexterityPower
-            | Power::SlowPower,
+            | Power::SlowPower
+            | Power::SlipperyPower,
             _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
+        // `SlipperyPower.ModifyHpLostAfterOsty`, which hands back one however
+        // much its owner was about to lose. A hit that the block took whole
+        // loses nothing, and this leaves that where it is.
+        (Power::SlipperyPower, _, ModifyHook::HpLost) => Modify::AtMost(one),
+        // No other ported power reads what a hit takes off the hit points.
+        (_, _, ModifyHook::HpLost) => Modify::Nothing,
         // `ModifyBlockAdditive`, which pays only a powered card's block or a
         // monster move's. Every block this hook is asked about is one of
         // those, so the condition is the call site and not an arm here. An
@@ -178,7 +186,8 @@ pub(crate) fn modify_hook(
             | Power::TerritorialPower
             | Power::IllusionPower
             | Power::MinionPower
-            | Power::SlowPower,
+            | Power::SlowPower
+            | Power::SlipperyPower,
             _,
             ModifyHook::Block,
         ) => Modify::Nothing,
@@ -259,7 +268,8 @@ pub(crate) fn event_hook(
             // `PowerStackType.Counter` with no `AfterSideTurnEnd`, so they
             // stay for the fight.
             | Power::DexterityPower
-            | Power::SlowPower,
+            | Power::SlowPower
+            | Power::SlipperyPower,
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,
@@ -323,6 +333,13 @@ pub(crate) fn event_hook(
             Some(HookEffect::ClearCount)
         }
         (Power::SlowPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `SlipperyPower.AfterDamageReceived`, which spends an instance on
+        // every hit that reaches its owner's hit points.
+        (Power::SlipperyPower, _, EventHook::DamageReceived { unblocked })
+            if unblocked >= one =>
+        {
+            Some(HookEffect::Decrement)
+        }
         // Each of these is an override on an empty base, so a power that does
         // not have one does nothing when the fight raises it.
         (
@@ -332,7 +349,8 @@ pub(crate) fn event_hook(
             | EventHook::AfterDeath
             | EventHook::BeforeApplied { .. }
             | EventHook::CardPlayed { .. }
-            | EventHook::SideTurnStart { .. },
+            | EventHook::SideTurnStart { .. }
+            | EventHook::DamageReceived { .. },
         ) => None,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };

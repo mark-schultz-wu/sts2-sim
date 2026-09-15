@@ -14,6 +14,26 @@ use super::{Odds, Offer, card};
 /// How many cards a fight's card reward offers.
 const CARDS_OFFERED: usize = 3;
 
+/// The kind of room a won fight was in, which `GenerateRewardsFor` switches on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Room {
+    Monster,
+    Elite,
+    Boss,
+}
+
+impl Room {
+    /// `CardCreationOptions.ForRoom`, which is the odds its card reward rolls
+    /// its rarities against.
+    fn card_odds(self) -> card::RarityOdds {
+        match self {
+            Room::Monster => card::RarityOdds::Regular,
+            Room::Elite => card::RarityOdds::Elite,
+            Room::Boss => card::RarityOdds::Boss,
+        }
+    }
+}
+
 /// The rewards a won fight offers.
 ///
 /// The potion rolls while the set is built. The gold rolls while the set is
@@ -28,8 +48,9 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     character: V::Character,
     gold: Interval<u16>,
     act: usize,
-    elite: bool,
+    room: Room,
 ) -> (Vec<Offer<V>>, Option<Rarity<V>>) {
+    let elite = room == Room::Elite;
     let pays_potion = potion(rng, odds, elite);
     let mut offered = vec![Offer::Gold {
         amount: purse::<V, R>(rng, gold),
@@ -42,7 +63,15 @@ pub(crate) fn won<V: Rules, R: GameRng>(
         });
     }
     offered.push(Offer::Card {
-        cards: card::encounter::<V, R>(rng, odds, ascension, character, CARDS_OFFERED, act),
+        cards: card::encounter::<V, R>(
+            rng,
+            odds,
+            ascension,
+            character,
+            CARDS_OFFERED,
+            act,
+            room.card_odds(),
+        ),
         taken: false,
     });
     // The rarity is rolled here and the relic is pulled by the caller, which

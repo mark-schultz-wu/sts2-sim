@@ -28,11 +28,12 @@ type V = V0_107_1;
 /// Filed by act beside the moves, so a monster's whole port is one file.
 pub(crate) fn starting_powers(
     monster: Monster,
+    ascension: <V0_107_1 as sts2_core::ContentVersion>::AscensionLevel,
 ) -> Option<(
     super::super::generated::powers::Power,
     sts2_core::PowerAmount<Number>,
 )> {
-    overgrowth::starting_powers(monster)
+    overgrowth::starting_powers(monster, ascension)
 }
 
 /// Which branch a monster's conditional state takes.

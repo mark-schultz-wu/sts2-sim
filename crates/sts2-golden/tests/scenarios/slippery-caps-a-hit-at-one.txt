@@ -1,0 +1,9 @@
+# The Vantom opens the fight carrying eight Slippery, which caps what any one
+# hit takes off it at a single hit point and spends an instance each time.
+#
+# The Strike swings for 6 and the Falling Star for 8. Both take off one, so
+# the boss stands at 171 with six Slippery left rather than at 159 with eight.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"VANTOM_BOSS"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":1,"target":1}
