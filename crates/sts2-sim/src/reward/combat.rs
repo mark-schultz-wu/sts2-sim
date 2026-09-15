@@ -5,18 +5,22 @@
 //! order is what puts the stream where the next screen finds it.
 
 use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
-use sts2_core::{AscensionKinds, Rules};
+use sts2_core::{AscensionKinds, RarityKinds, Rules};
+
+use crate::run::Rarity;
 
 use super::{Odds, Offer, card};
 
 /// How many cards a fight's card reward offers.
 const CARDS_OFFERED: usize = 3;
 
-/// The rewards a won monster fight offers.
+/// The rewards a won fight offers.
 ///
 /// The potion rolls while the set is built. The gold rolls while the set is
-/// filled in. So the potion draws first, and the gold still sits ahead of it
-/// on the screen.
+/// filled in. So the potion draws first, and the gold sits ahead of it.
+///
+/// An elite adds a relic. `Populate` runs in build order and `RewardsSet`
+/// sorts by `RewardsSetIndex` after, so the relic draws last and shows third.
 pub(crate) fn won<V: Rules, R: GameRng>(
     rng: &mut R,
     odds: &mut Odds,
@@ -24,8 +28,9 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     character: V::Character,
     gold: Interval<u16>,
     act: usize,
-) -> Vec<Offer<V>> {
-    let pays_potion = potion(rng, odds);
+    elite: bool,
+) -> (Vec<Offer<V>>, Option<Rarity<V>>) {
+    let pays_potion = potion(rng, odds, elite);
     let mut offered = vec![Offer::Gold {
         amount: purse::<V, R>(rng, gold),
         taken: false,
@@ -40,7 +45,32 @@ pub(crate) fn won<V: Rules, R: GameRng>(
         cards: card::encounter::<V, R>(rng, odds, ascension, character, CARDS_OFFERED, act),
         taken: false,
     });
+    // The rarity is rolled here and the relic is pulled by the caller, which
+    // is the half that holds the run's bags.
+    let rarity = elite.then(|| rarity::<V, R>(rng));
+    (offered, rarity)
+}
+
+/// Where a relic reward sits once the set is sorted, which is its
+/// `RewardsSetIndex` of three: after the potion's two and before the cards'
+/// five.
+pub(crate) fn relic_slot<V: Rules>(offered: &[Offer<V>]) -> usize {
     offered
+        .iter()
+        .position(|offer| matches!(offer, Offer::Card { .. }))
+        .unwrap_or(offered.len())
+}
+
+/// `RelicFactory.RollRarity`, which is one draw and three bands.
+///
+/// `NextFloat`, as the potion roll reads one.
+fn rarity<V: Rules, R: GameRng>(rng: &mut R) -> Rarity<V> {
+    let rolled = rng.next_double() as f32;
+    match rolled {
+        r if r < 0.5 => <Rarity<V> as RarityKinds>::COMMON,
+        r if r < 0.83 => <Rarity<V> as RarityKinds>::UNCOMMON,
+        _ => <Rarity<V> as RarityKinds>::RARE,
+    }
 }
 
 /// `GoldReward.Populate`, which is one draw over the encounter's own range.
@@ -58,11 +88,18 @@ fn purse<V: Rules, R: GameRng>(rng: &mut R, gold: Interval<u16>) -> V::Number {
 /// `PotionRewardOdds.Roll`, which draws whether or not a potion follows.
 ///
 /// The chance moves either way by a tenth, so a run that has gone without one
-/// is likelier to see the next. The elite bonus is not here: no elite is.
-fn potion<R: GameRng>(rng: &mut R, odds: &mut Odds) -> bool {
+/// is likelier to see the next. An elite adds a quarter of a bonus, halved,
+/// to what the draw is held against. The pity counter itself does not move by
+/// it: the bonus applies to this roll and no later one.
+fn potion<R: GameRng>(rng: &mut R, odds: &mut Odds, elite: bool) -> bool {
     const STEP: f32 = 0.1;
+    const ELITE_BONUS: f32 = 0.25;
+    let against = match elite {
+        true => odds.potion + ELITE_BONUS * 0.5,
+        false => odds.potion,
+    };
     let rolled = rng.next_double() as f32;
-    match rolled < odds.potion {
+    match rolled < against {
         true => {
             odds.potion -= STEP;
             true
