@@ -93,6 +93,10 @@ impl<V: Rules> State<V> {
                 self.enter_treasure(to, relic, streams);
                 return Ok(self.report());
             }
+            if kind == V::MapPointType::REST_SITE {
+                self.enter_rest_site(to);
+                return Ok(self.report());
+            }
             if kind != V::MapPointType::UNKNOWN {
                 unimplemented!("entering {destination:?}");
             }

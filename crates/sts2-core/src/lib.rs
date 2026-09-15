@@ -41,7 +41,7 @@ pub use content::{
     EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Fight, Fixed,
     FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
     MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerStreamKinds, PotionTable, PotionUsage,
-    PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Rests,
+    PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, RestKinds, Rests,
     RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds,
     SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds,
     Version,

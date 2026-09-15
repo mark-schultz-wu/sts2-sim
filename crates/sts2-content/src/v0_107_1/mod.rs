@@ -22,6 +22,7 @@
 mod behaviour;
 mod event_options;
 mod generated;
+mod rest_site;
 
 pub use behaviour::events::State as EventState;
 pub use behaviour::relics::State as RelicState;

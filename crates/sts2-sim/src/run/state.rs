@@ -161,6 +161,17 @@ enum Phase<V: Rules> {
         relic: V::Relic,
         finished: bool,
     },
+    /// A rest site, and how far through its one option the run is.
+    ///
+    /// The options empty when the chosen one resolves. A rest site offers one
+    /// choice, and the game stops offering any once it is taken. That is what
+    /// an observation reports, rather than a flag beside them.
+    RestSite {
+        options: Vec<V::RestSiteOption>,
+        /// Waiting for the card the smith upgrades.
+        upgrading: bool,
+        finished: bool,
+    },
 }
 
 impl<V: Rules> State<V> {
@@ -173,6 +184,9 @@ impl<V: Rules> State<V> {
             }
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
                 Some(sts2_core::QuestionKind::Rewards)
+            }
+            Phase::RestSite { upgrading, .. } if *upgrading => {
+                Some(sts2_core::QuestionKind::SelectCards)
             }
             _ => None,
         }
@@ -267,8 +281,25 @@ impl<V: Rules> State<V> {
             Phase::Neow { .. }
             | Phase::Rewards { .. }
             | Phase::Event { .. }
-            | Phase::Treasure { .. } => None,
+            | Phase::Treasure { .. }
+            | Phase::RestSite { .. } => None,
         }
+    }
+
+    /// Whether a rest site option can be taken.
+    ///
+    /// `RestSiteOption.IsEnabled` is true unless the option overrides it.
+    /// `SMITH` does: it is off when the deck holds nothing left to upgrade.
+    fn rest_option_enabled(&self, option: V::RestSiteOption) -> bool {
+        use sts2_core::{CardTable as _, RestKinds};
+
+        if option != <V::RestSiteOption as RestKinds<V>>::SMITH {
+            return true;
+        }
+        self.player
+            .deck
+            .iter()
+            .any(|card| card.upgrade < card.card.max_upgrade())
     }
 
     /// The belt as the relics in it stand, which a fight hands back written.
@@ -406,6 +437,27 @@ impl<V: Rules> State<V> {
             relic,
             finished: false,
         };
+    }
+
+    /// Enter a rest site, with the options this run's belt and deck open it on.
+    pub(super) fn enter_rest_site(&mut self, to: Coord) {
+        self.floor = self.floor + num_traits::one();
+        self.at = to;
+        self.visited.push(to);
+        let deck = self.player.deck.to_vec();
+        self.phase = Phase::RestSite {
+            options: <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(
+                &self.held_relics(),
+                &deck,
+            ),
+            upgrading: false,
+            finished: false,
+        };
+    }
+
+    /// The belt as the models the hook reads, rather than what a fight writes.
+    fn held_relics(&self) -> Vec<V::Relic> {
+        self.player.relics.iter().map(|held| held.relic).collect()
     }
 
     pub(super) fn enter_combat(
@@ -568,6 +620,33 @@ impl<V: Rules> State<V> {
             *finished = true;
             return Ok(self.report());
         }
+        if let Phase::RestSite {
+            options, finished, ..
+        } = &self.phase
+        {
+            if *finished {
+                unimplemented!("choosing at a rest site that is spent");
+            }
+            let option = *options
+                .get(usize::from(index))
+                .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
+            if option != <V::RestSiteOption as sts2_core::RestKinds<V>>::SMITH {
+                unimplemented!("the {option:?} rest site option");
+            }
+            if !self.rest_option_enabled(option) {
+                unimplemented!("a rest site option the run cannot take");
+            }
+            let Phase::RestSite { upgrading, .. } = &mut self.phase else {
+                unreachable!("the phase was a rest site when this began");
+            };
+            *upgrading = true;
+            // The option opened a card selection rather than finishing. The
+            // game reports the decision as unresolved until the selection is
+            // confirmed, because `CardSelectorPrefs` makes it cancelable.
+            let mut applied = self.report();
+            applied.resolved = false;
+            return Ok(applied);
+        }
         if matches!(self.phase, Phase::Event { .. }) {
             let room = match &self.phase {
                 Phase::Event { state, .. } => V::observe_event(state, self),
@@ -631,6 +710,9 @@ impl<V: Rules> State<V> {
         if matches!(&self.phase, Phase::Combat(live) if live.question().is_some()) {
             return self.answer_fight(answer);
         }
+        if matches!(&self.phase, Phase::RestSite { upgrading, .. } if *upgrading) {
+            return self.smith(answer);
+        }
         let Phase::Neow {
             finished,
             selection,
@@ -658,6 +740,47 @@ impl<V: Rules> State<V> {
 
         self.player.deck.extend(chosen);
         *selection = None;
+        *finished = true;
+        Ok(self.report())
+    }
+
+    /// Upgrade the card the smith was pointed at.
+    ///
+    /// `CardCmd.Upgrade` raises the level by one, and the selection offers the
+    /// whole deck, so the index is the deck's. A card already at its maximum
+    /// is offered and cannot be taken.
+    ///
+    /// The rest site is spent once this lands: its options empty, which is how
+    /// the game reports a rest site nobody can act at again.
+    fn smith(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+        use sts2_core::CardTable as _;
+
+        let Answer::Cards(indices) = answer else {
+            unimplemented!("an answer to the smith that is not a card selection");
+        };
+        let [index] = indices[..] else {
+            unimplemented!("a smith selection that is not one card");
+        };
+        let card = self
+            .player
+            .deck
+            .get_mut(index)
+            .unwrap_or_else(|| unimplemented!("upgrading a card the deck does not hold"));
+        if card.upgrade >= card.card.max_upgrade() {
+            unimplemented!("upgrading a card that is already at its highest");
+        }
+        card.upgrade += 1;
+
+        let Phase::RestSite {
+            options,
+            upgrading,
+            finished,
+        } = &mut self.phase
+        else {
+            unreachable!("the phase was a rest site when this began");
+        };
+        options.clear();
+        *upgrading = false;
         *finished = true;
         Ok(self.report())
     }
@@ -827,6 +950,47 @@ impl<V: Rules> State<V> {
                     false,
                 )
             }
+            Phase::RestSite {
+                options, upgrading, ..
+            } => {
+                // `CardSelectCmd.FromDeckForUpgrade` offers the whole deck and
+                // the indices are the deck's, so an unupgradable card is
+                // offered and cannot be taken. One card, and the selection
+                // cannot be empty.
+                let asking = upgrading.then(|| Question::SelectCards {
+                    min: 1,
+                    max: 1,
+                    asker: None,
+                    options: self
+                        .player
+                        .deck
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .map(|(index, card)| CardOption {
+                            index,
+                            card,
+                            text: None,
+                        })
+                        .collect(),
+                });
+                let offered = options
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(index, id)| sts2_core::RestOption {
+                        index: index as u8,
+                        id,
+                        enabled: self.rest_option_enabled(id),
+                    })
+                    .collect();
+                (
+                    asking,
+                    Some(Room::RestSite { options: offered }),
+                    None,
+                    false,
+                )
+            }
         };
         // Where the player stands. A live fight holds it, because a card can
         // move it and the fight is resolved on a copy; anywhere else the run
@@ -843,7 +1007,8 @@ impl<V: Rules> State<V> {
             Phase::Neow { .. }
             | Phase::Rewards { .. }
             | Phase::Event { .. }
-            | Phase::Treasure { .. } => Standing {
+            | Phase::Treasure { .. }
+            | Phase::RestSite { .. } => Standing {
                 hp: self.player.hp,
                 max_hp: self.player.max_hp,
                 alive: true,
