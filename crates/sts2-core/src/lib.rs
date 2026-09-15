@@ -42,12 +42,12 @@ pub use content::{
     FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
     MonsterSpawn, MonsterTable, MoveMachine, PotionTable, PotionUsage, PowerAmount, PowerTable,
     RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Rests, RewardRarity, RoomKinds, Rules,
-    SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
+    Selection, SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
     UnplayableReasonKinds, Version,
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;
-pub use ident::{CardId, CardIdent, Coord, ModelId, OutOfRange};
+pub use ident::{CardAt, CardId, CardIdent, Coord, ModelId, OutOfRange, Pile};
 pub use seed::Seed;
 
 pub use report::digest::{Digest, Section};

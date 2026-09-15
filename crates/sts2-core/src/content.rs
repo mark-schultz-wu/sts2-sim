@@ -852,21 +852,21 @@ pub trait Fight<V: ContentVersion> {
     /// prints no number at all.
     fn upgraded(&self) -> bool;
 
-    /// `CardSelectCmd.FromHand(prefs, filter: null, source: this)`, for a
-    /// selection of `count` cards.
+    /// `CardSelectCmd.FromHand(prefs, filter: null, source: this)`.
     ///
-    /// A hand holding no more than `count` is taken whole, and nothing is
-    /// asked. That is the command's own short circuit for a choice that is
-    /// not one. An empty hand selects nothing.
+    /// [`Selection::Exactly`] over a hand no larger than it is taken whole,
+    /// and nothing is asked. That is the command's own short circuit for a
+    /// choice that is not one. An empty hand selects nothing.
     ///
     /// The card being played is not in the hand to select. It left for the
     /// play pile before its own play began.
     ///
     /// # Panics
     ///
-    /// A hand larger than the selection, which is a question. A fight has
-    /// nowhere to stop and ask one yet.
-    fn select_cards_from_hand(&mut self, count: usize) -> Vec<crate::CardId>;
+    /// Any selection that is a question, which a fight has nowhere to stop and
+    /// ask. Those are a hand larger than an [`Selection::Exactly`], and every
+    /// [`Selection::UpTo`].
+    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<crate::CardAt>;
 
     /// `CardCmd.Transform(original, replacement)`.
     ///
@@ -874,10 +874,9 @@ pub trait Fight<V: ContentVersion> {
     /// index. It belongs to whoever owned the original, which is the creature
     /// acting.
     ///
-    /// The original is named by id rather than by where it sits. A fight moves
-    /// cards between piles, so a position names a card only until the next
-    /// thing that touches one.
-    fn transform(&mut self, card: crate::CardId, into: crate::CardIdent<V>);
+    /// The original is named by a [`crate::CardAt`], so this looks straight
+    /// where it says rather than read the piles through.
+    fn transform(&mut self, card: crate::CardAt, into: crate::CardIdent<V>);
 
     /// `ForgeCmd.Forge`: raise a number on every copy of one card.
     ///
@@ -890,6 +889,25 @@ pub trait Fight<V: ContentVersion> {
     /// The player for a card and the monster for a move, which is the creature
     /// a card saying "gain" means.
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
+}
+
+/// How many cards a selection takes, which is `CardSelectorPrefs`'s pair of
+/// counts.
+///
+/// The two differ in more than arithmetic. `RequireManualConfirmation` is set
+/// when the counts differ, and that decides whether the selector asks at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Selection {
+    /// `CardSelectorPrefs(prompt, n)`, which sets both counts to `n`.
+    ///
+    /// Nothing has to be confirmed, so a pile holding no more than `n` is
+    /// taken whole and the selector asks nothing.
+    Exactly(usize),
+    /// `CardSelectorPrefs(prompt, 0, n)`, which sets the counts apart.
+    ///
+    /// Taking none is an answer, so the selector always asks. Even one card in
+    /// the pile is a question, because leaving it is a choice.
+    UpTo(usize),
 }
 
 /// A combat operation before the fight's current listeners have modified it.

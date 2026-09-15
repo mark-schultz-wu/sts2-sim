@@ -86,6 +86,41 @@ pub struct CardIdent<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CardId(nonmax::NonMaxU8);
 
+/// One of the piles a fight keeps its cards in, which is `PileType`.
+///
+/// The four a combat has. `Deck` is the run's, and no fight moves a card into
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Pile {
+    Hand,
+    Draw,
+    Discard,
+    Exhaust,
+}
+
+/// A card the fight named, and where it stood when it named it.
+///
+/// [`CardId`] alone is an identity with no address, and finding one means
+/// reading every pile. Playing a card is the hottest path there is, so the
+/// place travels with the name.
+///
+/// The place is a hint and the id is the answer. Whoever acts on this looks
+/// where it says, and checks the id it finds there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CardAt {
+    /// Which card this is, whatever has moved since.
+    pub id: CardId,
+    /// The pile it was in.
+    pub pile: Pile,
+    /// Where it sat in that pile.
+    ///
+    /// Wider than the byte [`CardId`] is. A pile is as large as the deck, and
+    /// a deck has no bound a hand or a roster has. The cards that copy a deck
+    /// take one into the thousands. This holds every pile a run can reach, and
+    /// a fight that outgrows it stops rather than wrap.
+    pub index: u16,
+}
+
 impl CardId {
     /// The card this number names, or [`OutOfRange`] for one no fight mints.
     pub fn try_new(id: u8) -> Result<Self, OutOfRange> {

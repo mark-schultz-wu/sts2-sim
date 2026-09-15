@@ -12,8 +12,9 @@ use crate::rng::MegaRng;
 use num_traits::Zero;
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    Amount, CardId, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
-    EffectResolution, Fight, Holding, Modify, PowerAmount, PowerTable, Rules, SideKinds, Stack,
+    Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
+    EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, Selection,
+    SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -496,6 +497,11 @@ pub(crate) fn effect_of<V: Rules>(
     }
 }
 
+/// Where a card sits in its pile, as a [`CardAt`] carries it.
+fn spot(index: usize) -> u16 {
+    u16::try_from(index).unwrap_or_else(|_| unimplemented!("a pile deeper than a fight can number"))
+}
+
 /// The player, which every fight has one of.
 pub(super) fn player<V: Rules>(creatures: &[Creature<V>]) -> CombatId {
     creatures
@@ -620,34 +626,42 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             != 0
     }
 
-    fn select_cards_from_hand(&mut self, count: usize) -> Vec<CardId> {
+    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<CardAt> {
         // `FromHand` reads the pile it selects from, and the card being played
         // is not in it: the play took it out before the card acted.
-        if self.live.hand.len() > count {
-            unimplemented!("a card selection the fight has to stop and ask");
+        match select {
+            Selection::Exactly(count) if self.live.hand.len() <= count => {}
+            _ => unimplemented!("a card selection the fight has to stop and ask"),
         }
-        self.live.hand.iter().map(|held| held.id).collect()
+        self.live
+            .hand
+            .iter()
+            .enumerate()
+            .map(|(index, held)| CardAt {
+                id: held.id,
+                pile: Pile::Hand,
+                index: spot(index),
+            })
+            .collect()
     }
 
-    fn transform(&mut self, card: CardId, into: CardIdent<V>) {
+    fn transform(&mut self, card: CardAt, into: CardIdent<V>) {
         // A new model for the replacement, so a new id. The original's own is
         // gone with it.
         let id = self.live.card_ids.mint();
-        let piles = [
-            &mut self.live.hand,
-            &mut self.live.draw,
-            &mut self.live.discard,
-            &mut self.live.exhaust,
-        ];
-        for pile in piles {
-            // `Transform` puts the replacement where the original stood, in
-            // the pile it stood in.
-            if let Some(held) = pile.iter_mut().find(|held| held.id == card) {
-                *held = CardInstance::new(into, id);
-                return;
-            }
-        }
-        unimplemented!("a card transformed that the fight no longer holds");
+        let pile = match card.pile {
+            Pile::Hand => &mut self.live.hand,
+            Pile::Draw => &mut self.live.draw,
+            Pile::Discard => &mut self.live.discard,
+            Pile::Exhaust => &mut self.live.exhaust,
+        };
+        // `Transform` puts the replacement where the original stood, in the
+        // pile it stood in. The place came with the name, so this looks once.
+        let held = pile.get_mut(usize::from(card.index));
+        let Some(held) = held.filter(|held| held.id == card.id) else {
+            unimplemented!("a card transformed after the fight moved it");
+        };
+        *held = CardInstance::new(into, id);
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {

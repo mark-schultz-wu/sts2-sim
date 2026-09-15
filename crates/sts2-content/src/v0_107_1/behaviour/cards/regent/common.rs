@@ -1,6 +1,6 @@
 //! The Regent's common cards.
 
-use sts2_core::{Amount, CardIdent, Effect, EffectResolution, Fight, PowerAmount};
+use sts2_core::{Amount, CardIdent, Effect, EffectResolution, Fight, PowerAmount, Selection};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
@@ -60,7 +60,7 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
 /// Upgraded, the Minion Strike it creates is upgraded with it. Begone prints
 /// no number for an upgrade to raise.
 pub(super) fn begone<F: Fight<V>>(fight: &mut F) {
-    let Some(&card) = fight.select_cards_from_hand(1).first() else {
+    let Some(&card) = fight.select_cards_from_hand(Selection::Exactly(1)).first() else {
         return;
     };
     let mut into = CardIdent::new(Cards::Token(TokenCard::MinionStrike));
