@@ -287,7 +287,12 @@ pub enum Roster {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EncounterData {
     pub room: RoomType,
-    pub seed_salt: u64,
+    /// The name the game hashes into this encounter's seed.
+    ///
+    /// Which hash is the build's, so the name is kept and
+    /// `ContentVersion::name_hash` is what turns it into a
+    /// number.
+    pub seed_name: &'static str,
     pub flags: FlagSet,
     pub families: FamilySet,
     pub gold: Gold,
@@ -877,8 +882,8 @@ impl sts2_core::EncounterTable for Encounter {
     }
 
     /// The encounter entry hash used by its private RNG.
-    fn seed_salt(self) -> u64 {
-        self.data().seed_salt
+    fn seed_name(self) -> &'static str {
+        self.data().seed_name
     }
 }
 

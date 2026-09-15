@@ -21,7 +21,7 @@ pub(crate) fn opening<V: Rules>(
             let seed = V::seed_from(
                 raw_seed
                     .wrapping_add(floor)
-                    .wrapping_add(encounter.seed_salt()),
+                    .wrapping_add(V::name_hash(encounter.seed_name())),
             );
             let mut rng = MegaRng::new(seed);
             V::random_encounter_monsters(encounter, &mut rng).map_err(Error::from)

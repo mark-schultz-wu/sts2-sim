@@ -13,6 +13,7 @@ use sts2_core::{EventTable, Rules};
 /// at the width this build's `Rng` seeds from.
 pub(crate) fn stream<V: Rules, R: GameRng>(seed: u64, slot: u64, event: V::Event) -> R {
     R::new(V::seed_from(
-        seed.wrapping_add(slot).wrapping_add(event.event_id_hash()),
+        seed.wrapping_add(slot)
+            .wrapping_add(V::name_hash(event.seed_name())),
     ))
 }

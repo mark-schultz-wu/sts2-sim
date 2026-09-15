@@ -279,11 +279,12 @@ fn an_event_round_trips_through_its_wire_form() {
 }
 
 #[test]
-fn event_id_hashes_are_generated_from_the_wire_ids() {
+fn event_seed_names_are_the_wire_ids() {
     for event in Event::ALL {
         assert_eq!(
-            event.event_id_hash(),
-            sts2_core::rng::name_hash(&wire(event)) as u32 as u64
+            event.seed_name(),
+            wire(event),
+            "an event is seeded from another name than its own"
         );
     }
 }

@@ -7,28 +7,28 @@ use super::super::encounters::Encounter;
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const DEPRECATED_ANCIENT_EVENT: EventData = EventData {
-    event_id_hash: 4011425510601674034u64,
+    seed_name: "DEPRECATED_ANCIENT_EVENT",
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const DEPRECATED_EVENT: EventData = EventData {
-    event_id_hash: 11811723363492946833u64,
+    seed_name: "DEPRECATED_EVENT",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const MOCK_EVENT_MODEL: EventData = EventData {
-    event_id_hash: 1206687206075626973u64,
+    seed_name: "MOCK_EVENT_MODEL",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const THE_ARCHITECT: EventData = EventData {
-    event_id_hash: 1945072028653651286u64,
+    seed_name: "THE_ARCHITECT",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Combat,
     encounter: Some(Encounter::TheArchitectEventEncounter),

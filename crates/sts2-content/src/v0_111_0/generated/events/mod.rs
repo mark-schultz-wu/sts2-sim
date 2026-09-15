@@ -96,7 +96,8 @@ impl sts2_core::FlagSet for EventFlags {
 /// What is true of an event with no run in progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventData {
-    pub event_id_hash: u64,
+    /// The entry name the game hashes into this event's seed.
+    pub seed_name: &'static str,
     pub flags: EventFlags,
     /// Which layout the room draws. `Ancient` is the nine
     /// `AncientEventModel`s and `Combat` the three that open into a
@@ -531,8 +532,8 @@ impl sts2_core::EventTable for Event {
     }
 
     /// The event id hash used by its private RNG.
-    fn event_id_hash(self) -> u64 {
-        <Self as sts2_core::Table>::data(self).event_id_hash
+    fn seed_name(self) -> &'static str {
+        <Self as sts2_core::Table>::data(self).seed_name
     }
 }
 /// Every event in an act's own events, in the act's own order.

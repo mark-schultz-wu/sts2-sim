@@ -6,133 +6,133 @@
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const BRAIN_LEECH: EventData = EventData {
-    event_id_hash: 10732353679941929005u64,
+    seed_name: "BRAIN_LEECH",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const CRYSTAL_SPHERE: EventData = EventData {
-    event_id_hash: 1290138542896758221u64,
+    seed_name: "CRYSTAL_SPHERE",
     flags: EventFlags::new(&[EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const DARV: EventData = EventData {
-    event_id_hash: 14067487040739421984u64,
+    seed_name: "DARV",
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const DOLL_ROOM: EventData = EventData {
-    event_id_hash: 579632721902527843u64,
+    seed_name: "DOLL_ROOM",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const FAKE_MERCHANT: EventData = EventData {
-    event_id_hash: 412661753597179862u64,
+    seed_name: "FAKE_MERCHANT",
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers, EventFlag::Gated]),
     layout: EventLayoutType::Custom,
     encounter: None,
 };
 
 pub(super) const POTION_COURIER: EventData = EventData {
-    event_id_hash: 3773109850343163317u64,
+    seed_name: "POTION_COURIER",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const RANWID_THE_ELDER: EventData = EventData {
-    event_id_hash: 12956138497197582168u64,
+    seed_name: "RANWID_THE_ELDER",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const RELIC_TRADER: EventData = EventData {
-    event_id_hash: 13079787613501418302u64,
+    seed_name: "RELIC_TRADER",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const ROOM_FULL_OF_CHEESE: EventData = EventData {
-    event_id_hash: 5027109693830038969u64,
+    seed_name: "ROOM_FULL_OF_CHEESE",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const SELF_HELP_BOOK: EventData = EventData {
-    event_id_hash: 13393205992338395304u64,
+    seed_name: "SELF_HELP_BOOK",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const SLIPPERY_BRIDGE: EventData = EventData {
-    event_id_hash: 4020998394021389816u64,
+    seed_name: "SLIPPERY_BRIDGE",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const STONE_OF_ALL_TIME: EventData = EventData {
-    event_id_hash: 16011423105303690034u64,
+    seed_name: "STONE_OF_ALL_TIME",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const SYMBIOTE: EventData = EventData {
-    event_id_hash: 14613572339001454918u64,
+    seed_name: "SYMBIOTE",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TEA_MASTER: EventData = EventData {
-    event_id_hash: 15619661962797984485u64,
+    seed_name: "TEA_MASTER",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const THE_FUTURE_OF_POTIONS: EventData = EventData {
-    event_id_hash: 16787844811069606488u64,
+    seed_name: "THE_FUTURE_OF_POTIONS",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const THE_LEGENDS_WERE_TRUE: EventData = EventData {
-    event_id_hash: 281686916360648382u64,
+    seed_name: "THE_LEGENDS_WERE_TRUE",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const THIS_OR_THAT: EventData = EventData {
-    event_id_hash: 8610589396868944426u64,
+    seed_name: "THIS_OR_THAT",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const WAR_HISTORIAN_REPY: EventData = EventData {
-    event_id_hash: 4556673721027295421u64,
+    seed_name: "WAR_HISTORIAN_REPY",
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const WELCOME_TO_WONGOS: EventData = EventData {
-    event_id_hash: 9918180286353309848u64,
+    seed_name: "WELCOME_TO_WONGOS",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,

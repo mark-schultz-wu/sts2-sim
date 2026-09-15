@@ -552,7 +552,12 @@ fn emit_shape(out: &mut String) {
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub struct EncounterData {{\n\
          \x20   pub room: RoomType,\n\
-         \x20   pub seed_salt: u64,\n\
+         \x20   /// The name the game hashes into this encounter's seed.\n\
+         \x20   ///\n\
+         \x20   /// Which hash is the build's, so the name is kept and\n\
+         \x20   /// `ContentVersion::name_hash` is what turns it into a\n\
+         \x20   /// number.\n\
+         \x20   pub seed_name: &'static str,\n\
          \x20   pub flags: FlagSet,\n\
          \x20   pub families: FamilySet,\n\
          \x20   pub gold: Gold,\n\
@@ -605,7 +610,7 @@ fn literal(id: &str, e: &Encounter) -> Result<String, String> {
     let mut out = String::new();
     writeln!(out, "EncounterData {{").unwrap();
     writeln!(out, "    room: RoomType::{},", e.room).unwrap();
-    writeln!(out, "    seed_salt: {}u64,", super::seed_hash(id)?).unwrap();
+    writeln!(out, "    seed_name: {id:?},").unwrap();
     writeln!(
         out,
         "    flags: FlagSet::new(&[{}]),",
@@ -799,8 +804,8 @@ fn emit_encounters(
          \x20   }}\n\
          \n\
          \x20   /// The encounter entry hash used by its private RNG.\n\
-         \x20   fn seed_salt(self) -> u64 {{\n\
-         \x20       self.data().seed_salt\n\
+         \x20   fn seed_name(self) -> &'static str {{\n\
+         \x20       self.data().seed_name\n\
          \x20   }}"
     )
     .unwrap();

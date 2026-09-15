@@ -130,7 +130,7 @@ pub trait EncounterTable: Table {
     fn roster(self) -> EncounterRoster<impl Iterator<Item = Self::Monster>>;
 
     /// The encounter entry’s hash, already cast for wrapping seed arithmetic.
-    fn seed_salt(self) -> u64;
+    fn seed_name(self) -> &'static str;
 }
 
 /// What a table says about an event, beyond its row.
@@ -154,7 +154,7 @@ pub trait EventTable: Table {
     fn ancient(self) -> bool;
 
     /// The event id's deterministic hash, already cast for seed arithmetic.
-    fn event_id_hash(self) -> u64;
+    fn seed_name(self) -> &'static str;
 }
 
 /// What a table says about a monster, beyond its row.

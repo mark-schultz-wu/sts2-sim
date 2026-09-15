@@ -7,63 +7,63 @@ use super::super::encounters::Encounter;
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const ABYSSAL_BATHS: EventData = EventData {
-    event_id_hash: 7631786168426054773u64,
+    seed_name: "ABYSSAL_BATHS",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const DOORS_OF_LIGHT_AND_DARK: EventData = EventData {
-    event_id_hash: 1420588728364888895u64,
+    seed_name: "DOORS_OF_LIGHT_AND_DARK",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const DROWNING_BEACON: EventData = EventData {
-    event_id_hash: 8423321149290156319u64,
+    seed_name: "DROWNING_BEACON",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const ENDLESS_CONVEYOR: EventData = EventData {
-    event_id_hash: 7590881030708299114u64,
+    seed_name: "ENDLESS_CONVEYOR",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const PUNCH_OFF: EventData = EventData {
-    event_id_hash: 16789222935374477048u64,
+    seed_name: "PUNCH_OFF",
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers, EventFlag::Gated]),
     layout: EventLayoutType::Combat,
     encounter: Some(Encounter::PunchOffEventEncounter),
 };
 
 pub(super) const SPIRALING_WHIRLPOOL: EventData = EventData {
-    event_id_hash: 13373532545463656276u64,
+    seed_name: "SPIRALING_WHIRLPOOL",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const SUNKEN_TREASURY: EventData = EventData {
-    event_id_hash: 12723493142875581827u64,
+    seed_name: "SUNKEN_TREASURY",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TRASH_HEAP: EventData = EventData {
-    event_id_hash: 15975379972664539662u64,
+    seed_name: "TRASH_HEAP",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const WATERLOGGED_SCRIPTORIUM: EventData = EventData {
-    event_id_hash: 14830597723802957987u64,
+    seed_name: "WATERLOGGED_SCRIPTORIUM",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
