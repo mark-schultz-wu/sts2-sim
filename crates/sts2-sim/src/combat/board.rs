@@ -377,7 +377,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// Notify the player's belt after a death that did not end combat.
     fn after_enemy_death(&mut self) {
         let asked = super::relic::notify::<V>(self.relics, sts2_core::EventHook::AfterDeath);
-        super::relic::apply::<V, _>(self, asked);
+        super::hook::apply::<V, _>(self, asked);
     }
 }
 
@@ -857,9 +857,21 @@ pub(super) fn draw<V: Rules>(
         // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
         // than once for the whole draw. So a card that spends the pool as it
         // arrives has spent it before the next card is taken.
+        //
+        // The game raises it on every listener in the fight. This asks the
+        // card that arrived, which is the only listener ported to answer it.
+        let asked = V::event_hook(
+            sts2_core::Listener::Card {
+                card: drawn.ident.card,
+                printed: &drawn.vars,
+            },
+            sts2_core::EventHook::CardDrawn {
+                card: drawn.ident.card,
+            },
+        );
         let mut board =
             Board::for_card(live, shuffle, niche, relics, ascension, None, Some(&drawn));
-        V::on_card_drawn(drawn.ident.card, &mut board);
+        super::hook::apply::<V, _>(&mut board, asked);
     }
 }
 

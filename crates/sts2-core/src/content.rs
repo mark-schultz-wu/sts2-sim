@@ -1165,6 +1165,14 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayed {
         card: V::Card,
     },
+    /// `AfterCardDrawn`, carrying the card that has just reached the hand.
+    ///
+    /// Raised once per card, inside the draw loop. A listener that is itself
+    /// the drawn card compares the two, which is what every card that answers
+    /// this hook does.
+    CardDrawn {
+        card: V::Card,
+    },
     /// `BeforeApplied`, asked of a power on its way onto a creature.
     ///
     /// The power is not held yet, so `landing` is what is about to land
@@ -1199,6 +1207,8 @@ pub enum HookEffect<V: ContentVersion> {
     GainStars(V::Number),
     /// `PlayerCmd.GainEnergy`.
     GainEnergy(V::Number),
+    /// `PlayerCmd.LoseEnergy`.
+    LoseEnergy(V::Number),
     /// `CardPileCmd.Draw` for the player.
     Draw(V::Number),
     /// `CreatureCmd.GainBlock` on the listener's owner.
@@ -1264,6 +1274,14 @@ pub enum Listener<'a, V: Hooks> {
         owner: V::CombatSide,
     },
     Relic(&'a mut V::RelicState),
+    /// A card in the fight, with the numbers this copy of it prints.
+    ///
+    /// `CardModel` saves its fields in those numbers: a card that raises its
+    /// own damage as it is drawn has raised what this slice carries.
+    Card {
+        card: V::Card,
+        printed: &'a [CardNumber<V::CardVar, V::Number>],
+    },
 }
 
 /// The build-specific behavior behind the game's hook dispatcher.
@@ -1784,13 +1802,6 @@ pub trait Rules: Hooks {
 
     /// `CardModel.OnTurnEnd`, for a card that remains in the hand.
     fn on_card_turn_end<F: Fight<Self>>(card: Self::Card, fight: &mut F);
-
-    /// `CardModel.AfterCardDrawn`, for the card that has just been drawn.
-    ///
-    /// The game raises this on every listener in the fight and hands each the
-    /// card that arrived. This asks the drawn card alone, which is what the
-    /// cards ported so far read: each answers only when the card is itself.
-    fn on_card_drawn<F: Fight<Self>>(card: Self::Card, fight: &mut F);
 
     /// Continue a card that stopped, with the answer it awaited.
     ///

@@ -121,10 +121,20 @@ pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
     }
 }
 
-/// What a card does as it arrives in the hand.
-pub(crate) fn on_drawn<F: Fight<V>>(card: Cards, fight: &mut F) {
-    if let Cards::Status(card) = card {
-        status::on_drawn(card, fight);
+/// Deliver a notification to one card in the fight.
+///
+/// `printed` is what this copy of the card shows, which is what the model
+/// reads its own numbers off.
+pub(crate) fn event_hook(
+    card: Cards,
+    printed: &[CardNumber],
+    hook: sts2_core::EventHook<V>,
+) -> Vec<sts2_core::HookEffect<V>> {
+    match card {
+        Cards::Status(card) => status::event_hook(card, printed, hook),
+        // A card that overrides no hook answers nothing, which is what
+        // `AbstractModel` does for all but a handful of them.
+        _ => Vec::new(),
     }
 }
 

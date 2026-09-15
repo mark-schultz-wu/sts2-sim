@@ -5,7 +5,7 @@
 //! notification writes the state the run carries for it, and a value hook
 //! reads that state and leaves it.
 
-use sts2_core::{EventHook, Fight, HookEffect, Listener, ModifyHook, Rules};
+use sts2_core::{EventHook, HookEffect, Listener, ModifyHook, Rules};
 
 use crate::run::HeldRelic;
 
@@ -106,27 +106,4 @@ pub(crate) fn turn_started<V: Rules>(
             turn,
         },
     )
-}
-
-/// Carry out what a relic asked for, through the fight it asked in.
-///
-/// # Panics
-///
-/// An effect no fight can carry out here.
-pub(crate) fn apply<V: Rules, F: Fight<V>>(fight: &mut F, asked: Vec<HookEffect<V>>) {
-    for effect in asked {
-        match effect {
-            HookEffect::GainEnergy(amount) => fight.gain_energy(amount),
-            HookEffect::Draw(amount) => fight.draw(amount),
-            HookEffect::GainBlock(amount) => {
-                let block = fight.resolve(sts2_core::Effect::GainBlock {
-                    recipient: fight.actor(),
-                    amount: sts2_core::Amount::Number(amount),
-                    scaling: sts2_core::Scaling::Static,
-                });
-                fight.apply(block);
-            }
-            other => unimplemented!("a relic asking for {other:?} inside a fight"),
-        }
-    }
 }

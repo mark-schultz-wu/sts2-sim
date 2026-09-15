@@ -112,6 +112,9 @@ impl sts2_core::Hooks for V0_107_1 {
                 owner,
             } => behaviour::powers::modify_hook(power, amount, owner, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
+            // No card modifies a number a hook carries. `CardModel` overrides
+            // the numbers it prints instead, which the table already holds.
+            sts2_core::Listener::Card { .. } => sts2_core::Modify::Nothing,
         }
     }
 
@@ -121,7 +124,9 @@ impl sts2_core::Hooks for V0_107_1 {
     ) -> sts2_core::HookResponse<bool> {
         match listener {
             sts2_core::Listener::Power { power, .. } => behaviour::powers::decide_hook(power, hook),
-            sts2_core::Listener::Relic(_) => sts2_core::HookResponse::DoesNotImplement,
+            sts2_core::Listener::Relic(_) | sts2_core::Listener::Card { .. } => {
+                sts2_core::HookResponse::DoesNotImplement
+            }
         }
     }
 
@@ -136,6 +141,9 @@ impl sts2_core::Hooks for V0_107_1 {
                 owner,
             } => behaviour::powers::event_hook(power, amount, owner, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
+            sts2_core::Listener::Card { card, printed } => {
+                behaviour::cards::event_hook(card, printed, hook)
+            }
         }
     }
 }
@@ -215,10 +223,6 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn on_card_turn_end<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
         behaviour::cards::on_turn_end(card, fight);
-    }
-
-    fn on_card_drawn<F: sts2_core::Fight<Self>>(card: Self::Card, fight: &mut F) {
-        behaviour::cards::on_drawn(card, fight);
     }
 
     fn resume_play<F: sts2_core::Fight<Self>>(

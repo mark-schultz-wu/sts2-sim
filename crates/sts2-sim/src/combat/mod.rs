@@ -5,6 +5,7 @@ pub use error::Error;
 mod board;
 pub use board::ResolvedEffect;
 mod encounter;
+mod hook;
 mod legal;
 mod live;
 mod monster;

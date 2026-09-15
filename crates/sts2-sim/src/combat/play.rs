@@ -15,7 +15,7 @@ use crate::rng::MegaRng;
 
 use super::board::Board;
 use super::live::{CardInstance, Live};
-use super::{Error, legal, relic};
+use super::{Error, hook, legal, relic};
 use crate::stream::Streams;
 
 /// A play the fight allows, resolved but not yet made.
@@ -373,7 +373,7 @@ fn carry_on<V: Rules>(
             None,
             None,
         );
-        relic::apply::<V, _>(&mut board, asked);
+        hook::apply::<V, _>(&mut board, asked);
         let skipped = std::mem::take(&mut board.skipped);
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
