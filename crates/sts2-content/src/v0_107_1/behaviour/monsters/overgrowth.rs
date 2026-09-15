@@ -1,6 +1,6 @@
 //! The first act's monsters.
 
-use sts2_core::{Amount, ContentError, Effect, Fight, MonsterSpawn, PowerAmount};
+use sts2_core::{Amount, ContentError, Effect, Fight, MonsterSpawn, PowerAmount, Scaling};
 
 use super::super::super::generated::powers::Power;
 
@@ -176,6 +176,7 @@ fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
             let block = fight.resolve(Effect::GainBlock {
                 recipient: fight.actor(),
                 amount: Amount::Number(block),
+                scaling: Scaling::Dynamic,
             });
             fight.apply(block);
         }

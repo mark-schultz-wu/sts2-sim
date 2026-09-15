@@ -926,11 +926,29 @@ pub enum Effect<V: ContentVersion> {
         target: crate::CombatId,
         damage: Amount<V>,
     },
-    /// `CreatureCmd.GainBlock(recipient, amount, cardPlay)`.
+    /// `CreatureCmd.GainBlock(recipient, amount, props, cardPlay)`.
     GainBlock {
         recipient: crate::CombatId,
         amount: Amount<V>,
+        scaling: Scaling,
     },
+}
+
+/// Whether the powers that scale a number act on this one.
+///
+/// The game keeps this as `ValueProp`, a set of flags. It asks the same
+/// question of a hit and of a block: `IsPoweredAttack` and
+/// `IsPoweredCardOrMonsterMoveBlock` are both the `Move` flag without the
+/// `Unpowered` one. So one answer serves both.
+///
+/// A card or a monster move prints `Move`, and a relic prints `Unpowered`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scaling {
+    /// A relic's number, which lands as it reads.
+    Static,
+    /// A card's number or a monster move's, which Strength and Dexterity
+    /// move.
+    Dynamic,
 }
 
 /// The number an effect carries, before the fight works it out.

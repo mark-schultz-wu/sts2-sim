@@ -42,8 +42,8 @@ pub use content::{
     FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
     MonsterSpawn, MonsterTable, MoveMachine, PotionTable, PotionUsage, PowerAmount, PowerTable,
     RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Rests, RewardRarity, RoomKinds, Rules,
-    Selection, SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
-    UnplayableReasonKinds, Version,
+    Scaling, Selection, SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary,
+    TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;

@@ -15,6 +15,7 @@ mod anchor;
 mod bone_tea;
 mod divine_right;
 mod lead_paperweight;
+mod permafrost;
 mod pocketwatch;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
@@ -38,6 +39,7 @@ pub enum State {
     BoneTea(bone_tea::State),
     DivineRight,
     LeadPaperweight,
+    Permafrost(permafrost::State),
     Pocketwatch(pocketwatch::State),
 }
 
@@ -48,6 +50,7 @@ pub(crate) fn event_hook(state: &mut State, hook: EventHook<V>) -> Effects {
         State::BoneTea(state) => bone_tea::event_hook(state, hook),
         State::DivineRight => divine_right::event_hook(hook),
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
+        State::Permafrost(state) => permafrost::event_hook(state, hook),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
     }
 }
@@ -57,9 +60,11 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
         // The rest change no value a hook asks about.
-        State::Anchor | State::BoneTea(_) | State::DivineRight | State::LeadPaperweight => {
-            Modify::Nothing
-        }
+        State::Anchor
+        | State::BoneTea(_)
+        | State::DivineRight
+        | State::LeadPaperweight
+        | State::Permafrost(_) => Modify::Nothing,
     }
 }
 
@@ -75,6 +80,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
             Relic::DivineRight => State::DivineRight,
             Relic::LeadPaperweight => State::LeadPaperweight,
+            Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }

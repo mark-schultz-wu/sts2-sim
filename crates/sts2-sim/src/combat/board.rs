@@ -13,8 +13,8 @@ use num_traits::Zero;
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
-    EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, Selection,
-    SideKinds, Stack,
+    EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, Scaling,
+    Selection, SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -404,14 +404,23 @@ pub(crate) fn resolve<V: Rules>(
                 carried::<V>(playing, creatures, damage),
             ),
         },
-        Effect::GainBlock { recipient, amount } => Resolved::GainBlock {
+        Effect::GainBlock {
             recipient,
-            amount: blocked::<V>(
-                creatures,
+            amount,
+            scaling,
+        } => {
+            let amount = carried::<V>(playing, creatures, amount);
+            Resolved::GainBlock {
                 recipient,
-                carried::<V>(playing, creatures, amount),
-            ),
-        },
+                // `ModifyBlockAdditive` pays a card's block or a monster
+                // move's, and nothing else. A relic's block is asked of no
+                // listener this build fields.
+                amount: match scaling {
+                    Scaling::Dynamic => blocked::<V>(creatures, recipient, amount),
+                    Scaling::Static => amount,
+                },
+            }
+        }
     };
     ResolvedEffect { effect }
 }
@@ -492,6 +501,9 @@ pub(crate) fn effect_of<V: Rules>(
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
             amount: Amount::Var(key),
+            // Every block a card prints on this build is a `BlockVar` with
+            // `ValueProp.Move`.
+            scaling: Scaling::Dynamic,
         }),
         CardNumberModifier::OstyDamage => unimplemented!("a card previewing the Osty's damage"),
     }

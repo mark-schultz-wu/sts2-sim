@@ -1,6 +1,6 @@
 //! The Regent's basic cards.
 
-use sts2_core::{Amount, Effect, Fight, PowerAmount};
+use sts2_core::{Amount, Effect, Fight, PowerAmount, Scaling};
 
 use super::super::super::super::generated::cards::{CardVar, RegentCard};
 use super::super::super::super::generated::powers::Power;
@@ -32,6 +32,7 @@ pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
     });
     fight.apply(block);
 }
