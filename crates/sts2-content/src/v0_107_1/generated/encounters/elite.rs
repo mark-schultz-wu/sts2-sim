@@ -12,7 +12,7 @@ use crate::Scaled;
 
 pub(super) const BYGONE_EFFIGY_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 4265534423u32,
+    seed_name: "BYGONE_EFFIGY_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -35,7 +35,7 @@ pub(super) const BYGONE_EFFIGY_ELITE: EncounterData = EncounterData {
 
 pub(super) const BYRDONIS_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 3648577584u32,
+    seed_name: "BYRDONIS_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -58,7 +58,7 @@ pub(super) const BYRDONIS_ELITE: EncounterData = EncounterData {
 
 pub(super) const DECIMILLIPEDE_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 3805935806u32,
+    seed_name: "DECIMILLIPEDE_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -82,7 +82,7 @@ pub(super) const DECIMILLIPEDE_ELITE: EncounterData = EncounterData {
 
 pub(super) const ENTOMANCER_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 1790538790u32,
+    seed_name: "ENTOMANCER_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -105,7 +105,7 @@ pub(super) const ENTOMANCER_ELITE: EncounterData = EncounterData {
 
 pub(super) const INFESTED_PRISMS_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 3851064921u32,
+    seed_name: "INFESTED_PRISMS_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -128,7 +128,7 @@ pub(super) const INFESTED_PRISMS_ELITE: EncounterData = EncounterData {
 
 pub(super) const KNIGHTS_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 1980430608u32,
+    seed_name: "KNIGHTS_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Knights]),
     gold: Gold {
@@ -165,7 +165,7 @@ pub(super) const KNIGHTS_ELITE: EncounterData = EncounterData {
 
 pub(super) const MECHA_KNIGHT_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 3704256022u32,
+    seed_name: "MECHA_KNIGHT_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -188,7 +188,7 @@ pub(super) const MECHA_KNIGHT_ELITE: EncounterData = EncounterData {
 
 pub(super) const MOCK_ELITE_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 3089232522u32,
+    seed_name: "MOCK_ELITE_ENCOUNTER",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards, EncounterFlag::Debug]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -211,7 +211,7 @@ pub(super) const MOCK_ELITE_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const PHANTASMAL_GARDENERS_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 339566991u32,
+    seed_name: "PHANTASMAL_GARDENERS_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -248,7 +248,7 @@ pub(super) const PHANTASMAL_GARDENERS_ELITE: EncounterData = EncounterData {
 
 pub(super) const PHROG_PARASITE_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 2085419418u32,
+    seed_name: "PHROG_PARASITE_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -271,7 +271,7 @@ pub(super) const PHROG_PARASITE_ELITE: EncounterData = EncounterData {
 
 pub(super) const SKULKING_COLONY_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 479769915u32,
+    seed_name: "SKULKING_COLONY_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -294,7 +294,7 @@ pub(super) const SKULKING_COLONY_ELITE: EncounterData = EncounterData {
 
 pub(super) const SOUL_NEXUS_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 1527483709u32,
+    seed_name: "SOUL_NEXUS_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -317,7 +317,7 @@ pub(super) const SOUL_NEXUS_ELITE: EncounterData = EncounterData {
 
 pub(super) const TERROR_EEL_ELITE: EncounterData = EncounterData {
     room: RoomType::Elite,
-    seed_salt: 3319858769u32,
+    seed_name: "TERROR_EEL_ELITE",
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {

@@ -40,6 +40,20 @@ pub struct V0_107_1;
 
 impl sts2_core::ContentVersion for V0_107_1 {
     const VERSION: Version = VERSION;
+
+    /// The two-lane fold over UTF-16 code units, kept to 32 bits.
+    ///
+    /// `StringHelper.GetDeterministicHashCode` returns `int` here, and every
+    /// caller casts it to `uint` before it seeds anything.
+    fn name_hash(name: &str) -> u64 {
+        sts2_core::rng::name_hash(name) as u32 as u64
+    }
+
+    /// `Rng`'s seed is `uint` here, so a wider sum truncates.
+    fn seed_from(parts: u64) -> u64 {
+        parts as u32 as u64
+    }
+
     type EventOptionId = event_options::EventOptionId;
 
     type Number = i32;

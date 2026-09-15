@@ -416,7 +416,7 @@ mod tests {
 
     fn map() -> ActMap<V> {
         let seed = Seed::new("0RACLE1").expect("the fixture's seed is a seed");
-        let mut rng = MegaRng::named(stream_seed(&seed), "act_1_map");
+        let mut rng: MegaRng = sts2_core::rng::named::<V, _>(stream_seed::<V>(&seed), "act_1_map");
         ActMap::<V>::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::None)
             .expect("the fixture's map generates")
     }

@@ -6,84 +6,84 @@
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const AROMA_OF_CHAOS: EventData = EventData {
-    event_id_hash: 125660919u32,
+    seed_name: "AROMA_OF_CHAOS",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const BYRDONIS_NEST: EventData = EventData {
-    event_id_hash: 2595298453u32,
+    seed_name: "BYRDONIS_NEST",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const DENSE_VEGETATION: EventData = EventData {
-    event_id_hash: 2517467974u32,
+    seed_name: "DENSE_VEGETATION",
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const JUNGLE_MAZE_ADVENTURE: EventData = EventData {
-    event_id_hash: 2734816016u32,
+    seed_name: "JUNGLE_MAZE_ADVENTURE",
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const LUMINOUS_CHOIR: EventData = EventData {
-    event_id_hash: 349033992u32,
+    seed_name: "LUMINOUS_CHOIR",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const MORPHIC_GROVE: EventData = EventData {
-    event_id_hash: 1030522980u32,
+    seed_name: "MORPHIC_GROVE",
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const SAPPHIRE_SEED: EventData = EventData {
-    event_id_hash: 2849824616u32,
+    seed_name: "SAPPHIRE_SEED",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TABLET_OF_TRUTH: EventData = EventData {
-    event_id_hash: 1990547960u32,
+    seed_name: "TABLET_OF_TRUTH",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const UNREST_SITE: EventData = EventData {
-    event_id_hash: 4272417395u32,
+    seed_name: "UNREST_SITE",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const WELLSPRING: EventData = EventData {
-    event_id_hash: 1574415499u32,
+    seed_name: "WELLSPRING",
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const WHISPERING_HOLLOW: EventData = EventData {
-    event_id_hash: 3755075858u32,
+    seed_name: "WHISPERING_HOLLOW",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const WOOD_CARVINGS: EventData = EventData {
-    event_id_hash: 3059595645u32,
+    seed_name: "WOOD_CARVINGS",
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,

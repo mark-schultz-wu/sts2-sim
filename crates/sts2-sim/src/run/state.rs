@@ -4,7 +4,7 @@ use crate::rng::MegaRng;
 use num_traits::ToPrimitive as _;
 use smallvec::SmallVec;
 use sts2_core::ActMap as _;
-use sts2_core::rng::{GameRng, stream_seed};
+use sts2_core::rng::stream_seed;
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, EventOption,
     EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Positions, Question,
@@ -75,7 +75,7 @@ pub(super) enum EncounterQueue {
 struct RunData<V: Rules> {
     opening: Opening<V>,
     map: ActMap<V>,
-    raw_seed: u32,
+    raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
 }
@@ -183,7 +183,7 @@ impl<V: Rules> State<V> {
         character: V::Character,
         ascension: V::AscensionLevel,
     ) -> Self {
-        let raw_seed = stream_seed(seed);
+        let raw_seed = stream_seed::<V>(seed);
         let acts: Vec<V::Act> = V::Act::ALL
             .iter()
             .copied()
@@ -192,7 +192,7 @@ impl<V: Rules> State<V> {
         let mut streams = Streams::<V>::opening(raw_seed);
         let opening = Opening::draw(streams.run(V::RunRngType::UP_FRONT), character, &acts);
 
-        let mut map_rng = MegaRng::named(raw_seed, "act_1_map");
+        let mut map_rng: MegaRng = sts2_core::rng::named::<V, _>(raw_seed, "act_1_map");
         let map = ActMap::<V>::generate(&mut map_rng, Layout::ACT_ONE, ascension)
             .expect("the game's act-one layout fits a packed map path");
         let at = map
@@ -248,7 +248,7 @@ impl<V: Rules> State<V> {
         }
     }
 
-    pub(crate) fn raw_seed(&self) -> u32 {
+    pub(crate) fn raw_seed(&self) -> u64 {
         self.shared.raw_seed
     }
 

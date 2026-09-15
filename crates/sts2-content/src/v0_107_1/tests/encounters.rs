@@ -484,13 +484,12 @@ fn sharing_a_family_is_what_keeps_two_encounters_apart() {
 }
 
 #[test]
-fn encounter_seed_salts_are_the_cast_entry_hashes() {
+fn encounter_seed_names_are_the_cast_entry_names() {
     for encounter in Encounter::ALL {
         assert_eq!(
-            encounter.seed_salt(),
-            sts2_core::rng::name_hash(&wire(encounter)) as u32,
-            "{}",
-            wire(encounter)
+            encounter.seed_name(),
+            wire(encounter),
+            "an encounter is seeded from another name than its own"
         );
     }
 }

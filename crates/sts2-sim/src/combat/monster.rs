@@ -232,7 +232,7 @@ mod tests {
     #[test]
     fn monsters_of_a_kind_get_different_health() {
         let seed = Seed::new("0RACLE1").unwrap();
-        let mut streams = Streams::<V0_107_1>::opening(stream_seed(&seed));
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed));
         let inklets = [Monster::Inklet, Monster::Inklet, Monster::Inklet];
 
         let roster = initialize::<V0_107_1>(
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn the_oracle_weak_slimes_get_the_same_health_and_moves() {
         let seed = Seed::new("0RACLE1").unwrap();
-        let mut streams = Streams::<V0_107_1>::opening(stream_seed(&seed));
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed));
         let monsters = [
             Monster::TwigSlimeS,
             Monster::LeafSlimeM,

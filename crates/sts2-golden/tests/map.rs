@@ -18,7 +18,7 @@ use std::path::Path;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
-use sts2_core::rng::{GameRng, stream_seed};
+use sts2_core::rng::stream_seed;
 use sts2_core::{ActMap as _, Seed};
 use sts2_sim::map::{ActMap, Layout};
 use sts2_sim::rng::MegaRng;
@@ -53,7 +53,7 @@ fn render(map: &ActMap<V>) -> String {
 /// The act one map this seed generates at this ascension level, as lines.
 fn generate(seed: &str, ascension: AscensionLevel) -> String {
     let seed = Seed::new(seed).expect("a fixture's seed is a seed");
-    let mut rng = MegaRng::named(stream_seed(&seed), "act_1_map");
+    let mut rng = sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&seed), "act_1_map");
     render(&ActMap::<V>::generate(&mut rng, Layout::ACT_ONE, ascension).unwrap())
 }
 

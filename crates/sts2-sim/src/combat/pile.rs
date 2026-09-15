@@ -109,14 +109,15 @@ pub fn shuffle<T, R: GameRng>(rng: &mut R, mut cards: Vec<T>) -> Shuffled<T> {
 #[cfg(test)]
 mod tests {
     use crate::rng::MegaRng;
+    use sts2_content::v0_107_1::V0_107_1;
     use sts2_core::Seed;
     use sts2_core::rng::{GameRng, stream_seed};
 
     use super::{NotInHand, shuffle};
 
     fn rng() -> MegaRng {
-        let seed = stream_seed(&Seed::new("0RACLE1").expect("a canonical seed"));
-        MegaRng::named(seed, "shuffle")
+        let seed = stream_seed::<V0_107_1>(&Seed::new("0RACLE1").expect("a canonical seed"));
+        sts2_core::rng::named::<V0_107_1, MegaRng>(seed, "shuffle")
     }
 
     #[test]

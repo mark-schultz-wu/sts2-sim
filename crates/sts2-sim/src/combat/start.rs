@@ -19,7 +19,7 @@ const HAND_SIZE: usize = 5;
 /// from, without touching either. Entering a room is one transition, and a
 /// fight that cannot be built must leave the run where it stood.
 pub(crate) fn enter<V: Rules>(
-    raw_seed: u32,
+    raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
