@@ -1,0 +1,11 @@
+# `Begone.OnPlay` awaits `CardSelectCmd.FromHand` before it transforms the
+# answer into a Minion Strike. The card stays mid-play while the question is
+# open, and only finishes after the answer arrives.
+#
+# Two Begones, because one leaves none in the opening hand.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"BEGONE"}
+{"cmd":"grant","card":"BEGONE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":4}
+{"cmd":"answer","cards":[0]}

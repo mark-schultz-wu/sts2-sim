@@ -1,12 +1,14 @@
 //! The Regent's common cards.
 
 use sts2_core::{
-    Amount, CardIdent, Effect, EffectResolution, Fight, PowerAmount, Scaling, Selection,
+    Amount, CardIdent, Effect, EffectResolution, Fight, Pile, Played, PowerAmount, Scaling,
+    Selection,
 };
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
 use super::super::{CardNumber, Number, V, raise};
+use super::Resume;
 
 /// `Upgrade`, which raises what these cards print.
 pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
@@ -22,7 +24,7 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
 }
 
 /// `GuidingStar`. Deal damage, then draw.
-pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
+pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     let attack = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
@@ -31,6 +33,7 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
+    Played::Done
 }
 
 /// `Glitterstream`. Gain block now and after the next block clear.
@@ -38,7 +41,7 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
 /// The number the power carries runs through `Hook.ModifyBlock` first, which
 /// this card does itself rather than leave to the gain. It reads the hook
 /// before the block it gains lands, as the game's own order does.
-pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
+pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let next_turn = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(CardVar::BlockNextTurn),
@@ -54,6 +57,7 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
         Power::BlockNextTurnPower,
         PowerAmount::Counted(next_turn.amount()),
     );
+    Played::Done
 }
 
 /// `Begone`. Turn a card in hand into a Minion Strike.
@@ -64,16 +68,28 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
 ///
 /// Upgraded, the Minion Strike it creates is upgraded with it. Begone prints
 /// no number for an upgrade to raise.
-pub(super) fn begone<F: Fight<V>>(fight: &mut F) {
-    let Some(&card) = fight
-        .select_cards_from_hand(Selection::Exactly(nonmax::NonMaxUsize::ONE))
-        .first()
-    else {
-        return;
-    };
-    let mut into = CardIdent::new(Cards::Token(TokenCard::MinionStrike));
-    into.upgrade = u8::from(fight.upgraded());
-    fight.transform(card, into);
+pub(super) fn begone() -> Played<V> {
+    Played::Asking {
+        pile: Pile::Hand,
+        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Regent(Resume::BegoneTransform),
+    }
+}
+
+/// `Begone` again, with the card the selection took.
+///
+/// An empty hand selects nothing and the card does nothing, which is
+/// `FirstOrDefault` finding none.
+pub(super) fn begone_transform<F: Fight<V>>(
+    fight: &mut F,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    if let Some(card) = chosen.one_or_none() {
+        let mut into = CardIdent::new(Cards::Token(TokenCard::MinionStrike));
+        into.upgrade = u8::from(fight.upgraded());
+        fight.transform(card, into);
+    }
+    Played::Done
 }
 
 /// `CrushUnder`. Hit every enemy, then take a point of Strength off each.
@@ -81,7 +97,7 @@ pub(super) fn begone<F: Fight<V>>(fight: &mut F) {
 /// The command takes the creatures across before its first hit lands, and the
 /// powers go to that same list. One the damage took out holds no combat state
 /// by then, and `PowerCmd.Apply` returns on such a creature.
-pub(super) fn crush_under<F: Fight<V>>(fight: &mut F) {
+pub(super) fn crush_under<F: Fight<V>>(fight: &mut F) -> Played<V> {
     for target in fight.opponents() {
         let attack = fight.resolve(Effect::Attack {
             dealer: fight.actor(),
@@ -94,10 +110,11 @@ pub(super) fn crush_under<F: Fight<V>>(fight: &mut F) {
         Power::CrushUnderPower,
         PowerAmount::Counted(fight.var(CardVar::StrengthLoss)),
     );
+    Played::Done
 }
 
 /// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.
-pub(super) fn know_thy_place<F: Fight<V>>(fight: &mut F) {
+pub(super) fn know_thy_place<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     fight.apply_power(
         target,
@@ -109,6 +126,7 @@ pub(super) fn know_thy_place<F: Fight<V>>(fight: &mut F) {
         Power::VulnerablePower,
         PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
     );
+    Played::Done
 }
 
 /// `RefineBlade`. Forge every Sovereign Blade, then gain energy next turn.
@@ -116,7 +134,7 @@ pub(super) fn know_thy_place<F: Fight<V>>(fight: &mut F) {
 /// `ForgeCmd.Forge` creates a blade when the fight holds none it can reach,
 /// and raises the damage on every one it holds. A blade in the exhaust pile is
 /// raised and does not count as one it can reach.
-pub(super) fn refine_blade<F: Fight<V>>(fight: &mut F) {
+pub(super) fn refine_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let forge = fight.var(CardVar::Forge);
     fight.forge(
         Cards::Token(TokenCard::SovereignBlade),
@@ -127,4 +145,5 @@ pub(super) fn refine_blade<F: Fight<V>>(fight: &mut F) {
         Power::EnergyNextTurnPower,
         PowerAmount::Counted(fight.var(CardVar::Energy)),
     );
+    Played::Done
 }

@@ -1,6 +1,6 @@
 //! The Regent's basic cards.
 
-use sts2_core::{Amount, Effect, Fight, PowerAmount, Scaling};
+use sts2_core::{Amount, Effect, Fight, Played, PowerAmount, Scaling};
 
 use super::super::super::super::generated::cards::{CardVar, RegentCard};
 use super::super::super::super::generated::powers::Power;
@@ -17,7 +17,7 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
 }
 
 /// `StrikeRegent`. Deal damage.
-pub(super) fn strike<F: Fight<V>>(fight: &mut F) {
+pub(super) fn strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     let attack = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
@@ -25,16 +25,18 @@ pub(super) fn strike<F: Fight<V>>(fight: &mut F) {
         damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
+    Played::Done
 }
 
 /// `DefendRegent`. Gain block.
-pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
+pub(super) fn defend<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(CardVar::Block),
         scaling: Scaling::Dynamic,
     });
     fight.apply(block);
+    Played::Done
 }
 
 /// `FallingStar`. Deal damage, then weaken and expose what it hit.
@@ -42,7 +44,7 @@ pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
 /// The powers land after the damage, so a target the damage killed has left
 /// the fight and takes neither. `PowerCmd.Apply` returns on a creature with no
 /// combat state.
-pub(super) fn falling_star<F: Fight<V>>(fight: &mut F) {
+pub(super) fn falling_star<F: Fight<V>>(fight: &mut F) -> Played<V> {
     let target = fight.target();
     let attack = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
@@ -60,9 +62,11 @@ pub(super) fn falling_star<F: Fight<V>>(fight: &mut F) {
         Power::VulnerablePower,
         PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
     );
+    Played::Done
 }
 
 /// `Venerate`. Gain stars.
-pub(super) fn venerate<F: Fight<V>>(fight: &mut F) {
+pub(super) fn venerate<F: Fight<V>>(fight: &mut F) -> Played<V> {
     fight.gain_stars(fight.var(CardVar::Stars));
+    Played::Done
 }

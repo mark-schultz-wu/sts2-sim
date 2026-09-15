@@ -106,6 +106,7 @@ pub(crate) fn enter<V: Rules>(
             // Nothing has been applied to anyone yet.
             skip_tick: Vec::new(),
             card_ids,
+            asking: None,
         },
         counters,
     ))

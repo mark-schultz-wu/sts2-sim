@@ -1,12 +1,19 @@
 //! The Regent's cards, filed by rarity.
 
-use sts2_core::{CardTable, Fight};
+use sts2_core::{CardTable, Fight, Played};
 
 use super::super::super::generated::cards::{CardRarity, Cards, RegentCard};
 use super::{CardNumber, V};
 
 mod basic;
 mod common;
+
+/// Where a Regent card stopped inside its own play.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `Begone`, after it selected the card to turn into a Minion Strike.
+    BegoneTransform,
+}
 
 /// `Upgrade` for the Regent's cards, under the rarity the table files each
 /// one by.
@@ -21,7 +28,7 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     }
 }
 
-pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
+pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
     match card {
         RegentCard::Strike => basic::strike(fight),
         RegentCard::Defend => basic::defend(fight),
@@ -31,8 +38,19 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::KnowThyPlace => common::know_thy_place(fight),
         RegentCard::RefineBlade => common::refine_blade(fight),
-        RegentCard::Begone => common::begone(fight),
+        RegentCard::Begone => common::begone(),
         RegentCard::CrushUnder => common::crush_under(fight),
         card => unimplemented!("what {card:?} does when it is played"),
+    }
+}
+
+/// The rest of a play that stopped, once the fight has its answer.
+pub(super) fn resume_play<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    match at {
+        Resume::BegoneTransform => common::begone_transform(fight, chosen),
     }
 }

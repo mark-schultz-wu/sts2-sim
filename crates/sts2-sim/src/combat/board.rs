@@ -14,7 +14,7 @@ use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
     EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, Scaling,
-    Selection, SideKinds, Stack,
+    SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -663,25 +663,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .ident
             .upgrade
             != 0
-    }
-
-    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<CardAt<V>> {
-        // `FromHand` reads the pile it selects from, and the card being played
-        // is not in it: the play took it out before the card acted.
-        match select {
-            Selection::Exactly(count) if self.live.hand.len() <= count.get() => {}
-            _ => unimplemented!("a card selection the fight has to stop and ask"),
-        }
-        self.live
-            .hand
-            .iter()
-            .enumerate()
-            .map(|(index, held)| {
-                let index = num_traits::NumCast::from(index)
-                    .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-                CardAt::new(held.id, Pile::Hand, index)
-            })
-            .collect()
     }
 
     fn transform(&mut self, card: CardAt<V>, into: CardIdent<V>) {

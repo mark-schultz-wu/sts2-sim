@@ -38,6 +38,13 @@ use sts2_core::Version;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct V0_111_0;
 
+/// Where a card of this build stops to ask something.
+///
+/// Uninhabited. No card here is ported, so none of them stops, and a build
+/// that ports one grows a variant for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {}
+
 impl sts2_core::ContentVersion for V0_111_0 {
     const VERSION: Version = VERSION;
     type EventOptionId = event_options::EventOptionId;
@@ -47,6 +54,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type Count = u32;
     type Index = u16;
     type CardSerial = u16;
+    type Resume = Resume;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
     type Act = generated::acts::Act;

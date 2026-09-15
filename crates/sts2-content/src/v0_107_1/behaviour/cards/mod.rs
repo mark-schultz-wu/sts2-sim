@@ -8,7 +8,7 @@
 //! list of what the simulator can play. A card outside it stops the run where
 //! it stands rather than playing as if it did nothing.
 
-use sts2_core::{CardVars, Fight};
+use sts2_core::{CardVars, Fight, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::cards::{CardVar, Cards};
@@ -88,8 +88,14 @@ fn face(printed: &[CardNumber], key: CardVar) -> Number {
         .base
 }
 
+/// Where a card's own play stops to ask something, under its card grouping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    Regent(regent::Resume),
+}
+
 /// What a card does when it is played.
-pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) {
+pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
     match card {
         Cards::Colorless(card) => colorless::on_play(card, fight),
         Cards::Regent(card) => regent::on_play(card, fight),
@@ -105,5 +111,16 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) {
         | Cards::Event(_)
         | Cards::Quest(_)
         | Cards::Deprecated(_) => unimplemented!("what {card:?} does when it is played"),
+    }
+}
+
+/// The rest of a play that stopped, once the fight has its answer.
+pub(crate) fn resume_play<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    match at {
+        Resume::Regent(at) => regent::resume_play(fight, at, chosen),
     }
 }
