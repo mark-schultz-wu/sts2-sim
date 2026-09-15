@@ -866,7 +866,7 @@ public static class Driver
             + $"deck={me.Deck.Cards.Count} combat={CombatManager.Instance.IsInProgress}");
         // The adapter is the only place the build's RNG representation leaks.
         var counters = GameApi.RunRngCounters(state);
-        Log.Info($"[headless] counters: {string.Join(" ", counters.OrderBy(c => c.Key).Select(c => $"{c.Key}={c.Value}"))}");
+        Log.Info($"[headless] counters: {string.Join(" ", counters.OrderBy(c => c.Key).Select(c => $"{c.Key}={c.Value.Counter}"))}");
         Log.Info($"[headless] actions={_actions} checksums={_checksums} elapsed={Clock.Elapsed.TotalSeconds:F1}s");
     }
 }

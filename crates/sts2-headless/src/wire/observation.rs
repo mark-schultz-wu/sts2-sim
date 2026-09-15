@@ -20,9 +20,9 @@ use num_traits::{NumCast, ToPrimitive};
 use serde::Deserialize;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, CombatId, Coord,
-    Counters, Creature, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent, Map, NextMove,
-    Node, Observation, Orbs, Playable, PowerAmount, PowerTable, Preview, Reachable, RestOption,
-    Room, Stack, Stock, Take, Undrinkable,
+    Creature, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent, Map, NextMove, Node,
+    Observation, Orbs, Playable, Position, Positions, PowerAmount, PowerTable, Preview, Reachable,
+    RestOption, Room, Stack, Stock, Take, Undrinkable,
 };
 
 use super::ident::{self, named};
@@ -254,9 +254,9 @@ struct WireObservation<V: sts2_content_wire::WireContentVersion> {
     deck: Vec<String>,
     in_combat: bool,
     map: WireMap<V>,
-    /// Both counter sets in one dictionary, the per-player ones behind a
+    /// Both stream sets in one dictionary, the per-player ones behind a
     /// `player.` prefix.
-    rng: BTreeMap<String, u32>,
+    rng: BTreeMap<String, WirePosition>,
     /// Absent, not null, when the room offers nothing.
     #[serde(default)]
     room: Option<WireRoom<V>>,
@@ -544,18 +544,54 @@ fn coords(path: &str, texts: &[String]) -> Result<Vec<Coord>, Error> {
         .collect()
 }
 
-/// The two counter sets, split on the prefix the oracle flattened them with.
+/// Where one stream stands, in either shape a build reports it.
+///
+/// `SerializableRng` is `{counter, s0..s3}`, and a build that saves it whole
+/// sends the object. A build that saves the draw count alone sends the number,
+/// and so does every recording made against one.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(untagged)]
+enum WirePosition {
+    Counted(u32),
+    Stateful {
+        counter: u32,
+        s0: u64,
+        s1: u64,
+        s2: u64,
+        s3: u64,
+    },
+}
+
+impl From<WirePosition> for Position {
+    fn from(position: WirePosition) -> Position {
+        match position {
+            WirePosition::Counted(counter) => Position::counted(counter),
+            WirePosition::Stateful {
+                counter,
+                s0,
+                s1,
+                s2,
+                s3,
+            } => Position {
+                counter,
+                words: Some([s0, s1, s2, s3]),
+            },
+        }
+    }
+}
+
+/// The two stream sets, split on the prefix the oracle flattened them with.
 ///
 /// A key that is neither a run stream nor `player.` plus a player stream is a
 /// stream this build has no name for. That is a divergence rather than
 /// something to skip.
 fn counters<V: sts2_content_wire::WireContentVersion>(
-    flat: &BTreeMap<String, u32>,
-) -> Result<Counters<V>, Error> {
+    flat: &BTreeMap<String, WirePosition>,
+) -> Result<Positions<V>, Error> {
     let mut run = HashMap::new();
     let mut player = HashMap::new();
 
-    for (key, count) in flat {
+    for (key, at_stream) in flat {
         let unknown = || {
             at(
                 "rng",
@@ -568,15 +604,21 @@ fn counters<V: sts2_content_wire::WireContentVersion>(
 
         match key.strip_prefix("player.") {
             Some(name) => {
-                player.insert(named::<V::PlayerRngType>(name).ok_or_else(unknown)?, *count);
+                player.insert(
+                    named::<V::PlayerRngType>(name).ok_or_else(unknown)?,
+                    Position::from(*at_stream),
+                );
             }
             None => {
-                run.insert(named::<V::RunRngType>(key).ok_or_else(unknown)?, *count);
+                run.insert(
+                    named::<V::RunRngType>(key).ok_or_else(unknown)?,
+                    Position::from(*at_stream),
+                );
             }
         }
     }
 
-    Ok(Counters { run, player })
+    Ok(Positions { run, player })
 }
 
 impl<V: sts2_content_wire::WireContentVersion> WireMap<V> {
@@ -1134,15 +1176,18 @@ mod tests {
         assert!(matches!(count.why, Why::OutOfRange { .. }));
     }
 
-    /// The two counter sets come back apart, keyed by their own enums.
+    /// The two stream sets come back apart, keyed by their own enums.
     #[test]
     fn the_rng_counters_split_on_the_prefix_they_were_flattened_with() {
         use sts2_content::v0_107_1::runstate::{PlayerRngType, RunRngType};
 
         let obs = parse(&base()).unwrap();
-        assert_eq!(obs.rng.run[&RunRngType::Shuffle], 4);
-        assert_eq!(obs.rng.run[&RunRngType::MonsterAi], 0);
-        assert_eq!(obs.rng.player[&PlayerRngType::Rewards], 2);
+        assert_eq!(obs.rng.run[&RunRngType::Shuffle], Position::counted(4));
+        assert_eq!(obs.rng.run[&RunRngType::MonsterAi], Position::counted(0));
+        assert_eq!(
+            obs.rng.player[&PlayerRngType::Rewards],
+            Position::counted(2)
+        );
 
         // A stream this build has no name for is a divergence, not a key to
         // skip: it means the game keeps a stream the simulator will never be
@@ -1156,6 +1201,21 @@ mod tests {
         // Including one that is a run stream wearing the player prefix.
         let misfiled = with("rng", json!({"player.Shuffle": 1}));
         assert!(parse(&misfiled).is_err());
+
+        // A build that saves an `Rng` whole sends the record, and the words
+        // come through beside the count. A build that saves the count alone
+        // sends the number above, so both shapes reach the same type.
+        let stateful = with(
+            "rng",
+            json!({"Shuffle": {"counter": 4, "s0": 1, "s1": 2, "s2": 3, "s3": 4}}),
+        );
+        assert_eq!(
+            parse(&stateful).unwrap().rng.run[&RunRngType::Shuffle],
+            Position {
+                counter: 4,
+                words: Some([1, 2, 3, 4]),
+            }
+        );
     }
 
     /// A field the mod adds is a failure, not a field that is dropped.

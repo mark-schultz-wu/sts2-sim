@@ -388,33 +388,10 @@ impl sts2_core::Rules for V0_107_1 {
         &generated::runstate::RunRngType::ALL
     }
 
-    fn niche_rng() -> Self::RunRngType {
-        generated::runstate::RunRngType::Niche
-    }
-
-    fn monster_ai_rng() -> Self::RunRngType {
-        generated::runstate::RunRngType::MonsterAi
-    }
-
-    fn shuffle_rng() -> Self::RunRngType {
-        generated::runstate::RunRngType::Shuffle
-    }
-
-    fn up_front_rng() -> Self::RunRngType {
-        generated::runstate::RunRngType::UpFront
-    }
-
-    fn unknown_map_rng() -> Self::RunRngType {
-        generated::runstate::RunRngType::UnknownMapPoint
-    }
-
     fn player_rng_types() -> &'static [Self::PlayerRngType] {
         &generated::runstate::PlayerRngType::ALL
     }
 
-    fn rewards_rng() -> Self::PlayerRngType {
-        generated::runstate::PlayerRngType::Rewards
-    }
     fn enemy_side() -> Self::CombatSide {
         generated::runstate::CombatSide::Enemy
     }

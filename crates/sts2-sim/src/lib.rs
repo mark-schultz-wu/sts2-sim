@@ -10,6 +10,7 @@ pub mod map;
 mod reward;
 pub mod rng;
 pub mod run;
+mod stream;
 
 pub use combat::Error;
 pub use engine::Sim;

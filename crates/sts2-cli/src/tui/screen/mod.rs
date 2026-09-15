@@ -144,8 +144,13 @@ fn run_strip<V: sts2_content_wire::WireContentVersion>(
     }
 
     if rng {
-        let draws: u32 =
-            observed.rng.run.values().sum::<u32>() + observed.rng.player.values().sum::<u32>();
+        let draws: u32 = observed.rng.run.values().map(|at| at.counter).sum::<u32>()
+            + observed
+                .rng
+                .player
+                .values()
+                .map(|at| at.counter)
+                .sum::<u32>();
         spans.push(Span::raw("   "));
         spans.push(Span::styled(format!("rng {draws}"), theme::dim()));
     }

@@ -1,21 +1,22 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CombatId, Counters, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules,
-    SideKinds, TurnPhaseKinds,
+    CombatId, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules,
+    RunStreamKinds, SideKinds, TurnPhaseKinds,
 };
 
 use super::live::{CardIds, CardInstance, Live};
-use super::{Error, encounter, monster, pile, relic, stream};
+use super::{Error, encounter, monster, pile, relic};
 use crate::run::HeldRelic;
+use crate::stream::Streams;
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
 const HAND_SIZE: usize = 5;
 
 /// The fight this run opens on the encounter it just travelled into.
 ///
-/// Takes the run as observed and gives back the fight and the draw counts it
-/// consumed, without touching either. Entering a room is one transition, and a
+/// Takes the run as observed and gives back the fight and the streams it drew
+/// from, without touching either. Entering a room is one transition, and a
 /// fight that cannot be built must leave the run where it stood.
 pub(crate) fn enter<V: Rules>(
     raw_seed: u32,
@@ -23,13 +24,13 @@ pub(crate) fn enter<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     observation: &Observation<V>,
+    streams: &Streams<V>,
     relics: &mut [HeldRelic<V>],
-) -> Result<(Live<V>, Counters<V>), Error> {
-    let mut counters = observation.rng.clone();
+) -> Result<(Live<V>, Streams<V>), Error> {
+    let mut streams = streams.clone();
 
     let monsters = encounter::opening::<V>(raw_seed, observation.floor, encounter)?;
-    let enemies =
-        monster::initialize::<V>(raw_seed, ascension, encounter, &mut counters, &monsters)?;
+    let enemies = monster::initialize::<V>(ascension, encounter, &mut streams, &monsters)?;
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.
     let mut creatures = Vec::with_capacity(enemies.creatures.len() + 1);
@@ -74,10 +75,10 @@ pub(crate) fn enter<V: Rules>(
     }
     relic::turn_starting::<V>(relics, turn);
 
-    let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
+    let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
     let drawn = hand_size::<V>(relics, turn);
     let piles = pile::shuffle(&mut shuffle, deck).deal(drawn);
-    stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
+    streams.record(V::RunRngType::SHUFFLE, shuffle);
 
     let mut hand = piles.hand().to_vec();
     upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));
@@ -108,7 +109,7 @@ pub(crate) fn enter<V: Rules>(
             card_ids,
             asking: None,
         },
-        counters,
+        streams,
     ))
 }
 

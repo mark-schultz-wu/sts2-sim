@@ -10,6 +10,14 @@ pub struct MegaRng {
     counter: i32,
 }
 
+impl MegaRng {
+    /// The generator's own four words, which is what the game saves beside the
+    /// draw count.
+    pub fn words(&self) -> [u64; 4] {
+        self.s
+    }
+}
+
 impl GameRng for MegaRng {
     type Int = i32;
 

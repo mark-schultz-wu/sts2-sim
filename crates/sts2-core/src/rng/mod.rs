@@ -48,8 +48,16 @@ pub trait GameRng: Sized {
 
     /// Seeded by mixing in a name, the way the game names its streams. Getting
     /// the mix wrong draws from a real stream that is the wrong one.
+    ///
+    /// For the streams a run keeps, [`GameRng::for_stream`] says the same thing
+    /// without a name to spell and without hashing it again.
     fn named(seed: u32, name: &str) -> Self {
         Self::new(seed.wrapping_add(name_hash(name) as u32))
+    }
+
+    /// Seeded from one of the streams a build names, at counter zero.
+    fn for_stream(seed: u32, stream: impl crate::StreamKinds) -> Self {
+        Self::new(seed.wrapping_add(stream.seed_offset()))
     }
 
     /// A stream already advanced to `counter`, equal to one drawn there.
@@ -247,22 +255,70 @@ const INCR_DOUBLE: f64 = 1.110_223_024_625_156_5e-16;
 /// Public because a stream is not always named through [`GameRng::named`]. An
 /// event mixes its own id in beside the player's slot. That sum is the seed, so
 /// a caller needs the number and not a stream built from it.
-pub fn name_hash(s: &str) -> i32 {
-    let units: Vec<u16> = s.encode_utf16().collect();
+///
+/// A `const fn`. The generated stream tables hash their names at compile time.
+pub const fn name_hash(s: &str) -> i32 {
+    let bytes = s.as_bytes();
     let mut a: i32 = 352654597;
     let mut b: i32 = a;
+    let mut at = 0;
+    let mut unit = 0;
 
-    let mut i = 0;
-    while i < units.len() {
-        a = ((a << 5).wrapping_add(a)) ^ units[i] as i32;
-        if i == units.len() - 1 {
-            break;
+    while at < bytes.len() {
+        let (code, width) = codepoint(bytes, at);
+        at += width;
+
+        // Above the basic plane a codepoint is two units, and both are folded.
+        let (units, count) = if code < 0x1_0000 {
+            ([code, 0], 1)
+        } else {
+            let rest = code - 0x1_0000;
+            ([0xD800 | (rest >> 10), 0xDC00 | (rest & 0x3FF)], 2)
+        };
+
+        let mut taken = 0;
+        while taken < count {
+            // Even units go to one lane, odd units to the other.
+            if unit % 2 == 0 {
+                a = ((a << 5).wrapping_add(a)) ^ units[taken] as i32;
+            } else {
+                b = ((b << 5).wrapping_add(b)) ^ units[taken] as i32;
+            }
+            unit += 1;
+            taken += 1;
         }
-        b = ((b << 5).wrapping_add(b)) ^ units[i + 1] as i32;
-        i += 2;
     }
 
     a.wrapping_add(b.wrapping_mul(1566083941))
+}
+
+/// The codepoint UTF-8 spells at `at`, and how many bytes it took.
+///
+/// `str::chars` is not a const method, and the hash above is evaluated at
+/// compile time for the stream names. The input is a `&str`, so the encoding is
+/// already known to be well formed and there is nothing here to reject.
+const fn codepoint(bytes: &[u8], at: usize) -> (u32, usize) {
+    let first = bytes[at] as u32;
+    if first < 0x80 {
+        (first, 1)
+    } else if first < 0xE0 {
+        (((first & 0x1F) << 6) | (bytes[at + 1] as u32 & 0x3F), 2)
+    } else if first < 0xF0 {
+        (
+            ((first & 0x0F) << 12)
+                | ((bytes[at + 1] as u32 & 0x3F) << 6)
+                | (bytes[at + 2] as u32 & 0x3F),
+            3,
+        )
+    } else {
+        (
+            ((first & 0x07) << 18)
+                | ((bytes[at + 1] as u32 & 0x3F) << 12)
+                | ((bytes[at + 2] as u32 & 0x3F) << 6)
+                | (bytes[at + 3] as u32 & 0x3F),
+            4,
+        )
+    }
 }
 
 /// The number a run's streams are seeded from.
@@ -291,5 +347,46 @@ mod seeding {
             stream_seed(&Seed::new("ABCDEF").unwrap()),
             stream_seed(&Seed::new("ABCDEG").unwrap())
         );
+    }
+
+    /// The const hash decodes UTF-16 itself. This is the same fold over
+    /// `encode_utf16`, which is what the game's own loop walks.
+    fn over_encoded_units(s: &str) -> i32 {
+        let mut a: i32 = 352654597;
+        let mut b: i32 = a;
+        for (at, unit) in s.encode_utf16().enumerate() {
+            if at % 2 == 0 {
+                a = ((a << 5).wrapping_add(a)) ^ unit as i32;
+            } else {
+                b = ((b << 5).wrapping_add(b)) ^ unit as i32;
+            }
+        }
+        a.wrapping_add(b.wrapping_mul(1566083941))
+    }
+
+    #[test]
+    fn the_const_hash_folds_the_units_encode_utf16_produces() {
+        for text in [
+            "",
+            "a",
+            "up_front",
+            "treasure_room_relics",
+            "ABCDEF",
+            // Two bytes, three bytes, and a surrogate pair, each next to an
+            // odd number of ASCII characters so both lanes see one.
+            "é",
+            "xé",
+            "日本語",
+            "x日",
+            "🂡",
+            "x🂡",
+            "a🂡é日z",
+        ] {
+            assert_eq!(
+                name_hash(text),
+                over_encoded_units(text),
+                "hashing {text:?}"
+            );
+        }
     }
 }

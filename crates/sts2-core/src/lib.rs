@@ -40,10 +40,11 @@ pub use content::{
     CharacterTable, ContentError, ContentVersion, Cost, DecisionHook, Drafted, Effect,
     EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Fight, Fixed,
     FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
-    MonsterSpawn, MonsterTable, MoveMachine, Played, PotionTable, PotionUsage, PowerAmount,
-    PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Rests, RewardRarity,
-    RoomKinds, Rules, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, StreamKinds,
-    Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,
+    MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerStreamKinds, PotionTable, PotionUsage,
+    PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Rests,
+    RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds,
+    SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds,
+    Version,
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;
@@ -52,10 +53,10 @@ pub use seed::Seed;
 
 pub use report::digest::{Digest, Section};
 pub use report::observation::{
-    ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, CombatId, Counters,
-    Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, Held, Intent, Map, NextMove,
-    NoNode, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption, Room, ShopCard,
-    Stack, Stock, Take, Undrinkable,
+    ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, CombatId, Creature, Entry,
+    EventOption, EventOptionKey, EventOptionKinds, Held, Intent, Map, NextMove, NoNode, Node,
+    Observation, Orbs, Playable, Position, Positions, Preview, Reachable, RestOption, Room,
+    ShopCard, Stack, Stock, Take, Undrinkable,
 };
 pub use report::question::{
     CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail, RewardKind,

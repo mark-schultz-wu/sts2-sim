@@ -10,16 +10,6 @@
 pub enum Error {
     #[error(transparent)]
     Content(#[from] sts2_core::ContentError),
-    #[error("the {stream} RNG counter is missing")]
-    MissingCounter { stream: &'static str },
-    #[error("the {stream} RNG counter is outside the supported range")]
-    CounterOutOfRange { stream: &'static str },
-    #[error("seeking the {stream} RNG failed")]
-    Seek {
-        stream: &'static str,
-        #[source]
-        source: sts2_core::rng::Error,
-    },
     #[error("combat has too many creatures to assign an id")]
     CreatureIdOverflow,
 }

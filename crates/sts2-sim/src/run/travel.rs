@@ -1,10 +1,14 @@
 //! Moving to a map point, and entering what waits there.
 
 use sts2_core::rng::GameRng;
-use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, StreamKinds};
+use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, RunStreamKinds};
 
 use super::State;
 use super::state::EncounterQueue;
+
+/// `TreasureRoom`'s normal relic-rarity weights.
+const COMMON_RELIC_CHANCE: f64 = 0.5;
+const UNCOMMON_RELIC_CHANCE: f64 = 0.33;
 
 /// What waits at a reachable map point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,16 +77,28 @@ impl<V: Rules> State<V> {
     pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Applied<V>, crate::combat::Error> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {
+            if kind == V::MapPointType::TREASURE {
+                let mut streams = self.streams().clone();
+                let roll = streams
+                    .run(V::RunRngType::TREASURE_ROOM_RELICS)
+                    .next_double();
+                let rarity = if roll < COMMON_RELIC_CHANCE {
+                    <super::Rarity<V> as sts2_core::RarityKinds>::COMMON
+                } else if roll < COMMON_RELIC_CHANCE + UNCOMMON_RELIC_CHANCE {
+                    <super::Rarity<V> as sts2_core::RarityKinds>::UNCOMMON
+                } else {
+                    <super::Rarity<V> as sts2_core::RarityKinds>::RARE
+                };
+                let relic = self.next_shared_relic(rarity);
+                self.enter_treasure(to, relic, streams);
+                return Ok(self.report());
+            }
             if kind != V::MapPointType::UNKNOWN {
                 unimplemented!("entering {destination:?}");
             }
             let (mut events_used, visited, mut odds) = self.event_state();
-            let stream = V::unknown_map_rng();
-            let counter = self.counters().run[&stream];
-            let mut rng = crate::rng::MegaRng::named(self.raw_seed(), stream.name());
-            rng.fast_forward(counter as i32)
-                .expect("a stored RNG counter moves forward");
-            let roll = rng.next_double() as f32;
+            let mut streams = self.streams().clone();
+            let roll = streams.run(V::RunRngType::UNKNOWN_MAP_POINT).next_double() as f32;
             let mut cumulative = 0.0;
             for probability in odds {
                 cumulative += probability;
@@ -112,7 +128,7 @@ impl<V: Rules> State<V> {
                     event,
                     state,
                     rng: event_rng,
-                    unknown_counter: rng.counter() as u32,
+                    streams,
                     events_used,
                     unknown_odds: odds,
                 },

@@ -115,7 +115,7 @@ public static class Observation
             ["deck"] = me.Deck.Cards.Select(Ident).ToList(),
             ["inCombat"] = CombatManager.Instance.IsInProgress,
             ["map"] = MapPosition(state),
-            ["rng"] = Counters(state, me),
+            ["rng"] = Positions(state, me),
         };
 
         Dictionary<string, object?>? room = Room(state, me);
@@ -993,21 +993,47 @@ public static class Observation
 
     /// <summary>All fifteen RNG streams: twelve run-level, three per-player.</summary>
     /// <remarks>
-    /// Two implementations can agree on every visible field while having
-    /// consumed different numbers of draws. That divergence is invisible in the
-    /// state and fatal three decisions later, so counters are compared directly.
+    /// <para>
+    /// Two implementations can agree on every visible field while standing at
+    /// different places in a stream. That divergence is invisible in the state
+    /// and fatal three decisions later, so the streams are compared directly.
+    /// </para>
+    /// <para>
+    /// A stream is written as its draw count where that is all this build
+    /// saves, and as the whole <c>SerializableRng</c> record where the build
+    /// saves one. Two shapes because two builds, not because two kinds of
+    /// stream.
+    /// </para>
     /// </remarks>
-    private static Dictionary<string, int> Counters(RunState state, Player me)
+    private static Dictionary<string, object> Positions(RunState state, Player me)
     {
-        var counters = new Dictionary<string, int>();
-        foreach (KeyValuePair<RunRngType, int> c in GameApi.RunRngCounters(state))
+        var positions = new Dictionary<string, object>();
+        foreach (KeyValuePair<RunRngType, RngPosition> c in GameApi.RunRngCounters(state))
         {
-            counters[c.Key.ToString()] = c.Value;
+            positions[c.Key.ToString()] = Standing(c.Value);
         }
-        foreach (KeyValuePair<PlayerRngType, int> c in GameApi.PlayerRngCounters(me))
+        foreach (KeyValuePair<PlayerRngType, RngPosition> c in GameApi.PlayerRngCounters(me))
         {
-            counters["player." + c.Key] = c.Value;
+            positions["player." + c.Key] = Standing(c.Value);
         }
-        return counters;
+        return positions;
+    }
+
+    /// <summary>One stream, as the count alone or as the whole record.</summary>
+    private static object Standing(RngPosition at)
+    {
+        if (at.State == null)
+        {
+            return at.Counter;
+        }
+
+        return new Dictionary<string, object>
+        {
+            ["counter"] = at.Counter,
+            ["s0"] = at.State[0],
+            ["s1"] = at.State[1],
+            ["s2"] = at.State[2],
+            ["s3"] = at.State[3],
+        };
     }
 }
