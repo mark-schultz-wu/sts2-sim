@@ -13,7 +13,8 @@ use num_traits::Zero;
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
-    EffectResolution, Fight, Holding, Modify, PowerAmount, PowerTable, Rules, SideKinds, Stack,
+    EffectResolution, Fight, HandIndex, Holding, Modify, PowerAmount, PowerTable, Rules, SideKinds,
+    Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -610,6 +611,40 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             );
         }
         var::<V>(held, key, &self.live.creatures)
+    }
+
+    fn upgraded(&self) -> bool {
+        self.playing
+            .unwrap_or_else(|| unimplemented!("the upgrade of no card being played"))
+            .ident
+            .upgrade
+            != 0
+    }
+
+    fn select_from_hand(&mut self, count: usize) -> Vec<HandIndex> {
+        // `FromHand` reads the pile it selects from, and the card being played
+        // is not in it: the play took it out before the card acted.
+        if self.live.hand.len() > count {
+            unimplemented!("a card selection the fight has to stop and ask");
+        }
+        (0..self.live.hand.len())
+            .map(|at| {
+                let at = u8::try_from(at)
+                    .ok()
+                    .and_then(|at| HandIndex::try_new(at).ok());
+                at.unwrap_or_else(|| unimplemented!("a hand too large to number"))
+            })
+            .collect()
+    }
+
+    fn transform_in_hand(&mut self, at: HandIndex, into: CardIdent<V>) {
+        // `Transform` takes the original out and puts the replacement where it
+        // stood, in the pile it stood in.
+        let at = usize::from(at.get());
+        let Some(held) = self.live.hand.get_mut(at) else {
+            unimplemented!("a card transformed where the hand holds none");
+        };
+        *held = CardInstance::new(into);
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {

@@ -62,9 +62,22 @@ pub(super) fn computed_target(card: TokenCard, powers: &[sts2_core::Stack<V>]) -
 
 pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) {
     match card {
+        TokenCard::MinionStrike => minion_strike(fight),
         TokenCard::SovereignBlade => sovereign_blade(fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
+}
+
+/// `MinionStrike`. Deal damage, then draw.
+fn minion_strike<F: Fight<V>>(fight: &mut F) {
+    let target = fight.target();
+    let attack = fight.resolve(Effect::Attack {
+        dealer: fight.actor(),
+        target,
+        damage: Amount::Var(CardVar::Damage),
+    });
+    fight.apply(attack);
+    fight.draw(fight.var(CardVar::Cards));
 }
 
 /// `SovereignBlade`. Deal its damage, as many times as it repeats.

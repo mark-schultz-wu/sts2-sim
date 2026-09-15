@@ -31,6 +31,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) {
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::KnowThyPlace => common::know_thy_place(fight),
         RegentCard::RefineBlade => common::refine_blade(fight),
+        RegentCard::Begone => common::begone(fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
 }

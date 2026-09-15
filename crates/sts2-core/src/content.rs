@@ -845,6 +845,36 @@ pub trait Fight<V: ContentVersion> {
     /// [`Fight::resolve`] is where a number and its creatures arrive together.
     fn var(&self, key: V::CardVar) -> V::Number;
 
+    /// `IsUpgraded` for the card being played.
+    ///
+    /// A card whose play changes with its upgrade rather than by printing a
+    /// larger number. Begone upgrades the Minion Strike it creates, and
+    /// prints no number at all.
+    fn upgraded(&self) -> bool;
+
+    /// `CardSelectCmd.FromHand(prefs, filter: null, source: this)`, for a
+    /// selection of `count` cards.
+    ///
+    /// A hand holding no more than `count` is taken whole, and nothing is
+    /// asked. That is the command's own short circuit for a choice that is
+    /// not one. An empty hand selects nothing.
+    ///
+    /// The card being played is not in the hand to select. It left for the
+    /// play pile before its own play began.
+    ///
+    /// # Panics
+    ///
+    /// A hand larger than the selection, which is a question. A fight has
+    /// nowhere to stop and ask one yet.
+    fn select_from_hand(&mut self, count: usize) -> Vec<crate::HandIndex>;
+
+    /// `CardCmd.Transform(original, replacement)`.
+    ///
+    /// The replacement takes the original's place: the same pile, at the same
+    /// index. It belongs to whoever owned the original, which is the creature
+    /// acting.
+    fn transform_in_hand(&mut self, at: crate::HandIndex, into: crate::CardIdent<V>);
+
     /// `ForgeCmd.Forge`: raise a number on every copy of one card.
     ///
     /// Every pile, the exhaust pile included, and one copy is created in hand

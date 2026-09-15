@@ -1,6 +1,6 @@
 //! The Regent's common cards.
 
-use sts2_core::{Amount, Effect, EffectResolution, Fight, PowerAmount};
+use sts2_core::{Amount, CardIdent, Effect, EffectResolution, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
@@ -49,6 +49,23 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
         Power::BlockNextTurnPower,
         PowerAmount::Counted(next_turn.amount()),
     );
+}
+
+/// `Begone`. Turn a card in hand into a Minion Strike.
+///
+/// The selection takes the hand itself while the hand holds one card, so this
+/// asks nothing there. An empty hand selects nothing and the card does
+/// nothing, which is `FirstOrDefault` finding none.
+///
+/// Upgraded, the Minion Strike it creates is upgraded with it. Begone prints
+/// no number for an upgrade to raise.
+pub(super) fn begone<F: Fight<V>>(fight: &mut F) {
+    let Some(&at) = fight.select_from_hand(1).first() else {
+        return;
+    };
+    let mut into = CardIdent::new(Cards::Token(TokenCard::MinionStrike));
+    into.upgrade = u8::from(fight.upgraded());
+    fight.transform_in_hand(at, into);
 }
 
 /// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.
