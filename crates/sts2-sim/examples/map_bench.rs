@@ -9,8 +9,9 @@ use std::time::Instant;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
+use sts2_core::Rules as _;
 use sts2_core::rng::GameRng;
-use sts2_sim::map::{ActMap, Layout};
+use sts2_sim::map::ActMap;
 use sts2_sim::rng::MegaRng;
 
 struct CountingAllocator;
@@ -51,7 +52,8 @@ type V = V0_107_1;
 
 fn generate(seed: u64) -> ActMap<V> {
     let mut rng = MegaRng::new(seed);
-    ActMap::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::SwarmingElites).unwrap()
+    let layout = V::act_layout(sts2_content::v0_107_1::acts::Act::Overgrowth);
+    ActMap::generate(&mut rng, layout, AscensionLevel::SwarmingElites).unwrap()
 }
 
 fn main() {
