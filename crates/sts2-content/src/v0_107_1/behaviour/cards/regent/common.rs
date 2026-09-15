@@ -40,15 +40,15 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
         recipient: fight.actor(),
         amount: Amount::Var(CardVar::BlockNextTurn),
     });
-    let next_turn = next_turn
-        .amount()
-        .expect("one block gain resolves to one amount");
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(CardVar::Block),
     });
     fight.apply(block);
-    fight.apply_to_actor(Power::BlockNextTurnPower, PowerAmount::Counted(next_turn));
+    fight.apply_to_actor(
+        Power::BlockNextTurnPower,
+        PowerAmount::Counted(next_turn.amount()),
+    );
 }
 
 /// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.

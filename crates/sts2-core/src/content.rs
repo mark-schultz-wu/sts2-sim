@@ -894,8 +894,12 @@ pub enum Amount<V: ContentVersion> {
 
 /// What content behavior can read from an effect resolved by a fight.
 pub trait EffectResolution<V: ContentVersion> {
-    /// Its single modified amount, when resolution produced exactly one.
-    fn amount(&self) -> Option<V::Number>;
+    /// The amount the fight worked out, which every resolution has one of.
+    ///
+    /// Reading it is not applying it. A card that keeps a number for later,
+    /// such as Glitterstream's block, resolves the gain and stores this rather
+    /// than hand it to [`Fight::apply`].
+    fn amount(&self) -> V::Number;
 }
 
 /// What a power does to a number a fight works out.

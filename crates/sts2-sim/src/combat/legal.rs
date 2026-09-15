@@ -288,11 +288,9 @@ fn previewed<V: Rules>(
             let resolved = var
                 .modifier
                 .and_then(|modifier| super::board::effect_of::<V>(modifier, var.id, dealer, target))
-                .and_then(|effect| {
-                    super::board::resolve::<V>(creatures, Some(held), effect).amount()
-                });
-            // A number no hook reaches, and one whose target has left the
-            // fight, both print what the card prints.
+                .map(|effect| super::board::resolve::<V>(creatures, Some(held), effect).amount());
+            // A number no hook reaches, and a hit previewed against no target,
+            // both read what the card reads.
             let value = resolved.unwrap_or_else(|| super::board::var::<V>(held, var.id, creatures));
             (var.id, value)
         })

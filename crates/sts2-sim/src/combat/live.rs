@@ -114,7 +114,8 @@ impl<V: Rules> Live<V> {
         let player = self
             .creatures
             .iter()
-            .position(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER);
+            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+            .map(|creature| creature.id);
         for creature in &mut creatures {
             let (Some(player), Some(next)) = (player, &mut creature.next_move) else {
                 continue;

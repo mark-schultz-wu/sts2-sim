@@ -57,8 +57,14 @@ pub(super) struct Board<'a, V: Rules> {
 }
 
 /// An effect after a simulator fight's listeners have modified it.
+///
+/// One effect, because the game resolves one. A move that hits every opponent,
+/// and a card that hits the same one twice, are both a loop of resolve and
+/// apply. Each hit reaches the listeners the hit before it left behind, so a
+/// resolution standing for several of them freezes hooks the first landing
+/// changes.
 pub struct ResolvedEffect<V: Rules> {
-    effects: Vec<Resolved<V>>,
+    effect: Resolved<V>,
 }
 
 enum Resolved<V: Rules> {
@@ -73,11 +79,10 @@ enum Resolved<V: Rules> {
 }
 
 impl<V: Rules> EffectResolution<V> for ResolvedEffect<V> {
-    fn amount(&self) -> Option<V::Number> {
-        match self.effects.as_slice() {
-            [Resolved::Attack { damage, .. }] => Some(*damage),
-            [Resolved::GainBlock { amount, .. }] => Some(*amount),
-            _ => None,
+    fn amount(&self) -> V::Number {
+        match self.effect {
+            Resolved::Attack { damage, .. } => damage,
+            Resolved::GainBlock { amount, .. } => amount,
         }
     }
 }
@@ -314,16 +319,17 @@ pub(super) fn hooked<V: Rules>(
 /// One hit after every power on either side has had its say, which is
 /// `Hook.ModifyDamage`.
 ///
-/// `dealer` is the creature swinging and `at` is where the one it hits sits.
-/// Nothing caps a hit.
+/// `dealer` is the creature swinging and `target` the one it hits. A creature
+/// that has left the fight has no listeners left to ask, so it modifies
+/// nothing and the hit still works out. Nothing caps a hit.
 pub(crate) fn modified<V: Rules>(
     creatures: &[Creature<V>],
     dealer: CombatId,
-    at: usize,
+    target: CombatId,
     damage: V::Number,
 ) -> V::Number {
-    let dealer = creatures.iter().position(|creature| creature.id == dealer);
-    let sides = [(Some(at), Holding::Target), (dealer, Holding::Dealer)];
+    let at = |id: CombatId| creatures.iter().position(|creature| creature.id == id);
+    let sides = [(at(target), Holding::Target), (at(dealer), Holding::Dealer)];
     hooked::<V>(
         damage,
         sides.into_iter().flat_map(|(holder, holding)| {
@@ -349,17 +355,27 @@ pub(crate) fn modified<V: Rules>(
 /// One block gain after every power on the creature gaining it has had its
 /// say, which is `Hook.ModifyBlock`.
 ///
-/// The same hook whether the block is previewed or gained, as damage's is.
-pub(super) fn blocked<V: Rules>(creature: &Creature<V>, amount: V::Number) -> V::Number {
-    hooked::<V>(
-        amount,
-        creature.powers.iter().map(|held| {
-            <V as sts2_core::Hooks>::modify_hook(
-                held.listener(creature.side),
-                sts2_core::ModifyHook::Block,
-            )
-        }),
-    )
+/// The same hook whether the block is previewed or gained, as damage's is. A
+/// recipient that has left the fight modifies nothing, as a hit's creatures
+/// do.
+pub(super) fn blocked<V: Rules>(
+    creatures: &[Creature<V>],
+    recipient: CombatId,
+    amount: V::Number,
+) -> V::Number {
+    let held = creatures
+        .iter()
+        .find(|creature| creature.id == recipient)
+        .into_iter()
+        .flat_map(|creature| {
+            creature.powers.iter().map(|held| {
+                <V as sts2_core::Hooks>::modify_hook(
+                    held.listener(creature.side),
+                    sts2_core::ModifyHook::Block,
+                )
+            })
+        });
+    hooked::<V>(amount, held)
 }
 
 /// One effect after the fight's listeners have had their say.
@@ -373,34 +389,30 @@ pub(crate) fn resolve<V: Rules>(
     playing: Option<&CardInstance<V>>,
     effect: Effect<V>,
 ) -> ResolvedEffect<V> {
-    let at = |id: CombatId| creatures.iter().position(|creature| creature.id == id);
-    let effects = match effect {
+    let effect = match effect {
         Effect::Attack {
             dealer,
             target,
             damage,
-        } => at(target)
-            .filter(|&at| creatures[at].alive)
-            .map(|at| Resolved::Attack {
+        } => Resolved::Attack {
+            target,
+            damage: modified::<V>(
+                creatures,
+                dealer,
                 target,
-                damage: modified::<V>(
-                    creatures,
-                    dealer,
-                    at,
-                    carried::<V>(playing, creatures, damage),
-                ),
-            })
-            .into_iter()
-            .collect(),
-        Effect::GainBlock { recipient, amount } => at(recipient)
-            .map(|at| Resolved::GainBlock {
+                carried::<V>(playing, creatures, damage),
+            ),
+        },
+        Effect::GainBlock { recipient, amount } => Resolved::GainBlock {
+            recipient,
+            amount: blocked::<V>(
+                creatures,
                 recipient,
-                amount: blocked::<V>(&creatures[at], carried::<V>(playing, creatures, amount)),
-            })
-            .into_iter()
-            .collect(),
+                carried::<V>(playing, creatures, amount),
+            ),
+        },
     };
-    ResolvedEffect { effects }
+    ResolvedEffect { effect }
 }
 
 /// The number an effect carries, before any hook of its own runs.
@@ -516,35 +528,33 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn apply(&mut self, effect: Self::ResolvedEffect) {
-        for effect in effect.effects {
-            match effect {
-                Resolved::Attack { target, damage } => {
-                    // `CreatureCmd.Damage`: block first, then hit points, then
-                    // the death the hit caused. Resolution already ran hooks.
-                    let Some(at) = self.at(target) else { continue };
-                    if !self.live.creatures[at].alive {
-                        continue;
-                    }
-                    let zero = V::Number::zero();
-                    let blocked = self.live.creatures[at].block.min(damage).max(zero);
-                    self.live.creatures[at].block = self.live.creatures[at].block - blocked;
-                    let unblocked = (damage - blocked).max(zero);
-
-                    let hp = self.live.creatures[at].hp;
-                    let health_zero = V::Health::zero();
-                    let killed = hp > health_zero && unblocked >= V::Number::from(hp);
-                    self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
-                    if killed {
-                        self.kill(at);
-                    }
+        match effect.effect {
+            Resolved::Attack { target, damage } => {
+                // `CreatureCmd.Damage`: block first, then hit points, then the
+                // death the hit caused. Resolution already ran hooks. A target
+                // that has left the fight takes nothing, which is what the
+                // command does against a creature with no combat state.
+                let Some(at) = self.at(target) else { return };
+                if !self.live.creatures[at].alive {
+                    return;
                 }
-                Resolved::GainBlock { recipient, amount } => {
-                    let Some(at) = self.at(recipient) else {
-                        continue;
-                    };
-                    if amount > V::Number::zero() {
-                        self.live.creatures[at].block = self.live.creatures[at].block + amount;
-                    }
+                let zero = V::Number::zero();
+                let blocked = self.live.creatures[at].block.min(damage).max(zero);
+                self.live.creatures[at].block = self.live.creatures[at].block - blocked;
+                let unblocked = (damage - blocked).max(zero);
+
+                let hp = self.live.creatures[at].hp;
+                let health_zero = V::Health::zero();
+                let killed = hp > health_zero && unblocked >= V::Number::from(hp);
+                self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
+                if killed {
+                    self.kill(at);
+                }
+            }
+            Resolved::GainBlock { recipient, amount } => {
+                let Some(at) = self.at(recipient) else { return };
+                if amount > V::Number::zero() {
+                    self.live.creatures[at].block = self.live.creatures[at].block + amount;
                 }
             }
         }
