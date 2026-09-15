@@ -1,25 +1,22 @@
 //! The lifecycle shared by event implementations.
 
 use crate::rng::GameRng;
-use crate::{ContentVersion, Observation, Question, RewardKind, Room};
+use crate::{ContentVersion, Question, RewardKind, Room};
 
 /// The read-only run facts event behavior can inspect.
 pub trait EventView<V: ContentVersion> {
     fn act(&self) -> V::Count;
     fn gold(&self) -> V::Number;
     fn has_potion(&self) -> bool;
-}
-
-impl<V: ContentVersion> EventView<V> for Observation<V> {
-    fn act(&self) -> V::Count {
-        self.act
-    }
-    fn gold(&self) -> V::Number {
-        self.gold
-    }
-    fn has_potion(&self) -> bool {
-        !self.potions.is_empty()
-    }
+    /// Who the run is being played as.
+    ///
+    /// Not in an observation, which reports what a run holds rather than who
+    /// is holding it. The run itself is what answers an event's questions.
+    fn character(&self) -> V::Character;
+    /// The relics the run carries, in panel order.
+    fn relics(&self) -> impl Iterator<Item = V::Relic> + '_;
+    /// The deck as it stands, in deck order.
+    fn deck(&self) -> &[crate::CardIdent<V>];
 }
 
 /// The run operations an event is allowed to perform.

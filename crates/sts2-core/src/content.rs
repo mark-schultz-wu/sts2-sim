@@ -1241,6 +1241,11 @@ pub enum EventHook<V: ContentVersion> {
 /// One command requested by a content model in response to an event hook.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HookEffect<V: ContentVersion> {
+    /// `CardSelectCmd` over the run's upgradable cards.
+    UpgradeRandomDeckCards {
+        count: usize,
+        stream: V::RunRngType,
+    },
     /// `PlayerCmd.GainStars`.
     GainStars(V::Number),
     /// `PlayerCmd.GainEnergy`.

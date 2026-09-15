@@ -60,11 +60,8 @@ pub(crate) fn combat_starting<V: Rules>(relics: &mut [HeldRelic<V>]) -> Vec<Hook
 
 /// `AfterObtained`, which `RelicCmd.Obtain` gives the relic it just handed
 /// over and to no other.
-pub(crate) fn obtained<V: Rules>(held: &mut HeldRelic<V>) {
-    asks_for_nothing::<V>(
-        notify::<V>(std::slice::from_mut(held), EventHook::Obtained),
-        "as it is obtained",
-    );
+pub(crate) fn obtained<V: Rules>(held: &mut HeldRelic<V>) -> Vec<HookEffect<V>> {
+    notify::<V>(std::slice::from_mut(held), EventHook::Obtained)
 }
 
 /// `BeforeSideTurnStart` then, once the hand is dealt, `AfterSideTurnStart`.

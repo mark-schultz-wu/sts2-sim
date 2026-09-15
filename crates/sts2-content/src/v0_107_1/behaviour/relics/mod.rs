@@ -18,6 +18,7 @@ mod gremlin_horn;
 mod lead_paperweight;
 mod permafrost;
 mod pocketwatch;
+mod sand_castle;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
 
@@ -43,6 +44,7 @@ pub enum State {
     LeadPaperweight,
     Permafrost(permafrost::State),
     Pocketwatch(pocketwatch::State),
+    SandCastle,
 }
 
 /// Deliver a notification to one relic.
@@ -55,6 +57,7 @@ pub(crate) fn event_hook(state: &mut State, hook: EventHook<V>) -> Effects {
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
         State::Permafrost(state) => permafrost::event_hook(state, hook),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
+        State::SandCastle => sand_castle::event_hook(hook),
     }
 }
 
@@ -68,7 +71,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DivineRight
         | State::GremlinHorn
         | State::LeadPaperweight
-        | State::Permafrost(_) => Modify::Nothing,
+        | State::Permafrost(_)
+        | State::SandCastle => Modify::Nothing,
     }
 }
 
@@ -87,6 +91,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::LeadPaperweight => State::LeadPaperweight,
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
+            Relic::SandCastle => State::SandCastle,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }

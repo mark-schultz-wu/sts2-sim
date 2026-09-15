@@ -1,5 +1,6 @@
 //! Event behavior dispatch for this build.
 
+mod orobas;
 mod stone_of_all_time;
 mod tea_master;
 
@@ -10,12 +11,14 @@ use super::super::generated::events::Event;
 
 #[derive(Debug, Clone)]
 pub enum State {
+    Orobas(orobas::State),
     TeaMaster(tea_master::State),
 }
 
 pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
     match event {
         Event::StoneOfAllTime => stone_of_all_time::allowed(run),
+        Event::Orobas => orobas::Orobas.allowed(run),
         Event::TeaMaster => tea_master::TeaMaster.allowed(run),
         _ => unimplemented!("event eligibility: {event:?}"),
     }
@@ -27,6 +30,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
     rng: &mut R,
 ) -> State {
     match event {
+        Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
         Event::TeaMaster => State::TeaMaster(tea_master::TeaMaster.enter(run, rng)),
         _ => unimplemented!("entering event {event:?}"),
     }
@@ -34,6 +38,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
 
 pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
     match state {
+        State::Orobas(state) => orobas::Orobas.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
     }
 }
@@ -45,6 +50,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng, C: EventContext<V>>(
     rng: &mut R,
 ) -> EventFlow<V> {
     match state {
+        State::Orobas(state) => orobas::Orobas.choose(state, option, run, rng),
         State::TeaMaster(state) => tea_master::TeaMaster.choose(state, option, run, rng),
     }
 }
