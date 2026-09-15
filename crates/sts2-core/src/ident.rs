@@ -100,25 +100,38 @@ pub enum Pile {
 
 /// A card the fight named, and where it stood when it named it.
 ///
-/// [`CardId`] alone is an identity with no address, and finding one means
-/// reading every pile. Playing a card is the hottest path there is, so the
-/// place travels with the name.
+/// An id alone has no address, and finding one reads every pile. Playing a
+/// card is the hottest path there is, so the place travels with the name.
 ///
 /// The place is a hint and the id is the answer. Whoever acts on this looks
-/// where it says, and checks the id it finds there.
+/// where it says, and checks the id it finds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CardAt {
+pub struct CardAt<V: ContentVersion> {
+    id: CardId,
+    pile: Pile,
+    index: V::Index,
+}
+
+impl<V: ContentVersion> CardAt<V> {
+    /// The card a fight found at `index` of `pile`.
+    pub fn new(id: CardId, pile: Pile, index: V::Index) -> Self {
+        Self { id, pile, index }
+    }
+
     /// Which card this is, whatever has moved since.
-    pub id: CardId,
+    pub fn id(self) -> CardId {
+        self.id
+    }
+
     /// The pile it was in.
-    pub pile: Pile,
+    pub fn pile(self) -> Pile {
+        self.pile
+    }
+
     /// Where it sat in that pile.
-    ///
-    /// Wider than the byte [`CardId`] is. A pile is as large as the deck, and
-    /// a deck has no bound a hand or a roster has. The cards that copy a deck
-    /// take one into the thousands. This holds every pile a run can reach, and
-    /// a fight that outgrows it stops rather than wrap.
-    pub index: u16,
+    pub fn index(self) -> V::Index {
+        self.index
+    }
 }
 
 impl CardId {

@@ -866,7 +866,7 @@ pub trait Fight<V: ContentVersion> {
     /// Any selection that is a question, which a fight has nowhere to stop and
     /// ask. Those are a hand larger than an [`Selection::Exactly`], and every
     /// [`Selection::UpTo`].
-    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<crate::CardAt>;
+    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<crate::CardAt<V>>;
 
     /// `CardCmd.Transform(original, replacement)`.
     ///
@@ -876,7 +876,7 @@ pub trait Fight<V: ContentVersion> {
     ///
     /// The original is named by a [`crate::CardAt`], so this looks straight
     /// where it says rather than read the piles through.
-    fn transform(&mut self, card: crate::CardAt, into: crate::CardIdent<V>);
+    fn transform(&mut self, card: crate::CardAt<V>, into: crate::CardIdent<V>);
 
     /// `ForgeCmd.Forge`: raise a number on every copy of one card.
     ///
@@ -896,18 +896,21 @@ pub trait Fight<V: ContentVersion> {
 ///
 /// The two differ in more than arithmetic. `RequireManualConfirmation` is set
 /// when the counts differ, and that decides whether the selector asks at all.
+///
+/// The count is as wide as a pile, because the game writes "any number of
+/// them" as a count: `CardSelectorPrefs(prompt, 0, 999999999)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Selection {
     /// `CardSelectorPrefs(prompt, n)`, which sets both counts to `n`.
     ///
     /// Nothing has to be confirmed, so a pile holding no more than `n` is
     /// taken whole and the selector asks nothing.
-    Exactly(usize),
+    Exactly(nonmax::NonMaxUsize),
     /// `CardSelectorPrefs(prompt, 0, n)`, which sets the counts apart.
     ///
     /// Taking none is an answer, so the selector always asks. Even one card in
     /// the pile is a question, because leaving it is a choice.
-    UpTo(usize),
+    UpTo(nonmax::NonMaxUsize),
 }
 
 /// A combat operation before the fight's current listeners have modified it.
@@ -1238,6 +1241,19 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + num_traits::Unsigned
         + serde::Serialize
         + serde::de::DeserializeOwned
+        + std::fmt::Debug
+        + std::fmt::Display
+        + std::hash::Hash;
+
+    /// Where a card sits in one of a fight's piles.
+    ///
+    /// Named here so the repository picks the width once. A pile is as large
+    /// as the deck. The cards that copy a deck take one into the thousands, so
+    /// this is not the byte an id is.
+    ///
+    /// Not [`ContentVersion::Count`]. A count is a quantity a card prints.
+    type Index: num_traits::PrimInt
+        + num_traits::Unsigned
         + std::fmt::Debug
         + std::fmt::Display
         + std::hash::Hash;

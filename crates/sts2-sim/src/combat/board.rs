@@ -497,11 +497,6 @@ pub(crate) fn effect_of<V: Rules>(
     }
 }
 
-/// Where a card sits in its pile, as a [`CardAt`] carries it.
-fn spot(index: usize) -> u16 {
-    u16::try_from(index).unwrap_or_else(|_| unimplemented!("a pile deeper than a fight can number"))
-}
-
 /// The player, which every fight has one of.
 pub(super) fn player<V: Rules>(creatures: &[Creature<V>]) -> CombatId {
     creatures
@@ -626,30 +621,30 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             != 0
     }
 
-    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<CardAt> {
+    fn select_cards_from_hand(&mut self, select: Selection) -> Vec<CardAt<V>> {
         // `FromHand` reads the pile it selects from, and the card being played
         // is not in it: the play took it out before the card acted.
         match select {
-            Selection::Exactly(count) if self.live.hand.len() <= count => {}
+            Selection::Exactly(count) if self.live.hand.len() <= count.get() => {}
             _ => unimplemented!("a card selection the fight has to stop and ask"),
         }
         self.live
             .hand
             .iter()
             .enumerate()
-            .map(|(index, held)| CardAt {
-                id: held.id,
-                pile: Pile::Hand,
-                index: spot(index),
+            .map(|(index, held)| {
+                let index = num_traits::NumCast::from(index)
+                    .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+                CardAt::new(held.id, Pile::Hand, index)
             })
             .collect()
     }
 
-    fn transform(&mut self, card: CardAt, into: CardIdent<V>) {
+    fn transform(&mut self, card: CardAt<V>, into: CardIdent<V>) {
         // A new model for the replacement, so a new id. The original's own is
         // gone with it.
         let id = self.live.card_ids.mint();
-        let pile = match card.pile {
+        let pile = match card.pile() {
             Pile::Hand => &mut self.live.hand,
             Pile::Draw => &mut self.live.draw,
             Pile::Discard => &mut self.live.discard,
@@ -657,8 +652,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         };
         // `Transform` puts the replacement where the original stood, in the
         // pile it stood in. The place came with the name, so this looks once.
-        let held = pile.get_mut(usize::from(card.index));
-        let Some(held) = held.filter(|held| held.id == card.id) else {
+        let at: usize = num_traits::NumCast::from(card.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
+        let held = pile.get_mut(at);
+        let Some(held) = held.filter(|held| held.id == card.id()) else {
             unimplemented!("a card transformed after the fight moved it");
         };
         *held = CardInstance::new(into, id);
