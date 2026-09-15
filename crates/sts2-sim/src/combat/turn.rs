@@ -8,7 +8,9 @@
 //! leaves the fight where it stood.
 
 use crate::rng::MegaRng;
-use sts2_core::{CardTable, CombatId, Counters, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
+use sts2_core::{
+    CardTable, CombatId, Counters, PowerAmount, Rules, RunRng, SideKinds, TurnPhaseKinds,
+};
 
 use super::board::{Board, draw};
 use super::live::Live;
@@ -29,9 +31,14 @@ pub(crate) fn end<V: Rules>(
     let mut relics = relics.to_vec();
     let mut skipping = std::mem::take(&mut next.skip_tick);
     let mut counters = counters.clone();
-    let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
-    let mut ai = stream::seek(raw_seed, &counters, V::monster_ai_rng(), "monster_ai")?;
-    let mut niche = stream::seek(raw_seed, &counters, V::niche_rng(), "niche")?;
+    let mut shuffle = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Shuffle), "shuffle")?;
+    let mut ai = stream::seek(
+        raw_seed,
+        &counters,
+        V::run_rng(RunRng::MonsterAi),
+        "monster_ai",
+    )?;
+    let mut niche = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Niche), "niche")?;
 
     turn_end(&mut next);
     flush_hand(&mut next);
@@ -78,9 +85,19 @@ pub(crate) fn end<V: Rules>(
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
-    stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
-    stream::record(&mut counters, V::monster_ai_rng(), "monster_ai", &ai)?;
-    stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
+    stream::record(
+        &mut counters,
+        V::run_rng(RunRng::Shuffle),
+        "shuffle",
+        &shuffle,
+    )?;
+    stream::record(
+        &mut counters,
+        V::run_rng(RunRng::MonsterAi),
+        "monster_ai",
+        &ai,
+    )?;
+    stream::record(&mut counters, V::run_rng(RunRng::Niche), "niche", &niche)?;
     next.skip_tick = skipping;
     if won {
         relic::combat_ended::<V>(&mut relics);

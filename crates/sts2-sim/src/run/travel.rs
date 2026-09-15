@@ -1,10 +1,14 @@
 //! Moving to a map point, and entering what waits there.
 
 use sts2_core::rng::GameRng;
-use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, StreamKinds};
+use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, RunRng, StreamKinds};
 
 use super::State;
 use super::state::EncounterQueue;
+
+/// `TreasureRoom`'s normal relic-rarity weights.
+const COMMON_RELIC_CHANCE: f64 = 0.5;
+const UNCOMMON_RELIC_CHANCE: f64 = 0.33;
 
 /// What waits at a reachable map point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,11 +77,29 @@ impl<V: Rules> State<V> {
     pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Applied<V>, crate::combat::Error> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {
+            if kind == V::MapPointType::TREASURE {
+                let stream = V::run_rng(RunRng::TreasureRoomRelics);
+                let counter = self.counters().run[&stream];
+                let mut rng = crate::rng::MegaRng::named(self.raw_seed(), stream.name());
+                rng.fast_forward(counter as i32)
+                    .expect("a stored RNG counter moves forward");
+                let roll = rng.next_double();
+                let rarity = if roll < COMMON_RELIC_CHANCE {
+                    <super::Rarity<V> as sts2_core::RarityKinds>::COMMON
+                } else if roll < COMMON_RELIC_CHANCE + UNCOMMON_RELIC_CHANCE {
+                    <super::Rarity<V> as sts2_core::RarityKinds>::UNCOMMON
+                } else {
+                    <super::Rarity<V> as sts2_core::RarityKinds>::RARE
+                };
+                let relic = self.next_shared_relic(rarity);
+                self.enter_treasure(to, relic, rng.counter() as u32);
+                return Ok(self.report());
+            }
             if kind != V::MapPointType::UNKNOWN {
                 unimplemented!("entering {destination:?}");
             }
             let (mut events_used, visited, mut odds) = self.event_state();
-            let stream = V::unknown_map_rng();
+            let stream = V::run_rng(RunRng::UnknownMapPoint);
             let counter = self.counters().run[&stream];
             let mut rng = crate::rng::MegaRng::named(self.raw_seed(), stream.name());
             rng.fast_forward(counter as i32)

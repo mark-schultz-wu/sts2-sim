@@ -8,8 +8,9 @@ use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{
     ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
-    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, Question, Reachable,
-    RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, Seed, Table, TakeReward,
+    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, PlayerRng, Question,
+    Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, RunRng, Seed,
+    Table, TakeReward,
 };
 
 use crate::combat::Error;
@@ -164,6 +165,10 @@ enum Phase<V: Rules> {
         state: V::EventState,
         rng: MegaRng,
     },
+    Treasure {
+        relic: V::Relic,
+        finished: bool,
+    },
 }
 
 impl<V: Rules> State<V> {
@@ -210,7 +215,7 @@ impl<V: Rules> State<V> {
             smallvec::smallvec![0; V::run_rng_types().len()];
         let up_front_at = V::run_rng_types()
             .iter()
-            .position(|stream| *stream == V::up_front_rng())
+            .position(|stream| *stream == V::run_rng(RunRng::UpFront))
             .expect("up-front is a run RNG stream");
         run_counters[up_front_at] = up_front.counter() as u32;
 
@@ -279,7 +284,10 @@ impl<V: Rules> State<V> {
     pub(super) fn fight(&self) -> Option<&crate::combat::Live<V>> {
         match &self.phase {
             Phase::Combat(live) => Some(live),
-            Phase::Neow { .. } | Phase::Rewards { .. } | Phase::Event { .. } => None,
+            Phase::Neow { .. }
+            | Phase::Rewards { .. }
+            | Phase::Event { .. }
+            | Phase::Treasure { .. } => None,
         }
     }
 
@@ -361,6 +369,14 @@ impl<V: Rules> State<V> {
         relic
     }
 
+    /// The next relic in the shared bag, without dealing it yet.
+    pub(super) fn next_shared_relic(&self, rarity: Rarity<V>) -> V::Relic {
+        self.shared
+            .opening
+            .shared_relics
+            .front(rarity, &self.dealt_relics)
+    }
+
     /// Which act the run stands in.
     ///
     /// One, until the simulator leaves it. An act's own boss is the way out and
@@ -391,13 +407,30 @@ impl<V: Rules> State<V> {
         self.visited.push(to);
         let at = V::run_rng_types()
             .iter()
-            .position(|kind| *kind == V::unknown_map_rng())
+            .position(|kind| *kind == V::run_rng(RunRng::UnknownMapPoint))
             .expect("unknown-map is a run RNG stream");
         self.rngs.run[at] = unknown_counter;
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
         self.visited_events.push(event);
         self.phase = Phase::Event { state, rng };
+    }
+
+    /// Enter a treasure room after resolving its relic and stream counter.
+    pub(super) fn enter_treasure(&mut self, to: Coord, relic: V::Relic, counter: u32) {
+        self.floor = self.floor + num_traits::one();
+        self.at = to;
+        self.visited.push(to);
+        let at = V::run_rng_types()
+            .iter()
+            .position(|kind| *kind == V::run_rng(RunRng::TreasureRoomRelics))
+            .expect("treasure-room relics is a run RNG stream");
+        self.rngs.run[at] = counter;
+        self.dealt_relics.push(relic);
+        self.phase = Phase::Treasure {
+            relic,
+            finished: false,
+        };
     }
 
     pub(super) fn enter_combat(
@@ -428,7 +461,7 @@ impl<V: Rules> State<V> {
             self.rngs.run[at] = counter;
         }
         for (kind, counter) in counters.player {
-            if kind == V::rewards_rng() {
+            if kind == V::player_rng(PlayerRng::Rewards) {
                 continue;
             }
             let at = V::player_rng_types()
@@ -451,7 +484,10 @@ impl<V: Rules> State<V> {
             .copied()
             .zip(self.rngs.player.iter().copied())
             .collect();
-        player.insert(V::rewards_rng(), self.rngs.rewards.counter() as u32);
+        player.insert(
+            V::player_rng(PlayerRng::Rewards),
+            self.rngs.rewards.counter() as u32,
+        );
         Counters { run, player }
     }
 
@@ -572,6 +608,22 @@ impl<V: Rules> State<V> {
     }
 
     pub(crate) fn choose(&mut self, index: u8) -> Result<Applied<V>, Error> {
+        if let Phase::Treasure { relic, finished } = &mut self.phase {
+            if *finished {
+                unimplemented!("choosing from a finished treasure room");
+            }
+            match index {
+                0 => {
+                    let mut held = HeldRelic::new(*relic);
+                    crate::combat::obtained::<V>(&mut held);
+                    self.player.relics.push(held);
+                }
+                1 => {}
+                _ => unimplemented!("an option the treasure room does not offer"),
+            }
+            *finished = true;
+            return Ok(self.report());
+        }
         if matches!(self.phase, Phase::Event { .. }) {
             let room = match &self.phase {
                 Phase::Event { state, .. } => V::observe_event(state, self),
@@ -800,6 +852,33 @@ impl<V: Rules> State<V> {
                 false,
             ),
             Phase::Event { state, .. } => (None, Some(V::observe_event(state, self)), None, false),
+            Phase::Treasure { relic, finished } => {
+                let options = if *finished {
+                    Vec::new()
+                } else {
+                    vec![
+                        sts2_core::ChestOption {
+                            index: 0,
+                            take: sts2_core::Take::Relic(*relic),
+                            chosen: false,
+                        },
+                        sts2_core::ChestOption {
+                            index: 1,
+                            take: sts2_core::Take::Skip,
+                            chosen: false,
+                        },
+                    ]
+                };
+                (
+                    None,
+                    Some(Room::Treasure {
+                        finished: *finished,
+                        options,
+                    }),
+                    None,
+                    false,
+                )
+            }
         };
         // Where the player stands. A live fight holds it, because a card can
         // move it and the fight is resolved on a copy; anywhere else the run
@@ -813,7 +892,10 @@ impl<V: Rules> State<V> {
                     alive: player.alive,
                 }
             }
-            Phase::Neow { .. } | Phase::Rewards { .. } | Phase::Event { .. } => Standing {
+            Phase::Neow { .. }
+            | Phase::Rewards { .. }
+            | Phase::Event { .. }
+            | Phase::Treasure { .. } => Standing {
                 hp: self.player.hp,
                 max_hp: self.player.max_hp,
                 alive: true,

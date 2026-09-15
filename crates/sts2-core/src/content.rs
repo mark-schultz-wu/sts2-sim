@@ -1860,29 +1860,34 @@ pub trait Rules: Hooks {
     /// Every run stream, in the order the game creates them.
     fn run_rng_types() -> &'static [Self::RunRngType];
 
-    /// The run stream consumed while the run is built.
-    fn up_front_rng() -> Self::RunRngType;
-
-    /// The stream that decides what an unknown map point becomes.
-    fn unknown_map_rng() -> Self::RunRngType;
+    /// Find a run stream by the job it performs.
+    fn run_rng(kind: RunRng) -> Self::RunRngType;
 
     /// Every per-player stream, in the order the game creates them.
     fn player_rng_types() -> &'static [Self::PlayerRngType];
 
-    /// The per-player stream card rewards draw from.
-    fn rewards_rng() -> Self::PlayerRngType;
+    /// Find a per-player stream by the job it performs.
+    fn player_rng(kind: PlayerRng) -> Self::PlayerRngType;
 
     /// The side a monster fights on.
     fn enemy_side() -> Self::CombatSide;
+}
 
-    /// The stream that rolls monster health.
-    fn niche_rng() -> Self::RunRngType;
+/// A run RNG stream, named for the rule that consumes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunRng {
+    MonsterAi,
+    Niche,
+    Shuffle,
+    TreasureRoomRelics,
+    UnknownMapPoint,
+    UpFront,
+}
 
-    /// The stream that chooses monster moves.
-    fn monster_ai_rng() -> Self::RunRngType;
-
-    /// The stream that shuffles a combat's draw pile.
-    fn shuffle_rng() -> Self::RunRngType;
+/// A per-player RNG stream, named for the rule that consumes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayerRng {
+    Rewards,
 }
 
 /// Which build a content module came from.

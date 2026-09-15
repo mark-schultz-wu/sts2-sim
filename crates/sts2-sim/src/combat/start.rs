@@ -2,7 +2,7 @@
 
 use sts2_core::{
     CombatId, Counters, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules,
-    SideKinds, TurnPhaseKinds,
+    RunRng, SideKinds, TurnPhaseKinds,
 };
 
 use super::live::{CardIds, CardInstance, Live};
@@ -74,10 +74,15 @@ pub(crate) fn enter<V: Rules>(
     }
     relic::turn_starting::<V>(relics, turn);
 
-    let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
+    let mut shuffle = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Shuffle), "shuffle")?;
     let drawn = hand_size::<V>(relics, turn);
     let piles = pile::shuffle(&mut shuffle, deck).deal(drawn);
-    stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
+    stream::record(
+        &mut counters,
+        V::run_rng(RunRng::Shuffle),
+        "shuffle",
+        &shuffle,
+    )?;
 
     let mut hand = piles.hand().to_vec();
     upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));

@@ -4,7 +4,7 @@
 //! runs through the board a card acts through. Whether it can be drunk at all
 //! is the belt's question, and the run asks it before this.
 
-use sts2_core::{CombatId, Counters, Rules};
+use sts2_core::{CombatId, Counters, Rules, RunRng};
 
 use super::board::Board;
 use super::live::Live;
@@ -24,8 +24,8 @@ pub(crate) fn drink<V: Rules>(
     let mut next = live.clone();
     let mut relics = relics.to_vec();
     let mut counters = counters.clone();
-    let mut shuffle = stream::seek(raw_seed, &counters, V::shuffle_rng(), "shuffle")?;
-    let mut niche = stream::seek(raw_seed, &counters, V::niche_rng(), "niche")?;
+    let mut shuffle = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Shuffle), "shuffle")?;
+    let mut niche = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Niche), "niche")?;
 
     let mut board = Board::for_card(
         &mut next,
@@ -40,8 +40,13 @@ pub(crate) fn drink<V: Rules>(
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = super::play::merged::<V>(&next.skip_tick, skipped);
-    stream::record(&mut counters, V::shuffle_rng(), "shuffle", &shuffle)?;
-    stream::record(&mut counters, V::niche_rng(), "niche", &niche)?;
+    stream::record(
+        &mut counters,
+        V::run_rng(RunRng::Shuffle),
+        "shuffle",
+        &shuffle,
+    )?;
+    stream::record(&mut counters, V::run_rng(RunRng::Niche), "niche", &niche)?;
     if won {
         relic::combat_ended::<V>(&mut relics);
     }

@@ -2,7 +2,7 @@
 
 use crate::rng::MegaRng;
 use sts2_core::rng::{Choices, GameRng};
-use sts2_core::{CombatId, Counters, Creature, ModelId, MoveMachine, Rules, SideKinds};
+use sts2_core::{CombatId, Counters, Creature, ModelId, MoveMachine, Rules, RunRng, SideKinds};
 
 use super::Error;
 use super::live::Live;
@@ -64,8 +64,13 @@ pub(crate) fn initialize<V: Rules>(
     counters: &mut Counters<V>,
     monsters: &[V::Monster],
 ) -> Result<Roster<V>, Error> {
-    let mut niche = super::stream::seek(raw_seed, counters, V::niche_rng(), "niche")?;
-    let mut ai = super::stream::seek(raw_seed, counters, V::monster_ai_rng(), "monster_ai")?;
+    let mut niche = super::stream::seek(raw_seed, counters, V::run_rng(RunRng::Niche), "niche")?;
+    let mut ai = super::stream::seek(
+        raw_seed,
+        counters,
+        V::run_rng(RunRng::MonsterAi),
+        "monster_ai",
+    )?;
 
     // A fight the encounter builds nobody for is not a fight.
     let roster_size = u8::try_from(monsters.len())
@@ -118,8 +123,8 @@ pub(crate) fn initialize<V: Rules>(
         });
     }
 
-    super::stream::record(counters, V::niche_rng(), "niche", &niche)?;
-    super::stream::record(counters, V::monster_ai_rng(), "monster_ai", &ai)?;
+    super::stream::record(counters, V::run_rng(RunRng::Niche), "niche", &niche)?;
+    super::stream::record(counters, V::run_rng(RunRng::MonsterAi), "monster_ai", &ai)?;
     Ok(Roster {
         creatures,
         machines,
