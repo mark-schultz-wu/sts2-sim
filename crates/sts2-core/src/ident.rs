@@ -75,6 +75,35 @@ pub struct CardIdent<V: ContentVersion> {
     pub enchantment: Option<V::Enchantment>,
 }
 
+/// Which card instance a fight is talking about.
+///
+/// [`CardIdent`] says what a card is. This says which one. A fight moves its
+/// copies between piles, so a position names a card only until the next thing
+/// that touches one.
+///
+/// Minted per fight and never reused. A card transformed into another is a new
+/// card with a new id, as the game creates a new model for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct CardId(nonmax::NonMaxU8);
+
+impl CardId {
+    /// The card this number names, or [`OutOfRange`] for one no fight mints.
+    pub fn try_new(id: u8) -> Result<Self, OutOfRange> {
+        nonmax::NonMaxU8::new(id).map(Self).ok_or(OutOfRange)
+    }
+
+    /// The number it was minted as.
+    pub fn get(self) -> u8 {
+        self.0.get()
+    }
+}
+
+impl std::fmt::Display for CardId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl<V: ContentVersion> CardIdent<V> {
     /// A card as it comes out of a pool: nothing upgraded, nothing attached.
     pub const fn new(card: V::Card) -> CardIdent<V> {

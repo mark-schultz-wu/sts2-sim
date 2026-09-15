@@ -328,7 +328,10 @@ mod tests {
     type V = V0_107_1;
 
     fn card(card: Cards) -> CardInstance<V> {
-        CardInstance::new(CardIdent::new(card))
+        // One card per fixture fight, so one id is enough to tell it apart
+        // from the nothing beside it.
+        let id = sts2_core::CardId::try_new(0).expect("zero names a card");
+        CardInstance::new(CardIdent::new(card), id)
     }
 
     /// A player and one living enemy, which is the smallest fight.

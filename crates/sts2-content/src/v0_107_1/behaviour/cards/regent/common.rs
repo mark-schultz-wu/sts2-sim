@@ -60,12 +60,12 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
 /// Upgraded, the Minion Strike it creates is upgraded with it. Begone prints
 /// no number for an upgrade to raise.
 pub(super) fn begone<F: Fight<V>>(fight: &mut F) {
-    let Some(&at) = fight.select_from_hand(1).first() else {
+    let Some(&card) = fight.select_cards_from_hand(1).first() else {
         return;
     };
     let mut into = CardIdent::new(Cards::Token(TokenCard::MinionStrike));
     into.upgrade = u8::from(fight.upgraded());
-    fight.transform_in_hand(at, into);
+    fight.transform(card, into);
 }
 
 /// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.

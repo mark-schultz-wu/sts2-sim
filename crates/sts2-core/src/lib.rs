@@ -47,7 +47,7 @@ pub use content::{
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;
-pub use ident::{CardIdent, Coord, ModelId, OutOfRange};
+pub use ident::{CardId, CardIdent, Coord, ModelId, OutOfRange};
 pub use seed::Seed;
 
 pub use report::digest::{Digest, Section};

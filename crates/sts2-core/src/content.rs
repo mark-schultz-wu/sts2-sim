@@ -866,14 +866,18 @@ pub trait Fight<V: ContentVersion> {
     ///
     /// A hand larger than the selection, which is a question. A fight has
     /// nowhere to stop and ask one yet.
-    fn select_from_hand(&mut self, count: usize) -> Vec<crate::HandIndex>;
+    fn select_cards_from_hand(&mut self, count: usize) -> Vec<crate::CardId>;
 
     /// `CardCmd.Transform(original, replacement)`.
     ///
     /// The replacement takes the original's place: the same pile, at the same
     /// index. It belongs to whoever owned the original, which is the creature
     /// acting.
-    fn transform_in_hand(&mut self, at: crate::HandIndex, into: crate::CardIdent<V>);
+    ///
+    /// The original is named by id rather than by where it sits. A fight moves
+    /// cards between piles, so a position names a card only until the next
+    /// thing that touches one.
+    fn transform(&mut self, card: crate::CardId, into: crate::CardIdent<V>);
 
     /// `ForgeCmd.Forge`: raise a number on every copy of one card.
     ///
