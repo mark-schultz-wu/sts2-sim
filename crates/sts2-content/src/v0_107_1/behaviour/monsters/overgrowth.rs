@@ -47,6 +47,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::EyeWithTeeth => eye_with_teeth(move_id, fight),
         Monster::Byrdonis => byrdonis(move_id, fight),
         Monster::Mawler => mawler(move_id, fight),
+        Monster::PhrogParasite => phrog_parasite(move_id, fight),
         monster => unimplemented!("what {monster:?} does when it moves"),
     }
 }
@@ -90,8 +91,25 @@ const STICKY_CARDS: usize = 2;
 const TWIG_STICKY_CARDS: usize = 1;
 const GOOP_CARDS: usize = 1;
 
+/// How many Infections the Phrog Parasite leaves behind.
+const INFECTION_CARDS: usize = 3;
+
 /// The card every slime spits.
 const SLIMED: Cards = Cards::Status(StatusCard::Slimed);
+
+/// `PhrogParasite`. Infects the other side, or lashes it.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+fn phrog_parasite<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    match move_id {
+        MoveId::InfectMove => {
+            fight.give_cards(Cards::Status(StatusCard::Infection), INFECTION_CARDS)
+        }
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
 
 /// `LeafSlimeM`. Alternates a spit for two cards and a clump of damage.
 ///
