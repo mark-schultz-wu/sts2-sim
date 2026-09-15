@@ -1,13 +1,13 @@
 //! The Regent's common cards.
 
-use sts2_core::{Effect, Fight, PowerAmount};
+use sts2_core::{Amount, Effect, EffectResolution, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
-use super::super::{Number, Printed, V, raise};
+use super::super::{CardNumber, Number, V, raise};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
+pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     let changes: &[(CardVar, Number)] = match card {
         RegentCard::GuidingStar => &[(CardVar::Damage, 1), (CardVar::Cards, 1)],
         // `Begone` prints no number an upgrade raises. Upgraded, its own
@@ -22,22 +22,32 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
 pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
     let attack = fight.resolve(Effect::Attack {
+        dealer: fight.actor(),
         target,
-        damage: fight.var(CardVar::Damage),
+        damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
 }
 
 /// `Glitterstream`. Gain block now and after the next block clear.
+///
+/// The number the power carries runs through `Hook.ModifyBlock` first, which
+/// this card does itself rather than leave to the gain. It reads the hook
+/// before the block it gains lands, as the game's own order does.
 pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
+    let next_turn = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::BlockNextTurn),
+    });
     let block = fight.resolve(Effect::GainBlock {
-        amount: fight.var(CardVar::Block),
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
     });
     fight.apply(block);
     fight.apply_to_actor(
         Power::BlockNextTurnPower,
-        PowerAmount::Counted(fight.var(CardVar::BlockNextTurn)),
+        PowerAmount::Counted(next_turn.amount()),
     );
 }
 

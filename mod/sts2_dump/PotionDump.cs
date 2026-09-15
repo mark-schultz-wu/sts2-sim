@@ -49,20 +49,23 @@ public static class PotionDump
         var output = new StringBuilder();
 
         output.Append(Stamp.Header("potion"));
-        output.Append("# pool <pool> <potion>\n");
+        output.Append("# pool <pool> <index> <potion>\n");
         output.Append("# potion <id> <rarity> <usage> <target> ");
         output.Append("<canBeGeneratedInCombat> <passesCustomUsabilityCheck>\n");
 
         List<PotionModel> potions = AllPotions();
 
+        // The pool's own enumeration order, not the id order. A potion reward
+        // indexes into the pool after filtering by rarity, so sorting here
+        // would pick a different potion from the same draw.
         foreach (PotionPoolModel pool in ModelDb.AllPotionPools
             .OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
         {
-            foreach (string potion in pool.AllPotions
-                .Select(p => p.Id.Entry)
-                .OrderBy(id => id, StringComparer.Ordinal))
+            int index = 0;
+            foreach (PotionModel potion in pool.AllPotions)
             {
-                output.Append($"pool {pool.Id.Entry} {potion}\n");
+                output.Append($"pool {pool.Id.Entry} {index} {potion.Id.Entry}\n");
+                index++;
             }
         }
 

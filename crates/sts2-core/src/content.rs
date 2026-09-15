@@ -285,7 +285,7 @@ pub trait CardTable: Table {
     /// What the card says with nothing modifying it, which is
     /// [`crate::Preview::base`]. `Preview::vars` is these after the fight has
     /// had its say, and that is not static data.
-    fn vars(self) -> &'static [Printed<Self::Var, Self::Number>];
+    fn vars(self) -> &'static [CardNumber<Self::Var, Self::Number>];
 }
 
 /// An exact finite decimal as the game writes it.
@@ -349,7 +349,7 @@ mod card_number_tests {
 /// build generates the set as an enum. So a card asking for one it does not
 /// print is a compile error, not a lookup that finds nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Printed<K, N> {
+pub struct CardNumber<K, N> {
     pub id: K,
     /// The value with nothing modifying the card, upgrades and enchantment
     /// included.
@@ -361,6 +361,27 @@ pub struct Printed<K, N> {
     /// base alone, so an implementation that reads it and stops reports a
     /// number the game does not print. It has to run the card's own rule.
     pub calculated: bool,
+    /// Which of the fight's own hooks the number runs through.
+    ///
+    /// `DynamicVar`'s subclass decides it, and the key the number is filed
+    /// under says nothing. Sovereign Blade's block is a `CalculatedBlockVar`
+    /// named `CalculatedBlock`, and it runs the block hooks exactly as a
+    /// `BlockVar` named `Block` does.
+    pub modifier: Option<CardNumberModifier>,
+}
+
+/// What one printed number runs through before a card shows it.
+///
+/// `DynamicVar.UpdateCardPreview`, which each subclass overrides. The same
+/// hooks run when the card is played, so this is not a display rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CardNumberModifier {
+    /// `Hook.ModifyDamage`, against the creature the card is pointed at.
+    Damage,
+    /// The same, for the owner's Osty rather than the owner.
+    OstyDamage,
+    /// `Hook.ModifyBlock`, for the creature about to gain it.
+    Block,
 }
 
 /// The numbers a build's cards can print, as one set.
@@ -374,15 +395,6 @@ pub struct Printed<K, N> {
 pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
     /// Every key, once each.
     const ALL: &'static [Self];
-
-    /// The two keys the engine's own rules name.
-    ///
-    /// Damage and block are the printed numbers a fight modifies before a card
-    /// runs, through `Hook.ModifyDamage` and `Hook.ModifyBlock`. A preview has
-    /// to find them without naming a build. Every other key is named by the
-    /// ported behaviour that reads it.
-    const DAMAGE: Self;
-    const BLOCK: Self;
 
     /// The game's own key for it, which is what an observation carries.
     fn name(self) -> &'static str;
@@ -738,6 +750,12 @@ pub trait Fight<V: ContentVersion> {
     /// so this is not a question the card asks and then answers.
     fn target(&self) -> crate::CombatId;
 
+    /// The creature acting, which is `Owner.Creature`.
+    ///
+    /// The player for a card and the monster for a move. A card saying "gain"
+    /// names this creature as what it gains for.
+    fn actor(&self) -> crate::CombatId;
+
     /// The creatures across from whoever is acting, in command order.
     ///
     /// A command snapshots this list before its first effect lands. Each
@@ -745,7 +763,13 @@ pub trait Fight<V: ContentVersion> {
     /// one can change the listeners the next one reaches.
     fn opponents(&self) -> Vec<crate::CombatId>;
 
-    /// Run an effect through the listeners it names, without applying it.
+    /// Work an effect's number out and run it through the listeners the
+    /// effect names, without applying it.
+    ///
+    /// One step, so no half-worked-out number is observable. A card's variable
+    /// is worked out here, and the hooks run against the creatures the effect
+    /// already names. The caller reads the resolved amount, keeps it, applies
+    /// it, or any two of those.
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect;
 
     /// Apply an effect whose listeners have already had their say.
@@ -810,7 +834,15 @@ pub trait Fight<V: ContentVersion> {
     /// One of the numbers the card being played prints right now.
     ///
     /// This copy's own, not the table's. A fight writes on a card, so the card
-    /// that was forged twice prints more than the one beside it.
+    /// that was forged twice prints more than the one beside it. A
+    /// `CalculatedVar` is counted here, so this is what the card prints rather
+    /// than the base it was built with.
+    ///
+    /// # Panics
+    ///
+    /// A number that runs through hooks, which is every
+    /// [`CardNumberModifier`]. Those name creatures to run against, and
+    /// [`Fight::resolve`] is where a number and its creatures arrive together.
     fn var(&self, key: V::CardVar) -> V::Number;
 
     /// `ForgeCmd.Forge`: raise a number on every copy of one card.
@@ -827,21 +859,47 @@ pub trait Fight<V: ContentVersion> {
 }
 
 /// A combat operation before the fight's current listeners have modified it.
+///
+/// Every operation names the creatures it acts between. So resolving one is a
+/// single step: the number it carries is worked out, and the hooks the
+/// operation names run over it. Nothing in between is observable.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Effect<V: ContentVersion> {
     /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
     Attack {
+        dealer: crate::CombatId,
         target: crate::CombatId,
-        damage: V::Number,
+        damage: Amount<V>,
     },
-    /// `CreatureCmd.GainBlock(Owner.Creature, amount, cardPlay)`.
-    GainBlock { amount: V::Number },
+    /// `CreatureCmd.GainBlock(recipient, amount, cardPlay)`.
+    GainBlock {
+        recipient: crate::CombatId,
+        amount: Amount<V>,
+    },
+}
+
+/// The number an effect carries, before the fight works it out.
+///
+/// A card names one of its own variables. A monster or a relic hands over a
+/// number it already holds. The two differ in what resolution does first. A
+/// variable can be a `CalculatedVar`, which counts something in the live fight
+/// rather than reading the base it was built with.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Amount<V: ContentVersion> {
+    /// A number whoever asked already holds.
+    Number(V::Number),
+    /// One of the numbers on the card being played, by key.
+    Var(V::CardVar),
 }
 
 /// What content behavior can read from an effect resolved by a fight.
 pub trait EffectResolution<V: ContentVersion> {
-    /// Its single modified amount, when resolution produced exactly one.
-    fn amount(&self) -> Option<V::Number>;
+    /// The amount the fight worked out, which every resolution has one of.
+    ///
+    /// Reading it is not applying it. A card that keeps a number for later,
+    /// such as Glitterstream's block, resolves the gain and stores this rather
+    /// than hand it to [`Fight::apply`].
+    fn amount(&self) -> V::Number;
 }
 
 /// What a power does to a number a fight works out.
@@ -1430,7 +1488,7 @@ pub trait Rules: Hooks {
     fn lead_paperweight() -> Self::Relic;
 
     /// Apply a card's first upgrade to this combat copy's printed values.
-    fn upgrade_card(card: Self::Card, printed: &mut [Printed<Self::CardVar, Self::Number>]);
+    fn upgrade_card(card: Self::Card, numbers: &mut [CardNumber<Self::CardVar, Self::Number>]);
 
     /// What one card does when it is played, which is `CardModel.OnPlay`.
     ///
@@ -1524,7 +1582,7 @@ pub trait Rules: Hooks {
     fn calculated_card_var(
         card: Self::Card,
         key: Self::CardVar,
-        printed: &[Printed<Self::CardVar, Self::Number>],
+        numbers: &[CardNumber<Self::CardVar, Self::Number>],
         powers: &[crate::Stack<Self>],
     ) -> Self::Number;
 

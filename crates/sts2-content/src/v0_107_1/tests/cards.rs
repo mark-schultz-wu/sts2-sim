@@ -5,7 +5,7 @@ use super::super::{CARDS, VERSION};
 use super::{build, rows, wire};
 use crate::{Cost, Field};
 use sts2_core::CardVars;
-use sts2_core::{CardTable, Table};
+use sts2_core::{CardNumberModifier, CardTable, Table};
 
 /// The dump's `cost` and `costsX` columns as the `Cost` they generate.
 ///
@@ -249,24 +249,35 @@ fn only_the_known_cards_are_dynamic() {
 /// generated table sorts by pool and the dump does not.
 #[test]
 fn every_printed_number_matches_the_dump() {
-    let mut dumped: std::collections::HashMap<&str, Vec<(&str, i32, bool)>> =
+    type DumpedNumber<'a> = (&'a str, CardNumber, bool, Option<CardNumberModifier>);
+
+    let mut dumped: std::collections::HashMap<&str, Vec<DumpedNumber<'_>>> =
         std::collections::HashMap::new();
     for row in rows(CARDS, "var") {
-        assert_eq!(row.len(), 5, "a var row has five fields: {row:?}");
+        assert_eq!(row.len(), 6, "a var row has six fields: {row:?}");
         dumped.entry(row[1]).or_default().push((
             row[2],
             row[3].parse().expect("a printed number is an integer"),
             row[4] == "1",
+            // The hooks a number runs through are the var class's, and the
+            // generated table carries what the class means rather than its
+            // name. This is the same reading, from the other side.
+            match row[5] {
+                "DamageVar" | "CalculatedDamageVar" => Some(CardNumberModifier::Damage),
+                "OstyDamageVar" => Some(CardNumberModifier::OstyDamage),
+                "BlockVar" | "CalculatedBlockVar" => Some(CardNumberModifier::Block),
+                _ => None,
+            },
         ));
     }
     assert_eq!(dumped.values().map(Vec::len).sum::<usize>(), 775);
 
     for card in Cards::ALL {
         let want = dumped.remove(wire(&card).as_str()).unwrap_or_default();
-        let got: Vec<(&str, i32, bool)> = card
+        let got: Vec<DumpedNumber<'_>> = card
             .vars()
             .iter()
-            .map(|v| (v.id.name(), v.base, v.calculated))
+            .map(|v| (v.id.name(), v.base, v.calculated, v.modifier))
             .collect();
         assert_eq!(got, want, "{}: printed numbers", wire(&card));
     }

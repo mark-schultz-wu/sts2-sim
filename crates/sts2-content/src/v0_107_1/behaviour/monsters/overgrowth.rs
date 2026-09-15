@@ -1,6 +1,6 @@
 //! The first act's monsters.
 
-use sts2_core::{ContentError, Effect, Fight, MonsterSpawn, PowerAmount};
+use sts2_core::{Amount, ContentError, Effect, Fight, MonsterSpawn, PowerAmount};
 
 use super::super::super::generated::powers::Power;
 
@@ -173,7 +173,10 @@ fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
                 true => SLICE_BLOCK_TOUGH,
                 false => SLICE_BLOCK,
             };
-            let block = fight.resolve(Effect::GainBlock { amount: block });
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(block),
+            });
             fight.apply(block);
         }
         MoveId::HissMove => {
@@ -244,7 +247,11 @@ fn attack<F: Fight<V>>(fight: &mut F) {
         .unwrap_or_else(|| unimplemented!("a move that hits more times than a fight can count"));
     for _ in 0..repeats {
         for target in fight.opponents() {
-            let attack = fight.resolve(Effect::Attack { target, damage });
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Number(damage),
+            });
             fight.apply(attack);
         }
     }

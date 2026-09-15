@@ -5,10 +5,14 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
+using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Unlocks;
 
 namespace Sts2Dump;
 
@@ -55,7 +59,31 @@ public static class CardDump
         // rather than quietly replacing the table.
         output.Append(Stamp.Header("card"));
         output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords>\n");
-        output.Append("# var <card> <name> <base> <calculated>\n");
+        output.Append("# var <card> <name> <base> <calculated> <class>\n");
+        output.Append("# pool <pool> <index> <card>\n");
+        output.Append("# rewardpool <character> <index> <card>\n");
+
+        foreach (CardPoolModel pool in ModelDb.AllCardPools.OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
+        {
+            int index = 0;
+            foreach (CardModel card in pool.AllCards)
+            {
+                output.Append($"pool {pool.Id.Entry} {index} {card.Id.Entry}\n");
+                index++;
+            }
+        }
+
+        foreach (CharacterModel character in ModelDb.AllCharacters.Where(c => c.IsPlayable))
+        {
+            Player player = Player.CreateForNewRun(character, UnlockState.all, 1uL);
+            CardCreationOptions options = CardCreationOptions.ForRoom(player, RoomType.Monster);
+            int index = 0;
+            foreach (CardModel card in options.GetPossibleCards(player))
+            {
+                output.Append($"rewardpool {character.Id.Entry} {index} {card.Id.Entry}\n");
+                index++;
+            }
+        }
 
         List<CardModel> cards = ModelDb.AllCards
             .OrderBy(c => c.Id.Entry, StringComparer.Ordinal)
@@ -102,6 +130,7 @@ public static class CardDump
                     entry.Key,
                     entry.Value.BaseValue.ToString(CultureInfo.InvariantCulture),
                     entry.Value is CalculatedVar ? "1" : "0",
+                    VarClass(entry.Value),
                 }));
                 output.Append('\n');
             }
@@ -128,6 +157,26 @@ public static class CardDump
 
         Log.Info("[carddump] begin\n" + output);
         Log.Info("[carddump] end");
+    }
+
+    /// <summary>
+    /// The <c>DynamicVar</c> subclass this number is, by its own name.
+    /// </summary>
+    /// <remarks>
+    /// The class is what decides the number's rules, and the key it is filed
+    /// under says nothing: <c>SovereignBlade</c>'s block is a
+    /// <c>CalculatedBlockVar</c> named <c>CalculatedBlock</c>, and its preview
+    /// runs the block hooks exactly as a <c>BlockVar</c> named <c>Block</c>
+    /// does.
+    ///
+    /// A generic var prints without the arity C# spells it with, so
+    /// <c>PowerVar`1</c> is dumped as <c>PowerVar</c>.
+    /// </remarks>
+    private static string VarClass(DynamicVar var)
+    {
+        string name = var.GetType().Name;
+        int arity = name.IndexOf('`');
+        return arity < 0 ? name : name.Substring(0, arity);
     }
 
     /// <summary>

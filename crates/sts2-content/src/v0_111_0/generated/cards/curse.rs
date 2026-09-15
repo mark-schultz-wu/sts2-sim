@@ -3,12 +3,10 @@
 //! Cards in `CURSE_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::{
-    CardData, CardKeyword, CardNumber, CardRarity, CardType, CardVar, KeywordSet, TargetType,
-};
+use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TargetType};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
-use sts2_core::Printed;
+use sts2_core::CardNumberModifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -92,10 +90,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::HpLoss,
-            base: CardNumber::new(13, 0),
+            base: super::CardNumber::new(13, 0),
             calculated: false,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
@@ -126,10 +125,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Gold,
-            base: CardNumber::new(10, 0),
+            base: super::CardNumber::new(10, 0),
             calculated: false,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -140,10 +140,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
-            base: CardNumber::new(2, 0),
+            base: super::CardNumber::new(2, 0),
             calculated: false,
+            modifier: Some(CardNumberModifier::Damage),
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -154,10 +155,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::WeakPower,
-            base: CardNumber::new(1, 0),
+            base: super::CardNumber::new(1, 0),
             calculated: false,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -203,10 +205,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Combats,
-            base: CardNumber::new(5, 0),
+            base: super::CardNumber::new(5, 0),
             calculated: false,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -228,20 +231,23 @@ static ROWS: [CardData; 18] = [
         cost: Cost::None,
         star_cost: Cost::None,
         vars: &[
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculatedCards,
-                base: CardNumber::new(3, 0),
+                base: super::CardNumber::new(3, 0),
                 calculated: true,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculationBase,
-                base: CardNumber::new(3, 0),
+                base: super::CardNumber::new(3, 0),
                 calculated: false,
+                modifier: None,
             },
-            Printed {
+            sts2_core::CardNumber {
                 id: CardVar::CalculationExtra,
-                base: CardNumber::new(-1, 0),
+                base: super::CardNumber::new(-1, 0),
                 calculated: false,
+                modifier: None,
             },
         ],
         max_upgrade: 0,
@@ -273,10 +279,11 @@ static ROWS: [CardData; 18] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Frail,
-            base: CardNumber::new(1, 0),
+            base: super::CardNumber::new(1, 0),
             calculated: false,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),

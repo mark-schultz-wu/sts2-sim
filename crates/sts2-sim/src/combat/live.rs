@@ -12,7 +12,7 @@
 //! it and nothing else does.
 
 use sts2_core::{
-    CardIdent, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Printed, Rules, SideKinds,
+    CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Rules, SideKinds,
 };
 
 use super::monster::Machine;
@@ -26,7 +26,7 @@ use super::monster::Machine;
 pub(super) struct CardInstance<V: Rules> {
     pub(super) ident: CardIdent<V>,
     /// The numbers this copy prints, which start as the table's and move.
-    pub(super) vars: Vec<Printed<V::CardVar, V::Number>>,
+    pub(super) vars: Vec<CardNumber<V::CardVar, V::Number>>,
 }
 
 impl<V: Rules> CardInstance<V> {
@@ -36,7 +36,7 @@ impl<V: Rules> CardInstance<V> {
             .card
             .vars()
             .iter()
-            .map(|var| Printed {
+            .map(|var| CardNumber {
                 id: var.id,
                 // A build can store exact fractions where this slice only
                 // evaluates whole-number effects.
@@ -44,6 +44,7 @@ impl<V: Rules> CardInstance<V> {
                     unimplemented!("the fractional {} this card prints", var.id.name())
                 }),
                 calculated: var.calculated,
+                modifier: var.modifier,
             })
             .collect();
         let mut card = Self { ident, vars };
@@ -113,7 +114,8 @@ impl<V: Rules> Live<V> {
         let player = self
             .creatures
             .iter()
-            .position(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER);
+            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+            .map(|creature| creature.id);
         for creature in &mut creatures {
             let (Some(player), Some(next)) = (player, &mut creature.next_move) else {
                 continue;

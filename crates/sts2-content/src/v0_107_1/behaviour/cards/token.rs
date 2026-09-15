@@ -1,13 +1,13 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{CardVars, Effect, Fight};
+use sts2_core::{Amount, CardVars, Effect, Fight};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
-use super::{Number, Printed, V, face};
+use super::{CardNumber, Number, V, face};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: TokenCard, printed: &mut [Printed]) {
+pub(super) fn upgrade(card: TokenCard, printed: &mut [CardNumber]) {
     let changes: &[(CardVar, Number)] = match card {
         TokenCard::MinionStrike => &[(CardVar::Damage, 3)],
         card => unimplemented!("card upgrade: {card:?}"),
@@ -19,7 +19,7 @@ pub(super) fn upgrade(card: TokenCard, printed: &mut [Printed]) {
 pub(super) fn calculated(
     card: TokenCard,
     key: CardVar,
-    printed: &[Printed],
+    printed: &[CardNumber],
     powers: &[sts2_core::Stack<V>],
 ) -> Number {
     match (card, key) {
@@ -72,10 +72,13 @@ pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) {
 /// The damage is this copy's own. A forge raises it, and the card that was
 /// forged twice hits for more than the one beside it.
 fn sovereign_blade<F: Fight<V>>(fight: &mut F) {
-    let damage = fight.var(CardVar::Damage);
     let target = fight.target();
     for _ in 0..fight.var(CardVar::Repeat) {
-        let attack = fight.resolve(Effect::Attack { target, damage });
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+        });
         fight.apply(attack);
     }
 }

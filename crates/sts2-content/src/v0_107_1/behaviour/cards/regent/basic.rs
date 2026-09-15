@@ -1,13 +1,13 @@
 //! The Regent's basic cards.
 
-use sts2_core::{Effect, Fight, PowerAmount};
+use sts2_core::{Amount, Effect, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, RegentCard};
 use super::super::super::super::generated::powers::Power;
-use super::super::{Number, Printed, V, raise};
+use super::super::{CardNumber, Number, V, raise};
 
 /// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
+pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
     let changes: &[(CardVar, Number)] = match card {
         RegentCard::Strike => &[(CardVar::Damage, 3)],
         RegentCard::Defend => &[(CardVar::Block, 3)],
@@ -20,8 +20,9 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
 pub(super) fn strike<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
     let attack = fight.resolve(Effect::Attack {
+        dealer: fight.actor(),
         target,
-        damage: fight.var(CardVar::Damage),
+        damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
 }
@@ -29,7 +30,8 @@ pub(super) fn strike<F: Fight<V>>(fight: &mut F) {
 /// `DefendRegent`. Gain block.
 pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
     let block = fight.resolve(Effect::GainBlock {
-        amount: fight.var(CardVar::Block),
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
     });
     fight.apply(block);
 }
@@ -42,8 +44,9 @@ pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
 pub(super) fn falling_star<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
     let attack = fight.resolve(Effect::Attack {
+        dealer: fight.actor(),
         target,
-        damage: fight.var(CardVar::Damage),
+        damage: Amount::Var(CardVar::Damage),
     });
     fight.apply(attack);
     fight.apply_power(

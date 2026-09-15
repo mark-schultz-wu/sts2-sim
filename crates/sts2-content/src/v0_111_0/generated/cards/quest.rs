@@ -3,12 +3,9 @@
 //! Cards in `QUEST_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::{
-    CardData, CardKeyword, CardNumber, CardRarity, CardType, CardVar, KeywordSet, TargetType,
-};
+use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TargetType};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
-use sts2_core::Printed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -58,10 +55,11 @@ static ROWS: [CardData; 4] = [
         target: Field::Constant(TargetType::None),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Rooms,
-            base: CardNumber::new(5, 0),
+            base: super::CardNumber::new(5, 0),
             calculated: false,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
@@ -82,10 +80,11 @@ static ROWS: [CardData; 4] = [
         target: Field::Constant(TargetType::SelfTarget),
         cost: Cost::None,
         star_cost: Cost::None,
-        vars: &[Printed {
+        vars: &[sts2_core::CardNumber {
             id: CardVar::Gold,
-            base: CardNumber::new(600, 0),
+            base: super::CardNumber::new(600, 0),
             calculated: false,
+            modifier: None,
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),

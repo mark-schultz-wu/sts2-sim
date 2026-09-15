@@ -42,7 +42,7 @@ public static class EncounterDump
         var output = new StringBuilder();
 
         output.Append(Stamp.Header("encounter"));
-        output.Append("# act <act> <encounter>\n");
+        output.Append("# act <act> <index> <encounter> -- the act's own order, not sorted\n");
         output.Append("# encounter <id> <roomType> <isWeak> <givesRewards> <isDebug> ");
         output.Append("<minGold> <maxGold> <spawns>\n");
         output.Append("# slot <encounter> <index> <name>\n");
@@ -54,16 +54,20 @@ public static class EncounterDump
 
         List<EncounterModel> encounters = AllEncounters();
 
-        // Which acts can roll an encounter. The relation the map generator
-        // walks, and the one the monster dump currently projects a flattened
-        // copy of — `act <act> <monster>` there is this joined with `possible`.
+        // Which acts can roll an encounter, in the act's own order.
+        //
+        // Not sorted, unlike every other list here. `GenerateRooms` fills its
+        // grab bags by walking this, and a bag's weights land at the index they
+        // were added at, so the order decides which encounter a draw picks. The
+        // index column is what carries it, because a reader cannot tell an
+        // ordered list from a sorted one by looking.
         foreach (ActModel act in ModelDb.Acts)
         {
-            foreach (EncounterModel encounter in act.AllEncounters
-                .Where(e => e != null)
-                .OrderBy(e => e.Id.Entry, StringComparer.Ordinal))
+            int at = 0;
+            foreach (EncounterModel encounter in act.AllEncounters.Where(e => e != null))
             {
-                output.Append($"act {act.Id.Entry} {encounter.Id.Entry}\n");
+                output.Append($"act {act.Id.Entry} {at} {encounter.Id.Entry}\n");
+                at++;
             }
         }
 

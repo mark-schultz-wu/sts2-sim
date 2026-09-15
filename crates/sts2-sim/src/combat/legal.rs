@@ -9,8 +9,8 @@
 //! powers, no relic that listens, and no card that overrides it.
 
 use sts2_core::{
-    CardIdent, CardTable, CardVars, Combat, CombatId, Cost, Creature, FlagSet, Held, Playable,
-    PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable,
+    CardIdent, CardTable, Combat, CombatId, Cost, Creature, EffectResolution, FlagSet, Held,
+    Playable, PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable,
     UnplayableReasonKinds,
 };
 
@@ -40,7 +40,7 @@ pub(super) fn target_type<V: Rules>(
     // they do by reading the player's own powers.
     card.card
         .target()
-        .unwrap_or_else(|| V::computed_card_target(card.card, powers(creatures)))
+        .unwrap_or_else(|| V::computed_card_target(card.card, super::board::powers::<V>(creatures)))
 }
 
 /// Why this card cannot be played, which is empty for one that can.
@@ -249,7 +249,7 @@ fn effect<V: Rules>(
             // simulator does not have. `Observation::rules_digest` leaves it
             // out for that reason, and a front end reads the numbers.
             text: None,
-            vars: previewed::<V>(&numbers, creatures, target),
+            vars: previewed::<V>(held, creatures, target),
             base: numbers.clone(),
         })
         .collect();
@@ -265,65 +265,51 @@ fn effect<V: Rules>(
     previews
 }
 
-/// The card's numbers after the fight has had its say, which is `Preview`'s
-/// own half of `Hook.ModifyDamage` and `Hook.ModifyBlock`.
+/// The card's numbers after the fight has had its say, which is
+/// `DynamicVar.UpdateCardPreview` for each of them.
 ///
-/// Damage moves against the creature the card is pointed at, and block against
-/// the player about to gain it. The modifiers run over the same hooks whether
-/// the card is previewed or played.
+/// Each number becomes the effect its own class names and is resolved, which
+/// is the same call the card makes when it is played. Damage runs against the
+/// creature the card is pointed at, and block for the player about to gain it.
+///
+/// # Panics
+///
+/// A number whose class the simulator has nowhere to run, which is the Osty's
+/// damage. No character the simulator plays has one.
 fn previewed<V: Rules>(
-    numbers: &std::collections::BTreeMap<V::CardVar, V::Number>,
+    held: &CardInstance<V>,
     creatures: &[Creature<V>],
     target: Option<CombatId>,
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
-    let mut previewed = numbers.clone();
     let dealer = super::board::player::<V>(creatures);
-
-    if let Some(block) = previewed.get_mut(&<V::CardVar as CardVars>::BLOCK)
-        && let Some(player) = creatures.iter().find(|creature| creature.id == dealer)
-    {
-        *block = super::board::blocked::<V>(player, *block);
-    }
-
-    if let Some(at) = target.and_then(|id| creatures.iter().position(|c| c.id == id))
-        && let Some(damage) = previewed.get_mut(&<V::CardVar as CardVars>::DAMAGE)
-    {
-        *damage = super::board::modified::<V>(creatures, dealer, at, *damage);
-    }
-    previewed
+    held.vars
+        .iter()
+        .map(|var| {
+            let resolved = var
+                .modifier
+                .and_then(|modifier| super::board::effect_of::<V>(modifier, var.id, dealer, target))
+                .map(|effect| super::board::resolve::<V>(creatures, Some(held), effect).amount());
+            // A number no hook reaches, and a hit previewed against no target,
+            // both read what the card reads.
+            let value = resolved.unwrap_or_else(|| super::board::var::<V>(held, var.id, creatures));
+            (var.id, value)
+        })
+        .collect()
 }
 
 /// The numbers this copy of the card prints, as they resolve right now.
 ///
 /// This copy's own, not the table's. A fight writes on a card, and what it
-/// wrote is what the card prints afterwards.
+/// wrote is what the card prints afterwards. Nothing in the fight has listened
+/// yet: [`previewed`] is these after it has.
 fn numbers<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Creature<V>],
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
     held.vars
         .iter()
-        .map(|var| {
-            // A `CalculatedVar` counts something in the live fight, and prints
-            // what it counted rather than the zero it was built with.
-            let value = match var.calculated {
-                false => var.base,
-                true => {
-                    V::calculated_card_var(held.ident.card, var.id, &held.vars, powers(creatures))
-                }
-            };
-            (var.id, value)
-        })
+        .map(|var| (var.id, super::board::var::<V>(held, var.id, creatures)))
         .collect()
-}
-
-/// The player's own powers, which is what a card reads about the fight.
-fn powers<V: Rules>(creatures: &[Creature<V>]) -> &[sts2_core::Stack<V>] {
-    creatures
-        .iter()
-        .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-        .map(|creature| creature.powers.as_slice())
-        .unwrap_or_default()
 }
 
 #[cfg(test)]

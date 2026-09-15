@@ -50,6 +50,7 @@ public static class Dump
             "relicdump" => RelicDump.Run,
             "restsitedump" => RestSiteDump.Run,
             "rngdump" => RngDump.Run,
+            "setupdump" => SetupDump.Run,
             "runstatedump" => RunStateDump.Run,
             _ => null,
         };
