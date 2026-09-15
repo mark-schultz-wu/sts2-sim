@@ -45,7 +45,7 @@ fn nowhere() -> Applied<V> {
                 points: [].into(),
                 proceed: false,
             },
-            rng: sts2_core::Counters {
+            rng: sts2_core::Positions {
                 run: HashMap::new(),
                 player: HashMap::new(),
             },

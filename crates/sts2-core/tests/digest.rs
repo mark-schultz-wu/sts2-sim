@@ -23,9 +23,9 @@ use sts2_core::{PowerAmount, Section};
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Cost, Counters, Creature, Digest, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent,
-    Map, ModelId, NextMove, Node, Observation, Orbs, Playable, Preview, Reachable, RestOption,
-    Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
+    Cost, Creature, Digest, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent, Map,
+    ModelId, NextMove, Node, Observation, Orbs, Playable, Position, Positions, Preview, Reachable,
+    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
 };
 
 type V = V0_107_1;
@@ -119,13 +119,16 @@ fn full() -> Observation<V> {
             .into(),
             proceed: false,
         },
-        rng: Counters {
+        rng: Positions {
             run: HashMap::from([
-                (RunRngType::UpFront, 4),
-                (RunRngType::Shuffle, 17),
-                (RunRngType::MonsterAi, 2),
+                (RunRngType::UpFront, Position::counted(4)),
+                (RunRngType::Shuffle, Position::counted(17)),
+                (RunRngType::MonsterAi, Position::counted(2)),
             ]),
-            player: HashMap::from([(PlayerRngType::Rewards, 1), (PlayerRngType::Shops, 0)]),
+            player: HashMap::from([
+                (PlayerRngType::Rewards, Position::counted(1)),
+                (PlayerRngType::Shops, Position::counted(0)),
+            ]),
         },
         room: Some(rooms()[0].clone()),
         combat: Some(Combat {
@@ -542,16 +545,21 @@ fn mutations() -> Vec<Nudge> {
         }),
         ("map.proceed", |o| o.map.proceed = true),
         ("rng.run: a draw", |o| {
-            *o.rng.run.get_mut(&RunRngType::Shuffle).expect("a stream") += 1;
+            o.rng
+                .run
+                .get_mut(&RunRngType::Shuffle)
+                .expect("a stream")
+                .counter += 1;
         }),
         ("rng.run: another stream", |o| {
-            o.rng.run.insert(RunRngType::Niche, 1);
+            o.rng.run.insert(RunRngType::Niche, Position::counted(1));
         }),
         ("rng.player: a draw", |o| {
-            *o.rng
+            o.rng
                 .player
                 .get_mut(&PlayerRngType::Rewards)
-                .expect("a stream") += 1;
+                .expect("a stream")
+                .counter += 1;
         }),
         ("room absent", |o| o.room = None),
         ("combat absent", |o| o.combat = None),
@@ -904,11 +912,11 @@ fn how_the_counters_were_stored_is_not_in_the_digest() {
     let mut backwards = full();
 
     let pairs = [
-        (RunRngType::UpFront, 4),
-        (RunRngType::Shuffle, 17),
-        (RunRngType::MonsterAi, 2),
-        (RunRngType::Niche, 8),
-        (RunRngType::CombatOrbs, 3),
+        (RunRngType::UpFront, Position::counted(4)),
+        (RunRngType::Shuffle, Position::counted(17)),
+        (RunRngType::MonsterAi, Position::counted(2)),
+        (RunRngType::Niche, Position::counted(8)),
+        (RunRngType::CombatOrbs, Position::counted(3)),
     ];
 
     forwards.rng.run = pairs.iter().copied().collect();

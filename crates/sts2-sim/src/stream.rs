@@ -9,14 +9,14 @@
 //! quadratic in the run. A search rolling out from a deep position pays it
 //! again every rollout.
 //!
-//! [`Counters`] is the report's shape, and what a divergence is judged on. It
+//! [`Positions`] is the report's shape, and what a divergence is judged on. It
 //! is read off these on the way out, and never read back in.
 
 use std::marker::PhantomData;
 
 use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
-use sts2_core::{Counters, Rules};
+use sts2_core::{Position, Positions, Rules};
 
 use crate::rng::MegaRng;
 
@@ -73,18 +73,22 @@ impl<V: Rules> Streams<V> {
         &mut self.player[slot(V::player_rng_types(), kind)]
     }
 
-    /// How far each stream has been drawn, which is what a report carries.
-    pub(crate) fn counters(&self) -> Counters<V> {
-        Counters {
+    /// Where each stream stands, which is what a report carries.
+    ///
+    /// A run holds the generators, so it reports the words beside the count.
+    /// A build whose save format keeps the count alone reports none, and the
+    /// two are compared on what they both carry.
+    pub(crate) fn positions(&self) -> Positions<V> {
+        Positions {
             run: V::run_rng_types()
                 .iter()
                 .copied()
-                .zip(self.run.iter().map(counter_of))
+                .zip(self.run.iter().map(position_of))
                 .collect(),
             player: V::player_rng_types()
                 .iter()
                 .copied()
-                .zip(self.player.iter().map(counter_of))
+                .zip(self.player.iter().map(position_of))
                 .collect(),
         }
     }
@@ -101,9 +105,12 @@ fn slot<K: Eq>(kinds: &'static [K], kind: K) -> usize {
         .expect("a stream is one of the build's own")
 }
 
-/// A reported count as a `u32`, which is the shape the wire uses.
-fn counter_of(rng: &MegaRng) -> u32 {
-    u32::try_from(rng.counter()).expect("a stream's draw count is not negative")
+/// Where a generator stands, in the shape the wire uses.
+fn position_of(rng: &MegaRng) -> Position {
+    Position {
+        counter: u32::try_from(rng.counter()).expect("a stream's draw count is not negative"),
+        words: Some(rng.words()),
+    }
 }
 
 #[cfg(test)]
@@ -143,13 +150,13 @@ mod tests {
         }
         streams.record(RunRngType::Shuffle, shuffle);
 
-        let counters = streams.counters();
-        assert_eq!(counters.run[&RunRngType::Shuffle], 9);
+        let at = streams.positions();
+        assert_eq!(at.run[&RunRngType::Shuffle].counter, 9);
         for kind in RunRngType::ALL
             .into_iter()
             .filter(|k| *k != RunRngType::Shuffle)
         {
-            assert_eq!(counters.run[&kind], 0, "{} moved too", kind.name());
+            assert_eq!(at.run[&kind].counter, 0, "{} moved too", kind.name());
         }
     }
 
@@ -164,6 +171,6 @@ mod tests {
         let mut taken = streams.stream(RunRngType::Niche);
         taken.next_u64();
 
-        assert_eq!(streams.counters().run[&RunRngType::Niche], 0);
+        assert_eq!(streams.positions().run[&RunRngType::Niche].counter, 0);
     }
 }

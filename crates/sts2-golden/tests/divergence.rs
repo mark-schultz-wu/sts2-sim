@@ -19,8 +19,8 @@ use std::panic::{self, AssertUnwindSafe};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Combat, Construct, Counters, Creature, Decided, Play, Playable, PowerAmount, Rules, Snapshot,
-    Step,
+    Combat, Construct, Creature, Decided, Play, Playable, Position, Positions, PowerAmount, Rules,
+    Snapshot, Step,
 };
 use sts2_golden::{golden_dir, oracle_or_explain, recording};
 
@@ -156,11 +156,56 @@ fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Displa
         Err(panicked) => return Some(Stopped::Fault(panic_message(&panicked))),
     };
 
-    (made != wanted || digest_of(&got) != digest_of(&want)).then(|| Stopped::Diverged {
+    let diverged = made != wanted
+        || digest_of(&got) != digest_of(&want)
+        || words_apart(&want.observation.rng, &got.observation.rng);
+
+    diverged.then(|| Stopped::Diverged {
         want: digest_of(&want),
         got: digest_of(&got),
         fields: differences(&wanted, &want, &made, &got),
     })
+}
+
+/// Whether two reports put a stream's generator in different places.
+///
+/// The digest holds the draw counts alone, because a build that saves the
+/// count by itself reports no words. Where both sides carry the words they are
+/// the sharper check: two streams stand at the same count and still hold
+/// different numbers. The next draw off them says so, several moves late.
+fn words_apart<V: sts2_content_wire::WireContentVersion>(
+    want: &Positions<V>,
+    got: &Positions<V>,
+) -> bool {
+    let run = want
+        .run
+        .iter()
+        .any(|(stream, at)| got.run.get(stream).is_some_and(|mine| apart(*at, *mine)));
+    let player = want
+        .player
+        .iter()
+        .any(|(stream, at)| got.player.get(stream).is_some_and(|mine| apart(*at, *mine)));
+    run || player
+}
+
+/// Two positions whose words are both known and disagree.
+fn apart(want: Position, got: Position) -> bool {
+    matches!((want.words, got.words), (Some(want), Some(got)) if want != got)
+}
+
+/// A stream's position, as a line a reader can compare.
+fn standing(at: Option<&Position>) -> String {
+    match at {
+        None => "absent".to_string(),
+        Some(Position {
+            counter,
+            words: None,
+        }) => counter.to_string(),
+        Some(Position {
+            counter,
+            words: Some([s0, s1, s2, s3]),
+        }) => format!("{counter} [{s0:#018x} {s1:#018x} {s2:#018x} {s3:#018x}]"),
+    }
 }
 
 /// What a panic said, which for an unported rule is what it named.
@@ -331,8 +376,8 @@ fn differences<V: sts2_content_wire::WireContentVersion>(
     for stream in player_streams {
         note(
             &format!("rng.player.{stream:?}"),
-            format!("{:?}", want.rng.player.get(&stream)),
-            format!("{:?}", got.rng.player.get(&stream)),
+            standing(want.rng.player.get(&stream)),
+            standing(got.rng.player.get(&stream)),
         );
     }
 
@@ -341,11 +386,13 @@ fn differences<V: sts2_content_wire::WireContentVersion>(
     let mut streams: Vec<String> = want.rng.run.keys().map(|k| format!("{k:?}")).collect();
     streams.sort();
     for stream in streams {
-        let at = |c: &Counters<V>| {
-            c.run
-                .iter()
-                .find(|(k, _)| format!("{k:?}") == stream)
-                .map_or("absent".to_string(), |(_, v)| v.to_string())
+        let at = |c: &Positions<V>| {
+            standing(
+                c.run
+                    .iter()
+                    .find(|(k, _)| format!("{k:?}") == stream)
+                    .map(|(_, at)| at),
+            )
         };
         note(&format!("rng.run.{stream}"), at(&want.rng), at(&got.rng));
     }

@@ -5,7 +5,7 @@ use super::prose::one_line;
 use super::{cards, ident, names, spelling};
 use std::fmt;
 use sts2_core::{
-    Blocked, ChestOption, Counters, Entry, EventOption, Observation, RestOption, Room, Stock, Take,
+    Blocked, ChestOption, Entry, EventOption, Observation, Positions, RestOption, Room, Stock, Take,
 };
 
 pub(super) fn state_of<V: sts2_content_wire::WireContentVersion>(
@@ -248,7 +248,7 @@ fn shop<V: sts2_content_wire::WireContentVersion>(
 /// moved does not care which map it came out of.
 fn rng_of<V: sts2_content_wire::WireContentVersion>(
     f: &mut fmt::Formatter<'_>,
-    rng: &Counters<V>,
+    rng: &Positions<V>,
 ) -> fmt::Result {
     let mut moved: Vec<String> = Vec::new();
     let mut idle = 0;
@@ -256,8 +256,8 @@ fn rng_of<V: sts2_content_wire::WireContentVersion>(
     for (name, draws) in rng
         .run
         .iter()
-        .map(|(k, n)| (spelling(k), *n))
-        .chain(rng.player.iter().map(|(k, n)| (spelling(k), *n)))
+        .map(|(k, at)| (spelling(k), at.counter))
+        .chain(rng.player.iter().map(|(k, at)| (spelling(k), at.counter)))
     {
         match draws {
             0 => idle += 1,

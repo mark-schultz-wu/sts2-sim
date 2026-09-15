@@ -276,9 +276,9 @@ mod tests {
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),
             [8, 35, 12]
         );
-        let counters = streams.counters();
-        assert_eq!(counters.run[&RunRngType::Niche], 3);
-        assert_eq!(counters.run[&RunRngType::MonsterAi], 1);
+        let at = streams.positions();
+        assert_eq!(at.run[&RunRngType::Niche].counter, 3);
+        assert_eq!(at.run[&RunRngType::MonsterAi].counter, 1);
         assert_eq!(
             creatures
                 .iter()

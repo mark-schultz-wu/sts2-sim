@@ -58,8 +58,8 @@ use xxhash::XxHash64;
 
 use crate::{
     Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, Combat, ContentVersion,
-    Coord, Cost, Counters, Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, FlagSet,
-    Held, Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
+    Coord, Cost, Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, FlagSet, Held,
+    Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
     Reachable, RestOption, Room, Stack, Stock, Take,
 };
 
@@ -372,14 +372,14 @@ impl Sink {
     ///
     /// Each entry is digested whole, key and value together, so two maps that
     /// swap two values differ.
-    fn counters<K: Hash + Copy>(&mut self, counters: &HashMap<K, u32>) {
-        self.len(counters.len());
+    fn positions<K: Hash + Copy>(&mut self, streams: &HashMap<K, crate::Position>) {
+        self.len(streams.len());
 
         let mut total: u64 = 0;
-        for (stream, draws) in counters {
+        for (stream, position) in streams {
             let mut entry = Sink::new();
             entry.id(stream);
-            entry.u32(*draws);
+            entry.u32(position.counter);
             total = total.wrapping_add(entry.finish());
         }
         self.u64(total);
@@ -556,10 +556,16 @@ impl Sink {
         self.bool(*proceed);
     }
 
-    fn counters_of<V: ContentVersion>(&mut self, rng: &Counters<V>) {
-        let Counters { run, player } = rng;
-        self.counters(run);
-        self.counters(player);
+    /// The draw counts, and deliberately not the generator words beside them.
+    ///
+    /// A build that saves the count by itself reports no words. Hashing them
+    /// makes two builds of one game disagree by construction, so the words are
+    /// compared where both sides carry them. That is a check the digest cannot
+    /// express.
+    fn counters_of<V: ContentVersion>(&mut self, rng: &crate::Positions<V>) {
+        let crate::Positions { run, player } = rng;
+        self.positions(run);
+        self.positions(player);
     }
 
     fn room<V: ContentVersion>(&mut self, room: &Room<V>) {
@@ -922,7 +928,9 @@ mod tests {
 
         let of = |entries: [(Stream, u32); 3]| {
             let mut sink = Sink::new();
-            sink.counters(&HashMap::from(entries));
+            sink.positions(&HashMap::from(
+                entries.map(|(stream, at)| (stream, crate::Position::counted(at))),
+            ));
             sink.finish()
         };
 

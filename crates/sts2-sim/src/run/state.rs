@@ -6,8 +6,8 @@ use smallvec::SmallVec;
 use sts2_core::ActMap as _;
 use sts2_core::rng::{GameRng, stream_seed};
 use sts2_core::{
-    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, Counters,
-    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Question,
+    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, EventOption,
+    EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Positions, Question,
     Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, RunStreamKinds,
     Seed, Table, TakeReward,
 };
@@ -436,9 +436,9 @@ impl<V: Rules> State<V> {
         &self.streams
     }
 
-    /// How far each stream has been drawn, which is what a report carries.
-    pub(super) fn counters(&self) -> Counters<V> {
-        self.streams.counters()
+    /// Where each stream stands, which is what a report carries.
+    pub(super) fn positions(&self) -> Positions<V> {
+        self.streams.positions()
     }
 
     /// Build the fight the run is walking into, and let its relics act.
@@ -887,7 +887,7 @@ impl<V: Rules> State<V> {
                     points: map.shared(),
                     proceed: false,
                 },
-                rng: self.counters(),
+                rng: self.positions(),
                 room,
                 combat,
             },

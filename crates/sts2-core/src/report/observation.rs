@@ -38,7 +38,7 @@ pub struct Observation<V: ContentVersion> {
     pub deck: Vec<CardIdent<V>>,
     pub in_combat: bool,
     pub map: Map<V>,
-    pub rng: Counters<V>,
+    pub rng: Positions<V>,
     /// The choices this room offers, for a room that offers any.
     pub room: Option<Room<V>>,
     /// The fight, while there is one.
@@ -143,18 +143,43 @@ pub struct Node<V: ContentVersion> {
     pub to: Vec<Coord>,
 }
 
-/// How many draws each random stream has taken.
+/// Where every random stream stands.
 ///
-/// Two implementations can agree on every visible field while having consumed
-/// different numbers of draws. That divergence decides something several moves
-/// later, so the counters are compared directly.
+/// Two implementations can agree on every visible field while standing at
+/// different places in a stream. That divergence decides something several
+/// moves later, so the streams are compared directly.
 ///
 /// Two maps because the game keeps two sets: twelve per run, and three per
 /// player.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Counters<V: ContentVersion> {
-    pub run: HashMap<V::RunRngType, u32>,
-    pub player: HashMap<V::PlayerRngType, u32>,
+pub struct Positions<V: ContentVersion> {
+    pub run: HashMap<V::RunRngType, Position>,
+    pub player: HashMap<V::PlayerRngType, Position>,
+}
+
+/// Where one stream stands, the way the game saves it.
+///
+/// `SerializableRng` is `{counter, s0..s3}`, and this is that record. The
+/// count says how far the stream has been drawn. The words are the generator
+/// that count left behind.
+///
+/// Only the count is on every build. `v0.111.0` saves both, and `v0.107.1`
+/// saves the count by itself. So `words` says what a build's save format
+/// hands over, not what a stream has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Position {
+    pub counter: u32,
+    pub words: Option<[u64; 4]>,
+}
+
+impl Position {
+    /// A stream a build reports by its draw count alone.
+    pub fn counted(counter: u32) -> Position {
+        Position {
+            counter,
+            words: None,
+        }
+    }
 }
 
 /// A room that asks something, and what it offers.
