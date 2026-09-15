@@ -930,25 +930,25 @@ pub enum Effect<V: ContentVersion> {
     GainBlock {
         recipient: crate::CombatId,
         amount: Amount<V>,
-        props: BlockProps,
+        scaling: Scaling,
     },
 }
 
-/// The `ValueProp` a block carries, as the block hooks read it.
+/// Whether the powers that scale a number act on this one.
 ///
-/// `ModifyBlockAdditive` pays `IsPoweredCardOrMonsterMoveBlock`, which is the
-/// `Move` flag without the `Unpowered` one. Every block a card or a monster
-/// move prints on this build carries `Move`, and every block a relic prints
-/// carries `Unpowered`. So the two the hooks tell apart are these.
+/// The game keeps this as `ValueProp`, a set of flags. It asks the same
+/// question of a hit and of a block: `IsPoweredAttack` and
+/// `IsPoweredCardOrMonsterMoveBlock` are both the `Move` flag without the
+/// `Unpowered` one. So one answer serves both.
 ///
-/// The build's other flags are `Unblockable` and `SkipHurtAnim`, and no rule
-/// ported so far reads either.
+/// A card or a monster move prints `Move`, and a relic prints `Unpowered`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BlockProps {
-    /// `ValueProp.Move`: a card's block, or a monster move's.
-    Move,
-    /// `ValueProp.Unpowered`: a relic's.
-    Unpowered,
+pub enum Scaling {
+    /// A relic's number, which lands as it reads.
+    Static,
+    /// A card's number or a monster move's, which Strength and Dexterity
+    /// move.
+    Dynamic,
 }
 
 /// The number an effect carries, before the fight works it out.

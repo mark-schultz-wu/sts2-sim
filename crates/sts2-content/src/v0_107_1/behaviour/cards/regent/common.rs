@@ -1,7 +1,7 @@
 //! The Regent's common cards.
 
 use sts2_core::{
-    Amount, BlockProps, CardIdent, Effect, EffectResolution, Fight, PowerAmount, Selection,
+    Amount, CardIdent, Effect, EffectResolution, Fight, PowerAmount, Scaling, Selection,
 };
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
@@ -41,12 +41,12 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
     let next_turn = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(CardVar::BlockNextTurn),
-        props: BlockProps::Move,
+        scaling: Scaling::Dynamic,
     });
     let block = fight.resolve(Effect::GainBlock {
         recipient: fight.actor(),
         amount: Amount::Var(CardVar::Block),
-        props: BlockProps::Move,
+        scaling: Scaling::Dynamic,
     });
     fight.apply(block);
     fight.apply_to_actor(
