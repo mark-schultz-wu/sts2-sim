@@ -11,6 +11,7 @@
 //! its previews is derived from the fields below, so [`Live::report`] builds
 //! it and nothing else does.
 
+use num_traits::CheckedAdd;
 use sts2_core::{
     CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Rules,
     SideKinds,
@@ -23,18 +24,19 @@ use super::monster::Machine;
 /// One counter, and nothing reuses a number it gave out. A fight that runs out
 /// stops the run rather than name two cards the same.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct CardIds(u8);
+pub(super) struct CardIds<V: Rules>(V::CardSerial);
 
-impl CardIds {
+impl<V: Rules> CardIds<V> {
     pub(super) fn new() -> Self {
-        Self(0)
+        Self(num_traits::zero())
     }
 
-    pub(super) fn mint(&mut self) -> CardId {
-        let id = CardId::try_new(self.0)
-            .unwrap_or_else(|_| unimplemented!("a fight holding more cards than it can name"));
-        self.0 += 1;
-        id
+    pub(super) fn mint(&mut self) -> CardId<V> {
+        let next = self.0;
+        self.0 = next
+            .checked_add(&num_traits::one())
+            .unwrap_or_else(|| unimplemented!("a fight holding more cards than it can name"));
+        CardId::new(next)
     }
 }
 
@@ -46,7 +48,7 @@ impl CardIds {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CardInstance<V: Rules> {
     /// Which copy this is, for as long as the fight holds it.
-    pub(super) id: CardId,
+    pub(super) id: CardId<V>,
     pub(super) ident: CardIdent<V>,
     /// The numbers this copy prints, which start as the table's and move.
     pub(super) vars: Vec<CardNumber<V::CardVar, V::Number>>,
@@ -54,7 +56,7 @@ pub(super) struct CardInstance<V: Rules> {
 
 impl<V: Rules> CardInstance<V> {
     /// A fresh copy, printing what the table prints.
-    pub(super) fn new(ident: CardIdent<V>, id: CardId) -> Self {
+    pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {
         let vars = ident
             .card
             .vars()
@@ -115,7 +117,7 @@ pub(crate) struct Live<V: Rules> {
     /// shape and carries no such field, so the fight keeps it beside them.
     pub(super) skip_tick: Vec<(CombatId, V::Power)>,
     /// The ids this fight has given out, and the next one it will.
-    pub(super) card_ids: CardIds,
+    pub(super) card_ids: CardIds<V>,
 }
 
 impl<V: Rules> Live<V> {

@@ -1245,6 +1245,20 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::fmt::Display
         + std::hash::Hash;
 
+    /// The number a fight names one of its cards by.
+    ///
+    /// Wider than a pile is deep. A fight mints one per card it holds, and one
+    /// more for every card it makes. It reuses none of them. So this counts
+    /// every card a combat ever had, not the ones it holds at once.
+    type CardSerial: num_traits::PrimInt
+        + num_traits::Unsigned
+        // A fight that runs out of numbers has to say so rather than hand out
+        // one it already gave away.
+        + num_traits::CheckedAdd
+        + std::fmt::Debug
+        + std::fmt::Display
+        + std::hash::Hash;
+
     /// Where a card sits in one of a fight's piles.
     ///
     /// Named here so the repository picks the width once. A pile is as large

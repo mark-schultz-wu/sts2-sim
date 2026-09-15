@@ -46,6 +46,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type Health = i32;
     type Count = u32;
     type Index = u16;
+    type CardSerial = u16;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
     type Act = generated::acts::Act;

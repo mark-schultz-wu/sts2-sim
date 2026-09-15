@@ -47,7 +47,7 @@ pub(crate) fn enter<V: Rules>(
     creatures.extend(enemies.creatures);
 
     // The deck's own cards, each becoming a copy the fight can write on.
-    let mut card_ids = CardIds::new();
+    let mut card_ids = CardIds::<V>::new();
     let deck: Vec<CardInstance<V>> = observation
         .deck
         .iter()

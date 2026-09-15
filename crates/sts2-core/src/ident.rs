@@ -84,7 +84,7 @@ pub struct CardIdent<V: ContentVersion> {
 /// Minted per fight and never reused. A card transformed into another is a new
 /// card with a new id, as the game creates a new model for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct CardId(nonmax::NonMaxU8);
+pub struct CardId<V: ContentVersion>(V::CardSerial);
 
 /// One of the piles a fight keeps its cards in, which is `PileType`.
 ///
@@ -107,19 +107,19 @@ pub enum Pile {
 /// where it says, and checks the id it finds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CardAt<V: ContentVersion> {
-    id: CardId,
+    id: CardId<V>,
     pile: Pile,
     index: V::Index,
 }
 
 impl<V: ContentVersion> CardAt<V> {
     /// The card a fight found at `index` of `pile`.
-    pub fn new(id: CardId, pile: Pile, index: V::Index) -> Self {
+    pub fn new(id: CardId<V>, pile: Pile, index: V::Index) -> Self {
         Self { id, pile, index }
     }
 
     /// Which card this is, whatever has moved since.
-    pub fn id(self) -> CardId {
+    pub fn id(self) -> CardId<V> {
         self.id
     }
 
@@ -134,19 +134,19 @@ impl<V: ContentVersion> CardAt<V> {
     }
 }
 
-impl CardId {
-    /// The card this number names, or [`OutOfRange`] for one no fight mints.
-    pub fn try_new(id: u8) -> Result<Self, OutOfRange> {
-        nonmax::NonMaxU8::new(id).map(Self).ok_or(OutOfRange)
+impl<V: ContentVersion> CardId<V> {
+    /// The card this number names.
+    pub fn new(serial: V::CardSerial) -> Self {
+        Self(serial)
     }
 
     /// The number it was minted as.
-    pub fn get(self) -> u8 {
-        self.0.get()
+    pub fn get(self) -> V::CardSerial {
+        self.0
     }
 }
 
-impl std::fmt::Display for CardId {
+impl<V: ContentVersion> std::fmt::Display for CardId<V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
