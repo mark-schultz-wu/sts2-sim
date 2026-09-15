@@ -126,11 +126,25 @@ struct Player<V: Rules> {
 }
 
 /// Mutable random streams and their compact counters.
+///
+/// The counters are held at the position their stream has in
+/// [`Rules::run_rng_types`], so a run carries twelve numbers and no keys.
 #[derive(Debug, Clone)]
 struct Rngs {
     run: SmallVec<[u32; 16]>,
     player: SmallVec<[u32; 4]>,
     rewards: MegaRng,
+}
+
+/// Where in [`Rngs::run`] a stream's counter is kept.
+///
+/// Every run stream the build has is in that list, so a stream it does not hold
+/// is one the build did not generate.
+fn run_stream_at<V: Rules>(kind: V::RunRngType) -> usize {
+    V::run_rng_types()
+        .iter()
+        .position(|candidate| *candidate == kind)
+        .expect("a run stream is one of the build's own")
 }
 
 /// Exactly one room or pending action can own the run at a time.
@@ -197,7 +211,7 @@ impl<V: Rules> State<V> {
             .copied()
             .filter(|act| act.played())
             .collect();
-        let mut up_front = MegaRng::named(raw_seed, "up_front");
+        let mut up_front = MegaRng::for_stream(raw_seed, V::run_rng(RunRng::UpFront));
         let opening = Opening::draw(&mut up_front, character, &acts);
 
         let mut map_rng = MegaRng::named(raw_seed, "act_1_map");
@@ -213,11 +227,7 @@ impl<V: Rules> State<V> {
 
         let mut run_counters: SmallVec<[u32; 16]> =
             smallvec::smallvec![0; V::run_rng_types().len()];
-        let up_front_at = V::run_rng_types()
-            .iter()
-            .position(|stream| *stream == V::run_rng(RunRng::UpFront))
-            .expect("up-front is a run RNG stream");
-        run_counters[up_front_at] = up_front.counter() as u32;
+        run_counters[run_stream_at::<V>(V::run_rng(RunRng::UpFront))] = up_front.counter() as u32;
 
         Self {
             shared: Arc::new(RunData {
@@ -257,7 +267,7 @@ impl<V: Rules> State<V> {
             rngs: Rngs {
                 run: run_counters,
                 player: smallvec::smallvec![0; V::player_rng_types().len()],
-                rewards: MegaRng::named(raw_seed, "rewards"),
+                rewards: MegaRng::for_stream(raw_seed, V::player_rng(PlayerRng::Rewards)),
             },
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
@@ -405,11 +415,7 @@ impl<V: Rules> State<V> {
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
-        let at = V::run_rng_types()
-            .iter()
-            .position(|kind| *kind == V::run_rng(RunRng::UnknownMapPoint))
-            .expect("unknown-map is a run RNG stream");
-        self.rngs.run[at] = unknown_counter;
+        self.rngs.run[run_stream_at::<V>(V::run_rng(RunRng::UnknownMapPoint))] = unknown_counter;
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
         self.visited_events.push(event);
@@ -421,11 +427,7 @@ impl<V: Rules> State<V> {
         self.floor = self.floor + num_traits::one();
         self.at = to;
         self.visited.push(to);
-        let at = V::run_rng_types()
-            .iter()
-            .position(|kind| *kind == V::run_rng(RunRng::TreasureRoomRelics))
-            .expect("treasure-room relics is a run RNG stream");
-        self.rngs.run[at] = counter;
+        self.rngs.run[run_stream_at::<V>(V::run_rng(RunRng::TreasureRoomRelics))] = counter;
         self.dealt_relics.push(relic);
         self.phase = Phase::Treasure {
             relic,
@@ -454,11 +456,7 @@ impl<V: Rules> State<V> {
     /// Take back how far each stream a rule drew from now stands.
     pub(super) fn drew(&mut self, counters: Counters<V>) {
         for (kind, counter) in counters.run {
-            let at = V::run_rng_types()
-                .iter()
-                .position(|candidate| *candidate == kind)
-                .expect("a reported run stream belongs to the run");
-            self.rngs.run[at] = counter;
+            self.rngs.run[run_stream_at::<V>(kind)] = counter;
         }
         for (kind, counter) in counters.player {
             if kind == V::player_rng(PlayerRng::Rewards) {

@@ -283,24 +283,56 @@ impl RunRngType {
         RunRngType::CombatOrbs,
         RunRngType::TreasureRoomRelics,
     ];
+
+    /// Every stream's name, and the offset that name's hash adds
+    /// to the run's seed, in the game's own order.
+    const STREAMS: [(&'static str, u32); 12] = [
+        ("up_front", sts2_core::rng::name_hash("up_front") as u32),
+        ("shuffle", sts2_core::rng::name_hash("shuffle") as u32),
+        (
+            "unknown_map_point",
+            sts2_core::rng::name_hash("unknown_map_point") as u32,
+        ),
+        (
+            "combat_card_generation",
+            sts2_core::rng::name_hash("combat_card_generation") as u32,
+        ),
+        (
+            "combat_potion_generation",
+            sts2_core::rng::name_hash("combat_potion_generation") as u32,
+        ),
+        (
+            "combat_card_selection",
+            sts2_core::rng::name_hash("combat_card_selection") as u32,
+        ),
+        (
+            "combat_energy_costs",
+            sts2_core::rng::name_hash("combat_energy_costs") as u32,
+        ),
+        (
+            "combat_targets",
+            sts2_core::rng::name_hash("combat_targets") as u32,
+        ),
+        ("monster_ai", sts2_core::rng::name_hash("monster_ai") as u32),
+        ("niche", sts2_core::rng::name_hash("niche") as u32),
+        (
+            "combat_orbs",
+            sts2_core::rng::name_hash("combat_orbs") as u32,
+        ),
+        (
+            "treasure_room_relics",
+            sts2_core::rng::name_hash("treasure_room_relics") as u32,
+        ),
+    ];
 }
 
 impl sts2_core::StreamKinds for RunRngType {
     fn name(self) -> &'static str {
-        match self {
-            Self::UpFront => "up_front",
-            Self::Shuffle => "shuffle",
-            Self::UnknownMapPoint => "unknown_map_point",
-            Self::CombatCardGeneration => "combat_card_generation",
-            Self::CombatPotionGeneration => "combat_potion_generation",
-            Self::CombatCardSelection => "combat_card_selection",
-            Self::CombatEnergyCosts => "combat_energy_costs",
-            Self::CombatTargets => "combat_targets",
-            Self::MonsterAi => "monster_ai",
-            Self::Niche => "niche",
-            Self::CombatOrbs => "combat_orbs",
-            Self::TreasureRoomRelics => "treasure_room_relics",
-        }
+        Self::STREAMS[self as usize].0
+    }
+
+    fn seed_offset(self) -> u32 {
+        Self::STREAMS[self as usize].1
     }
 }
 
@@ -324,14 +356,25 @@ impl PlayerRngType {
         PlayerRngType::Shops,
         PlayerRngType::Transformations,
     ];
+
+    /// Every stream's name, and the offset that name's hash adds
+    /// to the run's seed, in the game's own order.
+    const STREAMS: [(&'static str, u32); 3] = [
+        ("rewards", sts2_core::rng::name_hash("rewards") as u32),
+        ("shops", sts2_core::rng::name_hash("shops") as u32),
+        (
+            "transformations",
+            sts2_core::rng::name_hash("transformations") as u32,
+        ),
+    ];
 }
 
 impl sts2_core::StreamKinds for PlayerRngType {
     fn name(self) -> &'static str {
-        match self {
-            Self::Rewards => "rewards",
-            Self::Shops => "shops",
-            Self::Transformations => "transformations",
-        }
+        Self::STREAMS[self as usize].0
+    }
+
+    fn seed_offset(self) -> u32 {
+        Self::STREAMS[self as usize].1
     }
 }

@@ -642,6 +642,13 @@ pub trait TargetKinds: std::fmt::Debug + Copy + Eq + 'static {
 pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// What the game hashes into this stream's seed.
     fn name(self) -> &'static str;
+
+    /// What that name hashes to, which is what the run's seed is offset by.
+    ///
+    /// The same fact as the name, one step on. Seeking a stream rebuilds it
+    /// from the seed, so hashing the name at every seek repeats a constant.
+    /// The generated impl takes the hash at compile time, beside the name.
+    fn seed_offset(self) -> u32;
 }
 
 /// How much of a power is on a creature.

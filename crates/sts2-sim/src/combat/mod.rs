@@ -12,7 +12,6 @@ mod play;
 mod potion;
 mod relic;
 mod start;
-mod stream;
 mod turn;
 pub(crate) use legal::belt;
 pub(crate) use live::Live;

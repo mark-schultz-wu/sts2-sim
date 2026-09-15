@@ -8,7 +8,8 @@ use sts2_core::{CombatId, Counters, Rules, RunRng};
 
 use super::board::Board;
 use super::live::Live;
-use super::{Error, relic, stream};
+use super::{Error, relic};
+use crate::stream;
 
 /// Drink one potion, and give back the fight it leaves behind.
 ///
@@ -24,8 +25,8 @@ pub(crate) fn drink<V: Rules>(
     let mut next = live.clone();
     let mut relics = relics.to_vec();
     let mut counters = counters.clone();
-    let mut shuffle = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Shuffle), "shuffle")?;
-    let mut niche = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Niche), "niche")?;
+    let mut shuffle = stream::seek(raw_seed, &counters, RunRng::Shuffle)?;
+    let mut niche = stream::seek(raw_seed, &counters, RunRng::Niche)?;
 
     let mut board = Board::for_card(
         &mut next,
@@ -40,13 +41,8 @@ pub(crate) fn drink<V: Rules>(
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = super::play::merged::<V>(&next.skip_tick, skipped);
-    stream::record(
-        &mut counters,
-        V::run_rng(RunRng::Shuffle),
-        "shuffle",
-        &shuffle,
-    )?;
-    stream::record(&mut counters, V::run_rng(RunRng::Niche), "niche", &niche)?;
+    stream::record(&mut counters, RunRng::Shuffle, &shuffle)?;
+    stream::record(&mut counters, RunRng::Niche, &niche)?;
     if won {
         relic::combat_ended::<V>(&mut relics);
     }

@@ -6,6 +6,7 @@ use sts2_core::{CombatId, Counters, Creature, ModelId, MoveMachine, Rules, RunRn
 
 use super::Error;
 use super::live::Live;
+use crate::stream;
 
 /// Roll a monster's health, avoiding healths already rolled in this fight
 /// whenever its range leaves another choice.
@@ -64,13 +65,8 @@ pub(crate) fn initialize<V: Rules>(
     counters: &mut Counters<V>,
     monsters: &[V::Monster],
 ) -> Result<Roster<V>, Error> {
-    let mut niche = super::stream::seek(raw_seed, counters, V::run_rng(RunRng::Niche), "niche")?;
-    let mut ai = super::stream::seek(
-        raw_seed,
-        counters,
-        V::run_rng(RunRng::MonsterAi),
-        "monster_ai",
-    )?;
+    let mut niche = stream::seek(raw_seed, counters, RunRng::Niche)?;
+    let mut ai = stream::seek(raw_seed, counters, RunRng::MonsterAi)?;
 
     // A fight the encounter builds nobody for is not a fight.
     let roster_size = u8::try_from(monsters.len())
@@ -123,8 +119,8 @@ pub(crate) fn initialize<V: Rules>(
         });
     }
 
-    super::stream::record(counters, V::run_rng(RunRng::Niche), "niche", &niche)?;
-    super::stream::record(counters, V::run_rng(RunRng::MonsterAi), "monster_ai", &ai)?;
+    stream::record(counters, RunRng::Niche, &niche)?;
+    stream::record(counters, RunRng::MonsterAi, &ai)?;
     Ok(Roster {
         creatures,
         machines,
@@ -342,8 +338,8 @@ mod counter_tests {
     #[test]
     fn a_missing_required_stream_is_not_counter_zero() {
         for (missing, stream) in [
-            (RunRngType::Niche, "niche"),
-            (RunRngType::MonsterAi, "monster_ai"),
+            (RunRngType::Niche, RunRng::Niche),
+            (RunRngType::MonsterAi, RunRng::MonsterAi),
         ] {
             let mut counters = Counters {
                 run: RunRngType::ALL

@@ -197,14 +197,14 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
         match name {
             "UnplayableReason" => emit_reasons(&mut out, doc, members)?,
-            _ => emit_enum(&mut out, name, doc, members),
+            _ => emit_enum(&mut out, name, doc, members, &stream_table(name, members)?),
         }
 
         if let Some(bridge) = BRIDGES.iter().find(|b| b.enum_name == name) {
             emit_bridge(&mut out, bridge, members)?;
         }
         if name.ends_with("RngType") {
-            emit_stream_names(&mut out, name, members)?;
+            emit_stream_kinds(&mut out, name);
         }
     }
 
@@ -229,7 +229,7 @@ fn note(enum_name: &str, member: &str) -> &'static str {
 }
 
 /// One enum at the game's own discriminants.
-fn emit_enum(out: &mut String, name: &str, doc: &str, members: &[(u8, String)]) {
+fn emit_enum(out: &mut String, name: &str, doc: &str, members: &[(u8, String)], extra: &str) {
     for line in doc.lines() {
         writeln!(out, "/// {}", line.trim()).unwrap();
     }
@@ -248,11 +248,13 @@ fn emit_enum(out: &mut String, name: &str, doc: &str, members: &[(u8, String)]) 
         out,
         name,
         &members.iter().map(|(_, m)| m.as_str()).collect::<Vec<_>>(),
+        extra,
     );
 }
 
-/// `ALL`, because Rust has no way to walk an enum.
-fn emit_all(out: &mut String, name: &str, members: &[&str]) {
+/// `ALL`, because Rust has no way to walk an enum, and whatever else the
+/// enum's own impl block carries.
+fn emit_all(out: &mut String, name: &str, members: &[&str], extra: &str) {
     writeln!(out, "impl {name} {{").unwrap();
     writeln!(
         out,
@@ -265,6 +267,7 @@ fn emit_all(out: &mut String, name: &str, members: &[&str]) {
         writeln!(out, "        {name}::{member},").unwrap();
     }
     writeln!(out, "    ];").unwrap();
+    out.push_str(extra);
     writeln!(out, "}}\n").unwrap();
 }
 
@@ -325,6 +328,7 @@ fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result
         out,
         "UnplayableReason",
         &bits.iter().map(|m| m.name).collect::<Vec<_>>(),
+        "",
     );
 
     sets::plain(
@@ -403,33 +407,70 @@ const BRIDGES: [Bridge; 4] = [
     },
 ];
 
-/// A stream's name, which is its member's in snake case.
+/// The names of a stream enum's members, and the seed offsets they hash to.
 ///
-/// `RunRngSet.CreateRng` seeds a stream with `SnakeCase(rngType.ToString())`.
-/// So this is that call, made once at generation, and not a table to keep in
-/// step with one.
+/// `RunRngSet.CreateRng` seeds a stream with
+/// `new Rng(Seed, SnakeCase(rngType.ToString()))`, so the name is that call
+/// made once at generation. The offset beside it is written as the `name_hash`
+/// call, and the compiler takes the hash.
 ///
-/// The game's snake case has a second rule for runs of capitals, which no
-/// member here has. A member that grows one stops generation.
-fn emit_stream_names(out: &mut String, name: &str, members: &[(u8, String)]) -> Result<(), String> {
-    writeln!(out, "impl sts2_core::StreamKinds for {name} {{").unwrap();
-    writeln!(out, "    fn name(self) -> &'static str {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
+/// Indexed by the discriminant, so generation stops on an enum numbered from
+/// anything but zero. Empty for the enums here that are not streams.
+fn stream_table(name: &str, members: &[(u8, String)]) -> Result<String, String> {
+    if !name.ends_with("RngType") {
+        return Ok(String::new());
+    }
+
+    for (at, (discriminant, member)) in members.iter().enumerate() {
+        if usize::from(*discriminant) != at {
+            return Err(format!(
+                "{name}::{member} is {discriminant} and not {at} — a stream is reached \
+                 by its discriminant, which this numbering would misindex"
+            ));
+        }
+    }
+
+    let mut out = String::new();
+    writeln!(
+        out,
+        "\n    /// Every stream's name, and the offset that name's hash adds\n\
+         \x20   /// to the run's seed, in the game's own order."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const STREAMS: [(&'static str, u32); {}] = [",
+        members.len()
+    )
+    .unwrap();
     for (_, member) in members {
+        let spelling = snake_case(name, member)?;
         writeln!(
             out,
-            "            Self::{member} => \"{}\",",
-            snake_case(name, member)?
+            "        (\"{spelling}\", sts2_core::rng::name_hash(\"{spelling}\") as u32),"
         )
         .unwrap();
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "    ];").unwrap();
+    Ok(out)
+}
+
+/// Both halves of [`sts2_core::StreamKinds`], read off the table above.
+fn emit_stream_kinds(out: &mut String, name: &str) {
+    writeln!(out, "impl sts2_core::StreamKinds for {name} {{").unwrap();
+    writeln!(out, "    fn name(self) -> &'static str {{").unwrap();
+    writeln!(out, "        Self::STREAMS[self as usize].0").unwrap();
+    writeln!(out, "    }}\n").unwrap();
+    writeln!(out, "    fn seed_offset(self) -> u32 {{").unwrap();
+    writeln!(out, "        Self::STREAMS[self as usize].1").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
-    Ok(())
 }
 
 /// `MonsterAi` as `monster_ai`, the way the game spells it.
+///
+/// The game's snake case has a second rule for runs of capitals, which no
+/// member here has. A member that grows one stops generation.
 fn snake_case(enum_name: &str, member: &str) -> Result<String, String> {
     let mut out = String::with_capacity(member.len() + 4);
     let mut previous_upper = false;

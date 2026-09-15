@@ -6,6 +6,9 @@
 //! beyond being unique. Those are the discriminant, which is the game's own,
 //! and `UnplayableReason`'s, which deliberately is not.
 
+use sts2_core::StreamKinds as _;
+use sts2_core::rng::name_hash;
+
 use super::super::runstate::*;
 use super::super::{RUNSTATE, VERSION};
 use super::{build, rows, wire};
@@ -277,5 +280,62 @@ fn the_words_this_build_uses() {
         PlayerRngType::ALL.map(|r| wire(&r)),
         ["Rewards", "Shops", "Transformations"],
         "a player's random streams have changed"
+    );
+}
+
+/// A stream's seed offset is the hash of the name beside it.
+///
+/// The names and the offsets are one generated table, read by the
+/// discriminant. So what this holds is the indexing. A table in another order
+/// hands every stream its neighbour's name and seed. Every draw after that
+/// comes from a real stream that is the wrong one.
+#[test]
+fn every_stream_offset_is_its_own_names_hash() {
+    for stream in RunRngType::ALL {
+        assert_eq!(
+            stream.seed_offset(),
+            name_hash(stream.name()) as u32,
+            "{stream:?} is seeded from another stream's name"
+        );
+    }
+    for stream in PlayerRngType::ALL {
+        assert_eq!(
+            stream.seed_offset(),
+            name_hash(stream.name()) as u32,
+            "{stream:?} is seeded from another stream's name"
+        );
+    }
+}
+
+/// And the name is the member's, in the game's snake case.
+///
+/// `RunRngSet.CreateRng` is `new Rng(Seed, SnakeCase(rngType.ToString()))`, so
+/// the pair is the game's and not something codegen gets to choose. Spelled
+/// out here rather than derived, because deriving it twice is one rule tested
+/// against itself.
+#[test]
+fn the_names_this_build_seeds_its_streams_with() {
+    assert_eq!(
+        RunRngType::ALL.map(|r| r.name()),
+        [
+            "up_front",
+            "shuffle",
+            "unknown_map_point",
+            "combat_card_generation",
+            "combat_potion_generation",
+            "combat_card_selection",
+            "combat_energy_costs",
+            "combat_targets",
+            "monster_ai",
+            "niche",
+            "combat_orbs",
+            "treasure_room_relics"
+        ],
+        "a run's streams are seeded from other names than these"
+    );
+    assert_eq!(
+        PlayerRngType::ALL.map(|r| r.name()),
+        ["rewards", "shops", "transformations"],
+        "a player's streams are seeded from other names than these"
     );
 }

@@ -6,8 +6,9 @@ use sts2_core::{
 };
 
 use super::live::{CardIds, CardInstance, Live};
-use super::{Error, encounter, monster, pile, relic, stream};
+use super::{Error, encounter, monster, pile, relic};
 use crate::run::HeldRelic;
+use crate::stream;
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
 const HAND_SIZE: usize = 5;
@@ -74,15 +75,10 @@ pub(crate) fn enter<V: Rules>(
     }
     relic::turn_starting::<V>(relics, turn);
 
-    let mut shuffle = stream::seek(raw_seed, &counters, V::run_rng(RunRng::Shuffle), "shuffle")?;
+    let mut shuffle = stream::seek(raw_seed, &counters, RunRng::Shuffle)?;
     let drawn = hand_size::<V>(relics, turn);
     let piles = pile::shuffle(&mut shuffle, deck).deal(drawn);
-    stream::record(
-        &mut counters,
-        V::run_rng(RunRng::Shuffle),
-        "shuffle",
-        &shuffle,
-    )?;
+    stream::record(&mut counters, RunRng::Shuffle, &shuffle)?;
 
     let mut hand = piles.hand().to_vec();
     upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));

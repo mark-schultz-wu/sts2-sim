@@ -1,7 +1,7 @@
 //! Moving to a map point, and entering what waits there.
 
 use sts2_core::rng::GameRng;
-use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, RunRng, StreamKinds};
+use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, RunRng};
 
 use super::State;
 use super::state::EncounterQueue;
@@ -78,11 +78,11 @@ impl<V: Rules> State<V> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
-                let stream = V::run_rng(RunRng::TreasureRoomRelics);
-                let counter = self.counters().run[&stream];
-                let mut rng = crate::rng::MegaRng::named(self.raw_seed(), stream.name());
-                rng.fast_forward(counter as i32)
-                    .expect("a stored RNG counter moves forward");
+                let mut rng = crate::stream::seek(
+                    self.raw_seed(),
+                    &self.counters(),
+                    RunRng::TreasureRoomRelics,
+                )?;
                 let roll = rng.next_double();
                 let rarity = if roll < COMMON_RELIC_CHANCE {
                     <super::Rarity<V> as sts2_core::RarityKinds>::COMMON
@@ -99,11 +99,8 @@ impl<V: Rules> State<V> {
                 unimplemented!("entering {destination:?}");
             }
             let (mut events_used, visited, mut odds) = self.event_state();
-            let stream = V::run_rng(RunRng::UnknownMapPoint);
-            let counter = self.counters().run[&stream];
-            let mut rng = crate::rng::MegaRng::named(self.raw_seed(), stream.name());
-            rng.fast_forward(counter as i32)
-                .expect("a stored RNG counter moves forward");
+            let mut rng =
+                crate::stream::seek(self.raw_seed(), &self.counters(), RunRng::UnknownMapPoint)?;
             let roll = rng.next_double() as f32;
             let mut cumulative = 0.0;
             for probability in odds {
