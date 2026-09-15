@@ -6,70 +6,70 @@
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const BATTLEWORN_DUMMY: EventData = EventData {
-    event_id_hash: 2564945393u32,
+    event_id_hash: 6044929051888751618u64,
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const GRAVE_OF_THE_FORGOTTEN: EventData = EventData {
-    event_id_hash: 690949760u32,
+    event_id_hash: 9778962469667262386u64,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const HUNGRY_FOR_MUSHROOMS: EventData = EventData {
-    event_id_hash: 3155106003u32,
+    event_id_hash: 15315538350552112183u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const NONUPEIPE: EventData = EventData {
-    event_id_hash: 185712139u32,
+    event_id_hash: 15161390188122217515u64,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const REFLECTIONS: EventData = EventData {
-    event_id_hash: 3213209028u32,
+    event_id_hash: 10698143308212293836u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const ROUND_TEA_PARTY: EventData = EventData {
-    event_id_hash: 1727237228u32,
+    event_id_hash: 16827147801602519953u64,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TANX: EventData = EventData {
-    event_id_hash: 2479364619u32,
+    event_id_hash: 14864729820880679986u64,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const TINKER_TIME: EventData = EventData {
-    event_id_hash: 3422039877u32,
+    event_id_hash: 2726421529396907377u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TRIAL: EventData = EventData {
-    event_id_hash: 1775136834u32,
+    event_id_hash: 15626281361262936519u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const VAKUU: EventData = EventData {
-    event_id_hash: 3838353314u32,
+    event_id_hash: 8647682973019211359u64,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,

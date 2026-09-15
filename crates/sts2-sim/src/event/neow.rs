@@ -9,7 +9,7 @@
 //! it from the run's seed, the player's slot and the event's own id, so no
 //! draw here moves any counter an observation reports.
 
-use sts2_core::rng::{GameRng, name_hash};
+use sts2_core::rng::GameRng;
 use sts2_core::{ContentVersion, Rules};
 
 /// The relics Neow offers, in the order the room lists them.
@@ -27,11 +27,10 @@ impl<V: Rules> Blessing<V> {
     /// The player's slot index is added in for an event that is not shared, and
     /// Neow is not. A single player sits in slot zero, so this is the run's
     /// seed mixed with the event's id and nothing else.
-    pub fn stream<R: GameRng>(seed: u32, slot: u32) -> R {
-        R::new(
-            seed.wrapping_add(slot)
-                .wrapping_add(name_hash("NEOW") as u32),
-        )
+    pub fn stream<R: GameRng>(seed: u64, slot: u64) -> R {
+        R::new(V::seed_from(
+            seed.wrapping_add(slot).wrapping_add(V::name_hash("NEOW")),
+        ))
     }
 
     /// Roll the three options.

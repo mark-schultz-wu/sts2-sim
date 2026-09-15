@@ -552,7 +552,7 @@ fn emit_shape(out: &mut String) {
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub struct EncounterData {{\n\
          \x20   pub room: RoomType,\n\
-         \x20   pub seed_salt: u32,\n\
+         \x20   pub seed_salt: u64,\n\
          \x20   pub flags: FlagSet,\n\
          \x20   pub families: FamilySet,\n\
          \x20   pub gold: Gold,\n\
@@ -605,12 +605,7 @@ fn literal(id: &str, e: &Encounter) -> Result<String, String> {
     let mut out = String::new();
     writeln!(out, "EncounterData {{").unwrap();
     writeln!(out, "    room: RoomType::{},", e.room).unwrap();
-    writeln!(
-        out,
-        "    seed_salt: {}u32,",
-        sts2_core::rng::name_hash(id) as u32
-    )
-    .unwrap();
+    writeln!(out, "    seed_salt: {}u64,", super::seed_hash(id)?).unwrap();
     writeln!(
         out,
         "    flags: FlagSet::new(&[{}]),",
@@ -804,7 +799,7 @@ fn emit_encounters(
          \x20   }}\n\
          \n\
          \x20   /// The encounter entry hash used by its private RNG.\n\
-         \x20   fn seed_salt(self) -> u32 {{\n\
+         \x20   fn seed_salt(self) -> u64 {{\n\
          \x20       self.data().seed_salt\n\
          \x20   }}"
     )

@@ -260,7 +260,7 @@ fn emit_shape(out: &mut String) {
         "/// What is true of an event with no run in progress.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub struct EventData {{\n\
-         \x20   pub event_id_hash: u32,\n\
+         \x20   pub event_id_hash: u64,\n\
          \x20   pub flags: EventFlags,\n\
          \x20   /// Which layout the room draws. `Ancient` is the nine\n\
          \x20   /// `AncientEventModel`s and `Combat` the three that open into a\n\
@@ -288,12 +288,7 @@ fn literal(row: &[String]) -> Result<String, String> {
 
     let mut out = String::new();
     writeln!(out, "EventData {{").unwrap();
-    writeln!(
-        out,
-        "    event_id_hash: {}u32,",
-        sts2_core::rng::name_hash(&row[1]) as u32
-    )
-    .unwrap();
+    writeln!(out, "    event_id_hash: {}u64,", super::seed_hash(&row[1])?).unwrap();
     writeln!(out, "    flags: EventFlags::new(&[{set}]),").unwrap();
     writeln!(out, "    layout: EventLayoutType::{},", row[5]).unwrap();
     writeln!(out, "    encounter: {encounter},").unwrap();
@@ -384,7 +379,7 @@ fn emit_events(
          \x20   }}\n\
          \n\
          \x20   /// The event id hash used by its private RNG.\n\
-         \x20   fn event_id_hash(self) -> u32 {{\n\
+         \x20   fn event_id_hash(self) -> u64 {{\n\
          \x20       <Self as sts2_core::Table>::data(self).event_id_hash\n\
          \x20   }}"
     )

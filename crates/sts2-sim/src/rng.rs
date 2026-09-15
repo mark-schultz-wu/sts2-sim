@@ -6,7 +6,7 @@ use sts2_core::rng::GameRng;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MegaRng {
     s: [u64; 4],
-    seed: u32,
+    seed: u64,
     counter: i32,
 }
 
@@ -21,8 +21,8 @@ impl MegaRng {
 impl GameRng for MegaRng {
     type Int = i32;
 
-    fn new(seed: u32) -> Self {
-        let mut x = u64::from(seed);
+    fn new(seed: u64) -> Self {
+        let mut x = seed;
         Self {
             s: [
                 splitmix64(&mut x),
@@ -35,7 +35,7 @@ impl GameRng for MegaRng {
         }
     }
 
-    fn seed(&self) -> u32 {
+    fn seed(&self) -> u64 {
         self.seed
     }
     fn counter(&self) -> i32 {

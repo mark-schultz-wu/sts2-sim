@@ -7,91 +7,91 @@ use super::super::encounters::Encounter;
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const AMALGAMATOR: EventData = EventData {
-    event_id_hash: 619363232u32,
+    event_id_hash: 6779911851982407123u64,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const BUGSLAYER: EventData = EventData {
-    event_id_hash: 3250104938u32,
+    event_id_hash: 16602429644646673853u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const COLORFUL_PHILOSOPHERS: EventData = EventData {
-    event_id_hash: 4223807935u32,
+    event_id_hash: 12748063803466123900u64,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const COLOSSAL_FLOWER: EventData = EventData {
-    event_id_hash: 4150253404u32,
+    event_id_hash: 15485874525568602042u64,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const FIELD_OF_MAN_SIZED_HOLES: EventData = EventData {
-    event_id_hash: 227408213u32,
+    event_id_hash: 5203195817745311532u64,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const INFESTED_AUTOMATON: EventData = EventData {
-    event_id_hash: 2915066467u32,
+    event_id_hash: 3552485257715232552u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const LOST_WISP: EventData = EventData {
-    event_id_hash: 1487069438u32,
+    event_id_hash: 16463937019538296410u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const OROBAS: EventData = EventData {
-    event_id_hash: 2877631874u32,
+    event_id_hash: 16327555172844452010u64,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const PAEL: EventData = EventData {
-    event_id_hash: 1222456984u32,
+    event_id_hash: 10328013273512881529u64,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const SPIRIT_GRAFTER: EventData = EventData {
-    event_id_hash: 1350255863u32,
+    event_id_hash: 5123518132682622442u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,
 };
 
 pub(super) const TEZCATARA: EventData = EventData {
-    event_id_hash: 3196042339u32,
+    event_id_hash: 294452974676550996u64,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const THE_LANTERN_KEY: EventData = EventData {
-    event_id_hash: 937258650u32,
+    event_id_hash: 12404133000556088318u64,
     flags: EventFlags::new(&[EventFlag::SharedBetweenPlayers]),
     layout: EventLayoutType::Combat,
     encounter: Some(Encounter::MysteriousKnightEventEncounter),
 };
 
 pub(super) const ZEN_WEAVER: EventData = EventData {
-    event_id_hash: 1187303384u32,
+    event_id_hash: 8205627492302482302u64,
     flags: EventFlags::new(&[EventFlag::Deterministic, EventFlag::Gated]),
     layout: EventLayoutType::Default,
     encounter: None,

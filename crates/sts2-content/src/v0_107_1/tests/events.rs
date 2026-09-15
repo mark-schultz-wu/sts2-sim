@@ -283,7 +283,7 @@ fn event_id_hashes_are_generated_from_the_wire_ids() {
     for event in Event::ALL {
         assert_eq!(
             event.event_id_hash(),
-            sts2_core::rng::name_hash(&wire(event)) as u32
+            sts2_core::rng::name_hash(&wire(event)) as u32 as u64
         );
     }
 }

@@ -124,10 +124,10 @@ mod tests {
 
     impl GameRng for Rng {
         type Int = i32;
-        fn new(_: u32) -> Self {
+        fn new(_: u64) -> Self {
             Self
         }
-        fn seed(&self) -> u32 {
+        fn seed(&self) -> u64 {
             0
         }
         fn counter(&self) -> i32 {

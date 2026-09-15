@@ -29,6 +29,7 @@
 # package: sts2-game
 # version: 0.107.1-59260271
 # assembly: 1692500715
+# hash: fold32
 # abi: counter-rng
 
 ef1898322c9f5c86dc1b0758b272a9c440823b4a41ca9a0b82a3aa6b3d206387  0Harmony.dll

@@ -9,18 +9,20 @@ use super::Error;
 /// Resolve a static roster without RNG, or run the build-specific generator
 /// from the encounter's private stream.
 pub(crate) fn opening<V: Rules>(
-    raw_seed: u32,
+    raw_seed: u64,
     floor: V::Count,
     encounter: V::Encounter,
 ) -> Result<Vec<V::Monster>, Error> {
     match encounter.roster() {
         EncounterRoster::Fixed(monsters) => Ok(monsters.collect()),
         EncounterRoster::Random => {
-            let floor: u32 = num_traits::cast(floor)
+            let floor: u64 = num_traits::cast(floor)
                 .expect("a floor number fits the seed the game mixes it into");
-            let seed = raw_seed
-                .wrapping_add(floor)
-                .wrapping_add(encounter.seed_salt());
+            let seed = V::seed_from(
+                raw_seed
+                    .wrapping_add(floor)
+                    .wrapping_add(encounter.seed_salt()),
+            );
             let mut rng = MegaRng::new(seed);
             V::random_encounter_monsters(encounter, &mut rng).map_err(Error::from)
         }

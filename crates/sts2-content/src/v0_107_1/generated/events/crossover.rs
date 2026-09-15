@@ -6,14 +6,14 @@
 use super::{EventData, EventFlag, EventFlags, EventLayoutType};
 
 pub(super) const NEOW: EventData = EventData {
-    event_id_hash: 348630327u32,
+    event_id_hash: 348630327u64,
     flags: EventFlags::new(&[EventFlag::Ancient, EventFlag::Deterministic]),
     layout: EventLayoutType::Ancient,
     encounter: None,
 };
 
 pub(super) const SUNKEN_STATUE: EventData = EventData {
-    event_id_hash: 4048998113u32,
+    event_id_hash: 4048998113u64,
     flags: EventFlags::new(&[EventFlag::Deterministic]),
     layout: EventLayoutType::Default,
     encounter: None,

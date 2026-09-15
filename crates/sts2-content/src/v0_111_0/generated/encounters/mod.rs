@@ -287,7 +287,7 @@ pub enum Roster {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EncounterData {
     pub room: RoomType,
-    pub seed_salt: u32,
+    pub seed_salt: u64,
     pub flags: FlagSet,
     pub families: FamilySet,
     pub gold: Gold,
@@ -877,7 +877,7 @@ impl sts2_core::EncounterTable for Encounter {
     }
 
     /// The encounter entry hash used by its private RNG.
-    fn seed_salt(self) -> u32 {
+    fn seed_salt(self) -> u64 {
         self.data().seed_salt
     }
 }

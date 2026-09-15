@@ -8,6 +8,7 @@
 # package: sts2-game
 # version: 0.111.0-41cef1ea
 # assembly: 1579942752
+# hash: xxhash64
 # abi: stateful-rng
 
 ef1898322c9f5c86dc1b0758b272a9c440823b4a41ca9a0b82a3aa6b3d206387  0Harmony.dll

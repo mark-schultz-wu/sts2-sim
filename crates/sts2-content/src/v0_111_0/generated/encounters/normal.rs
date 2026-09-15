@@ -12,7 +12,7 @@ use crate::Scaled;
 
 pub(super) const AXEBOTS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 4262077442u32,
+    seed_salt: 2230372960799843994u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -35,7 +35,7 @@ pub(super) const AXEBOTS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const BATTLEWORN_DUMMY_EVENT_V1_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2072346656u32,
+    seed_salt: 6925735061379714940u64,
     flags: FlagSet::new(&[]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -58,7 +58,7 @@ pub(super) const BATTLEWORN_DUMMY_EVENT_V1_ENCOUNTER: EncounterData = EncounterD
 
 pub(super) const BATTLEWORN_DUMMY_EVENT_V2_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2339104961u32,
+    seed_salt: 10913828323501057455u64,
     flags: FlagSet::new(&[]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -81,7 +81,7 @@ pub(super) const BATTLEWORN_DUMMY_EVENT_V2_ENCOUNTER: EncounterData = EncounterD
 
 pub(super) const BATTLEWORN_DUMMY_EVENT_V3_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2302132322u32,
+    seed_salt: 17102947759392275761u64,
     flags: FlagSet::new(&[]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -104,7 +104,7 @@ pub(super) const BATTLEWORN_DUMMY_EVENT_V3_ENCOUNTER: EncounterData = EncounterD
 
 pub(super) const BOWLBUGS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2062844597u32,
+    seed_salt: 8168940399719750497u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Workers]),
     gold: Gold {
@@ -129,7 +129,7 @@ pub(super) const BOWLBUGS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const BOWLBUGS_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3217401042u32,
+    seed_salt: 13576317781979862691u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Workers]),
     gold: Gold {
@@ -153,7 +153,7 @@ pub(super) const BOWLBUGS_WEAK: EncounterData = EncounterData {
 
 pub(super) const CHOMPERS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1196861873u32,
+    seed_salt: 12829397691919079890u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Chomper]),
     gold: Gold {
@@ -182,7 +182,7 @@ pub(super) const CHOMPERS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const CONSTRUCT_MENAGERIE_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1286723865u32,
+    seed_salt: 16689020906373122111u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -215,7 +215,7 @@ pub(super) const CONSTRUCT_MENAGERIE_NORMAL: EncounterData = EncounterData {
 
 pub(super) const CORPSE_SLUGS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2960788405u32,
+    seed_salt: 12785802655355727634u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Slugs]),
     gold: Gold {
@@ -235,7 +235,7 @@ pub(super) const CORPSE_SLUGS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const CORPSE_SLUGS_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 4070074638u32,
+    seed_salt: 3000424953492909297u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Slugs]),
     gold: Gold {
@@ -255,7 +255,7 @@ pub(super) const CORPSE_SLUGS_WEAK: EncounterData = EncounterData {
 
 pub(super) const CUBEX_CONSTRUCT_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2341944935u32,
+    seed_salt: 10632255642225116414u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -278,7 +278,7 @@ pub(super) const CUBEX_CONSTRUCT_NORMAL: EncounterData = EncounterData {
 
 pub(super) const CULTISTS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2644839139u32,
+    seed_salt: 16700416537771436162u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -307,7 +307,7 @@ pub(super) const CULTISTS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const DENSE_VEGETATION_EVENT_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1007806205u32,
+    seed_salt: 17990123666733894577u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -344,7 +344,7 @@ pub(super) const DENSE_VEGETATION_EVENT_ENCOUNTER: EncounterData = EncounterData
 
 pub(super) const DEPRECATED_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2583849289u32,
+    seed_salt: 9425525690763007105u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -364,7 +364,7 @@ pub(super) const DEPRECATED_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const DEVOTED_SCULPTOR_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2856641u32,
+    seed_salt: 8576273938193892879u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -387,7 +387,7 @@ pub(super) const DEVOTED_SCULPTOR_WEAK: EncounterData = EncounterData {
 
 pub(super) const EXOSKELETONS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 499371118u32,
+    seed_salt: 12384414244387232384u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Exoskeletons]),
     gold: Gold {
@@ -424,7 +424,7 @@ pub(super) const EXOSKELETONS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const EXOSKELETONS_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 724854743u32,
+    seed_salt: 5187578021243990309u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Exoskeletons]),
     gold: Gold {
@@ -457,7 +457,7 @@ pub(super) const EXOSKELETONS_WEAK: EncounterData = EncounterData {
 
 pub(super) const FABRICATOR_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2059243677u32,
+    seed_salt: 5927826743031113951u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -486,7 +486,7 @@ pub(super) const FABRICATOR_NORMAL: EncounterData = EncounterData {
 
 pub(super) const FAKE_MERCHANT_EVENT_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1831556119u32,
+    seed_salt: 6466092012626249216u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -509,7 +509,7 @@ pub(super) const FAKE_MERCHANT_EVENT_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const FLYCONID_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3534414942u32,
+    seed_salt: 13399469962679149888u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Mushroom, Family::Slimes]),
     gold: Gold {
@@ -529,7 +529,7 @@ pub(super) const FLYCONID_NORMAL: EncounterData = EncounterData {
 
 pub(super) const FOGMOG_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3282674507u32,
+    seed_salt: 7653729675551983624u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -552,7 +552,7 @@ pub(super) const FOGMOG_NORMAL: EncounterData = EncounterData {
 
 pub(super) const FOSSIL_STALKER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2902706201u32,
+    seed_salt: 15881798381759894516u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -575,7 +575,7 @@ pub(super) const FOSSIL_STALKER_NORMAL: EncounterData = EncounterData {
 
 pub(super) const FROG_KNIGHT_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2598690378u32,
+    seed_salt: 14585061464776755387u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -598,7 +598,7 @@ pub(super) const FROG_KNIGHT_NORMAL: EncounterData = EncounterData {
 
 pub(super) const FUZZY_WURM_CRAWLER_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1658452270u32,
+    seed_salt: 5522009916565160585u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Crawler]),
     gold: Gold {
@@ -621,7 +621,7 @@ pub(super) const FUZZY_WURM_CRAWLER_WEAK: EncounterData = EncounterData {
 
 pub(super) const GLOBE_HEAD_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3946887000u32,
+    seed_salt: 17598031512301308189u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -644,7 +644,7 @@ pub(super) const GLOBE_HEAD_NORMAL: EncounterData = EncounterData {
 
 pub(super) const GREMLIN_MERC_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1702862558u32,
+    seed_salt: 16500262504814426122u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -671,7 +671,7 @@ pub(super) const GREMLIN_MERC_NORMAL: EncounterData = EncounterData {
 
 pub(super) const HAUNTED_SHIP_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3854401452u32,
+    seed_salt: 511084913479735861u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -694,7 +694,7 @@ pub(super) const HAUNTED_SHIP_NORMAL: EncounterData = EncounterData {
 
 pub(super) const HUNTER_KILLER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2638055468u32,
+    seed_salt: 4989036223925905818u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -717,7 +717,7 @@ pub(super) const HUNTER_KILLER_NORMAL: EncounterData = EncounterData {
 
 pub(super) const INKLETS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3701599382u32,
+    seed_salt: 8655742156676744681u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -750,7 +750,7 @@ pub(super) const INKLETS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const LIVING_FOG_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2971054342u32,
+    seed_salt: 6569768601779052622u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -773,7 +773,7 @@ pub(super) const LIVING_FOG_NORMAL: EncounterData = EncounterData {
 
 pub(super) const LOUSE_PROGENITOR_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 206207570u32,
+    seed_salt: 7959619073077898865u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -796,7 +796,7 @@ pub(super) const LOUSE_PROGENITOR_NORMAL: EncounterData = EncounterData {
 
 pub(super) const MAWLER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1046762670u32,
+    seed_salt: 15751525540385205839u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -819,7 +819,7 @@ pub(super) const MAWLER_NORMAL: EncounterData = EncounterData {
 
 pub(super) const MOCK_ARTIFACT_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3506366275u32,
+    seed_salt: 4333388083508130773u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -842,7 +842,7 @@ pub(super) const MOCK_ARTIFACT_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const MOCK_ATTACK_AND_SUMMON_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1214728493u32,
+    seed_salt: 8315967880977183858u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -865,7 +865,7 @@ pub(super) const MOCK_ATTACK_AND_SUMMON_ENCOUNTER: EncounterData = EncounterData
 
 pub(super) const MOCK_MONSTER_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2975737133u32,
+    seed_salt: 2387577531972255211u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -888,7 +888,7 @@ pub(super) const MOCK_MONSTER_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const MOCK_NO_REWARDS_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3368096003u32,
+    seed_salt: 16143571925190614446u64,
     flags: FlagSet::new(&[]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -911,7 +911,7 @@ pub(super) const MOCK_NO_REWARDS_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const MOCK_PLATING_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1508841614u32,
+    seed_salt: 16141299815256202770u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -934,7 +934,7 @@ pub(super) const MOCK_PLATING_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const MOCK_TWO_MONSTER_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 734622562u32,
+    seed_salt: 5490476908696121177u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -963,7 +963,7 @@ pub(super) const MOCK_TWO_MONSTER_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2178862263u32,
+    seed_salt: 10881232305471116859u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -986,7 +986,7 @@ pub(super) const MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER: EncounterData = EncounterDat
 
 pub(super) const MYTES_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 182009946u32,
+    seed_salt: 8227291605304771337u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1015,7 +1015,7 @@ pub(super) const MYTES_NORMAL: EncounterData = EncounterData {
 
 pub(super) const NIBBITS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2503056837u32,
+    seed_salt: 8776882774351222381u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1044,7 +1044,7 @@ pub(super) const NIBBITS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const NIBBITS_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2119076252u32,
+    seed_salt: 8204063790309546289u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Nibbit]),
     gold: Gold {
@@ -1067,7 +1067,7 @@ pub(super) const NIBBITS_WEAK: EncounterData = EncounterData {
 
 pub(super) const OVERGROWTH_CRAWLERS: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 60546671u32,
+    seed_salt: 2062825818837551038u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Shrinker, Family::Crawler]),
     gold: Gold {
@@ -1096,7 +1096,7 @@ pub(super) const OVERGROWTH_CRAWLERS: EncounterData = EncounterData {
 
 pub(super) const OVICOPTER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1265759419u32,
+    seed_salt: 2978238028261813042u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1119,7 +1119,7 @@ pub(super) const OVICOPTER_NORMAL: EncounterData = EncounterData {
 
 pub(super) const OWL_MAGISTRATE_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1361851600u32,
+    seed_salt: 2642465565241084601u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1142,7 +1142,7 @@ pub(super) const OWL_MAGISTRATE_NORMAL: EncounterData = EncounterData {
 
 pub(super) const PUNCH_CONSTRUCT_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3946244934u32,
+    seed_salt: 5141966292253738256u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1165,7 +1165,7 @@ pub(super) const PUNCH_CONSTRUCT_NORMAL: EncounterData = EncounterData {
 
 pub(super) const PUNCH_OFF_EVENT_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3595705651u32,
+    seed_salt: 1301857307255550115u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1185,7 +1185,7 @@ pub(super) const PUNCH_OFF_EVENT_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const RUBY_RAIDERS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 657242057u32,
+    seed_salt: 7756109588529371022u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1211,7 +1211,7 @@ pub(super) const RUBY_RAIDERS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SCROLLS_OF_BITING_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3121197754u32,
+    seed_salt: 4858411105552804395u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Scrolls]),
     gold: Gold {
@@ -1231,7 +1231,7 @@ pub(super) const SCROLLS_OF_BITING_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SCROLLS_OF_BITING_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1358993411u32,
+    seed_salt: 10482568228293249896u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Scrolls]),
     gold: Gold {
@@ -1251,7 +1251,7 @@ pub(super) const SCROLLS_OF_BITING_WEAK: EncounterData = EncounterData {
 
 pub(super) const SEAPUNK_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 161347007u32,
+    seed_salt: 7494425925923800224u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Seapunk]),
     gold: Gold {
@@ -1280,7 +1280,7 @@ pub(super) const SEAPUNK_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SEAPUNK_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 650169962u32,
+    seed_salt: 12713818313124678095u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Seapunk]),
     gold: Gold {
@@ -1303,7 +1303,7 @@ pub(super) const SEAPUNK_WEAK: EncounterData = EncounterData {
 
 pub(super) const SEWER_CLAM_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 231324446u32,
+    seed_salt: 801498847737604109u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1326,7 +1326,7 @@ pub(super) const SEWER_CLAM_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SHRINKER_BEETLE_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1204062005u32,
+    seed_salt: 4365451996651200303u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Shrinker]),
     gold: Gold {
@@ -1349,7 +1349,7 @@ pub(super) const SHRINKER_BEETLE_WEAK: EncounterData = EncounterData {
 
 pub(super) const SLIMED_BERSERKER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2844853194u32,
+    seed_salt: 14680430685255724360u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1372,7 +1372,7 @@ pub(super) const SLIMED_BERSERKER_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SLIMES_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2907770653u32,
+    seed_salt: 9797588135617628244u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Slimes]),
     gold: Gold {
@@ -1397,7 +1397,7 @@ pub(super) const SLIMES_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SLIMES_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1426820976u32,
+    seed_salt: 16218133953461741614u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Slimes]),
     gold: Gold {
@@ -1422,7 +1422,7 @@ pub(super) const SLIMES_WEAK: EncounterData = EncounterData {
 
 pub(super) const SLITHERING_STRANGLER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1711516788u32,
+    seed_salt: 3293294595177530863u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Jaxfruit, Family::Slimes]),
     gold: Gold {
@@ -1449,7 +1449,7 @@ pub(super) const SLITHERING_STRANGLER_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SLUDGE_SPINNER_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3156529769u32,
+    seed_salt: 16780584648309316792u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1472,7 +1472,7 @@ pub(super) const SLUDGE_SPINNER_WEAK: EncounterData = EncounterData {
 
 pub(super) const SLUMBERING_BEETLE_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 4174591892u32,
+    seed_salt: 9536468926106404813u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Workers]),
     gold: Gold {
@@ -1509,7 +1509,7 @@ pub(super) const SLUMBERING_BEETLE_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SNAPPING_JAXFRUIT_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2537907086u32,
+    seed_salt: 14143792631401914766u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Mushroom, Family::Jaxfruit]),
     gold: Gold {
@@ -1538,7 +1538,7 @@ pub(super) const SNAPPING_JAXFRUIT_NORMAL: EncounterData = EncounterData {
 
 pub(super) const SPINY_TOAD_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 351137404u32,
+    seed_salt: 17402876933289644795u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1561,7 +1561,7 @@ pub(super) const SPINY_TOAD_NORMAL: EncounterData = EncounterData {
 
 pub(super) const THE_ARCHITECT_EVENT_ENCOUNTER: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 158117456u32,
+    seed_salt: 1816412267279947581u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1584,7 +1584,7 @@ pub(super) const THE_ARCHITECT_EVENT_ENCOUNTER: EncounterData = EncounterData {
 
 pub(super) const THE_LOST_AND_FORGOTTEN_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3672737661u32,
+    seed_salt: 8385804110237563057u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1613,7 +1613,7 @@ pub(super) const THE_LOST_AND_FORGOTTEN_NORMAL: EncounterData = EncounterData {
 
 pub(super) const THE_OBSCURA_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1128334897u32,
+    seed_salt: 5469196956260160028u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1636,7 +1636,7 @@ pub(super) const THE_OBSCURA_NORMAL: EncounterData = EncounterData {
 
 pub(super) const THIEVING_HOPPER_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 3575031382u32,
+    seed_salt: 3775692460387089412u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Thieves]),
     gold: Gold {
@@ -1659,7 +1659,7 @@ pub(super) const THIEVING_HOPPER_WEAK: EncounterData = EncounterData {
 
 pub(super) const TOADPOLES_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2392383186u32,
+    seed_salt: 11714786636523664904u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1688,7 +1688,7 @@ pub(super) const TOADPOLES_WEAK: EncounterData = EncounterData {
 
 pub(super) const TUNNELER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 45201919u32,
+    seed_salt: 13842916305130284848u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Burrower, Family::Chomper]),
     gold: Gold {
@@ -1717,7 +1717,7 @@ pub(super) const TUNNELER_NORMAL: EncounterData = EncounterData {
 
 pub(super) const TUNNELER_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 2088117980u32,
+    seed_salt: 14464053630847796512u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[Family::Burrower]),
     gold: Gold {
@@ -1740,7 +1740,7 @@ pub(super) const TUNNELER_WEAK: EncounterData = EncounterData {
 
 pub(super) const TURRET_OPERATOR_WEAK: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1781746490u32,
+    seed_salt: 17822847510336701007u64,
     flags: FlagSet::new(&[EncounterFlag::Weak, EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1769,7 +1769,7 @@ pub(super) const TURRET_OPERATOR_WEAK: EncounterData = EncounterData {
 
 pub(super) const TWO_TAILED_RATS_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1023128757u32,
+    seed_salt: 7361027107069121610u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {
@@ -1789,7 +1789,7 @@ pub(super) const TWO_TAILED_RATS_NORMAL: EncounterData = EncounterData {
 
 pub(super) const VINE_SHAMBLER_NORMAL: EncounterData = EncounterData {
     room: RoomType::Monster,
-    seed_salt: 1521864229u32,
+    seed_salt: 6082583169747393086u64,
     flags: FlagSet::new(&[EncounterFlag::GivesRewards]),
     families: FamilySet::new(&[]),
     gold: Gold {

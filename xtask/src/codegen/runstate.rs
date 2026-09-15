@@ -439,12 +439,12 @@ const BRIDGES: [Bridge; 6] = [
     },
 ];
 
-/// The names of a stream enum's members, and the seed offsets they hash to.
+/// The names of a stream enum's members, as one table read by discriminant.
 ///
 /// `RunRngSet.CreateRng` seeds a stream with
 /// `new Rng(Seed, SnakeCase(rngType.ToString()))`, so the name is that call
-/// made once at generation. The offset beside it is written as the `name_hash`
-/// call, and the compiler takes the hash.
+/// made once at generation. What it hashes to is the build's own arithmetic,
+/// which `ContentVersion::name_hash` answers.
 ///
 /// Indexed by the discriminant, so generation stops on an enum numbered from
 /// anything but zero. Empty for the enums here that are not streams.
@@ -465,36 +465,27 @@ fn stream_table(name: &str, members: &[(u8, String)]) -> Result<String, String> 
     let mut out = String::new();
     writeln!(
         out,
-        "\n    /// Every stream's name, and the offset that name's hash adds\n\
-         \x20   /// to the run's seed, in the game's own order."
+        "\n    /// Every stream's name, in the game's own order."
     )
     .unwrap();
     writeln!(
         out,
-        "    const STREAMS: [(&'static str, u32); {}] = [",
+        "    const STREAMS: [&'static str; {}] = [",
         members.len()
     )
     .unwrap();
     for (_, member) in members {
-        let spelling = snake_case(name, member)?;
-        writeln!(
-            out,
-            "        (\"{spelling}\", sts2_core::rng::name_hash(\"{spelling}\") as u32),"
-        )
-        .unwrap();
+        writeln!(out, "        \"{}\",", snake_case(name, member)?).unwrap();
     }
     writeln!(out, "    ];").unwrap();
     Ok(out)
 }
 
-/// Both halves of [`sts2_core::StreamKinds`], read off the table above.
+/// [`sts2_core::StreamKinds`], read off the table above.
 fn emit_stream_kinds(out: &mut String, name: &str) {
     writeln!(out, "impl sts2_core::StreamKinds for {name} {{").unwrap();
     writeln!(out, "    fn name(self) -> &'static str {{").unwrap();
-    writeln!(out, "        Self::STREAMS[self as usize].0").unwrap();
-    writeln!(out, "    }}\n").unwrap();
-    writeln!(out, "    fn seed_offset(self) -> u32 {{").unwrap();
-    writeln!(out, "        Self::STREAMS[self as usize].1").unwrap();
+    writeln!(out, "        Self::STREAMS[self as usize]").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
 }

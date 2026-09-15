@@ -49,7 +49,7 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 type V = V0_107_1;
 
-fn generate(seed: u32) -> ActMap<V> {
+fn generate(seed: u64) -> ActMap<V> {
     let mut rng = MegaRng::new(seed);
     ActMap::generate(&mut rng, Layout::ACT_ONE, AscensionLevel::SwarmingElites).unwrap()
 }
@@ -60,12 +60,12 @@ fn main() {
         .map(|value| value.parse().expect("iteration count must be an integer"))
         .unwrap_or(20_000u32);
 
-    for seed in 0..iterations.min(25) {
+    for seed in 0..iterations.min(25) as u64 {
         black_box(generate(seed));
     }
 
     let started = Instant::now();
-    for seed in 0..iterations {
+    for seed in 0..iterations as u64 {
         black_box(generate(seed));
     }
     let elapsed = started.elapsed();
@@ -73,7 +73,7 @@ fn main() {
     CALLS.store(0, Ordering::Relaxed);
     BYTES.store(0, Ordering::Relaxed);
     COUNTING.store(true, Ordering::Relaxed);
-    for seed in 0..iterations {
+    for seed in 0..iterations as u64 {
         black_box(generate(seed));
     }
     COUNTING.store(false, Ordering::Relaxed);

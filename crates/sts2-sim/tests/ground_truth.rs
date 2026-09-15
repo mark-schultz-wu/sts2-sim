@@ -5,7 +5,9 @@
 //! same fixture. Each block reseeds and draws in index order, so index `0`
 //! means reseed.
 
-use sts2_core::rng::{Bound, GameRng, Interval, Span};
+use sts2_content::v0_107_1::V0_107_1;
+use sts2_core::Seed;
+use sts2_core::rng::{Bound, GameRng, Interval, Span, stream_seed};
 use sts2_sim::rng::MegaRng;
 
 const FIXTURE: &str = include_str!("rng/megarandom.txt");
@@ -45,7 +47,7 @@ fn draws<G: GameRng<Int = i32>>() -> usize {
         (head != "hash" && head != "forward" && !head.starts_with('#')).then_some((n, f))
     }) {
         let method = f[0];
-        let seed: u32 = f[1].parse().unwrap();
+        let seed: u64 = f[1].parse().unwrap();
 
         // `int` carries one bound, `range` two, `raw` has no counter column.
         let (index, expected, counter) = match method {
@@ -147,7 +149,7 @@ fn fast_forwarding_lands_where_drawing_would_have() {
 fn named_streams_land_on_the_right_seed() {
     let mut checked = 0;
     for (lineno, f) in rows("hash") {
-        let expected_seed: u32 = f[2].parse().unwrap();
+        let expected_seed: u64 = f[2].parse().unwrap();
         let units: Vec<u16> = if f[3] == "-" {
             Vec::new()
         } else {
@@ -158,7 +160,7 @@ fn named_streams_land_on_the_right_seed() {
         };
         let name = String::from_utf16(&units).unwrap();
         assert_eq!(
-            MegaRng::named(1000, &name).seed(),
+            sts2_core::rng::named::<V0_107_1, MegaRng>(1000, &name).seed(),
             expected_seed,
             "line {lineno}: {name:?}"
         );
@@ -236,4 +238,34 @@ fn a_stream_refuses_to_rewind() {
     // And the failed seek left it where it was.
     assert_eq!(rng.counter(), 10);
     assert!(rng.fast_forward(10).is_ok(), "seeking to here is a no-op");
+}
+
+/// The stream `v0.111.0` seeds, against what that game reported.
+///
+/// Taken off a live `v0.111.0` run on seed `0RACLE1`: its `up_front` stream
+/// stood at draw 413 holding these four words. Both halves of the build's
+/// seeding are in that number, and both changed. A port that keeps the old
+/// hash, or the old 32-bit width, fails here.
+///
+/// The counters cannot say this. A draw count does not depend on the seed.
+#[test]
+fn v0_111_0_seeds_a_stream_the_way_that_game_does() {
+    use sts2_content::v0_111_0::{V0_111_0, runstate::RunRngType};
+    use sts2_core::RunStreamKinds;
+
+    let run = stream_seed::<V0_111_0>(&Seed::new("0RACLE1").expect("a canonical seed"));
+    let mut rng: MegaRng =
+        sts2_core::rng::for_stream::<V0_111_0, _>(run, <RunRngType as RunStreamKinds>::UP_FRONT);
+    rng.fast_forward(413).expect("a forward seek");
+
+    assert_eq!(
+        rng.words(),
+        [
+            0x9d1c_cf61_25a8_6ba5,
+            0xf7ef_38a4_1b06_4739,
+            0x8a0b_6aef_b8ef_8a2c,
+            0xaad5_a50c_2f95_5a74,
+        ],
+        "v0.111.0 seeds its streams from another number than the game does"
+    );
 }

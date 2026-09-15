@@ -488,7 +488,7 @@ fn encounter_seed_salts_are_the_cast_entry_hashes() {
     for encounter in Encounter::ALL {
         assert_eq!(
             encounter.seed_salt(),
-            sts2_core::rng::name_hash(&wire(encounter)) as u32,
+            sts2_core::rng::name_hash(&wire(encounter)) as u32 as u64,
             "{}",
             wire(encounter)
         );

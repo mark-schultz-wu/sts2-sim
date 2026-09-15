@@ -59,6 +59,34 @@ pub(crate) fn version() -> Result<String, String> {
     Ok(name)
 }
 
+/// The hash this build turns a name into a seed with.
+///
+/// Tables bake the number in, so the wrong hash seeds every encounter and
+/// event off a stream the game never reaches.
+///
+/// Read from the lock, so adding a build is still one file. Not from the ABI
+/// family: `mod/build.sh` says why a family is never evidence that two builds
+/// agree on a seed.
+pub(crate) fn seed_hash(name: &str) -> Result<u64, String> {
+    let version = version()?;
+    let lock = std::fs::read_to_string(Path::new("mod/games").join(format!("{version}.lock")))
+        .map_err(|e| format!("reading the lock for {version}: {e}"))?;
+    let which = lock
+        .lines()
+        .find_map(|line| line.strip_prefix("# hash: "))
+        .ok_or_else(|| format!("{version}.lock does not name a seed hash"))?
+        .trim();
+
+    match which {
+        "fold32" => Ok(sts2_core::rng::name_hash(name) as u32 as u64),
+        "xxhash64" => Ok(sts2_core::rng::xxhash64(name)),
+        other => Err(format!(
+            "{version}.lock calls its seed hash {other:?}, which this generator \
+             has no arithmetic for"
+        )),
+    }
+}
+
 /// The build as a Rust module name. `v0.107.1` is `v0_107_1`.
 pub(crate) fn version_module() -> Result<String, String> {
     Ok(version()?.replace('.', "_"))

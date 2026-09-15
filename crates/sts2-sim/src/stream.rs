@@ -34,15 +34,15 @@ pub(crate) struct Streams<V: Rules> {
 
 impl<V: Rules> Streams<V> {
     /// Every stream as the run's seed names it, before anything has drawn.
-    pub(crate) fn opening(raw_seed: u32) -> Self {
+    pub(crate) fn opening(raw_seed: u64) -> Self {
         Self {
             run: V::run_rng_types()
                 .iter()
-                .map(|&kind| MegaRng::for_stream(raw_seed, kind))
+                .map(|&kind| sts2_core::rng::for_stream::<V, MegaRng>(raw_seed, kind))
                 .collect(),
             player: V::player_rng_types()
                 .iter()
-                .map(|&kind| MegaRng::for_stream(raw_seed, kind))
+                .map(|&kind| sts2_core::rng::for_stream::<V, MegaRng>(raw_seed, kind))
                 .collect(),
             version: PhantomData,
         }
@@ -132,7 +132,7 @@ mod tests {
         for kind in RunRngType::ALL {
             assert_eq!(
                 *streams.run(kind),
-                MegaRng::for_stream(123, kind),
+                sts2_core::rng::for_stream::<V0_107_1, MegaRng>(123, kind),
                 "{} opened on another stream's seed",
                 kind.name()
             );

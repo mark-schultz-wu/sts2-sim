@@ -102,7 +102,7 @@ fn spell(bag: &RelicBag<V>) -> Vec<(String, Vec<String>)> {
 fn the_relic_bags_are_shuffled_the_way_the_game_shuffled_them() {
     let fixture = fixture();
     let seed = Seed::new(SEED).expect("the fixture's seed is a seed");
-    let mut rng = MegaRng::named(stream_seed(&seed), "up_front");
+    let mut rng = sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&seed), "up_front");
 
     assert_eq!(rng.counter(), at(&fixture, "created"), "before anything");
 
@@ -144,7 +144,7 @@ fn default_acts() -> Vec<<V as ContentVersion>::Act> {
 fn setting_up_a_run_draws_what_the_game_drew() {
     let fixture = fixture();
     let seed = Seed::new(SEED).expect("the fixture's seed is a seed");
-    let mut rng = MegaRng::named(stream_seed(&seed), "up_front");
+    let mut rng = sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&seed), "up_front");
 
     let acts = default_acts();
     let opening = Opening::<V>::draw(&mut rng, Character::Regent, &acts);

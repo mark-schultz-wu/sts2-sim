@@ -47,6 +47,20 @@ pub enum Resume {}
 
 impl sts2_core::ContentVersion for V0_111_0 {
     const VERSION: Version = VERSION;
+
+    /// `XxHash64` over the UTF-8 bytes, which replaced the fold `v0.107.1`
+    /// uses. The old fold survives as `GetDeterministicHashCodeOld`, reached
+    /// only by a seed string starting `old`, which [`sts2_core::Seed`] cannot
+    /// spell.
+    fn name_hash(name: &str) -> u64 {
+        sts2_core::rng::xxhash64(name)
+    }
+
+    /// `Rng`'s seed is `ulong` here, so nothing truncates.
+    fn seed_from(parts: u64) -> u64 {
+        parts
+    }
+
     type EventOptionId = event_options::EventOptionId;
 
     type Number = i32;

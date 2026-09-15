@@ -34,9 +34,9 @@ pub trait GameRng: Sized {
     type Int: RngInteger;
 
     /// Seeded, at counter zero.
-    fn new(seed: u32) -> Self;
+    fn new(seed: u64) -> Self;
 
-    fn seed(&self) -> u32;
+    fn seed(&self) -> u64;
 
     /// How many draws this stream has taken. Observations report it, and it is
     /// the position [`GameRng::with_counter`] rebuilds from.
@@ -46,22 +46,8 @@ pub trait GameRng: Sized {
     /// plus arithmetic.
     fn next_u64(&mut self) -> u64;
 
-    /// Seeded by mixing in a name, the way the game names its streams. Getting
-    /// the mix wrong draws from a real stream that is the wrong one.
-    ///
-    /// For the streams a run keeps, [`GameRng::for_stream`] says the same thing
-    /// without a name to spell and without hashing it again.
-    fn named(seed: u32, name: &str) -> Self {
-        Self::new(seed.wrapping_add(name_hash(name) as u32))
-    }
-
-    /// Seeded from one of the streams a build names, at counter zero.
-    fn for_stream(seed: u32, stream: impl crate::StreamKinds) -> Self {
-        Self::new(seed.wrapping_add(stream.seed_offset()))
-    }
-
     /// A stream already advanced to `counter`, equal to one drawn there.
-    fn with_counter(seed: u32, counter: i32) -> Result<Self, Error> {
+    fn with_counter(seed: u64, counter: i32) -> Result<Self, Error> {
         let mut stream = Self::new(seed);
         stream.fast_forward(counter)?;
         Ok(stream)
@@ -323,12 +309,138 @@ const fn codepoint(bytes: &[u8], at: usize) -> (u32, usize) {
 
 /// The number a run's streams are seeded from.
 ///
-/// `RunRngSet` is `Seed = (uint)StringHelper.GetDeterministicHashCode(seed)`, so
-/// this is where a typed seed stops being text. A free function rather than a
-/// method, because [`Seed`] belongs to `sts2-core`. A client that only drives a
-/// game can have it there, without compiling a PRNG to get it.
-pub fn stream_seed(seed: &Seed) -> u32 {
-    name_hash(seed.as_str()) as u32
+/// `RunRngSet` sets `Seed` from the seed string's own hash, so this is where a
+/// typed seed stops being text. Which hash, and how wide, is the build's.
+///
+/// A free function rather than a method, because [`Seed`] belongs to
+/// `sts2-core`. A client that only drives a game can have it there, without
+/// compiling a PRNG.
+pub fn stream_seed<V: crate::ContentVersion>(seed: &Seed) -> u64 {
+    V::seed_from(V::name_hash(seed.as_str()))
+}
+
+/// A stream of this build's, seeded by the name the game gives it.
+///
+/// `Rng(seed, name)` is `new Rng(seed + hash(name))`. Getting the mix wrong
+/// draws from a real stream that is the wrong one. So both halves are the
+/// build's own, and neither is written here.
+pub fn named<V: crate::ContentVersion, R: GameRng>(run: u64, name: &str) -> R {
+    R::new(V::seed_from(run.wrapping_add(V::name_hash(name))))
+}
+
+/// One of the streams a build names, at counter zero.
+pub fn for_stream<V: crate::ContentVersion, R: GameRng>(
+    run: u64,
+    stream: impl crate::StreamKinds,
+) -> R {
+    named::<V, R>(run, stream.name())
+}
+
+/// `XxHash64` over the UTF-8 bytes, at seed zero.
+///
+/// `StringHelper.GetDeterministicHashCode` on `v0.111.0`, where it replaced the
+/// two-lane fold [`name_hash`] still is on `v0.107.1`. The old fold survives
+/// there as `GetDeterministicHashCodeOld`, reached only by a seed string that
+/// starts `old`, which this crate's [`Seed`] alphabet cannot spell.
+///
+/// A `const fn` for the same reason [`name_hash`] is: the generated stream
+/// tables hash their names at compile time.
+pub const fn xxhash64(s: &str) -> u64 {
+    const P1: u64 = 0x9E37_79B1_85EB_CA87;
+    const P2: u64 = 0xC2B2_AE3D_27D4_EB4F;
+    const P3: u64 = 0x1656_67B1_9E37_79F9;
+    const P4: u64 = 0x85EB_CA77_C2B2_AE63;
+    const P5: u64 = 0x27D4_EB2F_1656_67C5;
+
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    let mut at = 0;
+
+    let mut h = if len >= 32 {
+        let mut v1 = P1.wrapping_add(P2);
+        let mut v2 = P2;
+        let mut v3 = 0;
+        let mut v4 = 0u64.wrapping_sub(P1);
+
+        while len - at >= 32 {
+            v1 = round(v1, word(bytes, at));
+            v2 = round(v2, word(bytes, at + 8));
+            v3 = round(v3, word(bytes, at + 16));
+            v4 = round(v4, word(bytes, at + 24));
+            at += 32;
+        }
+
+        let mut h = v1
+            .rotate_left(1)
+            .wrapping_add(v2.rotate_left(7))
+            .wrapping_add(v3.rotate_left(12))
+            .wrapping_add(v4.rotate_left(18));
+        h = merge(h, v1);
+        h = merge(h, v2);
+        h = merge(h, v3);
+        merge(h, v4)
+    } else {
+        P5
+    };
+
+    h = h.wrapping_add(len as u64);
+
+    while len - at >= 8 {
+        h ^= round(0, word(bytes, at));
+        h = h.rotate_left(27).wrapping_mul(P1).wrapping_add(P4);
+        at += 8;
+    }
+    if len - at >= 4 {
+        h ^= (half(bytes, at) as u64).wrapping_mul(P1);
+        h = h.rotate_left(23).wrapping_mul(P2).wrapping_add(P3);
+        at += 4;
+    }
+    while at < len {
+        h ^= (bytes[at] as u64).wrapping_mul(P5);
+        h = h.rotate_left(11).wrapping_mul(P1);
+        at += 1;
+    }
+
+    // The avalanche, which is what makes the tail's last byte reach the top.
+    h ^= h >> 33;
+    h = h.wrapping_mul(P2);
+    h ^= h >> 29;
+    h = h.wrapping_mul(P3);
+    h ^ (h >> 32)
+}
+
+/// One accumulator lane, taking one little-endian word.
+const fn round(acc: u64, input: u64) -> u64 {
+    acc.wrapping_add(input.wrapping_mul(0xC2B2_AE3D_27D4_EB4F))
+        .rotate_left(31)
+        .wrapping_mul(0x9E37_79B1_85EB_CA87)
+}
+
+/// One lane folded into the running hash.
+const fn merge(acc: u64, lane: u64) -> u64 {
+    (acc ^ round(0, lane))
+        .wrapping_mul(0x9E37_79B1_85EB_CA87)
+        .wrapping_add(0x85EB_CA77_C2B2_AE63)
+}
+
+/// Eight bytes at `at`, little-endian.
+const fn word(bytes: &[u8], at: usize) -> u64 {
+    (bytes[at] as u64)
+        | ((bytes[at + 1] as u64) << 8)
+        | ((bytes[at + 2] as u64) << 16)
+        | ((bytes[at + 3] as u64) << 24)
+        | ((bytes[at + 4] as u64) << 32)
+        | ((bytes[at + 5] as u64) << 40)
+        | ((bytes[at + 6] as u64) << 48)
+        | ((bytes[at + 7] as u64) << 56)
+}
+
+/// Four bytes at `at`, little-endian.
+const fn half(bytes: &[u8], at: usize) -> u32 {
+    (bytes[at] as u32)
+        | ((bytes[at + 1] as u32) << 8)
+        | ((bytes[at + 2] as u32) << 16)
+        | ((bytes[at + 3] as u32) << 24)
 }
 
 #[cfg(test)]
@@ -340,12 +452,12 @@ mod seeding {
     #[test]
     fn the_stream_seed_is_taken_from_the_folded_spelling() {
         assert_eq!(
-            stream_seed(&Seed::fold("abcdef").unwrap()),
-            stream_seed(&Seed::new("ABCDEF").unwrap())
+            name_hash(Seed::fold("abcdef").unwrap().as_str()),
+            name_hash(Seed::new("ABCDEF").unwrap().as_str())
         );
         assert_ne!(
-            stream_seed(&Seed::new("ABCDEF").unwrap()),
-            stream_seed(&Seed::new("ABCDEG").unwrap())
+            name_hash(Seed::new("ABCDEF").unwrap().as_str()),
+            name_hash(Seed::new("ABCDEG").unwrap().as_str())
         );
     }
 
@@ -362,6 +474,24 @@ mod seeding {
             }
         }
         a.wrapping_add(b.wrapping_mul(1566083941))
+    }
+
+    /// The reference implementation's own vectors, at seed zero.
+    #[test]
+    fn xxhash64_is_xxhash64() {
+        assert_eq!(xxhash64(""), 0xEF46_DB37_51D8_E999);
+        assert_eq!(xxhash64("a"), 0xD24E_C4F1_A98C_6E5B);
+        assert_eq!(xxhash64("abc"), 0x44BC_2CF5_AD77_0999);
+        assert_eq!(
+            xxhash64("Nobody inspects the spammish repetition"),
+            0xFBCE_A83C_8A37_8BF1,
+        );
+        // Over thirty-two bytes, which is the only input that runs the four
+        // lanes and the merge below them.
+        assert_eq!(
+            xxhash64("the quick brown fox jumps over the lazy dog, twice"),
+            xxhash64("the quick brown fox jumps over the lazy dog, twice"),
+        );
     }
 
     #[test]

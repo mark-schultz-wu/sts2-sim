@@ -130,7 +130,7 @@ pub trait EncounterTable: Table {
     fn roster(self) -> EncounterRoster<impl Iterator<Item = Self::Monster>>;
 
     /// The encounter entry’s hash, already cast for wrapping seed arithmetic.
-    fn seed_salt(self) -> u32;
+    fn seed_salt(self) -> u64;
 }
 
 /// What a table says about an event, beyond its row.
@@ -154,7 +154,7 @@ pub trait EventTable: Table {
     fn ancient(self) -> bool;
 
     /// The event id's deterministic hash, already cast for seed arithmetic.
-    fn event_id_hash(self) -> u32;
+    fn event_id_hash(self) -> u64;
 }
 
 /// What a table says about a monster, beyond its row.
@@ -642,13 +642,6 @@ pub trait TargetKinds: std::fmt::Debug + Copy + Eq + 'static {
 pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// What the game hashes into this stream's seed.
     fn name(self) -> &'static str;
-
-    /// What that name hashes to, which is what the run's seed is offset by.
-    ///
-    /// The same fact as the name, one step on. Seeking a stream rebuilds it
-    /// from the seed, so hashing the name at every seek repeats a constant.
-    /// The generated impl takes the hash at compile time, beside the name.
-    fn seed_offset(self) -> u32;
 }
 
 /// The streams a run keeps, as consts a rule can name.
@@ -1345,6 +1338,22 @@ impl MoveMachine {
 pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
     /// The build these types were generated from.
     const VERSION: Version;
+
+    /// This build's `StringHelper.GetDeterministicHashCode`.
+    ///
+    /// The number a name contributes to the seed of the stream it names.
+    /// `v0.107.1` folds UTF-16 code units in wrapping `i32` and keeps the low
+    /// 32 bits. `v0.111.0` takes `XxHash64` over the UTF-8 bytes and keeps all
+    /// 64. A run seeded by one lands on streams the other never reaches.
+    fn name_hash(name: &str) -> u64;
+
+    /// The seed this build's `Rng` takes, from the sum of its parts.
+    ///
+    /// `Rng`'s seed is `uint` on `v0.107.1`, so a sum wider than 32 bits
+    /// truncates before it seeds anything. It is `ulong` on `v0.111.0`, where
+    /// nothing truncates. Both add first and narrow after, which is what this
+    /// is applied to.
+    fn seed_from(parts: u64) -> u64;
 
     type EventOptionId: crate::EventOptionKinds<Self>;
 
