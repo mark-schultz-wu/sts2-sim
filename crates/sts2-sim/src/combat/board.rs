@@ -12,8 +12,8 @@ use crate::rng::MegaRng;
 use num_traits::Zero;
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    CardIdent, CardTable, CardVars, CombatId, Creature, Effect, EffectResolution, Fight, Holding,
-    Modify, PowerAmount, PowerTable, Rules, SideKinds, Stack,
+    Amount, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
+    EffectResolution, Fight, Holding, Modify, PowerAmount, PowerTable, Rules, SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -362,6 +362,126 @@ pub(super) fn blocked<V: Rules>(creature: &Creature<V>, amount: V::Number) -> V:
     )
 }
 
+/// One effect after the fight's listeners have had their say.
+///
+/// The one path a number takes. It is worked out from the card that prints
+/// it, then run through the hooks the effect names. No step in between is one
+/// a caller can reach. A preview and the play it previews call this with the
+/// same effect, so the number a card shows is the number it deals.
+pub(crate) fn resolve<V: Rules>(
+    creatures: &[Creature<V>],
+    playing: Option<&CardInstance<V>>,
+    effect: Effect<V>,
+) -> ResolvedEffect<V> {
+    let at = |id: CombatId| creatures.iter().position(|creature| creature.id == id);
+    let effects = match effect {
+        Effect::Attack {
+            dealer,
+            target,
+            damage,
+        } => at(target)
+            .filter(|&at| creatures[at].alive)
+            .map(|at| Resolved::Attack {
+                target,
+                damage: modified::<V>(
+                    creatures,
+                    dealer,
+                    at,
+                    carried::<V>(playing, creatures, damage),
+                ),
+            })
+            .into_iter()
+            .collect(),
+        Effect::GainBlock { recipient, amount } => at(recipient)
+            .map(|at| Resolved::GainBlock {
+                recipient,
+                amount: blocked::<V>(&creatures[at], carried::<V>(playing, creatures, amount)),
+            })
+            .into_iter()
+            .collect(),
+    };
+    ResolvedEffect { effects }
+}
+
+/// The number an effect carries, before any hook of its own runs.
+fn carried<V: Rules>(
+    playing: Option<&CardInstance<V>>,
+    creatures: &[Creature<V>],
+    amount: Amount<V>,
+) -> V::Number {
+    match amount {
+        Amount::Flat(number) => number,
+        Amount::Printed(key) => printed::<V>(
+            playing.unwrap_or_else(|| unimplemented!("a printed number with no card printing it")),
+            key,
+            creatures,
+        ),
+    }
+}
+
+/// What one copy of a card prints for `key` right now.
+///
+/// A `CalculatedVar` counts something in the live fight, and prints what it
+/// counted rather than the zero it was built with.
+pub(crate) fn printed<V: Rules>(
+    held: &CardInstance<V>,
+    key: V::CardVar,
+    creatures: &[Creature<V>],
+) -> V::Number {
+    let var = number::<V>(held, key);
+    match var.calculated {
+        false => var.base,
+        true => V::calculated_card_var(held.ident.card, key, &held.vars, powers::<V>(creatures)),
+    }
+}
+
+/// The entry this copy of the card holds for `key`.
+fn number<V: Rules>(
+    held: &CardInstance<V>,
+    key: V::CardVar,
+) -> &sts2_core::CardNumber<V::CardVar, V::Number> {
+    // A key the card does not print is a mistake in the port, the same way a
+    // card asking for a number no card prints is.
+    held.vars
+        .iter()
+        .find(|var| var.id == key)
+        .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
+}
+
+/// The player's own powers, which is what a card reads about the fight.
+pub(super) fn powers<V: Rules>(creatures: &[Creature<V>]) -> &[Stack<V>] {
+    creatures
+        .iter()
+        .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+        .map(|creature| creature.powers.as_slice())
+        .unwrap_or_default()
+}
+
+/// The effect one printed number becomes, for a card played at `target`.
+///
+/// `DynamicVar`'s subclass decides it: what the number runs through is the
+/// class the card filed it under, not the key it is filed by. A number that
+/// runs through nothing has no effect to build, and prints as it is.
+pub(crate) fn effect_of<V: Rules>(
+    modifier: CardNumberModifier,
+    key: V::CardVar,
+    dealer: CombatId,
+    target: Option<CombatId>,
+) -> Option<Effect<V>> {
+    match modifier {
+        CardNumberModifier::Damage => target.map(|target| Effect::Attack {
+            dealer,
+            target,
+            damage: Amount::Printed(key),
+        }),
+        CardNumberModifier::Block => Some(Effect::GainBlock {
+            recipient: dealer,
+            amount: Amount::Printed(key),
+        }),
+        CardNumberModifier::OstyDamage => unimplemented!("a card previewing the Osty's damage"),
+    }
+}
+
 /// The player, which every fight has one of.
 pub(super) fn player<V: Rules>(creatures: &[Creature<V>]) -> CombatId {
     creatures
@@ -373,6 +493,10 @@ pub(super) fn player<V: Rules>(creatures: &[Creature<V>]) -> CombatId {
 
 impl<V: Rules> Fight<V> for Board<'_, V> {
     type ResolvedEffect = ResolvedEffect<V>;
+
+    fn actor(&self) -> CombatId {
+        self.actor
+    }
 
     fn target(&self) -> CombatId {
         // `resolve` refuses a play whose card names a creature and was pointed
@@ -386,26 +510,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
-        let effects = match effect {
-            Effect::Attack { target, damage } => self
-                .at(target)
-                .filter(|&at| self.live.creatures[at].alive)
-                .map(|at| Resolved::Attack {
-                    target,
-                    damage: modified::<V>(&self.live.creatures, self.actor, at, damage),
-                })
-                .into_iter()
-                .collect(),
-            Effect::GainBlock { amount } => self
-                .at(self.actor)
-                .map(|at| Resolved::GainBlock {
-                    recipient: self.actor,
-                    amount: blocked::<V>(&self.live.creatures[at], amount),
-                })
-                .into_iter()
-                .collect(),
-        };
-        ResolvedEffect { effects }
+        resolve::<V>(&self.live.creatures, self.playing, effect)
     }
 
     fn apply(&mut self, effect: Self::ResolvedEffect) {
@@ -481,15 +586,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn var(&self, key: V::CardVar) -> V::Number {
-        // A key the card does not print is a mistake in the port, the same way
-        // a card asking for a number no card prints is.
-        self.playing
-            .unwrap_or_else(|| unimplemented!("a number printed by no card being played"))
-            .vars
-            .iter()
-            .find(|var| var.id == key)
-            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
-            .base
+        let held = self
+            .playing
+            .unwrap_or_else(|| unimplemented!("a number printed by no card being played"));
+        if number::<V>(held, key).modifier.is_some() {
+            // The hooks it runs through name creatures to run against, and a
+            // bare read has none. `Fight::resolve` is where both arrive.
+            unimplemented!(
+                "the {} read without the creatures it runs against",
+                key.name()
+            );
+        }
+        printed::<V>(held, key, &self.live.creatures)
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {

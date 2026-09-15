@@ -1,6 +1,6 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{CardVars, Effect, Fight};
+use sts2_core::{Amount, CardVars, Effect, Fight};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
@@ -72,10 +72,13 @@ pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) {
 /// The damage is this copy's own. A forge raises it, and the card that was
 /// forged twice hits for more than the one beside it.
 fn sovereign_blade<F: Fight<V>>(fight: &mut F) {
-    let damage = fight.var(CardVar::Damage);
     let target = fight.target();
     for _ in 0..fight.var(CardVar::Repeat) {
-        let attack = fight.resolve(Effect::Attack { target, damage });
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Printed(CardVar::Damage),
+        });
         fight.apply(attack);
     }
 }

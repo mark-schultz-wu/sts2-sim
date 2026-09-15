@@ -750,6 +750,12 @@ pub trait Fight<V: ContentVersion> {
     /// so this is not a question the card asks and then answers.
     fn target(&self) -> crate::CombatId;
 
+    /// The creature acting, which is `Owner.Creature`.
+    ///
+    /// The player for a card and the monster for a move. A card saying "gain"
+    /// names this creature as what it gains for.
+    fn actor(&self) -> crate::CombatId;
+
     /// The creatures across from whoever is acting, in command order.
     ///
     /// A command snapshots this list before its first effect lands. Each
@@ -757,7 +763,13 @@ pub trait Fight<V: ContentVersion> {
     /// one can change the listeners the next one reaches.
     fn opponents(&self) -> Vec<crate::CombatId>;
 
-    /// Run an effect through the listeners it names, without applying it.
+    /// Work an effect's number out and run it through the listeners the
+    /// effect names, without applying it.
+    ///
+    /// One step, so no half-worked-out number is observable. A printed number
+    /// is calculated here, and the hooks run against the creatures the effect
+    /// already names. The caller reads the resolved amount, keeps it, applies
+    /// it, or any two of those.
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect;
 
     /// Apply an effect whose listeners have already had their say.
@@ -822,7 +834,15 @@ pub trait Fight<V: ContentVersion> {
     /// One of the numbers the card being played prints right now.
     ///
     /// This copy's own, not the table's. A fight writes on a card, so the card
-    /// that was forged twice prints more than the one beside it.
+    /// that was forged twice prints more than the one beside it. A
+    /// `CalculatedVar` is counted here, so this is what the card prints rather
+    /// than the base it was built with.
+    ///
+    /// # Panics
+    ///
+    /// A number that runs through hooks, which is every
+    /// [`CardNumberModifier`]. Those name creatures to run against, and
+    /// [`Fight::resolve`] is where a number and its creatures arrive together.
     fn var(&self, key: V::CardVar) -> V::Number;
 
     /// `ForgeCmd.Forge`: raise a number on every copy of one card.
@@ -839,15 +859,37 @@ pub trait Fight<V: ContentVersion> {
 }
 
 /// A combat operation before the fight's current listeners have modified it.
+///
+/// Every operation names the creatures it acts between. So resolving one is a
+/// single step: the number it carries is worked out, and the hooks the
+/// operation names run over it. Nothing in between is observable.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Effect<V: ContentVersion> {
     /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
     Attack {
+        dealer: crate::CombatId,
         target: crate::CombatId,
-        damage: V::Number,
+        damage: Amount<V>,
     },
-    /// `CreatureCmd.GainBlock(Owner.Creature, amount, cardPlay)`.
-    GainBlock { amount: V::Number },
+    /// `CreatureCmd.GainBlock(recipient, amount, cardPlay)`.
+    GainBlock {
+        recipient: crate::CombatId,
+        amount: Amount<V>,
+    },
+}
+
+/// The number an effect carries, before the fight works it out.
+///
+/// A card names one of its own printed numbers. A monster or a relic hands
+/// over a number it already holds. The two differ in what resolution does
+/// first. A printed number can be a `CalculatedVar`, which counts something in
+/// the live fight rather than reading the base it was built with.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Amount<V: ContentVersion> {
+    /// A number whoever asked already holds.
+    Flat(V::Number),
+    /// One of the numbers on the card being played, by key.
+    Printed(V::CardVar),
 }
 
 /// What content behavior can read from an effect resolved by a fight.

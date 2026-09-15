@@ -1,6 +1,6 @@
 //! The Regent's common cards.
 
-use sts2_core::{Effect, EffectResolution, Fight, PowerAmount};
+use sts2_core::{Amount, Effect, EffectResolution, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
@@ -22,8 +22,9 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [CardNumber]) {
 pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
     let attack = fight.resolve(Effect::Attack {
+        dealer: fight.actor(),
         target,
-        damage: fight.var(CardVar::Damage),
+        damage: Amount::Printed(CardVar::Damage),
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
@@ -36,13 +37,15 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
 /// before the block it gains lands, as the game's own order does.
 pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
     let next_turn = fight.resolve(Effect::GainBlock {
-        amount: fight.var(CardVar::BlockNextTurn),
+        recipient: fight.actor(),
+        amount: Amount::Printed(CardVar::BlockNextTurn),
     });
     let next_turn = next_turn
         .amount()
         .expect("one block gain resolves to one amount");
     let block = fight.resolve(Effect::GainBlock {
-        amount: fight.var(CardVar::Block),
+        recipient: fight.actor(),
+        amount: Amount::Printed(CardVar::Block),
     });
     fight.apply(block);
     fight.apply_to_actor(Power::BlockNextTurnPower, PowerAmount::Counted(next_turn));
