@@ -1,6 +1,6 @@
 //! The Regent's basic cards.
 
-use sts2_core::{Fight, PowerAmount};
+use sts2_core::{Effect, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, RegentCard};
 use super::super::super::super::generated::powers::Power;
@@ -19,12 +19,19 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
 /// `StrikeRegent`. Deal damage.
 pub(super) fn strike<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
-    fight.attack(target, fight.var(CardVar::Damage));
+    let attack = fight.resolve(Effect::Attack {
+        target,
+        damage: fight.var(CardVar::Damage),
+    });
+    fight.apply(attack);
 }
 
 /// `DefendRegent`. Gain block.
 pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
-    fight.gain_block(fight.var(CardVar::Block));
+    let block = fight.resolve(Effect::GainBlock {
+        amount: fight.var(CardVar::Block),
+    });
+    fight.apply(block);
 }
 
 /// `FallingStar`. Deal damage, then weaken and expose what it hit.
@@ -34,13 +41,17 @@ pub(super) fn defend<F: Fight<V>>(fight: &mut F) {
 /// combat state.
 pub(super) fn falling_star<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
-    fight.attack(target, fight.var(CardVar::Damage));
-    fight.apply(
+    let attack = fight.resolve(Effect::Attack {
+        target,
+        damage: fight.var(CardVar::Damage),
+    });
+    fight.apply(attack);
+    fight.apply_power(
         target,
         Power::WeakPower,
         PowerAmount::Counted(fight.var(CardVar::WeakPower)),
     );
-    fight.apply(
+    fight.apply_power(
         target,
         Power::VulnerablePower,
         PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),

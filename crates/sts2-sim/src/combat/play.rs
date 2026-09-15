@@ -132,7 +132,7 @@ pub(crate) fn apply_power<V: Rules>(
         None,
         None,
     );
-    sts2_core::Fight::apply(&mut board, at, power, amount);
+    sts2_core::Fight::apply_power(&mut board, at, power, amount);
     let won = board.won;
     let skipped = std::mem::take(&mut board.skipped);
 

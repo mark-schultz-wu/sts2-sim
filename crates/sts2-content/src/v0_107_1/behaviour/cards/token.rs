@@ -1,6 +1,6 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{CardVars, Fight};
+use sts2_core::{CardVars, Effect, Fight};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
@@ -75,6 +75,7 @@ fn sovereign_blade<F: Fight<V>>(fight: &mut F) {
     let damage = fight.var(CardVar::Damage);
     let target = fight.target();
     for _ in 0..fight.var(CardVar::Repeat) {
-        fight.attack(target, damage);
+        let attack = fight.resolve(Effect::Attack { target, damage });
+        fight.apply(attack);
     }
 }

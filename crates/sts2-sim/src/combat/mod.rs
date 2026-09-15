@@ -3,6 +3,7 @@ mod error;
 pub use error::Error;
 
 mod board;
+pub use board::ResolvedEffect;
 mod encounter;
 mod legal;
 mod live;

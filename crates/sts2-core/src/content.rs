@@ -728,6 +728,9 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
 /// Each method is a command, and arrives when a ported card needs it. What a
 /// card prints is not here: that is static, and a card reads its own table.
 pub trait Fight<V: ContentVersion> {
+    /// An effect after this fight's current listeners have modified it.
+    type ResolvedEffect: EffectResolution<V>;
+
     /// The creature the card was pointed at.
     ///
     /// A card whose target type names a creature is played at one. The play
@@ -735,11 +738,18 @@ pub trait Fight<V: ContentVersion> {
     /// so this is not a question the card asks and then answers.
     fn target(&self) -> crate::CombatId;
 
-    /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
-    fn attack(&mut self, at: crate::CombatId, damage: V::Number);
+    /// The creatures across from whoever is acting, in command order.
+    ///
+    /// A command snapshots this list before its first effect lands. Each
+    /// effect still resolves immediately before it lands, because an earlier
+    /// one can change the listeners the next one reaches.
+    fn opponents(&self) -> Vec<crate::CombatId>;
 
-    /// `CreatureCmd.GainBlock(Owner.Creature, amount, cardPlay)`.
-    fn gain_block(&mut self, amount: V::Number);
+    /// Run an effect through the listeners it names, without applying it.
+    fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect;
+
+    /// Apply an effect whose listeners have already had their say.
+    fn apply(&mut self, effect: Self::ResolvedEffect);
 
     /// `PlayerCmd.GainStars(amount, Owner)`.
     ///
@@ -750,7 +760,7 @@ pub trait Fight<V: ContentVersion> {
     ///
     /// The power is the caller's to name. A rule knows which power it applies,
     /// and the fight only has to put it somewhere.
-    fn apply(&mut self, at: crate::CombatId, power: V::Power, amount: PowerAmount<V::Number>);
+    fn apply_power(&mut self, at: crate::CombatId, power: V::Power, amount: PowerAmount<V::Number>);
 
     /// What the acting monster's move advertises it will hit for.
     ///
@@ -764,10 +774,6 @@ pub trait Fight<V: ContentVersion> {
     /// The same count the intent advertises, for the same reason the damage
     /// is. A move that hits once reads one.
     fn intent_repeats(&self) -> V::Count;
-
-    /// `DamageCmd.Attack(damage).FromMonster(this)`, which hits every creature
-    /// on the other side.
-    fn attack_opponents(&mut self, damage: V::Number);
 
     /// `PowerCmd.Apply<P>(targets, amount, ...)`, which lands on every
     /// creature on the other side.
@@ -818,6 +824,24 @@ pub trait Fight<V: ContentVersion> {
     /// The player for a card and the monster for a move, which is the creature
     /// a card saying "gain" means.
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
+}
+
+/// A combat operation before the fight's current listeners have modified it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Effect<V: ContentVersion> {
+    /// `DamageCmd.Attack(damage).FromCard(this).Targeting(at)`.
+    Attack {
+        target: crate::CombatId,
+        damage: V::Number,
+    },
+    /// `CreatureCmd.GainBlock(Owner.Creature, amount, cardPlay)`.
+    GainBlock { amount: V::Number },
+}
+
+/// What content behavior can read from an effect resolved by a fight.
+pub trait EffectResolution<V: ContentVersion> {
+    /// Its single modified amount, when resolution produced exactly one.
+    fn amount(&self) -> Option<V::Number>;
 }
 
 /// What a power does to a number a fight works out.

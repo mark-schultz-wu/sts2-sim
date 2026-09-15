@@ -116,7 +116,10 @@ pub(crate) fn turn_started<V: Rules>(
 pub(crate) fn apply<V: Rules, F: Fight<V>>(fight: &mut F, asked: Vec<HookEffect<V>>) {
     for effect in asked {
         match effect {
-            HookEffect::GainBlock(block) => fight.gain_block(block),
+            HookEffect::GainBlock(amount) => {
+                let block = fight.resolve(sts2_core::Effect::GainBlock { amount });
+                fight.apply(block);
+            }
             other => unimplemented!("a relic asking for {other:?} inside a fight"),
         }
     }

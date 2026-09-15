@@ -245,7 +245,7 @@ fn applied<V: Rules>(
 ) {
     for (at, power, amount) in asked {
         let mut board = Board::for_card(live, shuffle, niche, ascension, None, None);
-        sts2_core::Fight::apply(&mut board, at, power, amount);
+        sts2_core::Fight::apply_power(&mut board, at, power, amount);
     }
 }
 

@@ -1,6 +1,6 @@
 //! The Regent's common cards.
 
-use sts2_core::{Fight, PowerAmount};
+use sts2_core::{Effect, Fight, PowerAmount};
 
 use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
@@ -21,13 +21,20 @@ pub(super) fn upgrade(card: RegentCard, printed: &mut [Printed]) {
 /// `GuidingStar`. Deal damage, then draw.
 pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
-    fight.attack(target, fight.var(CardVar::Damage));
+    let attack = fight.resolve(Effect::Attack {
+        target,
+        damage: fight.var(CardVar::Damage),
+    });
+    fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
 }
 
 /// `Glitterstream`. Gain block now and after the next block clear.
 pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
-    fight.gain_block(fight.var(CardVar::Block));
+    let block = fight.resolve(Effect::GainBlock {
+        amount: fight.var(CardVar::Block),
+    });
+    fight.apply(block);
     fight.apply_to_actor(
         Power::BlockNextTurnPower,
         PowerAmount::Counted(fight.var(CardVar::BlockNextTurn)),
@@ -37,12 +44,12 @@ pub(super) fn glitterstream<F: Fight<V>>(fight: &mut F) {
 /// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.
 pub(super) fn know_thy_place<F: Fight<V>>(fight: &mut F) {
     let target = fight.target();
-    fight.apply(
+    fight.apply_power(
         target,
         Power::WeakPower,
         PowerAmount::Counted(fight.var(CardVar::WeakPower)),
     );
-    fight.apply(
+    fight.apply_power(
         target,
         Power::VulnerablePower,
         PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
