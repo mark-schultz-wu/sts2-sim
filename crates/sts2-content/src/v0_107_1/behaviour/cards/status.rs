@@ -1,6 +1,6 @@
 //! The cards a fight puts in a deck that nobody chose.
 
-use sts2_core::{Amount, Effect, Fight, Played};
+use sts2_core::{Amount, Effect, Fight, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, StatusCard};
 use super::V;
@@ -21,6 +21,7 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
         dealer: fight.actor(),
         target: fight.actor(),
         damage: Amount::Var(CardVar::Damage),
+        scaling: Scaling::Static,
     });
     fight.apply(damage);
     fight.discard_this();

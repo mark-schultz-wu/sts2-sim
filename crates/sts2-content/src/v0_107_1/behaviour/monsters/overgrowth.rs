@@ -317,6 +317,7 @@ fn attack<F: Fight<V>>(fight: &mut F) {
                 dealer: fight.actor(),
                 target,
                 damage: Amount::Number(damage),
+                scaling: Scaling::Dynamic,
             });
             fight.apply(attack);
         }

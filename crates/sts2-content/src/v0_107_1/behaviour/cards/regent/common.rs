@@ -30,6 +30,7 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) -> Played<V> {
         dealer: fight.actor(),
         target,
         damage: Amount::Var(CardVar::Damage),
+        scaling: Scaling::Dynamic,
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
@@ -103,6 +104,7 @@ pub(super) fn crush_under<F: Fight<V>>(fight: &mut F) -> Played<V> {
             dealer: fight.actor(),
             target,
             damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
         });
         fight.apply(attack);
     }

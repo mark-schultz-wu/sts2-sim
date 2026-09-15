@@ -1050,6 +1050,7 @@ pub enum Effect<V: ContentVersion> {
         dealer: crate::CombatId,
         target: crate::CombatId,
         damage: Amount<V>,
+        scaling: Scaling,
     },
     /// `CreatureCmd.GainBlock(recipient, amount, props, cardPlay)`.
     GainBlock {
