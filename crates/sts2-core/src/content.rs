@@ -926,11 +926,29 @@ pub enum Effect<V: ContentVersion> {
         target: crate::CombatId,
         damage: Amount<V>,
     },
-    /// `CreatureCmd.GainBlock(recipient, amount, cardPlay)`.
+    /// `CreatureCmd.GainBlock(recipient, amount, props, cardPlay)`.
     GainBlock {
         recipient: crate::CombatId,
         amount: Amount<V>,
+        props: BlockProps,
     },
+}
+
+/// The `ValueProp` a block carries, as the block hooks read it.
+///
+/// `ModifyBlockAdditive` pays `IsPoweredCardOrMonsterMoveBlock`, which is the
+/// `Move` flag without the `Unpowered` one. Every block a card or a monster
+/// move prints on this build carries `Move`, and every block a relic prints
+/// carries `Unpowered`. So the two the hooks tell apart are these.
+///
+/// The build's other flags are `Unblockable` and `SkipHurtAnim`, and no rule
+/// ported so far reads either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockProps {
+    /// `ValueProp.Move`: a card's block, or a monster move's.
+    Move,
+    /// `ValueProp.Unpowered`: a relic's.
+    Unpowered,
 }
 
 /// The number an effect carries, before the fight works it out.

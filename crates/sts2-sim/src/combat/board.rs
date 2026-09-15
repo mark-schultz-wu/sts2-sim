@@ -12,9 +12,9 @@ use crate::rng::MegaRng;
 use num_traits::Zero;
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
-    EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, Selection,
-    SideKinds, Stack,
+    Amount, BlockProps, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId,
+    Creature, Effect, EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable,
+    Rules, Selection, SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -404,14 +404,23 @@ pub(crate) fn resolve<V: Rules>(
                 carried::<V>(playing, creatures, damage),
             ),
         },
-        Effect::GainBlock { recipient, amount } => Resolved::GainBlock {
+        Effect::GainBlock {
             recipient,
-            amount: blocked::<V>(
-                creatures,
+            amount,
+            props,
+        } => {
+            let amount = carried::<V>(playing, creatures, amount);
+            Resolved::GainBlock {
                 recipient,
-                carried::<V>(playing, creatures, amount),
-            ),
-        },
+                // `ModifyBlockAdditive` pays a powered card's block or a
+                // monster move's, and nothing else. A relic's block is asked
+                // of no listener this build fields.
+                amount: match props {
+                    BlockProps::Move => blocked::<V>(creatures, recipient, amount),
+                    BlockProps::Unpowered => amount,
+                },
+            }
+        }
     };
     ResolvedEffect { effect }
 }
@@ -492,6 +501,9 @@ pub(crate) fn effect_of<V: Rules>(
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
             amount: Amount::Var(key),
+            // Every block a card prints on this build is a `BlockVar` with
+            // `ValueProp.Move`.
+            props: BlockProps::Move,
         }),
         CardNumberModifier::OstyDamage => unimplemented!("a card previewing the Osty's damage"),
     }

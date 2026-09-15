@@ -36,8 +36,8 @@ mod step;
 pub use play::recording;
 
 pub use content::{
-    ActTable, Amount, AscensionKinds, CardNumber, CardNumberModifier, CardTable, CardVars,
-    CharacterTable, ContentError, ContentVersion, Cost, DecisionHook, Drafted, Effect,
+    ActTable, Amount, AscensionKinds, BlockProps, CardNumber, CardNumberModifier, CardTable,
+    CardVars, CharacterTable, ContentError, ContentVersion, Cost, DecisionHook, Drafted, Effect,
     EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Fight, Fixed,
     FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
     MonsterSpawn, MonsterTable, MoveMachine, PotionTable, PotionUsage, PowerAmount, PowerTable,
