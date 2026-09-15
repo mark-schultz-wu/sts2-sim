@@ -11,6 +11,7 @@
 use sts2_core::{Holding, Modify, ModifyHook, PowerAmount};
 
 use super::super::V0_107_1 as V;
+use super::super::generated::monsters::Monster;
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
@@ -271,6 +272,26 @@ pub(crate) fn event_hook(
                 .into_iter()
                 .collect(),
             }))
+        }
+        (
+            Power::InfestedPower,
+            PowerAmount::Counted(amount),
+            EventHook::AfterDeath,
+        ) => Some(HookEffect::SummonAfterOwnerDeath {
+            monster: Monster::Wriggler,
+            count: amount,
+            opening: sts2_core::NextMove {
+                id: MoveId::SpawnedMove,
+                intents: [sts2_core::Intent {
+                    kind: IntentKind::Stun,
+                    attack: None,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        }),
+        (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath) => {
+            unimplemented!("an endless Infested power")
         }
         // `BeforeApplied` is an override on an empty base, so a power with
         // none does nothing on its way onto a creature.

@@ -1197,6 +1197,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// then leaves asks for both, in the order it wants them.
     Remove,
     InstallMove(crate::NextMove<V>),
+    /// `CreatureCmd.Add<M>` once per count, in the dead owner's place.
+    SummonAfterOwnerDeath {
+        monster: V::Monster,
+        count: V::Number,
+        opening: crate::NextMove<V>,
+    },
 }
 
 /// One build's relic models, which is what a run holds a relic as.
