@@ -37,12 +37,12 @@ pub use play::recording;
 
 pub use content::{
     ActTable, AscensionKinds, CardTable, CardVars, CharacterTable, ContentError, ContentVersion,
-    Cost, DecisionHook, Drafted, EncounterRoster, EncounterTable, EventHook, EventTable, Fight,
-    Fixed, FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify,
-    ModifyHook, MonsterSpawn, MonsterTable, MoveMachine, PotionTable, PotionUsage, PowerAmount,
-    PowerTable, Printed, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Rests, RewardRarity,
-    RoomKinds, Rules, SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary,
-    TurnPhaseKinds, UnplayableReasonKinds, Version,
+    Cost, DecisionHook, Drafted, Effect, EffectResolution, EncounterRoster, EncounterTable,
+    EventHook, EventTable, Fight, Fixed, FlagSet, Holding, HookEffect, Hooks, Layout, Listener,
+    MapPointKinds, Modify, ModifyHook, MonsterSpawn, MonsterTable, MoveMachine, PotionTable,
+    PotionUsage, PowerAmount, PowerTable, Printed, RarityKinds, RelicModel, RelicPoolKinds,
+    RelicTable, Rests, RewardRarity, RoomKinds, Rules, SideKinds, SideTurnEnd, StreamKinds, Table,
+    TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;

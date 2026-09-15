@@ -12,8 +12,8 @@ use crate::rng::MegaRng;
 use num_traits::Zero;
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    CardIdent, CardTable, CardVars, CombatId, Creature, Fight, Holding, Modify, PowerAmount,
-    PowerTable, Rules, SideKinds, Stack,
+    CardIdent, CardTable, CardVars, CombatId, Creature, Effect, EffectResolution, Fight, Holding,
+    Modify, PowerAmount, PowerTable, Rules, SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Live};
@@ -54,6 +54,32 @@ pub(super) struct Board<'a, V: Rules> {
     /// `CheckWinCondition` runs after the command that killed it, so this is
     /// read once the effect is over rather than acted on where it is set.
     pub(super) won: bool,
+}
+
+/// An effect after a simulator fight's listeners have modified it.
+pub struct ResolvedEffect<V: Rules> {
+    effects: Vec<Resolved<V>>,
+}
+
+enum Resolved<V: Rules> {
+    Attack {
+        target: CombatId,
+        damage: V::Number,
+    },
+    GainBlock {
+        recipient: CombatId,
+        amount: V::Number,
+    },
+}
+
+impl<V: Rules> EffectResolution<V> for ResolvedEffect<V> {
+    fn amount(&self) -> Option<V::Number> {
+        match self.effects.as_slice() {
+            [Resolved::Attack { damage, .. }] => Some(*damage),
+            [Resolved::GainBlock { amount, .. }] => Some(*amount),
+            _ => None,
+        }
+    }
 }
 
 impl<'a, V: Rules> Board<'a, V> {
@@ -346,6 +372,8 @@ pub(super) fn player<V: Rules>(creatures: &[Creature<V>]) -> CombatId {
 }
 
 impl<V: Rules> Fight<V> for Board<'_, V> {
+    type ResolvedEffect = ResolvedEffect<V>;
+
     fn target(&self) -> CombatId {
         // `resolve` refuses a play whose card names a creature and was pointed
         // at none, so a card that reads this was pointed at one.
@@ -353,36 +381,65 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .expect("a card that names a target is played at one")
     }
 
-    fn attack(&mut self, at: CombatId, damage: V::Number) {
-        // `CreatureCmd.Damage`: block first, then hit points, then the death
-        // the hit caused. Nothing modifies the amount on the way.
-        let Some(at) = self.at(at) else { return };
-        if !self.live.creatures[at].alive {
-            return;
-        }
-        let damage = modified::<V>(&self.live.creatures, self.actor, at, damage);
-        let zero = V::Number::zero();
-        let blocked = self.live.creatures[at].block.min(damage).max(zero);
-        self.live.creatures[at].block = self.live.creatures[at].block - blocked;
-        let unblocked = (damage - blocked).max(zero);
-
-        let hp = self.live.creatures[at].hp;
-        let health_zero = V::Health::zero();
-        let killed = hp > health_zero && unblocked >= V::Number::from(hp);
-        self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
-        if killed {
-            self.kill(at);
-        }
+    fn opponents(&self) -> Vec<CombatId> {
+        self.opponents()
     }
 
-    fn gain_block(&mut self, amount: V::Number) {
-        // `CreatureCmd.GainBlock` runs the amount through `Hook.ModifyBlock`,
-        // clamps at zero, and adds nothing at all when nothing is left.
-        let actor = self.actor;
-        let Some(at) = self.at(actor) else { return };
-        let amount = blocked::<V>(&self.live.creatures[at], amount);
-        if amount > V::Number::zero() {
-            self.live.creatures[at].block = self.live.creatures[at].block + amount;
+    fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
+        let effects = match effect {
+            Effect::Attack { target, damage } => self
+                .at(target)
+                .filter(|&at| self.live.creatures[at].alive)
+                .map(|at| Resolved::Attack {
+                    target,
+                    damage: modified::<V>(&self.live.creatures, self.actor, at, damage),
+                })
+                .into_iter()
+                .collect(),
+            Effect::GainBlock { amount } => self
+                .at(self.actor)
+                .map(|at| Resolved::GainBlock {
+                    recipient: self.actor,
+                    amount: blocked::<V>(&self.live.creatures[at], amount),
+                })
+                .into_iter()
+                .collect(),
+        };
+        ResolvedEffect { effects }
+    }
+
+    fn apply(&mut self, effect: Self::ResolvedEffect) {
+        for effect in effect.effects {
+            match effect {
+                Resolved::Attack { target, damage } => {
+                    // `CreatureCmd.Damage`: block first, then hit points, then
+                    // the death the hit caused. Resolution already ran hooks.
+                    let Some(at) = self.at(target) else { continue };
+                    if !self.live.creatures[at].alive {
+                        continue;
+                    }
+                    let zero = V::Number::zero();
+                    let blocked = self.live.creatures[at].block.min(damage).max(zero);
+                    self.live.creatures[at].block = self.live.creatures[at].block - blocked;
+                    let unblocked = (damage - blocked).max(zero);
+
+                    let hp = self.live.creatures[at].hp;
+                    let health_zero = V::Health::zero();
+                    let killed = hp > health_zero && unblocked >= V::Number::from(hp);
+                    self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
+                    if killed {
+                        self.kill(at);
+                    }
+                }
+                Resolved::GainBlock { recipient, amount } => {
+                    let Some(at) = self.at(recipient) else {
+                        continue;
+                    };
+                    if amount > V::Number::zero() {
+                        self.live.creatures[at].block = self.live.creatures[at].block + amount;
+                    }
+                }
+            }
         }
     }
 
@@ -394,7 +451,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.stars = self.live.stars + amount;
     }
 
-    fn apply(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
+    fn apply_power(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
         self.land(at, power, amount);
     }
 
@@ -411,14 +468,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn intent_repeats(&self) -> V::Count {
         self.intent_repeats
-    }
-
-    fn attack_opponents(&mut self, damage: V::Number) {
-        // The list is taken before the first hit lands, which is what the
-        // game's own `validTargets` is.
-        for id in self.opponents() {
-            self.attack(id, damage);
-        }
     }
 
     fn draw(&mut self, count: V::Number) {

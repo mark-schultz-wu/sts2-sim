@@ -1,6 +1,6 @@
 //! The first act's monsters.
 
-use sts2_core::{ContentError, Fight, MonsterSpawn, PowerAmount};
+use sts2_core::{ContentError, Effect, Fight, MonsterSpawn, PowerAmount};
 
 use super::super::super::generated::powers::Power;
 
@@ -173,7 +173,8 @@ fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
                 true => SLICE_BLOCK_TOUGH,
                 false => SLICE_BLOCK,
             };
-            fight.gain_block(block);
+            let block = fight.resolve(Effect::GainBlock { amount: block });
+            fight.apply(block);
         }
         MoveId::HissMove => {
             let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
@@ -200,8 +201,8 @@ fn fogmog<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::IllusionMove => {
             let eye = fight.summon(Monster::EyeWithTeeth, 0);
-            fight.apply(eye, Power::IllusionPower, PowerAmount::Counted(1));
-            fight.apply(eye, Power::MinionPower, PowerAmount::Counted(1));
+            fight.apply_power(eye, Power::IllusionPower, PowerAmount::Counted(1));
+            fight.apply_power(eye, Power::MinionPower, PowerAmount::Counted(1));
         }
         MoveId::SwipeMove | MoveId::SwipeRandomMove => {
             attack(fight);
@@ -242,6 +243,9 @@ fn attack<F: Fight<V>>(fight: &mut F) {
     let repeats: usize = num_traits::cast(fight.intent_repeats())
         .unwrap_or_else(|| unimplemented!("a move that hits more times than a fight can count"));
     for _ in 0..repeats {
-        fight.attack_opponents(damage);
+        for target in fight.opponents() {
+            let attack = fight.resolve(Effect::Attack { target, damage });
+            fight.apply(attack);
+        }
     }
 }
