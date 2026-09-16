@@ -1,6 +1,8 @@
 //! The second act's monsters.
 
-use sts2_core::{CardAt, CardTable as _, Fight, Pile, PowerAmount, RunStreamKinds as _};
+use sts2_core::{
+    Amount, CardAt, CardTable as _, Effect, Fight, Pile, PowerAmount, RunStreamKinds as _, Scaling,
+};
 
 use super::super::super::generated::ascension::AscensionLevel;
 use super::super::super::generated::cards::CardRarity;
@@ -20,12 +22,32 @@ pub(super) fn starting_powers(
     }
 }
 
-/// Perform one of the Thieving Hopper's moves.
+/// Perform one of the Hive monsters' moves.
 pub(super) fn perform<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ThieveryMove => thievery(fight),
+        MoveId::BiteMove | MoveId::BelowMove => fight.attack_opponents(),
+        MoveId::BurrowMove => burrow(fight),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
+}
+
+/// Hide underground behind block that persists until it is broken.
+fn burrow<F: Fight<V>>(fight: &mut F) {
+    const BLOCK: Number = 32;
+    const TOUGH_BLOCK: Number = 37;
+
+    fight.apply_to_actor(Power::BurrowedPower, PowerAmount::Counted(1));
+    let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+        true => TOUGH_BLOCK,
+        false => BLOCK,
+    };
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Number(amount),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
 }
 
 /// Take the highest-priority deck card still in combat, then attack.

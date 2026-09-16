@@ -28,6 +28,7 @@ pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
             Change::Raise(CardVar::Block, 2),
             Change::Raise(CardVar::BlockNextTurn, 2),
         ],
+        RegentCard::SpoilsOfBattle => &[Change::Raise(CardVar::Forge, 3)],
         card => unimplemented!("card upgrade: {card:?}"),
     }
 }

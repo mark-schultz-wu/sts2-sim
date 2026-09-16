@@ -154,6 +154,7 @@ pub(crate) fn modify_hook(
             | Power::DexterityPower
             | Power::SlowPower
             | Power::SlipperyPower
+            | Power::BurrowedPower
             | Power::SwipePower,
             _,
             ModifyHook::Damage { .. },
@@ -190,6 +191,7 @@ pub(crate) fn modify_hook(
             | Power::MinionPower
             | Power::SlowPower
             | Power::SlipperyPower
+            | Power::BurrowedPower
             | Power::SwipePower,
             _,
             ModifyHook::Block,
@@ -282,6 +284,7 @@ pub(crate) fn event_hook(
             | Power::DexterityPower
             | Power::SlowPower
             | Power::SlipperyPower
+            | Power::BurrowedPower
             | Power::SwipePower,
             _,
             EventHook::SideTurnEnd { .. },
