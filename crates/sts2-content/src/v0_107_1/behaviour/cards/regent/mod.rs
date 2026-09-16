@@ -42,6 +42,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::KnowThyPlace => common::know_thy_place(fight),
         RegentCard::RefineBlade => common::refine_blade(fight),
+        RegentCard::SpoilsOfBattle => common::spoils_of_battle(fight),
         RegentCard::Begone => common::begone(),
         RegentCard::CrushUnder => common::crush_under(fight),
         RegentCard::Bulwark => uncommon::bulwark(fight),
