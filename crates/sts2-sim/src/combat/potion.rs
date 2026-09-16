@@ -4,7 +4,7 @@
 //! runs through the board a card acts through. Whether it can be drunk at all
 //! is the belt's question, and the run asks it before this.
 
-use sts2_core::{CombatId, Rules, RunStreamKinds};
+use sts2_core::{CombatId, Rules};
 
 use super::board::Board;
 use super::live::Live;
@@ -24,13 +24,10 @@ pub(crate) fn drink<V: Rules>(
     let mut next = live.clone();
     let mut relics = relics.to_vec();
     let mut streams = streams.clone();
-    let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
-    let mut niche = streams.stream(V::RunRngType::NICHE);
 
     let mut board = Board::for_card(
         &mut next,
-        &mut shuffle,
-        &mut niche,
+        streams.combat(),
         &mut relics,
         live.ascension,
         target,
@@ -41,8 +38,6 @@ pub(crate) fn drink<V: Rules>(
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = super::play::merged::<V>(&next.skip_tick, skipped);
-    streams.record(V::RunRngType::SHUFFLE, shuffle);
-    streams.record(V::RunRngType::NICHE, niche);
     if won {
         relic::combat_ended::<V>(&mut relics);
     }

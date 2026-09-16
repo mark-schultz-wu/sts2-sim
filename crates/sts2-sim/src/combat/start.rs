@@ -1,8 +1,8 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CombatId, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules,
-    RunStreamKinds, SideKinds, TurnPhaseKinds,
+    CombatId, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules, SideKinds,
+    TurnPhaseKinds,
 };
 
 use super::live::{CardIds, CardInstance, Live};
@@ -75,10 +75,8 @@ pub(crate) fn enter<V: Rules>(
     }
     relic::turn_starting::<V>(relics, turn);
 
-    let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
     let drawn = hand_size::<V>(relics, turn);
-    let piles = pile::shuffle(&mut shuffle, deck).deal(drawn);
-    streams.record(V::RunRngType::SHUFFLE, shuffle);
+    let piles = pile::shuffle(streams.combat().shuffle, deck).deal(drawn);
 
     let mut hand = piles.hand().to_vec();
     upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));

@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 
 use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
-use sts2_core::{Position, Positions, Rules};
+use sts2_core::{Position, Positions, Rules, RunStreamKinds};
 
 use crate::rng::MegaRng;
 
@@ -48,19 +48,28 @@ impl<V: Rules> Streams<V> {
         }
     }
 
-    /// One of the run's streams, where it stands.
+    /// The streams a fight draws through, lent together.
     ///
-    /// Handed out rather than lent, because a rule draws from two or three at
-    /// once and they are rows of one table. What it drew is put back with
-    /// [`Streams::record`], so a decision that fails part way leaves the run's
-    /// own streams where they were.
-    pub(crate) fn stream(&self, kind: V::RunRngType) -> MegaRng {
-        self.run[slot(V::run_rng_types(), kind)].clone()
-    }
-
-    /// Where a stream now stands, after a rule drew from it.
-    pub(crate) fn record(&mut self, kind: V::RunRngType, rng: MegaRng) {
-        self.run[slot(V::run_rng_types(), kind)] = rng;
+    /// A rule draws from two or three at once, and they are rows of one table.
+    /// So one call lends the set rather than each row separately. Drawing moves
+    /// the row where it lies, and there is nothing to put back.
+    pub(crate) fn combat(&mut self) -> CombatRngs<'_> {
+        let kinds = V::run_rng_types();
+        let [shuffle, niche, generation, ai] = self
+            .run
+            .get_disjoint_mut([
+                slot(kinds, V::RunRngType::SHUFFLE),
+                slot(kinds, V::RunRngType::NICHE),
+                slot(kinds, V::RunRngType::COMBAT_CARD_GENERATION),
+                slot(kinds, V::RunRngType::MONSTER_AI),
+            ])
+            .expect("a build names each of its streams once");
+        CombatRngs {
+            shuffle,
+            niche,
+            generation,
+            ai,
+        }
     }
 
     /// One of the run's streams, to draw from in place.
@@ -90,6 +99,36 @@ impl<V: Rules> Streams<V> {
                 .copied()
                 .zip(self.player.iter().map(position_of))
                 .collect(),
+        }
+    }
+}
+
+/// The run streams a fight draws through, lent as a set.
+///
+/// `RunState.Rng` holds every stream and any rule in a fight reaches any of
+/// these, so they travel together rather than one parameter at a time. Held by
+/// reference: the run owns the rows, and a draw moves the row itself.
+pub(crate) struct CombatRngs<'a> {
+    /// The shuffle stream, because drawing a card can turn the discard pile
+    /// back into a draw pile.
+    pub(crate) shuffle: &'a mut MegaRng,
+    /// The stream monsters use when they roll their hit points.
+    pub(crate) niche: &'a mut MegaRng,
+    /// The stream a rule that creates or takes cards draws from.
+    pub(crate) generation: &'a mut MegaRng,
+    /// The stream a monster's move machine rolls against.
+    pub(crate) ai: &'a mut MegaRng,
+}
+
+impl CombatRngs<'_> {
+    /// Lend the set again for a shorter life, which is what handing it to a
+    /// nested board needs.
+    pub(crate) fn reborrow(&mut self) -> CombatRngs<'_> {
+        CombatRngs {
+            shuffle: self.shuffle,
+            niche: self.niche,
+            generation: self.generation,
+            ai: self.ai,
         }
     }
 }
@@ -144,11 +183,9 @@ mod tests {
     fn drawing_moves_one_stream() {
         let mut streams = Streams::<V0_107_1>::opening(123);
 
-        let mut shuffle = streams.stream(RunRngType::Shuffle);
         for _ in 0..9 {
-            shuffle.next_u64();
+            streams.run(RunRngType::Shuffle).next_u64();
         }
-        streams.record(RunRngType::Shuffle, shuffle);
 
         let at = streams.positions();
         assert_eq!(at.run[&RunRngType::Shuffle].counter, 9);
@@ -160,17 +197,69 @@ mod tests {
         }
     }
 
-    /// A stream handed out and not recorded leaves the run where it was.
+    /// The set a fight draws through lends the rows it names.
     ///
-    /// What makes a decision transactional: it draws from a copy, and the run
-    /// takes the copy only once the decision is whole.
+    /// The rows are read by position, so a set built on the wrong positions
+    /// hands a fight another stream's generator. Nothing downstream tells the
+    /// difference: the draws are real numbers off a real stream, and the wrong
+    /// one.
     #[test]
-    fn a_stream_that_is_not_recorded_does_not_move() {
+    fn the_combat_set_lends_the_streams_it_names() {
+        let named = [
+            (RunRngType::Shuffle, 1),
+            (RunRngType::Niche, 2),
+            (RunRngType::CombatCardGeneration, 3),
+            (RunRngType::MonsterAi, 4),
+        ];
+
+        let mut streams = Streams::<V0_107_1>::opening(123);
+        {
+            let rngs = streams.combat();
+            let lent = [
+                (rngs.shuffle, 1),
+                (rngs.niche, 2),
+                (rngs.generation, 3),
+                (rngs.ai, 4),
+            ];
+            // A different count each, so a row lent twice or lent in another
+            // stream's place shows up as the wrong count rather than as none.
+            for (rng, draws) in lent {
+                for _ in 0..draws {
+                    rng.next_u64();
+                }
+            }
+        }
+
+        let at = streams.positions();
+        for (kind, draws) in named {
+            assert_eq!(
+                at.run[&kind].counter,
+                draws,
+                "{} was not the row the set lent",
+                kind.name()
+            );
+        }
+        for kind in RunRngType::ALL
+            .into_iter()
+            .filter(|k| !named.iter().any(|(named, _)| named == k))
+        {
+            assert_eq!(at.run[&kind].counter, 0, "{} moved too", kind.name());
+        }
+    }
+
+    /// A decision draws from a clone, and the run takes the clone only once
+    /// the decision is whole.
+    ///
+    /// What makes a decision transactional. The streams move where they lie,
+    /// so the copy is the whole of the boundary.
+    #[test]
+    fn a_decision_draws_from_a_clone() {
         let streams = Streams::<V0_107_1>::opening(123);
 
-        let mut taken = streams.stream(RunRngType::Niche);
-        taken.next_u64();
+        let mut taken = streams.clone();
+        taken.run(RunRngType::Niche).next_u64();
 
         assert_eq!(streams.positions().run[&RunRngType::Niche].counter, 0);
+        assert_eq!(taken.positions().run[&RunRngType::Niche].counter, 1);
     }
 }

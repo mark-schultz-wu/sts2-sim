@@ -19,17 +19,13 @@ use sts2_core::{
 
 use super::live::{CardInstance, Counter, Live, counted};
 use crate::run::HeldRelic;
+use crate::stream::CombatRngs;
 
 /// The fight an effect is resolved against.
 pub(super) struct Board<'a, V: Rules> {
     live: &'a mut Live<V>,
-    /// The shuffle stream, because drawing a card can turn the discard pile
-    /// back into a draw pile.
-    shuffle: &'a mut MegaRng,
-    /// The stream monsters use when they roll their hit points.
-    niche: &'a mut MegaRng,
-    /// The stream monsters use to select cards created or taken in combat.
-    generation: Option<&'a mut MegaRng>,
+    /// The run streams an effect can draw from while it resolves.
+    rngs: CombatRngs<'a>,
     /// The player's relic belt, for hooks raised while an effect resolves.
     relics: &'a mut [HeldRelic<V>],
     /// Whose effect this is. The player for a card, the monster for a move.
@@ -97,8 +93,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// A board for one card, played from the player.
     pub(super) fn for_card(
         live: &'a mut Live<V>,
-        shuffle: &'a mut MegaRng,
-        niche: &'a mut MegaRng,
+        rngs: CombatRngs<'a>,
         relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
         target: Option<CombatId>,
@@ -107,9 +102,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let actor = live.player().id;
         Board {
             live,
-            shuffle,
-            niche,
-            generation: None,
+            rngs,
             relics,
             actor,
             target,
@@ -126,9 +119,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// A board for one move, made by a monster.
     pub(super) fn for_move(
         live: &'a mut Live<V>,
-        shuffle: &'a mut MegaRng,
-        niche: &'a mut MegaRng,
-        generation: &'a mut MegaRng,
+        rngs: CombatRngs<'a>,
         relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
         acting: (CombatId, V::Number, V::Count),
@@ -136,9 +127,7 @@ impl<'a, V: Rules> Board<'a, V> {
         let (actor, intent_damage, intent_repeats) = acting;
         Board {
             live,
-            shuffle,
-            niche,
-            generation: Some(generation),
+            rngs,
             relics,
             actor,
             target: None,
@@ -365,7 +354,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             self.live,
                             monster,
                             position + offset,
-                            self.niche,
+                            self.rngs.niche,
                         );
                         let summoned = self
                             .live
@@ -467,17 +456,23 @@ pub(super) fn hp_lost<V: Rules>(
 /// `Hook.ModifyDamage`.
 ///
 /// `dealer` is the creature swinging and `target` the one it hits. A creature
-/// that has left the fight has no listeners left to ask, so it modifies
-/// nothing and the hit still works out. Nothing caps a hit.
+/// that has left the fight has no listeners to ask. Nothing caps a hit.
+///
+/// The target is absent for a hit previewed against nobody.
+/// `Hook.ModifyDamage` takes a null target and runs anyway. Only the powers
+/// reading the target sit that one out.
 pub(crate) fn modified<V: Rules>(
     creatures: &[Creature<V>],
     counters: &[Counter<V>],
     dealer: CombatId,
-    target: CombatId,
+    target: Option<CombatId>,
     damage: V::Number,
 ) -> V::Number {
     let at = |id: CombatId| creatures.iter().position(|creature| creature.id == id);
-    let sides = [(at(target), Holding::Target), (at(dealer), Holding::Dealer)];
+    let sides = [
+        (target.and_then(at), Holding::Target),
+        (at(dealer), Holding::Dealer),
+    ];
     hooked::<V>(
         damage,
         sides.into_iter().flat_map(|(holder, holding)| {
@@ -553,7 +548,9 @@ pub(crate) fn resolve<V: Rules>(
             damage: {
                 let damage = carried::<V>(playing, creatures, damage);
                 match scaling {
-                    Scaling::Dynamic => modified::<V>(creatures, counters, dealer, target, damage),
+                    Scaling::Dynamic => {
+                        modified::<V>(creatures, counters, dealer, Some(target), damage)
+                    }
                     Scaling::Static => damage,
                 }
             },
@@ -794,8 +791,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
         draw(
             self.live,
-            self.shuffle,
-            self.niche,
+            self.rngs.reborrow(),
             self.relics,
             self.ascension,
             count,
@@ -943,13 +939,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 .expect("a combat pile's length fits the game's RNG integer"),
         )
         .expect("a nonempty candidate list has a nonzero bound");
-        let at: usize = num_traits::NumCast::from(
-            self.generation
-                .as_deref_mut()
-                .expect("a random combat card is selected during a monster move")
-                .next_int(bound),
-        )
-        .expect("a bounded draw is a candidate index");
+        let at: usize = num_traits::NumCast::from(self.rngs.generation.next_int(bound))
+            .expect("a bounded draw is a candidate index");
         Some(cards[at])
     }
 
@@ -999,7 +990,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
-        super::monster::summon(self.live, monster, position, self.niche)
+        super::monster::summon(self.live, monster, position, self.rngs.niche)
     }
 }
 
@@ -1009,8 +1000,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 /// A fight with every card in hand draws short rather than manufacture one.
 pub(super) fn draw<V: Rules>(
     live: &mut Live<V>,
-    shuffle: &mut MegaRng,
-    niche: &mut MegaRng,
+    mut rngs: CombatRngs<'_>,
     relics: &mut [HeldRelic<V>],
     ascension: V::AscensionLevel,
     count: usize,
@@ -1020,7 +1010,7 @@ pub(super) fn draw<V: Rules>(
             if live.discard.is_empty() {
                 return;
             }
-            reshuffle(live, shuffle);
+            reshuffle(live, rngs.shuffle);
         }
         let drawn = live.draw.remove(0);
         live.hand.push(drawn.clone());
@@ -1040,7 +1030,7 @@ pub(super) fn draw<V: Rules>(
             },
         );
         let mut board =
-            Board::for_card(live, shuffle, niche, relics, ascension, None, Some(&drawn));
+            Board::for_card(live, rngs.reborrow(), relics, ascension, None, Some(&drawn));
         super::hook::apply::<V, _>(&mut board, asked);
     }
 }

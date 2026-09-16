@@ -290,16 +290,24 @@ fn previewed<V: Rules>(
     held.vars
         .iter()
         .map(|var| {
-            let resolved = var
-                .modifier
-                .and_then(|modifier| super::board::effect_of::<V>(modifier, var.id, dealer, target))
-                .map(|effect| {
-                    super::board::resolve::<V>(creatures, counters, Some(held), effect).amount()
-                });
-            // A number no hook reaches, and a hit previewed against no target,
-            // both read what the card reads.
-            let value = resolved.unwrap_or_else(|| super::board::var::<V>(held, var.id, creatures));
-            (var.id, value)
+            let printed = || super::board::var::<V>(held, var.id, creatures);
+            let resolved = match (var.modifier, target) {
+                // `UpdateCardPreview` hands the null target to
+                // `Hook.ModifyDamage` rather than skipping it, so a hit
+                // previewed against nobody still runs the dealer's own powers
+                // and only the ones reading the target sit it out.
+                (Some(sts2_core::CardNumberModifier::Damage), None) => Some(
+                    super::board::modified::<V>(creatures, counters, dealer, None, printed()),
+                ),
+                (Some(modifier), _) => {
+                    super::board::effect_of::<V>(modifier, var.id, dealer, target).map(|effect| {
+                        super::board::resolve::<V>(creatures, counters, Some(held), effect).amount()
+                    })
+                }
+                (None, _) => None,
+            };
+            // A number no hook reaches reads what the card reads.
+            (var.id, resolved.unwrap_or_else(printed))
         })
         .collect()
 }
@@ -378,6 +386,57 @@ mod tests {
         let mut plays = super::hand::<V>(hand, &fight(), &[], energy, stars);
         assert_eq!(plays.len(), 1);
         plays.remove(0)
+    }
+
+    /// A fight where the player carries one power, at one amount.
+    fn fight_with(power: sts2_content::v0_107_1::powers::Power, amount: i32) -> Vec<Creature<V>> {
+        let mut creatures = fight();
+        creatures[0].powers.push(sts2_core::Stack {
+            power,
+            amount: sts2_core::PowerAmount::Counted(amount),
+        });
+        creatures
+    }
+
+    /// `UpdateCardPreview` hands a null target to `Hook.ModifyDamage` rather
+    /// than skipping the hook, so the dealer's own powers still move a hit
+    /// nobody is pointed at.
+    #[test]
+    fn a_hit_previewed_against_nobody_still_reads_the_dealer_s_powers() {
+        use sts2_content::v0_107_1::{cards::CardVar, powers::Power};
+
+        let strike = card(Cards::Regent(RegentCard::Strike));
+        let creatures = fight_with(Power::StrengthPower, -2);
+        let damage = |targets: &[CombatId]| {
+            effect::<V>(&strike, &creatures, &[], targets)[0].vars[&CardVar::Damage]
+        };
+
+        // The same card, previewed at the one enemy and at nobody. Strength
+        // belongs to the player, so it lands on both.
+        let printed = super::numbers::<V>(&strike, &creatures)[&CardVar::Damage];
+        assert_eq!(damage(&[at(1)]), printed - 2);
+        assert_eq!(damage(&[]), printed - 2);
+    }
+
+    /// The other side of it. A power the target carries is the one that sits
+    /// out a preview against nobody, because there is nobody to read it off.
+    #[test]
+    fn a_hit_previewed_against_nobody_skips_the_target_s_own_powers() {
+        use sts2_content::v0_107_1::{cards::CardVar, powers::Power};
+
+        let strike = card(Cards::Regent(RegentCard::Strike));
+        let mut creatures = fight();
+        creatures[1].powers.push(sts2_core::Stack {
+            power: Power::VulnerablePower,
+            amount: sts2_core::PowerAmount::Counted(1),
+        });
+        let damage = |targets: &[CombatId]| {
+            effect::<V>(&strike, &creatures, &[], targets)[0].vars[&CardVar::Damage]
+        };
+
+        let printed = super::numbers::<V>(&strike, &creatures)[&CardVar::Damage];
+        assert!(damage(&[at(1)]) > printed);
+        assert_eq!(damage(&[]), printed);
     }
 
     #[test]
