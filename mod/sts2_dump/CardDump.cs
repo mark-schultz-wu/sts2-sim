@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Factories;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
@@ -61,6 +62,7 @@ public static class CardDump
         output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords>\n");
         output.Append("# var <card> <name> <base> <calculated> <class>\n");
         output.Append("# pool <pool> <index> <card>\n");
+        output.Append("# combatpool <pool> <index> <card>\n");
         output.Append("# rewardpool <character> <index> <card>\n");
 
         foreach (CardPoolModel pool in ModelDb.AllCardPools.OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
@@ -69,6 +71,32 @@ public static class CardDump
             foreach (CardModel card in pool.AllCards)
             {
                 output.Append($"pool {pool.Id.Entry} {index} {card.Id.Entry}\n");
+                index++;
+            }
+        }
+
+        // What a combat generation effect -- Power Potion, Attack Potion,
+        // Discovery -- can draw from, already narrowed the way
+        // `CardFactory.FilterForCombat` narrows it and in the order the shuffle
+        // it feeds will see. Dumped rather than derived, because deriving it
+        // would mean a per-card `CanBeGeneratedInCombat` and
+        // `MultiplayerConstraint` column and then re-running the filter here.
+        //
+        // `SingleplayerOnly` is what a one-player run's `RunState` reports, and
+        // `FilterForPlayerCount` narrows the same way after it, so one pass
+        // over `GetUnlockedCards` is the whole filter.
+        //
+        // The type filter each effect adds is not applied: it belongs to the
+        // effect and not to the pool, and filtering preserves order, so
+        // narrowing this list by type gives what the game's own LINQ gives.
+        foreach (CardPoolModel pool in ModelDb.AllCardPools.OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
+        {
+            int index = 0;
+            IEnumerable<CardModel> unlocked = pool.GetUnlockedCards(
+                UnlockState.all, CardMultiplayerConstraint.SingleplayerOnly);
+            foreach (CardModel card in CardFactory.FilterForCombat(unlocked))
+            {
+                output.Append($"combatpool {pool.Id.Entry} {index} {card.Id.Entry}\n");
                 index++;
             }
         }

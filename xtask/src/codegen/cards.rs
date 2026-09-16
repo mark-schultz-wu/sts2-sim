@@ -307,6 +307,37 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         }
     }
 
+    // The same pools, already narrowed to what a combat generation effect can
+    // draw. The narrowing is the game's own `CardFactory.FilterForCombat`, run
+    // in the dump, because the facts it reads -- `CanBeGeneratedInCombat` and
+    // `MultiplayerConstraint` -- are on the model and in no table.
+    let mut combat_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
+    for f in dump.of("combatpool") {
+        let index = f[2]
+            .parse::<usize>()
+            .map_err(|e| format!("{}: combat pool index {}: {e}", f[1], f[2]))?;
+        combat_pools
+            .entry(f[1].clone())
+            .or_default()
+            .push((index, f[3].clone()));
+    }
+    for (pool, entries) in &mut combat_pools {
+        entries.sort_by_key(|(index, _)| *index);
+        for (expected, (index, card)) in entries.iter().enumerate() {
+            if *index != expected {
+                return Err(format!(
+                    "{pool}: combat pool index {index}, expected {expected}"
+                ));
+            }
+            let Some(row) = cards.iter().find(|row| row.id == *card) else {
+                return Err(format!("{pool}: unknown combat card {card}"));
+            };
+            if row.pool != *pool {
+                return Err(format!("{pool}: {card} declares pool {}", row.pool));
+            }
+        }
+    }
+
     let mut reward_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
     for f in dump.of("rewardpool") {
         let index = f[2]
@@ -765,6 +796,52 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         let entries = pools
             .get(pool_id)
             .ok_or_else(|| format!("{pool_id}: dump has no runtime pool order"))?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "            Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, suffix)
+            )
+            .unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "        _ => &[],").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// A character pool as a combat generation effect sees it.\n\
+         ///\n\
+         /// [`pool_cards`] narrowed by `CardFactory.FilterForCombat`, in the\n\
+         /// same order, which is the order the shuffle it feeds will see. An\n\
+         /// effect that wants one card type filters this further, and\n\
+         /// filtering keeps the order, so the result is what the game's own\n\
+         /// query gives."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn combat_cards(pool: CardPool) -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match pool {{").unwrap();
+    for (pool_id, _, enum_name, suffix) in POOLS
+        .iter()
+        .copied()
+        .filter(|(_, _, _, suffix)| suffix.is_some())
+    {
+        let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
+        writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
+        let entries = combat_pools
+            .get(pool_id)
+            .ok_or_else(|| format!("{pool_id}: dump has no combat pool order"))?;
         for (_, id) in entries {
             let card = cards
                 .iter()
