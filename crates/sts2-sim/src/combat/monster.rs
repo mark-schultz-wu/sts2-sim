@@ -2,7 +2,7 @@
 
 use crate::rng::MegaRng;
 use sts2_core::rng::{Choices, GameRng};
-use sts2_core::{CombatId, Creature, ModelId, MoveMachine, Rules, RunStreamKinds, SideKinds};
+use sts2_core::{CombatId, Creature, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
 use super::live::Live;
@@ -64,8 +64,7 @@ pub(crate) fn initialize<V: Rules>(
     streams: &mut Streams<V>,
     monsters: &[V::Monster],
 ) -> Result<Roster<V>, Error> {
-    let mut niche = streams.stream(V::RunRngType::NICHE);
-    let mut ai = streams.stream(V::RunRngType::MONSTER_AI);
+    let rngs = streams.combat();
 
     // A fight the encounter builds nobody for is not a fight.
     let roster_size = u8::try_from(monsters.len())
@@ -76,7 +75,7 @@ pub(crate) fn initialize<V: Rules>(
     let mut creatures = Vec::with_capacity(monsters.len());
     let mut machines = Vec::with_capacity(monsters.len());
     for (index, &monster) in monsters.iter().enumerate() {
-        let hp = health::<V>(monster, ascension, &creatures, &mut niche);
+        let hp = health::<V>(monster, ascension, &creatures, rngs.niche);
 
         let position = u8::try_from(index)
             .ok()
@@ -95,7 +94,7 @@ pub(crate) fn initialize<V: Rules>(
             roster_size,
         };
         let mut machine = V::opening_move_machine(monster);
-        let opening = V::roll_monster_move(monster, ascension, spawn, &mut machine, &mut ai)?;
+        let opening = V::roll_monster_move(monster, ascension, spawn, &mut machine, rngs.ai)?;
         machines.push(Machine {
             creature: id,
             monster,
@@ -118,8 +117,6 @@ pub(crate) fn initialize<V: Rules>(
         });
     }
 
-    streams.record(V::RunRngType::NICHE, niche);
-    streams.record(V::RunRngType::MONSTER_AI, ai);
     Ok(Roster {
         creatures,
         machines,

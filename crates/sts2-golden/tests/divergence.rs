@@ -467,31 +467,27 @@ fn combat_differences<V: sts2_content_wire::WireContentVersion>(
     // Per creature, so a fight of four does not report as one long line.
     for index in 0..want.creatures.len().max(got.creatures.len()) {
         let (a, b) = (want.creatures.get(index), got.creatures.get(index));
-        match (a, b) {
-            (Some(a), Some(b)) => {
-                let at = |c: &Creature<V>| {
-                    format!(
-                        "{:?} hp {}/{} block {} alive {} powers {} next {:?}",
-                        c.model,
-                        c.hp,
-                        c.max_hp,
-                        c.block,
-                        c.alive,
-                        ids(&c.powers, |s| match s.amount {
-                            PowerAmount::Counted(amount) => format!("{:?}={amount}", s.power),
-                            PowerAmount::Endless => format!("{:?}=endless", s.power),
-                        }),
-                        c.next_move,
-                    )
-                };
-                note(&format!("combat.creatures[{index}]"), at(a), at(b));
-            }
-            _ => note(
-                &format!("combat.creatures[{index}]"),
-                a.map_or("absent".into(), |c| format!("{:?}", c.model)),
-                b.map_or("absent".into(), |c| format!("{:?}", c.model)),
-            ),
-        }
+        // The same detail whether both sides have the creature or one does. A
+        // creature only one side still has is the interesting case, and its
+        // hit points are usually why.
+        let at = |c: Option<&Creature<V>>| {
+            c.map_or("absent".to_string(), |c| {
+                format!(
+                    "{:?} hp {}/{} block {} alive {} powers {} next {:?}",
+                    c.model,
+                    c.hp,
+                    c.max_hp,
+                    c.block,
+                    c.alive,
+                    ids(&c.powers, |s| match s.amount {
+                        PowerAmount::Counted(amount) => format!("{:?}={amount}", s.power),
+                        PowerAmount::Endless => format!("{:?}=endless", s.power),
+                    }),
+                    c.next_move,
+                )
+            })
+        };
+        note(&format!("combat.creatures[{index}]"), at(a), at(b));
     }
 
     for index in 0..want.legal.len().max(got.legal.len()) {

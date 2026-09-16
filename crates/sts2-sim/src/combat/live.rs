@@ -263,7 +263,7 @@ impl<V: Rules> Live<V> {
                         &self.creatures,
                         &self.counted,
                         creature.id,
-                        player,
+                        Some(player),
                         attack.damage,
                     );
                 }

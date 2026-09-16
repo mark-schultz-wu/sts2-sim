@@ -8,9 +8,7 @@
 //! leaves the fight where it stood.
 
 use crate::rng::MegaRng;
-use sts2_core::{
-    CardTable, CombatId, PowerAmount, Rules, RunStreamKinds, SideKinds, TurnPhaseKinds,
-};
+use sts2_core::{CardTable, CombatId, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
 use super::Error;
 use super::board::{Board, draw};
@@ -18,6 +16,7 @@ use super::live::{Live, counted};
 use super::power;
 use super::relic;
 use super::start::{hand_size, upgraded};
+use crate::stream::CombatRngs;
 use crate::stream::Streams;
 
 /// End the player's turn and set up the next one.
@@ -32,12 +31,9 @@ pub(crate) fn end<V: Rules>(
     let mut relics = relics.to_vec();
     let mut skipping = std::mem::take(&mut next.skip_tick);
     let mut streams = streams.clone();
-    let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
-    let mut ai = streams.stream(V::RunRngType::MONSTER_AI);
-    let mut niche = streams.stream(V::RunRngType::NICHE);
-    let mut generation = streams.stream(V::RunRngType::COMBAT_CARD_GENERATION);
+    let mut rngs = streams.combat();
 
-    turn_end(&mut next, &mut shuffle, &mut niche, &mut relics, ascension);
+    turn_end(&mut next, rngs.reborrow(), &mut relics, ascension);
     flush_hand(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
     let asked = tick_powers::<V>(
@@ -45,14 +41,7 @@ pub(crate) fn end<V: Rules>(
         &mut skipping,
         <V::CombatSide as SideKinds>::PLAYER,
     );
-    applied::<V>(
-        &mut next,
-        &mut shuffle,
-        &mut niche,
-        &mut relics,
-        ascension,
-        asked,
-    );
+    applied::<V>(&mut next, rngs.reborrow(), &mut relics, ascension, asked);
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
@@ -61,28 +50,14 @@ pub(crate) fn end<V: Rules>(
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
     side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
-    let won = enemy_turn(
-        &mut next,
-        &mut shuffle,
-        &mut niche,
-        &mut generation,
-        &mut relics,
-        &mut skipping,
-    );
+    let won = enemy_turn(&mut next, rngs.reborrow(), &mut relics, &mut skipping);
 
     let asked = tick_powers::<V>(
         &mut next,
         &mut skipping,
         <V::CombatSide as SideKinds>::ENEMY,
     );
-    applied::<V>(
-        &mut next,
-        &mut shuffle,
-        &mut niche,
-        &mut relics,
-        ascension,
-        asked,
-    );
+    applied::<V>(&mut next, rngs.reborrow(), &mut relics, ascension, asked);
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -90,7 +65,7 @@ pub(crate) fn end<V: Rules>(
     next.turn = next.turn + num_traits::one();
 
     // `PrepareForNextTurn`, before the player draws anything.
-    roll_moves(&mut next, ascension, &mut ai)?;
+    roll_moves(&mut next, ascension, rngs.ai)?;
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
@@ -101,24 +76,13 @@ pub(crate) fn end<V: Rules>(
     // moves the count on, then the draw that reads it.
     relic::turn_starting::<V>(&mut relics, next.turn);
     let drawn = hand_size::<V>(&mut relics, next.turn);
-    draw(
-        &mut next,
-        &mut shuffle,
-        &mut niche,
-        &mut relics,
-        ascension,
-        drawn,
-    );
+    draw(&mut next, rngs.reborrow(), &mut relics, ascension, drawn);
     let started = relic::turn_started::<V>(&mut relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
     side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
-    streams.record(V::RunRngType::SHUFFLE, shuffle);
-    streams.record(V::RunRngType::MONSTER_AI, ai);
-    streams.record(V::RunRngType::NICHE, niche);
-    streams.record(V::RunRngType::COMBAT_CARD_GENERATION, generation);
     next.skip_tick = skipping;
     if won {
         relic::combat_ended::<V>(&mut relics);
@@ -137,14 +101,13 @@ pub(crate) fn end<V: Rules>(
 /// runs it, and that arrives with the port of the card.
 fn turn_end<V: Rules>(
     live: &mut Live<V>,
-    shuffle: &mut MegaRng,
-    niche: &mut MegaRng,
+    mut rngs: CombatRngs<'_>,
     relics: &mut [crate::run::HeldRelic<V>],
     ascension: V::AscensionLevel,
 ) {
     let held = live.hand.clone();
     for card in &held {
-        let mut board = Board::for_card(live, shuffle, niche, relics, ascension, None, Some(card));
+        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, Some(card));
         V::on_card_turn_end(card.ident.card, &mut board);
     }
     let ethereal: Vec<usize> = live
@@ -321,14 +284,13 @@ fn tick_powers<V: Rules>(
 /// order they were asked in.
 fn applied<V: Rules>(
     live: &mut Live<V>,
-    shuffle: &mut MegaRng,
-    niche: &mut MegaRng,
+    mut rngs: CombatRngs<'_>,
     relics: &mut [crate::run::HeldRelic<V>],
     ascension: V::AscensionLevel,
     asked: Vec<(CombatId, V::Power, PowerAmount<V::Number>)>,
 ) {
     for (at, power, amount) in asked {
-        let mut board = Board::for_card(live, shuffle, niche, relics, ascension, None, None);
+        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
         sts2_core::Fight::apply_power(&mut board, at, power, amount);
     }
 }
@@ -339,9 +301,7 @@ fn applied<V: Rules>(
 /// acts. An earlier move can take a later one out of the fight.
 fn enemy_turn<V: Rules>(
     live: &mut Live<V>,
-    shuffle: &mut MegaRng,
-    niche: &mut MegaRng,
-    generation: &mut MegaRng,
+    mut rngs: CombatRngs<'_>,
     relics: &mut [crate::run::HeldRelic<V>],
     skipping: &mut Vec<(CombatId, V::Power)>,
 ) -> bool {
@@ -393,9 +353,7 @@ fn enemy_turn<V: Rules>(
         let ascension = live.ascension;
         let mut board = Board::for_move(
             live,
-            shuffle,
-            niche,
-            generation,
+            rngs.reborrow(),
             relics,
             ascension,
             (id, damage, repeats),
