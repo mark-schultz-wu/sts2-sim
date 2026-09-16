@@ -140,8 +140,8 @@ impl sts2_core::Hooks for V0_107_1 {
                 power,
                 amount,
                 owner,
-                ..
-            } => behaviour::powers::event_hook(power, amount, owner, hook),
+                counted,
+            } => behaviour::powers::event_hook(power, amount, owner, counted, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
             sts2_core::Listener::Card { card, printed } => {
                 behaviour::cards::event_hook(card, printed, hook)

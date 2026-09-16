@@ -1,0 +1,18 @@
+# `SwordSagePower.AfterCardEnteredCombat` writes on a blade that reaches the
+# fight after the power is already out. Refine Blade makes one, so it carries a
+# replay and swings twice.
+#
+# A port that writes replays only where the power lands gives this blade none,
+# and the slime takes one swing rather than two.
+#
+# Applied rather than played, because Sword Sage's own play is the rule the
+# other file holds.
+#
+# Two Refine Blades, because one leaves none in the opening hand.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"grant","card":"REFINE_BLADE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"SWORD_SAGE_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":4,"target":2}

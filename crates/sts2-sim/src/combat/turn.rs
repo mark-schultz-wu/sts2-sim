@@ -233,6 +233,7 @@ fn tick_powers<V: Rules>(
     let one = num_traits::one();
     let mut applying = Vec::new();
     let mut leaving: Vec<(CombatId, V::Power)> = Vec::new();
+    let mut cleared: Vec<(CombatId, V::Power)> = Vec::new();
     let counters = live.counted.clone();
     for creature in &mut live.creatures {
         let id = creature.id;
@@ -259,6 +260,10 @@ fn tick_powers<V: Rules>(
                     // `PowerCmd.Remove(this)`, taken after the belt is read
                     // for the same reason a power it applies is.
                     sts2_core::HookEffect::Remove => leaving.push((id, power)),
+                    // The number the instance counts on itself, set back to
+                    // zero. A power that hands back what it took this turn
+                    // asks for this after asking for the handing back.
+                    sts2_core::HookEffect::ClearCount => cleared.push((id, power)),
                     other => unimplemented!("a power asking for {other:?} as a turn ends"),
                 }
             }
@@ -287,6 +292,8 @@ fn tick_powers<V: Rules>(
         };
         creature.powers.retain(|held| held.power != power);
     }
+    live.counted
+        .retain(|held| !cleared.contains(&(held.creature, held.power)));
     applying
 }
 

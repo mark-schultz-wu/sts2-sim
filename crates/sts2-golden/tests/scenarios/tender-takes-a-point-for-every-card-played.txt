@@ -1,0 +1,14 @@
+# `TenderPower.AfterCardPlayed` takes a point of Strength and a point of
+# Dexterity for each card its owner plays. Two cards, so two of each are gone.
+#
+# Two Defends, because the block one gains reads the Dexterity the play
+# before it took. A port that takes a fixed point on the first play alone
+# gains the same block twice.
+#
+# Applied rather than goaded out of the Hunter-Killer, because the monster's
+# own move is the rule the other file holds.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"TENDER_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":3}

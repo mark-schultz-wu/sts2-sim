@@ -1377,6 +1377,41 @@ pub enum EventHook<V: ContentVersion> {
     EnergyReset,
     BlockCleared,
     AfterDeath,
+    /// `AfterPowerAmountChanged`, raised on every listener once a power's
+    /// amount has moved.
+    ///
+    /// `delta` is the amount that was applied, which is what the hook carries
+    /// and not the total the creature now holds. A power reading this one
+    /// compares the power named against itself.
+    PowerAmountChanged {
+        power: V::Power,
+        delta: V::Number,
+    },
+    /// `AfterCardEnteredCombat`, carrying the card that has just joined the
+    /// fight.
+    ///
+    /// A card generated into a pile, or forged into one. Not a card moving
+    /// between piles, which is `AfterCardChangedPiles`.
+    ///
+    /// Both where it landed and what it is: a listener decides on the identity
+    /// and then writes on that one copy.
+    CardEnteredCombat {
+        at: crate::CardAt<V>,
+        card: V::Card,
+    },
+}
+
+/// Which cards a [`HookEffect::AddReplays`] writes on.
+///
+/// `PowerModel` reaches cards two ways, and both are here. `AllCards` is the
+/// combat state's own list. A listener that walks it names the card it wants
+/// rather than the copies, and the fight does the walking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Replaying<V: ContentVersion> {
+    /// One copy, named where it sits.
+    One(crate::CardAt<V>),
+    /// Every copy of one card the fight holds, in every pile.
+    EveryCopyOf(V::Card),
 }
 
 /// One command requested by a content model in response to an event hook.
@@ -1402,6 +1437,15 @@ pub enum HookEffect<V: ContentVersion> {
     /// `PowerCmd.Apply<P>(Owner, amount, Owner)`, on the creature the listener
     /// is carried by.
     ApplyToOwner(V::Power, PowerAmount<V::Number>),
+    /// `CardModel.BaseReplayCount += amount`.
+    ///
+    /// The extra times a card's own play runs. The two hooks that hand replays
+    /// out reach different cards: one walks `AllCards`, and the other is given
+    /// the single card that just arrived.
+    AddReplays {
+        to: Replaying<V>,
+        amount: V::Number,
+    },
     TickDownDuration,
     /// `DynamicVars[..].BaseValue += amount`, on the power that asked.
     ///

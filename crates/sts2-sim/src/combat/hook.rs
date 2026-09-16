@@ -25,6 +25,13 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(fight: &mut F, asked: Vec<HookEffect<
                 });
                 fight.apply(block);
             }
+            // `PowerCmd.Apply` on the creature carrying the listener. Every
+            // hook delivered here names the creature acting, and a power only
+            // answers one that its own owner is party to, so the two are the
+            // same creature. `GainBlock` above reads the actor for that
+            // reason. A listener that could answer for someone else would need
+            // the owner carried alongside the effect.
+            HookEffect::ApplyToOwner(power, amount) => fight.apply_to_actor(power, amount),
             other => unimplemented!("a model asking for {other:?} inside a fight"),
         }
     }

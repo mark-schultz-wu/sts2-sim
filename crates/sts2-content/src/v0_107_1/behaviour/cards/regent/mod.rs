@@ -48,6 +48,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Bulwark => uncommon::bulwark(fight),
         RegentCard::TheSmith => rare::the_smith(fight),
         RegentCard::BigBang => rare::big_bang(fight),
+        RegentCard::SwordSage => rare::sword_sage(fight),
         card => unimplemented!("what {card:?} does when it is played"),
     }
 }
