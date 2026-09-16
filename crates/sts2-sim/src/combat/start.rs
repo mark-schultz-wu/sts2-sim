@@ -99,6 +99,7 @@ pub(crate) fn enter<V: Rules>(
             draw: piles.draw().to_vec(),
             discard: piles.discard().to_vec(),
             exhaust: piles.exhaust().to_vec(),
+            removed_from_deck: Vec::new(),
             creatures,
             // Absent rather than an empty queue: the subsystem is inert until
             // something gives the player a slot.

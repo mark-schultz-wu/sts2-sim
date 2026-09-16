@@ -870,6 +870,28 @@ pub trait Fight<V: ContentVersion> {
     /// is. A move that hits once reads one.
     fn intent_repeats(&self) -> V::Count;
 
+    /// Perform the acting monster's advertised attack against every opponent.
+    ///
+    /// Each hit resolves immediately before it lands, so an earlier hit can
+    /// change the listeners the next one reaches.
+    fn attack_opponents(&mut self) {
+        let damage = self.intent_damage();
+        let repeats: usize = num_traits::cast(self.intent_repeats()).unwrap_or_else(|| {
+            unimplemented!("a move that hits more times than a fight can count")
+        });
+        for _ in 0..repeats {
+            for target in self.opponents() {
+                let attack = self.resolve(Effect::Attack {
+                    dealer: self.actor(),
+                    target,
+                    damage: Amount::Number(damage),
+                    scaling: Scaling::Dynamic,
+                });
+                self.apply(attack);
+            }
+        }
+    }
+
     /// `PowerCmd.Apply<P>(targets, amount, ...)`, which lands on every
     /// creature on the other side.
     ///
@@ -897,6 +919,25 @@ pub trait Fight<V: ContentVersion> {
     /// Each is named by where it was found, the way a selection names one. A
     /// card that acts on a whole pile walks this.
     fn cards_in(&self, pile: crate::Pile) -> Vec<crate::CardAt<V>>;
+
+    /// The identity carried by a card at one named place.
+    fn card_ident(&self, _card: crate::CardAt<V>) -> crate::CardIdent<V> {
+        unimplemented!("reading a card through its place")
+    }
+
+    /// Pick one candidate with the named run stream.
+    fn random_card(
+        &mut self,
+        _cards: &[crate::CardAt<V>],
+        _stream: V::RunRngType,
+    ) -> Option<crate::CardAt<V>> {
+        unimplemented!("choosing a random card from combat")
+    }
+
+    /// `CardPileCmd.RemoveFromCombat` for one named card.
+    fn remove_card(&mut self, _card: crate::CardAt<V>) -> crate::CardIdent<V> {
+        unimplemented!("removing a card from combat")
+    }
 
     /// `CardCmd.Upgrade(card)`, for the card at one place in a pile.
     ///

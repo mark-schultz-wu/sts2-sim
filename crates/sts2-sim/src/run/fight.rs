@@ -137,6 +137,7 @@ impl<V: Rules> State<V> {
     /// `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
     fn settle(&mut self, fought: combat::Fought<V>) -> sts2_core::Applied<V> {
         self.drew(fought.streams);
+        self.lose_cards(fought.live.removed_from_deck());
         // The belt the fight wrote, beside the streams it drew from. Neither
         // is committed until the decision is one the simulator could carry
         // out whole.
@@ -144,8 +145,16 @@ impl<V: Rules> State<V> {
         match fought.won {
             false => self.fought(fought.live),
             true => {
+                let returned = fought.live.removed_from_deck().to_vec();
                 let combat = fought.live.finish();
-                let offered = self.combat_rewards(&combat);
+                let mut offered = self.combat_rewards(&combat);
+                let at = offered
+                    .iter()
+                    .position(|offer| matches!(offer, crate::reward::Offer::Card { .. }))
+                    .unwrap_or(offered.len());
+                for card in returned.into_iter().rev() {
+                    offered.insert(at, crate::reward::Offer::SpecialCard { card, taken: false });
+                }
                 self.won(combat, offered);
             }
         }

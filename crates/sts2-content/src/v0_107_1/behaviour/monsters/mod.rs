@@ -16,6 +16,7 @@ use super::super::generated::monsters::{Monster, MoveId, State};
 /// What a move's own numbers are held as.
 pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
+mod hive;
 mod overgrowth;
 
 type V = V0_107_1;
@@ -34,6 +35,7 @@ pub(crate) fn starting_powers(
     sts2_core::PowerAmount<Number>,
 )> {
     overgrowth::starting_powers(monster, ascension)
+        .or_else(|| hive::starting_powers(monster, ascension))
 }
 
 /// Which branch a monster's conditional state takes.
@@ -74,5 +76,8 @@ pub(super) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 ///
 /// A monster nobody has ported.
 pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
-    overgrowth::perform(monster, move_id, fight);
+    match monster {
+        Monster::ThievingHopper => hive::perform(move_id, fight),
+        _ => overgrowth::perform(monster, move_id, fight),
+    }
 }

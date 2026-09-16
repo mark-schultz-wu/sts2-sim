@@ -24,6 +24,10 @@ pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
             Change::Raise(CardVar::Damage, 1),
             Change::Raise(CardVar::StrengthLoss, 1),
         ],
+        RegentCard::Glitterstream => &[
+            Change::Raise(CardVar::Block, 2),
+            Change::Raise(CardVar::BlockNextTurn, 2),
+        ],
         card => unimplemented!("card upgrade: {card:?}"),
     }
 }

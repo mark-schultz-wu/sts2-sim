@@ -79,7 +79,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
 fn wriggler<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::SpawnedMove => {}
-        MoveId::NastyBiteMove => attack(fight),
+        MoveId::NastyBiteMove => fight.attack_opponents(),
         MoveId::WriggleMove => {
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(WRIGGLE_STRENGTH));
             fight.give_cards(Cards::Status(StatusCard::Infection), WRIGGLE_CARDS);
@@ -168,7 +168,7 @@ fn bygone_effigy<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
         MoveId::WakeMove => {
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(WAKE_STRENGTH));
         }
-        MoveId::SlashesMove => attack(fight),
+        MoveId::SlashesMove => fight.attack_opponents(),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
@@ -197,9 +197,9 @@ const DISMEMBER_WOUNDS: usize = 3;
 /// A move of its graph nobody has ported.
 fn vantom<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::InkBlotMove | MoveId::InkyLanceMove => attack(fight),
+        MoveId::InkBlotMove | MoveId::InkyLanceMove => fight.attack_opponents(),
         MoveId::DismemberMove => {
-            attack(fight);
+            fight.attack_opponents();
             fight.give_cards(Cards::Status(StatusCard::Wound), DISMEMBER_WOUNDS);
         }
         MoveId::PrepareMove => {
@@ -216,7 +216,7 @@ fn vantom<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// A move of its graph nobody has ported.
 fn leaf_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::ClumpShot => attack(fight),
+        MoveId::ClumpShot => fight.attack_opponents(),
         MoveId::StickyShot => fight.give_cards(SLIMED, STICKY_CARDS),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
@@ -229,7 +229,7 @@ fn leaf_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// A move of its graph nobody has ported.
 fn leaf_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::TackleMove => attack(fight),
+        MoveId::TackleMove => fight.attack_opponents(),
         MoveId::GoopMove => fight.give_cards(SLIMED, GOOP_CARDS),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
@@ -242,7 +242,7 @@ fn leaf_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// A move of its graph nobody has ported.
 fn twig_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::PokeyPounceMove => attack(fight),
+        MoveId::PokeyPounceMove => fight.attack_opponents(),
         MoveId::StickyShotMove => fight.give_cards(SLIMED, TWIG_STICKY_CARDS),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
@@ -255,7 +255,7 @@ fn twig_slime_m<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// A move of its graph nobody has ported.
 fn twig_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::TackleMove => attack(fight),
+        MoveId::TackleMove => fight.attack_opponents(),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
@@ -268,7 +268,7 @@ fn twig_slime_s<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ShrinkerMove => fight.apply_to_opponents(Power::ShrinkPower, PowerAmount::Endless),
-        MoveId::ChompMove | MoveId::StompMove => attack(fight),
+        MoveId::ChompMove | MoveId::StompMove => fight.attack_opponents(),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
@@ -284,9 +284,9 @@ fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// A move of its graph nobody has ported.
 fn nibbit<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::ButtMove => attack(fight),
+        MoveId::ButtMove => fight.attack_opponents(),
         MoveId::SliceMove => {
-            attack(fight);
+            fight.attack_opponents();
             let block = match fight.ascension().has(AscensionLevel::ToughEnemies) {
                 true => SLICE_BLOCK_TOUGH,
                 false => SLICE_BLOCK,
@@ -327,10 +327,10 @@ fn fogmog<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
             fight.apply_power(eye, Power::MinionPower, PowerAmount::Counted(1));
         }
         MoveId::SwipeMove | MoveId::SwipeRandomMove => {
-            attack(fight);
+            fight.attack_opponents();
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
         }
-        MoveId::HeadbuttMove => attack(fight),
+        MoveId::HeadbuttMove => fight.attack_opponents(),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
@@ -353,7 +353,7 @@ fn eye_with_teeth<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// A move of its graph nobody has ported.
 fn byrdonis<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::PeckMove | MoveId::SwoopMove => attack(fight),
+        MoveId::PeckMove | MoveId::SwoopMove => fight.attack_opponents(),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
@@ -366,29 +366,10 @@ fn byrdonis<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// A move of its graph nobody has ported.
 fn mawler<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
-        MoveId::ClawMove | MoveId::RipAndTearMove => attack(fight),
+        MoveId::ClawMove | MoveId::RipAndTearMove => fight.attack_opponents(),
         MoveId::RoarMove => {
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(3));
         }
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
-    }
-}
-
-/// `DamageCmd.Attack(n).WithHitCount(k).FromMonster(this)`, for the moves that
-/// are that and nothing else.
-fn attack<F: Fight<V>>(fight: &mut F) {
-    let damage = fight.intent_damage();
-    let repeats: usize = num_traits::cast(fight.intent_repeats())
-        .unwrap_or_else(|| unimplemented!("a move that hits more times than a fight can count"));
-    for _ in 0..repeats {
-        for target in fight.opponents() {
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Number(damage),
-                scaling: Scaling::Dynamic,
-            });
-            fight.apply(attack);
-        }
     }
 }

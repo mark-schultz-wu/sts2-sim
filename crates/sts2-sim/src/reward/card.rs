@@ -1,7 +1,7 @@
 //! Card rewards drawn from a player's reward stream.
 
 use sts2_core::rng::{Bound, GameRng};
-use sts2_core::{Drafted, RewardRarity, Rules};
+use sts2_core::{CardIdent, CardTable as _, Drafted, RewardRarity, Rules};
 
 use super::Odds;
 
@@ -134,18 +134,13 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
     count: usize,
     act: usize,
     bands: RarityOdds,
-) -> Vec<V::Card> {
+) -> Vec<CardIdent<V>> {
     if super::combat::scarce::<V>(ascension) {
         unimplemented!("the reward odds a scarce run rolls");
     }
-    if act > 0 {
-        // `RollForUpgrade` weighs the act index, so the first act upgrades
-        // nothing and every act after it upgrades something.
-        unimplemented!("an upgraded card in a reward");
-    }
-
     let cards = V::reward_cards(character);
-    let mut drawn = Vec::with_capacity(count);
+    let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
+    let mut offered = Vec::with_capacity(count);
     for _ in 0..count {
         let wanted = rarity(rng, odds, bands);
         let choices = available::<V>(cards, &drawn, wanted);
@@ -154,17 +149,26 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
         let bound = Bound::try_new(left).expect("an available rarity has a card");
         let at =
             num_traits::cast(rng.next_int(bound)).expect("a bounded draw is a valid card index");
-        drawn.push(
-            choices
-                .iter()
-                .filter(|card| !drawn.contains(card))
-                .nth(at)
-                .copied()
-                .expect("the draw is inside the count"),
-        );
-        let _upgrade_roll = rng.next_double();
+        let card = choices
+            .iter()
+            .filter(|card| !drawn.contains(card))
+            .nth(at)
+            .copied()
+            .expect("the draw is inside the count");
+        drawn.push(card);
+        let upgrade_roll = rng.next_double() as f32;
+        let upgrade_chance = if V::reward_rarity(card) == RewardRarity::Rare {
+            0.0
+        } else {
+            act as f32 * 0.25
+        };
+        let mut ident = CardIdent::new(card);
+        if card.max_upgrade() > 0 && upgrade_roll <= upgrade_chance {
+            ident.upgrade = 1;
+        }
+        offered.push(ident);
     }
-    drawn
+    offered
 }
 
 /// One rarity, and the offset it leaves behind.

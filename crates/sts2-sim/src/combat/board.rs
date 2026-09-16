@@ -13,8 +13,8 @@ use num_traits::{Saturating as _, Zero};
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
-    EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, Scaling,
-    SideKinds, Stack,
+    EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, RunStreamKinds,
+    Scaling, SideKinds, Stack,
 };
 
 use super::live::{CardInstance, Counter, Live, counted};
@@ -28,6 +28,8 @@ pub(super) struct Board<'a, V: Rules> {
     shuffle: &'a mut MegaRng,
     /// The stream monsters use when they roll their hit points.
     niche: &'a mut MegaRng,
+    /// The stream monsters use to select cards created or taken in combat.
+    generation: Option<&'a mut MegaRng>,
     /// The player's relic belt, for hooks raised while an effect resolves.
     relics: &'a mut [HeldRelic<V>],
     /// Whose effect this is. The player for a card, the monster for a move.
@@ -107,6 +109,7 @@ impl<'a, V: Rules> Board<'a, V> {
             live,
             shuffle,
             niche,
+            generation: None,
             relics,
             actor,
             target,
@@ -125,16 +128,17 @@ impl<'a, V: Rules> Board<'a, V> {
         live: &'a mut Live<V>,
         shuffle: &'a mut MegaRng,
         niche: &'a mut MegaRng,
+        generation: &'a mut MegaRng,
         relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
-        actor: CombatId,
-        intent: (V::Number, V::Count),
+        acting: (CombatId, V::Number, V::Count),
     ) -> Self {
-        let (intent_damage, intent_repeats) = intent;
+        let (actor, intent_damage, intent_repeats) = acting;
         Board {
             live,
             shuffle,
             niche,
+            generation: Some(generation),
             relics,
             actor,
             target: None,
@@ -910,6 +914,62 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 CardAt::new(held.id, pile, at)
             })
             .collect()
+    }
+
+    fn card_ident(&self, card: CardAt<V>) -> CardIdent<V> {
+        let pile = match card.pile() {
+            Pile::Hand => &self.live.hand,
+            Pile::Draw => &self.live.draw,
+            Pile::Discard => &self.live.discard,
+            Pile::Exhaust => &self.live.exhaust,
+        };
+        let at: usize = num_traits::NumCast::from(card.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
+        pile.get(at)
+            .filter(|held| held.id == card.id())
+            .unwrap_or_else(|| unimplemented!("a card read after the fight moved it"))
+            .ident
+    }
+
+    fn random_card(&mut self, cards: &[CardAt<V>], stream: V::RunRngType) -> Option<CardAt<V>> {
+        if cards.is_empty() {
+            return None;
+        }
+        if stream != V::RunRngType::COMBAT_CARD_GENERATION {
+            unimplemented!("a combat card selected from {stream:?}")
+        }
+        let bound = sts2_core::rng::Bound::try_new(
+            num_traits::NumCast::from(cards.len())
+                .expect("a combat pile's length fits the game's RNG integer"),
+        )
+        .expect("a nonempty candidate list has a nonzero bound");
+        let at: usize = num_traits::NumCast::from(
+            self.generation
+                .as_deref_mut()
+                .expect("a random combat card is selected during a monster move")
+                .next_int(bound),
+        )
+        .expect("a bounded draw is a candidate index");
+        Some(cards[at])
+    }
+
+    fn remove_card(&mut self, card: CardAt<V>) -> CardIdent<V> {
+        let pile = match card.pile() {
+            Pile::Hand => &mut self.live.hand,
+            Pile::Draw => &mut self.live.draw,
+            Pile::Discard => &mut self.live.discard,
+            Pile::Exhaust => &mut self.live.exhaust,
+        };
+        let at: usize = num_traits::NumCast::from(card.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
+        let held = pile
+            .get(at)
+            .filter(|held| held.id == card.id())
+            .unwrap_or_else(|| unimplemented!("a card removed after the fight moved it"));
+        let ident = held.ident;
+        pile.remove(at);
+        self.live.removed_from_deck.push(ident);
+        ident
     }
 
     fn upgrade(&mut self, card: CardAt<V>) {

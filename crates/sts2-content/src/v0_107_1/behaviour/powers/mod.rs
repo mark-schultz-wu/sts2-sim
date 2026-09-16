@@ -146,13 +146,15 @@ pub(crate) fn modify_hook(
             | Power::ShrinkPower
             | Power::BlockNextTurnPower
             | Power::EnergyNextTurnPower
+            | Power::EscapeArtistPower
             | Power::TerritorialPower
             | Power::InfestedPower
             | Power::IllusionPower
             | Power::MinionPower
             | Power::DexterityPower
             | Power::SlowPower
-            | Power::SlipperyPower,
+            | Power::SlipperyPower
+            | Power::SwipePower,
             _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
@@ -187,7 +189,8 @@ pub(crate) fn modify_hook(
             | Power::IllusionPower
             | Power::MinionPower
             | Power::SlowPower
-            | Power::SlipperyPower,
+            | Power::SlipperyPower
+            | Power::SwipePower,
             _,
             ModifyHook::Block,
         ) => Modify::Nothing,
@@ -257,6 +260,15 @@ pub(crate) fn event_hook(
         }
         (Power::TerritorialPower, _, EventHook::SideTurnEnd { .. }) => None,
         (
+            Power::EscapeArtistPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnEnd { side },
+        ) if side == owner && amount > one => Some(HookEffect::Decrement),
+        (Power::EscapeArtistPower, PowerAmount::Endless, EventHook::SideTurnEnd { .. }) => {
+            unimplemented!("an endless Escape Artist")
+        }
+        (Power::EscapeArtistPower, _, EventHook::SideTurnEnd { .. }) => None,
+        (
             Power::VulnerablePower
             | Power::WeakPower
             | Power::EnergyNextTurnPower
@@ -269,7 +281,8 @@ pub(crate) fn event_hook(
             // stay for the fight.
             | Power::DexterityPower
             | Power::SlowPower
-            | Power::SlipperyPower,
+            | Power::SlipperyPower
+            | Power::SwipePower,
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,

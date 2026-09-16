@@ -23,3 +23,16 @@ pub(super) fn the_smith<F: Fight<V>>(fight: &mut F) -> Played<V> {
     );
     Played::Done
 }
+
+/// `BigBang`. Draw, fill both of the Regent's resources, then forge the blade.
+pub(super) fn big_bang<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.draw(fight.var(CardVar::Cards));
+    fight.gain_stars(fight.var(CardVar::Stars));
+    fight.modify_energy(fight.var(CardVar::Energy));
+    fight.forge(
+        Cards::Token(TokenCard::SovereignBlade),
+        CardVar::Damage,
+        fight.var(CardVar::Forge),
+    );
+    Played::Done
+}
