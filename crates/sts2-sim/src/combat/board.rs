@@ -963,22 +963,25 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         ident
     }
 
-    fn upgrade(&mut self, card: CardAt<V>) {
+    fn modify_card(
+        &mut self,
+        card: CardAt<V>,
+        change: sts2_core::Change<V>,
+        lasting: sts2_core::Lasting,
+    ) {
         let pile = match card.pile() {
             Pile::Hand => &mut self.live.hand,
             Pile::Draw => &mut self.live.draw,
             Pile::Discard => &mut self.live.discard,
             Pile::Exhaust => &mut self.live.exhaust,
         };
-        // The place came with the name, as a transform's does, so this looks
-        // once and says so if the card has moved since.
-        let at: usize = num_traits::NumCast::from(card.index())
-            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
-        let held = pile.get_mut(at);
-        let Some(held) = held.filter(|held| held.id == card.id()) else {
-            unimplemented!("a card upgraded after the fight moved it");
-        };
-        held.upgrade();
+        let at: usize =
+            num_traits::NumCast::from(card.index()).expect("a card's pile index fits this machine");
+        let held = pile
+            .get_mut(at)
+            .filter(|held| held.id == card.id())
+            .expect("the card is still at its named place");
+        held.modify(change, lasting);
     }
 
     fn discard_this(&mut self) {

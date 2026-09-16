@@ -305,7 +305,7 @@ impl Sink {
             Cost::X => self.u8(0),
             Cost::Fixed(n) => {
                 self.u8(1);
-                self.u8(n);
+                self.u8(n.get());
             }
             Cost::None => self.u8(2),
         }

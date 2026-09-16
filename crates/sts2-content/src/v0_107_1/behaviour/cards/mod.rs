@@ -8,7 +8,7 @@
 //! list of what the simulator can play. A card outside it stops the run where
 //! it stands rather than playing as if it did nothing.
 
-use sts2_core::{CardVars, Cost, Face, Fight, Played};
+use sts2_core::{CardVars, Fight, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::cards::{CardVar, Cards};
@@ -26,57 +26,24 @@ mod token;
 
 type V = V0_107_1;
 
-/// Apply the printed-number changes from a card's first upgrade.
+/// What a card's first upgrade writes on the copy being upgraded.
 ///
 /// `CardModel.Upgrade`, which each card overrides to raise the numbers it
 /// prints. Filed the way the play is: by pool here, then by the card's own
-/// rarity. An upgrade then sits beside the play of the same card.
-pub(crate) fn upgrade(card: Cards, face: Face<'_, V0_107_1>) {
-    let changes = match card {
+/// rarity.
+///
+/// Declared rather than applied: an upgrade writes in the same vocabulary any
+/// other effect does, and the fight owns the copy it writes on.
+pub(crate) fn upgrade(card: Cards) -> &'static [Change] {
+    match card {
         Cards::Regent(card) => regent::upgrade(card),
         Cards::Token(card) => token::upgrade(card),
         card => unimplemented!("card upgrade: {card:?}"),
-    };
-    apply(face, changes);
-}
-
-/// One thing a card's `OnUpgrade` changes about the copy it is upgrading.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Change {
-    /// `DynamicVars[key].UpgradeValueBy(amount)`.
-    Raise(CardVar, Number),
-    /// `EnergyCost.UpgradeBy(amount)`.
-    ///
-    /// No card of this build calls `StarCost.UpgradeBy`, so an upgrade moves
-    /// the energy cost and no other.
-    Cost(i8),
-}
-
-/// Write one card's upgrade onto the copy being upgraded.
-///
-/// A card that changes nothing passes an empty list. A card nobody has ported
-/// never reaches this.
-fn apply(face: Face<'_, V0_107_1>, changes: &[Change]) {
-    // `GetWithModifiers` returns early for a cost that is not a number, so an
-    // upgrade moves that cost nowhere.
-    let moved = |cost: &mut Cost, by: i8| {
-        if let Cost::Fixed(fixed) = cost {
-            *cost = Cost::Fixed(fixed.saturating_add_signed(by));
-        }
-    };
-    for &change in changes {
-        match change {
-            Change::Raise(key, amount) => {
-                face.numbers
-                    .iter_mut()
-                    .find(|var| var.id == key)
-                    .expect("an upgraded variable belongs to the card")
-                    .base += amount;
-            }
-            Change::Cost(by) => moved(face.cost, by),
-        }
     }
 }
+
+/// One thing an effect writes on a copy of a card, as this build spells it.
+pub(crate) type Change = sts2_core::Change<V>;
 
 /// What a card that works its own target out from the fight names.
 pub(crate) fn computed_target(

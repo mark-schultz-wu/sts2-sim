@@ -36,7 +36,7 @@ static ROWS: [CardData; 1] = [CardData {
     kind: Field::Constant(CardType::Status),
     rarity: CardRarity::Status,
     target: Field::Constant(TargetType::None),
-    cost: Cost::Fixed(0),
+    cost: Cost::fixed(0),
     star_cost: Cost::None,
     vars: &[],
     max_upgrade: 0,

@@ -289,7 +289,7 @@ pub fn pools(energy: Cost, stars: Cost) -> impl Iterator<Item = (Amount, Pool)> 
         .filter_map(|(cost, pool)| match cost {
             Cost::None => None,
             Cost::X => Some((Amount::All, pool)),
-            Cost::Fixed(n) => Some((Amount::Of(n), pool)),
+            Cost::Fixed(n) => Some((Amount::Of(n.get()), pool)),
         })
 }
 

@@ -939,11 +939,15 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("removing a card from combat")
     }
 
-    /// `CardCmd.Upgrade(card)`, for the card at one place in a pile.
+    /// Write one change on the copy of a card at a named place.
     ///
-    /// A card already at its own maximum is not upgradable and is left where
-    /// it is, which is what `CardModel.IsUpgradable` answers.
-    fn upgrade(&mut self, card: crate::CardAt<V>);
+    /// A number and a replay count go into what the copy prints, the way
+    /// `DynamicVars.BaseValue` and `BaseReplayCount` are written. Neither
+    /// wears off.
+    ///
+    /// A cost is kept beside the printed one. `CardEnergyCost` holds a list of
+    /// those and folds it on every read.
+    fn modify_card(&mut self, card: crate::CardAt<V>, change: Change<V>, lasting: Lasting);
 
     /// `CreatureCmd.Add<M>(CombatState, position)`.
     ///
@@ -1002,18 +1006,74 @@ pub trait Fight<V: ContentVersion> {
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 }
 
-/// The face of one copy of a card, as its own upgrade writes on it.
+/// Which of a card's two prices a temporary cost sets.
 ///
-/// `CardModel` keeps its printed numbers and its cost apart, and an
-/// `OnUpgrade` writes to either. So an upgrade is handed both rather than the
-/// numbers alone.
+/// `CardModel` keeps them apart and names them separately, so an effect that
+/// moves one says which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CostPool {
+    /// `CardModel.EnergyCost`.
+    Energy,
+    /// `CardModel.StarCost`, which only the Regent's cards carry.
+    Star,
+}
+
+/// One thing an effect writes on a copy of a card.
 ///
-/// `StarCost` is not here. No card of a ported build upgrades one, and the
-/// first that does adds it the way this one is written.
-pub struct Face<'a, V: ContentVersion> {
-    pub numbers: &'a mut [CardNumber<V::CardVar, V::Number>],
-    /// `CardModel.EnergyCost`, which `UpgradeBy` moves.
-    pub cost: &'a mut Cost,
+/// The vocabulary an upgrade is already spelled in: `OnUpgrade` is a list of
+/// these, and so is what a potion or a power writes. What differs is how long
+/// each lasts, which the [`Lasting`] beside it says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change<V: ContentVersion> {
+    /// `CardCmd.Upgrade(card)`: whatever this card's own `OnUpgrade` does.
+    ///
+    /// It stands for the card's own list rather than naming one write. The
+    /// list belongs to the card, and the effect asking does not know it. A
+    /// card already at its maximum is left alone.
+    Upgrade,
+    /// `DynamicVars[key].UpgradeValueBy(amount)`, and `ForgeCmd`'s raise.
+    Raise(V::CardVar, V::Number),
+    /// `LocalCostType.Relative`: the cost moves by an amount.
+    ///
+    /// `EnergyCost.UpgradeBy`, which an upgrade uses, and `AddThisTurn`.
+    ChangeCost(CostPool, V::Number),
+    /// `LocalCostType.Absolute`: the cost becomes a number.
+    ///
+    /// `EnergyCost.SetThisTurn` and its kin. `SetToFreeThisTurn` is this at
+    /// zero on both pools, for [`Lasting::ThisTurn`].
+    SetCost(CostPool, V::Number),
+}
+
+/// How long a [`Change`] lasts.
+///
+/// `LocalCostModifierExpiration`, which is a flag set over two events. The
+/// combinations the game names are these four.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lasting {
+    /// Neither flag: as long as the fight does. `EndOfCombat`.
+    ///
+    /// What an upgrade is. A combat copy dies with the fight, so nothing a
+    /// fight writes outlives one.
+    ThisFight,
+    /// `WhenPlayed`. `SetUntilPlayed`, which King's Gambit uses.
+    UntilPlayed,
+    /// `EndOfTurn`. `SetThisTurn`, which Bullet Time uses.
+    ThisTurn,
+    /// `EndOfTurn | WhenPlayed`, whichever comes first.
+    /// `SetThisTurnOrUntilPlayed`, which `SetToFreeThisTurn` uses.
+    ThisTurnOrUntilPlayed,
+}
+
+impl Lasting {
+    /// `Expiration.HasFlag(EndOfTurn)`.
+    pub const fn clears_when_turn_ends(self) -> bool {
+        matches!(self, Self::ThisTurn | Self::ThisTurnOrUntilPlayed)
+    }
+
+    /// `Expiration.HasFlag(WhenPlayed)`.
+    pub const fn clears_when_played(self) -> bool {
+        matches!(self, Self::UntilPlayed | Self::ThisTurnOrUntilPlayed)
+    }
 }
 
 /// How far a card's play got.
@@ -1895,8 +1955,11 @@ pub trait Rules: Hooks {
     /// The relic whose pickup opens the two-card colorless choice.
     fn lead_paperweight() -> Self::Relic;
 
-    /// Apply a card's first upgrade to this combat copy's own face.
-    fn upgrade_card(card: Self::Card, face: Face<'_, Self>);
+    /// What a card's `OnUpgrade` writes, as the list of changes it is.
+    ///
+    /// Declared rather than applied: the fight owns the copy, and an upgrade
+    /// is the same vocabulary any other effect writes in.
+    fn card_upgrade(card: Self::Card) -> &'static [Change<Self>];
 
     /// `CardModel.OnPlay`, as a direct call on the hot path.
     ///
@@ -2143,7 +2206,7 @@ pub enum Cost {
     /// build, and an X star cost resolves to the stars in hand.
     X,
     /// A fixed cost, and the only variant cost modifiers act on.
-    Fixed(u8),
+    Fixed(nonmax::NonMaxU8),
     /// Not priced in this pool at all. The default for statuses, curses and
     /// quests, and for the star cost of every card outside the Regent's.
     ///
@@ -2152,4 +2215,14 @@ pub enum Cost {
     /// a no-op, and Confused skip the card entirely. It still resolves to
     /// spending zero, because `GetAmountToSpend` clamps at zero.
     None,
+}
+
+impl Cost {
+    /// A fixed cost known not to collide with the largest-byte sentinel.
+    pub const fn fixed(value: u8) -> Self {
+        match nonmax::NonMaxU8::new(value) {
+            Some(value) => Self::Fixed(value),
+            None => panic!("the largest byte is not a fixed cost"),
+        }
+    }
 }

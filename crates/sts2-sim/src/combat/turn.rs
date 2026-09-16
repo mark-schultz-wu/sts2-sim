@@ -34,6 +34,7 @@ pub(crate) fn end<V: Rules>(
 
     turn_end(&mut next, streams.combat(), &mut relics, ascension);
     flush_hand(&mut next);
+    end_of_turn_cleanup(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
     let asked = tick_powers::<V>(
         &mut next,
@@ -118,6 +119,19 @@ fn turn_end<V: Rules>(
         .collect();
     for at in ethereal.into_iter().rev() {
         live.exhaust.push(live.hand.remove(at));
+    }
+}
+
+/// `PlayerCombatState.EndOfTurnCleanup`: what a card carried only for the turn.
+fn end_of_turn_cleanup<V: Rules>(live: &mut Live<V>) {
+    for held in live
+        .hand
+        .iter_mut()
+        .chain(&mut live.draw)
+        .chain(&mut live.discard)
+        .chain(&mut live.exhaust)
+    {
+        held.turn_ended();
     }
 }
 

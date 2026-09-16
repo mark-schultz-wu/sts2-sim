@@ -48,7 +48,7 @@ pub(crate) fn resolve<V: Rules>(
         count: live.hand.len(),
     })?;
     let card = held.ident;
-    let (cost, star_cost) = (held.cost, held.star_cost);
+    let (cost, star_cost) = held.costs();
 
     // The creature the play named has to still be in this fight. An id is
     // chosen against an observation, and a fight moves on from one.
@@ -283,7 +283,7 @@ fn carry_on<V: Rules>(
     mut streams: Streams<V>,
     mut relics: Vec<crate::run::HeldRelic<V>>,
     ascension: V::AscensionLevel,
-    card: CardInstance<V>,
+    mut card: CardInstance<V>,
     target: Option<CombatId>,
     mut played: sts2_core::Played<V>,
     mut won: bool,
@@ -327,6 +327,8 @@ fn carry_on<V: Rules>(
         let skipped = std::mem::take(&mut board.skipped);
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
+
+    card.was_played();
 
     let card_played = card.ident.card;
     // `GetResultPileTypeForCardPlay`, once the effect is over.

@@ -36,15 +36,15 @@ mod step;
 pub use play::recording;
 
 pub use content::{
-    ActTable, Amount, AscensionKinds, CardNumber, CardNumberModifier, CardTable, CardVars,
-    CharacterTable, ContentError, ContentVersion, Cost, DecisionHook, Drafted, Effect,
-    EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Face, Fight, Fixed,
-    FlagSet, Holding, HookEffect, Hooks, Layout, Listener, MapPointKinds, Modify, ModifyHook,
-    MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerStreamKinds, PotionTable, PotionUsage,
-    PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, RestKinds, Rests,
-    RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds,
-    SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds, UnplayableReasonKinds,
-    Version,
+    ActTable, Amount, AscensionKinds, CardNumber, CardNumberModifier, CardTable, CardVars, Change,
+    CharacterTable, ContentError, ContentVersion, Cost, CostPool, DecisionHook, Drafted, Effect,
+    EffectResolution, EncounterRoster, EncounterTable, EventHook, EventTable, Fight, Fixed,
+    FlagSet, Holding, HookEffect, Hooks, Lasting, Layout, Listener, MapPointKinds, Modify,
+    ModifyHook, MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerStreamKinds, PotionTable,
+    PotionUsage, PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable,
+    RestKinds, Rests, RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards,
+    Selection, SideKinds, SideTurnEnd, StreamKinds, Table, TargetKinds, Temporary, TurnPhaseKinds,
+    UnplayableReasonKinds, Version,
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;

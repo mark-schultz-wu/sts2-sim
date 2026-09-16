@@ -107,7 +107,7 @@ fn playable<V: Rules>(
 ) -> Playable<V> {
     let card = &held.ident;
     let target = target_type::<V>(*card, creatures);
-    let (cost, star_cost) = (held.cost, held.star_cost);
+    let (cost, star_cost) = held.costs();
     let reasons = reasons::<V>(*card, creatures, cost, star_cost, energy, stars);
     let targets = targets::<V>(target, creatures, !reasons.is_empty());
 
@@ -197,7 +197,7 @@ pub(super) fn spend<C: num_traits::PrimInt>(cost: Cost, pool: C) -> Option<C> {
         Cost::X => Some(pool),
         // Nothing at all for a price this build's count cannot hold, which
         // reads at the callsite as a cost nothing can pay.
-        Cost::Fixed(n) => num_traits::cast(n),
+        Cost::Fixed(n) => num_traits::cast(n.get()),
         Cost::None => Some(C::zero()),
     }
 }
