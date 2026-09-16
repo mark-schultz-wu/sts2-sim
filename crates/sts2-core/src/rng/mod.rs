@@ -228,6 +228,18 @@ pub trait GameRng: Sized {
         Choices::<T, Self::Int>::try_new(items).map(|items| self.choose_from(items))
     }
 
+    /// Shuffle a list whole and take its front, as `TakeRandom` does.
+    fn take_random<T: Copy, const N: usize>(&mut self, items: &mut [T]) -> Result<[T; N], Error> {
+        if items.len() < N {
+            return Err(Error::TooFew {
+                want: N,
+                have: items.len(),
+            });
+        }
+        self.unstable_shuffle(items);
+        Ok(std::array::from_fn(|at| items[at]))
+    }
+
     /// One item from a slice already known to be a valid choice list.
     fn choose_from<'a, T>(&mut self, choices: Choices<'a, T, Self::Int>) -> &'a T {
         let at: usize = num_traits::cast(self.next_int(choices.bound()))

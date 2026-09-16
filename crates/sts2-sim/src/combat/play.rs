@@ -12,7 +12,7 @@
 use sts2_core::{CardTable, CombatId, Cost, FlagSet, HandIndex, Reason, Rules};
 
 use super::board::Board;
-use super::live::{CardInstance, Live};
+use super::live::{Asked, Asker, CardInstance, Live, Resuming};
 use super::{Error, hook, legal, power, relic};
 use crate::stream::Streams;
 
@@ -203,10 +203,12 @@ pub(crate) fn play<V: Rules>(
         streams,
         relics,
         live.ascension,
-        card,
-        play.target,
+        Resuming {
+            asker: Asker::Card(card),
+            target: play.target,
+            won,
+        },
         played,
-        won,
     )
 }
 
@@ -222,42 +224,70 @@ pub(crate) fn answer<V: Rules>(
         .asking
         .take()
         .unwrap_or_else(|| unimplemented!("an answer to a fight that asked nothing"));
-    let held = pile(&next, asking.pile);
-    let cards: Option<Vec<_>> = chosen
-        .iter()
-        .map(|&index| {
-            held.get(index).map(|card| {
-                let index = num_traits::NumCast::from(index)
-                    .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-                sts2_core::CardAt::new(card.id, asking.pile, index)
-            })
-        })
-        .collect();
-    let cards = cards.unwrap_or_else(|| unimplemented!("a selection naming a card not offered"));
-    let distinct = cards
-        .iter()
-        .map(|card| card.id())
-        .collect::<std::collections::HashSet<_>>();
-    if chosen.len() != distinct.len() {
-        unimplemented!("a selection naming the same card twice");
-    }
-    let cards = asking
-        .selection
-        .validate_answer(cards.into_boxed_slice())
-        .unwrap_or_else(|| unimplemented!("a selection with the wrong number of cards"));
+    let taken = match &asking.question {
+        Asked::Pile {
+            pile: from,
+            selection,
+        } => {
+            let held = pile(&next, *from);
+            let cards: Option<Vec<_>> = chosen
+                .iter()
+                .map(|&index| {
+                    held.get(index).map(|card| {
+                        let index = num_traits::NumCast::from(index).unwrap_or_else(|| {
+                            unimplemented!("a pile deeper than a fight can number")
+                        });
+                        sts2_core::CardAt::new(card.id, *from, index)
+                    })
+                })
+                .collect();
+            let cards =
+                cards.unwrap_or_else(|| unimplemented!("a selection naming a card not offered"));
+            let distinct = cards
+                .iter()
+                .map(|card| card.id())
+                .collect::<std::collections::HashSet<_>>();
+            if chosen.len() != distinct.len() {
+                unimplemented!("a selection naming the same card twice");
+            }
+            sts2_core::Taken::Selected(
+                selection
+                    .validate_answer(cards.into_boxed_slice())
+                    .unwrap_or_else(|| {
+                        unimplemented!("a selection with the wrong number of cards")
+                    }),
+            )
+        }
+        Asked::Offered { offered, skippable } => {
+            let chosen = match chosen {
+                [] if *skippable => None,
+                [] => unimplemented!("skipping a choice that cannot be skipped"),
+                [only] => Some(*offered.get(*only).unwrap_or_else(|| {
+                    unimplemented!("a choice naming a card that was not offered")
+                })),
+                _ => unimplemented!("a choice taking more than one card"),
+            };
+            sts2_core::Taken::Chosen(chosen)
+        }
+    };
 
     let mut streams = streams.clone();
     let mut relics = relics.to_vec();
+    let mut effect = asking.effect;
+    let playing = match &effect.asker {
+        Asker::Card(card) => Some(card.clone()),
+        Asker::Potion(_) => None,
+    };
     let mut board = Board::for_card(
         &mut next,
         streams.combat(),
         &mut relics,
         live.ascension,
-        asking.target,
-        Some(&asking.card),
+        effect.target,
+        playing.as_ref(),
     );
-    let played = V::resume_play(&mut board, asking.at, cards);
-    let won = asking.won || board.won;
+    let played = V::resume_play(&mut board, asking.at, taken);
+    effect.won |= board.won;
     let skipped = std::mem::take(&mut board.skipped);
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     carry_on(
@@ -265,10 +295,8 @@ pub(crate) fn answer<V: Rules>(
         streams.clone(),
         relics,
         live.ascension,
-        asking.card,
-        asking.target,
+        effect,
         played,
-        won,
     )
 }
 
@@ -277,34 +305,38 @@ pub(crate) fn answer<V: Rules>(
 /// `OnPlay` is a coroutine in the game. A card that has to ask says so and
 /// comes back here with the answer. The first call and each resumption use
 /// this loop.
-#[allow(clippy::too_many_arguments)]
-fn carry_on<V: Rules>(
+pub(super) fn carry_on<V: Rules>(
     mut next: Live<V>,
     mut streams: Streams<V>,
     mut relics: Vec<crate::run::HeldRelic<V>>,
     ascension: V::AscensionLevel,
-    mut card: CardInstance<V>,
-    target: Option<CombatId>,
+    mut effect: Resuming<V>,
     mut played: sts2_core::Played<V>,
-    mut won: bool,
 ) -> Result<super::Fought<V>, Error> {
-    while let sts2_core::Played::Asking {
-        pile,
-        selection,
-        at,
-    } = played
-    {
-        // `CardSelectCmd.FromHand` and its kin. The pile is taken whole when
-        // it holds no more than the selection, and an empty one selects
-        // nothing. Neither is a question, so neither stops the fight.
-        let Some(chosen) = taken::<V>(&next, pile, selection) else {
-            next.asking = Some(super::live::Asking {
-                card,
-                target,
-                at,
+    loop {
+        let (at, question, answer) = match played {
+            sts2_core::Played::Done => break,
+            sts2_core::Played::Asking {
                 pile,
                 selection,
-                won,
+                at,
+            } => (
+                at,
+                Asked::Pile { pile, selection },
+                taken::<V>(&next, pile, selection).map(sts2_core::Taken::Selected),
+            ),
+            sts2_core::Played::Choosing {
+                offered,
+                skippable,
+                at,
+            } => (at, Asked::Offered { offered, skippable }, None),
+        };
+        let Some(answer) = answer else {
+            let won = effect.won;
+            next.asking = Some(super::live::Asking {
+                effect,
+                at,
+                question,
             });
             return Ok(super::Fought {
                 live: next,
@@ -314,19 +346,36 @@ fn carry_on<V: Rules>(
             });
         };
 
+        let playing = match &effect.asker {
+            Asker::Card(card) => Some(card.clone()),
+            Asker::Potion(_) => None,
+        };
         let mut board = Board::for_card(
             &mut next,
             streams.combat(),
             &mut relics,
             ascension,
-            target,
-            Some(&card),
+            effect.target,
+            playing.as_ref(),
         );
-        played = V::resume_play(&mut board, at, chosen);
-        won |= board.won;
+        played = V::resume_play(&mut board, at, answer);
+        effect.won |= board.won;
         let skipped = std::mem::take(&mut board.skipped);
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
+
+    let won = effect.won;
+    let Asker::Card(mut card) = effect.asker else {
+        if won {
+            relic::combat_ended::<V>(&mut relics);
+        }
+        return Ok(super::Fought {
+            live: next,
+            streams,
+            relics,
+            won,
+        });
+    };
 
     card.was_played();
 

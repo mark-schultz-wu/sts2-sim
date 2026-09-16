@@ -19,24 +19,36 @@ use sts2_core::{
 
 use super::monster::Machine;
 
-/// A card play that stopped on a question, and what it needs to go on.
-///
-/// The card is out of the hand and in the play pile, which is where
-/// `AddDuringManualCardPlay` put it. It stays there, held here rather than in
-/// a pile, until the question is answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Asker<V: Rules> {
+    Card(CardInstance<V>),
+    Potion(V::Potion),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Resuming<V: Rules> {
+    pub(super) asker: Asker<V>,
+    pub(super) target: Option<CombatId>,
+    pub(super) won: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Asked<V: Rules> {
+    Pile {
+        pile: sts2_core::Pile,
+        selection: sts2_core::Selection,
+    },
+    Offered {
+        offered: [CardIdent<V>; sts2_core::CHOICES],
+        skippable: bool,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Asking<V: Rules> {
-    pub(super) card: CardInstance<V>,
-    /// The creature the play was pointed at, which the rest of it still needs.
-    pub(super) target: Option<CombatId>,
-    /// Where the card stopped, in the card's own words.
+    pub(super) effect: Resuming<V>,
     pub(super) at: V::Resume,
-    /// The pile the selection reads.
-    pub(super) pile: sts2_core::Pile,
-    /// What the selection takes.
-    pub(super) selection: sts2_core::Selection,
-    /// Whether the fight was already won when the play stopped.
-    pub(super) won: bool,
+    pub(super) question: Asked<V>,
 }
 
 /// Mints the ids a fight names its cards by.
@@ -278,6 +290,7 @@ pub(crate) fn counted<V: Rules>(
 /// A fight in progress.
 #[derive(Debug, Clone)]
 pub(crate) struct Live<V: Rules> {
+    pub(super) character: V::Character,
     /// What the run is being played at, which a card or a move reads for the
     /// numbers the level moves.
     pub(super) ascension: V::AscensionLevel,
@@ -327,15 +340,26 @@ impl<V: Rules> Live<V> {
     /// The card-selection question on which this fight is parked.
     pub(crate) fn question(&self) -> Option<sts2_core::Question<V>> {
         let asked = self.asking.as_ref()?;
-        let (min, max) = match asked.selection {
-            sts2_core::Selection::Exactly(count) => {
-                let count = u32::try_from(count.get()).expect("a selection count fits the wire");
-                (count, count)
+        let (min, max, options) = match &asked.question {
+            Asked::Pile { pile, selection } => {
+                let (min, max) = match *selection {
+                    sts2_core::Selection::Exactly(count) => {
+                        let count =
+                            u32::try_from(count.get()).expect("a selection count fits the wire");
+                        (count, count)
+                    }
+                    sts2_core::Selection::UpTo(count) => (
+                        0,
+                        u32::try_from(count.get()).expect("a selection count fits the wire"),
+                    ),
+                };
+                let options = super::play::pile(self, *pile)
+                    .iter()
+                    .map(|card| card.ident)
+                    .collect();
+                (min, max, options)
             }
-            sts2_core::Selection::UpTo(count) => (
-                0,
-                u32::try_from(count.get()).expect("a selection count fits the wire"),
-            ),
+            Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.to_vec()),
         };
         Some(sts2_core::Question::SelectCards {
             min,
@@ -344,12 +368,12 @@ impl<V: Rules> Live<V> {
             // prompt either, so this stays absent as it does for other
             // unattributed selections.
             asker: None,
-            options: super::play::pile(self, asked.pile)
-                .iter()
+            options: options
+                .into_iter()
                 .enumerate()
                 .map(|(index, card)| sts2_core::CardOption {
                     index,
-                    card: card.ident,
+                    card,
                     text: None,
                 })
                 .collect(),
