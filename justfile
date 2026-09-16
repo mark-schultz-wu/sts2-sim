@@ -67,6 +67,13 @@ prose base="forgejo/main":
     ./tools/vale-lint.py
     ./tools/vale-lint.py --commits --base {{base}}
 
+# Text outside the repository cannot be part of `check`: a local checkout does
+# not hold the pull request description. Give that text a Just entry point too,
+# so CI and a local check of copied text run the same command.
+[doc("Lint prose supplied on standard input, such as a pull request description")]
+prose-stdin label="standard input":
+    ./tools/vale-lint.py --stdin {{quote(label)}}
+
 # What lets a review skip the generated tables. A hand edit to a generated file,
 # or a generator whose output nobody refreshed, fails here rather than as a
 # divergence nobody can place. This reads the dumps in the repository and never
