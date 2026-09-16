@@ -29,6 +29,134 @@ mod bounds;
 pub use crate::Seed;
 pub use bounds::{Bound, Choices, Error, Interval, RngInteger, Span};
 
+/// The ordering used by `Array.Sort`/`List.Sort` in the game's CoreCLR.
+///
+/// Rust's stable sort and pdqsort make different choices for equal elements.
+/// This is the relevant part of CoreCLR's `ArraySortHelper<T>` introsort. The
+/// depth fallback is included even though gameplay lists are ordinarily small.
+fn dotnet_sort_by_key<T, K: Ord>(items: &mut [T], mut key: impl FnMut(&T) -> K) {
+    fn swap_if_greater<T>(
+        items: &mut [T],
+        a: usize,
+        b: usize,
+        compare: &mut impl FnMut(&T, &T) -> std::cmp::Ordering,
+    ) {
+        if a != b && compare(&items[a], &items[b]).is_gt() {
+            items.swap(a, b);
+        }
+    }
+
+    fn insertion_sort<T>(items: &mut [T], compare: &mut impl FnMut(&T, &T) -> std::cmp::Ordering) {
+        for at in 1..items.len() {
+            let mut before = at;
+            while before > 0 && compare(&items[before - 1], &items[before]).is_gt() {
+                items.swap(before - 1, before);
+                before -= 1;
+            }
+        }
+    }
+
+    fn down_heap<T>(
+        items: &mut [T],
+        mut root: usize,
+        count: usize,
+        compare: &mut impl FnMut(&T, &T) -> std::cmp::Ordering,
+    ) {
+        loop {
+            let mut child = root * 2 + 1;
+            if child >= count {
+                return;
+            }
+            if child + 1 < count && compare(&items[child], &items[child + 1]).is_lt() {
+                child += 1;
+            }
+            if !compare(&items[root], &items[child]).is_lt() {
+                return;
+            }
+            items.swap(root, child);
+            root = child;
+        }
+    }
+
+    fn heap_sort<T>(items: &mut [T], compare: &mut impl FnMut(&T, &T) -> std::cmp::Ordering) {
+        let count = items.len();
+        for root in (0..count / 2).rev() {
+            down_heap(items, root, count, compare);
+        }
+        for end in (1..count).rev() {
+            items.swap(0, end);
+            down_heap(items, 0, end, compare);
+        }
+    }
+
+    fn pivot<T>(items: &mut [T], compare: &mut impl FnMut(&T, &T) -> std::cmp::Ordering) -> usize {
+        let high = items.len() - 1;
+        let middle = high / 2;
+        swap_if_greater(items, 0, middle, compare);
+        swap_if_greater(items, 0, high, compare);
+        swap_if_greater(items, middle, high, compare);
+        items.swap(middle, high - 1);
+
+        let mut left = 0;
+        let mut right = high - 1;
+        loop {
+            left += 1;
+            while compare(&items[left], &items[high - 1]).is_lt() {
+                left += 1;
+            }
+            right -= 1;
+            while compare(&items[high - 1], &items[right]).is_lt() {
+                right -= 1;
+            }
+            if left >= right {
+                break;
+            }
+            items.swap(left, right);
+        }
+        items.swap(left, high - 1);
+        left
+    }
+
+    fn intro_sort<T>(
+        mut items: &mut [T],
+        mut depth: usize,
+        compare: &mut impl FnMut(&T, &T) -> std::cmp::Ordering,
+    ) {
+        const INSERTION_THRESHOLD: usize = 16;
+        while items.len() > 1 {
+            if items.len() <= INSERTION_THRESHOLD {
+                let high = items.len() - 1;
+                if items.len() == 2 {
+                    swap_if_greater(items, 0, high, compare);
+                    return;
+                }
+                if items.len() == 3 {
+                    swap_if_greater(items, 0, 1, compare);
+                    swap_if_greater(items, 0, high, compare);
+                    swap_if_greater(items, 1, high, compare);
+                    return;
+                }
+                insertion_sort(items, compare);
+                return;
+            }
+            if depth == 0 {
+                heap_sort(items, compare);
+                return;
+            }
+            depth -= 1;
+            let middle = pivot(items, compare);
+            intro_sort(&mut items[..middle], depth, compare);
+            items = &mut items[middle + 1..];
+        }
+    }
+
+    if items.len() < 2 {
+        return;
+    }
+    let depth = 2 * (usize::BITS - items.len().leading_zeros()) as usize;
+    intro_sort(items, depth, &mut |a, b| key(a).cmp(&key(b)));
+}
+
 /// A counted stream producing the game's sequence.
 pub trait GameRng: Sized {
     type Int: RngInteger;
@@ -178,10 +306,11 @@ pub trait GameRng: Sized {
     ///
     /// `List.Sort` goes through `IComparable`, and what a card compares on is
     /// two of its fields rather than the whole of it. The game's own sort is
-    /// unstable and this one is not. That shows only on items the key cannot
-    /// tell apart, which the game cannot tell apart either.
+    /// .NET's unstable introsort. Equal cards still have distinct places in a
+    /// deck, so reproducing how that sort moves them matters when a shuffled
+    /// prefix is selected.
     fn stable_shuffle_by_key<T, K: Ord>(&mut self, items: &mut [T], key: impl FnMut(&T) -> K) {
-        items.sort_by_key(key);
+        dotnet_sort_by_key(items, key);
         self.unstable_shuffle(items);
     }
 

@@ -82,8 +82,8 @@ impl EventBehavior<V> for TeaMaster {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sts2_core::EventView;
     use sts2_core::rng::GameRng;
+    use sts2_core::{CardIdent, EventView};
 
     #[derive(Default)]
     struct Run {
@@ -101,6 +101,15 @@ mod tests {
         }
         fn has_potion(&self) -> bool {
             false
+        }
+        fn character(&self) -> <V as sts2_core::ContentVersion>::Character {
+            unreachable!("Tea Master does not inspect the character")
+        }
+        fn relics(&self) -> impl Iterator<Item = Relic> + '_ {
+            self.relics.iter().copied()
+        }
+        fn deck(&self) -> &[CardIdent<V>] {
+            &[]
         }
     }
 

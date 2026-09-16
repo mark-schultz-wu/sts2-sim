@@ -491,6 +491,32 @@ impl<V: Rules> State<V> {
         Ok(self.report())
     }
 
+    /// `RelicCmd.Obtain`: the relic joins the belt, and its own pickup runs.
+    ///
+    /// The model's `AfterObtained` state is written as the relic is built. A
+    /// row that carries `UponPickup` then changes the run itself.
+    pub(super) fn obtain(&mut self, relic: V::Relic) {
+        let mut held = HeldRelic::new(relic);
+        let effects = crate::combat::obtained::<V>(&mut held);
+        self.player.relics.push(held);
+        for effect in effects {
+            match effect {
+                sts2_core::HookEffect::UpgradeRandomDeckCards { count, stream } => {
+                    self.upgrade_random_deck_cards(count, stream);
+                }
+                effect => unimplemented!("a run-level relic effect: {effect:?}"),
+            }
+        }
+    }
+
+    /// Put the run back to the health it started with.
+    ///
+    /// `CreatureCmd.Heal(MaxHp - CurrentHp)`, which is what an ancient gives a
+    /// run before it offers anything.
+    pub(super) fn heal_fully(&mut self) {
+        self.player.hp = self.player.max_hp;
+    }
+
     /// The ancient this act opens on, which it rolled with its rooms.
     pub(super) fn act_ancient(&self) -> V::Event {
         self.shared.opening.acts[self.act()].1.ancient
@@ -670,9 +696,7 @@ impl<V: Rules> State<V> {
                 }
             }
             Gift::Relic(relic) => {
-                let mut held = HeldRelic::new(*relic);
-                crate::combat::obtained::<V>(&mut held);
-                self.player.relics.push(held);
+                self.obtain(*relic);
             }
         }
         Ok(self.report())
@@ -710,16 +734,13 @@ impl<V: Rules> State<V> {
             if *finished {
                 unimplemented!("choosing from a finished treasure room");
             }
+            let relic = *relic;
+            *finished = true;
             match index {
-                0 => {
-                    let mut held = HeldRelic::new(*relic);
-                    crate::combat::obtained::<V>(&mut held);
-                    self.player.relics.push(held);
-                }
+                0 => self.obtain(relic),
                 1 => {}
                 _ => unimplemented!("an option the treasure room does not offer"),
             }
-            *finished = true;
             return Ok(self.report());
         }
         if let Phase::RestSite { options, .. } = &self.phase {
@@ -771,20 +792,23 @@ impl<V: Rules> State<V> {
             if option.locked {
                 unimplemented!("a locked event option");
             }
-            let (phase, player) = (&mut self.phase, &mut self.player);
-            let Phase::Event { state, rng } = phase else {
+            // The choice acts on the whole run, so the room is taken out of
+            // the run for as long as it is acting and put back after. A relic
+            // an event hands over is taken the way any other is.
+            let Phase::Event { mut state, mut rng } =
+                std::mem::replace(&mut self.phase, Phase::Map)
+            else {
                 unreachable!()
             };
-            match V::choose_event(state, index, player, rng) {
+            let flow = V::choose_event(&mut state, index, self, &mut rng);
+            self.phase = Phase::Event { state, rng };
+            match flow {
                 sts2_core::EventFlow::Finished => return Ok(self.report()),
                 _ => unimplemented!("an event choice that does not finish"),
             }
         }
         let Phase::Neow {
-            options,
-            chosen,
-            selection,
-            ..
+            options, chosen, ..
         } = &mut self.phase
         else {
             unimplemented!("choosing an option inside a fight");
@@ -797,9 +821,15 @@ impl<V: Rules> State<V> {
         }
 
         *chosen = Some(index);
+        // Not through `obtain`. The blessing is the one path that carries out
+        // the paperweight's own `AfterObtained`, which is the colorless offer
+        // below, and the relic's row carries no `UponPickup` besides.
         self.player
             .relics
             .push(HeldRelic::new(V::lead_paperweight()));
+        let Phase::Neow { selection, .. } = &mut self.phase else {
+            unreachable!("the phase was the blessing when this began")
+        };
         *selection = Some(
             crate::reward::card::regular::<V, _>(
                 self.streams.player(V::PlayerRngType::REWARDS),
@@ -946,7 +976,7 @@ impl<V: Rules> State<V> {
                 (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
                     let relic = *relic;
                     *taken = true;
-                    self.player.relics.push(HeldRelic::new(relic));
+                    self.obtain(relic);
                 }
                 _ => unimplemented!("a reward taken as the wrong kind"),
             }
@@ -1198,6 +1228,31 @@ impl<V: Rules> State<V> {
     }
 }
 
+impl<V: Rules> State<V> {
+    fn upgrade_random_deck_cards(&mut self, count: usize, stream: V::RunRngType) {
+        use sts2_core::CardTable as _;
+        use sts2_core::rng::GameRng as _;
+
+        // `CardSelectCmd` shuffles the upgradable cards alone, so a card
+        // already at its highest neither takes a place nor moves the shuffle.
+        let deck = self.player.deck.clone();
+        let mut upgradable: Vec<usize> = deck
+            .iter()
+            .enumerate()
+            .filter(|(_, card)| card.upgrade < card.card.max_upgrade())
+            .map(|(at, _)| at)
+            .collect();
+        self.streams
+            .run(stream)
+            .stable_shuffle_by_key(&mut upgradable, |&at| {
+                (deck[at].card.order(), deck[at].upgrade)
+            });
+        for at in upgradable.into_iter().take(count) {
+            self.player.deck[at].upgrade += 1;
+        }
+    }
+}
+
 impl<V: Rules> sts2_core::EventView<V> for State<V> {
     fn act(&self) -> V::Count {
         num_traits::cast(self.act()).expect("an act index fits the build count")
@@ -1209,6 +1264,36 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
 
     fn has_potion(&self) -> bool {
         !self.player.potions.is_empty()
+    }
+
+    fn character(&self) -> V::Character {
+        self.shared.character
+    }
+
+    fn relics(&self) -> impl Iterator<Item = V::Relic> + '_ {
+        self.player.relics.iter().map(|held| held.relic)
+    }
+
+    fn deck(&self) -> &[CardIdent<V>] {
+        &self.player.deck
+    }
+}
+
+impl<V: Rules> sts2_core::EventContext<V> for State<V> {
+    fn gold(&self) -> V::Number {
+        self.player.gold
+    }
+
+    fn spend_gold(&mut self, amount: V::Number) -> bool {
+        if self.player.gold < amount {
+            return false;
+        }
+        self.player.gold = self.player.gold - amount;
+        true
+    }
+
+    fn obtain_relic(&mut self, relic: V::Relic) {
+        self.obtain(relic);
     }
 }
 

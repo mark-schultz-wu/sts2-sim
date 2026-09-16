@@ -1,7 +1,7 @@
 //! Moving to a map point, and entering what waits there.
 
 use sts2_core::rng::GameRng;
-use sts2_core::{Applied, Coord, MapPointKinds, Reason, Rules, RunStreamKinds};
+use sts2_core::{Applied, AscensionKinds, Coord, MapPointKinds, Reason, Rules, RunStreamKinds};
 
 use super::State;
 use super::state::EncounterQueue;
@@ -107,6 +107,16 @@ impl<V: Rules> State<V> {
                 return Ok(self.report());
             }
             if kind == V::MapPointType::ANCIENT {
+                // `AncientEventModel.BeforeEventStarted`, which heals what the
+                // run is missing before the ancient says anything. The rung
+                // that heals four fifths of it instead is not ported.
+                if self
+                    .ascension()
+                    .has(<V::AscensionLevel as AscensionKinds>::WEARY_TRAVELER)
+                {
+                    unimplemented!("an ancient healing a weary traveller");
+                }
+                self.heal_fully();
                 // The act rolled which ancient it opens on when it rolled its
                 // rooms, so nothing is drawn for it here. The question mark
                 // odds and the event queue are the unknown rooms' own, and an
@@ -151,9 +161,8 @@ impl<V: Rules> State<V> {
                 .find_map(|_| {
                     let candidate = events[events_used % events.len()];
                     events_used += 1;
-                    (!visited.contains(&candidate)
-                        && V::event_allowed(candidate, &self.report().observation))
-                    .then_some(candidate)
+                    (!visited.contains(&candidate) && V::event_allowed(candidate, self))
+                        .then_some(candidate)
                 })
                 .unwrap_or_else(|| unimplemented!("an exhausted event queue"));
             let mut event_rng =
