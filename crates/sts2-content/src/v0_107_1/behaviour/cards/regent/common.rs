@@ -161,3 +161,15 @@ pub(super) fn refine_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
     );
     Played::Done
 }
+
+/// `SpoilsOfBattle`. Forge the blade, then draw.
+pub(super) fn spoils_of_battle<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let forge = fight.var(CardVar::Forge);
+    fight.forge(
+        Cards::Token(TokenCard::SovereignBlade),
+        CardVar::Damage,
+        forge,
+    );
+    fight.draw(fight.var(CardVar::Cards));
+    Played::Done
+}
