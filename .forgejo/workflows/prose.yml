@@ -39,7 +39,7 @@ jobs:
       - name: Lint the pull request description
         run: |
           set -euo pipefail
-          python3 - <<'PY' | ./tools/vale-lint.py --stdin "pull request #${{ github.event.number }}"
+          python3 - <<'PY' | just prose-stdin "pull request #${{ github.event.number }}"
           import json
           import os
           import sys
