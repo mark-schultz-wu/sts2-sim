@@ -31,9 +31,8 @@ pub(crate) fn end<V: Rules>(
     let mut relics = relics.to_vec();
     let mut skipping = std::mem::take(&mut next.skip_tick);
     let mut streams = streams.clone();
-    let mut rngs = streams.combat();
 
-    turn_end(&mut next, rngs.reborrow(), &mut relics, ascension);
+    turn_end(&mut next, streams.combat(), &mut relics, ascension);
     flush_hand(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
     let asked = tick_powers::<V>(
@@ -41,7 +40,7 @@ pub(crate) fn end<V: Rules>(
         &mut skipping,
         <V::CombatSide as SideKinds>::PLAYER,
     );
-    applied::<V>(&mut next, rngs.reborrow(), &mut relics, ascension, asked);
+    applied::<V>(&mut next, streams.combat(), &mut relics, ascension, asked);
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
@@ -50,14 +49,14 @@ pub(crate) fn end<V: Rules>(
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
     side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
-    let won = enemy_turn(&mut next, rngs.reborrow(), &mut relics, &mut skipping);
+    let won = enemy_turn(&mut next, streams.combat(), &mut relics, &mut skipping);
 
     let asked = tick_powers::<V>(
         &mut next,
         &mut skipping,
         <V::CombatSide as SideKinds>::ENEMY,
     );
-    applied::<V>(&mut next, rngs.reborrow(), &mut relics, ascension, asked);
+    applied::<V>(&mut next, streams.combat(), &mut relics, ascension, asked);
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -65,7 +64,7 @@ pub(crate) fn end<V: Rules>(
     next.turn = next.turn + num_traits::one();
 
     // `PrepareForNextTurn`, before the player draws anything.
-    roll_moves(&mut next, ascension, rngs.ai)?;
+    roll_moves(&mut next, ascension, streams.combat().ai)?;
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
@@ -76,7 +75,7 @@ pub(crate) fn end<V: Rules>(
     // moves the count on, then the draw that reads it.
     relic::turn_starting::<V>(&mut relics, next.turn);
     let drawn = hand_size::<V>(&mut relics, next.turn);
-    draw(&mut next, rngs.reborrow(), &mut relics, ascension, drawn);
+    draw(&mut next, streams.combat(), &mut relics, ascension, drawn);
     let started = relic::turn_started::<V>(&mut relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
     side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
