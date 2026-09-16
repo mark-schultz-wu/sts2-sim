@@ -23,6 +23,9 @@ pub enum Error {
     #[error("an interval's end must not precede its start")]
     Inverted,
 
+    #[error("cannot take {want} items from a list of {have}")]
+    TooFew { want: usize, have: usize },
+
     /// A counter asked to move backwards. A stream is a position in a
     /// sequence, so rewinding is not a slower version of seeking, it is
     /// meaningless.

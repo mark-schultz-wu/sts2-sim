@@ -83,7 +83,9 @@ pub(super) fn begone() -> Played<V> {
     Played::Asking {
         pile: Pile::Hand,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Regent(Resume::BegoneTransform),
+        at: super::super::super::Resume::Card(super::super::Resume::Regent(
+            Resume::BegoneTransform,
+        )),
     }
 }
 

@@ -6,9 +6,9 @@
 
 use sts2_core::{CombatId, Rules};
 
+use super::Error;
 use super::board::Board;
 use super::live::Live;
-use super::{Error, relic};
 use crate::stream::Streams;
 
 /// Drink one potion, and give back the fight it leaves behind.
@@ -33,18 +33,21 @@ pub(crate) fn drink<V: Rules>(
         target,
         None,
     );
-    V::on_use(potion, &mut board);
+    let used = V::on_use(potion, &mut board);
     let won = board.won;
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = super::play::merged::<V>(&next.skip_tick, skipped);
-    if won {
-        relic::combat_ended::<V>(&mut relics);
-    }
-    Ok(super::Fought {
-        live: next,
+    super::play::carry_on(
+        next,
         streams,
         relics,
-        won,
-    })
+        live.ascension,
+        super::live::Resuming {
+            asker: super::live::Asker::Potion(potion),
+            target,
+            won,
+        },
+        used,
+    )
 }

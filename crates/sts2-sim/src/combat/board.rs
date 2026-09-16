@@ -887,12 +887,48 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if self.opponents().len() > 1 {
             unimplemented!("cards given to more than one player");
         }
+        self.add_generated_cards(CardIdent::new(card), Pile::Discard, count);
+    }
+
+    fn character(&self) -> V::Character {
+        self.live.character
+    }
+
+    fn generate_cards<const N: usize>(
+        &mut self,
+        cards: &mut [V::Card],
+        stream: V::RunRngType,
+    ) -> Result<[CardIdent<V>; N], sts2_core::rng::Error> {
+        if stream != V::RunRngType::COMBAT_CARD_GENERATION {
+            unimplemented!("cards generated from {stream:?}")
+        }
+        self.rngs
+            .generation
+            .take_random::<_, N>(cards)
+            .map(|taken| taken.map(CardIdent::new))
+    }
+
+    fn add_generated_cards(
+        &mut self,
+        card: CardIdent<V>,
+        pile: Pile,
+        count: usize,
+    ) -> Vec<CardAt<V>> {
+        let mut added = Vec::with_capacity(count);
         for _ in 0..count {
             let id = self.live.card_ids.mint();
-            self.live
-                .discard
-                .push(CardInstance::new(CardIdent::new(card), id));
+            let held = match pile {
+                Pile::Hand => &mut self.live.hand,
+                Pile::Draw => &mut self.live.draw,
+                Pile::Discard => &mut self.live.discard,
+                Pile::Exhaust => &mut self.live.exhaust,
+            };
+            let index = num_traits::NumCast::from(held.len())
+                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+            held.push(CardInstance::new(card, id));
+            added.push(CardAt::new(id, pile, index));
         }
+        added
     }
 
     fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {

@@ -911,6 +911,16 @@ pub trait Fight<V: ContentVersion> {
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
 
+    /// Add copies of a generated card to one combat pile.
+    fn add_generated_cards(
+        &mut self,
+        _card: crate::CardIdent<V>,
+        _pile: crate::Pile,
+        _count: usize,
+    ) -> Vec<crate::CardAt<V>> {
+        unimplemented!("adding generated cards to a pile")
+    }
+
     /// `CardCmd.Discard(this)`, for the card whose behavior is running.
     fn discard_this(&mut self);
 
@@ -1004,6 +1014,20 @@ pub trait Fight<V: ContentVersion> {
     /// The player for a card and the monster for a move, which is the creature
     /// a card saying "gain" means.
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
+
+    /// The character whose pool combat generation reads.
+    fn character(&self) -> V::Character {
+        unimplemented!("the character in this fight")
+    }
+
+    /// Generate distinct cards from a combat-ready pool.
+    fn generate_cards<const N: usize>(
+        &mut self,
+        _cards: &mut [V::Card],
+        _stream: V::RunRngType,
+    ) -> Result<[crate::CardIdent<V>; N], crate::rng::Error> {
+        unimplemented!("generating cards for combat")
+    }
 }
 
 /// Which of a card's two prices a temporary cost sets.
@@ -1095,7 +1119,23 @@ pub enum Played<V: ContentVersion> {
         /// Where the card stopped, in the card's own words.
         at: V::Resume,
     },
+    /// The play stopped on a choose-a-card screen.
+    Choosing {
+        offered: [crate::CardIdent<V>; CHOICES],
+        skippable: bool,
+        at: V::Resume,
+    },
 }
+
+/// What a stopped effect resumes with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Taken<V: ContentVersion> {
+    Selected(SelectedCards<V>),
+    Chosen(Option<crate::CardIdent<V>>),
+}
+
+/// The choose-a-card screen's fixed capacity.
+pub const CHOICES: usize = 3;
 
 /// How many cards a selection takes, which is `CardSelectorPrefs`'s pair of
 /// counts.
@@ -1977,7 +2017,7 @@ pub trait Rules: Hooks {
     fn resume_play<F: Fight<Self>>(
         fight: &mut F,
         at: Self::Resume,
-        chosen: SelectedCards<Self>,
+        chosen: Taken<Self>,
     ) -> Played<Self>;
 
     /// The cards a character's own pool offers, split by rarity.
@@ -2042,7 +2082,7 @@ pub trait Rules: Hooks {
     ///
     /// Panics for a potion nobody has ported, as [`Rules::on_play`] does for a
     /// card.
-    fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F);
+    fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F) -> Played<Self>;
 
     /// What a card that works its own target out from the fight names.
     ///

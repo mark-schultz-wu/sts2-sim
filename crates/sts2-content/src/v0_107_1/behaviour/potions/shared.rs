@@ -1,8 +1,11 @@
 //! The potions every character's pool draws from.
 
-use sts2_core::{Fight, Pile, PowerAmount};
+use sts2_core::{
+    Change, CostPool, Fight, Lasting, Pile, Played, PowerAmount, RunStreamKinds as _, Table as _,
+};
 
 use super::super::super::V0_107_1 as V;
+use super::super::super::generated::cards::{CardType, Cards, combat_cards};
 use super::super::super::generated::potions::Potion;
 use super::super::super::generated::powers::Power;
 use super::Number;
@@ -13,16 +16,22 @@ const DEXTERITY: Number = 2;
 /// `VulnerablePotion`'s `PowerVar<VulnerablePower>(3)`.
 const VULNERABLE: Number = 3;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    PowerPotionChoice,
+}
+
 /// What one of the shared potions does when it is drunk.
 ///
 /// # Panics
 ///
 /// A potion of this pool nobody has ported.
-pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) {
+pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
     match potion {
         // `AnyPlayer`, which a run with one player points at that player.
         Potion::DexterityPotion => {
             fight.apply_to_actor(Power::DexterityPower, PowerAmount::Counted(DEXTERITY));
+            Played::Done
         }
         Potion::VulnerablePotion => {
             fight.apply_power(
@@ -30,6 +39,7 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) {
                 Power::VulnerablePower,
                 PowerAmount::Counted(VULNERABLE),
             );
+            Played::Done
         }
         // `AnyPlayer` again, and a run with one player walks that player's
         // hand. Every card in it that can be upgraded is.
@@ -41,7 +51,53 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) {
                     sts2_core::Lasting::ThisFight,
                 );
             }
+            Played::Done
         }
+        Potion::PowerPotion => power_potion(fight),
         potion => unimplemented!("what {potion:?} does when it is drunk"),
+    }
+}
+
+fn power_potion<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let pool = fight.character().data().card_pool;
+    let mut powers: Vec<Cards> = combat_cards(pool)
+        .iter()
+        .copied()
+        .filter(|card| card.data().kind == crate::Field::Constant(CardType::Power))
+        .collect();
+    let offered = fight
+        .generate_cards(
+            &mut powers,
+            <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
+        )
+        .unwrap_or_else(|_| unimplemented!("a character pool with too few Power cards"));
+    Played::Choosing {
+        offered,
+        skippable: true,
+        at: super::super::Resume::Potion(super::Resume::Shared(Resume::PowerPotionChoice)),
+    }
+}
+
+pub(super) fn resume<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    answer: sts2_core::Taken<V>,
+) -> Played<V> {
+    match (at, answer) {
+        (Resume::PowerPotionChoice, sts2_core::Taken::Chosen(chosen)) => {
+            if let Some(card) = chosen {
+                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
+                    for pool in [CostPool::Energy, CostPool::Star] {
+                        fight.modify_card(
+                            at,
+                            Change::SetCost(pool, num_traits::zero()),
+                            Lasting::ThisTurnOrUntilPlayed,
+                        );
+                    }
+                }
+            }
+            Played::Done
+        }
+        (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
     }
 }

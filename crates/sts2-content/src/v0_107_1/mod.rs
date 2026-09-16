@@ -61,7 +61,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Health = i32;
     type Count = u32;
     type Index = u16;
-    type Resume = behaviour::cards::Resume;
+    type Resume = behaviour::Resume;
     type CardSerial = u16;
 
     type AscensionLevel = generated::ascension::AscensionLevel;
@@ -213,8 +213,11 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::upgrade(card)
     }
 
-    fn on_use<F: sts2_core::Fight<Self>>(potion: Self::Potion, fight: &mut F) {
-        behaviour::potions::on_use(potion, fight);
+    fn on_use<F: sts2_core::Fight<Self>>(
+        potion: Self::Potion,
+        fight: &mut F,
+    ) -> sts2_core::Played<Self> {
+        behaviour::potions::on_use(potion, fight)
     }
 
     fn on_play<F: sts2_core::Fight<Self>>(
@@ -231,9 +234,9 @@ impl sts2_core::Rules for V0_107_1 {
     fn resume_play<F: sts2_core::Fight<Self>>(
         fight: &mut F,
         at: Self::Resume,
-        chosen: sts2_core::SelectedCards<Self>,
+        chosen: sts2_core::Taken<Self>,
     ) -> sts2_core::Played<Self> {
-        behaviour::cards::resume_play(fight, at, chosen)
+        behaviour::resume(fight, at, chosen)
     }
 
     fn reward_cards(character: Self::Character) -> sts2_core::Drafted<'static, Self::Card> {
