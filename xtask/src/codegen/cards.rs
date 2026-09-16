@@ -185,8 +185,12 @@ fn priced(id: &str, pool: &str, costs_x: bool, canonical: &str) -> Result<String
         )),
         (false, n) => n
             .parse::<u8>()
-            .map(|n| format!("Cost::Fixed({n})"))
-            .map_err(|e| format!("{id}: {pool} cost {n}: {e}")),
+            .map_err(|e| format!("{id}: {pool} cost {n}: {e}"))
+            .and_then(|n| {
+                nonmax::NonMaxU8::new(n)
+                    .map(|_| format!("Cost::fixed({n})"))
+                    .ok_or_else(|| format!("{id}: {pool} cost is the largest byte"))
+            }),
     }
 }
 

@@ -272,14 +272,14 @@ mod tests {
     fn each_pool_is_shown_only_when_the_card_is_priced_in_it() {
         // The ordinary case: energy alone. Every card outside the Regent's has
         // no star cost at all, so a bare number is what almost every box says.
-        assert_eq!(cost(Cost::Fixed(1), Cost::None).as_deref(), Some("1"));
-        assert_eq!(cost(Cost::Fixed(0), Cost::None).as_deref(), Some("0"));
+        assert_eq!(cost(Cost::fixed(1), Cost::None).as_deref(), Some("1"));
+        assert_eq!(cost(Cost::fixed(0), Cost::None).as_deref(), Some("0"));
 
         // Stars alone, and both. Separated by a space rather than a `+`,
         // because they are two pools and not one sum.
-        assert_eq!(cost(Cost::None, Cost::Fixed(2)).as_deref(), Some("2★"));
+        assert_eq!(cost(Cost::None, Cost::fixed(2)).as_deref(), Some("2★"));
         assert_eq!(
-            cost(Cost::Fixed(1), Cost::Fixed(2)).as_deref(),
+            cost(Cost::fixed(1), Cost::fixed(2)).as_deref(),
             Some("1 2★")
         );
 

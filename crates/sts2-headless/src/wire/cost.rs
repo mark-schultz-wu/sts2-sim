@@ -30,7 +30,9 @@ impl WireCost {
             WireCost::Absent => Ok(Cost::None),
             WireCost::Spelled("x") => Ok(Cost::X),
             WireCost::Spelled(other) => Err(format!("unknown cost {other:?}")),
-            WireCost::Fixed(n) => Ok(Cost::Fixed(n)),
+            WireCost::Fixed(n) => nonmax::NonMaxU8::new(n)
+                .map(Cost::Fixed)
+                .ok_or_else(|| "the largest byte is not a fixed cost".into()),
         }
     }
 }
@@ -49,10 +51,10 @@ impl<'de> Deserialize<'de> for WireCost {
                 // The sentinel is the mod's to resolve. One arriving here means
                 // the mod is older than this client, and reading it as a cost
                 // would put `-1` on a card box.
-                Some(n) if n <= u64::from(u8::MAX) => Ok(WireCost::Fixed(n as u8)),
+                Some(n) if n < u64::from(u8::MAX) => Ok(WireCost::Fixed(n as u8)),
                 _ => Err(D::Error::invalid_value(
                     Unexpected::Other(&n.to_string()),
-                    &"a cost between 0 and 255, \"x\", or null",
+                    &"a cost between 0 and 254, \"x\", or null",
                 )),
             },
             Some(other) => Err(D::Error::invalid_type(
@@ -75,8 +77,8 @@ mod tests {
 
     #[test]
     fn the_three_states_are_three_shapes() {
-        assert_eq!(read("2"), Ok(Cost::Fixed(2)));
-        assert_eq!(read("0"), Ok(Cost::Fixed(0)));
+        assert_eq!(read("2"), Ok(Cost::fixed(2)));
+        assert_eq!(read("0"), Ok(Cost::fixed(0)));
         assert_eq!(read("\"x\""), Ok(Cost::X));
         assert_eq!(read("null"), Ok(Cost::None));
     }

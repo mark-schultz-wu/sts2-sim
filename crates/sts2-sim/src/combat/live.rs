@@ -60,8 +60,24 @@ impl<V: Rules> CardIds<V> {
     }
 }
 
-/// One mutable card in a combat pile.
+/// `LocalCostType`: what a modifier does to the cost so far.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CostChange<N> {
+    Relative(N),
+    Absolute(N),
+}
+
+/// One entry of a card's cost modifier list.
 ///
+/// `LocalCostModifier`, minus `reduceOnly`: no ported effect passes it, and an
+/// effect that does adds it here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct CostModifier<V: Rules> {
+    pub(super) pool: sts2_core::CostPool,
+    pub(super) change: CostChange<V::Number>,
+    pub(super) lasting: sts2_core::Lasting,
+}
+
 /// A pile holds copies rather than ids, because a fight writes on a card. Two
 /// copies of one card are two objects. A rule that raises the damage on one
 /// leaves the other where it was.
@@ -78,6 +94,14 @@ pub(super) struct CardInstance<V: Rules> {
     /// one, and `UpgradeBy` moves the copy alone.
     pub(super) cost: sts2_core::Cost,
     pub(super) star_cost: sts2_core::Cost,
+    /// `CardEnergyCost._localModifiers`, and the star pool's beside it.
+    ///
+    /// Held rather than folded into the printed cost, because each wears off
+    /// on its own event and the rest keep applying. Applied in the order they
+    /// were written, which is what decides what a stack of them comes to.
+    ///
+    /// Empty for almost every card, and an empty `Vec` allocates nothing.
+    pub(super) cost_modifiers: Vec<CostModifier<V>>,
 }
 
 impl<V: Rules> CardInstance<V> {
@@ -104,29 +128,130 @@ impl<V: Rules> CardInstance<V> {
             vars,
             cost: ident.card.cost(),
             star_cost: ident.card.star_cost(),
+            cost_modifiers: Vec::new(),
         };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
-            V::upgrade_card(card.ident.card, card.face());
+            // The level is already on the identity, so this writes what the
+            // upgrade writes without counting it again.
+            for &change in V::card_upgrade(card.ident.card) {
+                card.modify(change, sts2_core::Lasting::ThisFight);
+            }
         }
         card
     }
 
-    /// This copy's own face, which is what an upgrade writes on.
-    fn face(&mut self) -> sts2_core::Face<'_, V> {
-        sts2_core::Face {
-            numbers: &mut self.vars,
-            cost: &mut self.cost,
+    /// `EnergyCost.GetWithModifiers` and its star twin, as the pair a play
+    /// reads.
+    ///
+    /// The modifiers fold over the printed cost in the order they were
+    /// written. `GetWithModifiers` returns the base untouched for a cost that
+    /// is not a number, so a pool the card is not priced in folds nothing.
+    pub(super) fn costs(&self) -> (sts2_core::Cost, sts2_core::Cost) {
+        let fold = |pool, printed| {
+            let sts2_core::Cost::Fixed(printed) = printed else {
+                return printed;
+            };
+            let printed: V::Number =
+                num_traits::NumCast::from(printed.get()).expect("a fixed cost fits a game number");
+            let folded = self
+                .cost_modifiers
+                .iter()
+                .filter(|held| held.pool == pool)
+                .fold(printed, |cost, held| match held.change {
+                    CostChange::Relative(amount) => cost + amount,
+                    CostChange::Absolute(amount) => amount,
+                });
+            // `Math.Max(0, num)`, which every read clamps at.
+            let largest: V::Number =
+                num_traits::NumCast::from(u8::MAX - 1).expect("a fixed cost fits a game number");
+            let folded = folded.clamp(num_traits::zero(), largest);
+            let folded = num_traits::NumCast::from(folded)
+                .expect("a clamped fixed cost fits its representation");
+            sts2_core::Cost::fixed(folded)
+        };
+        (
+            fold(sts2_core::CostPool::Energy, self.cost),
+            fold(sts2_core::CostPool::Star, self.star_cost),
+        )
+    }
+
+    /// Write one change on this copy.
+    ///
+    /// A number and a replay count go into what the copy prints, because
+    /// `DynamicVars.BaseValue` and `BaseReplayCount` are written that way and
+    /// neither wears off. A cost is kept beside the printed one, because the
+    /// game keeps a list of those and folds it on every read.
+    pub(super) fn modify(&mut self, change: sts2_core::Change<V>, lasting: sts2_core::Lasting) {
+        match change {
+            sts2_core::Change::Upgrade => self.upgrade(),
+            sts2_core::Change::Raise(key, amount) => {
+                let printed = self
+                    .vars
+                    .iter_mut()
+                    .find(|var| var.id == key)
+                    .unwrap_or_else(|| {
+                        unimplemented!("the {} this card does not print", key.name())
+                    });
+                printed.base = printed.base + amount;
+            }
+            sts2_core::Change::ChangeCost(pool, by) => {
+                self.modify_cost(pool, CostChange::Relative(by), lasting)
+            }
+            sts2_core::Change::SetCost(pool, to) => {
+                self.modify_cost(pool, CostChange::Absolute(to), lasting)
+            }
         }
     }
 
-    pub(super) fn upgrade(&mut self) {
+    /// Append one cost modifier, which is what every `Set` and `Add` on
+    /// `CardEnergyCost` does.
+    ///
+    /// A pool the card is not priced in takes none. The setters guard on
+    /// `Canonical >= 0`, and `GetWithModifiers` returns early on the same
+    /// test, so nothing reads a modifier there.
+    fn modify_cost(
+        &mut self,
+        pool: sts2_core::CostPool,
+        change: CostChange<V::Number>,
+        lasting: sts2_core::Lasting,
+    ) {
+        let printed = match pool {
+            sts2_core::CostPool::Energy => self.cost,
+            sts2_core::CostPool::Star => self.star_cost,
+        };
+        if printed == sts2_core::Cost::None {
+            return;
+        }
+        self.cost_modifiers.push(CostModifier {
+            pool,
+            change,
+            lasting,
+        });
+    }
+
+    /// Drop the cost modifiers that do not outlive this turn.
+    pub(super) fn turn_ended(&mut self) {
+        self.cost_modifiers
+            .retain(|held| !held.lasting.clears_when_turn_ends());
+    }
+
+    /// Drop the cost modifiers that do not outlive being played.
+    pub(super) fn was_played(&mut self) {
+        self.cost_modifiers
+            .retain(|held| !held.lasting.clears_when_played());
+    }
+
+    fn upgrade(&mut self) {
         // `CardModel.IsUpgradable`, which a card already at its own maximum is
         // not. A status card prints no upgrade at all.
-        if self.ident.upgrade < self.ident.card.max_upgrade() {
-            V::upgrade_card(self.ident.card, self.face());
-            self.ident.upgrade += 1;
+        if self.ident.upgrade >= self.ident.card.max_upgrade() {
+            return;
         }
+        for &change in V::card_upgrade(self.ident.card) {
+            self.modify(change, sts2_core::Lasting::ThisFight);
+        }
+        self.ident.upgrade += 1;
     }
 }
 

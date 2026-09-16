@@ -135,7 +135,7 @@ pub(super) fn upgraded<V: Rules>(hand: &mut [CardInstance<V>], effects: Vec<Hook
         match effect {
             HookEffect::UpgradeHand => {
                 for card in hand.iter_mut() {
-                    card.upgrade();
+                    card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight);
                 }
             }
             other => unimplemented!("a relic asking for {other:?} as a turn starts"),

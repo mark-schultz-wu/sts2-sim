@@ -209,8 +209,8 @@ impl sts2_core::Rules for V0_107_1 {
         generated::relics::Relic::LeadPaperweight
     }
 
-    fn upgrade_card(card: Self::Card, face: sts2_core::Face<'_, Self>) {
-        behaviour::cards::upgrade(card, face);
+    fn card_upgrade(card: Self::Card) -> &'static [sts2_core::Change<Self>] {
+        behaviour::cards::upgrade(card)
     }
 
     fn on_use<F: sts2_core::Fight<Self>>(potion: Self::Potion, fight: &mut F) {

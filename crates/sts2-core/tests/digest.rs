@@ -167,7 +167,7 @@ fn full() -> Observation<V> {
             }],
             legal: vec![Playable {
                 card: card(2),
-                cost: Cost::Fixed(1),
+                cost: Cost::fixed(1),
                 star_cost: Cost::None,
                 target: TargetType::AnyEnemy,
                 reason: Some(UnplayableReasons::from_members(&[
@@ -220,7 +220,7 @@ fn rooms() -> Vec<Room<V>> {
     };
     let on_sale = |n| ShopCard {
         card: card(n),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
     };
     let entry = |index, stock, cost| Entry {
@@ -636,7 +636,7 @@ fn mutations() -> Vec<Nudge> {
                 });
         }),
         ("playable.card", |o| playable(o).card = card(10)),
-        ("playable.cost", |o| playable(o).cost = Cost::Fixed(2)),
+        ("playable.cost", |o| playable(o).cost = Cost::fixed(2)),
         // A card that costs nothing and one that is not priced at all are
         // different states of the game, so they must digest differently.
         ("playable.cost: none vs zero", |o| {
@@ -644,7 +644,7 @@ fn mutations() -> Vec<Nudge> {
         }),
         ("playable.cost: X", |o| playable(o).cost = Cost::X),
         ("playable.star_cost", |o| {
-            playable(o).star_cost = Cost::Fixed(0);
+            playable(o).star_cost = Cost::fixed(0);
         }),
         ("playable.target", |o| {
             playable(o).target = TargetType::AllEnemies;

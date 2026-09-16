@@ -916,25 +916,29 @@ mod tests {
     /// covered both for a while, which read as "3 energys".
     #[test]
     fn a_price_is_spelled_in_the_pools_it_is_paid_from() {
-        use sts2_core::Cost::{Fixed, None as Unpriced, X};
+        use sts2_core::Cost;
+        use sts2_core::Cost::{None as Unpriced, X};
 
         assert_eq!(priced(Unpriced, Unpriced), "costs nothing");
-        assert_eq!(priced(Fixed(1), Unpriced), "costs 1 energy");
-        assert_eq!(priced(Fixed(3), Unpriced), "costs 3 energy");
+        assert_eq!(priced(Cost::fixed(1), Unpriced), "costs 1 energy");
+        assert_eq!(priced(Cost::fixed(3), Unpriced), "costs 3 energy");
         assert_eq!(priced(X, Unpriced), "costs all your energy");
-        assert_eq!(priced(Unpriced, Fixed(1)), "costs 1 star");
-        assert_eq!(priced(Unpriced, Fixed(2)), "costs 2 stars");
+        assert_eq!(priced(Unpriced, Cost::fixed(1)), "costs 1 star");
+        assert_eq!(priced(Unpriced, Cost::fixed(2)), "costs 2 stars");
         assert_eq!(priced(Unpriced, X), "costs all your stars");
-        assert_eq!(priced(Fixed(1), Fixed(2)), "costs 1 energy and 2 stars");
+        assert_eq!(
+            priced(Cost::fixed(1), Cost::fixed(2)),
+            "costs 1 energy and 2 stars"
+        );
     }
 
     /// A pool priced at zero is priced, and says so. `Cost::None` is the pool
     /// the card is not priced in, and the two must not read alike.
     #[test]
     fn a_zero_price_is_not_the_same_as_no_price() {
-        use sts2_core::Cost::{Fixed, None as Unpriced};
+        use sts2_core::Cost::{self, None as Unpriced};
 
-        assert_eq!(priced(Fixed(0), Unpriced), "costs 0 energy");
+        assert_eq!(priced(Cost::fixed(0), Unpriced), "costs 0 energy");
         assert_eq!(priced(Unpriced, Unpriced), "costs nothing");
     }
 

@@ -35,7 +35,11 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) {
         // hand. Every card in it that can be upgraded is.
         Potion::BlessingOfTheForge => {
             for card in fight.cards_in(Pile::Hand) {
-                fight.upgrade(card);
+                fight.modify_card(
+                    card,
+                    sts2_core::Change::Upgrade,
+                    sts2_core::Lasting::ThisFight,
+                );
             }
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),

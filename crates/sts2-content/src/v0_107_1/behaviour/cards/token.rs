@@ -1,6 +1,6 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{Amount, CardVars, Effect, Fight, Played, Scaling};
+use sts2_core::{Amount, CardVars, CostPool, Effect, Fight, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
@@ -12,7 +12,7 @@ pub(super) fn upgrade(card: TokenCard) -> &'static [Change] {
         TokenCard::MinionStrike => &[Change::Raise(CardVar::Damage, 3)],
         // `SovereignBlade.OnUpgrade` is `EnergyCost.UpgradeBy(-1)`, and it
         // raises nothing the card prints.
-        TokenCard::SovereignBlade => &[Change::Cost(-1)],
+        TokenCard::SovereignBlade => &[Change::ChangeCost(CostPool::Energy, -1)],
         card => unimplemented!("card upgrade: {card:?}"),
     }
 }

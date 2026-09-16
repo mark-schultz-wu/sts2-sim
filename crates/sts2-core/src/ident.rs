@@ -103,8 +103,8 @@ pub enum Pile {
 /// An id alone has no address, and finding one reads every pile. Playing a
 /// card is the hottest path there is, so the place travels with the name.
 ///
-/// The place is a hint and the id is the answer. Whoever acts on this looks
-/// where it says, and checks the id it finds.
+/// The place and id name the card together. Whoever acts on this checks that
+/// the named card is still at the named place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CardAt<V: ContentVersion> {
     id: CardId<V>,

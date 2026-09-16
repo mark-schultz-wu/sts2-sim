@@ -218,7 +218,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Summon,
@@ -233,7 +233,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AllEnemies),
-        cost: Cost::Fixed(9),
+        cost: Cost::fixed(9),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -256,7 +256,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -271,7 +271,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Basic,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Summon,
@@ -286,7 +286,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AllEnemies),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -309,7 +309,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -332,7 +332,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(4),
+        cost: Cost::fixed(4),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -347,7 +347,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::CalcifyPower,
@@ -362,7 +362,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
@@ -377,7 +377,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -400,7 +400,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Summon,
@@ -415,7 +415,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::CountdownPower,
@@ -430,7 +430,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -453,7 +453,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AllEnemies),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -476,7 +476,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -499,7 +499,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -528,7 +528,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -551,7 +551,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Basic,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Block,
@@ -566,7 +566,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -581,7 +581,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -604,7 +604,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -627,7 +627,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(3),
+        cost: Cost::fixed(3),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -650,7 +650,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::DevourLifePower,
@@ -680,7 +680,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -703,7 +703,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
@@ -718,7 +718,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[],
         max_upgrade: 1,
@@ -728,7 +728,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AllEnemies),
-        cost: Cost::Fixed(3),
+        cost: Cost::fixed(3),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::DoomPower,
@@ -743,7 +743,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::StrengthLoss,
@@ -773,7 +773,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -796,7 +796,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -819,7 +819,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::OstyDamage,
@@ -834,7 +834,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Ancient,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[],
         max_upgrade: 1,
@@ -844,7 +844,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -867,7 +867,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AllAllies),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
@@ -882,7 +882,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -897,7 +897,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -920,7 +920,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -935,7 +935,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::HpLoss,
@@ -950,7 +950,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AllEnemies),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -973,7 +973,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -996,7 +996,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AllAllies),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Summon,
@@ -1011,7 +1011,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::LethalityPower,
@@ -1026,7 +1026,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(3),
+        cost: Cost::fixed(3),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1049,7 +1049,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -1064,7 +1064,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Summon,
@@ -1079,7 +1079,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AllEnemies),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1102,7 +1102,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1131,7 +1131,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1166,7 +1166,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::DoomPower,
@@ -1181,7 +1181,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
@@ -1196,7 +1196,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
@@ -1211,7 +1211,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::OstyDamage,
@@ -1226,7 +1226,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Ancient,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1255,7 +1255,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1278,7 +1278,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1313,7 +1313,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Power,
@@ -1328,7 +1328,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1363,7 +1363,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(3),
+        cost: Cost::fixed(3),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Summon,
@@ -1378,7 +1378,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(3),
+        cost: Cost::fixed(3),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -1393,7 +1393,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(3),
+        cost: Cost::fixed(3),
         star_cost: Cost::None,
         vars: &[],
         max_upgrade: 1,
@@ -1403,7 +1403,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1426,7 +1426,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1449,7 +1449,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1478,7 +1478,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1501,7 +1501,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -1516,7 +1516,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Cards,
@@ -1531,7 +1531,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::SentryModePower,
@@ -1546,7 +1546,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -1561,7 +1561,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1584,7 +1584,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Block,
@@ -1599,7 +1599,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1622,7 +1622,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::SleightOfFleshPower,
@@ -1637,7 +1637,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::OstyDamage,
@@ -1652,7 +1652,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1681,7 +1681,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::AllEnemies),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -1696,7 +1696,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Power),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::BlockOnExhaust,
@@ -1711,7 +1711,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1734,7 +1734,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(3),
+        cost: Cost::fixed(3),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1763,7 +1763,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Basic,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -1778,7 +1778,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1801,7 +1801,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(2),
+        cost: Cost::fixed(2),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1830,7 +1830,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Energy,
@@ -1845,7 +1845,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Rare,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Block,
@@ -1860,7 +1860,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Basic,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[
             sts2_core::CardNumber {
@@ -1889,7 +1889,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Attack),
         rarity: CardRarity::Uncommon,
         target: Field::Constant(TargetType::AnyEnemy),
-        cost: Cost::Fixed(1),
+        cost: Cost::fixed(1),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Damage,
@@ -1904,7 +1904,7 @@ static ROWS: [CardData; 88] = [
         kind: Field::Constant(CardType::Skill),
         rarity: CardRarity::Common,
         target: Field::Constant(TargetType::SelfTarget),
-        cost: Cost::Fixed(0),
+        cost: Cost::fixed(0),
         star_cost: Cost::None,
         vars: &[sts2_core::CardNumber {
             id: CardVar::Energy,
