@@ -167,6 +167,8 @@ pub(crate) struct Live<V: Rules> {
     pub(super) draw: Vec<CardInstance<V>>,
     pub(super) discard: Vec<CardInstance<V>>,
     pub(super) exhaust: Vec<CardInstance<V>>,
+    /// Deck cards a combat command removed permanently while this fight ran.
+    pub(super) removed_from_deck: Vec<CardIdent<V>>,
     pub(super) creatures: Vec<Creature<V>>,
     pub(super) orbs: Option<Orbs<V>>,
     /// One per monster in the fight, in the order the encounter fields them.
@@ -193,6 +195,10 @@ pub(crate) struct Live<V: Rules> {
 }
 
 impl<V: Rules> Live<V> {
+    pub(crate) fn removed_from_deck(&self) -> &[CardIdent<V>] {
+        &self.removed_from_deck
+    }
+
     /// The card-selection question on which this fight is parked.
     pub(crate) fn question(&self) -> Option<sts2_core::Question<V>> {
         let asked = self.asking.as_ref()?;

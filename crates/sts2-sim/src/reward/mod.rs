@@ -18,7 +18,12 @@ pub(crate) enum Offer<V: Rules> {
     },
     /// The cards on offer. Taking one takes the whole reward.
     Card {
-        cards: Vec<V::Card>,
+        cards: Vec<sts2_core::CardIdent<V>>,
+        taken: bool,
+    },
+    /// One stolen deck card returned by the creature that took it.
+    SpecialCard {
+        card: sts2_core::CardIdent<V>,
         taken: bool,
     },
     Potion {
@@ -38,6 +43,7 @@ impl<V: Rules> Offer<V> {
         match self {
             Self::Gold { taken, .. }
             | Self::Card { taken, .. }
+            | Self::SpecialCard { taken, .. }
             | Self::Potion { taken, .. }
             | Self::Relic { taken, .. } => *taken,
         }

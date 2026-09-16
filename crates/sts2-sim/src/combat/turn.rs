@@ -35,6 +35,7 @@ pub(crate) fn end<V: Rules>(
     let mut shuffle = streams.stream(V::RunRngType::SHUFFLE);
     let mut ai = streams.stream(V::RunRngType::MONSTER_AI);
     let mut niche = streams.stream(V::RunRngType::NICHE);
+    let mut generation = streams.stream(V::RunRngType::COMBAT_CARD_GENERATION);
 
     turn_end(&mut next, &mut shuffle, &mut niche, &mut relics, ascension);
     flush_hand(&mut next);
@@ -64,6 +65,7 @@ pub(crate) fn end<V: Rules>(
         &mut next,
         &mut shuffle,
         &mut niche,
+        &mut generation,
         &mut relics,
         &mut skipping,
     );
@@ -116,6 +118,7 @@ pub(crate) fn end<V: Rules>(
     streams.record(V::RunRngType::SHUFFLE, shuffle);
     streams.record(V::RunRngType::MONSTER_AI, ai);
     streams.record(V::RunRngType::NICHE, niche);
+    streams.record(V::RunRngType::COMBAT_CARD_GENERATION, generation);
     next.skip_tick = skipping;
     if won {
         relic::combat_ended::<V>(&mut relics);
@@ -271,7 +274,7 @@ fn tick_powers<V: Rules>(
             );
             for effect in &asked {
                 match effect {
-                    sts2_core::HookEffect::TickDownDuration => {}
+                    sts2_core::HookEffect::TickDownDuration | sts2_core::HookEffect::Decrement => {}
                     // `PowerCmd.Apply` on the creature carrying the power,
                     // which is what a power that grows its owner asks for.
                     sts2_core::HookEffect::ApplyToOwner(power, amount) => {
@@ -282,6 +285,10 @@ fn tick_powers<V: Rules>(
                     sts2_core::HookEffect::Remove => leaving.push((id, power)),
                     other => unimplemented!("a power asking for {other:?} as a turn ends"),
                 }
+            }
+            if asked.contains(&sts2_core::HookEffect::Decrement) {
+                held.amount = PowerAmount::Counted(amount - one);
+                continue;
             }
             if !asked.contains(&sts2_core::HookEffect::TickDownDuration) {
                 continue;
@@ -334,6 +341,7 @@ fn enemy_turn<V: Rules>(
     live: &mut Live<V>,
     shuffle: &mut MegaRng,
     niche: &mut MegaRng,
+    generation: &mut MegaRng,
     relics: &mut [crate::run::HeldRelic<V>],
     skipping: &mut Vec<(CombatId, V::Power)>,
 ) -> bool {
@@ -387,10 +395,10 @@ fn enemy_turn<V: Rules>(
             live,
             shuffle,
             niche,
+            generation,
             relics,
             ascension,
-            id,
-            (damage, repeats),
+            (id, damage, repeats),
         );
         V::perform_move(monster, next_move.id, &mut board);
         won |= board.won;

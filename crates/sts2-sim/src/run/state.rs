@@ -131,8 +131,10 @@ impl<V: Rules> HeldRelic<V> {
 #[derive(Debug, Clone)]
 struct Player<V: Rules> {
     relics: SmallVec<[HeldRelic<V>; 8]>,
-    /// The belt, in the order the potions were taken.
+    /// The belt, in physical slot order.
     potions: SmallVec<[V::Potion; 3]>,
+    /// The physical slot beside each potion. Empty slots survive drinking.
+    potion_positions: SmallVec<[usize; 3]>,
     deck: Vec<CardIdent<V>>,
     /// What the run carries between fights.
     ///
@@ -292,6 +294,7 @@ impl<V: Rules> State<V> {
                     .map(HeldRelic::new)
                     .collect(),
                 potions: SmallVec::new(),
+                potion_positions: SmallVec::new(),
                 deck: V::starting_deck(character)
                     .into_iter()
                     .map(CardIdent::new)
@@ -369,6 +372,24 @@ impl<V: Rules> State<V> {
     /// `RemoveBeforeUse`.
     pub(super) fn drank(&mut self, at: usize) {
         self.player.potions.remove(at);
+        self.player.potion_positions.remove(at);
+    }
+
+    /// Put a potion in the first empty physical belt slot.
+    fn procure(&mut self, potion: V::Potion) -> bool {
+        let slots: usize = num_traits::cast(self.player.potion_slots)
+            .expect("the belt has an addressable number of slots");
+        let Some(slot) = (0..slots).find(|slot| !self.player.potion_positions.contains(slot))
+        else {
+            return false;
+        };
+        let at = self
+            .player
+            .potion_positions
+            .partition_point(|held| *held < slot);
+        self.player.potion_positions.insert(at, slot);
+        self.player.potions.insert(at, potion);
+        true
     }
 
     /// Put the belt a fight handed back in place of the one it was given.
@@ -382,6 +403,16 @@ impl<V: Rules> State<V> {
     /// cannot carry out never reaches this, so the run keeps the fight it had.
     pub(super) fn fought(&mut self, live: crate::combat::Live<V>) {
         self.phase = Phase::Combat(live);
+    }
+
+    /// Remove the deck copies a combat command took permanently.
+    pub(super) fn lose_cards(&mut self, cards: &[CardIdent<V>]) {
+        for card in cards {
+            let Some(at) = self.player.deck.iter().position(|held| held == card) else {
+                continue;
+            };
+            self.player.deck.remove(at);
+        }
     }
 
     /// Park the run on the rewards a won fight left it.
@@ -687,13 +718,9 @@ impl<V: Rules> State<V> {
         match gift {
             Gift::Card(card) => self.player.deck.push(CardIdent::new(*card)),
             Gift::Potion(potion) => {
-                let slots: usize = num_traits::cast(self.player.potion_slots)
-                    .expect("the belt has an addressable number of slots");
                 // `TryToProcure` refuses a full belt rather than growing one,
                 // and the belt in the next observation says whether it landed.
-                if self.player.potions.len() < slots {
-                    self.player.potions.push(*potion);
-                }
+                self.procure(*potion);
             }
             Gift::Relic(relic) => {
                 self.obtain(*relic);
@@ -931,6 +958,7 @@ impl<V: Rules> State<V> {
                 match offer {
                     Offer::Gold { taken, .. }
                     | Offer::Card { taken, .. }
+                    | Offer::SpecialCard { taken, .. }
                     | Offer::Potion { taken, .. }
                     | Offer::Relic { taken, .. } => *taken = true,
                 }
@@ -963,7 +991,7 @@ impl<V: Rules> State<V> {
                         unimplemented!("a potion offered to a full belt");
                     }
                     *taken = true;
-                    self.player.potions.push(potion);
+                    self.procure(potion);
                 }
                 (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
                     let chosen = cards
@@ -971,7 +999,12 @@ impl<V: Rules> State<V> {
                         .copied()
                         .unwrap_or_else(|| unimplemented!("a card the reward does not offer"));
                     *taken = true;
-                    self.player.deck.push(CardIdent::new(chosen));
+                    self.player.deck.push(chosen);
+                }
+                (Offer::SpecialCard { card, taken }, TakeReward::NonCard { .. }) => {
+                    let card = *card;
+                    *taken = true;
+                    self.player.deck.push(card);
                 }
                 (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
                     let relic = *relic;
@@ -1359,13 +1392,14 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                         cards: cards
                             .iter()
                             .map(|card| RewardCard {
-                                card: CardIdent::new(*card),
+                                card: *card,
                                 // The game formats this from its localisation
                                 // tables, which the simulator does not have.
                                 text: None,
                             })
                             .collect(),
                     },
+                    Offer::SpecialCard { .. } => RewardKind::SpecialCard { card: None },
                 },
             })
             .collect(),
