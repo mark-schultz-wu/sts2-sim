@@ -42,9 +42,9 @@ pub use content::{
     FlagSet, Holding, HookEffect, Hooks, Lasting, Layout, Listener, MapPointKinds, Modify,
     ModifyHook, MonsterSpawn, MonsterTable, MoveMachine, Played, PlayerStreamKinds, PotionTable,
     PotionUsage, PowerAmount, PowerTable, RarityKinds, RelicModel, RelicPoolKinds, RelicTable,
-    RestKinds, Rests, RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards,
-    Selection, SideKinds, SideTurnEnd, StreamKinds, Table, Taken, TargetKinds, Temporary,
-    TurnPhaseKinds, UnplayableReasonKinds, Version,
+    Replaying, RestKinds, Rests, RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling,
+    SelectedCards, Selection, SideKinds, SideTurnEnd, StreamKinds, Table, Taken, TargetKinds,
+    Temporary, TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;

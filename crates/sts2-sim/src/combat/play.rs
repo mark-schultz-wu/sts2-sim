@@ -12,7 +12,7 @@
 use sts2_core::{CardTable, CombatId, Cost, FlagSet, HandIndex, Reason, Rules};
 
 use super::board::Board;
-use super::live::{Asked, Asker, CardInstance, Live, Resuming};
+use super::live::{Asked, Asker, CardInstance, Live, Plays, Resuming};
 use super::{Error, hook, legal, power, relic};
 use crate::stream::Streams;
 
@@ -204,6 +204,11 @@ pub(crate) fn play<V: Rules>(
         relics,
         live.ascension,
         Resuming {
+            // `GeneratePlayCount`, worked out once and before the first play.
+            plays: Plays {
+                done: num_traits::zero(),
+                count: card.play_count(),
+            },
             asker: Asker::Card(card),
             target: play.target,
             won,
@@ -315,7 +320,31 @@ pub(super) fn carry_on<V: Rules>(
 ) -> Result<super::Fought<V>, Error> {
     loop {
         let (at, question, answer) = match played {
-            sts2_core::Played::Done => break,
+            // One turn of `GeneratePlayCount`'s loop is over. A card carrying
+            // replays runs its own effect again, from the top.
+            sts2_core::Played::Done => {
+                effect.plays.done = effect.plays.done + num_traits::one();
+                let Asker::Card(card) = &effect.asker else {
+                    break;
+                };
+                if effect.plays.done >= effect.plays.count {
+                    break;
+                }
+                let card = card.clone();
+                let mut board = Board::for_card(
+                    &mut next,
+                    streams.combat(),
+                    &mut relics,
+                    ascension,
+                    effect.target,
+                    Some(&card),
+                );
+                played = V::on_play(card.ident.card, &mut board);
+                effect.won |= board.won;
+                let skipped = std::mem::take(&mut board.skipped);
+                next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+                continue;
+            }
             sts2_core::Played::Asking {
                 pile,
                 selection,

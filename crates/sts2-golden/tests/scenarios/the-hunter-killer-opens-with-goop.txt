@@ -1,0 +1,6 @@
+# `HunterKiller`'s move machine starts on `TENDERIZING_GOOP_MOVE`, and the move
+# applies one Tender to the player. So the first turn the monster takes leaves
+# the player carrying it.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"HUNTER_KILLER_NORMAL"}
+{"cmd":"end_turn"}

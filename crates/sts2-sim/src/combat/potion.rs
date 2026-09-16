@@ -44,6 +44,11 @@ pub(crate) fn drink<V: Rules>(
         relics,
         live.ascension,
         super::live::Resuming {
+            // A drink runs once. `GeneratePlayCount` belongs to a card.
+            plays: super::live::Plays {
+                done: num_traits::zero(),
+                count: num_traits::one(),
+            },
             asker: super::live::Asker::Potion(potion),
             target,
             won,

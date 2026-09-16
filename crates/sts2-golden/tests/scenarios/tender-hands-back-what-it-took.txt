@@ -1,0 +1,12 @@
+# `TenderPower.AfterSideTurnEnd` gives back everything it took this turn, and
+# starts counting again. So the player ends the turn on the Strength and the
+# Dexterity they opened it with.
+#
+# A port that hands back a fixed point, or forgets to clear the count, is off
+# by the cards played after the first.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"TENDER_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":3}
+{"cmd":"end_turn"}

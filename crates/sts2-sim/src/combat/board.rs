@@ -245,6 +245,76 @@ impl<'a, V: Rules> Board<'a, V> {
         self.live.creatures[at]
             .powers
             .retain(|held| held.amount != PowerAmount::Counted(V::Number::zero()));
+
+        // `AfterPowerAmountChanged`, once the power is on. It carries what
+        // landed rather than the stack the creature now holds, and an amount
+        // of zero raises nothing. An endless power lands no number, so the
+        // hook that reads one has nothing to read.
+        let PowerAmount::Counted(delta) = amount else {
+            return;
+        };
+        let asked = super::power::notify::<V>(
+            self.live,
+            sts2_core::EventHook::PowerAmountChanged { power, delta },
+        );
+        self.add_replays(asked);
+    }
+
+    /// `AfterCardEnteredCombat`, for a card that reached a combat pile from no
+    /// pile at all.
+    ///
+    /// A card moving between piles is `AfterCardChangedPiles` and does not
+    /// come here.
+    fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card) {
+        let asked = super::power::notify::<V>(
+            self.live,
+            sts2_core::EventHook::CardEnteredCombat { at, card },
+        );
+        self.add_replays(asked);
+    }
+
+    /// Carry out what the card-writing hooks asked for.
+    ///
+    /// The two of them ask for one thing. It is the only effect a fight
+    /// carries out against its own cards rather than against a creature.
+    fn add_replays(&mut self, asked: Vec<sts2_core::HookEffect<V>>) {
+        for effect in asked {
+            let sts2_core::HookEffect::AddReplays { to, amount } = effect else {
+                unimplemented!("a power asking for {effect:?} as it writes on cards")
+            };
+            match to {
+                sts2_core::Replaying::One(at) => {
+                    let pile = match at.pile() {
+                        Pile::Hand => &mut self.live.hand,
+                        Pile::Draw => &mut self.live.draw,
+                        Pile::Discard => &mut self.live.discard,
+                        Pile::Exhaust => &mut self.live.exhaust,
+                    };
+                    let index: usize = num_traits::NumCast::from(at.index())
+                        .expect("a card's pile index fits this machine");
+                    let held = pile
+                        .get_mut(index)
+                        .filter(|held| held.id == at.id())
+                        .expect("the card is still at its named place");
+                    held.replays = held.replays + amount;
+                }
+                // `PlayerCombatState.AllCards`, which the exhaust pile is
+                // among. A blade taken out of the fight is written on and
+                // never played again.
+                sts2_core::Replaying::EveryCopyOf(card) => {
+                    for pile in [
+                        &mut self.live.hand,
+                        &mut self.live.draw,
+                        &mut self.live.discard,
+                        &mut self.live.exhaust,
+                    ] {
+                        for held in pile.iter_mut().filter(|held| held.ident.card == card) {
+                            held.replays = held.replays + amount;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Resolve a death, then end the fight if no primary enemy remains.
@@ -853,12 +923,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .into_iter()
             .flatten()
             .any(|held| held.ident.card == card);
-        if !held {
+        let created = (!held).then(|| {
             let id = self.live.card_ids.mint();
             self.live
                 .hand
                 .push(CardInstance::new(CardIdent::new(card), id));
-        }
+            let index = num_traits::NumCast::from(self.live.hand.len() - 1)
+                .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+            CardAt::new(id, Pile::Hand, index)
+        });
         for pile in [
             &mut self.live.hand,
             &mut self.live.draw,
@@ -873,6 +946,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     .unwrap_or_else(|| unimplemented!("the {} a forge raises", key.name()));
                 var.base = var.base + amount;
             }
+        }
+        // The blade goes through `AddGeneratedCardToCombat`, so it enters the
+        // fight the way a generated card does. It is raised after the raise,
+        // which is the order `ForgeCmd` adds and then increases in.
+        if let Some(at) = created {
+            self.card_entered_combat(at, card);
         }
     }
 
@@ -927,6 +1006,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
             held.push(CardInstance::new(card, id));
             added.push(CardAt::new(id, pile, index));
+        }
+        for &at in &added {
+            self.card_entered_combat(at, card.card);
         }
         added
     }

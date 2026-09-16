@@ -77,7 +77,9 @@ pub(super) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 /// A monster nobody has ported.
 pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
     match monster {
-        Monster::ThievingHopper | Monster::Tunneler => hive::perform(move_id, fight),
+        Monster::ThievingHopper | Monster::Tunneler | Monster::HunterKiller => {
+            hive::perform(move_id, fight)
+        }
         _ => overgrowth::perform(monster, move_id, fight),
     }
 }

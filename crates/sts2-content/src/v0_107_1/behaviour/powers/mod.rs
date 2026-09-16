@@ -11,6 +11,7 @@
 use sts2_core::{Holding, Modify, ModifyHook, PowerAmount};
 
 use super::super::V0_107_1 as V;
+use super::super::generated::cards::{Cards, TokenCard};
 use super::super::generated::monsters::Monster;
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
@@ -155,7 +156,9 @@ pub(crate) fn modify_hook(
             | Power::SlowPower
             | Power::SlipperyPower
             | Power::BurrowedPower
-            | Power::SwipePower,
+            | Power::SwipePower
+            | Power::SwordSagePower
+            | Power::TenderPower,
             _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
@@ -192,7 +195,9 @@ pub(crate) fn modify_hook(
             | Power::SlowPower
             | Power::SlipperyPower
             | Power::BurrowedPower
-            | Power::SwipePower,
+            | Power::SwipePower
+            | Power::SwordSagePower
+            | Power::TenderPower,
             _,
             ModifyHook::Block,
         ) => Modify::Nothing,
@@ -223,6 +228,7 @@ pub(crate) fn event_hook(
     power: Power,
     amount: PowerAmount<Number>,
     owner: CombatSide,
+    counted: Number,
     hook: sts2_core::EventHook<V>,
 ) -> Vec<sts2_core::HookEffect<V>> {
     use super::super::generated::monsters::{IntentKind, MoveId};
@@ -285,7 +291,8 @@ pub(crate) fn event_hook(
             | Power::SlowPower
             | Power::SlipperyPower
             | Power::BurrowedPower
-            | Power::SwipePower,
+            | Power::SwipePower
+            | Power::SwordSagePower,
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,
@@ -303,7 +310,9 @@ pub(crate) fn event_hook(
             | Power::StrengthPower
             | Power::IllusionPower
             | Power::MinionPower
-            | Power::DexterityPower,
+            | Power::DexterityPower
+            | Power::SwordSagePower
+            | Power::TenderPower,
             _,
             EventHook::EnergyReset,
         ) => None,
@@ -341,6 +350,28 @@ pub(crate) fn event_hook(
         (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath) => {
             unimplemented!("an endless Infested power")
         }
+        // `TenderPower.AfterCardPlayed`, which counts only its owner's own
+        // cards. A fight here has one player, so every card played is theirs.
+        // Each one takes a point of Strength and of Dexterity, and the count
+        // is what gives them back.
+        (Power::TenderPower, _, EventHook::CardPlayed { .. }) => {
+            return vec![
+                HookEffect::Count(one),
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(-one)),
+                HookEffect::ApplyToOwner(Power::DexterityPower, PowerAmount::Counted(-one)),
+            ];
+        }
+        // `TenderPower.AfterSideTurnEnd` for the side its owner is among the
+        // participants of. Everything taken this turn comes back, and the
+        // count starts again.
+        (Power::TenderPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            return vec![
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(counted)),
+                HookEffect::ApplyToOwner(Power::DexterityPower, PowerAmount::Counted(counted)),
+                HookEffect::ClearCount,
+            ];
+        }
+        (Power::TenderPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `SlowPower.AfterCardPlayed` counts every card anyone plays, and its
         // `AfterSideTurnStart` forgets the count when the side its owner is
         // among takes its turn.
@@ -356,6 +387,40 @@ pub(crate) fn event_hook(
         {
             Some(HookEffect::Decrement)
         }
+        // `SwordSagePower.AfterPowerAmountChanged`, which answers only its own
+        // kind. Every Sovereign Blade its owner holds gets one more replay per
+        // point applied.
+        //
+        // A fight here has one player, so a Sword Sage instance and the cards
+        // it writes on belong to the same player, which is what
+        // `TryAddReplays` checks.
+        (
+            Power::SwordSagePower,
+            _,
+            EventHook::PowerAmountChanged {
+                power: Power::SwordSagePower,
+                delta,
+            },
+        ) => Some(HookEffect::AddReplays {
+            to: sts2_core::Replaying::EveryCopyOf(Cards::Token(TokenCard::SovereignBlade)),
+            amount: delta,
+        }),
+        // `SwordSagePower.AfterCardEnteredCombat`, which gives a blade that
+        // joins later the replays the ones already here were given.
+        (
+            Power::SwordSagePower,
+            PowerAmount::Counted(amount),
+            EventHook::CardEnteredCombat {
+                at,
+                card: Cards::Token(TokenCard::SovereignBlade),
+            },
+        ) => Some(HookEffect::AddReplays {
+            to: sts2_core::Replaying::One(at),
+            amount,
+        }),
+        (Power::SwordSagePower, PowerAmount::Endless, EventHook::CardEnteredCombat { .. }) => {
+            unimplemented!("an endless Sword Sage")
+        }
         // Each of these is an override on an empty base, so a power that does
         // not have one does nothing when the fight raises it.
         (
@@ -366,7 +431,9 @@ pub(crate) fn event_hook(
             | EventHook::BeforeApplied { .. }
             | EventHook::CardPlayed { .. }
             | EventHook::SideTurnStart { .. }
-            | EventHook::DamageReceived { .. },
+            | EventHook::DamageReceived { .. }
+            | EventHook::PowerAmountChanged { .. }
+            | EventHook::CardEnteredCombat { .. },
         ) => None,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };

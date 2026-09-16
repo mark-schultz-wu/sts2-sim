@@ -26,10 +26,19 @@ pub(super) fn starting_powers(
 pub(super) fn perform<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ThieveryMove => thievery(fight),
-        MoveId::BiteMove | MoveId::BelowMove => fight.attack_opponents(),
+        MoveId::BiteMove | MoveId::BelowMove | MoveId::PunctureMove => fight.attack_opponents(),
         MoveId::BurrowMove => burrow(fight),
+        MoveId::TenderizingGoopMove => tenderizing_goop(fight),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
+}
+
+/// Make the target tender: every card it plays costs it a point of each.
+///
+/// One stack, however many targets the move names. The power itself is what
+/// takes the Strength and the Dexterity, and what hands them back.
+fn tenderizing_goop<F: Fight<V>>(fight: &mut F) {
+    fight.apply_to_opponents(Power::TenderPower, PowerAmount::Counted(1));
 }
 
 /// Hide underground behind block that persists until it is broken.

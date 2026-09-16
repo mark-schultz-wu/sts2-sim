@@ -30,6 +30,19 @@ pub(super) struct Resuming<V: Rules> {
     pub(super) asker: Asker<V>,
     pub(super) target: Option<CombatId>,
     pub(super) won: bool,
+    /// Where this effect is in `GeneratePlayCount`'s loop.
+    pub(super) plays: Plays<V>,
+}
+
+/// `GeneratePlayCount`'s count, and how much of its loop has run.
+///
+/// The count is worked out once, before the first play. A replay the effect
+/// itself hands out does not lengthen the loop it is inside. A potion has no
+/// count, and runs once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Plays<V: Rules> {
+    pub(super) done: V::Number,
+    pub(super) count: V::Number,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,6 +127,11 @@ pub(super) struct CardInstance<V: Rules> {
     ///
     /// Empty for almost every card, and an empty `Vec` allocates nothing.
     pub(super) cost_modifiers: Vec<CostModifier<V>>,
+    /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
+    ///
+    /// Zero for every card the table prints. Only a power hands these out, and
+    /// what it writes stays on the copy for the rest of the fight.
+    pub(super) replays: V::Number,
 }
 
 impl<V: Rules> CardInstance<V> {
@@ -141,6 +159,7 @@ impl<V: Rules> CardInstance<V> {
             cost: ident.card.cost(),
             star_cost: ident.card.star_cost(),
             cost_modifiers: Vec::new(),
+            replays: num_traits::zero(),
         };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
@@ -246,6 +265,15 @@ impl<V: Rules> CardInstance<V> {
     pub(super) fn turn_ended(&mut self) {
         self.cost_modifiers
             .retain(|held| !held.lasting.clears_when_turn_ends());
+    }
+
+    /// `GeneratePlayCount`: one play, and one more per replay this copy holds.
+    ///
+    /// `Hook.ModifyCardPlayCount` and an enchantment's `EnchantPlayCount` both
+    /// move this in the game. Neither is ported, and each is a hook this reads
+    /// rather than a number to store.
+    pub(super) fn play_count(&self) -> V::Number {
+        self.replays + num_traits::one()
     }
 
     /// Drop the cost modifiers that do not outlive being played.
