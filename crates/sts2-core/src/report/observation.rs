@@ -660,8 +660,19 @@ pub struct Preview<V: ContentVersion> {
 /// Every map in an observation is this shape: a preview's numbers, and where
 /// each stream stands. A report builds a fresh one per decision, and hashing
 /// four entries costs more than walking them.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Keyed<K, N>(SmallVec<[(K, N); KEYED_INLINE]>);
+
+impl<K: Copy, N: Copy> Clone for Keyed<K, N> {
+    /// Copies the entries rather than walking them.
+    ///
+    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
+    /// see that the item is `Copy`. Every key and value in here is, and a
+    /// report clones these on the way out.
+    fn clone(&self) -> Self {
+        Self(SmallVec::from_slice(&self.0))
+    }
+}
 
 /// How many entries a map holds without reaching the heap.
 ///

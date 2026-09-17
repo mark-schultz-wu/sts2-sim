@@ -25,11 +25,26 @@ use crate::rng::MegaRng;
 /// Held at the position each stream has in [`Rules::run_rng_types`], so this is
 /// a fixed row of generators and not a map. Cloning one copies that row, which
 /// is what a decision does before it draws.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Streams<V: Rules> {
     run: SmallVec<[MegaRng; 16]>,
     player: SmallVec<[MegaRng; 4]>,
     version: PhantomData<fn() -> V>,
+}
+
+impl<V: Rules> Clone for Streams<V> {
+    /// Copies the two rows rather than walking them.
+    ///
+    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
+    /// see that the item is `Copy`. A generator is 48 bytes and there are
+    /// fifteen, and a decision copies them all before it draws.
+    fn clone(&self) -> Self {
+        Self {
+            run: SmallVec::from_slice(&self.run),
+            player: SmallVec::from_slice(&self.player),
+            version: PhantomData,
+        }
+    }
 }
 
 impl<V: Rules> Streams<V> {

@@ -133,7 +133,7 @@ pub(super) struct CostModifier<V: Rules> {
 /// A pile holds copies rather than ids, because a fight writes on a card. Two
 /// copies of one card are two objects. A rule that raises the damage on one
 /// leaves the other where it was.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(super) struct CardInstance<V: Rules> {
     /// Which copy this is, for as long as the fight holds it.
     pub(super) id: CardId<V>,
@@ -164,6 +164,26 @@ pub(super) struct CardInstance<V: Rules> {
     /// Zero for every card the table prints. Only a power hands these out, and
     /// what it writes stays on the copy for the rest of the fight.
     pub(super) replays: V::Number,
+}
+
+impl<V: Rules> Clone for CardInstance<V> {
+    /// Copies the printed numbers rather than walking them.
+    ///
+    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
+    /// see that the item is `Copy`. A [`CardNumber`] is, and every card in
+    /// every pile is cloned each time a decision branches the run.
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            ident: self.ident,
+            vars: smallvec::SmallVec::from_slice(&self.vars),
+            cost: self.cost,
+            star_cost: self.star_cost,
+            cost_modifiers: self.cost_modifiers.clone(),
+            added_keywords: self.added_keywords.clone(),
+            replays: self.replays,
+        }
+    }
 }
 
 impl<V: Rules> CardInstance<V> {
