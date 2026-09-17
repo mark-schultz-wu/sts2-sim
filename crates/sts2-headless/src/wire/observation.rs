@@ -219,7 +219,7 @@ fn domain_count<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> R
 fn domain_vars<V: sts2_content_wire::WireContentVersion, T: NumCast>(
     path: &str,
     values: BTreeMap<String, i32>,
-) -> Result<BTreeMap<V::CardVar, T>, Error> {
+) -> Result<sts2_core::Vars<V::CardVar, T>, Error> {
     values
         .into_iter()
         .map(|(name, value)| {

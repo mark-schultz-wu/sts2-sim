@@ -6,8 +6,10 @@
 //!
 //! The crate README says what this shape is for, and which fields stay prose.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
+
+use smallvec::SmallVec;
 
 use crate::{CardIdent, ContentVersion, Coord, Cost, MapPointKinds, ModelId};
 
@@ -645,8 +647,135 @@ pub struct Preview<V: ContentVersion> {
     /// Keyed by the build's own variable, not by its name. A key outside the
     /// set this build prints is a divergence the reader reports, and no caller
     /// spells one to look it up.
-    pub vars: BTreeMap<V::CardVar, V::Number>,
+    pub vars: Vars<V::CardVar, V::Number>,
     /// The same variables as the card prints them, upgrades and enchantment
     /// included. Equal to `vars` exactly when nothing is modifying the card.
-    pub base: BTreeMap<V::CardVar, V::Number>,
+    pub base: Vars<V::CardVar, V::Number>,
+}
+
+/// The numbers one preview reports, by the key the build files them under.
+///
+/// Sorted by key with no repeats, which is what a `BTreeMap` of them read as.
+/// Repeated keys keep the last value, as that map did.
+///
+/// Inline, because a card prints one to four numbers and every card in hand is
+/// previewed against every creature it can hit. A map of four entries reached
+/// the allocator twice.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Vars<K, N>(SmallVec<[(K, N); VARS_INLINE]>);
+
+/// How many numbers a preview reports without reaching the heap.
+///
+/// Four, because all but four of the cards the ported build prints hold at
+/// most this many.
+const VARS_INLINE: usize = 4;
+
+impl<K: Ord, N> Vars<K, N> {
+    /// The value filed under `key`.
+    pub fn get(&self, key: &K) -> Option<&N> {
+        self.0
+            .binary_search_by(|(at, _)| at.cmp(key))
+            .ok()
+            .map(|at| &self.0[at].1)
+    }
+
+    /// Files `value` under `key`, and hands back what was there.
+    pub fn insert(&mut self, key: K, value: N) -> Option<N> {
+        match self.0.binary_search_by(|(at, _)| at.cmp(&key)) {
+            Ok(at) => Some(std::mem::replace(&mut self.0[at].1, value)),
+            Err(at) => {
+                self.0.insert(at, (key, value));
+                None
+            }
+        }
+    }
+
+    /// Every pair, in key order.
+    pub fn iter(&self) -> impl Iterator<Item = (&K, &N)> {
+        self.0.iter().map(|(key, value)| (key, value))
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl<K: Ord, N> FromIterator<(K, N)> for Vars<K, N> {
+    fn from_iter<I: IntoIterator<Item = (K, N)>>(pairs: I) -> Self {
+        let mut held: SmallVec<[(K, N); VARS_INLINE]> = SmallVec::new();
+        for (key, value) in pairs {
+            match held.binary_search_by(|(at, _)| at.cmp(&key)) {
+                Ok(at) => held[at].1 = value,
+                Err(at) => held.insert(at, (key, value)),
+            }
+        }
+        Self(held)
+    }
+}
+
+impl<K: Ord, N, const COUNT: usize> From<[(K, N); COUNT]> for Vars<K, N> {
+    fn from(pairs: [(K, N); COUNT]) -> Self {
+        pairs.into_iter().collect()
+    }
+}
+
+/// So that a failure prints what the map it replaced printed.
+impl<K: std::fmt::Debug, N: std::fmt::Debug> std::fmt::Debug for Vars<K, N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map()
+            .entries(self.0.iter().map(|(key, value)| (key, value)))
+            .finish()
+    }
+}
+
+/// A key a card does not print is a mistake in the caller, the way indexing a
+/// map with one was.
+impl<K: Ord, N> std::ops::Index<&K> for Vars<K, N> {
+    type Output = N;
+
+    fn index(&self, key: &K) -> &N {
+        self.get(key).expect("the card prints this number")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Vars;
+
+    #[test]
+    fn the_numbers_read_back_in_key_order() {
+        let vars = Vars::from([(2, "two"), (0, "zero"), (1, "one")]);
+        let read: Vec<_> = vars.iter().map(|(key, value)| (*key, *value)).collect();
+        assert_eq!(read, [(0, "zero"), (1, "one"), (2, "two")]);
+    }
+
+    #[test]
+    fn a_repeated_key_keeps_the_last_value() {
+        let vars = Vars::from([(0, "first"), (1, "one"), (0, "last")]);
+        assert_eq!(vars.len(), 2);
+        assert_eq!(vars.get(&0), Some(&"last"));
+    }
+
+    #[test]
+    fn writing_over_a_key_hands_back_what_was_there() {
+        let mut vars = Vars::from([(0, "zero")]);
+        assert_eq!(vars.insert(0, "written"), Some("zero"));
+        assert_eq!(vars.insert(1, "one"), None);
+        assert_eq!(vars[&0], "written");
+        assert_eq!(vars.get(&2), None);
+    }
+
+    /// The `BTreeMap` this replaced printed its entries this way, and a
+    /// divergence is read as printed.
+    #[test]
+    fn it_prints_as_a_map() {
+        assert_eq!(
+            format!("{:?}", Vars::from([(0, 6), (1, 9)])),
+            "{0: 6, 1: 9}"
+        );
+    }
 }

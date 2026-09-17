@@ -1464,6 +1464,7 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_json",
+ "smallvec",
  "sts2-content",
  "sts2-core",
  "thiserror 2.0.20",
