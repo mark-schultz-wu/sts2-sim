@@ -4,7 +4,7 @@ use sts2_core::rng::GameRng;
 use sts2_core::{Applied, AscensionKinds, Coord, MapPointKinds, Reason, Rules, RunStreamKinds};
 
 use super::State;
-use super::state::EncounterQueue;
+use super::state::{EncounterQueue, Location};
 
 /// `TreasureRoom`'s normal relic-rarity weights.
 const COMMON_RELIC_CHANCE: f64 = 0.5;
@@ -185,9 +185,8 @@ impl<V: Rules> State<V> {
             unreachable!()
         };
 
-        let (combat, counters) = self.open_combat(encounter, &self.report().observation)?;
-
-        self.enter_combat(to, queue, counters, combat);
+        let fight = self.create_fight(encounter, queue, &self.report().observation)?;
+        self.enter_fight(fight, Location::MapPoint(to));
         Ok(self.report())
     }
 }
