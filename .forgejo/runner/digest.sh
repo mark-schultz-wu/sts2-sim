@@ -11,6 +11,7 @@ repo="$(cd "$here/../.." && pwd)"
     "$here"/build.sh "$here"/digest.sh "$here"/checkout.sh; do
     sha256sum "$file" | cut -d' ' -f1
   done
+  sha256sum "$repo"/rust-toolchain.toml | cut -d' ' -f1
   for lock in "$repo"/mod/games/*.lock; do
     sha256sum "$lock" | cut -d' ' -f1
   done

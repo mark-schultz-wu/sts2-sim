@@ -20,7 +20,7 @@ repo="$(cd "$here/../.." && pwd)"
 # shellcheck source=/dev/null
 source "$here/versions.env"
 
-: "${RUST_VERSION:?versions.env must set RUST_VERSION}"
+: "${RUST_VERSION:?rust-toolchain.toml must name a channel}"
 : "${DOTNET_CHANNEL:?versions.env must set DOTNET_CHANNEL}"
 : "${VALE_VERSION:?versions.env must set VALE_VERSION}"
 : "${VALE_SHA256:?versions.env must set VALE_SHA256}"
