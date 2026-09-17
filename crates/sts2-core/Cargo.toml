@@ -19,6 +19,10 @@ num-traits = { workspace = true }
 # build's ids can be spelled by whatever does the spelling. Nothing in this
 # crate derives serde. See the note above.
 serde = { workspace = true }
+# An inline map for the numbers a preview reports. See `report::observation`'s
+# `Vars`: a `BTreeMap` of four entries allocated twice, and a report builds one
+# per card in hand per creature it can be pointed at.
+smallvec = { workspace = true }
 thiserror = { workspace = true }
 
 [features]

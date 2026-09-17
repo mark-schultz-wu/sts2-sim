@@ -50,7 +50,7 @@ mod xxhash;
 
 pub use section::Section;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::hash::Hash;
 
 use num_traits::ToPrimitive;
@@ -60,7 +60,7 @@ use crate::{
     Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, Combat, ContentVersion,
     Coord, Cost, Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, FlagSet, Held,
     Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
-    Reachable, RestOption, Room, Stack, Stock, Take,
+    Reachable, RestOption, Room, Stack, Stock, Take, Vars,
 };
 
 /// One observation, as eight bytes.
@@ -390,9 +390,9 @@ impl Sink {
     /// Keyed by the build's own variable, and digested by the game's name for
     /// it. Two builds that print the same number under the same name agree
     /// here, whatever each spells its own variant.
-    fn vars<K: CardVars, N: ToPrimitive>(&mut self, vars: &BTreeMap<K, N>) {
+    fn vars<K: CardVars, N: ToPrimitive>(&mut self, vars: &Vars<K, N>) {
         self.len(vars.len());
-        for (key, value) in vars {
+        for (key, value) in vars.iter() {
             self.str(key.name());
             self.number(value);
         }

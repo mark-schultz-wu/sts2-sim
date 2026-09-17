@@ -25,7 +25,7 @@ use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
     Cost, Creature, Digest, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent, Map,
     ModelId, NextMove, Node, Observation, Orbs, Playable, Position, Positions, Preview, Reachable,
-    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
+    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable, Vars,
 };
 
 type V = V0_107_1;
@@ -178,8 +178,8 @@ fn full() -> Observation<V> {
                 effect: vec![Preview {
                     target: Some(at(1)),
                     text: Some("Deal {Damage} damage.".into()),
-                    vars: BTreeMap::from([(CardVar::Damage, 9)]),
-                    base: BTreeMap::from([(CardVar::Damage, 6)]),
+                    vars: Vars::from([(CardVar::Damage, 9)]),
+                    base: Vars::from([(CardVar::Damage, 6)]),
                 }],
             }],
             orbs: Some(Orbs {
