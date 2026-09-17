@@ -11,6 +11,7 @@
 //! the only crate whose tests need a real game. That is why the build script
 //! filling the oracle cache lives here, and nowhere else.
 
+pub mod bench;
 mod counted;
 
 pub use counted::{Allocations, Counted, allocations};
