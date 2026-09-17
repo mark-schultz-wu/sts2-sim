@@ -1,7 +1,7 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CombatId, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules, SideKinds,
+    CardIdent, CombatId, EventHook, HookEffect, ModelId, ModifyHook, Rules, SideKinds,
     TurnPhaseKinds,
 };
 
@@ -13,9 +13,23 @@ use crate::stream::Streams;
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
 const HAND_SIZE: usize = 5;
 
+/// The run as it stands in the door of a fight.
+///
+/// What a fight is built from, and no more. The observation carried this here
+/// once, which cost a whole report for five of its fields.
+pub(crate) struct Entering<'a, V: Rules> {
+    /// The floor the fight is fought on, which the run has already stepped up
+    /// to. The encounter is rolled against it.
+    pub(crate) floor: V::Count,
+    pub(crate) hp: V::Health,
+    pub(crate) max_hp: V::Health,
+    pub(crate) alive: bool,
+    pub(crate) deck: &'a [CardIdent<V>],
+}
+
 /// The fight this run opens on the encounter it just travelled into.
 ///
-/// Takes the run as observed and gives back the fight and the streams it drew
+/// Takes the run as it stands and gives back the fight and the streams it drew
 /// from, without touching either. Entering a room is one transition, and a
 /// fight that cannot be built must leave the run where it stood.
 pub(crate) fn enter<V: Rules>(
@@ -23,13 +37,13 @@ pub(crate) fn enter<V: Rules>(
     character: V::Character,
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
-    observation: &Observation<V>,
+    entering: &Entering<'_, V>,
     streams: &Streams<V>,
     relics: &mut [HeldRelic<V>],
 ) -> Result<(Live<V>, Streams<V>), Error> {
     let mut streams = streams.clone();
 
-    let monsters = encounter::opening::<V>(raw_seed, observation.floor, encounter)?;
+    let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter)?;
     let enemies = monster::initialize::<V>(ascension, encounter, &mut streams, &monsters)?;
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.
@@ -38,10 +52,10 @@ pub(crate) fn enter<V: Rules>(
         id: CombatId::new(nonmax::NonMaxU8::ZERO),
         model: Some(ModelId::Character(character)),
         side: <V::CombatSide as SideKinds>::PLAYER,
-        hp: observation.hp,
-        max_hp: observation.max_hp,
+        hp: entering.hp,
+        max_hp: entering.max_hp,
         block: num_traits::zero(),
-        alive: observation.alive,
+        alive: entering.alive,
         powers: PowerList::new(),
         next_move: None,
     });
@@ -49,7 +63,7 @@ pub(crate) fn enter<V: Rules>(
 
     // The deck's own cards, each becoming a copy the fight can write on.
     let mut card_ids = CardIds::<V>::new();
-    let deck: Vec<CardInstance<V>> = observation
+    let deck: Vec<CardInstance<V>> = entering
         .deck
         .iter()
         .map(|card| CardInstance::new(*card, card_ids.mint()))

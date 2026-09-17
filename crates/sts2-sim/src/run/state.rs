@@ -1042,17 +1042,24 @@ impl<V: Rules> State<V> {
         &mut self,
         encounter: V::Encounter,
         queue: EncounterQueue,
-        observation: &Observation<V>,
     ) -> Result<CreatedFight<V>, Error> {
-        let mut entered = observation.clone();
-        entered.floor = entered.floor + num_traits::one();
+        let standing = self.standing();
+        let entering = crate::combat::Entering {
+            // The run steps up to the floor it fights on, and the encounter
+            // is rolled against that one rather than the one behind it.
+            floor: self.floor + num_traits::one(),
+            hp: standing.hp,
+            max_hp: standing.max_hp,
+            alive: standing.alive,
+            deck: &self.player.deck,
+        };
         let mut relics = self.player.relics.clone();
         let (live, streams) = crate::combat::enter::<V>(
             self.raw_seed(),
             self.character(),
             self.ascension(),
             encounter,
-            &entered,
+            &entering,
             &self.streams,
             &mut relics,
         )?;
@@ -1072,8 +1079,7 @@ impl<V: Rules> State<V> {
     /// reaching a chosen fight without hunting for a seed that puts one on the
     /// way. The encounter is named, so the act's own list is not drawn from.
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
-        let observation = self.report().observation;
-        let fight = self.create_fight(encounter, EncounterQueue::Named, &observation)?;
+        let fight = self.create_fight(encounter, EncounterQueue::Named)?;
         self.enter_fight(fight, Location::NoLocation);
         Ok(Decided::Resolved)
     }
@@ -1452,8 +1458,7 @@ impl<V: Rules> State<V> {
     pub(crate) fn belt(&self) -> Vec<sts2_core::Held<V>> {
         // A fight that is over is not one a potion can be drunk in, so a live
         // fight is the only one read.
-        let live = self.fight().map(|fight| fight.report());
-        crate::combat::belt::<V>(&self.player.potions, live.as_ref(), self.standing().alive)
+        crate::combat::belt::<V>(&self.player.potions, self.fight(), self.standing().alive)
     }
 
     /// Where the run can move to from where it stands.
@@ -1715,13 +1720,7 @@ impl<V: Rules> State<V> {
                         text: None,
                     })
                     .collect(),
-                potions: crate::combat::belt::<V>(
-                    &self.player.potions,
-                    // A fight that is over is not one a potion can be drunk
-                    // in. `in_combat` is that question already answered.
-                    combat.as_ref().filter(|_| in_combat),
-                    standing.alive,
-                ),
+                potions: self.belt(),
                 potion_slots: self.player.potion_slots,
                 deck: self.player.deck.clone(),
                 in_combat,

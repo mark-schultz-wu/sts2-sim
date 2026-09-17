@@ -10,12 +10,11 @@
 
 use smallvec::{SmallVec, smallvec};
 use sts2_core::{
-    CardIdent, CardTable, Combat, CombatId, Cost, Creature, EffectResolution, FlagSet, Held,
-    Playable, PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable,
-    UnplayableReasonKinds,
+    CardIdent, CardTable, CombatId, Cost, EffectResolution, FlagSet, Held, Playable, PotionTable,
+    PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable, UnplayableReasonKinds,
 };
 
-use super::live::{CardInstance, Fighter};
+use super::live::{CardInstance, Fighter, Live};
 
 /// Every card in hand, in hand order, with the reasons each cannot be played.
 pub(super) fn hand<V: Rules>(
@@ -130,21 +129,21 @@ fn playable<V: Rules>(
 /// alive, because a dead one stops the run.
 pub(crate) fn belt<V: Rules>(
     potions: &[V::Potion],
-    combat: Option<&Combat<V>>,
+    fight: Option<&Live<V>>,
     alive: bool,
 ) -> Vec<Held<V>> {
     potions
         .iter()
         .map(|&potion| {
-            let reason = undrinkable::<V>(potion, combat, alive);
+            let reason = undrinkable::<V>(potion, fight, alive);
             Held {
                 potion,
                 // The game reads both out of its localisation tables, which
                 // the simulator does not have.
                 title: None,
                 text: None,
-                targets: match (reason, combat) {
-                    (None, Some(combat)) => aimable::<V>(potion, &combat.creatures),
+                targets: match (reason, fight) {
+                    (None, Some(fight)) => aimable::<V>(potion, &fight.creatures),
                     // A potion nobody can drink names nobody, and one drunk
                     // outside a fight has no creature to name.
                     _ => Vec::new(),
@@ -163,7 +162,7 @@ pub(crate) fn belt<V: Rules>(
 /// whatever else is true of one.
 fn undrinkable<V: Rules>(
     potion: V::Potion,
-    combat: Option<&Combat<V>>,
+    fight: Option<&Live<V>>,
     alive: bool,
 ) -> Option<Undrinkable> {
     if !alive {
@@ -172,10 +171,10 @@ fn undrinkable<V: Rules>(
     if potion.usage() == PotionUsage::Automatic {
         return Some(Undrinkable::Automatic);
     }
-    match combat {
+    match fight {
         None if potion.usage() == PotionUsage::CombatOnly => return Some(Undrinkable::OutOfCombat),
         None => {}
-        Some(combat) if combat.phase != <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::PLAY => {
+        Some(fight) if fight.phase != <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::PLAY => {
             return Some(Undrinkable::NotYourTurn);
         }
         Some(_) => {}
@@ -188,7 +187,7 @@ fn undrinkable<V: Rules>(
 }
 
 /// The creatures a potion can be pointed at.
-fn aimable<V: Rules>(potion: V::Potion, creatures: &[Creature<V>]) -> Vec<CombatId> {
+fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Vec<CombatId> {
     let Some(target) = potion.target() else {
         // One of the potions that work their target out from the fight.
         unimplemented!("a potion that decides its own target");
