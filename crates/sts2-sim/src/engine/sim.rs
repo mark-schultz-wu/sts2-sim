@@ -51,6 +51,8 @@ impl<V: Rules> Play<V> for Sim<V> {
             Decision::EndTurn => self.state.end_turn(),
             Decision::UsePotion { index, target } => self.state.use_potion(*index, *target),
             Decision::Proceed => self.state.proceed().map(Ok),
+            Decision::Buy { index } => self.state.buy(*index).map(Ok),
+            Decision::EnterRoom { room } => self.state.enter_room(*room).map(Ok),
             Decision::Travel { to } => match self.state.resolve(*to) {
                 Err(reason) => Ok(Err(Refusal {
                     what: "travel".into(),
@@ -58,7 +60,6 @@ impl<V: Rules> Play<V> for Sim<V> {
                 })),
                 Ok(moving) => self.state.travel(moving).map(Ok),
             },
-            _ => unimplemented!("{}", name(decision)),
         }
     }
 

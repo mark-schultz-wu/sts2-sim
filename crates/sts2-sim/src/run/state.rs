@@ -64,6 +64,9 @@ pub(crate) struct State<V: Rules> {
     /// that deals a relic must not deal it to the other, so what moves lives
     /// here. It is a handful over a run, not the whole table.
     dealt_relics: SmallVec<[V::Relic; 8]>,
+    /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
+    /// removal price climbs with. It counts over the run, not the room.
+    removals_used: usize,
     phase: Phase<V>,
 }
 
@@ -103,6 +106,32 @@ struct RunData<V: Rules> {
     raw_seed: u64,
     character: V::Character,
     ascension: V::AscensionLevel,
+}
+
+/// `ClearAfterPurchase`, which empties one shelf.
+///
+/// Each subclass drops what it was holding, so the slot keeps its index and
+/// its price and no longer names a thing. The removal is the one entry with an
+/// empty `ClearAfterPurchase`, and nothing calls this for it.
+fn sold<V: Rules>(entries: &mut [sts2_core::Entry<V>], index: u8) {
+    for entry in entries.iter_mut() {
+        if entry.index != index {
+            continue;
+        }
+        entry.stocked = false;
+        entry.stock = match entry.stock {
+            sts2_core::Stock::Card(_) => sts2_core::Stock::Card(None),
+            sts2_core::Stock::Relic(_) => sts2_core::Stock::Relic(None),
+            sts2_core::Stock::Potion(_) => sts2_core::Stock::Potion(None),
+            sts2_core::Stock::CardRemoval => sts2_core::Stock::CardRemoval,
+        };
+    }
+}
+
+/// `MerchantCardRemovalEntry.CalcCost`, in the build's own number.
+fn removal_cost<V: Rules>(used: usize) -> V::Number {
+    num_traits::cast(super::shop::removal_cost(used))
+        .expect("a removal price fits the build's number")
 }
 
 /// One relic the run carries, and what its own model saves.
@@ -152,34 +181,6 @@ struct Player<V: Rules> {
     potion_slots: V::Count,
 }
 
-/// A fight built and not yet entered.
-///
-/// Built first because building can fail, and a fight that cannot be built
-/// leaves the run where it stood. What the fight costs the run is spent as it
-/// enters, and carried here until then. That is the streams it drew from, and
-/// the act list it came off.
-#[derive(Debug)]
-pub(super) struct CreatedFight<V: Rules> {
-    live: crate::combat::Live<V>,
-    streams: Streams<V>,
-    queue: EncounterQueue,
-}
-
-/// Where the run stands when it enters a room.
-///
-/// A room is reached two ways, and this is the whole of what they differ by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Location {
-    /// The map point the run travelled to.
-    MapPoint(Coord),
-    /// No map point at all, which is `MapPointType.Unassigned`.
-    ///
-    /// Only the debug construction commands reach a room this way, and the
-    /// scenarios are what use them. The run gains the floor and goes on
-    /// standing where it stood, so map and room disagree by construction.
-    NoLocation,
-}
-
 /// Exactly one room or pending action can own the run at a time.
 #[derive(Debug, Clone)]
 pub(super) struct EnteredEvent<V: Rules> {
@@ -192,7 +193,7 @@ pub(super) struct EnteredEvent<V: Rules> {
 }
 
 #[derive(Debug, Clone)]
-enum Phase<V: Rules> {
+pub(super) enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
         chosen: Option<u8>,
@@ -227,6 +228,73 @@ enum Phase<V: Rules> {
         /// Waiting for the card the smith upgrades.
         upgrading: bool,
     },
+    /// A merchant, and how far through its shelves the run has bought.
+    ///
+    /// The entries are stocked once, when the run walks in. A slot the run
+    /// bought stops being stocked rather than leaving the list, because the
+    /// index the next decision names is the slot's own.
+    Shop {
+        entries: Vec<sts2_core::Entry<V>>,
+        /// The purchase this merchant has not finished.
+        unfinished: Option<Unfinished>,
+    },
+}
+
+/// What a relic's pickup is still asking the run for.
+///
+/// `AfterObtained` does not return until the answer does, so the room the
+/// relic was picked up in is what parks on it. A room that cannot park on one
+/// says so rather than answer it itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Pickup {
+    /// `CardSelectCmd.FromDeckGeneric`, and a clone of what it takes. The card
+    /// type the relic's own filter leaves out comes with it.
+    CloneDeckCard { excluding: sts2_core::CardKind },
+}
+
+/// A fight built and not yet entered.
+///
+/// Built first because building can fail, and a fight that cannot be built
+/// leaves the run where it stood. What the fight costs the run is spent as it
+/// enters, and carried here until then. That is the streams it drew from, and
+/// the act list it came off.
+#[derive(Debug)]
+pub(super) struct CreatedFight<V: Rules> {
+    live: crate::combat::Live<V>,
+    streams: Streams<V>,
+    queue: EncounterQueue,
+}
+
+/// Where the run stands when it enters a room.
+///
+/// A room is reached two ways, and this is the whole of what they differ by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Location {
+    /// The map point the run travelled to.
+    MapPoint(Coord),
+    /// No map point at all, which is `MapPointType.Unassigned`.
+    ///
+    /// Only the debug construction commands reach a room this way, and the
+    /// scenarios are what use them. The run gains the floor and goes on
+    /// standing where it stood, so map and room disagree by construction.
+    NoLocation,
+}
+
+/// A purchase a merchant is waiting on an answer to.
+///
+/// `OnTryPurchaseWrapper` does not return while the entry's own purchase is
+/// awaiting one, so the shelf and the question it opened are one thing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Unfinished {
+    /// The card removal, waiting for the card it takes out of the deck. It
+    /// clears no shelf, so it names none.
+    Removal,
+    /// A relic's pickup, waiting for the card it copies. The shelf it came off
+    /// clears when the answer lands.
+    Pickup {
+        shelf: u8,
+        excluding: sts2_core::CardKind,
+    },
 }
 
 impl<V: Rules> Phase<V> {
@@ -244,6 +312,9 @@ impl<V: Rules> Phase<V> {
             } => chosen.is_some() && selection.is_none(),
             Phase::Treasure { finished, .. } => *finished,
             Phase::RestSite { options, .. } => options.is_empty(),
+            // A merchant never runs out. The run leaves when it decides to,
+            // and a shelf it has not bought is still there.
+            Phase::Shop { unfinished, .. } => unfinished.is_none(),
             // The map is not a room, so there is nothing to leave.
             Phase::Map | Phase::Combat(_) | Phase::Rewards { .. } | Phase::Event { .. } => false,
         }
@@ -264,6 +335,10 @@ impl<V: Rules> State<V> {
             Phase::RestSite { upgrading, .. } if *upgrading => {
                 Some(sts2_core::QuestionKind::SelectCards)
             }
+            Phase::Shop {
+                unfinished: Some(_),
+                ..
+            } => Some(sts2_core::QuestionKind::SelectCards),
             _ => None,
         }
     }
@@ -345,6 +420,7 @@ impl<V: Rules> State<V> {
             unknown_odds: UNKNOWN_ODDS,
             odds: Odds::default(),
             dealt_relics: SmallVec::new(),
+            removals_used: 0,
             streams,
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
@@ -375,7 +451,8 @@ impl<V: Rules> State<V> {
             | Phase::Rewards { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
-            | Phase::RestSite { .. } => None,
+            | Phase::RestSite { .. }
+            | Phase::Shop { .. } => None,
         }
     }
 
@@ -558,17 +635,38 @@ impl<V: Rules> State<V> {
     ///
     /// The model's `AfterObtained` state is written as the relic is built. A
     /// row that carries `UponPickup` then changes the run itself.
-    pub(super) fn obtain(&mut self, relic: V::Relic) {
+    ///
+    /// A pickup that asks a question comes back rather than being answered
+    /// here, because `AfterObtained` does not return until the answer does.
+    /// The room the relic was picked up in is what parks on it.
+    #[must_use]
+    pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Pickup> {
         let mut held = HeldRelic::new(relic);
         let effects = crate::combat::obtained::<V>(&mut held);
         self.player.relics.push(held);
+        let mut asking = None;
         for effect in effects {
             match effect {
                 sts2_core::HookEffect::UpgradeRandomDeckCards { count, stream } => {
                     self.upgrade_random_deck_cards(count, stream);
                 }
+                sts2_core::HookEffect::CloneDeckCard { excluding } => {
+                    asking = Some(Pickup::CloneDeckCard { excluding });
+                }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
             }
+        }
+        asking
+    }
+
+    /// Pick a relic up where nothing can park on what its pickup asks.
+    ///
+    /// Every room but the shop hands a relic over with no way to suspend the
+    /// handover. A pickup that asks a question there stops by name rather than
+    /// be answered by whoever happens to be holding the run.
+    fn obtain_here(&mut self, relic: V::Relic) {
+        if let Some(pickup) = self.obtain(relic) {
+            unimplemented!("{relic:?} asking for {pickup:?} where it was picked up");
         }
     }
 
@@ -601,7 +699,7 @@ impl<V: Rules> State<V> {
     ///
     /// The room is built first. Building one can fail, and a room that cannot
     /// be built leaves the run where it stood.
-    fn enter(&mut self, at: Location, phase: Phase<V>) {
+    pub(super) fn enter(&mut self, at: Location, phase: Phase<V>) {
         self.floor = self.floor + num_traits::one();
         if let Location::MapPoint(to) = at {
             self.visited.push(to);
@@ -636,6 +734,198 @@ impl<V: Rules> State<V> {
                 finished: false,
             },
         );
+    }
+
+    /// `MerchantEntry.OnTryPurchaseWrapper`: buy the entry at an index.
+    ///
+    /// Stock and gold are the two checks the wrapper makes, and both are
+    /// already reported. A slot it sells clears rather than restocks, because
+    /// `ShouldRefillMerchantEntry` is a hook and no ported relic answers it.
+    ///
+    /// The card removal is the one entry that does not clear. Its price climbs
+    /// with every removal the run has bought, and it stays on the shelf.
+    pub(crate) fn buy(&mut self, index: u8) -> Result<Applied<V>, Error> {
+        let Phase::Shop { entries, .. } = &self.phase else {
+            unimplemented!("buying outside a shop");
+        };
+        let Some(entry) = entries.iter().find(|entry| entry.index == index) else {
+            unimplemented!("buying a shelf this merchant does not have");
+        };
+        if !entry.stocked {
+            unimplemented!("buying a shelf this merchant has sold");
+        }
+        if entry.cost > self.player.gold {
+            unimplemented!("buying a shelf this run cannot afford");
+        }
+        let (stock, cost) = (entry.stock, entry.cost);
+
+        // `PlayerCmd.LoseGold` runs after the entry's own purchase in the
+        // game. Nothing between the two reads the gold, and a purchase that
+        // cannot be carried out panics rather than returns, so it is spent
+        // here.
+        self.player.gold = self.player.gold - cost;
+        let asking = match stock {
+            sts2_core::Stock::Card(Some(on_sale)) => {
+                self.player.deck.push(on_sale.card);
+                None
+            }
+            sts2_core::Stock::Relic(Some(relic)) => {
+                self.obtain(relic)
+                    .map(|Pickup::CloneDeckCard { excluding }| Unfinished::Pickup {
+                        shelf: index,
+                        excluding,
+                    })
+            }
+            sts2_core::Stock::Potion(Some(potion)) => {
+                if !self.procure(potion) {
+                    unimplemented!("buying a potion with no slot to put it in");
+                }
+                None
+            }
+            // `DoLocalMerchantCardRemoval` opens a cancelable selection and
+            // spends the gold once a card comes back, so nothing is spent on
+            // this one until then.
+            sts2_core::Stock::CardRemoval => {
+                self.player.gold = self.player.gold + cost;
+                Some(Unfinished::Removal)
+            }
+            stock => unimplemented!("buying {stock:?}"),
+        };
+
+        let Phase::Shop {
+            entries,
+            unfinished,
+        } = &mut self.phase
+        else {
+            unreachable!("the phase was a shop when this began");
+        };
+        // `ClearAfterPurchase` runs once the entry's own purchase returns, so a
+        // shelf whose purchase is still asking stays stocked until it does.
+        match asking {
+            Some(_) => *unfinished = asking,
+            None => sold(entries, index),
+        }
+        // A purchase that has not returned leaves the decision unresolved,
+        // which is what the game reports.
+        let mut applied = self.report();
+        applied.resolved = asking.is_none();
+        Ok(applied)
+    }
+
+    /// Finish the purchase this merchant is waiting on.
+    ///
+    /// One entry point, because the phase holds one unfinished purchase. Which
+    /// of the two it is decides what the answer means and what clears after it.
+    fn finish_purchase(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+        let Phase::Shop { unfinished, .. } = &self.phase else {
+            unreachable!("the phase was a shop when this began");
+        };
+        let unfinished = unfinished.expect("the merchant was waiting when this began");
+        let Answer::Cards(indices) = answer else {
+            unimplemented!("an answer to a purchase that is not a card selection");
+        };
+        let [index] = indices[..] else {
+            unimplemented!("a purchase answered with more than one card");
+        };
+        match unfinished {
+            Unfinished::Removal => self.removed(index),
+            Unfinished::Pickup { shelf, excluding } => self.cloned(index, shelf, excluding),
+        }
+        let Phase::Shop { unfinished, .. } = &mut self.phase else {
+            unreachable!("the phase was a shop when this began");
+        };
+        *unfinished = None;
+        Ok(self.report())
+    }
+
+    /// `CloneCard`, then `CardPileCmd.Add` to the deck.
+    ///
+    /// The selection offers the deck less what the relic's filter names, so the
+    /// index is into that narrowed list rather than into the deck.
+    fn cloned(&mut self, index: usize, shelf: u8, excluding: sts2_core::CardKind) {
+        let offered = self.clonable(excluding);
+        let Some(card) = offered.get(index).copied() else {
+            unimplemented!("a clone naming a card that was not offered");
+        };
+        self.player.deck.push(card);
+        // `OnTryPurchaseWrapper` has returned now, so `ClearAfterPurchase`
+        // runs and the shelf the relic came off empties.
+        let Phase::Shop { entries, .. } = &mut self.phase else {
+            unreachable!("the phase was a shop when this began");
+        };
+        sold(entries, shelf);
+    }
+
+    /// Take the card the merchant's removal was pointed at out of the deck.
+    ///
+    /// The selection offers the whole deck, so the index is the deck's.
+    fn removed(&mut self, index: usize) {
+        if index >= self.player.deck.len() {
+            unimplemented!("a removal naming a card the deck does not hold");
+        }
+        self.player.deck.remove(index);
+        // `DoLocalMerchantCardRemoval` spends the gold once the card comes
+        // back, and `CardShopRemovalsUsed` climbs over the run.
+        let spent = removal_cost::<V>(self.removals_used);
+        self.player.gold = self.player.gold - spent;
+        self.removals_used += 1;
+        // The entry itself is left where it was. `CalcCost` runs in its
+        // constructor and nowhere else, and `ClearAfterPurchase` is empty, so
+        // this merchant still shows it stocked and at the price it opened on.
+        // The next merchant reads the raised count.
+    }
+
+    /// The deck as a pickup's selection offers it.
+    fn clonable(&self, excluding: sts2_core::CardKind) -> Vec<CardIdent<V>> {
+        self.player
+            .deck
+            .iter()
+            .copied()
+            .filter(|card| V::card_kind(card.card) != Some(excluding))
+            .collect()
+    }
+
+    /// Put the run into a room of a named type, rather than travel to one.
+    ///
+    /// `EnterRoomDebug` at `MapPointType.Unassigned`. The floor advances and
+    /// the map does not, the way a constructed fight's does.
+    ///
+    /// A shop is the one type this builds. It is stocked the way a shop the
+    /// run travelled to is, so a scenario stands in front of the shop a run
+    /// walks into.
+    pub(crate) fn enter_room(&mut self, room: V::RoomType) -> Result<Applied<V>, Error> {
+        if room != <V::RoomType as sts2_core::RoomKinds>::SHOP {
+            unimplemented!("constructing a {room:?} room");
+        }
+        let shop = self.stocked_shop();
+        self.enter(Location::NoLocation, shop);
+        Ok(self.report())
+    }
+
+    /// `MerchantInventory.CreateForNormalMerchant`, which runs as the room
+    /// opens. So every draw it takes is paid for on the way in, not at a shelf.
+    ///
+    /// Built rather than entered, because what a merchant stocks does not
+    /// depend on how the run reached it.
+    pub(super) fn stocked_shop(&mut self) -> Phase<V> {
+        let mut streams = self.streams.clone();
+        let mut dealt = self.dealt_relics.to_vec();
+        let entries = super::shop::Merchant::<V> {
+            streams: &mut streams,
+            player_relics: &self.shared.opening.player_relics,
+            dealt_relics: &mut dealt,
+            character: self.shared.character,
+            offset: self.odds.rarity,
+            removals_used: self.removals_used,
+        }
+        .stock();
+
+        self.streams = streams;
+        self.dealt_relics = dealt.into_iter().collect();
+        Phase::Shop {
+            entries,
+            unfinished: None,
+        }
     }
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
@@ -773,9 +1063,7 @@ impl<V: Rules> State<V> {
                 // and the belt in the next observation says whether it landed.
                 self.procure(*potion);
             }
-            Gift::Relic(relic) => {
-                self.obtain(*relic);
-            }
+            Gift::Relic(relic) => self.obtain_here(*relic),
         }
         Ok(self.report())
     }
@@ -815,7 +1103,7 @@ impl<V: Rules> State<V> {
             let relic = *relic;
             *finished = true;
             match index {
-                0 => self.obtain(relic),
+                0 => self.obtain_here(relic),
                 1 => {}
                 _ => unimplemented!("an option the treasure room does not offer"),
             }
@@ -931,6 +1219,9 @@ impl<V: Rules> State<V> {
         }
         if matches!(&self.phase, Phase::RestSite { upgrading, .. } if *upgrading) {
             return self.smith(answer);
+        }
+        if matches!(&self.phase, Phase::Shop { unfinished, .. } if unfinished.is_some()) {
+            return self.finish_purchase(answer);
         }
         let Phase::Neow { selection, .. } = &mut self.phase else {
             unimplemented!("answering a question inside a fight");
@@ -1060,7 +1351,7 @@ impl<V: Rules> State<V> {
                 (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
                     let relic = *relic;
                     *taken = true;
-                    self.obtain(relic);
+                    self.obtain_here(relic);
                 }
                 _ => unimplemented!("a reward taken as the wrong kind"),
             }
@@ -1237,6 +1528,56 @@ impl<V: Rules> State<V> {
                     false,
                 )
             }
+            Phase::Shop {
+                entries,
+                unfinished,
+            } => {
+                // Each selection offers a different list. The removal reads the
+                // whole deck, and a pickup reads the deck less what its own
+                // filter leaves out. One card either way, and neither can be
+                // empty.
+                let offered = match unfinished {
+                    None => None,
+                    Some(Unfinished::Removal) => Some(self.player.deck.to_vec()),
+                    Some(Unfinished::Pickup { excluding, .. }) => Some(self.clonable(*excluding)),
+                };
+                let asking = offered.map(|offered| Question::SelectCards {
+                    min: 1,
+                    max: 1,
+                    asker: None,
+                    options: offered
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, card)| CardOption {
+                            index,
+                            card,
+                            text: None,
+                        })
+                        .collect(),
+                });
+                // `EnoughGold` and the potion slot check are derived, the way
+                // the belt is. Both move as the run buys, and neither is a
+                // fact about the shelf.
+                let gold = self.player.gold;
+                let room_for_a_potion = num_traits::cast::<_, usize>(self.player.potion_slots)
+                    .expect("a potion slot count fits this machine")
+                    > self.player.potions.len();
+                let entries = entries
+                    .iter()
+                    .cloned()
+                    .map(|entry| sts2_core::Entry {
+                        affordable: entry.cost <= gold,
+                        blocked: match entry.stock {
+                            sts2_core::Stock::Potion(_) if !room_for_a_potion => {
+                                Some(sts2_core::Blocked::NoPotionSlot)
+                            }
+                            _ => None,
+                        },
+                        ..entry
+                    })
+                    .collect();
+                (asking, Some(Room::Shop { entries }), None, false)
+            }
         };
         // Where the player stands. A live fight holds it, because a card can
         // move it and the fight is resolved on a copy; anywhere else the run
@@ -1255,7 +1596,8 @@ impl<V: Rules> State<V> {
             | Phase::Rewards { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
-            | Phase::RestSite { .. } => Standing {
+            | Phase::RestSite { .. }
+            | Phase::Shop { .. } => Standing {
                 hp: self.player.hp,
                 max_hp: self.player.max_hp,
                 alive: true,
@@ -1377,7 +1719,7 @@ impl<V: Rules> sts2_core::EventContext<V> for State<V> {
     }
 
     fn obtain_relic(&mut self, relic: V::Relic) {
-        self.obtain(relic);
+        self.obtain_here(relic);
     }
 }
 

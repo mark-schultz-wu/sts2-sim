@@ -1,0 +1,7 @@
+# `ClearAfterPurchase` drops what the entry was holding, so a sold shelf keeps
+# its index and its price and names nothing. The card itself goes to the deck.
+#
+# The cheapest shelf, because the run opens on the gold for one purchase.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":0}

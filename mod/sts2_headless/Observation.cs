@@ -871,6 +871,11 @@ public static class Observation
                         ["kind"] = e.GetType().Name,
                         ["id"] = EntryId(e),
                         ["cost"] = e.Cost,
+                        // What a card on the shelf costs to play, which is a
+                        // different question from what it costs to buy. Absent
+                        // for every other kind of entry, which `kind` says.
+                        ["cardCost"] = EntryCardCost(e, static c => EnergyCost(c)),
+                        ["cardStarCost"] = EntryCardCost(e, static c => StarCost(c)),
                         ["stocked"] = e.IsStocked,
                         ["affordable"] = e.EnoughGold,
                         ["blocked"] = Blocked(e, me),
@@ -908,6 +913,14 @@ public static class Observation
         MerchantPotionEntry when !me.HasOpenPotionSlots => "no potion slot",
         _ => null,
     };
+
+    /// <summary>What a stocked card entry's card costs, through one reader.</summary>
+    /// <remarks>
+    /// The two cost readers are the same ones the hand reports through, so a
+    /// card on a shelf and the same card in hand read the same way.
+    /// </remarks>
+    private static object? EntryCardCost(MerchantEntry entry, Func<CardModel, object?> read) =>
+        entry is MerchantCardEntry card && card.CreationResult?.Card is { } c ? read(c) : null;
 
     private static string? EntryId(MerchantEntry entry) => entry switch
     {

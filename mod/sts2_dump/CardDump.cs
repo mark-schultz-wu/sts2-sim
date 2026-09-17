@@ -101,6 +101,28 @@ public static class CardDump
             }
         }
 
+        // What a merchant stocks a shelf from. `MerchantInventory` reads
+        // `Character.CardPool` and `ColorlessCardPool` through
+        // `GetUnlockedCards`, and `CreateForMerchant` then drops the basics and
+        // runs `FilterForPlayerCount` over what is left.
+        //
+        // Dumped rather than derived for the same reason `combatpool` is: the
+        // filter reads `MultiplayerConstraint`, which is on the model and in no
+        // column here. The rarity and type filters a shelf adds are not
+        // applied, because they belong to the shelf and filtering preserves
+        // order.
+        foreach (CardPoolModel pool in ModelDb.AllCardPools.OrderBy(p => p.Id.Entry, StringComparer.Ordinal))
+        {
+            int index = 0;
+            IEnumerable<CardModel> unlocked = pool.GetUnlockedCards(
+                UnlockState.all, CardMultiplayerConstraint.SingleplayerOnly);
+            foreach (CardModel card in unlocked)
+            {
+                output.Append($"shoppool {pool.Id.Entry} {index} {card.Id.Entry}\n");
+                index++;
+            }
+        }
+
         foreach (CharacterModel character in ModelDb.AllCharacters.Where(c => c.IsPlayable))
         {
             Player player = Player.CreateForNewRun(character, UnlockState.all, 1uL);

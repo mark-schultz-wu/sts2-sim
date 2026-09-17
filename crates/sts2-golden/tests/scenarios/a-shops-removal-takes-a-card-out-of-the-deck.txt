@@ -1,0 +1,9 @@
+# The card removal is the one entry that does not clear. It stays on the shelf
+# at the price it opened on, and the card it was pointed at leaves the deck.
+#
+# `DoLocalMerchantCardRemoval` is cancelable, so the gold goes when the card
+# comes back rather than when the entry is bought.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":13}
+{"cmd":"answer","cards":[0]}

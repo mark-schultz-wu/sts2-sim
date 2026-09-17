@@ -2,6 +2,7 @@
 
 mod fight;
 mod setup;
+mod shop;
 mod state;
 mod travel;
 
