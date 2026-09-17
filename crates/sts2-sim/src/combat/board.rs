@@ -148,24 +148,6 @@ impl<'a, V: Rules> Board<'a, V> {
             .position(|creature| creature.id == at)
     }
 
-    /// Which side the acting creature fights on.
-    fn side(&self) -> V::CombatSide {
-        self.at(self.actor)
-            .map(|at| self.live.creatures[at].side)
-            .unwrap_or(<V::CombatSide as SideKinds>::PLAYER)
-    }
-
-    /// Everything on the other side, which is `GetOpponentsOf`.
-    fn opponents(&self) -> Vec<CombatId> {
-        let side = self.side();
-        self.live
-            .creatures
-            .iter()
-            .filter(|creature| creature.side != side && creature.alive)
-            .map(|creature| creature.id)
-            .collect()
-    }
-
     /// `PowerCmd.Apply<P>(at, amount, Owner.Creature, this)`.
     fn land(&mut self, at: CombatId, power: V::Power, amount: PowerAmount<V::Number>) {
         // The command returns on a zero amount, and on a creature that cannot
@@ -176,52 +158,21 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let Some(at) = self.at(at) else { return };
 
-        // `PowerCmd.Apply` sets `SkipNextDurationTick` on every debuff that
-        // lands on a player-side creature, so the next tick passes it over.
-        // The power's own kind and the side it landed on, and nothing about
-        // what the power does when a turn ends.
-        // `BeforeApplied`, which runs before the power attaches. What it asks
-        // for lands first, so a creature carries those powers ahead of this
-        // one.
-        // Not a `Stack`, because nothing carries it yet. The side is the
-        // creature it is landing on, which is the owner it is about to have.
-        let mut state = <V::PowerState as sts2_core::PowerModel<V>>::new(power);
-        let listener = sts2_core::EventListener::Power {
-            power,
-            amount,
-            owner: self.live.creatures[at].side,
-            state: &mut state,
-        };
-        let asked = <V as sts2_core::Hooks>::event_hook(
-            listener,
-            sts2_core::EventHook::BeforeApplied { landing: amount },
-        );
-        for effect in asked {
-            match effect {
-                sts2_core::HookEffect::ApplyToOwner(power, amount) => {
-                    self.land(self.live.creatures[at].id, power, amount);
-                }
-                other => unimplemented!("a power asking for {other:?} as it lands"),
-            }
-        }
-        let Some(at) = self.at(self.live.creatures[at].id) else {
-            return;
-        };
-
-        // The game reads the power's type behind `&&`, so it asks only about
-        // one landing on the player. A power that works its own type out is
-        // never asked on the way onto a monster.
-        let on_player = self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER;
-        let debuff = || {
-            power
-                .debuff()
-                .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"))
-        };
-        if on_player && debuff() {
-            let id = self.live.creatures[at].id;
-            if !self.skipped.contains(&(id, power)) {
-                self.skipped.push((id, power));
-            }
+        // `FindExistingInstanceForStacking`: a creature already carrying this
+        // power takes the amount through `ModifyAmount`, which is the whole of
+        // what happens. Everything below to the stacking itself is the other
+        // branch, the one that builds an instance.
+        let fresh = !self.live.creatures[at]
+            .powers
+            .iter()
+            .any(|held| held.power == power);
+        if fresh {
+            self.apply_fresh(at, power, amount);
+            // The hook can take the creature out of the fight.
+            let Some(found) = self.at(self.live.creatures[at].id) else {
+                return;
+            };
+            debug_assert_eq!(found, at, "a power landing does not reorder the fight");
         }
 
         // `FindExistingInstanceForStacking`: a counter stacks into the one
@@ -260,6 +211,60 @@ impl<'a, V: Rules> Board<'a, V> {
             sts2_core::EventHook::PowerAmountChanged { power, delta },
         );
         self.add_replays(asked);
+    }
+
+    /// What `PowerCmd.Apply` does that `ModifyAmount` does not.
+    ///
+    /// The instance half of the command: the hook a power runs before it
+    /// attaches, and the tick the creature it lands on will pass over. A
+    /// second stack of a power reaches neither, because the command hands one
+    /// to `ModifyAmount` before it gets here.
+    fn apply_fresh(&mut self, at: usize, power: V::Power, amount: PowerAmount<V::Number>) {
+        // `BeforeApplied`, which runs before the power attaches. What it asks
+        // for lands first, so a creature carries those powers ahead of this
+        // one.
+        //
+        // Not a `Stack`, because nothing carries it yet. The side is the
+        // creature it is landing on, which is the owner it is about to have.
+        let mut state = <V::PowerState as sts2_core::PowerModel<V>>::new(power);
+        let listener = sts2_core::EventListener::Power {
+            power,
+            amount,
+            owner: self.live.creatures[at].side,
+            state: &mut state,
+        };
+        let asked = <V as sts2_core::Hooks>::event_hook(
+            listener,
+            sts2_core::EventHook::BeforeApplied { landing: amount },
+        );
+        for effect in asked {
+            match effect {
+                sts2_core::HookEffect::ApplyToOwner(power, amount) => {
+                    self.land(self.live.creatures[at].id, power, amount);
+                }
+                other => unimplemented!("a power asking for {other:?} as it lands"),
+            }
+        }
+        let Some(at) = self.at(self.live.creatures[at].id) else {
+            return;
+        };
+
+        // `SkipNextDurationTick`, which the next tick then passes over. The
+        // game reads the power's type behind `&&`, so it asks only about one
+        // landing on the player. A power that works its own type out is never
+        // asked on the way onto a monster.
+        let on_player = self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER;
+        let debuff = || {
+            power
+                .debuff()
+                .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"))
+        };
+        if on_player && debuff() {
+            let id = self.live.creatures[at].id;
+            if !self.skipped.contains(&(id, power)) {
+                self.skipped.push((id, power));
+            }
+        }
     }
 
     /// `AfterCardEnteredCombat`, for a card that reached a combat pile from no
@@ -319,13 +324,16 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// Resolve a death, then end the fight if no primary enemy remains.
+    /// Resolve a death, then end the fight if no primary enemy is left alive.
+    ///
+    /// `CombatManager.IsEnding`, which asks for an enemy that is both alive
+    /// and primary. A creature a power keeps in the fight is still counted,
+    /// and still dead, so keeping one does not hold the fight open.
     fn kill(&mut self, at: usize) {
-        if self.die(at) {
-            return;
-        }
+        self.die(at);
         let primary_enemy_remains = self.live.creatures.iter().any(|creature| {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
+                && creature.alive
                 && !creature.powers.iter().any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
                         held.listener(creature.side),
@@ -353,9 +361,7 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// `KillWithoutCheckingWinCondition`, including a power's revival hook.
-    ///
-    /// Returns whether a hook keeps the dead creature in the fight.
-    fn die(&mut self, at: usize) -> bool {
+    fn die(&mut self, at: usize) {
         self.live.creatures[at].alive = false;
         if self.live.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
             unimplemented!("a player dying in a fight");
@@ -381,23 +387,41 @@ impl<'a, V: Rules> Board<'a, V> {
             .is_decision_and(|remove| !remove)
         });
         if kept {
-            let revival = after_death
-                .into_iter()
-                .find_map(|effect| match effect {
-                    sts2_core::HookEffect::InstallMove(next) => Some(next),
-                    _ => None,
-                })
-                .expect("a retained dead monster installs a move");
-
-            let resume = self.live.creatures[at].next_move.replace(revival);
-            let held = self
-                .live
-                .machines
-                .iter_mut()
-                .find(|held| held.creature == id)
-                .expect("a reviving monster has a move machine");
-            held.resume = resume;
-            return true;
+            let ascension = self.live.ascension;
+            for effect in after_death {
+                let held = self
+                    .live
+                    .machines
+                    .iter_mut()
+                    .find(|held| held.creature == id)
+                    .expect("a monster kept in the fight has a move graph");
+                match effect {
+                    // A state the power built, whose follow-up is the move
+                    // the graph is standing on. That move is what comes back.
+                    sts2_core::HookEffect::InstallMove(next) => {
+                        if V::can_leave_current_move(held.monster, &held.machine) {
+                            held.machine.interpose();
+                            self.live.creatures[at].next_move = Some(next);
+                        }
+                    }
+                    // A state the graph already holds, which walks on by
+                    // itself and so has nothing to come back to.
+                    sts2_core::HookEffect::EnterMove(move_id) => {
+                        let monster = held.monster;
+                        // A move the graph cannot leave yet is left standing.
+                        // That is the command's own guard, and not a failure
+                        // this has to answer for.
+                        if let Ok(next) =
+                            V::set_move_immediate(monster, ascension, move_id, &mut held.machine)
+                        {
+                            self.live.creatures[at].next_move = Some(next);
+                        }
+                    }
+                    other => unimplemented!("a power asking for {other:?} over a death"),
+                }
+            }
+            self.strip_powers(at);
+            return;
         }
 
         let position = self.live.creatures[..at]
@@ -440,10 +464,42 @@ impl<'a, V: Rules> Board<'a, V> {
         // dead monster. The observation therefore omits it rather than
         // reporting it dead, and the numbers its powers counted go with it.
         self.live.creatures.retain(|creature| creature.id != id);
-        false
+    }
+
+    /// `RemoveAllPowersAfterDeath` on a creature that stays in the fight.
+    ///
+    /// Two hooks and either one keeps a power: the power can keep itself, and
+    /// something else on the creature can keep it. A creature the fight drops
+    /// takes its powers with it, so this is asked only of one that does not.
+    fn strip_powers(&mut self, at: usize) {
+        let owner = self.live.creatures[at].side;
+        let powers = self.live.creatures[at].powers.clone();
+        let kept = |subject: &super::live::HeldPower<V>| {
+            let itself = <V as sts2_core::Hooks>::decide_hook(
+                subject.listener(owner),
+                sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
+            )
+            .is_decision_and(|remove| !remove);
+            let another = powers.iter().any(|held| {
+                <V as sts2_core::Hooks>::decide_hook(
+                    held.listener(owner),
+                    sts2_core::DecisionHook::ShouldRemovePowerOnDeath {
+                        power: subject.power,
+                    },
+                )
+                .is_decision_and(|remove| !remove)
+            });
+            itself || another
+        };
+        self.live.creatures[at].powers.retain(kept);
     }
 
     /// Notify the player's belt after a death that did not end combat.
+    ///
+    /// `Hook.AfterDeath` runs whatever the death was, and what the relics ask
+    /// for is what stops. `PlayerCmd.GainEnergy` and `CardPileCmd.Draw` both
+    /// return early while `CombatManager.IsEnding`. Nothing ported so far asks
+    /// for anything that lands there.
     fn after_enemy_death(&mut self) {
         let asked = super::relic::notify::<V>(self.relics, sts2_core::EventHook::AfterDeath);
         super::hook::apply::<V, _>(self, asked);
@@ -727,6 +783,7 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 
 impl<V: Rules> Fight<V> for Board<'_, V> {
     type ResolvedEffect = ResolvedEffect<V>;
+    type Creature = Fighter<V>;
 
     fn actor(&self) -> CombatId {
         self.actor
@@ -739,8 +796,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .expect("a card that names a target is played at one")
     }
 
-    fn opponents(&self) -> Vec<CombatId> {
-        self.opponents()
+    fn creatures(&self) -> impl Iterator<Item = &Self::Creature> {
+        self.live.creatures.iter()
+    }
+
+    /// A fight whose actor has left it answers for the player, which is the
+    /// side every effect with no creature behind it belongs to.
+    fn side(&self) -> V::CombatSide {
+        self.at(self.actor)
+            .map(|at| self.live.creatures[at].side)
+            .unwrap_or(<V::CombatSide as SideKinds>::PLAYER)
     }
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
@@ -942,6 +1007,25 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>) {
         self.land(self.actor, power, amount);
+    }
+
+    /// `CreatureCmd.Heal`, which is `HealInternal` and the revival it reports.
+    ///
+    /// `SetCurrentHpInternal` caps at the maximum, and a creature whose health
+    /// crosses back over zero is alive again. A fight that is already ending
+    /// heals no monster, which is what leaves a segment killed with the last
+    /// of them dead.
+    fn heal(&mut self, at: CombatId, amount: V::Number) {
+        if self.won {
+            return;
+        }
+        let Some(creature) = self.live.creatures.iter_mut().find(|c| c.id == at) else {
+            return;
+        };
+        let healed: V::Health = num_traits::cast(amount)
+            .unwrap_or_else(|| unimplemented!("healing by {amount:?}, which is not a health"));
+        creature.hp = (creature.hp + healed).min(creature.max_hp);
+        creature.alive = creature.hp > V::Health::zero();
     }
 
     fn give_cards(&mut self, card: V::Card, count: usize) {

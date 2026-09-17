@@ -3316,6 +3316,10 @@ impl sts2_core::CardTable for Cards {
         self.data().keywords.contains(CardKeyword::Ethereal)
     }
 
+    fn innate(self) -> bool {
+        self.data().keywords.contains(CardKeyword::Innate)
+    }
+
     fn retains(self) -> bool {
         self.data().keywords.contains(CardKeyword::Retain)
     }

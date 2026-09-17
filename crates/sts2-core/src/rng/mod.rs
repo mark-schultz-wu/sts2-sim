@@ -145,8 +145,8 @@ fn dotnet_sort_by_key<T, K: Ord>(items: &mut [T], mut key: impl FnMut(&T) -> K) 
             }
             depth -= 1;
             let middle = pivot(items, compare);
-            intro_sort(&mut items[..middle], depth, compare);
-            items = &mut items[middle + 1..];
+            intro_sort(&mut items[middle + 1..], depth, compare);
+            items = &mut items[..middle];
         }
     }
 

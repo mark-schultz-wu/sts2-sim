@@ -52,10 +52,6 @@ pub(crate) struct Machine<V: Rules> {
     /// state in the graph asks about.
     pub(crate) spawn: sts2_core::MonsterSpawn<V::Encounter>,
     pub(crate) machine: MoveMachine,
-    /// The move restored after this monster spends one turn reviving.
-    pub(crate) resume: Option<sts2_core::NextMove<V>>,
-    /// A stun installed since this monster last had a chance to act.
-    pub(crate) stunned: bool,
 }
 
 /// Roll health and the first move in encounter order, advancing the two run
@@ -64,7 +60,7 @@ pub(crate) fn initialize<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     streams: &mut Streams<V>,
-    monsters: &[V::Monster],
+    monsters: &[sts2_core::Spawned<V>],
 ) -> Result<Roster<V>, Error> {
     let rngs = streams.combat();
 
@@ -76,7 +72,7 @@ pub(crate) fn initialize<V: Rules>(
 
     let mut creatures = Vec::with_capacity(monsters.len());
     let mut machines = Vec::with_capacity(monsters.len());
-    for (index, &monster) in monsters.iter().enumerate() {
+    for (index, &sts2_core::Spawned { monster, opens_on }) in monsters.iter().enumerate() {
         let hp = health::<V>(monster, ascension, &creatures, rngs.niche);
 
         let position = u8::try_from(index)
@@ -95,7 +91,7 @@ pub(crate) fn initialize<V: Rules>(
             position,
             roster_size,
         };
-        let mut machine = V::opening_move_machine(monster);
+        let mut machine = V::opening_move_machine(monster, opens_on);
         let opening = V::roll_monster_move(
             monster,
             ascension,
@@ -109,8 +105,6 @@ pub(crate) fn initialize<V: Rules>(
             monster,
             spawn,
             machine,
-            resume: None,
-            stunned: false,
         });
         creatures.push(Fighter {
             id,
@@ -123,8 +117,36 @@ pub(crate) fn initialize<V: Rules>(
             powers: V::monster_starting_powers(monster, ascension)
                 .map(|(power, amount)| HeldPower::new(power, amount))
                 .collect(),
-            next_move: Some(opening),
+            // A fresh machine stands on no built state, so the walk always
+            // names the move a monster opens on.
+            next_move: opening,
         });
+    }
+
+    // `AfterCreatureAdded`, which runs once every creature the encounter built
+    // exists: each reads what the rest of its row stands at, and each writes
+    // before the next one reads. The powers above are applied in the same
+    // hook, and none of them reads another creature, so where they sit among
+    // these two passes cannot be seen.
+    for at in 0..creatures.len() {
+        let Some(ModelId::Monster(monster)) = creatures[at].model else {
+            continue;
+        };
+        let side = creatures[at].side;
+        let teammates: Vec<V::Health> = creatures
+            .iter()
+            .enumerate()
+            .filter(|(other, creature)| *other != at && creature.side == side)
+            .map(|(_, creature)| creature.max_hp)
+            .collect();
+        let Some(health) =
+            V::monster_health_after_added(monster, ascension, creatures[at].max_hp, &teammates)
+        else {
+            continue;
+        };
+        // `SetMaxAndCurrentHp`, which is both numbers at once.
+        creatures[at].max_hp = health;
+        creatures[at].hp = health;
     }
 
     Ok(Roster {
@@ -200,9 +222,9 @@ pub(super) fn summon<V: Rules>(
                 position: spawn_position,
                 roster_size,
             },
-            machine: V::opening_move_machine(monster),
-            resume: None,
-            stunned: false,
+            // Nothing writes onto a monster a fight summons: the
+            // roster that could have is long built.
+            machine: V::opening_move_machine(monster, None),
         },
     );
     for (position, held) in live.machines.iter_mut().enumerate() {
@@ -241,7 +263,8 @@ mod tests {
     fn monsters_of_a_kind_get_different_health() {
         let seed = Seed::new("0RACLE1").unwrap();
         let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed));
-        let inklets = [Monster::Inklet, Monster::Inklet, Monster::Inklet];
+        let inklets =
+            [Monster::Inklet, Monster::Inklet, Monster::Inklet].map(sts2_core::Spawned::new);
 
         let roster = initialize::<V0_107_1>(
             AscensionLevel::None,
@@ -261,6 +284,90 @@ mod tests {
         );
     }
 
+    /// `SetMoveImmediate` is a no-op on a move the graph cannot leave yet.
+    ///
+    /// `REATTACH_MOVE` is the segment's one `MustPerformOnceBeforeTransitioning`
+    /// state. A segment killed while it stands there goes on reattaching, and
+    /// reaches its dead move no earlier than the turn after.
+    ///
+    /// The replay does not reach this, because nothing killed a segment on the
+    /// turn it was reattaching.
+    #[test]
+    fn a_move_that_has_to_be_performed_is_not_replaced() {
+        use sts2_core::MovePinned;
+
+        let segment = Monster::DecimillipedeSegmentFront;
+        let mut machine = V0_107_1::opening_move_machine(segment, Some(MoveId::ReattachMove));
+        let standing = machine.at;
+
+        assert_eq!(
+            V0_107_1::set_move_immediate(
+                segment,
+                AscensionLevel::None,
+                MoveId::DeadMove,
+                &mut machine
+            ),
+            Err(MovePinned),
+            "the reattach has not been performed"
+        );
+        assert_eq!(machine.at, standing, "and the graph did not move");
+
+        machine.performed();
+        let next = V0_107_1::set_move_immediate(
+            segment,
+            AscensionLevel::None,
+            MoveId::DeadMove,
+            &mut machine,
+        )
+        .expect("a performed move can be left");
+        assert_eq!(next.id, MoveId::DeadMove);
+        assert!(
+            !machine.log.contains(&machine.at),
+            "`ForceCurrentState` does not write the state into the log"
+        );
+    }
+
+    /// `DecimillipedeSegment.AfterAddedToRoom` rewrites the rolled health.
+    ///
+    /// Each segment is even, and none carries what another already does. The
+    /// third here rounds up onto the first's number, walks past the top of its
+    /// own range, and wraps to the bottom of it.
+    ///
+    /// The numbers are the game's, off the `0RACLE1-REGENT-2` replay at the
+    /// floor that elite stands on.
+    #[test]
+    fn the_decimillipede_segments_carry_different_even_healths() {
+        let seed = Seed::new("0RACLE1").unwrap();
+        let mut streams = Streams::<V0_107_1>::opening(stream_seed::<V0_107_1>(&seed));
+        // The rolled numbers this reaches are 46, 43 and 45.
+        for _ in 0..46 {
+            streams.combat().niche.next_u64();
+        }
+        let segments = [
+            Monster::DecimillipedeSegmentFront,
+            Monster::DecimillipedeSegmentMiddle,
+            Monster::DecimillipedeSegmentBack,
+        ]
+        .map(sts2_core::Spawned::new);
+
+        let roster = initialize::<V0_107_1>(
+            AscensionLevel::None,
+            Encounter::DecimillipedeElite,
+            &mut streams,
+            &segments,
+        )
+        .unwrap();
+
+        assert_eq!(
+            roster
+                .creatures
+                .iter()
+                .map(|c| (c.hp, c.max_hp))
+                .collect::<Vec<_>>(),
+            [(46, 46), (44, 44), (40, 40)]
+        );
+    }
+
     #[test]
     fn the_oracle_weak_slimes_get_the_same_health_and_moves() {
         let seed = Seed::new("0RACLE1").unwrap();
@@ -269,7 +376,8 @@ mod tests {
             Monster::TwigSlimeS,
             Monster::LeafSlimeM,
             Monster::LeafSlimeS,
-        ];
+        ]
+        .map(sts2_core::Spawned::new);
 
         let roster = initialize::<V0_107_1>(
             AscensionLevel::None,

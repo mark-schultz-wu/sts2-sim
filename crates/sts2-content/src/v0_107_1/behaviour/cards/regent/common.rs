@@ -28,6 +28,7 @@ pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
             Change::Raise(CardVar::Block, 2),
             Change::Raise(CardVar::BlockNextTurn, 2),
         ],
+        RegentCard::GatherLight => &[Change::Raise(CardVar::Block, 3)],
         RegentCard::SpoilsOfBattle => &[Change::Raise(CardVar::Forge, 3)],
         RegentCard::WroughtInWar => &[
             Change::Raise(CardVar::Damage, 2),
@@ -48,6 +49,18 @@ pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) -> Played<V> {
     });
     fight.apply(attack);
     fight.draw(fight.var(CardVar::Cards));
+    Played::Done
+}
+
+/// `GatherLight`. Gain block, and a star with it.
+pub(super) fn gather_light<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    fight.gain_stars(fight.var(CardVar::Stars));
     Played::Done
 }
 

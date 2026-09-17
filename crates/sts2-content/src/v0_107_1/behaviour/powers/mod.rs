@@ -229,7 +229,8 @@ pub(crate) fn modify_hook(
             | Power::ImbalancedPower
             | Power::PlatingPower
             | Power::SlumberPower
-            | Power::FurnacePower,
+            | Power::FurnacePower
+            | Power::ReattachPower,
             _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
@@ -272,7 +273,8 @@ pub(crate) fn modify_hook(
             | Power::ImbalancedPower
             | Power::PlatingPower
             | Power::SlumberPower
-            | Power::FurnacePower,
+            | Power::FurnacePower
+            | Power::ReattachPower,
             _,
             ModifyHook::Block,
         ) => Modify::Nothing,
@@ -283,14 +285,36 @@ pub(crate) fn modify_hook(
 /// Answer a yes-or-no hook for one power.
 pub(crate) fn decide_hook(
     power: Power,
-    hook: sts2_core::DecisionHook,
+    hook: sts2_core::DecisionHook<V>,
 ) -> sts2_core::HookResponse<bool> {
     match (power, hook) {
-        (Power::IllusionPower, sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath) => {
-            sts2_core::HookResponse::Decision(false)
-        }
+        (
+            Power::IllusionPower | Power::ReattachPower,
+            sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
+        ) => sts2_core::HookResponse::Decision(false),
         (Power::MinionPower, sts2_core::DecisionHook::ShouldCountForCombatEnd) => {
             sts2_core::HookResponse::Decision(false)
+        }
+        // `ShouldPowerBeRemovedAfterOwnerDeath`. A power that keeps its owner
+        // in the fight keeps itself, or the creature would come back without
+        // whatever brought it back.
+        (
+            Power::ReattachPower | Power::MinionPower,
+            sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
+        ) => sts2_core::HookResponse::Decision(false),
+        // `IllusionPower.ShouldPowerBeRemovedOnDeath`: an illusion keeps its
+        // buffs, its own power among them, and loses the debuffs on it. A
+        // temporary power is a debuff's own doing and goes with it, and none
+        // is ported.
+        (Power::IllusionPower, sts2_core::DecisionHook::ShouldRemovePowerOnDeath { power }) => {
+            use sts2_core::PowerTable as _;
+
+            let debuff = power.debuff().unwrap_or_else(|| {
+                unimplemented!("whether {power:?} is a debuff on a dying illusion")
+            });
+            // `ITemporaryPower` is a debuff's own doing and goes with it.
+            // None is ported, so a debuff here is a debuff.
+            sts2_core::HookResponse::Decision(debuff)
         }
         _ => sts2_core::HookResponse::DoesNotImplement,
     }
@@ -397,7 +421,8 @@ pub(crate) fn event_hook(
             // `PlatingPower` re-plates on `BeforeSideTurnEndEarly`, which is
             // its own hook and not this one.
             | Power::PlatingPower
-            | Power::FurnacePower,
+            | Power::FurnacePower
+            | Power::ReattachPower,
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,
@@ -421,12 +446,23 @@ pub(crate) fn event_hook(
             | Power::ImbalancedPower
             | Power::PlatingPower
             | Power::SlumberPower
-            | Power::FurnacePower,
+            | Power::FurnacePower
+            | Power::ReattachPower,
             _,
             EventHook::EnergyReset,
         ) => None,
         (Power::BlockNextTurnPower, PowerAmount::Counted(amount), EventHook::BlockCleared) => {
             Some(HookEffect::GainBlockAndRemove(amount))
+        }
+        // `ReattachPower.AfterDeath`, which sends the segment to the dead move
+        // its own graph holds. The reattach that follows it is the graph's, so
+        // nothing here installs one.
+        //
+        // A segment whose row is otherwise dead is left where it lies. The
+        // fight is over by then, and the game spends that branch on the fade
+        // every segment plays.
+        (Power::ReattachPower, _, EventHook::AfterDeath) => {
+            Some(HookEffect::EnterMove(MoveId::DeadMove))
         }
         (Power::IllusionPower, _, EventHook::AfterDeath) => {
             Some(HookEffect::InstallMove(sts2_core::NextMove {

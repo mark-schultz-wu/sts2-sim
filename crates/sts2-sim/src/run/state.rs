@@ -461,15 +461,29 @@ impl<V: Rules> State<V> {
     /// `RestSiteOption.IsEnabled` is true unless the option overrides it.
     /// `SMITH` does: it is off when the deck holds nothing left to upgrade.
     fn rest_option_enabled(&self, option: V::RestSiteOption) -> bool {
-        use sts2_core::{CardTable as _, RestKinds};
+        use sts2_core::RestKinds;
 
         if option != <V::RestSiteOption as RestKinds<V>>::SMITH {
             return true;
         }
+        self.upgradable().next().is_some()
+    }
+
+    /// The deck's cards that `CardModel.IsUpgradable` holds, each with where
+    /// it sits in the deck.
+    ///
+    /// A selection to upgrade offers these and nothing else. The index an
+    /// answer names is this list's, so the deck's own place has to be carried
+    /// alongside to apply it.
+    fn upgradable(&self) -> impl Iterator<Item = (usize, CardIdent<V>)> + '_ {
+        use sts2_core::CardTable as _;
+
         self.player
             .deck
             .iter()
-            .any(|card| card.upgrade < card.card.max_upgrade())
+            .copied()
+            .enumerate()
+            .filter(|(_, card)| card.upgrade < card.card.max_upgrade())
     }
 
     /// The belt as the relics in it stand, which a fight hands back written.
@@ -984,22 +998,27 @@ impl<V: Rules> State<V> {
 
     /// Build the fight the run is walking into, and let its relics act.
     ///
-    /// The relics act on a copy, which is kept only once the fight is built.
-    /// A fight that cannot be built leaves the run where it stood. A relic
-    /// that spent a charge on such a fight has spent nothing.
+    /// The relics act on a copy, kept only once the fight is built. A fight
+    /// that cannot be built leaves the run where it stood.
+    ///
+    /// The floor advances first. `EnterRoom` writes the point into
+    /// `MapPointHistory` before the room is set up, so `TotalFloor` counts
+    /// this room already.
     pub(super) fn create_fight(
         &mut self,
         encounter: V::Encounter,
         queue: EncounterQueue,
         observation: &Observation<V>,
     ) -> Result<CreatedFight<V>, Error> {
+        let mut entered = observation.clone();
+        entered.floor = entered.floor + num_traits::one();
         let mut relics = self.player.relics.clone();
         let (live, streams) = crate::combat::enter::<V>(
             self.raw_seed(),
             self.character(),
             self.ascension(),
             encounter,
-            observation,
+            &entered,
             &self.streams,
             &mut relics,
         )?;
@@ -1019,8 +1038,7 @@ impl<V: Rules> State<V> {
     /// reaching a chosen fight without hunting for a seed that puts one on the
     /// way. The encounter is named, so the act's own list is not drawn from.
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
-        let mut observation = self.report().observation;
-        observation.floor = observation.floor + num_traits::one();
+        let observation = self.report().observation;
         let fight = self.create_fight(encounter, EncounterQueue::Named, &observation)?;
         self.enter_fight(fight, Location::NoLocation);
         Ok(self.report())
@@ -1250,30 +1268,24 @@ impl<V: Rules> State<V> {
 
     /// Upgrade the card the smith was pointed at.
     ///
-    /// `CardCmd.Upgrade` raises the level by one, and the selection offers the
-    /// whole deck, so the index is the deck's. A card already at its maximum
-    /// is offered and cannot be taken.
+    /// `CardCmd.Upgrade` raises the level by one. The selection offers the
+    /// deck's upgradable cards alone, so the index is that list's and the
+    /// deck's own place comes back with it.
     ///
     /// The rest site is spent once this lands: its options empty, which is how
     /// the game reports a rest site nobody can act at again.
     fn smith(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
-        use sts2_core::CardTable as _;
-
         let Answer::Cards(indices) = answer else {
             unimplemented!("an answer to the smith that is not a card selection");
         };
         let [index] = indices[..] else {
             unimplemented!("a smith selection that is not one card");
         };
-        let card = self
-            .player
-            .deck
-            .get_mut(index)
-            .unwrap_or_else(|| unimplemented!("upgrading a card the deck does not hold"));
-        if card.upgrade >= card.card.max_upgrade() {
-            unimplemented!("upgrading a card that is already at its highest");
-        }
-        card.upgrade += 1;
+        let (at, _) = self
+            .upgradable()
+            .nth(index)
+            .unwrap_or_else(|| unimplemented!("upgrading a card the selection did not offer"));
+        self.player.deck[at].upgrade += 1;
 
         let Phase::RestSite {
             options, upgrading, ..
@@ -1490,21 +1502,18 @@ impl<V: Rules> State<V> {
             Phase::RestSite {
                 options, upgrading, ..
             } => {
-                // `CardSelectCmd.FromDeckForUpgrade` offers the whole deck and
-                // the indices are the deck's, so an unupgradable card is
-                // offered and cannot be taken. One card, and the selection
-                // cannot be empty.
+                // `CardSelectCmd.FromDeckForUpgrade` offers the deck's
+                // upgradable cards alone, so a card already at its highest is
+                // not offered and the indices are that list's rather than the
+                // deck's. One card, and the selection cannot be empty.
                 let asking = upgrading.then(|| Question::SelectCards {
                     min: 1,
                     max: 1,
                     asker: None,
                     options: self
-                        .player
-                        .deck
-                        .iter()
-                        .copied()
+                        .upgradable()
                         .enumerate()
-                        .map(|(index, card)| CardOption {
+                        .map(|(index, (_, card))| CardOption {
                             index,
                             card,
                             text: None,
@@ -1662,12 +1671,7 @@ impl<V: Rules> State<V> {
         // `CardSelectCmd` shuffles the upgradable cards alone, so a card
         // already at its highest neither takes a place nor moves the shuffle.
         let deck = self.player.deck.clone();
-        let mut upgradable: Vec<usize> = deck
-            .iter()
-            .enumerate()
-            .filter(|(_, card)| card.upgrade < card.card.max_upgrade())
-            .map(|(at, _)| at)
-            .collect();
+        let mut upgradable: Vec<usize> = self.upgradable().map(|(at, _)| at).collect();
         self.streams
             .run(stream)
             .stable_shuffle_by_key(&mut upgradable, |&at| {
@@ -1816,6 +1820,59 @@ mod tests {
             Character::Regent,
             AscensionLevel::None,
         )
+    }
+
+    /// `CardSelectCmd.FromDeckForUpgrade` offers the upgradable cards alone,
+    /// so an answer's index is that list's rather than the deck's.
+    ///
+    /// The case that says which is a deck holding two copies of one card, one
+    /// of them already upgraded. A selection over the whole deck lands on the
+    /// copy before it.
+    #[test]
+    fn the_smith_offers_the_cards_it_can_upgrade_and_numbers_those() {
+        use sts2_content::v0_107_1::cards::{Cards, RegentCard};
+        use sts2_core::{Answer, Question, RestKinds};
+
+        let mut run = opened();
+        let strike = CardIdent::new(Cards::Regent(RegentCard::Strike));
+        let upgraded = CardIdent {
+            upgrade: 1,
+            ..CardIdent::new(Cards::Regent(RegentCard::BigBang))
+        };
+        let big_bang = CardIdent::new(Cards::Regent(RegentCard::BigBang));
+        run.player.deck = vec![strike, upgraded, big_bang];
+        run.phase = Phase::RestSite {
+            options: vec![
+                <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
+                <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
+            ],
+            upgrading: false,
+        };
+
+        let parked = run.choose(1).expect("the smith can be chosen");
+        let Some(Question::SelectCards { options, .. }) = parked.asking else {
+            panic!("the smith asks which card to upgrade: {:?}", parked.asking);
+        };
+        assert_eq!(
+            options.iter().map(|option| option.card).collect::<Vec<_>>(),
+            [strike, big_bang],
+            "the copy already upgraded is not offered"
+        );
+
+        run.answer(&Answer::Cards(vec![1]))
+            .expect("the second offered card can be upgraded");
+        assert_eq!(
+            run.player.deck,
+            vec![
+                strike,
+                upgraded,
+                CardIdent {
+                    upgrade: 1,
+                    ..big_bang
+                }
+            ],
+            "the index names the offered list, not the deck"
+        );
     }
 
     /// A branch has to be able to cross a thread, so that searching a run in

@@ -82,6 +82,15 @@ pub enum ContentError {
     InvalidMonsterWeights,
 }
 
+/// A `SetMoveImmediate` the graph refused.
+///
+/// `NextMove.CanTransitionAway` is false. The move the monster advertises has
+/// to be performed before the graph can leave it. The command moves nothing,
+/// and the monster goes on advertising that move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the advertised move must be performed before the graph can leave it")]
+pub struct MovePinned;
+
 /// How an encounter chooses the creatures that open its fight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EncounterRoster<T> {
@@ -271,6 +280,12 @@ pub trait CardTable: Table {
 
     /// Whether an unplayed copy stays in hand when the turn ends.
     fn retains(self) -> bool;
+
+    /// Whether the table prints the keyword that opens a fight in hand.
+    ///
+    /// What the table prints, which an upgrade can add to. A copy is what
+    /// carries the answer, because `AddKeyword` writes on one.
+    fn innate(self) -> bool;
 
     /// How many times it can be upgraded, which is `MaxUpgradeLevel`.
     ///
@@ -658,6 +673,16 @@ pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
     fn name(self) -> &'static str;
 }
 
+/// The card keywords a rule names, rather than a screen prints.
+///
+/// Most are read off the table alone, which [`CardTable::exhausts`] and its
+/// three neighbours answer. A keyword something in a fight writes onto a copy
+/// has to be nameable as a value, and this names it.
+pub trait KeywordKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
+    /// Starts the fight in hand, which `OnUpgrade` adds to three cards.
+    const INNATE: Self;
+}
+
 /// The things a rest site can offer, as consts a rule can name.
 ///
 /// The same bridge as [`MapPointKinds`]. `RestSiteOption.Generate` names two
@@ -808,6 +833,31 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
     fn has(self, rung: Self) -> bool;
 }
 
+/// One creature in a fight, as content behavior reads one.
+///
+/// The same narrowing as [`crate::EventView`]. `Creature` is the game's, and a
+/// simulator's own creature answers these. Content then reads a fight without
+/// knowing how one is stored. A member is added when a rule asks for it.
+pub trait CreatureView<V: ContentVersion> {
+    /// Stable for as long as the fight lasts, which a position is not.
+    fn id(&self) -> crate::CombatId;
+
+    /// Which side it fights on, not whether it is a monster.
+    fn side(&self) -> V::CombatSide;
+
+    fn alive(&self) -> bool;
+
+    fn hp(&self) -> V::Health;
+
+    fn max_hp(&self) -> V::Health;
+
+    /// `Creature.GetPower<T>()?.Amount`, and `None` for one without it.
+    ///
+    /// Both of the questions the game asks a power from outside: whether the
+    /// creature carries it, and the stack it carries it at.
+    fn power(&self, power: V::Power) -> Option<PowerAmount<V::Number>>;
+}
+
 /// The fight, as a card's own behaviour reaches it.
 ///
 /// A card's behaviour is ported code and lives per build, in `sts2-content`.
@@ -819,6 +869,9 @@ pub trait AscensionKinds: std::fmt::Debug + Copy + Eq + 'static {
 pub trait Fight<V: ContentVersion> {
     /// An effect after this fight's current listeners have modified it.
     type ResolvedEffect: EffectResolution<V>;
+
+    /// One creature in this fight, as [`Fight::creatures`] hands it over.
+    type Creature: CreatureView<V>;
 
     /// The creature the card was pointed at.
     ///
@@ -833,12 +886,28 @@ pub trait Fight<V: ContentVersion> {
     /// names this creature as what it gains for.
     fn actor(&self) -> crate::CombatId;
 
+    /// Every creature the fight holds, in the order it holds them.
+    ///
+    /// `ICombatState.Creatures`, dead ones included. A rule that reads another
+    /// creature reads it here, rather than take a list of ids and then ask
+    /// after each one.
+    fn creatures(&self) -> impl Iterator<Item = &Self::Creature>;
+
+    /// The side whoever is acting is on, which is `Owner.Creature.Side`.
+    fn side(&self) -> V::CombatSide;
+
     /// The creatures across from whoever is acting, in command order.
     ///
-    /// A command snapshots this list before its first effect lands. Each
-    /// effect still resolves immediately before it lands, because an earlier
-    /// one can change the listeners the next one reaches.
-    fn opponents(&self) -> Vec<crate::CombatId>;
+    /// `GetOpponentsOf`. A command snapshots this list before its first
+    /// effect lands. Each effect still resolves immediately before it lands,
+    /// because an earlier one can change the listeners the next one reaches.
+    fn opponents(&self) -> Vec<crate::CombatId> {
+        let side = self.side();
+        self.creatures()
+            .filter(|creature| creature.side() != side && creature.alive())
+            .map(CreatureView::id)
+            .collect()
+    }
 
     /// Work an effect's number out and run it through the listeners the
     /// effect names, without applying it.
@@ -1029,6 +1098,12 @@ pub trait Fight<V: ContentVersion> {
     /// a card saying "gain" means.
     fn apply_to_actor(&mut self, power: V::Power, amount: PowerAmount<V::Number>);
 
+    /// `CreatureCmd.Heal(at, amount)`, which no power modifies.
+    ///
+    /// The health is capped at the recipient's maximum, and a dead creature
+    /// healed above zero is alive again.
+    fn heal(&mut self, at: crate::CombatId, amount: V::Number);
+
     /// The character whose pool combat generation reads.
     fn character(&self) -> V::Character {
         unimplemented!("the character in this fight")
@@ -1080,6 +1155,11 @@ pub enum Change<V: ContentVersion> {
     /// `EnergyCost.SetThisTurn` and its kin. `SetToFreeThisTurn` is this at
     /// zero on both pools, for [`Lasting::ThisTurn`].
     SetCost(CostPool, V::Number),
+    /// `CardModel.AddKeyword`: the copy carries a word its table does not.
+    ///
+    /// The word is on the copy for as long as the copy lasts. `RemoveKeyword`
+    /// exists and nothing on this build calls it.
+    AddKeyword(V::CardKeyword),
 }
 
 /// How long a [`Change`] lasts.
@@ -1331,9 +1411,20 @@ pub enum ModifyHook<V: ContentVersion> {
 
 /// A yes-or-no hook the simulator asks one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DecisionHook {
+pub enum DecisionHook<V: ContentVersion> {
     ShouldRemoveCreatureAfterDeath,
     ShouldCountForCombatEnd,
+    /// `PowerModel.ShouldPowerBeRemovedAfterOwnerDeath`, asked of a power
+    /// about itself as its owner dies.
+    ShouldRemoveSelfAfterOwnerDeath,
+    /// `Hook.ShouldPowerBeRemovedOnDeath`, asked of everything on a dying
+    /// creature about one of the powers on it.
+    ///
+    /// The other half of the same removal: a power can keep itself, and
+    /// something else on the creature can keep it. Either is enough.
+    ShouldRemovePowerOnDeath {
+        power: V::Power,
+    },
 }
 
 /// A notification delivered to one content model.
@@ -1498,6 +1589,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// Its own effect rather than a suffix on another. A power that acts and
     /// then leaves asks for both, in the order it wants them.
     Remove,
+    /// `SetMoveImmediate` onto a state the owner's own graph already holds.
+    ///
+    /// The machine stands on that state, so the graph walks on from it. A
+    /// segment sent to its dead move reaches the reattach that follows.
+    /// [`HookEffect::InstallMove`] is the other half of the same command, for
+    /// the states a power builds rather than names.
+    EnterMove(V::MoveId),
     InstallMove(crate::NextMove<V>),
     /// Replace the owner's advertised move with a stunned turn.
     StunOwner(crate::NextMove<V>),
@@ -1604,7 +1702,10 @@ pub trait Hooks: ContentVersion {
 
     fn modify_hook(listener: Listener<'_, Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
-    fn decide_hook(listener: Listener<'_, Self>, hook: DecisionHook) -> crate::HookResponse<bool>;
+    fn decide_hook(
+        listener: Listener<'_, Self>,
+        hook: DecisionHook<Self>,
+    ) -> crate::HookResponse<bool>;
 
     fn event_hook(
         listener: EventListener<'_, Self>,
@@ -1661,6 +1762,41 @@ pub struct MonsterSpawn<E> {
     pub roster_size: nonmax::NonMaxU8,
 }
 
+/// One creature an encounter's roster names, as `GenerateMonsters` returns it.
+///
+/// The game builds a mutable monster model per slot and writes onto it what
+/// that roster decided. Every field written this way is read in one of two
+/// places. One is a `ConditionalBranchState` the graph asks mid-fight, which
+/// [`MonsterSpawn`] answers. The other is the state the machine is constructed
+/// on, which is this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Spawned<V: ContentVersion> {
+    pub monster: V::Monster,
+    /// `GenerateMoveStateMachine`'s initial state, when the roster names one.
+    ///
+    /// `None` is the monster's own table entry, which is what a roster that
+    /// writes nothing leaves the machine to open on.
+    pub opens_on: Option<V::MoveId>,
+}
+
+impl<V: ContentVersion> Spawned<V> {
+    /// A monster whose roster wrote nothing onto it.
+    pub fn new(monster: V::Monster) -> Self {
+        Self {
+            monster,
+            opens_on: None,
+        }
+    }
+
+    /// The same, opening on the move the roster named.
+    pub fn opening_on(monster: V::Monster, opens_on: V::MoveId) -> Self {
+        Self {
+            monster,
+            opens_on: Some(opens_on),
+        }
+    }
+}
+
 /// Where a monster's move graph stands.
 ///
 /// `MonsterMoveStateMachine`, which no observation reports: an observation
@@ -1682,6 +1818,14 @@ pub struct MoveMachine {
     /// `StateLog`: every move state entered, in order. A random branch's
     /// repeat rules read it.
     pub log: Vec<u8>,
+    /// Whether the machine stands on a state a caller built.
+    ///
+    /// `Creature.Stun` and `IllusionPower` both build a `MoveState` rather
+    /// than name one, and hand it to `SetMoveImmediate`. Each sets
+    /// `MustPerformOnceBeforeTransitioning`, and each points `FollowUpStateId`
+    /// at the last state in the log. That state is [`MoveMachine::at`]. So a
+    /// built state needs no index of its own, and `at` is where it goes.
+    pub built: bool,
 }
 
 impl MoveMachine {
@@ -1712,6 +1856,27 @@ impl MoveMachine {
     pub fn performed(&mut self) {
         self.performed = true;
         self.ever_performed = true;
+    }
+
+    /// `SetMoveImmediate` onto a state the caller built.
+    ///
+    /// The machine leaves the state it stands on without logging the new
+    /// one. `at` stays where it is, because that is what the built state
+    /// follows on to.
+    pub fn interpose(&mut self) {
+        self.built = true;
+        self.performed = false;
+    }
+
+    /// Leave a built state for the one it follows on to.
+    ///
+    /// `FindNextMoveState` enters that state and writes it into the log, so a
+    /// move a monster is stunned out of is logged twice.
+    pub fn resume(&mut self) {
+        self.built = false;
+        let at = self.at;
+        self.enter(at);
+        self.log.push(at);
     }
 }
 
@@ -1845,6 +2010,13 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + serde::Serialize
         + serde::de::DeserializeOwned
         + CardTable<Target = Self::TargetType, Var = Self::CardVar>
+        + 'static;
+
+    /// A word a card carries, which a rule can read and an upgrade can add.
+    type CardKeyword: KeywordKinds<Self>
+        + std::hash::Hash
+        + serde::Serialize
+        + serde::de::DeserializeOwned
         + 'static;
 
     /// One of the numbers this build's cards print, by the game's key for it.
@@ -2184,13 +2356,29 @@ pub trait Rules: Hooks {
         ascension: Self::AscensionLevel,
     ) -> crate::rng::Interval<Self::Health>;
 
+    /// `AfterAddedToRoom`'s rewrite of the health a monster was built with.
+    ///
+    /// `rolled` is what its own range gave it, and `teammates` is what the
+    /// others on its side stand at.
+    ///
+    /// `None` is a monster that does not override it, which is nearly all of
+    /// them. The rewrite is a `SetMaxAndCurrentHp`, and nothing calls one.
+    fn monster_health_after_added(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+        rolled: Self::Health,
+        teammates: &[Self::Health],
+    ) -> Option<Self::Health>;
+
     /// Walk a monster's state graph to the move it makes next, which is
     /// `MonsterMoveStateMachine.RollMove`.
     ///
     /// `machine` is where the graph stands, and this leaves it where the walk
-    /// ended. A machine on the graph's own initial state has not walked yet,
-    /// so the first call answers the opening intent. A graph the table cannot
-    /// describe returns a typed error.
+    /// ended. A machine on its own initial state has not walked, so the first
+    /// call answers the opening intent.
+    ///
+    /// `None` is a machine on a built state it has yet to perform. Nothing
+    /// here names that state, so the monster keeps advertising it.
     fn roll_monster_move<'a, R: crate::rng::GameRng>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
@@ -2198,13 +2386,54 @@ pub trait Rules: Hooks {
         powers: impl IntoIterator<Item = crate::Listener<'a, Self>>,
         machine: &mut MoveMachine,
         rng: &mut R,
-    ) -> Result<crate::NextMove<Self>, ContentError>;
+    ) -> Result<Option<crate::NextMove<Self>>, ContentError>;
+
+    /// `NextMove.CanTransitionAway` for the state the machine stands on.
+    ///
+    /// The guard `SetMoveImmediate` carries. A move that has to be performed
+    /// first is not replaced, whether by a state the graph holds or by one a
+    /// power built. Three callers force the transition and skip it.
+    ///
+    /// The machine-wide pin a fresh graph carries is not part of this. That
+    /// one holds `RollMove`, and this command is not one.
+    fn can_leave_current_move(monster: Self::Monster, machine: &MoveMachine) -> bool;
+
+    /// `MonsterModel.SetMoveImmediate`: stand the graph on a state it holds.
+    ///
+    /// The machine enters that state without logging it. What the monster
+    /// advertises becomes that state's move, and the graph walks on from
+    /// there, so the state's own follow-up is what comes next.
+    ///
+    /// # Errors
+    ///
+    /// [`MovePinned`], which is the guard the command carries. The graph is
+    /// left where it stood.
+    ///
+    /// # Panics
+    ///
+    /// A move the named monster's graph does not hold.
+    fn set_move_immediate(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+        move_id: Self::MoveId,
+        machine: &mut MoveMachine,
+    ) -> Result<crate::NextMove<Self>, MovePinned>;
 
     /// A monster's move graph, as it stands before the fight opens.
     ///
     /// The machine's constructor records its starting state. Only the table
     /// says whether the log carries that state, so a bare index is not enough.
-    fn opening_move_machine(monster: Self::Monster) -> crate::MoveMachine;
+    ///
+    /// `opens_on` is what the encounter's roster wrote onto this one, which
+    /// `GenerateMoveStateMachine` takes in place of the table's own entry.
+    ///
+    /// # Panics
+    ///
+    /// A move the named monster's graph does not hold.
+    fn opening_move_machine(
+        monster: Self::Monster,
+        opens_on: Option<Self::MoveId>,
+    ) -> crate::MoveMachine;
 
     /// Powers a monster applies to itself when it enters combat.
     ///
@@ -2262,7 +2491,7 @@ pub trait Rules: Hooks {
     fn random_encounter_monsters<R: crate::rng::GameRng>(
         encounter: Self::Encounter,
         rng: &mut R,
-    ) -> Result<Vec<Self::Monster>, ContentError>;
+    ) -> Result<Vec<crate::Spawned<Self>>, ContentError>;
 
     /// Every encounter an act fields, in the act's own order.
     ///

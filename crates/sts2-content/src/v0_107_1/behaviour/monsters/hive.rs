@@ -11,6 +11,9 @@ use super::super::super::generated::monsters::{Monster, MoveId};
 use super::super::super::generated::powers::Power;
 use super::{Number, V};
 
+/// What a creature's health is counted in.
+type Health = <V as sts2_core::ContentVersion>::Health;
+
 /// Powers a Hive monster applies to itself as it enters combat.
 pub(super) fn starting_powers(
     monster: Monster,
@@ -23,8 +26,17 @@ pub(super) fn starting_powers(
     // `SlumberPower`, which counts the hits the beetle sleeps through.
     const SLUMBER: Number = 3;
 
+    // `ReattachPower`, which is both what keeps a segment in the fight and
+    // the health its reattach gives back.
+    const REATTACH: Number = 25;
+
     match monster {
         Monster::ThievingHopper => vec![(Power::EscapeArtistPower, PowerAmount::Counted(5))],
+        Monster::DecimillipedeSegmentFront
+        | Monster::DecimillipedeSegmentMiddle
+        | Monster::DecimillipedeSegmentBack => {
+            vec![(Power::ReattachPower, PowerAmount::Counted(REATTACH))]
+        }
         Monster::BowlbugRock => vec![(Power::ImbalancedPower, PowerAmount::Counted(1))],
         Monster::SlumberingBeetle => {
             let plating = match ascension.has(AscensionLevel::ToughEnemies) {
@@ -38,6 +50,46 @@ pub(super) fn starting_powers(
         }
         _ => Vec::new(),
     }
+}
+
+/// What a Hive monster's `AfterAddedToRoom` writes over its rolled health.
+///
+/// `DecimillipedeSegment` is the one that does. A segment carries an even
+/// number of points, and no two in the row carry the same number. The player
+/// can then tell them apart by the bar alone. It walks up in twos from the
+/// rolled number, and wraps round its own range rather than leave it.
+pub(super) fn health_after_added(
+    monster: Monster,
+    ascension: AscensionLevel,
+    rolled: Health,
+    teammates: &[Health],
+) -> Option<Health> {
+    if !matches!(
+        monster,
+        Monster::DecimillipedeSegmentFront
+            | Monster::DecimillipedeSegmentMiddle
+            | Monster::DecimillipedeSegmentBack
+    ) {
+        return None;
+    }
+    // `MaxInitialHp` and `MinInitialHp`, which are the same two numbers the
+    // health was rolled between.
+    let data = sts2_core::Table::data(monster);
+    let (lowest, highest): (Health, Health) = (
+        data.min_hp.at(ascension as u8).into(),
+        data.max_hp.at(ascension as u8).into(),
+    );
+    let mut health = rolled;
+    if health % 2 == 1 {
+        health += 1;
+    }
+    while teammates.contains(&health) {
+        health += 2;
+        if health > highest {
+            health = lowest;
+        }
+    }
+    Some(health)
 }
 
 /// Which move a Hive monster selects from a conditional state.
@@ -82,8 +134,14 @@ pub(super) fn perform<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
         }
         // `SnoreMove` sleeps, which is a sound and nothing else.
         MoveId::SnoreMove => {}
-        MoveId::Stunned => {}
         MoveId::RollOutMove => roll_out(fight),
+        // `WritheMove`, whose two hits are the intent's own repeat count.
+        MoveId::WritheMove => fight.attack_opponents(),
+        MoveId::BulkMove => bulk(fight),
+        MoveId::ConstrictMove => constrict(fight),
+        // `DeadMove` is a segment lying where it fell, which is nothing.
+        MoveId::DeadMove => {}
+        MoveId::ReattachMove => reattach(fight),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
@@ -105,6 +163,58 @@ fn roll_out<F: Fight<V>>(fight: &mut F) {
 
     fight.attack_opponents();
     fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(HARDENS));
+}
+
+/// Swell: hit, then grow.
+///
+/// `BulkMove` applies the Strength to the segment itself, so the creature it
+/// hits and the one it grows are not the same.
+fn bulk<F: Fight<V>>(fight: &mut F) {
+    const BULKS: Number = 2;
+
+    fight.attack_opponents();
+    fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(BULKS));
+}
+
+/// Squeeze: hit, and leave the target weakened.
+fn constrict<F: Fight<V>>(fight: &mut F) {
+    fight.attack_opponents();
+    fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1));
+}
+
+/// Join the row again, for the health the power carries.
+///
+/// `ReattachPower.DoReattach`, which is `CreatureCmd.Heal(Owner, Amount)` and
+/// so is what brings the segment back. A row whose every other segment is down
+/// does not reattach. The fight is over by then, and what plays instead is the
+/// death of all of them at once.
+fn reattach<F: Fight<V>>(fight: &mut F) {
+    use sts2_core::CreatureView as _;
+
+    // `GetOtherSegments`, which is the rest of the row carrying this power.
+    let actor = fight.actor();
+    let side = fight.side();
+    let alone = fight
+        .creatures()
+        .filter(|creature| {
+            creature.id() != actor
+                && creature.side() == side
+                && creature.power(Power::ReattachPower).is_some()
+        })
+        .all(|creature| !creature.alive());
+    if alone {
+        return;
+    }
+    let carried = fight
+        .creatures()
+        .find(|creature| creature.id() == actor)
+        .and_then(|creature| creature.power(Power::ReattachPower));
+    let amount = match carried {
+        Some(PowerAmount::Counted(amount)) => amount,
+        Some(PowerAmount::Endless) => unimplemented!("an endless Reattach power"),
+        None => unreachable!("a segment reattaching carries the power that reattaches it"),
+    };
+    fight.heal(actor, amount);
 }
 
 /// Hide underground behind block that persists until it is broken.
