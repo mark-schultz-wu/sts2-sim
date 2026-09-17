@@ -6,10 +6,10 @@ use smallvec::SmallVec;
 use sts2_core::ActMap as _;
 use sts2_core::rng::stream_seed;
 use sts2_core::{
-    ActTable, Answer, Applied, CardIdent, CardOption, Carried, Combat, Coord, EventOption,
+    ActTable, Answer, CardIdent, CardOption, Carried, Combat, Coord, Decided, EventOption,
     EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Positions, Question,
     Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, RunStreamKinds,
-    Seed, Table, TakeReward,
+    Seed, Snapshot, Table, TakeReward,
 };
 
 use crate::combat::Error;
@@ -355,6 +355,17 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// Whether the decision that just ran finished, or left a question open.
+    ///
+    /// Reads the phase the way [`State::pending`] does. A command knows this
+    /// without a report, which is why it is here rather than derived from one.
+    pub(crate) fn decided(&self) -> Decided {
+        match self.pending() {
+            Some(_) => Decided::Abandoned,
+            None => Decided::Resolved,
+        }
+    }
+
     /// Generate one act's map, off the stream the act's own index names.
     ///
     /// `new Rng(seed, $"act_{CurrentActIndex + 1}_map")`, which is why the
@@ -640,7 +651,7 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A run that has beaten the last act's boss, which wins it.
-    pub(crate) fn proceed(&mut self) -> Result<Applied<V>, Error> {
+    pub(crate) fn proceed(&mut self) -> Result<Decided, Error> {
         let next = self.act + 1;
         let (act, _) = *self
             .shared
@@ -664,7 +675,7 @@ impl<V: Rules> State<V> {
         self.normal_fights = 0;
         self.elite_fights = 0;
         self.phase = Phase::Map;
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     /// `RelicCmd.Obtain`: the relic joins the belt, and its own pickup runs.
@@ -780,7 +791,7 @@ impl<V: Rules> State<V> {
     ///
     /// The card removal is the one entry that does not clear. Its price climbs
     /// with every removal the run has bought, and it stays on the shelf.
-    pub(crate) fn buy(&mut self, index: u8) -> Result<Applied<V>, Error> {
+    pub(crate) fn buy(&mut self, index: u8) -> Result<Decided, Error> {
         let Phase::Shop { entries, .. } = &self.phase else {
             unimplemented!("buying outside a shop");
         };
@@ -843,16 +854,17 @@ impl<V: Rules> State<V> {
         }
         // A purchase that has not returned leaves the decision unresolved,
         // which is what the game reports.
-        let mut applied = self.report();
-        applied.resolved = asking.is_none();
-        Ok(applied)
+        Ok(match asking {
+            Some(_) => Decided::Abandoned,
+            None => Decided::Resolved,
+        })
     }
 
     /// Finish the purchase this merchant is waiting on.
     ///
     /// One entry point, because the phase holds one unfinished purchase. Which
     /// of the two it is decides what the answer means and what clears after it.
-    fn finish_purchase(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+    fn finish_purchase(&mut self, answer: &Answer) -> Result<Decided, Error> {
         let Phase::Shop { unfinished, .. } = &self.phase else {
             unreachable!("the phase was a shop when this began");
         };
@@ -871,7 +883,7 @@ impl<V: Rules> State<V> {
             unreachable!("the phase was a shop when this began");
         };
         *unfinished = None;
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     /// `CloneCard`, then `CardPileCmd.Add` to the deck.
@@ -929,13 +941,13 @@ impl<V: Rules> State<V> {
     /// A shop is the one type this builds. It is stocked the way a shop the
     /// run travelled to is, so a scenario stands in front of the shop a run
     /// walks into.
-    pub(crate) fn enter_room(&mut self, room: V::RoomType) -> Result<Applied<V>, Error> {
+    pub(crate) fn enter_room(&mut self, room: V::RoomType) -> Result<Decided, Error> {
         if room != <V::RoomType as sts2_core::RoomKinds>::SHOP {
             unimplemented!("constructing a {room:?} room");
         }
         let shop = self.stocked_shop();
         self.enter(Location::NoLocation, shop);
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     /// `MerchantInventory.CreateForNormalMerchant`, which runs as the room
@@ -1059,11 +1071,11 @@ impl<V: Rules> State<V> {
     /// map and room disagree by construction. That is what the command is for:
     /// reaching a chosen fight without hunting for a seed that puts one on the
     /// way. The encounter is named, so the act's own list is not drawn from.
-    pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
+    pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
         let observation = self.report().observation;
         let fight = self.create_fight(encounter, EncounterQueue::Named, &observation)?;
         self.enter_fight(fight, Location::NoLocation);
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     /// Put a power on a creature in the fight.
@@ -1076,7 +1088,7 @@ impl<V: Rules> State<V> {
         at: sts2_core::CombatId,
         power: V::Power,
         amount: sts2_core::PowerAmount<V::Number>,
-    ) -> Result<Applied<V>, Error> {
+    ) -> Result<Decided, Error> {
         let Some(ongoing) = self.fight() else {
             unimplemented!("a power applied outside a fight");
         };
@@ -1086,7 +1098,7 @@ impl<V: Rules> State<V> {
         self.drew(applied.streams);
         self.hold(applied.relics);
         self.fought(applied.live);
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     /// Put a card, a relic or a potion straight into the run.
@@ -1095,7 +1107,7 @@ impl<V: Rules> State<V> {
     /// which are the paths ordinary play uses. A relic arrives through the
     /// command that runs its `AfterObtained`. The simulator runs no relic's
     /// hooks, so it cannot answer for one.
-    pub(crate) fn grant(&mut self, gift: &Gift<V>) -> Result<Applied<V>, Error> {
+    pub(crate) fn grant(&mut self, gift: &Gift<V>) -> Result<Decided, Error> {
         match gift {
             Gift::Card(card) => self.player.deck.push(CardIdent::new(*card)),
             Gift::Potion(potion) => {
@@ -1105,7 +1117,7 @@ impl<V: Rules> State<V> {
             }
             Gift::Relic(relic) => self.obtain_here(*relic),
         }
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     pub(super) fn normal_encounter(&self, act: usize) -> Option<V::Encounter> {
@@ -1135,7 +1147,7 @@ impl<V: Rules> State<V> {
             .map(|(_, rooms)| rooms.boss)
     }
 
-    pub(crate) fn choose(&mut self, index: u8) -> Result<Applied<V>, Error> {
+    pub(crate) fn choose(&mut self, index: u8) -> Result<Decided, Error> {
         if let Phase::Treasure { relic, finished } = &mut self.phase {
             if *finished {
                 unimplemented!("choosing from a finished treasure room");
@@ -1147,7 +1159,7 @@ impl<V: Rules> State<V> {
                 1 => {}
                 _ => unimplemented!("an option the treasure room does not offer"),
             }
-            return Ok(self.report());
+            return Ok(Decided::Resolved);
         }
         if let Phase::RestSite { options, .. } = &self.phase {
             if self.phase.finished() {
@@ -1166,7 +1178,7 @@ impl<V: Rules> State<V> {
                     unreachable!("the phase was a rest site when this began");
                 };
                 options.clear();
-                return Ok(self.report());
+                return Ok(Decided::Resolved);
             }
             if option != <V::RestSiteOption as sts2_core::RestKinds<V>>::SMITH {
                 unimplemented!("the {option:?} rest site option");
@@ -1181,9 +1193,7 @@ impl<V: Rules> State<V> {
             // The option opened a card selection rather than finishing. The
             // game reports the decision as unresolved until the selection is
             // confirmed, because `CardSelectorPrefs` makes it cancelable.
-            let mut applied = self.report();
-            applied.resolved = false;
-            return Ok(applied);
+            return Ok(Decided::Abandoned);
         }
         if matches!(self.phase, Phase::Event { .. }) {
             let room = match &self.phase {
@@ -1209,7 +1219,7 @@ impl<V: Rules> State<V> {
             let flow = V::choose_event(&mut state, index, self, &mut rng);
             self.phase = Phase::Event { state, rng };
             match flow {
-                sts2_core::EventFlow::Finished => return Ok(self.report()),
+                sts2_core::EventFlow::Finished => return Ok(Decided::Resolved),
                 _ => unimplemented!("an event choice that does not finish"),
             }
         }
@@ -1245,12 +1255,10 @@ impl<V: Rules> State<V> {
             .into_iter()
             .collect(),
         );
-        let mut applied = self.report();
-        applied.resolved = false;
-        Ok(applied)
+        Ok(Decided::Abandoned)
     }
 
-    pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+    pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Decided, Error> {
         if let Phase::Rewards { .. } = self.phase {
             return self.take(answer);
         }
@@ -1285,7 +1293,7 @@ impl<V: Rules> State<V> {
 
         self.player.deck.extend(chosen);
         *selection = None;
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     /// Upgrade the card the smith was pointed at.
@@ -1296,7 +1304,7 @@ impl<V: Rules> State<V> {
     ///
     /// The rest site is spent once this lands: its options empty, which is how
     /// the game reports a rest site nobody can act at again.
-    fn smith(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+    fn smith(&mut self, answer: &Answer) -> Result<Decided, Error> {
         let Answer::Cards(indices) = answer else {
             unimplemented!("an answer to the smith that is not a card selection");
         };
@@ -1317,7 +1325,7 @@ impl<V: Rules> State<V> {
         };
         options.clear();
         *upgrading = false;
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 
     /// Take rewards from the screen a won fight put up.
@@ -1325,7 +1333,7 @@ impl<V: Rules> State<V> {
     /// `RewardsSetSynchronizer.SelectLocalReward`, one entry at a time. A
     /// reward stays in the set once it is taken, because the indices an answer
     /// names never renumber.
-    fn take(&mut self, answer: &Answer) -> Result<Applied<V>, Error> {
+    fn take(&mut self, answer: &Answer) -> Result<Decided, Error> {
         if let Answer::Skip = answer {
             let Phase::Rewards { offered, .. } = &mut self.phase else {
                 unreachable!("the phase was a reward screen when this began");
@@ -1339,7 +1347,7 @@ impl<V: Rules> State<V> {
                     | Offer::Relic { taken, .. } => *taken = true,
                 }
             }
-            return Ok(self.report());
+            return Ok(Decided::Resolved);
         }
         let Answer::Take(taking) = answer else {
             unimplemented!("an answer the reward screen does not accept");
@@ -1391,21 +1399,77 @@ impl<V: Rules> State<V> {
             }
         }
 
-        let mut applied = self.report();
-        applied.resolved = applied.asking.is_none();
-        Ok(applied)
+        Ok(self.decided())
     }
 
-    /// Derive the comparison snapshot from the run's authoritative state.
-    pub(crate) fn report(&self) -> Applied<V> {
+    /// Where the player stands.
+    ///
+    /// A live fight holds these numbers, because a card can move them and the
+    /// fight is resolved on a copy. Anywhere else the run holds them. See
+    /// `Player::hp`.
+    fn standing(&self) -> Standing<V> {
+        match &self.phase {
+            Phase::Combat(live) => {
+                let player = live.player();
+                Standing {
+                    hp: player.hp,
+                    max_hp: player.max_hp,
+                    alive: player.alive,
+                }
+            }
+            // The player fell in the fight, and the fight is where its own
+            // numbers stayed.
+            Phase::Lost { combat } => {
+                let player = combat
+                    .creatures
+                    .iter()
+                    .find(|c| c.id == self.player_id(combat))
+                    .expect("a lost fight has the player in it");
+                Standing {
+                    hp: player.hp,
+                    max_hp: player.max_hp,
+                    alive: player.alive,
+                }
+            }
+            Phase::Map
+            | Phase::Neow { .. }
+            | Phase::Rewards { .. }
+            | Phase::Event { .. }
+            | Phase::Treasure { .. }
+            | Phase::RestSite { .. }
+            | Phase::Shop { .. } => Standing {
+                hp: self.player.hp,
+                max_hp: self.player.max_hp,
+                alive: true,
+            },
+        }
+    }
+
+    /// The belt, and why each potion in it cannot be drunk.
+    ///
+    /// Beside the report rather than inside it, because deciding whether a
+    /// potion can be drunk reads this list and nothing else around it.
+    pub(crate) fn belt(&self) -> Vec<sts2_core::Held<V>> {
+        // A fight that is over is not one a potion can be drunk in, so a live
+        // fight is the only one read.
+        let live = self.fight().map(|fight| fight.report());
+        crate::combat::belt::<V>(&self.player.potions, live.as_ref(), self.standing().alive)
+    }
+
+    /// Where the run can move to from where it stands.
+    ///
+    /// `MapLegality.TravelableFrom`, which reads the last point visited rather
+    /// than a room the run is in. An act with none visited has just begun, and
+    /// its map opens on its own starting node.
+    ///
+    /// Beside the report rather than inside it, because deciding whether a
+    /// move is legal reads this list and nothing else around it.
+    pub(crate) fn travelable(&self) -> Vec<Reachable<V>> {
         let map = &self.map;
         let standing = self.visited.last().map(|&at| {
             map.at(at)
                 .expect("the run stands on a point of its own map")
         });
-        // `MapLegality.TravelableFrom`, which reads the last point visited
-        // rather than a room the run is in. An act with none visited has just
-        // begun, and its map opens on its own starting node.
         let reachable: Vec<Coord> = match standing {
             Some(point) => point.to.clone(),
             None => vec![
@@ -1414,13 +1478,23 @@ impl<V: Rules> State<V> {
                     .at,
             ],
         };
-        let travelable = reachable
+        reachable
             .into_iter()
             .map(|at| Reachable {
                 at,
                 kind: map.at(at).expect("a map edge leads to a node").kind,
             })
-            .collect();
+            .collect()
+    }
+
+    /// Derive the comparison snapshot from the run's authoritative state.
+    pub(crate) fn report(&self) -> Snapshot<V> {
+        let map = &self.map;
+        let standing = self.visited.last().map(|&at| {
+            map.at(at)
+                .expect("the run stands on a point of its own map")
+        });
+        let travelable = self.travelable();
         let at_boss = standing
             .is_some_and(|point| point.kind == <V::MapPointType as sts2_core::MapPointKinds>::BOSS);
         let finished = self.phase.finished();
@@ -1613,46 +1687,9 @@ impl<V: Rules> State<V> {
                 (asking, Some(Room::Shop { entries }), None, false)
             }
         };
-        // Where the player stands. A live fight holds it, because a card can
-        // move it and the fight is resolved on a copy; anywhere else the run
-        // does. See `Player::hp`.
-        let standing: Standing<V> = match &self.phase {
-            Phase::Combat(live) => {
-                let player = live.player();
-                Standing {
-                    hp: player.hp,
-                    max_hp: player.max_hp,
-                    alive: player.alive,
-                }
-            }
-            // The player fell in the fight, and the fight is where its own
-            // numbers stayed.
-            Phase::Lost { combat } => {
-                let player = combat
-                    .creatures
-                    .iter()
-                    .find(|c| c.id == self.player_id(combat))
-                    .expect("a lost fight has the player in it");
-                Standing {
-                    hp: player.hp,
-                    max_hp: player.max_hp,
-                    alive: player.alive,
-                }
-            }
-            Phase::Map
-            | Phase::Neow { .. }
-            | Phase::Rewards { .. }
-            | Phase::Event { .. }
-            | Phase::Treasure { .. }
-            | Phase::RestSite { .. }
-            | Phase::Shop { .. } => Standing {
-                hp: self.player.hp,
-                max_hp: self.player.max_hp,
-                alive: true,
-            },
-        };
+        let standing = self.standing();
 
-        Applied {
+        Snapshot {
             observation: Observation {
                 act: num_traits::cast(self.act).expect("an act index is a game number"),
                 floor: self.floor,
@@ -1703,7 +1740,6 @@ impl<V: Rules> State<V> {
                 combat,
             },
             asking,
-            resolved: true,
         }
     }
 }
@@ -1942,7 +1978,8 @@ mod tests {
             upgrading: false,
         };
 
-        let parked = run.choose(1).expect("the smith can be chosen");
+        run.choose(1).expect("the smith can be chosen");
+        let parked = run.report();
         let Some(Question::SelectCards { options, .. }) = parked.asking else {
             panic!("the smith asks which card to upgrade: {:?}", parked.asking);
         };

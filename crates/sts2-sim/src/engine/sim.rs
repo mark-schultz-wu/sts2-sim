@@ -1,8 +1,8 @@
 use sts2_core::{
-    Answered, Construct, Decision, Play, Reason, Refusal, Rules, Setup, Snapshot, Start,
+    Answered, Construct, Decision, Play, Reason, Refusal, Rules, Setup, Snapshot, Start, Step,
 };
 
-use crate::run::State;
+use crate::run::{Settled, State};
 
 use crate::combat::Error;
 
@@ -29,6 +29,20 @@ impl<V: Rules> Play<V> for Sim<V> {
     }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
+        Ok(self.decide(decision)?.map(|decided| self.reported(decided)))
+    }
+
+    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
+        Ok(self.state.report())
+    }
+}
+
+impl<V: Rules> Sim<V> {
+    /// Plays one decision and reports what it decided, and nothing more.
+    ///
+    /// A search steps through here. Building the observation costs more than
+    /// most decisions do, and a search throws every one of them away.
+    pub fn decide(&mut self, decision: &Decision<V>) -> Result<Settled<V>, Error> {
         let pending = self.state.pending();
         if let Some(kind) = pending
             && !matches!(decision, Decision::Answer(_))
@@ -63,8 +77,38 @@ impl<V: Rules> Play<V> for Sim<V> {
         }
     }
 
-    fn observe(&mut self) -> Result<Snapshot<V>, Self::Error> {
-        Ok(self.state.report().snapshot())
+    /// Puts the run into a position, and reports what that decided.
+    ///
+    /// [`Sim::decide`], for the debug commands rather than the decisions.
+    pub fn construct(&mut self, step: &Setup<V>) -> Result<Settled<V>, Error> {
+        match step {
+            Setup::Fight { encounter } => self.state.fight_here(*encounter).map(Ok),
+            Setup::Grant(gift) => self.state.grant(gift).map(Ok),
+            Setup::Power { at, power, amount } => {
+                self.state.apply_power(*at, *power, *amount).map(Ok)
+            }
+            Setup::Event { event } => unimplemented!("jumping to {event:?}"),
+        }
+    }
+
+    /// Plays one line of a recording and reports what it decided.
+    ///
+    /// [`Construct::step`], without the observation. A search that replays a
+    /// recording to reach its position steps through here.
+    pub fn advance(&mut self, step: &Step<V>) -> Result<Settled<V>, Error> {
+        match step {
+            Step::Decision(decision) => self.decide(decision),
+            Step::Setup(setup) => self.construct(setup),
+        }
+    }
+
+    /// Where the run is standing, beside what the decision decided.
+    ///
+    /// The one place an observation is built for a decision. Every command
+    /// hands back a [`Decided`] alone, so nothing pays for this but a caller
+    /// that asked to see where it landed.
+    fn reported(&self, decided: sts2_core::Decided) -> sts2_core::Applied<V> {
+        self.state.report().applied(decided)
     }
 }
 
@@ -75,14 +119,7 @@ impl<V: Rules> Construct<V> for Sim<V> {
     /// reached through them is a state the game reaches. That is what makes a
     /// constructed scenario worth holding the simulator to.
     fn setup(&mut self, step: &Setup<V>) -> Result<Answered<V>, Self::Error> {
-        match step {
-            Setup::Fight { encounter } => self.state.fight_here(*encounter).map(Ok),
-            Setup::Grant(gift) => self.state.grant(gift).map(Ok),
-            Setup::Power { at, power, amount } => {
-                self.state.apply_power(*at, *power, *amount).map(Ok)
-            }
-            Setup::Event { event } => unimplemented!("jumping to {event:?}"),
-        }
+        Ok(self.construct(step)?.map(|decided| self.reported(decided)))
     }
 }
 

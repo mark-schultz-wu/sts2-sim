@@ -2,22 +2,22 @@
 //!
 //! `replay` says what a step costs. This says where that cost goes.
 //!
-//! A search node is a clone and a step. The step ends by deriving an
-//! observation, whether or not the caller reads one. So a decision splits:
+//! A search node is a clone and a step. So a decision splits:
 //!
 //! ```text
 //!   clone    the run a node branches from
 //!   command  the rules the decision runs
-//!   report   the observation the command hands back
+//!   report   the observation a caller that wants one derives
 //! ```
 //!
 //! The clone and the report are timed on their own, the report by asking the
 //! run that stands after the step for another one. The command is what is
 //! left of the total once those two come off.
 //!
-//! The bar is `spikes/spike17-dod`, at 135-233 ns for a decision and about 60
-//! to clone its whole fight. It built no observation and held its fight flat,
-//! so `command` is the column that races it.
+//! `total` is a step through `Play`, which reports. `search` is a clone and a
+//! step through `Sim::advance`, which does not. The gap is what a search
+//! stopped paying. That column races `spikes/spike17-dod`, at 135-233 ns for
+//! a decision and about 60 to clone its whole fight.
 //!
 //! One decision of each kind, the last the recording plays. A median of nine
 //! rounds, with the allocations counted in a pass of their own.
@@ -47,8 +47,17 @@ fn main() {
 
         println!(
             "{name}, nanoseconds and allocations per decision\n  \
-             {:<18} {:>7} {:>8} {:>7} {:>7}    {:>5} {:>7} {:>6}",
-            "", "clone", "command", "report", "total", "clone", "command", "report"
+             {:<18} {:>7} {:>8} {:>7} {:>7} {:>7}    {:>5} {:>7} {:>6} {:>6}",
+            "",
+            "clone",
+            "command",
+            "report",
+            "total",
+            "search",
+            "clone",
+            "command",
+            "report",
+            "search"
         );
         for at in last_of_each_kind(&steps[..supported]) {
             let step = &steps[at];
@@ -69,6 +78,13 @@ fn main() {
                 std::hint::black_box(after.observe().ok());
             });
 
+            // A search node: the clone and the step, with no observation
+            // derived off either end.
+            let searched = time(|| {
+                let mut sim = base.clone();
+                std::hint::black_box(sim.advance(step).ok());
+            });
+
             let (_, whole_calls) = allocations(|| {
                 let mut sim = base.clone();
                 let _ = sim.step(step);
@@ -79,17 +95,23 @@ fn main() {
             let (_, report_calls) = allocations(|| {
                 std::hint::black_box(after.observe().ok());
             });
+            let (_, search_calls) = allocations(|| {
+                let mut sim = base.clone();
+                let _ = sim.advance(step);
+            });
 
             println!(
-                "  {:<18} {:>7.0} {:>8.0} {:>7.0} {:>7.0}    {:>5} {:>7} {:>6}",
+                "  {:<18} {:>7.0} {:>8.0} {:>7.0} {:>7.0} {:>7.0}    {:>5} {:>7} {:>6} {:>6}",
                 format!("{} @{at}", kind(step)),
                 cloned,
                 whole - cloned - reported,
                 reported,
                 whole,
+                searched,
                 clone_calls.calls,
                 whole_calls.calls - clone_calls.calls - report_calls.calls,
                 report_calls.calls,
+                search_calls.calls,
             );
         }
     }

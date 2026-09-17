@@ -74,6 +74,20 @@ pub enum Decided {
     Abandoned,
 }
 
+impl<V: ContentVersion> Snapshot<V> {
+    /// This, beside what the decision that reached it decided.
+    ///
+    /// The inverse of [`Applied::split`]. An implementation that builds the
+    /// two apart joins them here.
+    pub fn applied(self, decided: Decided) -> Applied<V> {
+        Applied {
+            observation: self.observation,
+            asking: self.asking,
+            resolved: decided == Decided::Resolved,
+        }
+    }
+}
+
 impl<V: ContentVersion> Applied<V> {
     /// Where this left the run.
     pub fn snapshot(self) -> Snapshot<V> {
