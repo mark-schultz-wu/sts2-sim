@@ -5,7 +5,7 @@ use sts2_core::rng::{Choices, GameRng};
 use sts2_core::{CombatId, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
-use super::live::{Fighter, HeldPower, Live};
+use super::live::{Fighter, HeldPower, Live, PowerList};
 use crate::stream::Streams;
 
 /// Roll a monster's health, avoiding healths already rolled in this fight
@@ -208,7 +208,7 @@ pub(super) fn summon<V: Rules>(
             max_hp: hp,
             block: num_traits::zero(),
             alive: true,
-            powers: Vec::new(),
+            powers: PowerList::new(),
             next_move: None,
         },
     );

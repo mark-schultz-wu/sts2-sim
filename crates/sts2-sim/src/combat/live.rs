@@ -28,6 +28,18 @@ pub(super) type CardVarList<V> = SmallVec<
     [CardNumber<<V as ContentVersion>::CardVar, <V as ContentVersion>::Number>; VARS_INLINE],
 >;
 
+/// The powers one creature holds.
+///
+/// Inline for the same reason as [`CardVarList`]: every creature in the fight
+/// is cloned with the fight, once per decision.
+pub(crate) type PowerList<V> = SmallVec<[HeldPower<V>; POWERS_INLINE]>;
+
+/// How many powers a creature holds without reaching the heap.
+///
+/// A monster fields one or two, and a player holds what the fight has put on
+/// them. More than this spills.
+const POWERS_INLINE: usize = 4;
+
 /// How many printed numbers a card holds without reaching the heap.
 ///
 /// Four, because all but four of the cards the ported build prints hold at
@@ -436,7 +448,7 @@ pub(crate) struct Fighter<V: Rules> {
     pub(crate) max_hp: V::Health,
     pub(crate) block: V::Number,
     pub(crate) alive: bool,
-    pub(crate) powers: Vec<HeldPower<V>>,
+    pub(crate) powers: PowerList<V>,
     pub(crate) next_move: Option<sts2_core::NextMove<V>>,
 }
 

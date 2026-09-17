@@ -5,7 +5,7 @@ use sts2_core::{
     TurnPhaseKinds,
 };
 
-use super::live::{CardIds, CardInstance, Fighter, Live};
+use super::live::{CardIds, CardInstance, Fighter, Live, PowerList};
 use super::{Error, encounter, monster, pile, relic};
 use crate::run::HeldRelic;
 use crate::stream::Streams;
@@ -42,7 +42,7 @@ pub(crate) fn enter<V: Rules>(
         max_hp: observation.max_hp,
         block: num_traits::zero(),
         alive: observation.alive,
-        powers: Vec::new(),
+        powers: PowerList::new(),
         next_move: None,
     });
     creatures.extend(enemies.creatures);

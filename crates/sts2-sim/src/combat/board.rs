@@ -10,6 +10,7 @@
 
 use crate::rng::MegaRng;
 use num_traits::{Saturating as _, Zero};
+use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Effect,
@@ -506,7 +507,7 @@ impl<'a, V: Rules> Board<'a, V> {
             });
             itself || another
         };
-        self.live.creatures[at].powers.retain(kept);
+        self.live.creatures[at].powers.retain(|held| kept(held));
     }
 
     /// Notify the player's belt after a death that did not end combat.
@@ -753,7 +754,10 @@ fn number<V: Rules>(
 }
 
 /// The player's own powers, which is what a card reads about the fight.
-pub(super) fn powers<V: Rules>(creatures: &[Fighter<V>]) -> Vec<Stack<V>> {
+///
+/// Inline, because a calculated number asks for this every time it is read,
+/// and a report reads every card in hand.
+pub(super) fn powers<V: Rules>(creatures: &[Fighter<V>]) -> SmallVec<[Stack<V>; 8]> {
     creatures
         .iter()
         .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
@@ -1283,7 +1287,7 @@ mod tests {
             max_hp: 10,
             block: 0,
             alive: true,
-            powers: vec![HeldPower::new(power, PowerAmount::Counted(2))],
+            powers: smallvec::smallvec![HeldPower::new(power, PowerAmount::Counted(2))],
             next_move: None,
         }];
         let card = CardInstance::new(
