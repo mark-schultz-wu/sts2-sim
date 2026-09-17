@@ -18,26 +18,67 @@ use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct State {
-    power: Power,
-    counted: Number,
+pub enum State {
+    Stateless(Power),
+    Slow { counted: Number },
+    Tender { counted: Number },
+    Imbalanced { off_balance: bool },
 }
 
 impl sts2_core::PowerModel<V> for State {
     fn new(power: Power) -> Self {
-        Self { power, counted: 0 }
+        match power {
+            Power::SlowPower => Self::Slow { counted: 0 },
+            Power::TenderPower => Self::Tender { counted: 0 },
+            Power::ImbalancedPower => Self::Imbalanced { off_balance: false },
+            power => Self::Stateless(power),
+        }
     }
 }
 
 impl State {
+    fn power(&self) -> Power {
+        match self {
+            Self::Stateless(power) => *power,
+            Self::Slow { .. } => Power::SlowPower,
+            Self::Tender { .. } => Power::TenderPower,
+            Self::Imbalanced { .. } => Power::ImbalancedPower,
+        }
+    }
+
     fn counted(&self) -> Number {
-        self.counted
+        match self {
+            Self::Slow { counted } | Self::Tender { counted } => *counted,
+            _ => 0,
+        }
     }
+
     fn count(&mut self, amount: Number) {
-        self.counted += amount;
+        match self {
+            Self::Slow { counted } | Self::Tender { counted } => *counted += amount,
+            state => unreachable!("counted state for {:?}", state.power()),
+        }
     }
+
     fn clear(&mut self) {
-        self.counted = 0;
+        match self {
+            Self::Slow { counted } | Self::Tender { counted } => *counted = 0,
+            state => unreachable!("counted state for {:?}", state.power()),
+        }
+    }
+
+    fn set_off_balance(&mut self, off_balance: bool) {
+        let Self::Imbalanced {
+            off_balance: current,
+        } = self
+        else {
+            unreachable!("off-balance state for {:?}", self.power())
+        };
+        *current = off_balance;
+    }
+
+    pub(crate) fn is_off_balance(&self) -> bool {
+        matches!(self, Self::Imbalanced { off_balance: true })
     }
 }
 
@@ -119,7 +160,7 @@ pub(crate) fn modify_hook(
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     let one: Number = num_traits::one();
-    debug_assert_eq!(state.power, power);
+    debug_assert_eq!(state.power(), power);
     let counted = state.counted();
     match (power, amount, hook) {
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
@@ -184,7 +225,11 @@ pub(crate) fn modify_hook(
             | Power::BurrowedPower
             | Power::SwipePower
             | Power::SwordSagePower
-            | Power::TenderPower,
+            | Power::TenderPower
+            | Power::ImbalancedPower
+            | Power::PlatingPower
+            | Power::SlumberPower
+            | Power::FurnacePower,
             _,
             ModifyHook::Damage { .. },
         ) => Modify::Nothing,
@@ -223,7 +268,11 @@ pub(crate) fn modify_hook(
             | Power::BurrowedPower
             | Power::SwipePower
             | Power::SwordSagePower
-            | Power::TenderPower,
+            | Power::TenderPower
+            | Power::ImbalancedPower
+            | Power::PlatingPower
+            | Power::SlumberPower
+            | Power::FurnacePower,
             _,
             ModifyHook::Block,
         ) => Modify::Nothing,
@@ -260,7 +309,7 @@ pub(crate) fn event_hook(
     use super::super::generated::monsters::{IntentKind, MoveId};
     use sts2_core::{EventHook, HookEffect};
 
-    debug_assert_eq!(state.power, power);
+    debug_assert_eq!(state.power(), power);
     let counted = state.counted();
 
     // `TemporaryStrengthPower` asks for two things when a turn ends, and the
@@ -272,6 +321,28 @@ pub(crate) fn event_hook(
     let one: Number = num_traits::one();
 
     let effect = match (power, amount, hook) {
+        (Power::ImbalancedPower, _, EventHook::DamageGiven { fully_blocked: true }) => {
+            state.set_off_balance(true);
+            return vec![HookEffect::StunOwner(sts2_core::NextMove {
+                id: MoveId::Stunned,
+                intents: [sts2_core::Intent {
+                    kind: IntentKind::Stun,
+                    attack: None,
+                }]
+                .into_iter()
+                .collect(),
+            })];
+        }
+        (
+            Power::ImbalancedPower,
+            _,
+            EventHook::MonsterMovePerformed {
+                move_id: MoveId::Stunned,
+            },
+        ) => {
+            state.set_off_balance(false);
+            None
+        }
         (
             Power::VulnerablePower | Power::WeakPower,
             _,
@@ -321,7 +392,12 @@ pub(crate) fn event_hook(
             | Power::SlipperyPower
             | Power::BurrowedPower
             | Power::SwipePower
-            | Power::SwordSagePower,
+            | Power::SwordSagePower
+            | Power::ImbalancedPower
+            // `PlatingPower` re-plates on `BeforeSideTurnEndEarly`, which is
+            // its own hook and not this one.
+            | Power::PlatingPower
+            | Power::FurnacePower,
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,
@@ -341,7 +417,11 @@ pub(crate) fn event_hook(
             | Power::MinionPower
             | Power::DexterityPower
             | Power::SwordSagePower
-            | Power::TenderPower,
+            | Power::TenderPower
+            | Power::ImbalancedPower
+            | Power::PlatingPower
+            | Power::SlumberPower
+            | Power::FurnacePower,
             _,
             EventHook::EnergyReset,
         ) => None,
@@ -401,6 +481,33 @@ pub(crate) fn event_hook(
             ];
         }
         (Power::TenderPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `SlumberPower.AfterSideTurnEnd` for the side its owner is among. The
+        // beetle sleeps through its own turns and wakes when the count is
+        // spent, which `PowerCmd.Decrement` taking the last instance off is.
+        (Power::SlumberPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            if amount == one {
+                return vec![
+                    HookEffect::Decrement,
+                    HookEffect::RemoveFromOwner(Power::PlatingPower),
+                ];
+            }
+            Some(HookEffect::Decrement)
+        }
+        (Power::SlumberPower, _, EventHook::SideTurnEnd { .. }) => None,
+        (Power::FurnacePower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            Some(HookEffect::Forge {
+                card: Cards::Token(TokenCard::SovereignBlade),
+                key: super::super::generated::cards::CardVar::Damage,
+                amount,
+            })
+        }
+        (Power::FurnacePower, PowerAmount::Endless, EventHook::SideTurnStart { .. }) => {
+            unimplemented!("an endless Furnace")
+        }
         // `SlowPower.AfterCardPlayed` counts every card anyone plays, and its
         // `AfterSideTurnStart` forgets the count when the side its owner is
         // among takes its turn.
@@ -409,6 +516,31 @@ pub(crate) fn event_hook(
             { state.clear(); None }
         }
         (Power::SlowPower, _, EventHook::SideTurnStart { .. }) => None,
+        (
+            Power::SlumberPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived { unblocked },
+        ) if unblocked >= one => {
+            if amount == one {
+                return vec![
+                    HookEffect::Decrement,
+                    HookEffect::RemoveFromOwner(Power::PlatingPower),
+                    HookEffect::StunOwner(sts2_core::NextMove {
+                        id: MoveId::Stunned,
+                        intents: [sts2_core::Intent {
+                            kind: IntentKind::Stun,
+                            attack: None,
+                        }]
+                        .into_iter()
+                        .collect(),
+                    }),
+                ];
+            }
+            Some(HookEffect::Decrement)
+        }
+        (Power::SlumberPower, PowerAmount::Endless, EventHook::DamageReceived { .. }) => {
+            unimplemented!("an endless Slumber power")
+        }
         // `SlipperyPower.AfterDamageReceived`, which spends an instance on
         // every hit that reaches its owner's hit points.
         (Power::SlipperyPower, _, EventHook::DamageReceived { unblocked })
@@ -450,6 +582,34 @@ pub(crate) fn event_hook(
         (Power::SwordSagePower, PowerAmount::Endless, EventHook::CardEnteredCombat { .. }) => {
             unimplemented!("an endless Sword Sage")
         }
+        (
+            Power::PlatingPower,
+            PowerAmount::Counted(_),
+            EventHook::SideTurnStart { side, turn },
+        ) if owner == CombatSide::Enemy
+            && side == owner
+            && turn > <V as sts2_core::ContentVersion>::Count::from(1u8) =>
+        {
+            Some(HookEffect::Decrement)
+        }
+        // `PlatingPower.BeforeSideTurnStart`: a monster that opens the fight
+        // with Plating opens it behind that much block. It answers the
+        // player's first turn opening and no other, and only on a monster.
+        (
+            Power::PlatingPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeSideTurnStart { side, turn },
+        ) if side == CombatSide::Player
+            && owner == CombatSide::Enemy
+            && turn == <V as sts2_core::ContentVersion>::Count::from(1u8) =>
+        {
+            Some(HookEffect::GainBlock(amount))
+        }
+        (
+            Power::PlatingPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeSideTurnEndEarly { side },
+        ) if side == owner => Some(HookEffect::GainBlock(amount)),
         // Each of these is an override on an empty base, so a power that does
         // not have one does nothing when the fight raises it.
         (
@@ -462,7 +622,11 @@ pub(crate) fn event_hook(
             | EventHook::SideTurnStart { .. }
             | EventHook::DamageReceived { .. }
             | EventHook::PowerAmountChanged { .. }
-            | EventHook::CardEnteredCombat { .. },
+            | EventHook::CardEnteredCombat { .. }
+            | EventHook::BeforeSideTurnStart { .. }
+            | EventHook::BeforeSideTurnEndEarly { .. }
+            | EventHook::DamageGiven { .. }
+            | EventHook::MonsterMovePerformed { .. },
         ) => None,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };

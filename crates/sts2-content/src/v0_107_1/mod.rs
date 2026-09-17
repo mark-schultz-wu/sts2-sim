@@ -296,14 +296,15 @@ impl sts2_core::Rules for V0_107_1 {
         )
     }
 
-    fn roll_monster_move<R: sts2_core::rng::GameRng>(
+    fn roll_monster_move<'a, R: sts2_core::rng::GameRng>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         spawn: sts2_core::MonsterSpawn<Self::Encounter>,
+        powers: impl IntoIterator<Item = sts2_core::Listener<'a, Self>>,
         machine: &mut sts2_core::MoveMachine,
         rng: &mut R,
     ) -> Result<sts2_core::NextMove<Self>, sts2_core::ContentError> {
-        roll_monster_move(monster, ascension as u8, spawn, machine, rng)
+        roll_monster_move(monster, ascension as u8, spawn, powers, machine, rng)
     }
 
     fn opening_move_machine(monster: Self::Monster) -> sts2_core::MoveMachine {
@@ -468,15 +469,17 @@ impl sts2_core::Rules for V0_107_1 {
 /// The other is a move the graph holds it on until that move has been.
 ///
 /// Otherwise it steps until it lands on a move, and logs the move it lands on.
-fn roll_monster_move<R: sts2_core::rng::GameRng>(
+fn roll_monster_move<'a, R: sts2_core::rng::GameRng>(
     monster: generated::monsters::Monster,
     ascension: u8,
     spawn: sts2_core::MonsterSpawn<generated::encounters::Encounter>,
+    powers: impl IntoIterator<Item = sts2_core::Listener<'a, V0_107_1>>,
     machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
 ) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
     use generated::monsters::{FollowUp, State};
 
+    let powers: Vec<_> = powers.into_iter().collect();
     let data = sts2_core::Table::data(monster);
     let state = |at: u8| {
         data.states
@@ -495,7 +498,7 @@ fn roll_monster_move<R: sts2_core::rng::GameRng>(
                 },
                 State::Random(branches) => branch(branches, machine, rng)?,
                 State::Conditional(_) => {
-                    behaviour::monsters::conditional(monster, machine.at, spawn)?
+                    behaviour::monsters::conditional(monster, machine.at, spawn, &powers)?
                 }
             };
             machine.enter(next);

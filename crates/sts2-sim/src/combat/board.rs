@@ -23,7 +23,7 @@ use crate::stream::CombatRngs;
 
 /// The fight an effect is resolved against.
 pub(super) struct Board<'a, V: Rules> {
-    live: &'a mut Live<V>,
+    pub(super) live: &'a mut Live<V>,
     /// The run streams an effect can draw from while it resolves.
     rngs: CombatRngs<'a>,
     /// The player's relic belt, for hooks raised while an effect resolves.
@@ -765,6 +765,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 // power that caps a hit rather than shrinks it acts.
                 let unblocked =
                     hp_lost::<V>(&self.live.creatures, target, (damage - blocked).max(zero));
+                let fully_blocked = damage > zero && blocked == damage;
 
                 let hp = self.live.creatures[at].hp;
                 let health_zero = V::Health::zero();
@@ -779,6 +780,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 );
                 if let Some(effect) = asked.first() {
                     unimplemented!("a power asking for {effect:?} after a hit")
+                }
+                let asked = super::power::notify_creature::<V>(
+                    self.live,
+                    self.actor,
+                    sts2_core::EventHook::DamageGiven { fully_blocked },
+                );
+                if let Some(effect) = asked.first() {
+                    unimplemented!("a power asking for {effect:?} after dealing a hit")
                 }
                 if killed {
                     self.kill(at);

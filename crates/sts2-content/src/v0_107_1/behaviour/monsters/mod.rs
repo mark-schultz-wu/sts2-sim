@@ -30,12 +30,13 @@ type V = V0_107_1;
 pub(crate) fn starting_powers(
     monster: Monster,
     ascension: <V0_107_1 as sts2_core::ContentVersion>::AscensionLevel,
-) -> Option<(
+) -> Vec<(
     super::super::generated::powers::Power,
     sts2_core::PowerAmount<Number>,
 )> {
-    overgrowth::starting_powers(monster, ascension)
-        .or_else(|| hive::starting_powers(monster, ascension))
+    let mut applied = overgrowth::starting_powers(monster, ascension);
+    applied.extend(hive::starting_powers(monster, ascension));
+    applied
 }
 
 /// Which branch a monster's conditional state takes.
@@ -51,8 +52,12 @@ pub(crate) fn conditional(
     monster: Monster,
     at: u8,
     spawn: MonsterSpawn<Encounter>,
+    powers: &[sts2_core::Listener<'_, V>],
 ) -> Result<u8, ContentError> {
-    overgrowth::conditional(monster, at, spawn)
+    match monster {
+        Monster::BowlbugRock | Monster::SlumberingBeetle => hive::conditional(monster, at, powers),
+        _ => overgrowth::conditional(monster, at, spawn),
+    }
 }
 
 /// Where a named move sits in a monster's own state list.
@@ -77,9 +82,12 @@ pub(super) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 /// A monster nobody has ported.
 pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
     match monster {
-        Monster::ThievingHopper | Monster::Tunneler | Monster::HunterKiller => {
-            hive::perform(move_id, fight)
-        }
+        Monster::ThievingHopper
+        | Monster::Tunneler
+        | Monster::HunterKiller
+        | Monster::BowlbugRock
+        | Monster::BowlbugSilk
+        | Monster::SlumberingBeetle => hive::perform(move_id, fight),
         _ => overgrowth::perform(monster, move_id, fight),
     }
 }

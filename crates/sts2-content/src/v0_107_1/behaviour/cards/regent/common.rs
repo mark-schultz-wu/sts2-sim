@@ -29,6 +29,10 @@ pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
             Change::Raise(CardVar::BlockNextTurn, 2),
         ],
         RegentCard::SpoilsOfBattle => &[Change::Raise(CardVar::Forge, 3)],
+        RegentCard::WroughtInWar => &[
+            Change::Raise(CardVar::Damage, 2),
+            Change::Raise(CardVar::Forge, 2),
+        ],
         card => unimplemented!("card upgrade: {card:?}"),
     }
 }
@@ -171,5 +175,24 @@ pub(super) fn spoils_of_battle<F: Fight<V>>(fight: &mut F) -> Played<V> {
         forge,
     );
     fight.draw(fight.var(CardVar::Cards));
+    Played::Done
+}
+
+/// `WroughtInWar`. Hit, then forge the blade.
+pub(super) fn wrought_in_war<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    let attack = fight.resolve(Effect::Attack {
+        dealer: fight.actor(),
+        target,
+        damage: Amount::Var(CardVar::Damage),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(attack);
+    let forge = fight.var(CardVar::Forge);
+    fight.forge(
+        Cards::Token(TokenCard::SovereignBlade),
+        CardVar::Damage,
+        forge,
+    );
     Played::Done
 }

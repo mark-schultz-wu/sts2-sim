@@ -54,6 +54,8 @@ pub(crate) struct Machine<V: Rules> {
     pub(crate) machine: MoveMachine,
     /// The move restored after this monster spends one turn reviving.
     pub(crate) resume: Option<sts2_core::NextMove<V>>,
+    /// A stun installed since this monster last had a chance to act.
+    pub(crate) stunned: bool,
 }
 
 /// Roll health and the first move in encounter order, advancing the two run
@@ -94,13 +96,21 @@ pub(crate) fn initialize<V: Rules>(
             roster_size,
         };
         let mut machine = V::opening_move_machine(monster);
-        let opening = V::roll_monster_move(monster, ascension, spawn, &mut machine, rngs.ai)?;
+        let opening = V::roll_monster_move(
+            monster,
+            ascension,
+            spawn,
+            std::iter::empty(),
+            &mut machine,
+            rngs.ai,
+        )?;
         machines.push(Machine {
             creature: id,
             monster,
             spawn,
             machine,
             resume: None,
+            stunned: false,
         });
         creatures.push(Fighter {
             id,
@@ -192,6 +202,7 @@ pub(super) fn summon<V: Rules>(
             },
             machine: V::opening_move_machine(monster),
             resume: None,
+            stunned: false,
         },
     );
     for (position, held) in live.machines.iter_mut().enumerate() {

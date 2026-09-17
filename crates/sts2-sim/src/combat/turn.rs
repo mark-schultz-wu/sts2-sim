@@ -33,6 +33,7 @@ pub(crate) fn end<V: Rules>(
     let mut streams = streams.clone();
 
     turn_end(&mut next, streams.combat(), &mut relics, ascension);
+    power::before_turn_end::<V>(&mut next.creatures, <V::CombatSide as SideKinds>::PLAYER);
     flush_hand(&mut next);
     end_of_turn_cleanup(&mut next);
     // `AfterSideTurnEnd` for the side that just ended.
@@ -49,8 +50,15 @@ pub(crate) fn end<V: Rules>(
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
-    side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
+    side_turn_started::<V>(
+        &mut next,
+        streams.combat(),
+        &mut relics,
+        ascension,
+        <V::CombatSide as SideKinds>::ENEMY,
+    );
     let won = enemy_turn(&mut next, streams.combat(), &mut relics, &mut skipping);
+    power::before_turn_end::<V>(&mut next.creatures, <V::CombatSide as SideKinds>::ENEMY);
 
     let asked = tick_powers::<V>(
         &mut next,
@@ -75,11 +83,22 @@ pub(crate) fn end<V: Rules>(
     // `BeforeSideTurnStart`, which is where a relic counting a turn's plays
     // moves the count on, then the draw that reads it.
     relic::turn_starting::<V>(&mut relics, next.turn);
+    power::before_turn_start::<V>(
+        &mut next.creatures,
+        <V::CombatSide as SideKinds>::PLAYER,
+        next.turn,
+    );
     let drawn = hand_size::<V>(&mut relics, next.turn);
     draw(&mut next, streams.combat(), &mut relics, ascension, drawn);
     let started = relic::turn_started::<V>(&mut relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
-    side_turn_started::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
+    side_turn_started::<V>(
+        &mut next,
+        streams.combat(),
+        &mut relics,
+        ascension,
+        <V::CombatSide as SideKinds>::PLAYER,
+    );
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
@@ -140,11 +159,24 @@ fn end_of_turn_cleanup<V: Rules>(live: &mut Live<V>) {
 /// # Panics
 ///
 /// A power asking for something no side turn start can carry out.
-fn side_turn_started<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
+fn side_turn_started<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut [crate::run::HeldRelic<V>],
+    ascension: V::AscensionLevel,
+    side: V::CombatSide,
+) {
     let turn = live.turn;
     let asked = power::notify::<V>(live, sts2_core::EventHook::SideTurnStart { side, turn });
-    if let Some(effect) = asked.first() {
-        unimplemented!("a power asking for {effect:?} as a side turn starts")
+    for effect in asked {
+        match effect {
+            sts2_core::HookEffect::Forge { card, key, amount } => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::forge(&mut board, card, key, amount);
+            }
+            effect => unimplemented!("a power asking for {effect:?} as a side turn starts"),
+        }
     }
 }
 
@@ -254,6 +286,9 @@ fn tick_powers<V: Rules>(
                     // `PowerCmd.Remove(this)`, taken after the belt is read
                     // for the same reason a power it applies is.
                     sts2_core::HookEffect::Remove => leaving.push((id, power)),
+                    sts2_core::HookEffect::RemoveFromOwner(power) => {
+                        leaving.push((id, *power));
+                    }
                     // The number the instance counts on itself, set back to
                     // zero. A power that hands back what it took this turn
                     // asks for this after asking for the handing back.
@@ -353,6 +388,9 @@ fn enemy_turn<V: Rules>(
             .find(|held| held.creature == id)
             .unwrap_or_else(|| unimplemented!("an enemy with no move graph"));
         let monster = held.monster;
+        if held.stunned {
+            held.stunned = false;
+        }
         // `OnMovePerformed`, which is what lets the graph leave this move. It
         // happens beside `PerformMove` rather than after what the move does.
         held.machine.performed();
@@ -370,6 +408,16 @@ fn enemy_turn<V: Rules>(
             (id, damage, repeats),
         );
         V::perform_move(monster, next_move.id, &mut board);
+        let asked = power::notify_creature::<V>(
+            board.live,
+            id,
+            sts2_core::EventHook::MonsterMovePerformed {
+                move_id: next_move.id,
+            },
+        );
+        if let Some(effect) = asked.first() {
+            unimplemented!("a power asking for {effect:?} after a monster move")
+        }
         won |= board.won;
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));
     }
@@ -386,6 +434,9 @@ fn roll_moves<V: Rules>(
     live.machines
         .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
     for held in live.machines.iter_mut() {
+        if held.stunned {
+            continue;
+        }
         if let Some(resume) = held.resume.take() {
             if let Some(creature) = live
                 .creatures
@@ -396,8 +447,25 @@ fn roll_moves<V: Rules>(
             }
             continue;
         }
-        let rolled =
-            V::roll_monster_move(held.monster, ascension, held.spawn, &mut held.machine, ai)?;
+        let rolled = {
+            let creature = live
+                .creatures
+                .iter()
+                .find(|creature| creature.id == held.creature)
+                .expect("a retained move machine has its creature");
+            let powers = creature
+                .powers
+                .iter()
+                .map(|power| power.listener(creature.side));
+            V::roll_monster_move(
+                held.monster,
+                ascension,
+                held.spawn,
+                powers,
+                &mut held.machine,
+                ai,
+            )?
+        };
         if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {
             creature.next_move = Some(rolled);
         }

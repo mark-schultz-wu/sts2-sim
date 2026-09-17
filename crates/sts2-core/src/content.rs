@@ -1358,6 +1358,14 @@ pub enum EventHook<V: ContentVersion> {
     DamageReceived {
         unblocked: V::Number,
     },
+    /// `AfterDamageGiven`, for the creature that dealt the hit.
+    DamageGiven {
+        fully_blocked: bool,
+    },
+    /// `MonsterMoveState.OnPerform`, after the move's behavior runs.
+    MonsterMovePerformed {
+        move_id: V::MoveId,
+    },
     /// `AfterCardDrawn`, carrying the card that has just reached the hand.
     ///
     /// Raised once per card, inside the draw loop. A listener that is itself
@@ -1384,6 +1392,9 @@ pub enum EventHook<V: ContentVersion> {
     SideTurnStart {
         side: V::CombatSide,
         turn: V::Count,
+    },
+    BeforeSideTurnEndEarly {
+        side: V::CombatSide,
     },
     SideTurnEnd {
         side: V::CombatSide,
@@ -1451,6 +1462,12 @@ pub enum HookEffect<V: ContentVersion> {
     LoseEnergy(V::Number),
     /// `CardPileCmd.Draw` for the player.
     Draw(V::Number),
+    /// `ForgeCmd.Forge` from a power hook.
+    Forge {
+        card: V::Card,
+        key: V::CardVar,
+        amount: V::Number,
+    },
     /// `CreatureCmd.GainBlock` on the listener's owner.
     GainBlock(V::Number),
     /// `CardCmd.Upgrade` over every card in the hand.
@@ -1482,6 +1499,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// then leaves asks for both, in the order it wants them.
     Remove,
     InstallMove(crate::NextMove<V>),
+    /// Replace the owner's advertised move with a stunned turn.
+    StunOwner(crate::NextMove<V>),
+    /// Remove another power from the same owner.
+    RemoveFromOwner(V::Power),
     /// `CreatureCmd.Add<M>` once per count, in the dead owner's place.
     SummonAfterOwnerDeath {
         monster: V::Monster,
@@ -2170,10 +2191,11 @@ pub trait Rules: Hooks {
     /// ended. A machine on the graph's own initial state has not walked yet,
     /// so the first call answers the opening intent. A graph the table cannot
     /// describe returns a typed error.
-    fn roll_monster_move<R: crate::rng::GameRng>(
+    fn roll_monster_move<'a, R: crate::rng::GameRng>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         spawn: MonsterSpawn<Self::Encounter>,
+        powers: impl IntoIterator<Item = crate::Listener<'a, Self>>,
         machine: &mut MoveMachine,
         rng: &mut R,
     ) -> Result<crate::NextMove<Self>, ContentError>;
