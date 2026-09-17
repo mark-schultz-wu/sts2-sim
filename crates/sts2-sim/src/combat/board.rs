@@ -55,7 +55,7 @@ pub(super) struct Board<'a, V: Rules> {
     ///
     /// `CheckWinCondition` runs after the command that killed it, so this is
     /// read once the effect is over rather than acted on where it is set.
-    pub(super) won: bool,
+    pub(super) ended: Option<super::Ended>,
 }
 
 /// An effect after a simulator fight's listeners have modified it.
@@ -112,7 +112,7 @@ impl<'a, V: Rules> Board<'a, V> {
             intent_repeats: num_traits::zero(),
             ascension,
             skipped: Vec::new(),
-            won: false,
+            ended: None,
         }
     }
 
@@ -136,7 +136,7 @@ impl<'a, V: Rules> Board<'a, V> {
             intent_repeats,
             ascension,
             skipped: Vec::new(),
-            won: false,
+            ended: None,
         }
     }
 
@@ -330,6 +330,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// and primary. A creature a power keeps in the fight is still counted,
     /// and still dead, so keeping one does not hold the fight open.
     fn kill(&mut self, at: usize) {
+        let side = self.live.creatures[at].side;
         self.die(at);
         let primary_enemy_remains = self.live.creatures.iter().any(|creature| {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
@@ -343,7 +344,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 })
         });
         if primary_enemy_remains {
-            self.after_enemy_death();
+            self.after_death(side);
             return;
         }
 
@@ -357,14 +358,28 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.die(at);
             }
         }
-        self.won = true;
+        self.ended = Some(super::Ended::Won);
     }
 
     /// `KillWithoutCheckingWinCondition`, including a power's revival hook.
+    ///
+    /// A player dying takes the run with it. `LoseCombat` files the loss, and
+    /// the next win check turns that into the end of the fight.
+    ///
+    /// `HandlePlayerDeath` empties the piles and the pools. It is the other
+    /// branch of the same question, for a player whose teammates still stand,
+    /// and a run with one player never reaches it.
     fn die(&mut self, at: usize) {
         self.live.creatures[at].alive = false;
         if self.live.creatures[at].side != <V::CombatSide as SideKinds>::ENEMY {
-            unimplemented!("a player dying in a fight");
+            if self.live.creatures.iter().any(|creature| {
+                creature.side == <V::CombatSide as SideKinds>::PLAYER && creature.alive
+            }) {
+                unimplemented!("a player dying beside a player still standing");
+            }
+            self.strip_powers(at);
+            self.ended = Some(super::Ended::Lost);
+            return;
         }
         let owner = self.live.creatures[at].side;
         let id = self.live.creatures[at].id;
@@ -375,7 +390,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .flat_map(|held| {
                 <V as sts2_core::Hooks>::event_hook(
                     held.event_listener(owner),
-                    sts2_core::EventHook::AfterDeath,
+                    sts2_core::EventHook::AfterDeath { side: owner },
                 )
             })
             .collect();
@@ -500,8 +515,12 @@ impl<'a, V: Rules> Board<'a, V> {
     /// for is what stops. `PlayerCmd.GainEnergy` and `CardPileCmd.Draw` both
     /// return early while `CombatManager.IsEnding`. Nothing ported so far asks
     /// for anything that lands there.
-    fn after_enemy_death(&mut self) {
-        let asked = super::relic::notify::<V>(self.relics, sts2_core::EventHook::AfterDeath);
+    ///
+    /// `side` is the dead creature's, because a relic reads it. A belt paid
+    /// for every death pays for its own holder's.
+    fn after_death(&mut self, side: V::CombatSide) {
+        let asked =
+            super::relic::notify::<V>(self.relics, sts2_core::EventHook::AfterDeath { side });
         super::hook::apply::<V, _>(self, asked);
     }
 }
@@ -1016,7 +1035,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     /// heals no monster, which is what leaves a segment killed with the last
     /// of them dead.
     fn heal(&mut self, at: CombatId, amount: V::Number) {
-        if self.won {
+        if self.ended.is_some() {
             return;
         }
         let Some(creature) = self.live.creatures.iter_mut().find(|c| c.id == at) else {

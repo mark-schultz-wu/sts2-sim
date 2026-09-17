@@ -37,6 +37,17 @@ pub(crate) struct Fought<V: Rules> {
     /// fight and their models save what they counted, so the run writes these
     /// back beside the fight or neither.
     pub(crate) relics: Vec<crate::run::HeldRelic<V>>,
-    /// The last enemy left the fight, so this decision won it.
-    pub(crate) won: bool,
+    /// How this decision ended the fight, for one that ended it.
+    pub(crate) ended: Option<Ended>,
+}
+
+/// How a fight finished.
+///
+/// `CombatManager` keeps the two apart: `IsEnding` asks whether any primary
+/// enemy is alive, and `_pendingLoss` is set when the last player dies. A
+/// decision reaches at most one of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Ended {
+    Won,
+    Lost,
 }

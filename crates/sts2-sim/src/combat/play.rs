@@ -135,18 +135,18 @@ pub(crate) fn apply_power<V: Rules>(
         None,
     );
     sts2_core::Fight::apply_power(&mut board, at, power, amount);
-    let won = board.won;
+    let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
-    if won {
+    if ended == Some(super::Ended::Won) {
         relic::combat_ended::<V>(&mut relics);
     }
     Ok(super::Fought {
         live: next,
         streams,
         relics,
-        won,
+        ended,
     })
 }
 
@@ -194,7 +194,7 @@ pub(crate) fn play<V: Rules>(
         Some(&card),
     );
     let played = V::on_play(card.ident.card, &mut board);
-    let won = board.won;
+    let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
 
@@ -211,7 +211,7 @@ pub(crate) fn play<V: Rules>(
             },
             asker: Asker::Card(card),
             target: play.target,
-            won,
+            ended,
         },
         played,
     )
@@ -292,7 +292,7 @@ pub(crate) fn answer<V: Rules>(
         playing.as_ref(),
     );
     let played = V::resume_play(&mut board, asking.at, taken);
-    effect.won |= board.won;
+    effect.ended = effect.ended.or(board.ended);
     let skipped = std::mem::take(&mut board.skipped);
     next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     carry_on(
@@ -340,7 +340,7 @@ pub(super) fn carry_on<V: Rules>(
                     Some(&card),
                 );
                 played = V::on_play(card.ident.card, &mut board);
-                effect.won |= board.won;
+                effect.ended = effect.ended.or(board.ended);
                 let skipped = std::mem::take(&mut board.skipped);
                 next.skip_tick = merged::<V>(&next.skip_tick, skipped);
                 continue;
@@ -361,7 +361,7 @@ pub(super) fn carry_on<V: Rules>(
             } => (at, Asked::Offered { offered, skippable }, None),
         };
         let Some(answer) = answer else {
-            let won = effect.won;
+            let ended = effect.ended;
             next.asking = Some(super::live::Asking {
                 effect,
                 at,
@@ -371,7 +371,7 @@ pub(super) fn carry_on<V: Rules>(
                 live: next,
                 streams,
                 relics,
-                won,
+                ended,
             });
         };
 
@@ -388,21 +388,21 @@ pub(super) fn carry_on<V: Rules>(
             playing.as_ref(),
         );
         played = V::resume_play(&mut board, at, answer);
-        effect.won |= board.won;
+        effect.ended = effect.ended.or(board.ended);
         let skipped = std::mem::take(&mut board.skipped);
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
 
-    let won = effect.won;
+    let ended = effect.ended;
     let Asker::Card(mut card) = effect.asker else {
-        if won {
+        if ended == Some(super::Ended::Won) {
             relic::combat_ended::<V>(&mut relics);
         }
         return Ok(super::Fought {
             live: next,
             streams,
             relics,
-            won,
+            ended,
         });
     };
 
@@ -444,14 +444,14 @@ pub(super) fn carry_on<V: Rules>(
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
 
-    if won {
+    if ended == Some(super::Ended::Won) {
         relic::combat_ended::<V>(&mut relics);
     }
     Ok(super::Fought {
         live: next,
         streams,
         relics,
-        won,
+        ended,
     })
 }
 

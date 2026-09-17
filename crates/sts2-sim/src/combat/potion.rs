@@ -34,7 +34,7 @@ pub(crate) fn drink<V: Rules>(
         None,
     );
     let used = V::on_use(potion, &mut board);
-    let won = board.won;
+    let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
 
     next.skip_tick = super::play::merged::<V>(&next.skip_tick, skipped);
@@ -51,7 +51,7 @@ pub(crate) fn drink<V: Rules>(
             },
             asker: super::live::Asker::Potion(potion),
             target,
-            won,
+            ended,
         },
         used,
     )

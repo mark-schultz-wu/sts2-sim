@@ -29,7 +29,7 @@ pub(super) enum Asker<V: Rules> {
 pub(super) struct Resuming<V: Rules> {
     pub(super) asker: Asker<V>,
     pub(super) target: Option<CombatId>,
-    pub(super) won: bool,
+    pub(super) ended: Option<super::Ended>,
     /// Where this effect is in `GeneratePlayCount`'s loop.
     pub(super) plays: Plays<V>,
 }
