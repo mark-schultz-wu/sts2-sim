@@ -289,7 +289,7 @@ fn literal(row: &[String]) -> Result<String, String> {
 
     let mut out = String::new();
     writeln!(out, "EventData {{").unwrap();
-    writeln!(out, "    seed_name: {:?},", &row[1]).unwrap();
+    writeln!(out, "    seed_name: {:?},", row[1]).unwrap();
     writeln!(out, "    flags: EventFlags::new(&[{set}]),").unwrap();
     writeln!(out, "    layout: EventLayoutType::{},", row[5]).unwrap();
     writeln!(out, "    encounter: {encounter},").unwrap();
