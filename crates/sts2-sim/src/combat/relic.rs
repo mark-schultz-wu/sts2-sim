@@ -19,7 +19,7 @@ pub(crate) fn notify<V: Rules>(
 ) -> Vec<HookEffect<V>> {
     relics
         .iter_mut()
-        .flat_map(|held| V::event_hook(Listener::Relic(&mut held.state), hook))
+        .flat_map(|held| V::event_hook(sts2_core::EventListener::Relic(&mut held.state), hook))
         .collect()
 }
 
@@ -33,7 +33,7 @@ pub(crate) fn modified<V: Rules>(
         amount,
         relics
             .iter_mut()
-            .map(|held| V::modify_hook(Listener::Relic(&mut held.state), hook)),
+            .map(|held| V::modify_hook(Listener::Relic(&held.state), hook)),
     )
 }
 

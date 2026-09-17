@@ -1,11 +1,11 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CombatId, Creature, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules, SideKinds,
+    CombatId, EventHook, HookEffect, ModelId, ModifyHook, Observation, Rules, SideKinds,
     TurnPhaseKinds,
 };
 
-use super::live::{CardIds, CardInstance, Live};
+use super::live::{CardIds, CardInstance, Fighter, Live};
 use super::{Error, encounter, monster, pile, relic};
 use crate::run::HeldRelic;
 use crate::stream::Streams;
@@ -34,7 +34,7 @@ pub(crate) fn enter<V: Rules>(
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.
     let mut creatures = Vec::with_capacity(enemies.creatures.len() + 1);
-    creatures.push(Creature {
+    creatures.push(Fighter {
         id: CombatId::new(nonmax::NonMaxU8::ZERO),
         model: Some(ModelId::Character(character)),
         side: <V::CombatSide as SideKinds>::PLAYER,
@@ -106,7 +106,6 @@ pub(crate) fn enter<V: Rules>(
             machines: enemies.machines,
             // Nothing has been applied to anyone yet.
             skip_tick: Vec::new(),
-            counted: Vec::new(),
             card_ids,
             asking: None,
         },

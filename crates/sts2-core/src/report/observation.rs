@@ -476,24 +476,6 @@ pub struct Stack<V: ContentVersion> {
     pub amount: crate::PowerAmount<V::Number>,
 }
 
-impl<V: crate::Hooks> Stack<V> {
-    /// This power as a hook's listener, which is the instance the game gives
-    /// the hook to.
-    ///
-    /// `owner` is the side of the creature carrying it. A stack is held by a
-    /// creature and does not know which, so the caller that found it says.
-    /// `counted` is the number this instance keeps on itself. It is zero for
-    /// a power that keeps none.
-    pub fn listener(&self, owner: V::CombatSide, counted: V::Number) -> crate::Listener<'_, V> {
-        crate::Listener::Power {
-            power: self.power,
-            amount: self.amount,
-            owner,
-            counted,
-        }
-    }
-}
-
 /// The move a monster has chosen, and what it amounts to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NextMove<V: ContentVersion> {

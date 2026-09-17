@@ -12,7 +12,7 @@ use sts2_core::{CardTable, CombatId, PowerAmount, Rules, SideKinds, TurnPhaseKin
 
 use super::Error;
 use super::board::{Board, draw};
-use super::live::{Live, counted};
+use super::live::Live;
 use super::power;
 use super::relic;
 use super::start::{hand_size, upgraded};
@@ -173,13 +173,10 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
         return;
     };
     let mut gained: V::Count = num_traits::zero();
-    let counters = live.counted.clone();
-    live.creatures[at].powers.retain(|held| {
+
+    live.creatures[at].powers.retain_mut(|held| {
         let amount = <V as sts2_core::Hooks>::event_hook(
-            held.listener(
-                <V::CombatSide as SideKinds>::PLAYER,
-                counted::<V>(&counters, player, held.power),
-            ),
+            held.event_listener(<V::CombatSide as SideKinds>::PLAYER),
             sts2_core::EventHook::EnergyReset,
         )
         .into_iter()
@@ -198,14 +195,12 @@ fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
 
 /// `ClearBlock` on every creature of one side.
 fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
-    let counters = live.counted.clone();
     for creature in live.creatures.iter_mut().filter(|c| c.side == side) {
         creature.block = num_traits::zero();
         let mut gained: V::Number = num_traits::zero();
-        let id = creature.id;
-        creature.powers.retain(|held| {
+        creature.powers.retain_mut(|held| {
             let block = <V as sts2_core::Hooks>::event_hook(
-                held.listener(side, counted::<V>(&counters, id, held.power)),
+                held.event_listener(side),
                 sts2_core::EventHook::BlockCleared,
             )
             .into_iter()
@@ -233,8 +228,7 @@ fn tick_powers<V: Rules>(
     let one = num_traits::one();
     let mut applying = Vec::new();
     let mut leaving: Vec<(CombatId, V::Power)> = Vec::new();
-    let mut cleared: Vec<(CombatId, V::Power)> = Vec::new();
-    let counters = live.counted.clone();
+
     for creature in &mut live.creatures {
         let id = creature.id;
         let owner = creature.side;
@@ -246,7 +240,7 @@ fn tick_powers<V: Rules>(
                 continue;
             };
             let asked = <V as sts2_core::Hooks>::event_hook(
-                held.listener(owner, counted::<V>(&counters, id, held.power)),
+                held.event_listener(owner),
                 sts2_core::EventHook::SideTurnEnd { side },
             );
             for effect in &asked {
@@ -263,7 +257,6 @@ fn tick_powers<V: Rules>(
                     // The number the instance counts on itself, set back to
                     // zero. A power that hands back what it took this turn
                     // asks for this after asking for the handing back.
-                    sts2_core::HookEffect::ClearCount => cleared.push((id, power)),
                     other => unimplemented!("a power asking for {other:?} as a turn ends"),
                 }
             }
@@ -290,10 +283,8 @@ fn tick_powers<V: Rules>(
         let Some(creature) = live.creatures.iter_mut().find(|creature| creature.id == id) else {
             continue;
         };
-        creature.powers.retain(|held| held.power != power);
+        creature.powers.retain_mut(|held| held.power != power);
     }
-    live.counted
-        .retain(|held| !cleared.contains(&(held.creature, held.power)));
     applying
 }
 

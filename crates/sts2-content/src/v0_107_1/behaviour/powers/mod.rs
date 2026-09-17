@@ -17,6 +17,30 @@ use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct State {
+    power: Power,
+    counted: Number,
+}
+
+impl sts2_core::PowerModel<V> for State {
+    fn new(power: Power) -> Self {
+        Self { power, counted: 0 }
+    }
+}
+
+impl State {
+    fn counted(&self) -> Number {
+        self.counted
+    }
+    fn count(&mut self, amount: Number) {
+        self.counted += amount;
+    }
+    fn clear(&mut self) {
+        self.counted = 0;
+    }
+}
+
 /// `VulnerablePower`'s `DamageIncrease`.
 const DAMAGE_INCREASE: f64 = 1.5;
 
@@ -91,10 +115,12 @@ pub(crate) fn modify_hook(
     power: Power,
     amount: PowerAmount<Number>,
     _owner: CombatSide,
-    counted: Number,
+    state: &State,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     let one: Number = num_traits::one();
+    debug_assert_eq!(state.power, power);
+    let counted = state.counted();
     match (power, amount, hook) {
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
         // since its owner's turn began and takes a tenth more for each.
@@ -228,11 +254,14 @@ pub(crate) fn event_hook(
     power: Power,
     amount: PowerAmount<Number>,
     owner: CombatSide,
-    counted: Number,
+    state: &mut State,
     hook: sts2_core::EventHook<V>,
 ) -> Vec<sts2_core::HookEffect<V>> {
     use super::super::generated::monsters::{IntentKind, MoveId};
     use sts2_core::{EventHook, HookEffect};
+
+    debug_assert_eq!(state.power, power);
+    let counted = state.counted();
 
     // `TemporaryStrengthPower` asks for two things when a turn ends, and the
     // match below spells one. Its subclasses answer there instead.
@@ -355,8 +384,8 @@ pub(crate) fn event_hook(
         // Each one takes a point of Strength and of Dexterity, and the count
         // is what gives them back.
         (Power::TenderPower, _, EventHook::CardPlayed { .. }) => {
+            state.count(one);
             return vec![
-                HookEffect::Count(one),
                 HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(-one)),
                 HookEffect::ApplyToOwner(Power::DexterityPower, PowerAmount::Counted(-one)),
             ];
@@ -365,19 +394,19 @@ pub(crate) fn event_hook(
         // participants of. Everything taken this turn comes back, and the
         // count starts again.
         (Power::TenderPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            state.clear();
             return vec![
                 HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(counted)),
-                HookEffect::ApplyToOwner(Power::DexterityPower, PowerAmount::Counted(counted)),
-                HookEffect::ClearCount,
+                HookEffect::ApplyToOwner(Power::DexterityPower, PowerAmount::Counted(counted))
             ];
         }
         (Power::TenderPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `SlowPower.AfterCardPlayed` counts every card anyone plays, and its
         // `AfterSideTurnStart` forgets the count when the side its owner is
         // among takes its turn.
-        (Power::SlowPower, _, EventHook::CardPlayed { .. }) => Some(HookEffect::Count(one)),
+        (Power::SlowPower, _, EventHook::CardPlayed { .. }) => { state.count(one); None },
         (Power::SlowPower, _, EventHook::SideTurnStart { side, .. }) if side == owner => {
-            Some(HookEffect::ClearCount)
+            { state.clear(); None }
         }
         (Power::SlowPower, _, EventHook::SideTurnStart { .. }) => None,
         // `SlipperyPower.AfterDamageReceived`, which spends an instance on

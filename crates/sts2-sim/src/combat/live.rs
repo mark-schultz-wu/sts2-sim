@@ -295,24 +295,95 @@ impl<V: Rules> CardInstance<V> {
     }
 }
 
-/// One number a power counts on itself, and the creature carrying it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Counter<V: Rules> {
-    pub(crate) creature: CombatId,
+/// One power on a creature, with the fields its own model saves.
+///
+/// [`sts2_core::Stack`] is what a report shows of a power: which one, and the
+/// amount. This is what the fight carries, which is that pair and the model
+/// beside it. See [`Fighter`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HeldPower<V: Rules> {
     pub(crate) power: V::Power,
-    pub(crate) amount: V::Number,
+    pub(crate) amount: sts2_core::PowerAmount<V::Number>,
+    pub(crate) state: V::PowerState,
 }
 
-/// What one power counts on itself, or zero for one counting nothing.
-pub(crate) fn counted<V: Rules>(
-    counters: &[Counter<V>],
-    creature: CombatId,
-    power: V::Power,
-) -> V::Number {
-    counters
-        .iter()
-        .find(|held| held.creature == creature && held.power == power)
-        .map_or_else(num_traits::zero, |held| held.amount)
+impl<V: Rules> HeldPower<V> {
+    /// A power as `PowerCmd.Apply` lands one, its model as new as it is.
+    pub(crate) fn new(power: V::Power, amount: sts2_core::PowerAmount<V::Number>) -> Self {
+        Self {
+            power,
+            amount,
+            state: <V::PowerState as sts2_core::PowerModel<V>>::new(power),
+        }
+    }
+
+    /// This power as a hook's listener, which is the instance the game hands
+    /// the hook to.
+    ///
+    /// `owner` is the side of the creature carrying it. A power is held by a
+    /// creature and does not know which, so the caller that found it says.
+    pub(crate) fn listener(&self, owner: V::CombatSide) -> sts2_core::Listener<'_, V> {
+        sts2_core::Listener::Power {
+            power: self.power,
+            amount: self.amount,
+            owner,
+            state: &self.state,
+        }
+    }
+
+    pub(crate) fn event_listener(
+        &mut self,
+        owner: V::CombatSide,
+    ) -> sts2_core::EventListener<'_, V> {
+        sts2_core::EventListener::Power {
+            power: self.power,
+            amount: self.amount,
+            owner,
+            state: &mut self.state,
+        }
+    }
+
+    /// What a report shows of it.
+    pub(crate) fn stack(&self) -> sts2_core::Stack<V> {
+        sts2_core::Stack {
+            power: self.power,
+            amount: self.amount,
+        }
+    }
+}
+
+/// One creature in the fight, and what its powers save.
+///
+/// [`sts2_core::Creature`] is what a report shows. This is what the fight
+/// holds: the same facts, and a model per power rather than a bare stack.
+#[derive(Debug, Clone)]
+pub(crate) struct Fighter<V: Rules> {
+    pub(crate) id: CombatId,
+    pub(crate) model: Option<sts2_core::ModelId<V>>,
+    pub(crate) side: V::CombatSide,
+    pub(crate) hp: V::Health,
+    pub(crate) max_hp: V::Health,
+    pub(crate) block: V::Number,
+    pub(crate) alive: bool,
+    pub(crate) powers: Vec<HeldPower<V>>,
+    pub(crate) next_move: Option<sts2_core::NextMove<V>>,
+}
+
+impl<V: Rules> Fighter<V> {
+    /// What a report shows of it, which is everything but the models.
+    pub(crate) fn creature(&self) -> Creature<V> {
+        Creature {
+            id: self.id,
+            model: self.model,
+            side: self.side,
+            hp: self.hp,
+            max_hp: self.max_hp,
+            block: self.block,
+            alive: self.alive,
+            powers: self.powers.iter().map(HeldPower::stack).collect(),
+            next_move: self.next_move.clone(),
+        }
+    }
 }
 
 /// A fight in progress.
@@ -335,7 +406,7 @@ pub(crate) struct Live<V: Rules> {
     pub(super) exhaust: Vec<CardInstance<V>>,
     /// Deck cards a combat command removed permanently while this fight ran.
     pub(super) removed_from_deck: Vec<CardIdent<V>>,
-    pub(super) creatures: Vec<Creature<V>>,
+    pub(super) creatures: Vec<Fighter<V>>,
     pub(super) orbs: Option<Orbs<V>>,
     /// One per monster in the fight, in the order the encounter fields them.
     pub(super) machines: Vec<Machine<V>>,
@@ -346,13 +417,6 @@ pub(crate) struct Live<V: Rules> {
     /// instance. The observation's [`sts2_core::Stack`] is the game's own wire
     /// shape and carries no such field, so the fight keeps it beside them.
     pub(super) skip_tick: Vec<(CombatId, V::Power)>,
-    /// `PowerModel.DynamicVars`, as the powers counting on themselves.
-    ///
-    /// A power counts here rather than in the stack the creature carries it
-    /// as. The reason is `skip_tick`'s: the wire's [`sts2_core::Stack`]
-    /// carries the amount and nothing else. Slow counts the cards played
-    /// against it in one of these.
-    pub(super) counted: Vec<Counter<V>>,
     /// The ids this fight has given out, and the next one it will.
     pub(super) card_ids: CardIds<V>,
     /// A card play waiting on an answer, which is the only thing the fight
@@ -409,7 +473,7 @@ impl<V: Rules> Live<V> {
     }
 
     /// The player, which every fight has one of.
-    pub(crate) fn player(&self) -> &Creature<V> {
+    pub(crate) fn player(&self) -> &Fighter<V> {
         self.creatures
             .iter()
             .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
@@ -424,7 +488,7 @@ impl<V: Rules> Live<V> {
     /// `Attack::damage` comes out as the number that will land, not the one
     /// the move prints. The game works it out on every read.
     pub(crate) fn report(&self) -> Combat<V> {
-        let mut creatures = self.creatures.clone();
+        let mut creatures: Vec<_> = self.creatures.iter().map(Fighter::creature).collect();
         let player = self
             .creatures
             .iter()
@@ -438,7 +502,6 @@ impl<V: Rules> Live<V> {
                 if let Some(attack) = &mut intent.attack {
                     attack.damage = super::board::modified::<V>(
                         &self.creatures,
-                        &self.counted,
                         creature.id,
                         Some(player),
                         attack.damage,
@@ -458,13 +521,7 @@ impl<V: Rules> Live<V> {
             discard: self.discard.iter().map(|card| card.ident).collect(),
             exhaust: self.exhaust.iter().map(|card| card.ident).collect(),
             creatures,
-            legal: super::legal::hand::<V>(
-                &self.hand,
-                &self.creatures,
-                &self.counted,
-                self.energy,
-                self.stars,
-            ),
+            legal: super::legal::hand::<V>(&self.hand, &self.creatures, self.energy, self.stars),
             orbs: self.orbs.clone(),
         }
     }
