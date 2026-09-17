@@ -37,7 +37,9 @@ pub(crate) struct State<V: Rules> {
     /// Where the run stands is the last of them. An act that has just begun
     /// has none, because `SetActInternal` clears them. Its map opens on its
     /// own starting node rather than on a point the run stands at.
-    visited: Vec<Coord>,
+    ///
+    /// Inline: an act's own height bounds it, and a coordinate is two bytes.
+    visited: SmallVec<[Coord; VISITED_INLINE]>,
     player: Player<V>,
     streams: Streams<V>,
     /// How many of this act's normal fights the run has walked into.
@@ -54,7 +56,9 @@ pub(crate) struct State<V: Rules> {
     /// must not consume the next normal encounter.
     elite_fights: usize,
     events_used: usize,
-    visited_events: Vec<V::Event>,
+    /// Shared until one is written. A run walks into a handful of events over
+    /// four acts, and no decision inside a fight touches the list.
+    visited_events: Arc<Vec<V::Event>>,
     unknown_odds: [f32; 3],
     odds: Odds,
     /// Every relic this run has dealt out of a bag, in the order it dealt
@@ -63,7 +67,7 @@ pub(crate) struct State<V: Rules> {
     /// The bags sit in the setup that every branch of a run shares. A branch
     /// that deals a relic must not deal it to the other, so what moves lives
     /// here. It is a handful over a run, not the whole table.
-    dealt_relics: SmallVec<[V::Relic; 8]>,
+    dealt_relics: Arc<Vec<V::Relic>>,
     /// `PlayerExtraFields.CardShopRemovalsUsed`, which every merchant's
     /// removal price climbs with. It counts over the run, not the room.
     removals_used: usize,
@@ -168,7 +172,10 @@ struct Player<V: Rules> {
     potions: SmallVec<[V::Potion; 3]>,
     /// The physical slot beside each potion. Empty slots survive drinking.
     potion_positions: SmallVec<[usize; 3]>,
-    deck: Vec<CardIdent<V>>,
+    /// Shared until one is written. Every write is a room's: a shop, a
+    /// reward, a rest site. Nothing inside a fight moves the deck, so a
+    /// search expanding a fight copies the pointer and not the cards.
+    deck: Arc<Vec<CardIdent<V>>>,
     /// What the run carries between fights.
     ///
     /// The game keeps one number. Here a fight holds a copy, because a fight
@@ -180,6 +187,22 @@ struct Player<V: Rules> {
     gold: V::Number,
     potion_slots: V::Count,
 }
+
+impl<V: Rules> Player<V> {
+    /// The deck, to write on.
+    ///
+    /// The copy the writer gets is its own, and every other branch of the run
+    /// keeps the one they shared. See [`Player::deck`].
+    fn deck_mut(&mut self) -> &mut Vec<CardIdent<V>> {
+        Arc::make_mut(&mut self.deck)
+    }
+}
+
+/// How many map points one act's run stands on, before reaching the heap.
+///
+/// An act is shorter than this, so the list stays where it is put. A longer
+/// one spills, the way every act's list did.
+const VISITED_INLINE: usize = 24;
 
 /// Exactly one room or pending action can own the run at a time.
 #[derive(Debug, Clone)]
@@ -417,7 +440,7 @@ impl<V: Rules> State<V> {
             map: Arc::new(map),
             act: 0,
             floor: num_traits::one(),
-            visited: vec![at],
+            visited: smallvec::smallvec![at],
             player: Player {
                 relics: V::starting_relics(character)
                     .into_iter()
@@ -425,10 +448,12 @@ impl<V: Rules> State<V> {
                     .collect(),
                 potions: SmallVec::new(),
                 potion_positions: SmallVec::new(),
-                deck: V::starting_deck(character)
-                    .into_iter()
-                    .map(CardIdent::new)
-                    .collect(),
+                deck: Arc::new(
+                    V::starting_deck(character)
+                        .into_iter()
+                        .map(CardIdent::new)
+                        .collect(),
+                ),
                 hp: V::starting_hp(character),
                 max_hp: V::starting_hp(character),
                 gold: num_traits::cast(V::starting_gold(character))
@@ -439,10 +464,10 @@ impl<V: Rules> State<V> {
             normal_fights: 0,
             elite_fights: 0,
             events_used: 0,
-            visited_events: Vec::new(),
+            visited_events: Arc::new(Vec::new()),
             unknown_odds: UNKNOWN_ODDS,
             odds: Odds::default(),
-            dealt_relics: SmallVec::new(),
+            dealt_relics: Arc::new(Vec::new()),
             removals_used: 0,
             streams,
             phase: Phase::Neow {
@@ -558,7 +583,7 @@ impl<V: Rules> State<V> {
             let Some(at) = self.player.deck.iter().position(|held| held == card) else {
                 continue;
             };
-            self.player.deck.remove(at);
+            self.player.deck_mut().remove(at);
         }
     }
 
@@ -624,7 +649,7 @@ impl<V: Rules> State<V> {
             .opening
             .player_relics
             .front(rarity, &self.dealt_relics);
-        self.dealt_relics.push(relic);
+        Arc::make_mut(&mut self.dealt_relics).push(relic);
         relic
     }
 
@@ -766,14 +791,14 @@ impl<V: Rules> State<V> {
         self.streams = streams;
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
-        self.visited_events.push(event);
+        Arc::make_mut(&mut self.visited_events).push(event);
         self.enter(Location::MapPoint(to), Phase::Event { state, rng });
     }
 
     /// Enter a treasure room after resolving its relic and stream counter.
     pub(super) fn enter_treasure(&mut self, to: Coord, relic: V::Relic, streams: Streams<V>) {
         self.streams = streams;
-        self.dealt_relics.push(relic);
+        Arc::make_mut(&mut self.dealt_relics).push(relic);
         self.enter(
             Location::MapPoint(to),
             Phase::Treasure {
@@ -813,7 +838,7 @@ impl<V: Rules> State<V> {
         self.player.gold = self.player.gold - cost;
         let asking = match stock {
             sts2_core::Stock::Card(Some(on_sale)) => {
-                self.player.deck.push(on_sale.card);
+                self.player.deck_mut().push(on_sale.card);
                 None
             }
             sts2_core::Stock::Relic(Some(relic)) => {
@@ -895,7 +920,7 @@ impl<V: Rules> State<V> {
         let Some(card) = offered.get(index).copied() else {
             unimplemented!("a clone naming a card that was not offered");
         };
-        self.player.deck.push(card);
+        self.player.deck_mut().push(card);
         // `OnTryPurchaseWrapper` has returned now, so `ClearAfterPurchase`
         // runs and the shelf the relic came off empties.
         let Phase::Shop { entries, .. } = &mut self.phase else {
@@ -911,7 +936,7 @@ impl<V: Rules> State<V> {
         if index >= self.player.deck.len() {
             unimplemented!("a removal naming a card the deck does not hold");
         }
-        self.player.deck.remove(index);
+        self.player.deck_mut().remove(index);
         // `DoLocalMerchantCardRemoval` spends the gold once the card comes
         // back, and `CardShopRemovalsUsed` climbs over the run.
         let spent = removal_cost::<V>(self.removals_used);
@@ -969,7 +994,7 @@ impl<V: Rules> State<V> {
         .stock();
 
         self.streams = streams;
-        self.dealt_relics = dealt.into_iter().collect();
+        self.dealt_relics = Arc::new(dealt);
         Phase::Shop {
             entries,
             unfinished: None,
@@ -1115,7 +1140,7 @@ impl<V: Rules> State<V> {
     /// hooks, so it cannot answer for one.
     pub(crate) fn grant(&mut self, gift: &Gift<V>) -> Result<Decided, Error> {
         match gift {
-            Gift::Card(card) => self.player.deck.push(CardIdent::new(*card)),
+            Gift::Card(card) => self.player.deck_mut().push(CardIdent::new(*card)),
             Gift::Potion(potion) => {
                 // `TryToProcure` refuses a full belt rather than growing one,
                 // and the belt in the next observation says whether it landed.
@@ -1297,7 +1322,7 @@ impl<V: Rules> State<V> {
             unimplemented!("a card selection naming a card that was not offered");
         };
 
-        self.player.deck.extend(chosen);
+        self.player.deck_mut().extend(chosen);
         *selection = None;
         Ok(Decided::Resolved)
     }
@@ -1321,7 +1346,7 @@ impl<V: Rules> State<V> {
             .upgradable()
             .nth(index)
             .unwrap_or_else(|| unimplemented!("upgrading a card the selection did not offer"));
-        self.player.deck[at].upgrade += 1;
+        self.player.deck_mut()[at].upgrade += 1;
 
         let Phase::RestSite {
             options, upgrading, ..
@@ -1389,12 +1414,12 @@ impl<V: Rules> State<V> {
                         .copied()
                         .unwrap_or_else(|| unimplemented!("a card the reward does not offer"));
                     *taken = true;
-                    self.player.deck.push(chosen);
+                    self.player.deck_mut().push(chosen);
                 }
                 (Offer::SpecialCard { card, taken }, TakeReward::NonCard { .. }) => {
                     let card = *card;
                     *taken = true;
-                    self.player.deck.push(card);
+                    self.player.deck_mut().push(card);
                 }
                 (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
                     let relic = *relic;
@@ -1722,11 +1747,11 @@ impl<V: Rules> State<V> {
                     .collect(),
                 potions: self.belt(),
                 potion_slots: self.player.potion_slots,
-                deck: self.player.deck.clone(),
+                deck: self.player.deck.to_vec(),
                 in_combat,
                 map: Map {
                     at: self.visited.last().copied(),
-                    visited: self.visited.clone(),
+                    visited: self.visited.to_vec(),
                     travelable,
                     points: map.shared(),
                     // `MapLegality.CanProceed`, and the fight it is standing
@@ -1758,7 +1783,7 @@ impl<V: Rules> State<V> {
                 (deck[at].card.order(), deck[at].upgrade)
             });
         for at in upgradable.into_iter().take(count) {
-            self.player.deck[at].upgrade += 1;
+            self.player.deck_mut()[at].upgrade += 1;
         }
     }
 }
@@ -1968,7 +1993,7 @@ mod tests {
             ..CardIdent::new(Cards::Regent(RegentCard::BigBang))
         };
         let big_bang = CardIdent::new(Cards::Regent(RegentCard::BigBang));
-        run.player.deck = vec![strike, upgraded, big_bang];
+        run.player.deck = Arc::new(vec![strike, upgraded, big_bang]);
         run.phase = Phase::RestSite {
             options: vec![
                 <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
@@ -1991,7 +2016,7 @@ mod tests {
         run.answer(&Answer::Cards(vec![1]))
             .expect("the second offered card can be upgraded");
         assert_eq!(
-            run.player.deck,
+            *run.player.deck,
             vec![
                 strike,
                 upgraded,
@@ -2060,8 +2085,9 @@ mod tests {
         // A deck of the one card whose upgrade is ported. What upgrading does
         // to a card is the card's own rule, and this is about the relic that
         // asks for it.
-        run.player.deck =
-            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 10).collect();
+        run.player.deck = Arc::new(
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 10).collect(),
+        );
 
         let mut opening_hands = Vec::new();
         for _ in 0..2 {
@@ -2114,8 +2140,9 @@ mod tests {
 
         let mut run = opened();
         run.player.relics.push(HeldRelic::new(Relic::Pocketwatch));
-        run.player.deck =
-            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20).collect();
+        run.player.deck = Arc::new(
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20).collect(),
+        );
         run.fight_here(Encounter::SlimesWeak)
             .expect("the simulator can build this fight");
 
