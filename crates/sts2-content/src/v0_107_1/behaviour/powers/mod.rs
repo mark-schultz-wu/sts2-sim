@@ -18,39 +18,67 @@ use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct State {
-    power: Power,
-    counted: Number,
-    off_balance: bool,
+pub enum State {
+    Stateless(Power),
+    Slow { counted: Number },
+    Tender { counted: Number },
+    Imbalanced { off_balance: bool },
 }
 
 impl sts2_core::PowerModel<V> for State {
     fn new(power: Power) -> Self {
-        Self {
-            power,
-            counted: 0,
-            off_balance: false,
+        match power {
+            Power::SlowPower => Self::Slow { counted: 0 },
+            Power::TenderPower => Self::Tender { counted: 0 },
+            Power::ImbalancedPower => Self::Imbalanced { off_balance: false },
+            power => Self::Stateless(power),
         }
     }
 }
 
 impl State {
+    fn power(&self) -> Power {
+        match self {
+            Self::Stateless(power) => *power,
+            Self::Slow { .. } => Power::SlowPower,
+            Self::Tender { .. } => Power::TenderPower,
+            Self::Imbalanced { .. } => Power::ImbalancedPower,
+        }
+    }
+
     fn counted(&self) -> Number {
-        self.counted
+        match self {
+            Self::Slow { counted } | Self::Tender { counted } => *counted,
+            _ => 0,
+        }
     }
+
     fn count(&mut self, amount: Number) {
-        self.counted += amount;
+        match self {
+            Self::Slow { counted } | Self::Tender { counted } => *counted += amount,
+            state => unreachable!("counted state for {:?}", state.power()),
+        }
     }
+
     fn clear(&mut self) {
-        self.counted = 0;
+        match self {
+            Self::Slow { counted } | Self::Tender { counted } => *counted = 0,
+            state => unreachable!("counted state for {:?}", state.power()),
+        }
     }
 
     fn set_off_balance(&mut self, off_balance: bool) {
-        self.off_balance = off_balance;
+        let Self::Imbalanced {
+            off_balance: current,
+        } = self
+        else {
+            unreachable!("off-balance state for {:?}", self.power())
+        };
+        *current = off_balance;
     }
 
     pub(crate) fn is_off_balance(&self) -> bool {
-        self.off_balance
+        matches!(self, Self::Imbalanced { off_balance: true })
     }
 }
 
@@ -132,7 +160,7 @@ pub(crate) fn modify_hook(
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     let one: Number = num_traits::one();
-    debug_assert_eq!(state.power, power);
+    debug_assert_eq!(state.power(), power);
     let counted = state.counted();
     match (power, amount, hook) {
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
@@ -281,7 +309,7 @@ pub(crate) fn event_hook(
     use super::super::generated::monsters::{IntentKind, MoveId};
     use sts2_core::{EventHook, HookEffect};
 
-    debug_assert_eq!(state.power, power);
+    debug_assert_eq!(state.power(), power);
     let counted = state.counted();
 
     // `TemporaryStrengthPower` asks for two things when a turn ends, and the
