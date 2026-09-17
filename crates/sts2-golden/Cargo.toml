@@ -29,3 +29,9 @@ sts2-core = { workspace = true, features = ["fixture"] }
 # Replaying a recording means spelling the decisions in it, which names a build.
 sts2-content = { workspace = true }
 sts2-sim = { workspace = true }
+
+# No harness: the spike this is measured against printed its own medians, and a
+# criterion dependency does not make the two more comparable.
+[[bench]]
+name = "replay"
+harness = false
