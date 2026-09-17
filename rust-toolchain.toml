@@ -1,0 +1,9 @@
+# The compiler this repository is built with, everywhere.
+#
+# rustup reads this before any cargo command. The CI image bakes what it says:
+# `versions.env` reads the channel out of here. `digest.sh` hashes this file,
+# so a bump fails every job until the image is rebuilt.
+[toolchain]
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]
+targets = ["wasm32-unknown-unknown"]
