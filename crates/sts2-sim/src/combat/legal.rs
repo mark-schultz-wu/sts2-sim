@@ -8,6 +8,7 @@
 //! `IsPlayable` override. Nothing raises either one yet: this fight has no
 //! powers, no relic that listens, and no card that overrides it.
 
+use smallvec::{SmallVec, smallvec};
 use sts2_core::{
     CardIdent, CardTable, Combat, CombatId, Cost, Creature, EffectResolution, FlagSet, Held,
     Playable, PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable,
@@ -260,24 +261,26 @@ fn effect<V: Rules>(
     );
 
     let numbers = numbers::<V>(held, creatures);
-    let against: Vec<Option<CombatId>> = if per_target && !targets.is_empty() {
+    // Inline, because the common list is the one entry a card that names no
+    // target previews against, and this is built for every card in hand.
+    let against: SmallVec<[Option<CombatId>; 4]> = if per_target && !targets.is_empty() {
         targets.iter().copied().map(Some).collect()
     } else {
-        vec![None]
+        smallvec![None]
     };
 
-    let mut previews: Vec<Preview<V>> = against
-        .into_iter()
-        .map(|target| Preview {
-            target,
-            // The game formats this from its localisation tables, which the
-            // simulator does not have. `Observation::rules_digest` leaves it
-            // out for that reason, and a front end reads the numbers.
-            text: None,
-            vars: previewed::<V>(held, creatures, target),
-            base: numbers.clone(),
-        })
-        .collect();
+    // Sized up front. A `SmallVec` does not promise its length the way a
+    // `Vec` does, and a collect that cannot read one grows by doubling.
+    let mut previews: Vec<Preview<V>> = Vec::with_capacity(against.len());
+    previews.extend(against.into_iter().map(|target| Preview {
+        target,
+        // The game formats this from its localisation tables, which the
+        // simulator does not have. `Observation::rules_digest` leaves it
+        // out for that reason, and a front end reads the numbers.
+        text: None,
+        vars: previewed::<V>(held, creatures, target),
+        base: numbers.clone(),
+    }));
 
     if previews.len() > 1
         && previews[1..]
@@ -349,6 +352,7 @@ fn numbers<V: Rules>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::live::PowerList;
     use super::*;
     use sts2_content::v0_107_1::{
         V0_107_1,
@@ -393,7 +397,7 @@ mod tests {
             max_hp: 10,
             block: 0,
             alive: true,
-            powers: Vec::new(),
+            powers: PowerList::new(),
             next_move: None,
         }
     }
