@@ -156,7 +156,7 @@ fn full() -> Observation<V> {
                 }],
                 next_move: Some(NextMove {
                     id: MoveId::AboutToBlowMove,
-                    intents: vec![Intent {
+                    intents: smallvec::smallvec![Intent {
                         kind: IntentKind::Attack,
                         attack: Some(Attack {
                             damage: 12,

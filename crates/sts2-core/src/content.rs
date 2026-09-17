@@ -1812,7 +1812,7 @@ impl<V: ContentVersion> Spawned<V> {
 ///
 /// The numbers index the build's own state list, so only that build's walk
 /// reads them.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct MoveMachine {
     /// The state the machine stands on.
     pub at: u8,
@@ -1824,7 +1824,10 @@ pub struct MoveMachine {
     pub ever_performed: bool,
     /// `StateLog`: every move state entered, in order. A random branch's
     /// repeat rules read it.
-    pub log: Vec<u8>,
+    ///
+    /// Inline, because one monster logs one state a turn and a fight is
+    /// shorter than this. A branch of a run copies every monster's log.
+    pub log: smallvec::SmallVec<[u8; LOG_INLINE]>,
     /// Whether the machine stands on a state a caller built.
     ///
     /// `Creature.Stun` and `IllusionPower` both build a `MoveState` rather
@@ -1833,6 +1836,29 @@ pub struct MoveMachine {
     /// at the last state in the log. That state is [`MoveMachine::at`]. So a
     /// built state needs no index of its own, and `at` is where it goes.
     pub built: bool,
+}
+
+/// How many states one monster's log holds before reaching the heap.
+///
+/// A monster enters about one a turn. The longest fight in the recording logs
+/// twenty, so this is that with room over. A longer one spills, as every log
+/// used to.
+pub const LOG_INLINE: usize = 24;
+
+impl Clone for MoveMachine {
+    /// Copies the log rather than walking it.
+    ///
+    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
+    /// see that the item is `Copy`. A state index is a byte.
+    fn clone(&self) -> Self {
+        Self {
+            at: self.at,
+            performed: self.performed,
+            ever_performed: self.ever_performed,
+            log: smallvec::SmallVec::from_slice(&self.log),
+            built: self.built,
+        }
+    }
 }
 
 impl MoveMachine {
@@ -1845,7 +1871,11 @@ impl MoveMachine {
     pub fn new(at: u8, logged: bool) -> Self {
         Self {
             at,
-            log: if logged { vec![at] } else { Vec::new() },
+            log: if logged {
+                smallvec::smallvec![at]
+            } else {
+                smallvec::SmallVec::new()
+            },
             ..Self::default()
         }
     }
