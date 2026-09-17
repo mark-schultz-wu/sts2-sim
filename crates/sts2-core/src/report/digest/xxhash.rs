@@ -63,8 +63,9 @@ impl XxHash64 {
     }
 
     fn stripe(&mut self, stripe: &[u8]) {
-        for (lane, chunk) in self.lanes.iter_mut().zip(stripe.chunks_exact(8)) {
-            *lane = round(*lane, word(chunk));
+        let (words, _) = stripe.as_chunks::<8>();
+        for (lane, chunk) in self.lanes.iter_mut().zip(words) {
+            *lane = round(*lane, u64::from_le_bytes(*chunk));
         }
     }
 

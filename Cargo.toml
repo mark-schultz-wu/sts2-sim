@@ -42,3 +42,6 @@ thiserror = "2.0.20"
 
 [profile.release]
 debug = true
+# The rules are generic over the build, so the inlining that matters is inside
+# a crate. Sixteen units cut it up.
+codegen-units = 1
