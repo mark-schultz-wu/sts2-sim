@@ -13,11 +13,11 @@
 //! counts beside each number do not wobble at all, which is why they are here:
 //! a cut that removes a `Vec` shows up there whether or not the clock agrees.
 
-use std::panic::{self, AssertUnwindSafe};
 use std::time::Instant;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{Construct, Play, Start, Step};
+use sts2_golden::bench::{named, reached, upto};
 use sts2_golden::{Counted, allocations, every_run, recording};
 use sts2_sim::Sim;
 
@@ -35,7 +35,7 @@ fn main() {
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
 
         // Only the prefix the simulator manages. The rest measures nothing yet.
-        let reached = reached(&start, &steps);
+        let reached = reached::<V, Sim<V>>(&start, &steps);
         let mut rounds: Vec<f64> = (0..ROUNDS)
             .map(|_| {
                 let at = Instant::now();
@@ -71,7 +71,7 @@ fn main() {
             let time = |take: &mut dyn FnMut(&mut Sim<V>)| {
                 let mut rounds: Vec<f64> = (0..ROUNDS)
                     .map(|_| {
-                        let mut sim = upto(&start, &steps, at);
+                        let mut sim: Sim<V> = upto(&start, &steps, at);
                         let started = Instant::now();
                         take(&mut sim);
                         started.elapsed().as_nanos() as f64
@@ -90,7 +90,7 @@ fn main() {
                 std::hint::black_box(sim.observe().ok());
             });
 
-            let mut sim = upto(&start, &steps, at);
+            let mut sim: Sim<V> = upto(&start, &steps, at);
             let (_, asked) = allocations(|| {
                 let _ = sim.step(step);
             });
@@ -106,7 +106,7 @@ fn main() {
 
         // What one observation costs to hand back, which a search pays at every
         // node whether it reads the observation or not.
-        let mut sim = upto(&start, &steps, reached);
+        let mut sim: Sim<V> = upto(&start, &steps, reached);
         let laps = 10_000;
         let at = Instant::now();
         for _ in 0..laps {
@@ -125,18 +125,6 @@ fn main() {
     }
 }
 
-/// What a step is, for a report that has to name one.
-fn named(step: &Step<V>) -> String {
-    match step {
-        Step::Decision(decision) => format!("{decision:?}")
-            .split_whitespace()
-            .next()
-            .unwrap_or("?")
-            .to_string(),
-        Step::Setup(_) => "setup".to_string(),
-    }
-}
-
 /// Replays a prefix known to be supported.
 fn played(start: &Start<V>, steps: &[Step<V>]) -> usize {
     let mut sim = Sim::<V>::begin((), start).expect("a recording starts a run");
@@ -144,36 +132,4 @@ fn played(start: &Start<V>, steps: &[Step<V>]) -> usize {
         assert!(matches!(sim.step(step), Ok(Ok(_))));
     }
     steps.len()
-}
-
-/// How much of a recording the simulator supports. Unported behavior panics
-/// deliberately, so discover the boundary outside the timed region.
-fn reached(start: &Start<V>, steps: &[Step<V>]) -> usize {
-    let hook = panic::take_hook();
-    panic::set_hook(Box::new(|_| {}));
-    let begun = panic::catch_unwind(AssertUnwindSafe(|| Sim::<V>::begin((), start)));
-    let Ok(Ok(mut sim)) = begun else {
-        panic::set_hook(hook);
-        return 0;
-    };
-    let reached = steps
-        .iter()
-        .position(|step| {
-            !matches!(
-                panic::catch_unwind(AssertUnwindSafe(|| sim.step(step))),
-                Ok(Ok(Ok(_)))
-            )
-        })
-        .unwrap_or(steps.len());
-    panic::set_hook(hook);
-    reached
-}
-
-/// A simulator standing where the first `count` steps leave the run.
-fn upto(start: &Start<V>, steps: &[Step<V>], count: usize) -> Sim<V> {
-    let mut sim = Sim::<V>::begin((), start).expect("a recording starts a run");
-    for step in steps.iter().take(count) {
-        let _ = sim.step(step);
-    }
-    sim
 }
