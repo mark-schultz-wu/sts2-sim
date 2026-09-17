@@ -12,12 +12,27 @@
 //! it and nothing else does.
 
 use num_traits::CheckedAdd;
+use smallvec::SmallVec;
 use sts2_core::{
-    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Rules,
-    SideKinds,
+    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, ContentVersion, Creature,
+    Orbs, Rules, SideKinds,
 };
 
 use super::monster::Machine;
+
+/// The numbers one copy of a card prints.
+///
+/// Held inline up to [`VARS_INLINE`] of them, because the fight is cloned
+/// once per decision and every card it holds is cloned with it.
+pub(super) type CardVarList<V> = SmallVec<
+    [CardNumber<<V as ContentVersion>::CardVar, <V as ContentVersion>::Number>; VARS_INLINE],
+>;
+
+/// How many printed numbers a card holds without reaching the heap.
+///
+/// Four, because all but four of the cards the ported build prints hold at
+/// most this many. Those four spill to the heap, the way every card did.
+const VARS_INLINE: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Asker<V: Rules> {
@@ -112,7 +127,7 @@ pub(super) struct CardInstance<V: Rules> {
     pub(super) id: CardId<V>,
     pub(super) ident: CardIdent<V>,
     /// The numbers this copy prints, which start as the table's and move.
-    pub(super) vars: Vec<CardNumber<V::CardVar, V::Number>>,
+    pub(super) vars: CardVarList<V>,
     /// `CardModel.EnergyCost` and `StarCost` for this copy.
     ///
     /// Per copy, because an upgrade writes on them. The table prices a fresh
