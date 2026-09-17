@@ -1,7 +1,7 @@
 //! Moving to a map point, and entering what waits there.
 
 use sts2_core::rng::GameRng;
-use sts2_core::{Applied, AscensionKinds, Coord, MapPointKinds, Reason, Rules, RunStreamKinds};
+use sts2_core::{AscensionKinds, Coord, Decided, MapPointKinds, Reason, Rules, RunStreamKinds};
 
 use super::State;
 use super::state::{EncounterQueue, Location};
@@ -36,11 +36,8 @@ impl<V: Rules> State<V> {
     /// still fail while its rules are incomplete, and a failed decision must
     /// leave the run where it was.
     pub(crate) fn resolve(&self, to: Coord) -> Result<Move<V>, Reason<V>> {
-        let reported = self.report();
-        let reachable = reported
-            .observation
-            .map
-            .travelable
+        let travelable = self.travelable();
+        let reachable = travelable
             .iter()
             .find(|reachable| reachable.at == to)
             .ok_or(Reason::NotTravelable { at: to })?;
@@ -50,8 +47,7 @@ impl<V: Rules> State<V> {
             V::MapPointType::BOSS,
         ];
         let destination = if fights.contains(&reachable.kind) {
-            let act: usize = num_traits::cast(reported.observation.act)
-                .expect("an act number fits an addressable list");
+            let act = self.act();
             let (encounter, queue) = if reachable.kind == V::MapPointType::MONSTER {
                 (
                     self.normal_encounter(act)
@@ -83,7 +79,7 @@ impl<V: Rules> State<V> {
     /// The room comes first, and nothing before the last block touches the
     /// run. A room the simulator cannot build yet reports which one, and the
     /// caller still holds the run it had.
-    pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Applied<V>, crate::combat::Error> {
+    pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Decided, crate::combat::Error> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
@@ -100,16 +96,16 @@ impl<V: Rules> State<V> {
                 };
                 let relic = self.next_shared_relic(rarity);
                 self.enter_treasure(to, relic, streams);
-                return Ok(self.report());
+                return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::REST_SITE {
                 self.enter_rest_site(to);
-                return Ok(self.report());
+                return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::SHOP {
                 let shop = self.stocked_shop();
                 self.enter(Location::MapPoint(to), shop);
-                return Ok(self.report());
+                return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::ANCIENT {
                 // `AncientEventModel.BeforeEventStarted`, which heals what the
@@ -143,7 +139,7 @@ impl<V: Rules> State<V> {
                         unknown_odds,
                     },
                 );
-                return Ok(self.report());
+                return Ok(Decided::Resolved);
             }
             if kind != V::MapPointType::UNKNOWN {
                 unimplemented!("entering {destination:?}");
@@ -184,7 +180,7 @@ impl<V: Rules> State<V> {
                     unknown_odds: odds,
                 },
             );
-            return Ok(self.report());
+            return Ok(Decided::Resolved);
         }
         let Destination::Combat { encounter, queue } = destination else {
             unreachable!()
@@ -192,6 +188,6 @@ impl<V: Rules> State<V> {
 
         let fight = self.create_fight(encounter, queue, &self.report().observation)?;
         self.enter_fight(fight, Location::MapPoint(to));
-        Ok(self.report())
+        Ok(Decided::Resolved)
     }
 }

@@ -1,16 +1,16 @@
 //! Driving the fight the run is standing in.
 
 use sts2_core::{
-    Answer, Answered, BeltIndex, CombatId, HandIndex, PotionTable, Reason, Refusal, Rules,
+    Answer, BeltIndex, CombatId, Decided, HandIndex, PotionTable, Reason, Refusal, Rules,
 };
 
-use super::State;
+use super::{Settled, State};
 use crate::combat;
 use crate::combat::Error;
 
 impl<V: Rules> State<V> {
     /// Answer the selection on which a card play stopped.
-    pub(super) fn answer_fight(&mut self, answer: &Answer) -> Result<sts2_core::Applied<V>, Error> {
+    pub(super) fn answer_fight(&mut self, answer: &Answer) -> Result<Decided, Error> {
         let Answer::Cards(chosen) = answer else {
             unimplemented!("an answer that is not a card selection");
         };
@@ -29,7 +29,7 @@ impl<V: Rules> State<V> {
         &mut self,
         index: HandIndex,
         target: Option<CombatId>,
-    ) -> Result<Answered<V>, Error> {
+    ) -> Result<Settled<V>, Error> {
         let refused = |reason| {
             Ok(Err(Refusal {
                 what: "play_card".into(),
@@ -61,7 +61,7 @@ impl<V: Rules> State<V> {
         &mut self,
         index: BeltIndex,
         target: Option<CombatId>,
-    ) -> Result<Answered<V>, Error> {
+    ) -> Result<Settled<V>, Error> {
         let refused = |reason| {
             Ok(Err(Refusal {
                 what: "use_potion".into(),
@@ -69,7 +69,8 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let belt = self.report().observation.potions;
+        // The belt alone, rather than the whole report it appears in.
+        let belt = self.belt();
         let at = usize::from(index.get());
         let Some(held) = belt.get(at) else {
             return refused(Reason::OutOfRange {
@@ -111,7 +112,7 @@ impl<V: Rules> State<V> {
     /// End the player's turn, and set up the next one.
     ///
     /// On a copy of the fight and the graphs beside it, as playing a card is.
-    pub(crate) fn end_turn(&mut self) -> Result<Answered<V>, Error> {
+    pub(crate) fn end_turn(&mut self) -> Result<Settled<V>, Error> {
         let Some(live) = self.fight() else {
             return Ok(Err(Refusal {
                 what: "end_turn".into(),
@@ -135,7 +136,7 @@ impl<V: Rules> State<V> {
     ///
     /// A decision that won the fight goes on to the rewards, which is
     /// `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
-    fn settle(&mut self, fought: combat::Fought<V>) -> sts2_core::Applied<V> {
+    fn settle(&mut self, fought: combat::Fought<V>) -> Decided {
         self.drew(fought.streams);
         self.lose_cards(fought.live.removed_from_deck());
         // The belt the fight wrote, beside the streams it drew from. Neither
@@ -161,11 +162,9 @@ impl<V: Rules> State<V> {
                 self.won(combat, offered);
             }
         }
-        let mut applied = self.report();
         // A decision the end of a fight cut short is `Decided::Abandoned`. The
         // rewards it put up are what is left of it.
-        applied.resolved = applied.asking.is_none();
-        applied
+        self.decided()
     }
 
     /// `RewardsSet.WithRewardsFromRoom`, for the fight just won.
