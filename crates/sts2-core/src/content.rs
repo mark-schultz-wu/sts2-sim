@@ -1468,13 +1468,6 @@ pub enum HookEffect<V: ContentVersion> {
         amount: V::Number,
     },
     TickDownDuration,
-    /// `DynamicVars[..].BaseValue += amount`, on the power that asked.
-    ///
-    /// The number a power counts on itself, which is not the stack the
-    /// creature carries it as. Slow counts the cards played against it.
-    Count(V::Number),
-    /// `DynamicVars[..].BaseValue = 0`, on the power that asked.
-    ClearCount,
     /// `PowerCmd.Decrement(this)`: one off the amount, and the instance goes
     /// once it reaches zero.
     ///
@@ -1519,6 +1512,19 @@ pub trait RelicModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + E
     fn display_amount(&self, relic: V::Relic) -> V::Number;
 }
 
+/// One power's own model, as the creature carrying it holds one.
+///
+/// `PowerModel`'s subclasses read their own fields off `this`, the way a
+/// relic's do. The stack is the amount the creature carries, and everything
+/// beside it a power saves for itself is here.
+pub trait PowerModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
+    /// The model as `PowerCmd.Apply` builds one.
+    ///
+    /// Every power reaches this, because every power that lands is an
+    /// instance. A power that saves nothing still has a model.
+    fn new(power: V::Power) -> Self;
+}
+
 /// One model instance a hook is delivered to, with what that instance saves.
 ///
 /// `AbstractModel`'s subclasses read their own fields off `this`. A power's
@@ -1534,15 +1540,30 @@ pub enum Listener<'a, V: Hooks> {
         /// The side its owner is on, which is `Owner.Creature.Side`. A hook
         /// naming a side asks the instance whether it is one of them.
         owner: V::CombatSide,
-        /// The one number this instance counts on itself, out of
-        /// `PowerModel.DynamicVars`. Zero for a power that counts none.
-        counted: V::Number,
+        /// What this instance saves for itself, which is every field of its
+        /// own model. A power writes here rather than ask the fight to.
+        state: &'a V::PowerState,
     },
-    Relic(&'a mut V::RelicState),
+    Relic(&'a V::RelicState),
     /// A card in the fight, with the numbers this copy of it prints.
     ///
     /// `CardModel` saves its fields in those numbers: a card that raises its
     /// own damage as it is drawn has raised what this slice carries.
+    Card {
+        card: V::Card,
+        printed: &'a [CardNumber<V::CardVar, V::Number>],
+    },
+}
+
+#[derive(Debug)]
+pub enum EventListener<'a, V: Hooks> {
+    Power {
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+        owner: V::CombatSide,
+        state: &'a mut V::PowerState,
+    },
+    Relic(&'a mut V::RelicState),
     Card {
         card: V::Card,
         printed: &'a [CardNumber<V::CardVar, V::Number>],
@@ -1557,11 +1578,17 @@ pub trait Hooks: ContentVersion {
     /// What one relic's own model saves, which the run carries for it.
     type RelicState: RelicModel<Self>;
 
+    /// What one power's own model saves, which the creature carries for it.
+    type PowerState: PowerModel<Self>;
+
     fn modify_hook(listener: Listener<'_, Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
 
     fn decide_hook(listener: Listener<'_, Self>, hook: DecisionHook) -> crate::HookResponse<bool>;
 
-    fn event_hook(listener: Listener<'_, Self>, hook: EventHook<Self>) -> Vec<HookEffect<Self>>;
+    fn event_hook(
+        listener: EventListener<'_, Self>,
+        hook: EventHook<Self>,
+    ) -> Vec<HookEffect<Self>>;
 }
 
 /// What a power does when one side's turn ends, which is its

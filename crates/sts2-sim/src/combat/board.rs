@@ -12,12 +12,12 @@ use crate::rng::MegaRng;
 use num_traits::{Saturating as _, Zero};
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Creature, Effect,
+    Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Effect,
     EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, RunStreamKinds,
     Scaling, SideKinds, Stack,
 };
 
-use super::live::{CardInstance, Counter, Live, counted};
+use super::live::{CardInstance, Fighter, HeldPower, Live};
 use crate::run::HeldRelic;
 use crate::stream::CombatRngs;
 
@@ -185,12 +185,12 @@ impl<'a, V: Rules> Board<'a, V> {
         // one.
         // Not a `Stack`, because nothing carries it yet. The side is the
         // creature it is landing on, which is the owner it is about to have.
-        let listener = sts2_core::Listener::Power {
+        let mut state = <V::PowerState as sts2_core::PowerModel<V>>::new(power);
+        let listener = sts2_core::EventListener::Power {
             power,
             amount,
             owner: self.live.creatures[at].side,
-            // Nothing is counted on a power that is not on a creature yet.
-            counted: V::Number::zero(),
+            state: &mut state,
         };
         let asked = <V as sts2_core::Hooks>::event_hook(
             listener,
@@ -237,7 +237,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 PowerAmount::Endless => unimplemented!("a count landing on an endless power"),
             },
             (Some(_), PowerAmount::Endless) => {}
-            (None, amount) => self.live.creatures[at].powers.push(Stack { power, amount }),
+            (None, amount) => self.live.creatures[at]
+                .powers
+                .push(HeldPower::new(power, amount)),
         }
         // A counted power whose stack reaches zero is gone. Temporary
         // Strength returns exactly what it took, so leaving a zero instance
@@ -322,15 +324,11 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.die(at) {
             return;
         }
-        let counters = &self.live.counted;
         let primary_enemy_remains = self.live.creatures.iter().any(|creature| {
             creature.side == <V::CombatSide as SideKinds>::ENEMY
                 && !creature.powers.iter().any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
-                        held.listener(
-                            creature.side,
-                            counted::<V>(counters, creature.id, held.power),
-                        ),
+                        held.listener(creature.side),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
                     )
                     .is_decision_and(|counts| !counts)
@@ -364,20 +362,20 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         let owner = self.live.creatures[at].side;
         let id = self.live.creatures[at].id;
-        let powers = self.live.creatures[at].powers.clone();
-        let counters = self.live.counted.clone();
+
+        let mut powers = self.live.creatures[at].powers.clone();
         let after_death: Vec<_> = powers
-            .iter()
+            .iter_mut()
             .flat_map(|held| {
                 <V as sts2_core::Hooks>::event_hook(
-                    held.listener(owner, counted::<V>(&counters, id, held.power)),
+                    held.event_listener(owner),
                     sts2_core::EventHook::AfterDeath,
                 )
             })
             .collect();
         let kept = powers.iter().any(|held| {
             <V as sts2_core::Hooks>::decide_hook(
-                held.listener(owner, counted::<V>(&counters, id, held.power)),
+                held.listener(owner),
                 sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
             )
             .is_decision_and(|remove| !remove)
@@ -390,7 +388,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     _ => None,
                 })
                 .expect("a retained dead monster installs a move");
-            let id = self.live.creatures[at].id;
+
             let resume = self.live.creatures[at].next_move.replace(revival);
             let held = self
                 .live
@@ -401,7 +399,7 @@ impl<'a, V: Rules> Board<'a, V> {
             held.resume = resume;
             return true;
         }
-        let id = self.live.creatures[at].id;
+
         let position = self.live.creatures[..at]
             .iter()
             .filter(|creature| creature.side == owner)
@@ -442,7 +440,6 @@ impl<'a, V: Rules> Board<'a, V> {
         // dead monster. The observation therefore omits it rather than
         // reporting it dead, and the numbers its powers counted go with it.
         self.live.creatures.retain(|creature| creature.id != id);
-        self.live.counted.retain(|held| held.creature != id);
         false
     }
 
@@ -499,8 +496,7 @@ pub(super) fn hooked<V: Rules>(
 /// the fight, and each reads whether the creature hit is its own. This asks
 /// the powers on that creature, which is the same set answering.
 pub(super) fn hp_lost<V: Rules>(
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     target: CombatId,
     unblocked: V::Number,
 ) -> V::Number {
@@ -511,10 +507,7 @@ pub(super) fn hp_lost<V: Rules>(
         .flat_map(|creature| {
             creature.powers.iter().map(|held| {
                 <V as sts2_core::Hooks>::modify_hook(
-                    held.listener(
-                        creature.side,
-                        counted::<V>(counters, creature.id, held.power),
-                    ),
+                    held.listener(creature.side),
                     sts2_core::ModifyHook::HpLost,
                 )
             })
@@ -532,8 +525,7 @@ pub(super) fn hp_lost<V: Rules>(
 /// `Hook.ModifyDamage` takes a null target and runs anyway. Only the powers
 /// reading the target sit that one out.
 pub(crate) fn modified<V: Rules>(
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     dealer: CombatId,
     target: Option<CombatId>,
     damage: V::Number,
@@ -555,9 +547,9 @@ pub(crate) fn modified<V: Rules>(
                         .iter()
                         .map(move |held| (held, creature.side, creature.id))
                 })
-                .map(move |(held, side, id)| {
+                .map(move |(held, side, _id)| {
                     <V as sts2_core::Hooks>::modify_hook(
-                        held.listener(side, counted::<V>(counters, id, held.power)),
+                        held.listener(side),
                         sts2_core::ModifyHook::Damage { holding },
                     )
                 })
@@ -572,8 +564,7 @@ pub(crate) fn modified<V: Rules>(
 /// recipient that has left the fight modifies nothing, as a hit's creatures
 /// do.
 pub(super) fn blocked<V: Rules>(
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     recipient: CombatId,
     amount: V::Number,
 ) -> V::Number {
@@ -584,10 +575,7 @@ pub(super) fn blocked<V: Rules>(
         .flat_map(|creature| {
             creature.powers.iter().map(|held| {
                 <V as sts2_core::Hooks>::modify_hook(
-                    held.listener(
-                        creature.side,
-                        counted::<V>(counters, creature.id, held.power),
-                    ),
+                    held.listener(creature.side),
                     sts2_core::ModifyHook::Block,
                 )
             })
@@ -602,8 +590,7 @@ pub(super) fn blocked<V: Rules>(
 /// a caller can reach. A preview and the play it previews call this with the
 /// same effect, so the number a card shows is the number it deals.
 pub(crate) fn resolve<V: Rules>(
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     playing: Option<&CardInstance<V>>,
     effect: Effect<V>,
 ) -> ResolvedEffect<V> {
@@ -618,9 +605,7 @@ pub(crate) fn resolve<V: Rules>(
             damage: {
                 let damage = carried::<V>(playing, creatures, damage);
                 match scaling {
-                    Scaling::Dynamic => {
-                        modified::<V>(creatures, counters, dealer, Some(target), damage)
-                    }
+                    Scaling::Dynamic => modified::<V>(creatures, dealer, Some(target), damage),
                     Scaling::Static => damage,
                 }
             },
@@ -637,7 +622,7 @@ pub(crate) fn resolve<V: Rules>(
                 // move's, and nothing else. A relic's block is asked of no
                 // listener this build fields.
                 amount: match scaling {
-                    Scaling::Dynamic => blocked::<V>(creatures, counters, recipient, amount),
+                    Scaling::Dynamic => blocked::<V>(creatures, recipient, amount),
                     Scaling::Static => amount,
                 },
             }
@@ -649,7 +634,7 @@ pub(crate) fn resolve<V: Rules>(
 /// The number an effect carries, before any hook of its own runs.
 fn carried<V: Rules>(
     playing: Option<&CardInstance<V>>,
-    creatures: &[Creature<V>],
+    creatures: &[Fighter<V>],
     amount: Amount<V>,
 ) -> V::Number {
     match amount {
@@ -670,12 +655,12 @@ fn carried<V: Rules>(
 pub(crate) fn var<V: Rules>(
     held: &CardInstance<V>,
     key: V::CardVar,
-    creatures: &[Creature<V>],
+    creatures: &[Fighter<V>],
 ) -> V::Number {
     let number = number::<V>(held, key);
     match number.calculated {
         false => number.base,
-        true => V::calculated_card_var(held.ident.card, key, &held.vars, powers::<V>(creatures)),
+        true => V::calculated_card_var(held.ident.card, key, &held.vars, &powers::<V>(creatures)),
     }
 }
 
@@ -693,11 +678,11 @@ fn number<V: Rules>(
 }
 
 /// The player's own powers, which is what a card reads about the fight.
-pub(super) fn powers<V: Rules>(creatures: &[Creature<V>]) -> &[Stack<V>] {
+pub(super) fn powers<V: Rules>(creatures: &[Fighter<V>]) -> Vec<Stack<V>> {
     creatures
         .iter()
         .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-        .map(|creature| creature.powers.as_slice())
+        .map(|creature| creature.powers.iter().map(HeldPower::stack).collect())
         .unwrap_or_default()
 }
 
@@ -732,7 +717,7 @@ pub(crate) fn effect_of<V: Rules>(
 }
 
 /// The player, which every fight has one of.
-pub(super) fn player<V: Rules>(creatures: &[Creature<V>]) -> CombatId {
+pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
     creatures
         .iter()
         .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
@@ -759,12 +744,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
-        resolve::<V>(
-            &self.live.creatures,
-            &self.live.counted,
-            self.playing,
-            effect,
-        )
+        resolve::<V>(&self.live.creatures, self.playing, effect)
     }
 
     fn apply(&mut self, effect: Self::ResolvedEffect) {
@@ -783,12 +763,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 self.live.creatures[at].block = self.live.creatures[at].block - blocked;
                 // `ModifyHpLost` over what the block left, which is where a
                 // power that caps a hit rather than shrinks it acts.
-                let unblocked = hp_lost::<V>(
-                    &self.live.creatures,
-                    &self.live.counted,
-                    target,
-                    (damage - blocked).max(zero),
-                );
+                let unblocked =
+                    hp_lost::<V>(&self.live.creatures, target, (damage - blocked).max(zero));
 
                 let hp = self.live.creatures[at].hp;
                 let health_zero = V::Health::zero();
@@ -1142,7 +1118,7 @@ pub(super) fn draw<V: Rules>(
         // The game raises it on every listener in the fight. This asks the
         // card that arrived, which is the only listener ported to answer it.
         let asked = V::event_hook(
-            sts2_core::Listener::Card {
+            sts2_core::EventListener::Card {
                 card: drawn.ident.card,
                 printed: &drawn.vars,
             },
@@ -1187,7 +1163,7 @@ mod tests {
 
     fn infection_damage_with(power: Power) -> i32 {
         let player = at(0);
-        let creatures = [Creature {
+        let creatures = [Fighter {
             id: player,
             model: Some(ModelId::Character(Character::Regent)),
             side: CombatSide::Player,
@@ -1195,10 +1171,7 @@ mod tests {
             max_hp: 10,
             block: 0,
             alive: true,
-            powers: vec![Stack {
-                power,
-                amount: PowerAmount::Counted(2),
-            }],
+            powers: vec![HeldPower::new(power, PowerAmount::Counted(2))],
             next_move: None,
         }];
         let card = CardInstance::new(
@@ -1208,7 +1181,6 @@ mod tests {
 
         resolve::<V>(
             &creatures,
-            &[],
             Some(&card),
             Effect::Attack {
                 dealer: player,

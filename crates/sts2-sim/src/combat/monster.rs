@@ -2,10 +2,10 @@
 
 use crate::rng::MegaRng;
 use sts2_core::rng::{Choices, GameRng};
-use sts2_core::{CombatId, Creature, ModelId, MoveMachine, Rules, SideKinds};
+use sts2_core::{CombatId, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
-use super::live::Live;
+use super::live::{Fighter, HeldPower, Live};
 use crate::stream::Streams;
 
 /// Roll a monster's health, avoiding healths already rolled in this fight
@@ -13,7 +13,7 @@ use crate::stream::Streams;
 fn health<V: Rules>(
     monster: V::Monster,
     ascension: V::AscensionLevel,
-    creatures: &[Creature<V>],
+    creatures: &[Fighter<V>],
     niche: &mut MegaRng,
 ) -> V::Health {
     let range = V::monster_hp_bounds(monster, ascension);
@@ -35,7 +35,7 @@ fn health<V: Rules>(
 /// The enemy side of a fight, as it begins.
 #[derive(Debug)]
 pub(crate) struct Roster<V: Rules> {
-    pub(crate) creatures: Vec<Creature<V>>,
+    pub(crate) creatures: Vec<Fighter<V>>,
     pub(crate) machines: Vec<Machine<V>>,
 }
 
@@ -102,7 +102,7 @@ pub(crate) fn initialize<V: Rules>(
             machine,
             resume: None,
         });
-        creatures.push(Creature {
+        creatures.push(Fighter {
             id,
             model: Some(ModelId::Monster(monster)),
             side: <V::CombatSide as SideKinds>::ENEMY,
@@ -111,7 +111,7 @@ pub(crate) fn initialize<V: Rules>(
             block: num_traits::zero(),
             alive: true,
             powers: V::monster_starting_powers(monster, ascension)
-                .map(|(power, amount)| sts2_core::Stack { power, amount })
+                .map(|(power, amount)| HeldPower::new(power, amount))
                 .collect(),
             next_move: Some(opening),
         });
@@ -168,7 +168,7 @@ pub(super) fn summon<V: Rules>(
 
     live.creatures.insert(
         creature_at,
-        Creature {
+        Fighter {
             id,
             model: Some(ModelId::Monster(monster)),
             side: <V::CombatSide as SideKinds>::ENEMY,

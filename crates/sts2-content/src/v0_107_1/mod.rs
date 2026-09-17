@@ -100,6 +100,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
 /// Dispatch the hook shapes this simulator can execute.
 impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
+    type PowerState = behaviour::powers::State;
 
     fn modify_hook(
         listener: sts2_core::Listener<'_, Self>,
@@ -110,8 +111,8 @@ impl sts2_core::Hooks for V0_107_1 {
                 power,
                 amount,
                 owner,
-                counted,
-            } => behaviour::powers::modify_hook(power, amount, owner, counted, hook),
+                state,
+            } => behaviour::powers::modify_hook(power, amount, owner, state, hook),
             sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
             // No card modifies a number a hook carries. `CardModel` overrides
             // the numbers it prints instead, which the table already holds.
@@ -132,18 +133,18 @@ impl sts2_core::Hooks for V0_107_1 {
     }
 
     fn event_hook(
-        listener: sts2_core::Listener<'_, Self>,
+        listener: sts2_core::EventListener<'_, Self>,
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
         match listener {
-            sts2_core::Listener::Power {
+            sts2_core::EventListener::Power {
                 power,
                 amount,
                 owner,
-                counted,
-            } => behaviour::powers::event_hook(power, amount, owner, counted, hook),
-            sts2_core::Listener::Relic(state) => behaviour::relics::event_hook(state, hook),
-            sts2_core::Listener::Card { card, printed } => {
+                state,
+            } => behaviour::powers::event_hook(power, amount, owner, state, hook),
+            sts2_core::EventListener::Relic(state) => behaviour::relics::event_hook(state, hook),
+            sts2_core::EventListener::Card { card, printed } => {
                 behaviour::cards::event_hook(card, printed, hook)
             }
         }

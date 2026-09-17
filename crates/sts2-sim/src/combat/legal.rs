@@ -14,40 +14,36 @@ use sts2_core::{
     UnplayableReasonKinds,
 };
 
-use super::live::{CardInstance, Counter};
+use super::live::{CardInstance, Fighter};
 
 /// Every card in hand, in hand order, with the reasons each cannot be played.
 pub(super) fn hand<V: Rules>(
     hand: &[CardInstance<V>],
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<Playable<V>> {
     hand.iter()
-        .map(|card| playable::<V>(card, creatures, counters, energy, stars))
+        .map(|card| playable::<V>(card, creatures, energy, stars))
         .collect()
 }
 
 /// What a card names as its target.
-pub(super) fn target_type<V: Rules>(
-    card: CardIdent<V>,
-    creatures: &[Creature<V>],
-) -> V::TargetType {
+pub(super) fn target_type<V: Rules>(card: CardIdent<V>, creatures: &[Fighter<V>]) -> V::TargetType {
     if card.affliction.is_some() || card.enchantment.is_some() {
         unimplemented!("what an afflicted or enchanted card prints");
     }
     // One of the four cards that work their target out from the fight, which
     // they do by reading the player's own powers.
-    card.card
-        .target()
-        .unwrap_or_else(|| V::computed_card_target(card.card, super::board::powers::<V>(creatures)))
+    card.card.target().unwrap_or_else(|| {
+        V::computed_card_target(card.card, &super::board::powers::<V>(creatures))
+    })
 }
 
 /// Why this card cannot be played, which is empty for one that can.
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
-    creatures: &[Creature<V>],
+    creatures: &[Fighter<V>],
     cost: Cost,
     star_cost: Cost,
     energy: V::Count,
@@ -85,7 +81,7 @@ pub(super) fn reasons<V: Rules>(
 /// to hit.
 pub(super) fn targets<V: Rules>(
     target: V::TargetType,
-    creatures: &[Creature<V>],
+    creatures: &[Fighter<V>],
     refused: bool,
 ) -> Vec<CombatId> {
     if refused {
@@ -100,8 +96,7 @@ pub(super) fn targets<V: Rules>(
 
 fn playable<V: Rules>(
     held: &CardInstance<V>,
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     energy: V::Count,
     stars: V::Count,
 ) -> Playable<V> {
@@ -121,7 +116,7 @@ fn playable<V: Rules>(
         // `BlockedByHook` is the only reason that names one, and nothing in a
         // fight raises it yet.
         preventer: None,
-        effect: effect::<V>(held, creatures, counters, &targets),
+        effect: effect::<V>(held, creatures, &targets),
         targets,
     }
 }
@@ -183,7 +178,18 @@ fn aimable<V: Rules>(potion: V::Potion, creatures: &[Creature<V>]) -> Vec<Combat
     };
     creatures
         .iter()
-        .filter(|creature| valid_target::<V>(target, creature))
+        .filter(|creature| {
+            creature.alive
+                && match target {
+                    t if t == <V::TargetType as TargetKinds>::ANY_ENEMY => {
+                        creature.side == <V::CombatSide as SideKinds>::ENEMY
+                    }
+                    t if t == <V::TargetType as TargetKinds>::ANY_ALLY => {
+                        creature.side == <V::CombatSide as SideKinds>::PLAYER
+                    }
+                    _ => false,
+                }
+        })
         .map(|creature| creature.id)
         .collect()
 }
@@ -203,7 +209,7 @@ pub(super) fn spend<C: num_traits::PrimInt>(cost: Cost, pool: C) -> Option<C> {
 }
 
 /// `CardModel.IsValidTarget`, for a creature offered as this card's target.
-fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool {
+fn valid_target<V: Rules>(target: V::TargetType, creature: &Fighter<V>) -> bool {
     if !creature.alive {
         return false;
     }
@@ -227,8 +233,7 @@ fn valid_target<V: Rules>(target: V::TargetType, creature: &Creature<V>) -> bool
 /// a card the fight moves no number of reports.
 fn effect<V: Rules>(
     held: &CardInstance<V>,
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     targets: &[CombatId],
 ) -> Vec<Preview<V>> {
     let per_target = matches!(
@@ -253,7 +258,7 @@ fn effect<V: Rules>(
             // simulator does not have. `Observation::rules_digest` leaves it
             // out for that reason, and a front end reads the numbers.
             text: None,
-            vars: previewed::<V>(held, creatures, counters, target),
+            vars: previewed::<V>(held, creatures, target),
             base: numbers.clone(),
         })
         .collect();
@@ -282,8 +287,7 @@ fn effect<V: Rules>(
 /// damage. No character the simulator plays has one.
 fn previewed<V: Rules>(
     held: &CardInstance<V>,
-    creatures: &[Creature<V>],
-    counters: &[Counter<V>],
+    creatures: &[Fighter<V>],
     target: Option<CombatId>,
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
     let dealer = super::board::player::<V>(creatures);
@@ -297,11 +301,11 @@ fn previewed<V: Rules>(
                 // previewed against nobody still runs the dealer's own powers
                 // and only the ones reading the target sit it out.
                 (Some(sts2_core::CardNumberModifier::Damage), None) => Some(
-                    super::board::modified::<V>(creatures, counters, dealer, None, printed()),
+                    super::board::modified::<V>(creatures, dealer, None, printed()),
                 ),
                 (Some(modifier), _) => {
                     super::board::effect_of::<V>(modifier, var.id, dealer, target).map(|effect| {
-                        super::board::resolve::<V>(creatures, counters, Some(held), effect).amount()
+                        super::board::resolve::<V>(creatures, Some(held), effect).amount()
                     })
                 }
                 (None, _) => None,
@@ -319,7 +323,7 @@ fn previewed<V: Rules>(
 /// yet: [`previewed`] is these after it has.
 fn numbers<V: Rules>(
     held: &CardInstance<V>,
-    creatures: &[Creature<V>],
+    creatures: &[Fighter<V>],
 ) -> std::collections::BTreeMap<V::CardVar, V::Number> {
     held.vars
         .iter()
@@ -349,7 +353,7 @@ mod tests {
     }
 
     /// A player and one living enemy, which is the smallest fight.
-    fn fight() -> Vec<Creature<V>> {
+    fn fight() -> Vec<Fighter<V>> {
         vec![
             creature(
                 at(0),
@@ -364,8 +368,8 @@ mod tests {
         ]
     }
 
-    fn creature(id: CombatId, model: ModelId<V>, side: CombatSide) -> Creature<V> {
-        Creature {
+    fn creature(id: CombatId, model: ModelId<V>, side: CombatSide) -> Fighter<V> {
+        Fighter {
             id,
             model: Some(model),
             side,
@@ -383,18 +387,18 @@ mod tests {
         energy: <V as sts2_core::ContentVersion>::Count,
         stars: <V as sts2_core::ContentVersion>::Count,
     ) -> Playable<V> {
-        let mut plays = super::hand::<V>(hand, &fight(), &[], energy, stars);
+        let mut plays = super::hand::<V>(hand, &fight(), energy, stars);
         assert_eq!(plays.len(), 1);
         plays.remove(0)
     }
 
     /// A fight where the player carries one power, at one amount.
-    fn fight_with(power: sts2_content::v0_107_1::powers::Power, amount: i32) -> Vec<Creature<V>> {
+    fn fight_with(power: sts2_content::v0_107_1::powers::Power, amount: i32) -> Vec<Fighter<V>> {
         let mut creatures = fight();
-        creatures[0].powers.push(sts2_core::Stack {
+        creatures[0].powers.push(super::super::live::HeldPower::new(
             power,
-            amount: sts2_core::PowerAmount::Counted(amount),
-        });
+            sts2_core::PowerAmount::Counted(amount),
+        ));
         creatures
     }
 
@@ -408,7 +412,7 @@ mod tests {
         let strike = card(Cards::Regent(RegentCard::Strike));
         let creatures = fight_with(Power::StrengthPower, -2);
         let damage = |targets: &[CombatId]| {
-            effect::<V>(&strike, &creatures, &[], targets)[0].vars[&CardVar::Damage]
+            effect::<V>(&strike, &creatures, targets)[0].vars[&CardVar::Damage]
         };
 
         // The same card, previewed at the one enemy and at nobody. Strength
@@ -426,12 +430,12 @@ mod tests {
 
         let strike = card(Cards::Regent(RegentCard::Strike));
         let mut creatures = fight();
-        creatures[1].powers.push(sts2_core::Stack {
-            power: Power::VulnerablePower,
-            amount: sts2_core::PowerAmount::Counted(1),
-        });
+        creatures[1].powers.push(super::super::live::HeldPower::new(
+            Power::VulnerablePower,
+            sts2_core::PowerAmount::Counted(1),
+        ));
         let damage = |targets: &[CombatId]| {
-            effect::<V>(&strike, &creatures, &[], targets)[0].vars[&CardVar::Damage]
+            effect::<V>(&strike, &creatures, targets)[0].vars[&CardVar::Damage]
         };
 
         let printed = super::numbers::<V>(&strike, &creatures)[&CardVar::Damage];
@@ -500,7 +504,7 @@ mod tests {
         let mut creatures = fight();
         creatures[1].alive = false;
 
-        let plays = super::hand::<V>(&[strike], &creatures, &[], 3, 0);
+        let plays = super::hand::<V>(&[strike], &creatures, 3, 0);
 
         assert!(plays[0].targets.is_empty());
         // Nothing to hit is not a reason the card cannot be played. The game
