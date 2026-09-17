@@ -18,16 +18,16 @@ use super::{Number, V};
 pub(super) fn starting_powers(
     monster: Monster,
     ascension: AscensionLevel,
-) -> Option<(Power, PowerAmount<Number>)> {
+) -> Vec<(Power, PowerAmount<Number>)> {
     match monster {
-        Monster::Byrdonis => Some((Power::TerritorialPower, PowerAmount::Counted(1))),
-        Monster::PhrogParasite => Some((Power::InfestedPower, PowerAmount::Counted(4))),
-        Monster::BygoneEffigy => Some((Power::SlowPower, PowerAmount::Counted(1))),
-        Monster::Vantom => Some((
+        Monster::Byrdonis => vec![(Power::TerritorialPower, PowerAmount::Counted(1))],
+        Monster::PhrogParasite => vec![(Power::InfestedPower, PowerAmount::Counted(4))],
+        Monster::BygoneEffigy => vec![(Power::SlowPower, PowerAmount::Counted(1))],
+        Monster::Vantom => vec![(
             Power::SlipperyPower,
             PowerAmount::Counted(slippery(ascension)),
-        )),
-        _ => None,
+        )],
+        _ => Vec::new(),
     }
 }
 

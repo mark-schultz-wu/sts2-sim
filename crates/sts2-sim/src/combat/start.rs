@@ -74,6 +74,13 @@ pub(crate) fn enter<V: Rules>(
         }
     }
     relic::turn_starting::<V>(relics, turn);
+    // `BeforeSideTurnStart` for the powers a monster entered with, which is
+    // where one that opens the fight behind block gains it.
+    super::power::before_turn_start::<V>(
+        &mut creatures,
+        <V::CombatSide as SideKinds>::PLAYER,
+        turn,
+    );
 
     let drawn = hand_size::<V>(relics, turn);
     let piles = pile::shuffle(streams.combat().shuffle, deck).deal(drawn);

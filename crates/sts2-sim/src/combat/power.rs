@@ -6,7 +6,7 @@
 
 use sts2_core::{EventHook, HookEffect, Rules};
 
-use super::live::Live;
+use super::live::{Fighter, Live};
 
 /// Deliver one notification to every power in the fight, and gather what they
 /// ask for.
@@ -28,7 +28,30 @@ pub(crate) fn notify_creature<V: Rules>(
     creature: sts2_core::CombatId,
     hook: EventHook<V>,
 ) -> Vec<HookEffect<V>> {
-    asked_of::<V>(live, Some(creature), hook)
+    let mut remaining = Vec::new();
+    for effect in asked_of::<V>(live, Some(creature), hook) {
+        match effect {
+            HookEffect::RemoveFromOwner(power) => {
+                if let Some(owner) = live.creatures.iter_mut().find(|owner| owner.id == creature) {
+                    owner.powers.retain(|held| held.power != power);
+                }
+            }
+            HookEffect::StunOwner(stunned) => {
+                if let Some(owner) = live.creatures.iter_mut().find(|owner| owner.id == creature) {
+                    owner.next_move = Some(stunned);
+                }
+                if let Some(machine) = live
+                    .machines
+                    .iter_mut()
+                    .find(|held| held.creature == creature)
+                {
+                    machine.stunned = true;
+                }
+            }
+            effect => remaining.push(effect),
+        }
+    }
+    remaining
 }
 
 /// The body both of those share, over every creature or over one.
@@ -77,4 +100,55 @@ fn asked_of<V: Rules>(
             .retain(|held| held.amount != sts2_core::PowerAmount::Counted(num_traits::zero()));
     }
     asked
+}
+
+/// `BeforeSideTurnStart`, as the powers in the fight answer it.
+///
+/// Raised on every power, not only the ones on the side taking its turn. Which
+/// side's turn opening a power answers is the power's own rule. Block gained
+/// here lands on the creature the power sits on, which is why this walks the
+/// creatures rather than hand the effect back.
+pub(crate) fn before_turn_start<V: Rules>(
+    creatures: &mut [Fighter<V>],
+    side: V::CombatSide,
+    turn: V::Count,
+) {
+    for creature in creatures {
+        let owner = creature.side;
+        let mut gained = <V::Number as num_traits::Zero>::zero();
+        for held in creature.powers.iter_mut() {
+            for effect in <V as sts2_core::Hooks>::event_hook(
+                held.event_listener(owner),
+                EventHook::BeforeSideTurnStart { side, turn },
+            ) {
+                match effect {
+                    // `ValueProp.Unpowered`, so nothing the creature carries
+                    // moves it.
+                    HookEffect::GainBlock(amount) => gained = gained + amount,
+                    other => unimplemented!("a power asking for {other:?} before a turn starts"),
+                }
+            }
+        }
+        creature.block = creature.block + gained;
+    }
+}
+
+/// `BeforeSideTurnEndEarly`, including Plating before later end effects.
+pub(crate) fn before_turn_end<V: Rules>(creatures: &mut [Fighter<V>], side: V::CombatSide) {
+    for creature in creatures {
+        let owner = creature.side;
+        let mut gained = <V::Number as num_traits::Zero>::zero();
+        for held in &mut creature.powers {
+            for effect in <V as sts2_core::Hooks>::event_hook(
+                held.event_listener(owner),
+                EventHook::BeforeSideTurnEndEarly { side },
+            ) {
+                match effect {
+                    HookEffect::GainBlock(amount) => gained = gained + amount,
+                    other => unimplemented!("a power asking for {other:?} before a turn ends"),
+                }
+            }
+        }
+        creature.block = creature.block + gained;
+    }
 }

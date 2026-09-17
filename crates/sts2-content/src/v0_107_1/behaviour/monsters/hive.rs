@@ -14,21 +14,76 @@ use super::{Number, V};
 /// Powers a Hive monster applies to itself as it enters combat.
 pub(super) fn starting_powers(
     monster: Monster,
-    _ascension: AscensionLevel,
-) -> Option<(Power, PowerAmount<Number>)> {
+    ascension: AscensionLevel,
+) -> Vec<(Power, PowerAmount<Number>)> {
+    // `PlatingPower`'s own amount, which is also the block it opens with.
+    const PLATING: Number = 15;
+    const TOUGH_PLATING: Number = 18;
+
+    // `SlumberPower`, which counts the hits the beetle sleeps through.
+    const SLUMBER: Number = 3;
+
     match monster {
-        Monster::ThievingHopper => Some((Power::EscapeArtistPower, PowerAmount::Counted(5))),
-        _ => None,
+        Monster::ThievingHopper => vec![(Power::EscapeArtistPower, PowerAmount::Counted(5))],
+        Monster::BowlbugRock => vec![(Power::ImbalancedPower, PowerAmount::Counted(1))],
+        Monster::SlumberingBeetle => {
+            let plating = match ascension.has(AscensionLevel::ToughEnemies) {
+                true => TOUGH_PLATING,
+                false => PLATING,
+            };
+            vec![
+                (Power::PlatingPower, PowerAmount::Counted(plating)),
+                (Power::SlumberPower, PowerAmount::Counted(SLUMBER)),
+            ]
+        }
+        _ => Vec::new(),
     }
+}
+
+/// Which move a Hive monster selects from a conditional state.
+pub(super) fn conditional(
+    monster: Monster,
+    at: u8,
+    powers: &[sts2_core::Listener<'_, V>],
+) -> Result<u8, sts2_core::ContentError> {
+    let held = |wanted| {
+        powers.iter().find_map(|listener| match listener {
+            sts2_core::Listener::Power { power, state, .. } if *power == wanted => Some(*state),
+            _ => None,
+        })
+    };
+    let wanted = match monster {
+        Monster::BowlbugRock => match held(Power::ImbalancedPower) {
+            Some(state) if state.is_off_balance() => MoveId::DizzyMove,
+            _ => MoveId::HeadbuttMove,
+        },
+        Monster::SlumberingBeetle => match held(Power::SlumberPower) {
+            Some(_) => MoveId::SnoreMove,
+            None => MoveId::RollOutMove,
+        },
+        monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
+    };
+    super::state_of(monster, wanted, at)
 }
 
 /// Perform one of the Hive monsters' moves.
 pub(super) fn perform<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ThieveryMove => thievery(fight),
-        MoveId::BiteMove | MoveId::BelowMove | MoveId::PunctureMove => fight.attack_opponents(),
+        MoveId::BiteMove
+        | MoveId::BelowMove
+        | MoveId::PunctureMove
+        | MoveId::HeadbuttMove
+        | MoveId::ThrashMove => fight.attack_opponents(),
         MoveId::BurrowMove => burrow(fight),
         MoveId::TenderizingGoopMove => tenderizing_goop(fight),
+        MoveId::ToxicSpitMove => {
+            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1))
+        }
+        // `SnoreMove` sleeps, which is a sound and nothing else.
+        MoveId::SnoreMove => {}
+        MoveId::Stunned => {}
+        MoveId::RollOutMove => roll_out(fight),
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }
@@ -39,6 +94,17 @@ pub(super) fn perform<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
 /// takes the Strength and the Dexterity, and what hands them back.
 fn tenderizing_goop<F: Fight<V>>(fight: &mut F) {
     fight.apply_to_opponents(Power::TenderPower, PowerAmount::Counted(1));
+}
+
+/// Roll over the target, then harden.
+///
+/// `RolloutMove` applies the Strength to the beetle itself, so the fight it
+/// hits and the creature it grows are not the same one.
+fn roll_out<F: Fight<V>>(fight: &mut F) {
+    const HARDENS: Number = 2;
+
+    fight.attack_opponents();
+    fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(HARDENS));
 }
 
 /// Hide underground behind block that persists until it is broken.
