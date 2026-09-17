@@ -36,16 +36,23 @@ pub(crate) fn notify_creature<V: Rules>(
                     owner.powers.retain(|held| held.power != power);
                 }
             }
+            // `Creature.Stun` builds a state and hands it to
+            // `SetMoveImmediate`, so it is held to the same guard: a monster
+            // advertising a move it has to perform is not stunned out of it.
             HookEffect::StunOwner(stunned) => {
-                if let Some(owner) = live.creatures.iter_mut().find(|owner| owner.id == creature) {
-                    owner.next_move = Some(stunned);
-                }
-                if let Some(machine) = live
+                let Some(machine) = live
                     .machines
                     .iter_mut()
                     .find(|held| held.creature == creature)
-                {
-                    machine.stunned = true;
+                else {
+                    continue;
+                };
+                if !V::can_leave_current_move(machine.monster, &machine.machine) {
+                    continue;
+                }
+                machine.machine.interpose();
+                if let Some(owner) = live.creatures.iter_mut().find(|owner| owner.id == creature) {
+                    owner.next_move = Some(stunned);
                 }
             }
             effect => remaining.push(effect),

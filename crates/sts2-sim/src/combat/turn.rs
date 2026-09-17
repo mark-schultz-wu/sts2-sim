@@ -363,21 +363,6 @@ fn enemy_turn<V: Rules>(
         let Some(creature) = live.creatures.iter().find(|c| c.id == id) else {
             continue;
         };
-        let reviving = live
-            .machines
-            .iter()
-            .find(|held| held.creature == id)
-            .is_some_and(|held| held.resume.is_some());
-        if reviving && !creature.alive {
-            let creature = live
-                .creatures
-                .iter_mut()
-                .find(|creature| creature.id == id)
-                .expect("a reviving monster remains in the fight");
-            creature.hp = creature.max_hp;
-            creature.alive = true;
-            continue;
-        }
         let next_move = creature
             .next_move
             .clone()
@@ -388,9 +373,6 @@ fn enemy_turn<V: Rules>(
             .find(|held| held.creature == id)
             .unwrap_or_else(|| unimplemented!("an enemy with no move graph"));
         let monster = held.monster;
-        if held.stunned {
-            held.stunned = false;
-        }
         // `OnMovePerformed`, which is what lets the graph leave this move. It
         // happens beside `PerformMove` rather than after what the move does.
         held.machine.performed();
@@ -434,19 +416,6 @@ fn roll_moves<V: Rules>(
     live.machines
         .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
     for held in live.machines.iter_mut() {
-        if held.stunned {
-            continue;
-        }
-        if let Some(resume) = held.resume.take() {
-            if let Some(creature) = live
-                .creatures
-                .iter_mut()
-                .find(|creature| creature.id == held.creature)
-            {
-                creature.next_move = Some(resume);
-            }
-            continue;
-        }
         let rolled = {
             let creature = live
                 .creatures
@@ -466,6 +435,9 @@ fn roll_moves<V: Rules>(
                 ai,
             )?
         };
+        // `None` is a monster still standing on a state something built for
+        // it, which goes on advertising what that caller set.
+        let Some(rolled) = rolled else { continue };
         if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {
             creature.next_move = Some(rolled);
         }

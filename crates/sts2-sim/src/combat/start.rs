@@ -83,7 +83,7 @@ pub(crate) fn enter<V: Rules>(
     );
 
     let drawn = hand_size::<V>(relics, turn);
-    let piles = pile::shuffle(streams.combat().shuffle, deck).deal(drawn);
+    let piles = pile::shuffle(streams.combat().shuffle, deck).deal_opening(drawn);
 
     let mut hand = piles.hand().to_vec();
     upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));

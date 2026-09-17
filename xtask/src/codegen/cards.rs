@@ -1162,6 +1162,14 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     .unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out).unwrap();
+    writeln!(out, "    fn innate(self) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "        self.data().keywords.contains(CardKeyword::Innate)"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
     writeln!(out, "    fn retains(self) -> bool {{").unwrap();
     writeln!(
         out,

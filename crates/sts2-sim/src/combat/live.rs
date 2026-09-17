@@ -127,6 +127,11 @@ pub(super) struct CardInstance<V: Rules> {
     ///
     /// Empty for almost every card, and an empty `Vec` allocates nothing.
     pub(super) cost_modifiers: Vec<CostModifier<V>>,
+    /// `CardModel.AddKeyword`, which writes words the table did not print.
+    ///
+    /// Beside the printed set rather than folded into it. The table's answer
+    /// is the card's, and this is the copy's. Only the copy is written on.
+    pub(super) added_keywords: Vec<V::CardKeyword>,
     /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
@@ -159,6 +164,7 @@ impl<V: Rules> CardInstance<V> {
             cost: ident.card.cost(),
             star_cost: ident.card.star_cost(),
             cost_modifiers: Vec::new(),
+            added_keywords: Vec::new(),
             replays: num_traits::zero(),
         };
         if card.ident.upgrade != 0 {
@@ -232,7 +238,28 @@ impl<V: Rules> CardInstance<V> {
             sts2_core::Change::SetCost(pool, to) => {
                 self.modify_cost(pool, CostChange::Absolute(to), lasting)
             }
+            // `AddKeyword`, which is a set: a word already on the copy is not
+            // added twice.
+            sts2_core::Change::AddKeyword(keyword) => {
+                if !self.added_keywords.contains(&keyword) {
+                    self.added_keywords.push(keyword);
+                }
+            }
         }
+    }
+
+    /// `Keywords.Contains(Innate)` for this copy.
+    ///
+    /// The union of what the table prints and what has been written on. Asked
+    /// of Innate alone, because that is the one keyword something in a fight
+    /// both writes and reads. The rest are read off the table.
+    pub(super) fn innate(&self) -> bool {
+        use sts2_core::{CardTable as _, KeywordKinds};
+
+        self.ident.card.innate()
+            || self
+                .added_keywords
+                .contains(&<V::CardKeyword as KeywordKinds<V>>::INNATE)
     }
 
     /// Append one cost modifier, which is what every `Set` and `Add` on
@@ -292,6 +319,35 @@ impl<V: Rules> CardInstance<V> {
             self.modify(change, sts2_core::Lasting::ThisFight);
         }
         self.ident.upgrade += 1;
+    }
+}
+
+impl<V: Rules> sts2_core::CreatureView<V> for Fighter<V> {
+    fn id(&self) -> CombatId {
+        self.id
+    }
+
+    fn side(&self) -> V::CombatSide {
+        self.side
+    }
+
+    fn alive(&self) -> bool {
+        self.alive
+    }
+
+    fn hp(&self) -> V::Health {
+        self.hp
+    }
+
+    fn max_hp(&self) -> V::Health {
+        self.max_hp
+    }
+
+    fn power(&self, power: V::Power) -> Option<sts2_core::PowerAmount<V::Number>> {
+        self.powers
+            .iter()
+            .find(|held| held.power == power)
+            .map(|held| held.amount)
     }
 }
 

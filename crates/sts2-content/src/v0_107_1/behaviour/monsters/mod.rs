@@ -21,6 +21,24 @@ mod overgrowth;
 
 type V = V0_107_1;
 
+/// `IllusionPower.ReviveMove`: the illusion comes back whole.
+///
+/// `CreatureCmd.Heal(Owner, MaxHp - CurrentHp)`, which is what takes a dead
+/// one back over zero.
+fn revive<F: Fight<V>>(fight: &mut F) {
+    use sts2_core::CreatureView as _;
+
+    let actor = fight.actor();
+    let Some(missing) = fight
+        .creatures()
+        .find(|creature| creature.id() == actor)
+        .map(|creature| creature.max_hp() - creature.hp())
+    else {
+        return;
+    };
+    fight.heal(actor, missing);
+}
+
 /// Powers a monster applies to itself as it enters combat.
 ///
 /// `AfterAddedToRoom`, where a monster that has one `PowerCmd.Apply`s on its
@@ -37,6 +55,18 @@ pub(crate) fn starting_powers(
     let mut applied = overgrowth::starting_powers(monster, ascension);
     applied.extend(hive::starting_powers(monster, ascension));
     applied
+}
+
+/// What `AfterAddedToRoom` writes over the health a monster was built with.
+///
+/// Filed by act beside the moves, the way the starting powers are.
+pub(crate) fn health_after_added(
+    monster: Monster,
+    ascension: <V0_107_1 as sts2_core::ContentVersion>::AscensionLevel,
+    rolled: <V0_107_1 as sts2_core::ContentVersion>::Health,
+    teammates: &[<V0_107_1 as sts2_core::ContentVersion>::Health],
+) -> Option<<V0_107_1 as sts2_core::ContentVersion>::Health> {
+    hive::health_after_added(monster, ascension, rolled, teammates)
 }
 
 /// Which branch a monster's conditional state takes.
@@ -66,7 +96,7 @@ pub(crate) fn conditional(
 /// number. A graph adds its branches from the same fields a condition reads.
 /// So a dumped list is the one the dump's own monster had, and a branch some
 /// other one takes can be missing.
-pub(super) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, ContentError> {
+pub(crate) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, ContentError> {
     sts2_core::Table::data(monster)
         .states
         .iter()
@@ -81,13 +111,24 @@ pub(super) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 ///
 /// A monster nobody has ported.
 pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+    // Two states no table names. `Creature.Stun` builds one and
+    // `IllusionPower` builds the other, and what each does belongs to
+    // whoever built it rather than to the monster standing on it.
+    match move_id {
+        MoveId::Stunned => return,
+        MoveId::ReviveMove => return revive(fight),
+        _ => {}
+    }
     match monster {
         Monster::ThievingHopper
         | Monster::Tunneler
         | Monster::HunterKiller
         | Monster::BowlbugRock
         | Monster::BowlbugSilk
-        | Monster::SlumberingBeetle => hive::perform(move_id, fight),
+        | Monster::SlumberingBeetle
+        | Monster::DecimillipedeSegmentFront
+        | Monster::DecimillipedeSegmentMiddle
+        | Monster::DecimillipedeSegmentBack => hive::perform(move_id, fight),
         _ => overgrowth::perform(monster, move_id, fight),
     }
 }

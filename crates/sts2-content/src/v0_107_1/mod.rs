@@ -22,6 +22,7 @@
 mod behaviour;
 mod event_options;
 mod generated;
+mod keywords;
 mod rest_site;
 
 pub use behaviour::events::State as EventState;
@@ -68,6 +69,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type Act = generated::acts::Act;
     type Affliction = generated::afflictions::Affliction;
     type Card = generated::cards::Cards;
+    type CardKeyword = generated::cards::CardKeyword;
     type CardVar = generated::cards::CardVar;
     type Character = generated::characters::Character;
     type Enchantment = generated::enchantments::Enchantment;
@@ -122,7 +124,7 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn decide_hook(
         listener: sts2_core::Listener<'_, Self>,
-        hook: sts2_core::DecisionHook,
+        hook: sts2_core::DecisionHook<Self>,
     ) -> sts2_core::HookResponse<bool> {
         match listener {
             sts2_core::Listener::Power { power, .. } => behaviour::powers::decide_hook(power, hook),
@@ -285,6 +287,15 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::rng::Interval::new(gold.min.at(ascension as u8), gold.max.at(ascension as u8))
     }
 
+    fn monster_health_after_added(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+        rolled: Self::Health,
+        teammates: &[Self::Health],
+    ) -> Option<Self::Health> {
+        behaviour::monsters::health_after_added(monster, ascension, rolled, teammates)
+    }
+
     fn monster_hp_bounds(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
@@ -303,13 +314,71 @@ impl sts2_core::Rules for V0_107_1 {
         powers: impl IntoIterator<Item = sts2_core::Listener<'a, Self>>,
         machine: &mut sts2_core::MoveMachine,
         rng: &mut R,
-    ) -> Result<sts2_core::NextMove<Self>, sts2_core::ContentError> {
+    ) -> Result<Option<sts2_core::NextMove<Self>>, sts2_core::ContentError> {
         roll_monster_move(monster, ascension as u8, spawn, powers, machine, rng)
     }
 
-    fn opening_move_machine(monster: Self::Monster) -> sts2_core::MoveMachine {
+    fn can_leave_current_move(monster: Self::Monster, machine: &sts2_core::MoveMachine) -> bool {
+        use generated::monsters::{FollowUp, State};
+
+        // A built state is one nothing names, and both callers that build one
+        // set `MustPerformOnceBeforeTransitioning`.
+        if machine.built {
+            return machine.performed;
+        }
         let data = sts2_core::Table::data(monster);
-        let at = data.initial;
+        let State::Move(held) = data
+            .states
+            .get(usize::from(machine.at))
+            .copied()
+            .unwrap_or_else(|| unimplemented!("{monster:?} standing outside its own graph"))
+        else {
+            // A branch state is not a move, and nothing pins one.
+            return true;
+        };
+        !matches!(held.follow_up, FollowUp::OncePerformed(_)) || machine.performed
+    }
+
+    fn set_move_immediate(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+        move_id: Self::MoveId,
+        machine: &mut sts2_core::MoveMachine,
+    ) -> Result<sts2_core::NextMove<Self>, sts2_core::MovePinned> {
+        use generated::monsters::State;
+
+        if !Self::can_leave_current_move(monster, machine) {
+            return Err(sts2_core::MovePinned);
+        }
+        let data = sts2_core::Table::data(monster);
+        let at = behaviour::monsters::state_of(monster, move_id, machine.at).unwrap_or_else(|_| {
+            unimplemented!("{monster:?} sent to {move_id:?}, which its graph has no state for")
+        });
+        // `ForceCurrentState`, which does not write the state into the log.
+        machine.enter(at);
+        let State::Move(held) = data.states[usize::from(at)] else {
+            unimplemented!("{monster:?} sent to {move_id:?}, which is not a move")
+        };
+        Ok(intents(held, ascension as u8).expect("a move state publishes its own intents"))
+    }
+
+    fn opening_move_machine(
+        monster: Self::Monster,
+        opens_on: Option<Self::MoveId>,
+    ) -> sts2_core::MoveMachine {
+        let data = sts2_core::Table::data(monster);
+        // `GenerateMoveStateMachine` takes the state it is constructed on. A
+        // roster that wrote onto this monster names it; the rest open where
+        // the table says.
+        let at = match opens_on {
+            None => data.initial,
+            Some(move_id) => behaviour::monsters::state_of(monster, move_id, data.initial)
+                .unwrap_or_else(|_| {
+                    unimplemented!(
+                        "{monster:?} opening on {move_id:?}, which its graph has no state for"
+                    )
+                }),
+        };
         // `ShouldAppearInLogs`, which a branch state answers no to. A graph
         // opening on a move has that move in its history already.
         let logged = matches!(
@@ -353,7 +422,7 @@ impl sts2_core::Rules for V0_107_1 {
     fn random_encounter_monsters<R: sts2_core::rng::GameRng>(
         encounter: Self::Encounter,
         rng: &mut R,
-    ) -> Result<Vec<Self::Monster>, sts2_core::ContentError> {
+    ) -> Result<Vec<sts2_core::Spawned<Self>>, sts2_core::ContentError> {
         Ok(behaviour::encounters::generate(encounter, rng))
     }
 
@@ -476,7 +545,7 @@ fn roll_monster_move<'a, R: sts2_core::rng::GameRng>(
     powers: impl IntoIterator<Item = sts2_core::Listener<'a, V0_107_1>>,
     machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
-) -> Result<sts2_core::NextMove<V0_107_1>, sts2_core::ContentError> {
+) -> Result<Option<sts2_core::NextMove<V0_107_1>>, sts2_core::ContentError> {
     use generated::monsters::{FollowUp, State};
 
     let powers: Vec<_> = powers.into_iter().collect();
@@ -487,6 +556,20 @@ fn roll_monster_move<'a, R: sts2_core::rng::GameRng>(
             .copied()
             .ok_or(sts2_core::ContentError::InvalidMonsterState { index: at })
     };
+
+    // A machine standing on a built state performs that state, and goes back
+    // to the one it follows on to once it has. Until then it advertises what
+    // the caller built, which the walk has nothing to say about.
+    if machine.built {
+        if !machine.performed {
+            return Ok(None);
+        }
+        machine.resume();
+        let State::Move(held) = state(machine.at)? else {
+            return Err(sts2_core::ContentError::InvalidMonsterState { index: machine.at });
+        };
+        return intents(held, ascension).map(Some);
+    }
 
     if !pinned(state(machine.at)?, machine) {
         loop {
@@ -512,7 +595,7 @@ fn roll_monster_move<'a, R: sts2_core::rng::GameRng>(
     let State::Move(held) = state(machine.at)? else {
         return Err(sts2_core::ContentError::InvalidMonsterState { index: machine.at });
     };
-    intents(held, ascension)
+    intents(held, ascension).map(Some)
 }
 
 /// Whether the machine cannot leave the state it stands on.

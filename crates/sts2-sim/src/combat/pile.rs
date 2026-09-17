@@ -36,6 +36,42 @@ impl<T> Shuffled<T> {
     }
 }
 
+/// `CardPile.MaxCardsInHand`, which the fight's first draw is capped at.
+const MAX_CARDS_IN_HAND: usize = 10;
+
+impl<V: sts2_core::Rules> Shuffled<super::live::CardInstance<V>> {
+    /// The same, for the one turn the innate cards are put on top first.
+    ///
+    /// `SetupPlayerTurn` on turn one. The sinking enchantments go to the
+    /// bottom, then every innate card is moved to the top one at a time. The
+    /// last of them in pile order ends up first. The hand is then drawn to at
+    /// least their number, and at most a full hand.
+    ///
+    /// # Panics
+    ///
+    /// An enchanted card, whose sink the port has not reached.
+    pub fn deal_opening(mut self, hand_size: usize) -> Piles<super::live::CardInstance<V>> {
+        if let Some(card) = self
+            .cards
+            .iter()
+            .find(|card| card.ident.enchantment.is_some())
+        {
+            unimplemented!(
+                "where {:?} starts the fight, which its enchantment decides",
+                card.ident
+            );
+        }
+        let innate = self.cards.iter().filter(|card| card.innate()).count();
+        // `MoveToTopInternal` per card, in pile order. Each insert goes in
+        // front of the last, which is what reverses them.
+        let mut moved: Vec<_> = self.cards.extract_if(.., |card| card.innate()).collect();
+        moved.reverse();
+        moved.append(&mut self.cards);
+        self.cards = moved;
+        self.deal(hand_size.max(innate).min(MAX_CARDS_IN_HAND))
+    }
+}
+
 impl<T> Piles<T> {
     /// Cards in hand, in hand order.
     pub fn hand(&self) -> &[T] {
@@ -113,7 +149,7 @@ mod tests {
     use sts2_core::Seed;
     use sts2_core::rng::{GameRng, stream_seed};
 
-    use super::{NotInHand, shuffle};
+    use super::{NotInHand, Shuffled, shuffle};
 
     fn rng() -> MegaRng {
         let seed = stream_seed::<V0_107_1>(&Seed::new("0RACLE1").expect("a canonical seed"));
@@ -182,5 +218,40 @@ mod tests {
         assert_eq!(piles.hand().len(), 2);
         assert!(piles.discard().is_empty());
         assert!(piles.exhaust().is_empty());
+    }
+
+    /// The fight's first draw puts the innate cards on top and draws them all.
+    ///
+    /// Two of them, so the order they end up in is visible. Each is moved to
+    /// the top in turn, which leaves the later one in front.
+    #[test]
+    fn the_first_hand_opens_with_every_innate_card() {
+        use crate::combat::live::{CardIds, CardInstance};
+        use sts2_content::v0_107_1::cards::{Cards, RegentCard};
+        use sts2_core::CardIdent;
+
+        let mut ids = CardIds::<V0_107_1>::new();
+        let plain = CardIdent::new(Cards::Regent(RegentCard::Strike));
+        // `BigBang.OnUpgrade` is `AddKeyword(Innate)`, so an upgraded one
+        // opens the fight in hand.
+        let innate = CardIdent {
+            upgrade: 1,
+            ..CardIdent::new(Cards::Regent(RegentCard::BigBang))
+        };
+        let deck = [plain, innate, plain, plain, plain, innate, plain];
+        let cards: Vec<_> = deck
+            .iter()
+            .map(|card| CardInstance::new(*card, ids.mint()))
+            .collect();
+        let named: Vec<_> = cards.iter().map(|card| card.id).collect();
+
+        let piles = Shuffled { cards }.deal_opening(1);
+
+        assert_eq!(
+            piles.hand().iter().map(|card| card.id).collect::<Vec<_>>(),
+            [named[5], named[1]],
+            "both innate cards are drawn, the later one first"
+        );
+        assert_eq!(piles.draw().len(), 5);
     }
 }

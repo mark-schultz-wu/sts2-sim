@@ -2,7 +2,9 @@
 
 use sts2_core::{CostPool, Fight, Played, PowerAmount};
 
-use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
+use super::super::super::super::generated::cards::{
+    CardKeyword, CardVar, Cards, RegentCard, TokenCard,
+};
 use super::super::super::super::generated::powers::Power;
 use super::super::{Change, V};
 
@@ -13,6 +15,9 @@ pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
         // `EnergyCost.UpgradeBy(-1)`. The card prints one number, and the
         // upgrade moves the cost rather than that number.
         RegentCard::SwordSage => &[Change::ChangeCost(CostPool::Energy, -1)],
+        // `AddKeyword(Innate)`. The card prints the same numbers upgraded, and
+        // what changes is where it starts the fight.
+        RegentCard::BigBang => &[Change::AddKeyword(CardKeyword::Innate)],
         card => unimplemented!("card upgrade: {card:?}"),
     }
 }
