@@ -77,14 +77,45 @@ impl<V: Rules> RelicBag<V> {
     /// A bag with nothing left at any rarity. The game refreshes a spent one
     /// and falls back to a relic of its own, and neither is reached.
     pub fn front(&self, rarity: Rarity<V>, dealt: &[V::Relic]) -> V::Relic {
+        self.pull(rarity, dealt, |_| true, false)
+    }
+
+    /// `RelicGrabBag.PullFromBack`, which is what a merchant stocks from.
+    ///
+    /// The same deque and the same walk, read from the other end and through a
+    /// filter. `IsAllowedInShops` is that filter, and a rarity whose deque
+    /// holds nothing passing it is walked past rather than drawn from.
+    pub fn back(
+        &self,
+        rarity: Rarity<V>,
+        dealt: &[V::Relic],
+        allowed: impl Fn(V::Relic) -> bool,
+    ) -> V::Relic {
+        self.pull(rarity, dealt, allowed, true)
+    }
+
+    /// The body both ends share: walk the rarities, then read one deque.
+    fn pull(
+        &self,
+        rarity: Rarity<V>,
+        dealt: &[V::Relic],
+        allowed: impl Fn(V::Relic) -> bool,
+        from_back: bool,
+    ) -> V::Relic {
         let mut rarity = rarity;
         loop {
-            if let Some(relic) = self
-                .deques
-                .get(&rarity)
-                .and_then(|relics| relics.iter().find(|relic| !dealt.contains(relic)))
-            {
-                return *relic;
+            let held = self.deques.get(&rarity).map(|relics| {
+                let left = relics
+                    .iter()
+                    .copied()
+                    .filter(|relic| !dealt.contains(relic) && allowed(*relic));
+                match from_back {
+                    true => left.last(),
+                    false => left.take(1).last(),
+                }
+            });
+            if let Some(Some(relic)) = held {
+                return relic;
             }
             rarity = match rarity {
                 r if r == <Rarity<V> as RarityKinds>::SHOP => <Rarity<V> as RarityKinds>::COMMON,

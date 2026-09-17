@@ -342,6 +342,36 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         }
     }
 
+    // The same pools again, narrowed the way a merchant sees them. The
+    // narrowing is `GetUnlockedCards` with a one-player run's constraint, run
+    // in the dump for the same reason `combatpool` is.
+    let mut shop_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
+    for f in dump.of("shoppool") {
+        let index = f[2]
+            .parse::<usize>()
+            .map_err(|e| format!("{}: shop pool index {}: {e}", f[1], f[2]))?;
+        shop_pools
+            .entry(f[1].clone())
+            .or_default()
+            .push((index, f[3].clone()));
+    }
+    for (pool, entries) in &mut shop_pools {
+        entries.sort_by_key(|(index, _)| *index);
+        for (expected, (index, card)) in entries.iter().enumerate() {
+            if *index != expected {
+                return Err(format!(
+                    "{pool}: shop pool index {index}, expected {expected}"
+                ));
+            }
+            let Some(row) = cards.iter().find(|row| row.id == *card) else {
+                return Err(format!("{pool}: unknown shop card {card}"));
+            };
+            if row.pool != *pool {
+                return Err(format!("{pool}: {card} declares pool {}", row.pool));
+            }
+        }
+    }
+
     let mut reward_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
     for f in dump.of("rewardpool") {
         let index = f[2]
@@ -863,6 +893,85 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
     writeln!(out, "        _ => &[],").unwrap();
     writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// A pool as a merchant sees it.\n\
+         ///\n\
+         /// [`pool_cards`] narrowed by `GetUnlockedCards` for a one-player\n\
+         /// run, in the same order. A shelf narrows this further by rarity and\n\
+         /// by card type, and filtering keeps the order, so the result is what\n\
+         /// the game's own query gives."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn merchant_cards(pool: CardPool) -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match pool {{").unwrap();
+    for (pool_id, _, enum_name, suffix) in POOLS
+        .iter()
+        .copied()
+        .filter(|(_, _, _, suffix)| suffix.is_some())
+    {
+        let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
+        writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
+        let entries = shop_pools
+            .get(pool_id)
+            .ok_or_else(|| format!("{pool_id}: dump has no shop pool order"))?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "            Cards::{}({enum_name}::{}),",
+                enum_name.trim_end_matches("Card"),
+                variant(card, suffix)
+            )
+            .unwrap();
+        }
+        writeln!(out, "        ],").unwrap();
+    }
+    writeln!(out, "        _ => &[],").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// The colourless pool as a merchant sees it.\n\
+         ///\n\
+         /// The same narrowing [`merchant_cards`] applies, on the one pool no\n\
+         /// character holds. Two of a merchant's shelves read it."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn merchant_colorless_cards() -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    &[").unwrap();
+    {
+        let entries = shop_pools
+            .get("COLORLESS_CARD_POOL")
+            .ok_or_else(|| "COLORLESS_CARD_POOL: dump has no shop pool order".to_string())?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "        Cards::Colorless(ColorlessCard::{}),",
+                variant(card, None)
+            )
+            .unwrap();
+        }
+    }
+    writeln!(out, "    ]").unwrap();
     writeln!(out, "}}\n").unwrap();
 
     writeln!(

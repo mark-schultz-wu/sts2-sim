@@ -1,0 +1,12 @@
+# `MerchantInventory.CreateForNormalMerchant` fills the shelves in one order:
+# five cards off the character's pool by type, two off the colourless pool by
+# rarity, three relics, three potions, and the card removal. The prices are
+# haggled from that order, so a shelf stocked out of turn is priced wrong even
+# when it holds the right thing.
+#
+# One of the five character slots is on sale at half price, and `SetOnSale`
+# recalculates rather than halves what it had. So the slot on sale costs one
+# draw more than its neighbours, and every price after it moves if that draw
+# is not taken.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"enter_room","type":"Shop"}

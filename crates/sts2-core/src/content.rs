@@ -192,6 +192,20 @@ impl<'a, T> Drafted<'a, T> {
     }
 }
 
+/// `CardType`, which a merchant's shelves and a relic's filter both name.
+///
+/// The game's own six. `_coloredCardTypes` names the first three, and a shelf
+/// is stocked by filtering the character's pool down to one of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CardKind {
+    Attack,
+    Skill,
+    Power,
+    Status,
+    Curse,
+    Quest,
+}
+
 /// The three rarities a reward rolls, plus everything else.
 ///
 /// One rule and two tables. A card reward and a potion reward each roll a
@@ -1417,6 +1431,13 @@ pub enum Replaying<V: ContentVersion> {
 /// One command requested by a content model in response to an event hook.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HookEffect<V: ContentVersion> {
+    /// `CardSelectCmd.FromDeckGeneric`, and a clone of what it took.
+    ///
+    /// The run asks for one card of its deck and adds a copy of it. A card
+    /// whose type the filter names is offered by no such selection.
+    CloneDeckCard {
+        excluding: CardKind,
+    },
     /// `CardSelectCmd` over the run's upgradable cards.
     UpgradeRandomDeckCards {
         count: usize,
@@ -2069,6 +2090,32 @@ pub trait Rules: Hooks {
     /// `Character.CardPool`, which is what a fight's card reward draws from.
     /// [`Rules::colorless_cards`] is the other pool, and no character holds it.
     fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card>;
+
+    /// The cards one of a merchant's character shelves draws from.
+    ///
+    /// `Character.CardPool` narrowed to one type and one rarity, which is what
+    /// `CreateForMerchant` filters it down to before it picks. Basic cards are
+    /// out, because the merchant drops them first.
+    ///
+    /// [`Rules::merchant_colorless_cards`] is the other pool a merchant reads.
+    fn merchant_cards(
+        character: Self::Character,
+        kind: CardKind,
+        rarity: RewardRarity,
+    ) -> Vec<Self::Card>;
+
+    /// `CardModel.Type`, or nothing for the one card that works it out from
+    /// the fight it is in.
+    ///
+    /// A pickup that filters the deck by type reads this. A run stands
+    /// outside a fight, so the card with no answer is in no such selection.
+    fn card_kind(card: Self::Card) -> Option<CardKind>;
+
+    /// The cards a merchant's two colourless shelves draw from.
+    ///
+    /// The same pool narrowed the same way, at one rarity. A colourless shelf
+    /// stocks by rarity alone, so it asks for no card type.
+    fn merchant_colorless_cards(rarity: RewardRarity) -> Vec<Self::Card>;
 
     /// The potions a reward draws from, split by rarity.
     ///

@@ -14,6 +14,7 @@
 mod anchor;
 mod bone_tea;
 mod divine_right;
+mod dollys_mirror;
 mod gremlin_horn;
 mod lead_paperweight;
 mod permafrost;
@@ -40,6 +41,7 @@ pub enum State {
     Anchor,
     BoneTea(bone_tea::State),
     DivineRight,
+    DollysMirror,
     GremlinHorn,
     LeadPaperweight,
     Permafrost(permafrost::State),
@@ -53,6 +55,7 @@ pub(crate) fn event_hook(state: &mut State, hook: EventHook<V>) -> Effects {
         State::Anchor => anchor::event_hook(hook),
         State::BoneTea(state) => bone_tea::event_hook(state, hook),
         State::DivineRight => divine_right::event_hook(hook),
+        State::DollysMirror => dollys_mirror::event_hook(hook),
         State::GremlinHorn => gremlin_horn::event_hook(hook),
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
         State::Permafrost(state) => permafrost::event_hook(state, hook),
@@ -69,6 +72,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::Anchor
         | State::BoneTea(_)
         | State::DivineRight
+        | State::DollysMirror
         | State::GremlinHorn
         | State::LeadPaperweight
         | State::Permafrost(_)
@@ -87,6 +91,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::Anchor => State::Anchor,
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
             Relic::DivineRight => State::DivineRight,
+            Relic::DollysMirror => State::DollysMirror,
             Relic::GremlinHorn => State::GremlinHorn,
             Relic::LeadPaperweight => State::LeadPaperweight,
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),

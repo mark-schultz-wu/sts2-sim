@@ -243,6 +243,35 @@ impl sts2_core::Rules for V0_107_1 {
         generated::cards::reward_cards(character)
     }
 
+    /// The card whose type the fight works out is on no shelf. A merchant
+    /// stands outside a fight, so nothing can answer for it there either.
+    fn merchant_cards(
+        character: Self::Character,
+        kind: sts2_core::CardKind,
+        rarity: sts2_core::RewardRarity,
+    ) -> Vec<Self::Card> {
+        let pool = sts2_core::Table::data(character).card_pool;
+        narrowed(generated::cards::merchant_cards(pool), Some(kind), rarity)
+    }
+
+    fn card_kind(card: Self::Card) -> Option<sts2_core::CardKind> {
+        let crate::Field::Constant(kind) = sts2_core::Table::data(card).kind else {
+            return None;
+        };
+        Some(match kind {
+            generated::cards::CardType::Attack => sts2_core::CardKind::Attack,
+            generated::cards::CardType::Skill => sts2_core::CardKind::Skill,
+            generated::cards::CardType::Power => sts2_core::CardKind::Power,
+            generated::cards::CardType::Status => sts2_core::CardKind::Status,
+            generated::cards::CardType::Curse => sts2_core::CardKind::Curse,
+            generated::cards::CardType::Quest => sts2_core::CardKind::Quest,
+        })
+    }
+
+    fn merchant_colorless_cards(rarity: sts2_core::RewardRarity) -> Vec<Self::Card> {
+        narrowed(generated::cards::merchant_colorless_cards(), None, rarity)
+    }
+
     fn reward_potions(character: Self::Character) -> sts2_core::Drafted<'static, Self::Potion> {
         generated::potions::reward_potions(character)
     }
@@ -672,3 +701,39 @@ const HOOKS: &str = include_str!("dumps/hooks.txt");
 
 #[cfg(test)]
 mod tests;
+
+/// `CardType`, as this build spells the one the vocabulary names.
+pub(crate) fn card_type(kind: sts2_core::CardKind) -> generated::cards::CardType {
+    use generated::cards::CardType;
+
+    match kind {
+        sts2_core::CardKind::Attack => CardType::Attack,
+        sts2_core::CardKind::Skill => CardType::Skill,
+        sts2_core::CardKind::Power => CardType::Power,
+        sts2_core::CardKind::Status => CardType::Status,
+        sts2_core::CardKind::Curse => CardType::Curse,
+        sts2_core::CardKind::Quest => CardType::Quest,
+    }
+}
+
+/// One merchant pool, narrowed to a rarity and optionally to one card type.
+///
+/// `CreateForMerchant` filters the pool it was handed, and a filter keeps the
+/// order. So an index into this means what an index into the game's own query
+/// means.
+fn narrowed(
+    pool: &'static [generated::cards::Cards],
+    kind: Option<sts2_core::CardKind>,
+    rarity: sts2_core::RewardRarity,
+) -> Vec<generated::cards::Cards> {
+    let wanted = kind.map(card_type);
+    pool.iter()
+        .copied()
+        .filter(|&card| {
+            <V0_107_1 as sts2_core::Rules>::reward_rarity(card) == rarity
+                && wanted.is_none_or(|wanted| {
+                    sts2_core::Table::data(card).kind == crate::Field::Constant(wanted)
+                })
+        })
+        .collect()
+}

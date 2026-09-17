@@ -106,6 +106,11 @@ impl<V: Rules> State<V> {
                 self.enter_rest_site(to);
                 return Ok(self.report());
             }
+            if kind == V::MapPointType::SHOP {
+                let shop = self.stocked_shop();
+                self.enter(Location::MapPoint(to), shop);
+                return Ok(self.report());
+            }
             if kind == V::MapPointType::ANCIENT {
                 // `AncientEventModel.BeforeEventStarted`, which heals what the
                 // run is missing before the ancient says anything. The rung
