@@ -13,7 +13,7 @@
 //! every failure carries a path.
 
 use super::cost::WireCost;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use sts2_core::{Cost, ShopCard};
 
 use num_traits::{NumCast, ToPrimitive};
@@ -219,7 +219,7 @@ fn domain_count<T: NumCast>(path: &str, value: impl ToPrimitive + ToString) -> R
 fn domain_vars<V: sts2_content_wire::WireContentVersion, T: NumCast>(
     path: &str,
     values: BTreeMap<String, i32>,
-) -> Result<sts2_core::Vars<V::CardVar, T>, Error> {
+) -> Result<sts2_core::Keyed<V::CardVar, T>, Error> {
     values
         .into_iter()
         .map(|(name, value)| {
@@ -588,8 +588,8 @@ impl From<WirePosition> for Position {
 fn counters<V: sts2_content_wire::WireContentVersion>(
     flat: &BTreeMap<String, WirePosition>,
 ) -> Result<Positions<V>, Error> {
-    let mut run = HashMap::new();
-    let mut player = HashMap::new();
+    let mut run = sts2_core::Keyed::new();
+    let mut player = sts2_core::Keyed::new();
 
     for (key, at_stream) in flat {
         let unknown = || {

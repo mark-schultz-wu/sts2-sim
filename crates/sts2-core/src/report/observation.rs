@@ -6,7 +6,6 @@
 //!
 //! The crate README says what this shape is for, and which fields stay prose.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use smallvec::SmallVec;
@@ -155,8 +154,8 @@ pub struct Node<V: ContentVersion> {
 /// player.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Positions<V: ContentVersion> {
-    pub run: HashMap<V::RunRngType, Position>,
-    pub player: HashMap<V::PlayerRngType, Position>,
+    pub run: Keyed<V::RunRngType, Position>,
+    pub player: Keyed<V::PlayerRngType, Position>,
 }
 
 /// Where one stream stands, the way the game saves it.
@@ -647,36 +646,45 @@ pub struct Preview<V: ContentVersion> {
     /// Keyed by the build's own variable, not by its name. A key outside the
     /// set this build prints is a divergence the reader reports, and no caller
     /// spells one to look it up.
-    pub vars: Vars<V::CardVar, V::Number>,
+    pub vars: Keyed<V::CardVar, V::Number>,
     /// The same variables as the card prints them, upgrades and enchantment
     /// included. Equal to `vars` exactly when nothing is modifying the card.
-    pub base: Vars<V::CardVar, V::Number>,
+    pub base: Keyed<V::CardVar, V::Number>,
 }
 
-/// The numbers one preview reports, by the key the build files them under.
+/// A handful of values, by a key the build names.
 ///
-/// Sorted by key with no repeats, which is what a `BTreeMap` of them read as.
-/// Repeated keys keep the last value, as that map did.
+/// Sorted by key with no repeats, the way a `BTreeMap` of them read. Repeated
+/// keys keep the last value, as that map did.
 ///
-/// Inline, because a card prints one to four numbers and every card in hand is
-/// previewed against every creature it can hit. A map of four entries reached
-/// the allocator twice.
+/// Every map in an observation is this shape: a preview's numbers, and where
+/// each stream stands. A report builds a fresh one per decision, and hashing
+/// four entries costs more than walking them.
 #[derive(Clone, PartialEq, Eq)]
-pub struct Vars<K, N>(SmallVec<[(K, N); VARS_INLINE]>);
+pub struct Keyed<K, N>(SmallVec<[(K, N); KEYED_INLINE]>);
 
-/// How many numbers a preview reports without reaching the heap.
+/// How many entries a map holds without reaching the heap.
 ///
-/// Four, because all but four of the cards the ported build prints hold at
-/// most this many.
-const VARS_INLINE: usize = 4;
+/// Four, which holds the numbers all but four of the ported build's cards
+/// print, and the streams the game keeps per player. A run's twelve streams
+/// spill, into one allocation that [`Keyed::from_iter`] sizes up front.
+const KEYED_INLINE: usize = 4;
 
-impl<K: Ord, N> Vars<K, N> {
+impl<K: Ord, N> Keyed<K, N> {
     /// The value filed under `key`.
     pub fn get(&self, key: &K) -> Option<&N> {
         self.0
             .binary_search_by(|(at, _)| at.cmp(key))
             .ok()
             .map(|at| &self.0[at].1)
+    }
+
+    /// The value filed under `key`, to write on.
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut N> {
+        self.0
+            .binary_search_by(|(at, _)| at.cmp(key))
+            .ok()
+            .map(|at| &mut self.0[at].1)
     }
 
     /// Files `value` under `key`, and hands back what was there.
@@ -689,10 +697,29 @@ impl<K: Ord, N> Vars<K, N> {
             }
         }
     }
+}
+
+/// Reading one, which is every use but building it and looking one up. No
+/// ordering bound, because the order was settled when it was built.
+impl<K, N> Keyed<K, N> {
+    /// A map with nothing in it.
+    pub fn new() -> Self {
+        Self(SmallVec::new())
+    }
 
     /// Every pair, in key order.
     pub fn iter(&self) -> impl Iterator<Item = (&K, &N)> {
         self.0.iter().map(|(key, value)| (key, value))
+    }
+
+    /// Every key, in order.
+    pub fn keys(&self) -> impl Iterator<Item = &K> {
+        self.0.iter().map(|(key, _)| key)
+    }
+
+    /// Every value, in key order.
+    pub fn values(&self) -> impl Iterator<Item = &N> {
+        self.0.iter().map(|(_, value)| value)
     }
 
     pub fn len(&self) -> usize {
@@ -704,9 +731,13 @@ impl<K: Ord, N> Vars<K, N> {
     }
 }
 
-impl<K: Ord, N> FromIterator<(K, N)> for Vars<K, N> {
+impl<K: Ord, N> FromIterator<(K, N)> for Keyed<K, N> {
     fn from_iter<I: IntoIterator<Item = (K, N)>>(pairs: I) -> Self {
-        let mut held: SmallVec<[(K, N); VARS_INLINE]> = SmallVec::new();
+        let pairs = pairs.into_iter();
+        // One allocation for a map that spills, rather than the doubling a
+        // sequence of inserts would do.
+        let mut held: SmallVec<[(K, N); KEYED_INLINE]> =
+            SmallVec::with_capacity(pairs.size_hint().0);
         for (key, value) in pairs {
             match held.binary_search_by(|(at, _)| at.cmp(&key)) {
                 Ok(at) => held[at].1 = value,
@@ -717,14 +748,20 @@ impl<K: Ord, N> FromIterator<(K, N)> for Vars<K, N> {
     }
 }
 
-impl<K: Ord, N, const COUNT: usize> From<[(K, N); COUNT]> for Vars<K, N> {
+impl<K, N> Default for Keyed<K, N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<K: Ord, N, const COUNT: usize> From<[(K, N); COUNT]> for Keyed<K, N> {
     fn from(pairs: [(K, N); COUNT]) -> Self {
         pairs.into_iter().collect()
     }
 }
 
 /// So that a failure prints what the map it replaced printed.
-impl<K: std::fmt::Debug, N: std::fmt::Debug> std::fmt::Debug for Vars<K, N> {
+impl<K: std::fmt::Debug, N: std::fmt::Debug> std::fmt::Debug for Keyed<K, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map()
             .entries(self.0.iter().map(|(key, value)| (key, value)))
@@ -734,7 +771,7 @@ impl<K: std::fmt::Debug, N: std::fmt::Debug> std::fmt::Debug for Vars<K, N> {
 
 /// A key a card does not print is a mistake in the caller, the way indexing a
 /// map with one was.
-impl<K: Ord, N> std::ops::Index<&K> for Vars<K, N> {
+impl<K: Ord, N> std::ops::Index<&K> for Keyed<K, N> {
     type Output = N;
 
     fn index(&self, key: &K) -> &N {
@@ -744,25 +781,25 @@ impl<K: Ord, N> std::ops::Index<&K> for Vars<K, N> {
 
 #[cfg(test)]
 mod tests {
-    use super::Vars;
+    use super::Keyed;
 
     #[test]
     fn the_numbers_read_back_in_key_order() {
-        let vars = Vars::from([(2, "two"), (0, "zero"), (1, "one")]);
+        let vars = Keyed::from([(2, "two"), (0, "zero"), (1, "one")]);
         let read: Vec<_> = vars.iter().map(|(key, value)| (*key, *value)).collect();
         assert_eq!(read, [(0, "zero"), (1, "one"), (2, "two")]);
     }
 
     #[test]
     fn a_repeated_key_keeps_the_last_value() {
-        let vars = Vars::from([(0, "first"), (1, "one"), (0, "last")]);
+        let vars = Keyed::from([(0, "first"), (1, "one"), (0, "last")]);
         assert_eq!(vars.len(), 2);
         assert_eq!(vars.get(&0), Some(&"last"));
     }
 
     #[test]
     fn writing_over_a_key_hands_back_what_was_there() {
-        let mut vars = Vars::from([(0, "zero")]);
+        let mut vars = Keyed::from([(0, "zero")]);
         assert_eq!(vars.insert(0, "written"), Some("zero"));
         assert_eq!(vars.insert(1, "one"), None);
         assert_eq!(vars[&0], "written");
@@ -774,7 +811,7 @@ mod tests {
     #[test]
     fn it_prints_as_a_map() {
         assert_eq!(
-            format!("{:?}", Vars::from([(0, 6), (1, 9)])),
+            format!("{:?}", Keyed::from([(0, 6), (1, 9)])),
             "{0: 6, 1: 9}"
         );
     }

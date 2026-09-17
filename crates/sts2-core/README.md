@@ -208,10 +208,10 @@ build is meaningless whatever it hashed. It cost one read of the name out of a
 that, per id, per observation, after every decision.
 
 A counter map is digested as the count and then the wrapping sum of a sub-digest
-per entry. A sum, because a `HashMap` has no order to walk in and sorting needs
-an `Ord` the counter types do not have. Summing also says what is true of the
-value. These are two sets of named counters, and the order the game happened to
-store them in is not part of the state.
+per entry. A sum, because the order is not part of the state. These are two sets of named
+counters, and which order they are held in says nothing about the run. The map
+holding them is sorted now, and the sum stays. Walking it in order instead
+moves every digest the golden files commit.
 
 ## The model id
 

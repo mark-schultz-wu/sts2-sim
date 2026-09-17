@@ -2180,7 +2180,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// One of the random streams a run keeps.
     type RunRngType: std::fmt::Debug
         + Copy
-        + Eq
+        + Ord
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
@@ -2189,7 +2189,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     /// One of the random streams each player keeps.
     type PlayerRngType: std::fmt::Debug
         + Copy
-        + Eq
+        + Ord
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned

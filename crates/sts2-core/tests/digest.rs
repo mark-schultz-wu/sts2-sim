@@ -16,16 +16,16 @@
 //! forever and pass. The walk destructures exhaustively so that cannot
 //! compile, and this is what says the destructured field was then *used*.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use sts2_core::fixture::at;
 use sts2_core::{PowerAmount, Section};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
     Attack, Blocked, CardIdent, Carried, Channelled, ChestOption, Combat, ContentVersion, Coord,
-    Cost, Creature, Digest, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent, Map,
+    Cost, Creature, Digest, Entry, EventOption, EventOptionKey, FlagSet, Held, Intent, Keyed, Map,
     ModelId, NextMove, Node, Observation, Orbs, Playable, Position, Positions, Preview, Reachable,
-    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable, Vars,
+    RestOption, Room, ShopCard, Stack, Stock, Table, Take, Undrinkable,
 };
 
 type V = V0_107_1;
@@ -120,12 +120,12 @@ fn full() -> Observation<V> {
             proceed: false,
         },
         rng: Positions {
-            run: HashMap::from([
+            run: Keyed::from([
                 (RunRngType::UpFront, Position::counted(4)),
                 (RunRngType::Shuffle, Position::counted(17)),
                 (RunRngType::MonsterAi, Position::counted(2)),
             ]),
-            player: HashMap::from([
+            player: Keyed::from([
                 (PlayerRngType::Rewards, Position::counted(1)),
                 (PlayerRngType::Shops, Position::counted(0)),
             ]),
@@ -178,8 +178,8 @@ fn full() -> Observation<V> {
                 effect: vec![Preview {
                     target: Some(at(1)),
                     text: Some("Deal {Damage} damage.".into()),
-                    vars: Vars::from([(CardVar::Damage, 9)]),
-                    base: Vars::from([(CardVar::Damage, 6)]),
+                    vars: Keyed::from([(CardVar::Damage, 9)]),
+                    base: Keyed::from([(CardVar::Damage, 6)]),
                 }],
             }],
             orbs: Some(Orbs {

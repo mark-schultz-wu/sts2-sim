@@ -8,12 +8,10 @@
 //! about the wrapper's rule, not about any implementation. A stub is the only
 //! way to hold "the game refused it" fixed while asking what the tape did.
 
-use std::collections::HashMap;
-
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Answered, Applied, Construct, ContentVersion, Coord, Decision, Gift, Map, Observation, Play,
-    Reason, Recorder, Recording, Refusal, Setup, Snapshot, Start, Step, Table, Tape,
+    Answered, Applied, Construct, ContentVersion, Coord, Decision, Gift, Keyed, Map, Observation,
+    Play, Reason, Recorder, Recording, Refusal, Setup, Snapshot, Start, Step, Table, Tape,
 };
 
 type V = V0_107_1;
@@ -46,8 +44,8 @@ fn nowhere() -> Applied<V> {
                 proceed: false,
             },
             rng: sts2_core::Positions {
-                run: HashMap::new(),
-                player: HashMap::new(),
+                run: Keyed::new(),
+                player: Keyed::new(),
             },
             room: None,
             combat: None,

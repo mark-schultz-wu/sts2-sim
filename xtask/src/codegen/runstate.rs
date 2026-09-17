@@ -220,6 +220,13 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     Ok(build)
 }
 
+/// The enums whose members carry an order.
+///
+/// An observation keys a map by each of these, and that map is sorted rather
+/// than hashed. Nothing reads the order itself: it is the declaration order,
+/// which is the order the game creates the streams in.
+const ORDERED: [&str; 2] = ["RunRngType", "PlayerRngType"];
+
 /// A note on a member, or nothing where the name is the whole fact.
 fn note(enum_name: &str, member: &str) -> &'static str {
     NOTES
@@ -234,6 +241,9 @@ fn emit_enum(out: &mut String, name: &str, doc: &str, members: &[(u8, String)], 
         writeln!(out, "/// {}", line.trim()).unwrap();
     }
     writeln!(out, "{DERIVES}").unwrap();
+    if ORDERED.contains(&name) {
+        writeln!(out, "#[derive(PartialOrd, Ord)]").unwrap();
+    }
     writeln!(out, "#[repr(u8)]").unwrap();
     writeln!(out, "pub enum {name} {{").unwrap();
     for (discriminant, member) in members {
