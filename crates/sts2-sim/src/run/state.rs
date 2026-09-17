@@ -228,6 +228,14 @@ pub(super) enum Phase<V: Rules> {
         /// Waiting for the card the smith upgrades.
         upgrading: bool,
     },
+    /// The fight the run died in, as it stood when the player fell.
+    ///
+    /// `ProcessPendingLoss` ends the combat and the run with it. The room is
+    /// still the one it was fought in, so the fight is still reported. Nothing
+    /// is offered, because a dead run takes nothing.
+    Lost {
+        combat: Combat<V>,
+    },
     /// A merchant, and how far through its shelves the run has bought.
     ///
     /// The entries are stocked once, when the run walks in. A slot the run
@@ -316,7 +324,11 @@ impl<V: Rules> Phase<V> {
             // and a shelf it has not bought is still there.
             Phase::Shop { unfinished, .. } => unfinished.is_none(),
             // The map is not a room, so there is nothing to leave.
-            Phase::Map | Phase::Combat(_) | Phase::Rewards { .. } | Phase::Event { .. } => false,
+            Phase::Map
+            | Phase::Combat(_)
+            | Phase::Rewards { .. }
+            | Phase::Lost { .. }
+            | Phase::Event { .. } => false,
         }
     }
 }
@@ -449,6 +461,7 @@ impl<V: Rules> State<V> {
             Phase::Map
             | Phase::Neow { .. }
             | Phase::Rewards { .. }
+            | Phase::Lost { .. }
             | Phase::Event { .. }
             | Phase::Treasure { .. }
             | Phase::RestSite { .. }
@@ -553,6 +566,15 @@ impl<V: Rules> State<V> {
             self.player.max_hp = player.max_hp;
         }
         self.phase = Phase::Rewards { combat, offered };
+    }
+
+    /// Park the run on the fight it died in.
+    ///
+    /// The creature was built from the run's own numbers, and where it fell is
+    /// where they stayed. Nothing writes them back, because a run that is over
+    /// has nowhere to carry them to.
+    pub(super) fn lost(&mut self, combat: Combat<V>) {
+        self.phase = Phase::Lost { combat };
     }
 
     /// The player's own creature in a fight.
@@ -1458,6 +1480,9 @@ impl<V: Rules> State<V> {
                 let asking = live.question();
                 (asking, None, Some(live.report()), true)
             }
+            // `IsInProgress` is false once the loss is processed, and the
+            // room it was fought in is still the room the run is standing in.
+            Phase::Lost { combat } => (None, None, Some(combat.clone()), false),
             Phase::Rewards { combat, offered } => (
                 offered
                     .iter()
@@ -1600,6 +1625,20 @@ impl<V: Rules> State<V> {
                     alive: player.alive,
                 }
             }
+            // The player fell in the fight, and the fight is where its own
+            // numbers stayed.
+            Phase::Lost { combat } => {
+                let player = combat
+                    .creatures
+                    .iter()
+                    .find(|c| c.id == self.player_id(combat))
+                    .expect("a lost fight has the player in it");
+                Standing {
+                    hp: player.hp,
+                    max_hp: player.max_hp,
+                    alive: player.alive,
+                }
+            }
             Phase::Map
             | Phase::Neow { .. }
             | Phase::Rewards { .. }
@@ -1620,8 +1659,13 @@ impl<V: Rules> State<V> {
                 hp: standing.hp,
                 max_hp: standing.max_hp,
                 alive: standing.alive,
-                run_over: false,
-                victory: None,
+                // `RunState.IsGameOver` is every player being dead, and a run
+                // with one player has its answer in `alive`.
+                run_over: !standing.alive,
+                // `CurrentRoom.IsVictoryRoom`, asked only once the run is
+                // over. No room a run can reach is one yet, because the act
+                // that ends a run in victory is not ported.
+                victory: (!standing.alive).then_some(false),
                 gold: self.player.gold,
                 relics: self
                     .player
@@ -1639,6 +1683,7 @@ impl<V: Rules> State<V> {
                     // A fight that is over is not one a potion can be drunk
                     // in. `in_combat` is that question already answered.
                     combat.as_ref().filter(|_| in_combat),
+                    standing.alive,
                 ),
                 potion_slots: self.player.potion_slots,
                 deck: self.player.deck.clone(),
@@ -1820,6 +1865,54 @@ mod tests {
             Character::Regent,
             AscensionLevel::None,
         )
+    }
+
+    /// A run whose player falls reports itself over, and where it fell.
+    ///
+    /// `RunState.IsGameOver` is every player being dead, and
+    /// `CurrentRoom.IsVictoryRoom` is what tells a defeat from a win. The room
+    /// the run died in is still the room it stands in, so the fight is still
+    /// reported and the fighting is over.
+    #[test]
+    fn a_run_whose_player_died_is_over_and_lost() {
+        use sts2_content::v0_107_1::encounters::Encounter;
+        use sts2_content::v0_107_1::potions::Potion;
+        use sts2_core::{Gift, SideKinds, Undrinkable};
+
+        let mut run = opened();
+        run.grant(&Gift::Potion(Potion::BlockPotion))
+            .expect("a potion can be granted");
+        run.fight_here(Encounter::SlimesWeak)
+            .expect("the simulator can build this fight");
+
+        // Where the player fell, which is what the run keeps.
+        let mut combat = run.fight().expect("the run is in the fight").report();
+        let player = combat
+            .creatures
+            .iter_mut()
+            .find(|c| c.side == <V as sts2_core::ContentVersion>::CombatSide::PLAYER)
+            .expect("a fight has the player in it");
+        player.hp = 0;
+        player.alive = false;
+        run.lost(combat);
+
+        let seen = run.report().observation;
+        assert!(!seen.alive, "the player is dead");
+        assert!(seen.run_over, "so the run is over");
+        assert_eq!(seen.victory, Some(false), "and it was not a victory");
+        assert!(!seen.in_combat, "the fighting is over");
+        assert!(
+            seen.combat.is_some(),
+            "the run has not left the room it died in"
+        );
+        assert_eq!(
+            seen.potions
+                .iter()
+                .map(|held| held.reason)
+                .collect::<Vec<_>>(),
+            [Some(Undrinkable::Dead)],
+            "a dead run drinks nothing"
+        );
     }
 
     /// `CardSelectCmd.FromDeckForUpgrade` offers the upgradable cards alone,

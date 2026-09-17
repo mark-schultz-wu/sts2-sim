@@ -46,6 +46,11 @@ pub(crate) fn end<V: Rules>(
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
+    //
+    // `StartTurn` opens with `SetPhaseForAllPlayers(None)` and puts the phase
+    // back only for a turn the player is taking. So the phase a fight ending
+    // here reports is the one the enemy turn ran under.
+    next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
     clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
@@ -57,7 +62,23 @@ pub(crate) fn end<V: Rules>(
         ascension,
         <V::CombatSide as SideKinds>::ENEMY,
     );
-    let won = enemy_turn(&mut next, streams.combat(), &mut relics, &mut skipping);
+    let ended = enemy_turn(&mut next, streams.combat(), &mut relics, &mut skipping);
+    // `EndEnemyTurn` is gated on `IsInProgress`, which both endings clear:
+    // `ProcessPendingLoss` for a death and `EndCombatInternal` for a win. So
+    // a fight that ended during the enemy turn ends the turn with it, and
+    // nothing below here runs.
+    if let Some(ended) = ended {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            relic::combat_ended::<V>(&mut relics);
+        }
+        return Ok(super::Fought {
+            live: next,
+            streams,
+            relics,
+            ended: Some(ended),
+        });
+    }
     power::before_turn_end::<V>(&mut next.creatures, <V::CombatSide as SideKinds>::ENEMY);
 
     let asked = tick_powers::<V>(
@@ -103,14 +124,11 @@ pub(crate) fn end<V: Rules>(
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
     next.skip_tick = skipping;
-    if won {
-        relic::combat_ended::<V>(&mut relics);
-    }
     Ok(super::Fought {
         live: next,
         streams,
         relics,
-        won,
+        ended: None,
     })
 }
 
@@ -350,8 +368,8 @@ fn enemy_turn<V: Rules>(
     mut rngs: CombatRngs<'_>,
     relics: &mut [crate::run::HeldRelic<V>],
     skipping: &mut Vec<(CombatId, V::Power)>,
-) -> bool {
-    let mut won = false;
+) -> Option<super::Ended> {
+    let mut ended = None;
     let acting: Vec<CombatId> = live
         .creatures
         .iter()
@@ -400,10 +418,10 @@ fn enemy_turn<V: Rules>(
         if let Some(effect) = asked.first() {
             unimplemented!("a power asking for {effect:?} after a monster move")
         }
-        won |= board.won;
+        ended = ended.or(board.ended);
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));
     }
-    won
+    ended
 }
 
 /// `PrepareForNextTurn`: every enemy still in the fight advertises its next

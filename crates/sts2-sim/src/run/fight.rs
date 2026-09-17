@@ -142,9 +142,12 @@ impl<V: Rules> State<V> {
         // is committed until the decision is one the simulator could carry
         // out whole.
         self.hold(fought.relics);
-        match fought.won {
-            false => self.fought(fought.live),
-            true => {
+        match fought.ended {
+            None => self.fought(fought.live),
+            // Not `finish`: the run never left the fight, and the piles and
+            // the powers are where the player fell.
+            Some(combat::Ended::Lost) => self.lost(fought.live.report()),
+            Some(combat::Ended::Won) => {
                 let returned = fought.live.removed_from_deck().to_vec();
                 let combat = fought.live.finish();
                 let mut offered = self.combat_rewards(&combat);

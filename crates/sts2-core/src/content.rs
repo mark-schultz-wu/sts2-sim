@@ -1492,7 +1492,14 @@ pub enum EventHook<V: ContentVersion> {
     },
     EnergyReset,
     BlockCleared,
-    AfterDeath,
+    /// `Hook.AfterDeath`, carrying the side the dead creature fought on.
+    ///
+    /// Every model in the fight is asked, not only the dead creature's own.
+    /// So a model whose rule is about the other side reads this. Gremlin Horn
+    /// pays for a kill, and not for its own holder's death.
+    AfterDeath {
+        side: V::CombatSide,
+    },
     /// `AfterPowerAmountChanged`, raised on every listener once a power's
     /// amount has moved.
     ///

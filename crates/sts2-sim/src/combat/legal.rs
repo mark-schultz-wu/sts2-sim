@@ -127,11 +127,15 @@ fn playable<V: Rules>(
 /// slice cannot raise. Nothing is queued, because a decision resolves whole.
 /// Nothing is stuck, because that is a relic and none is ported. The player is
 /// alive, because a dead one stops the run.
-pub(crate) fn belt<V: Rules>(potions: &[V::Potion], combat: Option<&Combat<V>>) -> Vec<Held<V>> {
+pub(crate) fn belt<V: Rules>(
+    potions: &[V::Potion],
+    combat: Option<&Combat<V>>,
+    alive: bool,
+) -> Vec<Held<V>> {
     potions
         .iter()
         .map(|&potion| {
-            let reason = undrinkable::<V>(potion, combat);
+            let reason = undrinkable::<V>(potion, combat, alive);
             Held {
                 potion,
                 // The game reads both out of its localisation tables, which
@@ -151,7 +155,19 @@ pub(crate) fn belt<V: Rules>(potions: &[V::Potion], combat: Option<&Combat<V>>) 
 }
 
 /// Why one potion cannot be drunk, or nothing for one that can.
-fn undrinkable<V: Rules>(potion: V::Potion, combat: Option<&Combat<V>>) -> Option<Undrinkable> {
+///
+/// The order is the game's, so the reason reported is the first that holds.
+/// `NPotionPopup.RefreshButtons` asks whether the player is dead before it
+/// asks anything else. A dead run answers for every potion in the belt,
+/// whatever else is true of one.
+fn undrinkable<V: Rules>(
+    potion: V::Potion,
+    combat: Option<&Combat<V>>,
+    alive: bool,
+) -> Option<Undrinkable> {
+    if !alive {
+        return Some(Undrinkable::Dead);
+    }
     if potion.usage() == PotionUsage::Automatic {
         return Some(Undrinkable::Automatic);
     }

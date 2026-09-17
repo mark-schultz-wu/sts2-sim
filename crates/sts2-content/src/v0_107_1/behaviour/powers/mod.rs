@@ -461,10 +461,10 @@ pub(crate) fn event_hook(
         // A segment whose row is otherwise dead is left where it lies. The
         // fight is over by then, and the game spends that branch on the fade
         // every segment plays.
-        (Power::ReattachPower, _, EventHook::AfterDeath) => {
+        (Power::ReattachPower, _, EventHook::AfterDeath { .. }) => {
             Some(HookEffect::EnterMove(MoveId::DeadMove))
         }
-        (Power::IllusionPower, _, EventHook::AfterDeath) => {
+        (Power::IllusionPower, _, EventHook::AfterDeath { .. }) => {
             Some(HookEffect::InstallMove(sts2_core::NextMove {
                 id: MoveId::ReviveMove,
                 intents: [sts2_core::Intent {
@@ -478,7 +478,7 @@ pub(crate) fn event_hook(
         (
             Power::InfestedPower,
             PowerAmount::Counted(amount),
-            EventHook::AfterDeath,
+            EventHook::AfterDeath { .. },
         ) => Some(HookEffect::SummonAfterOwnerDeath {
             monster: Monster::Wriggler,
             count: amount,
@@ -492,7 +492,7 @@ pub(crate) fn event_hook(
                 .collect(),
             },
         }),
-        (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath) => {
+        (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath { .. }) => {
             unimplemented!("an endless Infested power")
         }
         // `TenderPower.AfterCardPlayed`, which counts only its owner's own
@@ -652,7 +652,7 @@ pub(crate) fn event_hook(
             _,
             _,
             EventHook::BlockCleared
-            | EventHook::AfterDeath
+            | EventHook::AfterDeath { .. }
             | EventHook::BeforeApplied { .. }
             | EventHook::CardPlayed { .. }
             | EventHook::SideTurnStart { .. }
