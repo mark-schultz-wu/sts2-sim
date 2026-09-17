@@ -20,6 +20,7 @@ pub(crate) use live::Live;
 pub(crate) use play::{answer, apply_power, play, resolve};
 pub(crate) use potion::drink;
 pub(crate) use relic::obtained;
+pub(crate) use start::Entering;
 pub(crate) use start::enter;
 pub(crate) use turn::end as end_turn;
 pub mod pile;

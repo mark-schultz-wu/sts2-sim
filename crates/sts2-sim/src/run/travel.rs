@@ -186,7 +186,7 @@ impl<V: Rules> State<V> {
             unreachable!()
         };
 
-        let fight = self.create_fight(encounter, queue, &self.report().observation)?;
+        let fight = self.create_fight(encounter, queue)?;
         self.enter_fight(fight, Location::MapPoint(to));
         Ok(Decided::Resolved)
     }
