@@ -74,6 +74,10 @@ pub(super) enum EncounterQueue {
     /// An act rolls one boss and fights it once, so a boss takes nothing from
     /// a queue and moves no count on.
     Boss,
+    /// A fight the debug command named, which is off the map and off every
+    /// queue. `EnterRoomDebug` is handed its encounter and takes none from a
+    /// list.
+    Named,
 }
 
 /// Data generated once and shared by every branch of this run.
@@ -146,6 +150,34 @@ struct Player<V: Rules> {
     max_hp: V::Health,
     gold: V::Number,
     potion_slots: V::Count,
+}
+
+/// A fight built and not yet entered.
+///
+/// Built first because building can fail, and a fight that cannot be built
+/// leaves the run where it stood. What the fight costs the run is spent as it
+/// enters, and carried here until then. That is the streams it drew from, and
+/// the act list it came off.
+#[derive(Debug)]
+pub(super) struct CreatedFight<V: Rules> {
+    live: crate::combat::Live<V>,
+    streams: Streams<V>,
+    queue: EncounterQueue,
+}
+
+/// Where the run stands when it enters a room.
+///
+/// A room is reached two ways, and this is the whole of what they differ by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Location {
+    /// The map point the run travelled to.
+    MapPoint(Coord),
+    /// No map point at all, which is `MapPointType.Unassigned`.
+    ///
+    /// Only the debug construction commands reach a room this way, and the
+    /// scenarios are what use them. The run gains the floor and goes on
+    /// standing where it stood, so map and room disagree by construction.
+    NoLocation,
 }
 
 /// Exactly one room or pending action can own the run at a time.
@@ -561,6 +593,22 @@ impl<V: Rules> State<V> {
         (self.events_used, &self.visited_events, self.unknown_odds)
     }
 
+    /// `RunManager.EnterRoom`: the run leaves the map and stands in a room.
+    ///
+    /// `at` is the map point the run walked to. `EnterRoomDebug` passes
+    /// nothing, because it enters at `MapPointType.Unassigned`. The run then
+    /// gains the floor and still stands where it already stood.
+    ///
+    /// The room is built first. Building one can fail, and a room that cannot
+    /// be built leaves the run where it stood.
+    fn enter(&mut self, at: Location, phase: Phase<V>) {
+        self.floor = self.floor + num_traits::one();
+        if let Location::MapPoint(to) = at {
+            self.visited.push(to);
+        }
+        self.phase = phase;
+    }
+
     pub(super) fn enter_event(&mut self, to: Coord, entered: EnteredEvent<V>) {
         let EnteredEvent {
             event,
@@ -570,39 +618,38 @@ impl<V: Rules> State<V> {
             events_used,
             unknown_odds,
         } = entered;
-        self.floor = self.floor + num_traits::one();
-        self.visited.push(to);
         self.streams = streams;
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
         self.visited_events.push(event);
-        self.phase = Phase::Event { state, rng };
+        self.enter(Location::MapPoint(to), Phase::Event { state, rng });
     }
 
     /// Enter a treasure room after resolving its relic and stream counter.
     pub(super) fn enter_treasure(&mut self, to: Coord, relic: V::Relic, streams: Streams<V>) {
-        self.floor = self.floor + num_traits::one();
-        self.visited.push(to);
         self.streams = streams;
         self.dealt_relics.push(relic);
-        self.phase = Phase::Treasure {
-            relic,
-            finished: false,
-        };
+        self.enter(
+            Location::MapPoint(to),
+            Phase::Treasure {
+                relic,
+                finished: false,
+            },
+        );
     }
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, to: Coord) {
-        self.floor = self.floor + num_traits::one();
-        self.visited.push(to);
         let deck = self.player.deck.to_vec();
-        self.phase = Phase::RestSite {
-            options: <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(
-                &self.held_relics(),
-                &deck,
-            ),
-            upgrading: false,
-        };
+        let options =
+            <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&self.held_relics(), &deck);
+        self.enter(
+            Location::MapPoint(to),
+            Phase::RestSite {
+                options,
+                upgrading: false,
+            },
+        );
     }
 
     /// The belt as the models the hook reads, rather than what a fight writes.
@@ -610,22 +657,24 @@ impl<V: Rules> State<V> {
         self.player.relics.iter().map(|held| held.relic).collect()
     }
 
-    pub(super) fn enter_combat(
-        &mut self,
-        to: Coord,
-        queue: EncounterQueue,
-        streams: Streams<V>,
-        live: crate::combat::Live<V>,
-    ) {
-        self.floor = self.floor + num_traits::one();
+    /// Enter a fight that is already built, where the run reached it.
+    ///
+    /// The act counts the fight here rather than where it was built, because
+    /// the count is how far down its list the run has walked. A fight the run
+    /// never walked into moves no list on.
+    pub(super) fn enter_fight(&mut self, fight: CreatedFight<V>, at: Location) {
+        let CreatedFight {
+            live,
+            streams,
+            queue,
+        } = fight;
         match queue {
             EncounterQueue::Normal => self.normal_fights += 1,
             EncounterQueue::Elite => self.elite_fights += 1,
-            EncounterQueue::Boss => {}
+            EncounterQueue::Boss | EncounterQueue::Named => {}
         }
-        self.visited.push(to);
         self.drew(streams);
-        self.phase = Phase::Combat(live);
+        self.enter(at, Phase::Combat(live));
     }
 
     /// Take back the streams a rule drew from.
@@ -648,13 +697,14 @@ impl<V: Rules> State<V> {
     /// The relics act on a copy, which is kept only once the fight is built.
     /// A fight that cannot be built leaves the run where it stood. A relic
     /// that spent a charge on such a fight has spent nothing.
-    pub(super) fn open_combat(
+    pub(super) fn create_fight(
         &mut self,
         encounter: V::Encounter,
+        queue: EncounterQueue,
         observation: &Observation<V>,
-    ) -> Result<(crate::combat::Live<V>, Streams<V>), Error> {
+    ) -> Result<CreatedFight<V>, Error> {
         let mut relics = self.player.relics.clone();
-        let opened = crate::combat::enter::<V>(
+        let (live, streams) = crate::combat::enter::<V>(
             self.raw_seed(),
             self.character(),
             self.ascension(),
@@ -664,7 +714,11 @@ impl<V: Rules> State<V> {
             &mut relics,
         )?;
         self.player.relics = relics;
-        Ok(opened)
+        Ok(CreatedFight {
+            live,
+            streams,
+            queue,
+        })
     }
 
     /// Put the run into a named fight, rather than travel to one.
@@ -677,11 +731,8 @@ impl<V: Rules> State<V> {
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Applied<V>, Error> {
         let mut observation = self.report().observation;
         observation.floor = observation.floor + num_traits::one();
-        let (ongoing, streams) = self.open_combat(encounter, &observation)?;
-
-        self.floor = self.floor + num_traits::one();
-        self.drew(streams);
-        self.fought(ongoing);
+        let fight = self.create_fight(encounter, EncounterQueue::Named, &observation)?;
+        self.enter_fight(fight, Location::NoLocation);
         Ok(self.report())
     }
 
