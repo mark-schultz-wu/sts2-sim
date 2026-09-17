@@ -3,7 +3,11 @@
 use sts2_core::rng::GameRng;
 
 /// xoshiro256** seeded through splitmix64, counted.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Copy`, so a row of them copies rather than walking. Nothing here holds one
+/// by value. A run keeps them in [`crate::stream::Streams`], which hands out
+/// `&mut`, so a copy is a thing the author writes down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MegaRng {
     s: [u64; 4],
     seed: u64,
