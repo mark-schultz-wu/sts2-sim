@@ -269,8 +269,9 @@ fn rng_of<V: sts2_content_wire::WireContentVersion>(
         return Ok(());
     }
 
-    // Sorted, because the counters live in hash maps and an order that moves
-    // between two prints of the same state is a diff that is not one.
+    // By name, which is not the order the two maps hold. A reader looking for
+    // one stream in a line of them reads the names, and the run's twelve come
+    // in the order the game creates them.
     moved.sort();
     let rest = match idle {
         0 => String::new(),

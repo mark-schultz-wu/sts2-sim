@@ -308,7 +308,7 @@ fn previewed<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Fighter<V>],
     target: Option<CombatId>,
-) -> sts2_core::Vars<V::CardVar, V::Number> {
+) -> sts2_core::Keyed<V::CardVar, V::Number> {
     let dealer = super::board::player::<V>(creatures);
     held.vars
         .iter()
@@ -343,7 +343,7 @@ fn previewed<V: Rules>(
 fn numbers<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Fighter<V>],
-) -> sts2_core::Vars<V::CardVar, V::Number> {
+) -> sts2_core::Keyed<V::CardVar, V::Number> {
     held.vars
         .iter()
         .map(|var| (var.id, super::board::var::<V>(held, var.id, creatures)))

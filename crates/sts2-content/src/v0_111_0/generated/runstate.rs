@@ -244,7 +244,7 @@ impl sts2_core::UnplayableReasonKinds for UnplayableReason {
 /// can still have consumed different numbers of draws. That divergence is
 /// invisible until it decides something, which is why the counters are
 /// compared directly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum RunRngType {
     /// Drawn when a run or an act is set up rather than while it is played:
@@ -326,7 +326,7 @@ impl sts2_core::StreamKinds for RunRngType {
 ///
 /// Beside the run's twelve, not among them: these are per-player, so a
 /// multiplayer run has a set each.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum PlayerRngType {
     Rewards = 0,

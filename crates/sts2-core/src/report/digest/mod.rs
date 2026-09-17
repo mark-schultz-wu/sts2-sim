@@ -50,7 +50,6 @@ mod xxhash;
 
 pub use section::Section;
 
-use std::collections::HashMap;
 use std::hash::Hash;
 
 use num_traits::ToPrimitive;
@@ -59,8 +58,8 @@ use xxhash::XxHash64;
 use crate::{
     Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, Combat, ContentVersion,
     Coord, Cost, Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, FlagSet, Held,
-    Intent, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
-    Reachable, RestOption, Room, Stack, Stock, Take, Vars,
+    Intent, Keyed, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
+    Reachable, RestOption, Room, Stack, Stock, Take,
 };
 
 /// One observation, as eight bytes.
@@ -365,18 +364,20 @@ impl Sink {
         self.list(&held, |sink, member| sink.id(*member));
     }
 
-    /// A map with no order of its own.
+    /// A map digested without reading its order.
     ///
     /// The count, then the wrapping sum of a sub-digest per entry. The crate
     /// README says why a sum.
     ///
     /// Each entry is digested whole, key and value together, so two maps that
-    /// swap two values differ.
-    fn positions<K: Hash + Copy>(&mut self, streams: &HashMap<K, crate::Position>) {
+    /// swap two values differ. The streams are sorted now, and this still
+    /// takes the sum. Walking them in order instead moves every committed
+    /// digest.
+    fn positions<K: Hash + Copy>(&mut self, streams: &Keyed<K, crate::Position>) {
         self.len(streams.len());
 
         let mut total: u64 = 0;
-        for (stream, position) in streams {
+        for (stream, position) in streams.iter() {
             let mut entry = Sink::new();
             entry.id(stream);
             entry.u32(position.counter);
@@ -390,7 +391,7 @@ impl Sink {
     /// Keyed by the build's own variable, and digested by the game's name for
     /// it. Two builds that print the same number under the same name agree
     /// here, whatever each spells its own variant.
-    fn vars<K: CardVars, N: ToPrimitive>(&mut self, vars: &Vars<K, N>) {
+    fn vars<K: CardVars, N: ToPrimitive>(&mut self, vars: &Keyed<K, N>) {
         self.len(vars.len());
         for (key, value) in vars.iter() {
             self.str(key.name());
@@ -912,11 +913,15 @@ mod tests {
         assert_ne!(absent.finish(), zero.finish());
     }
 
-    /// The counters digest the same however the map stored them, and differ
+    /// The counters digest the same however they were handed over, and differ
     /// when the numbers move between streams.
+    ///
+    /// The map sorts them now, so the first of these holds by construction.
+    /// It stays because the digest is what this pins, and the digest must not
+    /// start reading an order.
     #[test]
     fn a_counter_map_has_no_order_but_has_pairs() {
-        #[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
         enum Stream {
             #[serde(rename = "A")]
             A,
@@ -928,7 +933,7 @@ mod tests {
 
         let of = |entries: [(Stream, u32); 3]| {
             let mut sink = Sink::new();
-            sink.positions(&HashMap::from(
+            sink.positions(&Keyed::from(
                 entries.map(|(stream, at)| (stream, crate::Position::counted(at))),
             ));
             sink.finish()
