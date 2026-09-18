@@ -11,6 +11,8 @@
 //! its previews is derived from the fields below, so [`Live::report`] builds
 //! it and nothing else does.
 
+use bitfield_struct::bitfield;
+use nonmax::NonMaxI16;
 use num_traits::CheckedAdd;
 use smallvec::SmallVec;
 use sts2_core::{
@@ -28,15 +30,14 @@ use super::monster::Machine;
 /// So the width outlasts a run rather than fitting a table.
 pub(super) type Amount = i16;
 
-/// What one copy of a card prints, as the amounts alone.
+/// What one copy of a card prints, as the difference from its own table row.
 ///
-/// One per number the card's row names, in that row's order. The rest of a
-/// [`CardNumber`] is the table's and never moves. See
-/// [`CardInstance::numbers`].
+/// A fresh copy is zeroes, whatever the card prints. An upgrade moves one and
+/// `ForgeCmd` moves one again.
 ///
-/// A fixed row rather than a list, so a copy reaches no heap and a pile of
-/// them is one block. Its length is the card's own row, so it carries none.
-pub(super) type CardVarList = [Amount; VARS];
+/// `None` for a card printing more than [`VARS`] numbers. Nothing raises one
+/// of those, and [`CardInstance::raise`] says so if something tries.
+pub(super) type CardVarList = Option<[NonMaxI16; VARS]>;
 
 /// The powers one creature holds.
 ///
@@ -50,26 +51,20 @@ pub(crate) type PowerList<V> = SmallVec<[HeldPower<V>; POWERS_INLINE]>;
 /// them. More than this spills.
 const POWERS_INLINE: usize = 4;
 
-/// One of the build's game numbers, as a card holds it.
+/// How many differences one copy of a card holds.
 ///
-/// # Panics
-///
-/// A number no [`Amount`] holds. Every cost a card names is a printed one,
-/// and every read of a cost clamps at `u8::MAX - 1`.
-fn amount<N: std::fmt::Debug + Copy + num_traits::ToPrimitive>(number: N) -> Amount {
-    num_traits::NumCast::from(number).unwrap_or_else(|| unimplemented!("a card cost of {number:?}"))
-}
+/// Five, which covers 577 of the 578 cards this build prints. The one that
+/// prints more is `Event(MadScience)`, at eleven, and no event is ported.
+/// `only_one_card_prints_more_than_a_copy_holds` is what keeps that true.
+const VARS: usize = 5;
 
-/// How many numbers one copy of a card holds.
+/// How many local price changes one copy of a card carries.
 ///
-/// Eleven, because `Event(MadScience)` prints eleven and nothing in either
-/// ported build prints more. `no_card_prints_more_than_a_copy_holds` is what
-/// keeps that true.
-const VARS: usize = 11;
-
-/// How many local price changes one copy of a card carries, before reaching
-/// the heap.
-const MODIFIERS_INLINE: usize = 2;
+/// Four, from how they arrive rather than from a guess. A card collects one
+/// from its own upgrade, and two from a power potion, which sets both pools at
+/// once. So three is what the ported content reaches. A second potion
+/// generates a second card, which starts empty.
+const MODIFIERS: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Asker<V: Rules> {
@@ -139,21 +134,115 @@ impl<V: Rules> CardIds<V> {
 
 /// `LocalCostType`: what a modifier does to the cost so far.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum CostChange {
-    Relative(Amount),
-    Absolute(Amount),
+pub(super) enum CostChange<N> {
+    Relative(N),
+    Absolute(N),
 }
 
-/// One entry of a card's cost modifier list.
+/// One entry of a card's cost modifier list, in a byte.
 ///
-/// `LocalCostModifier`, minus `reduceOnly`: no ported effect passes it, and an
-/// effect that does adds it here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `LocalCostModifier`, minus `reduceOnly`: no ported effect passes it.
+///
+/// Eight bits say all of it: which pool, which expiration, whether it sets the
+/// cost or shifts it, and by how much.
+#[bitfield(u8, new = false, default = false, debug = false, order = Lsb)]
+#[derive(PartialEq, Eq)]
 pub(super) struct CostModifier {
-    pub(super) pool: sts2_core::CostPool,
-    /// Held as an [`Amount`], because every read clamps at `u8::MAX - 1`.
-    pub(super) change: CostChange,
-    pub(super) lasting: sts2_core::Lasting,
+    /// On the star pool rather than the energy one.
+    star: bool,
+    /// Sets the cost rather than shifting it.
+    absolute: bool,
+    /// `LocalCostModifierExpiration`'s two flags, which is what it is.
+    turn_end: bool,
+    when_played: bool,
+    /// How much, as [`CostChange`] reads it.
+    ///
+    /// Raw, because the same four bits carry a set and a shift. A set is a
+    /// price and reads unsigned. A shift is signed and carries
+    /// [`SHIFT_BIAS`], because four bits cannot be both.
+    #[bits(4)]
+    amount: u8,
+}
+
+/// What a shift carries so that it shares the bits a set uses.
+///
+/// A set is a price, which is never negative, so its four bits run `0..=15`. A
+/// shift runs `-8..=7` over the same four, and this is the offset between
+/// them.
+const SHIFT_BIAS: i8 = 8;
+
+/// The most a modifier sets a cost to, which is four bits of price.
+pub(super) const SET_AT_MOST: i8 = 15;
+/// How far a modifier shifts a cost, which is the same four bits, biased.
+pub(super) const SHIFT_WITHIN: std::ops::RangeInclusive<i8> = -SHIFT_BIAS..=SHIFT_BIAS - 1;
+
+impl CostModifier {
+    /// One modifier, as the change a rule asked for.
+    ///
+    /// The one place that knows what a modifier holds. A rule names a game
+    /// number, and this is where it has to fit four bits.
+    ///
+    /// # Panics
+    ///
+    /// A cost set higher than [`SET_AT_MOST`] or shifted outside
+    /// [`SHIFT_WITHIN`].
+    fn held<N: std::fmt::Debug + Copy + num_traits::ToPrimitive>(
+        pool: sts2_core::CostPool,
+        change: CostChange<N>,
+        lasting: sts2_core::Lasting,
+    ) -> Self {
+        let fits = |asked: N, within: std::ops::RangeInclusive<i8>| {
+            num_traits::NumCast::from(asked)
+                .filter(|amount| within.contains(amount))
+                .unwrap_or_else(|| {
+                    unimplemented!("a card cost of {asked:?}, and a modifier holds {within:?}")
+                })
+        };
+        let (absolute, amount) = match change {
+            CostChange::Relative(shift) => (false, fits(shift, SHIFT_WITHIN) + SHIFT_BIAS),
+            CostChange::Absolute(set) => (true, fits(set, 0..=SET_AT_MOST)),
+        };
+        Self::from_bits(0)
+            .with_star(pool == sts2_core::CostPool::Star)
+            .with_absolute(absolute)
+            .with_turn_end(lasting.clears_when_turn_ends())
+            .with_when_played(lasting.clears_when_played())
+            .with_amount(amount as u8)
+    }
+
+    fn pool(self) -> sts2_core::CostPool {
+        match self.star() {
+            false => sts2_core::CostPool::Energy,
+            true => sts2_core::CostPool::Star,
+        }
+    }
+
+    fn change(self) -> CostChange<i8> {
+        let amount = self.amount() as i8;
+        match self.absolute() {
+            true => CostChange::Absolute(amount),
+            false => CostChange::Relative(amount - SHIFT_BIAS),
+        }
+    }
+
+    fn clears_when_turn_ends(self) -> bool {
+        self.turn_end()
+    }
+
+    fn clears_when_played(self) -> bool {
+        self.when_played()
+    }
+}
+
+impl std::fmt::Debug for CostModifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CostModifier")
+            .field("pool", &self.pool())
+            .field("change", &self.change())
+            .field("turn_end", &self.clears_when_turn_ends())
+            .field("when_played", &self.clears_when_played())
+            .finish()
+    }
 }
 
 /// A listener of this fight's, which is a hook's audience of one.
@@ -192,7 +281,9 @@ pub(crate) struct CardInstance<V: Rules> {
     /// were written, which is what decides what a stack of them comes to.
     ///
     /// Empty for almost every card, and inline for the rest.
-    cost_modifiers: SmallVec<[CostModifier; MODIFIERS_INLINE]>,
+    cost_modifiers: [CostModifier; MODIFIERS],
+    /// How many of [`CardInstance::cost_modifiers`] a card holds.
+    modifiers: u8,
     /// `CardModel.AddKeyword`, which writes words the table did not print.
     ///
     /// Beside the printed set rather than folded into it. The table's answer
@@ -205,7 +296,10 @@ pub(crate) struct CardInstance<V: Rules> {
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
     /// what it writes stays on the copy for the rest of the fight.
-    pub(super) replays: V::Number,
+    ///
+    /// A byte, because a card played more times than that is a fight nobody
+    /// finishes. [`CardInstance::replay`] says so rather than wrapping.
+    replays: i8,
 }
 
 impl<V: Rules> Clone for CardInstance<V> {
@@ -221,7 +315,8 @@ impl<V: Rules> Clone for CardInstance<V> {
             vars: self.vars,
             cost: self.cost,
             star_cost: self.star_cost,
-            cost_modifiers: SmallVec::from_slice(&self.cost_modifiers),
+            cost_modifiers: self.cost_modifiers,
+            modifiers: self.modifiers,
             added_keywords: self.added_keywords,
             replays: self.replays,
         }
@@ -241,7 +336,12 @@ impl<V: Rules> CardInstance<V> {
     /// asking for a number no card prints is.
     pub(super) fn number(&self, key: V::CardVar) -> CardNumber<V::CardVar, V::Number> {
         let at = self.at(key);
-        self.printed(&self.ident.card.vars()[at], self.vars[at])
+        self.printed(&self.ident.card.vars()[at], self.moved(at))
+    }
+
+    /// How far this copy has moved the number its row holds at `at`.
+    fn moved(&self, at: usize) -> Amount {
+        self.vars.map_or(0, |row| row[at].get())
     }
 
     /// Every number this copy prints, in the order its table prints them.
@@ -253,8 +353,8 @@ impl<V: Rules> CardInstance<V> {
             .card
             .vars()
             .iter()
-            .zip(&self.vars)
-            .map(|(named, &base)| self.printed(named, base))
+            .enumerate()
+            .map(|(at, named)| self.printed(named, self.moved(at)))
     }
 
     /// Where in the card's own row `key` sits.
@@ -274,11 +374,16 @@ impl<V: Rules> CardInstance<V> {
     fn printed(
         &self,
         named: &CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>,
-        base: Amount,
+        moved: Amount,
     ) -> CardNumber<V::CardVar, V::Number> {
+        let printed: V::Number = num_traits::NumCast::from(named.base).unwrap_or_else(|| {
+            unimplemented!("the fractional {} this card prints", named.id.name())
+        });
+        let moved: V::Number =
+            num_traits::NumCast::from(moved).expect("a difference fits a game number");
         CardNumber {
             id: named.id,
-            base: num_traits::NumCast::from(base).expect("an amount fits a game number"),
+            base: printed + moved,
             calculated: named.calculated,
             modifier: named.modifier,
         }
@@ -288,6 +393,10 @@ impl<V: Rules> CardInstance<V> {
     ///
     /// # Panics
     ///
+    /// A card too wide to hold a difference. No fight raises one: the only
+    /// card either build prints that wide belongs to an event, and no event
+    /// is ported.
+    ///
     /// A number raised past what an [`Amount`] holds. `ForgeCmd` is the only
     /// thing that raises one repeatedly, and arriving here takes two thousand
     /// smiths in one fight.
@@ -295,37 +404,33 @@ impl<V: Rules> CardInstance<V> {
         let at = self.at(key);
         let by: Amount = num_traits::NumCast::from(by)
             .unwrap_or_else(|| unimplemented!("the {} raised by {by:?}", key.name()));
-        self.vars[at] = self.vars[at]
+        let row = self.vars.as_mut().unwrap_or_else(|| {
+            unimplemented!("the {} raised on a card too wide to hold one", key.name())
+        });
+        let moved = row[at]
+            .get()
             .checked_add(by)
+            .and_then(NonMaxI16::new)
             .unwrap_or_else(|| unimplemented!("the {} raised past what a card holds", key.name()));
+        row[at] = moved;
     }
 
     /// A fresh copy, printing what the table prints.
     pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {
-        let named = ident.card.vars();
-        assert!(
-            named.len() <= VARS,
-            "{:?} prints {} numbers, and a copy holds {VARS}",
-            ident.card,
-            named.len(),
-        );
-        let mut vars: CardVarList = [0; VARS];
-        for (slot, var) in vars.iter_mut().zip(named) {
-            // A build can store exact fractions where this slice only
-            // evaluates whole-number effects.
-            *slot = num_traits::NumCast::from(var.base).unwrap_or_else(|| {
-                unimplemented!("the fractional {} this card prints", var.id.name())
-            });
-        }
+        // Zeroes, because a fresh copy prints what its row prints. A card too
+        // wide for the row carries no differences at all, which is what its
+        // `None` says.
+        let vars = (ident.card.vars().len() <= VARS).then_some([NonMaxI16::ZERO; VARS]);
         let mut card = Self {
             id,
             ident,
             vars,
             cost: ident.card.cost(),
             star_cost: ident.card.star_cost(),
-            cost_modifiers: SmallVec::new(),
+            cost_modifiers: [CostModifier::from_bits(0); MODIFIERS],
+            modifiers: 0,
             added_keywords: sts2_core::FlagSet::from_members(&[]),
-            replays: num_traits::zero(),
+            replays: 0,
         };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
@@ -354,17 +459,18 @@ impl<V: Rules> CardInstance<V> {
             let folded = self
                 .cost_modifiers
                 .iter()
-                .filter(|held| held.pool == pool)
+                .take(usize::from(self.modifiers))
+                .filter(|held| held.pool() == pool)
                 .fold(printed, |cost, held| {
-                    let amount: V::Number = match held.change {
-                        CostChange::Relative(amount) | CostChange::Absolute(amount) => {
-                            num_traits::NumCast::from(amount)
-                                .expect("a cost change fits a game number")
-                        }
+                    let (shift, amount) = match held.change() {
+                        CostChange::Relative(amount) => (true, amount),
+                        CostChange::Absolute(amount) => (false, amount),
                     };
-                    match held.change {
-                        CostChange::Relative(_) => cost + amount,
-                        CostChange::Absolute(_) => amount,
+                    let amount: V::Number = num_traits::NumCast::from(amount)
+                        .expect("a cost change fits a game number");
+                    match shift {
+                        true => cost + amount,
+                        false => amount,
                     }
                 });
             // `Math.Max(0, num)`, which every read clamps at.
@@ -392,10 +498,10 @@ impl<V: Rules> CardInstance<V> {
             sts2_core::Change::Upgrade => self.upgrade(),
             sts2_core::Change::Raise(key, amount) => self.raise(key, amount),
             sts2_core::Change::ChangeCost(pool, by) => {
-                self.modify_cost(pool, CostChange::Relative(amount(by)), lasting)
+                self.modify_cost(pool, CostChange::Relative(by), lasting)
             }
             sts2_core::Change::SetCost(pool, to) => {
-                self.modify_cost(pool, CostChange::Absolute(amount(to)), lasting)
+                self.modify_cost(pool, CostChange::Absolute(to), lasting)
             }
             // `AddKeyword`, which is a set: a word already on the copy is not
             // added twice.
@@ -426,10 +532,10 @@ impl<V: Rules> CardInstance<V> {
     /// A pool the card is not priced in takes none. The setters guard on
     /// `Canonical >= 0`, and `GetWithModifiers` returns early on the same
     /// test, so nothing reads a modifier there.
-    fn modify_cost(
+    fn modify_cost<N: std::fmt::Debug + Copy + num_traits::ToPrimitive>(
         &mut self,
         pool: sts2_core::CostPool,
-        change: CostChange,
+        change: CostChange<N>,
         lasting: sts2_core::Lasting,
     ) {
         let printed = match pool {
@@ -439,17 +545,17 @@ impl<V: Rules> CardInstance<V> {
         if printed == sts2_core::Cost::None {
             return;
         }
-        self.cost_modifiers.push(CostModifier {
-            pool,
-            change,
-            lasting,
-        });
+        let at = usize::from(self.modifiers);
+        if at == MODIFIERS {
+            unimplemented!("a card carrying more than {MODIFIERS} cost modifiers");
+        }
+        self.cost_modifiers[at] = CostModifier::held(pool, change, lasting);
+        self.modifiers += 1;
     }
 
     /// Drop the cost modifiers that do not outlive this turn.
     pub(super) fn turn_ended(&mut self) {
-        self.cost_modifiers
-            .retain(|held| !held.lasting.clears_when_turn_ends());
+        self.kept(CostModifier::clears_when_turn_ends);
     }
 
     /// `GeneratePlayCount`: one play, and one more per replay this copy holds.
@@ -458,13 +564,42 @@ impl<V: Rules> CardInstance<V> {
     /// move this in the game. Neither is ported, and each is a hook this reads
     /// rather than a number to store.
     pub(super) fn play_count(&self) -> V::Number {
-        self.replays + num_traits::one()
+        num_traits::NumCast::from(self.replays + 1).expect("a play count fits a game number")
     }
 
     /// Drop the cost modifiers that do not outlive being played.
     pub(super) fn was_played(&mut self) {
-        self.cost_modifiers
-            .retain(|held| !held.lasting.clears_when_played());
+        self.kept(CostModifier::clears_when_played);
+    }
+
+    /// Hand this copy one more play of its own, which is `BaseReplayCount`.
+    ///
+    /// # Panics
+    ///
+    /// More replays than a byte holds.
+    pub(super) fn replay(&mut self, amount: V::Number) {
+        let amount: i8 = num_traits::NumCast::from(amount)
+            .unwrap_or_else(|| unimplemented!("a card replayed {amount:?} times"));
+        self.replays = self
+            .replays
+            .checked_add(amount)
+            .unwrap_or_else(|| unimplemented!("a card replayed past what a copy counts"));
+    }
+
+    /// Drop the cost modifiers `clears` names, and close the gaps they leave.
+    ///
+    /// In order, because a modifier that sets the cost overrides every one
+    /// written before it. Compacted, because an empty slot ends the row.
+    fn kept(&mut self, clears: fn(CostModifier) -> bool) {
+        let mut to = 0;
+        for at in 0..usize::from(self.modifiers) {
+            let held = self.cost_modifiers[at];
+            if !clears(held) {
+                self.cost_modifiers[to] = held;
+                to += 1;
+            }
+        }
+        self.modifiers = to as u8;
     }
 
     fn upgrade(&mut self) {
@@ -759,23 +894,146 @@ impl<V: Rules> Live<V> {
 mod tests {
     use super::*;
 
-    /// Every card in every ported build fits the row a copy holds.
+    /// A packed modifier hands back every field it was given.
     ///
-    /// [`VARS`] is a measured constant, so it goes stale the moment a build
-    /// prints a wider card. This is what says so, rather than the first fight
-    /// that draws one.
+    /// Four expirations, two pools, and a shift or a set. The amount is signed
+    /// for a shift and a plain price for a set, so both ends are checked.
     #[test]
-    fn no_card_prints_more_than_a_copy_holds() {
-        fn widest<V: sts2_core::ContentVersion>(build: &str) {
-            for &card in <V::Card as sts2_core::Table>::ALL {
-                let printed = card.vars().len();
-                assert!(
-                    printed <= VARS,
-                    "{build} prints {printed} numbers on {card:?}, and a copy holds {VARS}",
-                );
+    fn a_packed_cost_modifier_reads_back() {
+        use sts2_core::{CostPool, Lasting};
+
+        let expirations = [
+            Lasting::ThisFight,
+            Lasting::UntilPlayed,
+            Lasting::ThisTurn,
+            Lasting::ThisTurnOrUntilPlayed,
+        ];
+        for pool in [CostPool::Energy, CostPool::Star] {
+            for lasting in expirations {
+                for change in [CostChange::Relative(-3), CostChange::Absolute(0)] {
+                    let packed = CostModifier::held(pool, change, lasting);
+                    assert_eq!(packed.pool(), pool);
+                    assert_eq!(packed.change(), change);
+                    assert_eq!(
+                        packed.clears_when_turn_ends(),
+                        lasting.clears_when_turn_ends(),
+                    );
+                    assert_eq!(packed.clears_when_played(), lasting.clears_when_played());
+                }
             }
         }
-        widest::<sts2_content::v0_107_1::V0_107_1>("v0.107.1");
-        widest::<sts2_content::v0_111_0::V0_111_0>("v0.111.0");
+    }
+
+    /// The widest amount a cost names survives the pack.
+    #[test]
+    fn a_cost_modifier_holds_the_widest_price() {
+        use sts2_core::CostPool;
+
+        for shift in [*SHIFT_WITHIN.start(), -1, 0, 1, *SHIFT_WITHIN.end()] {
+            let change = CostChange::Relative(shift);
+            let packed =
+                CostModifier::held(CostPool::Energy, change, sts2_core::Lasting::ThisFight);
+            assert_eq!(packed.change(), change, "a shift of {shift} survives");
+        }
+        for set in [0, 1, SET_AT_MOST] {
+            let change = CostChange::Absolute(set);
+            let packed =
+                CostModifier::held(CostPool::Energy, change, sts2_core::Lasting::ThisFight);
+            assert_eq!(packed.change(), change, "a cost set to {set} survives");
+        }
+    }
+
+    /// Dropping the expired ones keeps the rest, in the order they arrived.
+    ///
+    /// Order is what decides the fold: a modifier that sets the cost overrides
+    /// every one written before it. So a gap in the middle has to close rather
+    /// than leave the row out of order.
+    #[test]
+    fn dropping_a_modifier_closes_the_gap() {
+        use sts2_core::{CostPool, Lasting};
+        type V = sts2_content::v0_107_1::V0_107_1;
+
+        let mut card = CardInstance::<V>::new(
+            CardIdent::new(sts2_content::v0_107_1::cards::Cards::Regent(
+                sts2_content::v0_107_1::cards::RegentCard::Strike,
+            )),
+            CardId::new(0),
+        );
+        // A turn's worth in the middle of two that outlive it.
+        for (change, lasting) in [
+            (CostChange::Relative(-1), Lasting::ThisFight),
+            (CostChange::Relative(-2), Lasting::ThisTurn),
+            (CostChange::Absolute(3), Lasting::ThisFight),
+        ] {
+            card.modify_cost(CostPool::Energy, change, lasting);
+        }
+
+        card.turn_ended();
+
+        let kept: Vec<CostChange<i8>> = card
+            .cost_modifiers
+            .iter()
+            .take(usize::from(card.modifiers))
+            .map(|held| held.change())
+            .collect();
+        assert_eq!(
+            kept,
+            [CostChange::Relative(-1), CostChange::Absolute(3)],
+            "the turn's own goes, and the two around it close up",
+        );
+    }
+
+    /// Every cost either build prints fits what a modifier sets.
+    ///
+    /// [`SET_AT_MOST`] is four bits, which is where the bytes went. The
+    /// dearest card either build prints costs twelve. A build printing a
+    /// dearer one moves the packing rather than finding out in a fight.
+    #[test]
+    fn every_cost_fits_a_modifier() {
+        use sts2_core::CardTable as _;
+
+        fn costs<V: sts2_core::ContentVersion>(build: &str) {
+            for &card in <V::Card as sts2_core::Table>::ALL {
+                for cost in [card.cost(), card.star_cost()] {
+                    let sts2_core::Cost::Fixed(printed) = cost else {
+                        continue;
+                    };
+                    assert!(
+                        i16::from(printed.get()) <= i16::from(SET_AT_MOST),
+                        "{build} prints {card:?} at {}, and a modifier sets at most \
+                         {SET_AT_MOST}",
+                        printed.get(),
+                    );
+                }
+            }
+        }
+        costs::<sts2_content::v0_107_1::V0_107_1>("v0.107.1");
+        costs::<sts2_content::v0_111_0::V0_111_0>("v0.111.0");
+    }
+
+    /// One card in each ported build prints more than a copy holds.
+    ///
+    /// [`VARS`] is a measured constant, so it goes stale the moment a build
+    /// prints another wide card. The one that is already wide is an event's,
+    /// and no event is ported, so no fight raises it. A second one is a
+    /// decision somebody has to make rather than a panic in a fight.
+    #[test]
+    fn only_one_card_prints_more_than_a_copy_holds() {
+        fn wide<V: sts2_core::ContentVersion>(build: &str) {
+            let mut wide = 0;
+            for &card in <V::Card as sts2_core::Table>::ALL {
+                let printed = card.vars().len();
+                if printed > VARS {
+                    wide += 1;
+                    assert!(
+                        wide <= 1,
+                        "{build} holds {VARS} a copy, and {card:?} prints {printed}",
+                    );
+                }
+            }
+            assert_eq!(wide, 1, "{build} prints one card wider than {VARS}");
+        }
+        wide::<sts2_content::v0_107_1::V0_107_1>("v0.107.1");
+        wide::<sts2_content::v0_111_0::V0_111_0>("v0.111.0");
     }
 }
