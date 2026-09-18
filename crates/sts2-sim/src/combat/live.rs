@@ -14,19 +14,29 @@
 use num_traits::CheckedAdd;
 use smallvec::SmallVec;
 use sts2_core::{
-    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, ContentVersion, Creature,
-    Orbs, Rules, SideKinds,
+    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Rules,
+    SideKinds,
 };
 
 use super::monster::Machine;
 
-/// The numbers one copy of a card prints.
+/// How a copy holds one of the numbers it prints.
 ///
-/// Held inline up to [`VARS_INLINE`] of them, because the fight is cloned
-/// once per decision and every card it holds is cloned with it.
-pub(super) type CardVarList<V> = SmallVec<
-    [CardNumber<<V as ContentVersion>::CardVar, <V as ContentVersion>::Number>; VARS_INLINE],
->;
+/// Narrower than the build's own game number, which is an `int`. Both ported
+/// builds print inside `-1..=600`, and a fight writes on top of that:
+/// `ForgeCmd` raises `SovereignBlade`'s damage each time a smith is played.
+/// So the width outlasts a run rather than fitting a table.
+pub(super) type Amount = i16;
+
+/// What one copy of a card prints, as the amounts alone.
+///
+/// One per number the card's row names, in that row's order. The rest of a
+/// [`CardNumber`] is the table's and never moves. See
+/// [`CardInstance::numbers`].
+///
+/// A fixed row rather than a list, so a copy reaches no heap and a pile of
+/// them is one block. Its length is the card's own row, so it carries none.
+pub(super) type CardVarList = [Amount; VARS];
 
 /// The powers one creature holds.
 ///
@@ -40,11 +50,12 @@ pub(crate) type PowerList<V> = SmallVec<[HeldPower<V>; POWERS_INLINE]>;
 /// them. More than this spills.
 const POWERS_INLINE: usize = 4;
 
-/// How many printed numbers a card holds without reaching the heap.
+/// How many numbers one copy of a card holds.
 ///
-/// Four, because all but four of the cards the ported build prints hold at
-/// most this many. Those four spill to the heap, the way every card did.
-const VARS_INLINE: usize = 4;
+/// Eleven, because `Event(MadScience)` prints eleven and nothing in either
+/// ported build prints more. `no_card_prints_more_than_a_copy_holds` is what
+/// keeps that true.
+const VARS: usize = 11;
 
 /// How many local price changes one copy of a card carries, before reaching
 /// the heap.
@@ -154,12 +165,12 @@ pub(crate) struct CardInstance<V: Rules> {
     /// Which copy this is, for as long as the fight holds it.
     pub(super) id: CardId<V>,
     pub(super) ident: CardIdent<V>,
-    /// The numbers this copy prints, which start as the table's and move.
+    /// What this copy prints, which starts as the table's and moves.
     ///
     /// Private, because how a copy keeps them is nobody else's business. A
     /// rule asks [`sts2_core::Printed::face`] for one by name, and the fight
     /// asks [`CardInstance::numbers`] for all of them.
-    vars: CardVarList<V>,
+    vars: CardVarList,
     /// `CardModel.EnergyCost` and `StarCost` for this copy.
     ///
     /// Per copy, because an upgrade writes on them. The table prices a fresh
@@ -199,7 +210,7 @@ impl<V: Rules> Clone for CardInstance<V> {
         Self {
             id: self.id,
             ident: self.ident,
-            vars: smallvec::SmallVec::from_slice(&self.vars),
+            vars: self.vars,
             cost: self.cost,
             star_cost: self.star_cost,
             cost_modifiers: SmallVec::from_slice(&self.cost_modifiers),
@@ -221,45 +232,83 @@ impl<V: Rules> CardInstance<V> {
     /// A key the card does not print is a mistake in the port, the way a card
     /// asking for a number no card prints is.
     pub(super) fn number(&self, key: V::CardVar) -> CardNumber<V::CardVar, V::Number> {
-        *self
-            .vars
-            .iter()
-            .find(|var| var.id == key)
-            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
+        let at = self.at(key);
+        self.printed(&self.ident.card.vars()[at], self.vars[at])
     }
 
     /// Every number this copy prints, in the order its table prints them.
+    ///
+    /// The table names each one and says how it is worked out. This copy
+    /// carries the amounts, which is the half a fight writes on.
     pub(super) fn numbers(&self) -> impl Iterator<Item = CardNumber<V::CardVar, V::Number>> + '_ {
-        self.vars.iter().copied()
+        self.ident
+            .card
+            .vars()
+            .iter()
+            .zip(&self.vars)
+            .map(|(named, &base)| self.printed(named, base))
+    }
+
+    /// Where in the card's own row `key` sits.
+    ///
+    /// A key the card does not print is a mistake in the port, the way a card
+    /// asking for a number no card prints is.
+    fn at(&self, key: V::CardVar) -> usize {
+        self.ident
+            .card
+            .vars()
+            .iter()
+            .position(|named| named.id == key)
+            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
+    }
+
+    /// One of the table's numbers, as this copy prints it.
+    fn printed(
+        &self,
+        named: &CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>,
+        base: Amount,
+    ) -> CardNumber<V::CardVar, V::Number> {
+        CardNumber {
+            id: named.id,
+            base: num_traits::NumCast::from(base).expect("an amount fits a game number"),
+            calculated: named.calculated,
+            modifier: named.modifier,
+        }
     }
 
     /// Add to what this copy prints for `key`.
+    ///
+    /// # Panics
+    ///
+    /// A number raised past what an [`Amount`] holds. `ForgeCmd` is the only
+    /// thing that raises one repeatedly, and arriving here takes two thousand
+    /// smiths in one fight.
     pub(super) fn raise(&mut self, key: V::CardVar, by: V::Number) {
-        let printed = self
-            .vars
-            .iter_mut()
-            .find(|var| var.id == key)
-            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()));
-        printed.base = printed.base + by;
+        let at = self.at(key);
+        let by: Amount = num_traits::NumCast::from(by)
+            .unwrap_or_else(|| unimplemented!("the {} raised by {by:?}", key.name()));
+        self.vars[at] = self.vars[at]
+            .checked_add(by)
+            .unwrap_or_else(|| unimplemented!("the {} raised past what a card holds", key.name()));
     }
 
     /// A fresh copy, printing what the table prints.
     pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {
-        let vars = ident
-            .card
-            .vars()
-            .iter()
-            .map(|var| CardNumber {
-                id: var.id,
-                // A build can store exact fractions where this slice only
-                // evaluates whole-number effects.
-                base: num_traits::NumCast::from(var.base).unwrap_or_else(|| {
-                    unimplemented!("the fractional {} this card prints", var.id.name())
-                }),
-                calculated: var.calculated,
-                modifier: var.modifier,
-            })
-            .collect();
+        let named = ident.card.vars();
+        assert!(
+            named.len() <= VARS,
+            "{:?} prints {} numbers, and a copy holds {VARS}",
+            ident.card,
+            named.len(),
+        );
+        let mut vars: CardVarList = [0; VARS];
+        for (slot, var) in vars.iter_mut().zip(named) {
+            // A build can store exact fractions where this slice only
+            // evaluates whole-number effects.
+            *slot = num_traits::NumCast::from(var.base).unwrap_or_else(|| {
+                unimplemented!("the fractional {} this card prints", var.id.name())
+            });
+        }
         let mut card = Self {
             id,
             ident,
@@ -688,5 +737,30 @@ impl<V: Rules> Live<V> {
         player.powers.clear();
         player.block = num_traits::zero();
         self.report()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every card in every ported build fits the row a copy holds.
+    ///
+    /// [`VARS`] is a measured constant, so it goes stale the moment a build
+    /// prints a wider card. This is what says so, rather than the first fight
+    /// that draws one.
+    #[test]
+    fn no_card_prints_more_than_a_copy_holds() {
+        fn widest<V: sts2_core::ContentVersion>(build: &str) {
+            for &card in <V::Card as sts2_core::Table>::ALL {
+                let printed = card.vars().len();
+                assert!(
+                    printed <= VARS,
+                    "{build} prints {printed} numbers on {card:?}, and a copy holds {VARS}",
+                );
+            }
+        }
+        widest::<sts2_content::v0_107_1::V0_107_1>("v0.107.1");
+        widest::<sts2_content::v0_111_0::V0_111_0>("v0.111.0");
     }
 }
