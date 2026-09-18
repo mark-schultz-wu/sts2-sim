@@ -104,8 +104,8 @@ impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
     type PowerState = behaviour::powers::State;
 
-    fn modify_hook(
-        listener: sts2_core::Listener<'_, Self>,
+    fn modify_hook<P: sts2_core::Printed<Self> + ?Sized>(
+        listener: sts2_core::Listener<'_, Self, P>,
         hook: sts2_core::ModifyHook<Self>,
     ) -> sts2_core::Modify<Self::Number> {
         match listener {
@@ -122,8 +122,8 @@ impl sts2_core::Hooks for V0_107_1 {
         }
     }
 
-    fn decide_hook(
-        listener: sts2_core::Listener<'_, Self>,
+    fn decide_hook<P: sts2_core::Printed<Self> + ?Sized>(
+        listener: sts2_core::Listener<'_, Self, P>,
         hook: sts2_core::DecisionHook<Self>,
     ) -> sts2_core::HookResponse<bool> {
         match listener {
@@ -134,8 +134,8 @@ impl sts2_core::Hooks for V0_107_1 {
         }
     }
 
-    fn event_hook(
-        listener: sts2_core::EventListener<'_, Self>,
+    fn event_hook<P: sts2_core::Printed<Self> + ?Sized>(
+        listener: sts2_core::EventListener<'_, Self, P>,
         hook: sts2_core::EventHook<Self>,
     ) -> Vec<sts2_core::HookEffect<Self>> {
         match listener {
@@ -307,11 +307,15 @@ impl sts2_core::Rules for V0_107_1 {
         )
     }
 
-    fn roll_monster_move<'a, R: sts2_core::rng::GameRng>(
+    fn roll_monster_move<
+        'a,
+        R: sts2_core::rng::GameRng,
+        P: sts2_core::Printed<Self> + ?Sized + 'a,
+    >(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         spawn: sts2_core::MonsterSpawn<Self::Encounter>,
-        powers: impl IntoIterator<Item = sts2_core::Listener<'a, Self>>,
+        powers: impl IntoIterator<Item = sts2_core::Listener<'a, Self, P>>,
         machine: &mut sts2_core::MoveMachine,
         rng: &mut R,
     ) -> Result<Option<sts2_core::NextMove<Self>>, sts2_core::ContentError> {
@@ -402,13 +406,13 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::computed_target(card, powers)
     }
 
-    fn calculated_card_var(
+    fn calculated_card_var<P: sts2_core::Printed<Self> + ?Sized>(
         card: Self::Card,
         key: Self::CardVar,
-        numbers: &[sts2_core::CardNumber<Self::CardVar, Self::Number>],
+        printed: &P,
         powers: &[sts2_core::Stack<Self>],
     ) -> Self::Number {
-        behaviour::cards::calculated(card, key, numbers, powers)
+        behaviour::cards::calculated(card, key, printed, powers)
     }
 
     fn perform_move<F: sts2_core::Fight<Self>>(
@@ -538,11 +542,15 @@ impl sts2_core::Rules for V0_107_1 {
 /// The other is a move the graph holds it on until that move has been.
 ///
 /// Otherwise it steps until it lands on a move, and logs the move it lands on.
-fn roll_monster_move<'a, R: sts2_core::rng::GameRng>(
+fn roll_monster_move<
+    'a,
+    R: sts2_core::rng::GameRng,
+    P: sts2_core::Printed<V0_107_1> + ?Sized + 'a,
+>(
     monster: generated::monsters::Monster,
     ascension: u8,
     spawn: sts2_core::MonsterSpawn<generated::encounters::Encounter>,
-    powers: impl IntoIterator<Item = sts2_core::Listener<'a, V0_107_1>>,
+    powers: impl IntoIterator<Item = sts2_core::Listener<'a, V0_107_1, P>>,
     machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
 ) -> Result<Option<sts2_core::NextMove<V0_107_1>>, sts2_core::ContentError> {

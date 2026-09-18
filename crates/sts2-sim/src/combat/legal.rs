@@ -309,8 +309,7 @@ fn previewed<V: Rules>(
     target: Option<CombatId>,
 ) -> sts2_core::Keyed<V::CardVar, V::Number> {
     let dealer = super::board::player::<V>(creatures);
-    held.vars
-        .iter()
+    held.numbers()
         .map(|var| {
             let printed = || super::board::var::<V>(held, var.id, creatures);
             let resolved = match (var.modifier, target) {
@@ -343,8 +342,7 @@ fn numbers<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Fighter<V>],
 ) -> sts2_core::Keyed<V::CardVar, V::Number> {
-    held.vars
-        .iter()
+    held.numbers()
         .map(|var| (var.id, super::board::var::<V>(held, var.id, creatures)))
         .collect()
 }

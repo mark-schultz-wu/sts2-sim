@@ -96,7 +96,7 @@ pub(crate) fn initialize<V: Rules>(
             monster,
             ascension,
             spawn,
-            std::iter::empty(),
+            std::iter::empty::<super::live::Heard<'_, V>>(),
             &mut machine,
             rngs.ai,
         )?;

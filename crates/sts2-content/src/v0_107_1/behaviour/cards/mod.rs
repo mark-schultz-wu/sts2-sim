@@ -16,9 +16,6 @@ use super::super::generated::cards::{CardVar, Cards};
 /// What the run holds a card's numbers as.
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
-/// One number on a card's face, as this copy of it prints one.
-type CardNumber = sts2_core::CardNumber<CardVar, Number>;
-
 mod colorless;
 mod regent;
 mod status;
@@ -57,27 +54,16 @@ pub(crate) fn computed_target(
 }
 
 /// What a card works out from the fight for a number it prints.
-pub(crate) fn calculated(
+pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
     key: CardVar,
-    printed: &[CardNumber],
+    printed: &P,
     powers: &[sts2_core::Stack<V0_107_1>],
 ) -> Number {
     match card {
         Cards::Token(card) => token::calculated(card, key, printed, powers),
         card => unimplemented!("the {} {card:?} works out", key.name()),
     }
-}
-
-/// One of the numbers on a card's own face.
-///
-/// A key the card does not print is a mistake in the port.
-fn face(printed: &[CardNumber], key: CardVar) -> Number {
-    printed
-        .iter()
-        .find(|var| var.id == key)
-        .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
-        .base
 }
 
 /// Where a card's own play stops to ask something, under its card grouping.
@@ -117,9 +103,9 @@ pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
 ///
 /// `printed` is what this copy of the card shows, which is what the model
 /// reads its own numbers off.
-pub(crate) fn event_hook(
+pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
-    printed: &[CardNumber],
+    printed: &P,
     hook: sts2_core::EventHook<V>,
 ) -> Vec<sts2_core::HookEffect<V>> {
     match card {
