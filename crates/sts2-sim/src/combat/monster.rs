@@ -403,7 +403,7 @@ mod tests {
             vec![
                 Some(NextMove {
                     id: MoveId::TackleMove,
-                    intents: vec![Intent {
+                    intents: smallvec::smallvec![Intent {
                         kind: IntentKind::Attack,
                         attack: Some(Attack {
                             damage: 4,
@@ -413,14 +413,14 @@ mod tests {
                 }),
                 Some(NextMove {
                     id: MoveId::StickyShot,
-                    intents: vec![Intent {
+                    intents: smallvec::smallvec![Intent {
                         kind: IntentKind::StatusCard,
                         attack: None
                     }]
                 }),
                 Some(NextMove {
                     id: MoveId::GoopMove,
-                    intents: vec![Intent {
+                    intents: smallvec::smallvec![Intent {
                         kind: IntentKind::StatusCard,
                         attack: None
                     }]

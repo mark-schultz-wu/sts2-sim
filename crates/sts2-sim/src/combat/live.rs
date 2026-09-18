@@ -46,6 +46,13 @@ const POWERS_INLINE: usize = 4;
 /// most this many. Those four spill to the heap, the way every card did.
 const VARS_INLINE: usize = 4;
 
+/// How many local price changes one copy of a card carries, before reaching
+/// the heap.
+const MODIFIERS_INLINE: usize = 2;
+
+/// How many keywords one copy of a card gains, before reaching the heap.
+const KEYWORDS_INLINE: usize = 4;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Asker<V: Rules> {
     Card(CardInstance<V>),
@@ -152,13 +159,16 @@ pub(super) struct CardInstance<V: Rules> {
     /// on its own event and the rest keep applying. Applied in the order they
     /// were written, which is what decides what a stack of them comes to.
     ///
-    /// Empty for almost every card, and an empty `Vec` allocates nothing.
-    pub(super) cost_modifiers: Vec<CostModifier<V>>,
+    /// Empty for almost every card, and inline for the rest.
+    pub(super) cost_modifiers: SmallVec<[CostModifier<V>; MODIFIERS_INLINE]>,
     /// `CardModel.AddKeyword`, which writes words the table did not print.
     ///
     /// Beside the printed set rather than folded into it. The table's answer
     /// is the card's, and this is the copy's. Only the copy is written on.
-    pub(super) added_keywords: Vec<V::CardKeyword>,
+    ///
+    /// Inline, because a keyword is one byte and a card gains few. One of
+    /// these on the heap cost a branch an allocation of a single byte.
+    pub(super) added_keywords: SmallVec<[V::CardKeyword; KEYWORDS_INLINE]>,
     /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
@@ -179,8 +189,8 @@ impl<V: Rules> Clone for CardInstance<V> {
             vars: smallvec::SmallVec::from_slice(&self.vars),
             cost: self.cost,
             star_cost: self.star_cost,
-            cost_modifiers: self.cost_modifiers.clone(),
-            added_keywords: self.added_keywords.clone(),
+            cost_modifiers: SmallVec::from_slice(&self.cost_modifiers),
+            added_keywords: SmallVec::from_slice(&self.added_keywords),
             replays: self.replays,
         }
     }
@@ -210,8 +220,8 @@ impl<V: Rules> CardInstance<V> {
             vars,
             cost: ident.card.cost(),
             star_cost: ident.card.star_cost(),
-            cost_modifiers: Vec::new(),
-            added_keywords: Vec::new(),
+            cost_modifiers: SmallVec::new(),
+            added_keywords: SmallVec::new(),
             replays: num_traits::zero(),
         };
         if card.ident.upgrade != 0 {

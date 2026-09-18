@@ -2,117 +2,81 @@
 //!
 //! `replay` says what a step costs. This says where that cost goes.
 //!
-//! A search node is a clone and a step. So a decision splits:
+//! A search node is a clone and a step. So a decision splits four ways, and
+//! each is timed on its own rather than taken as what is left of a total:
 //!
 //! ```text
 //!   clone    the run a node branches from
-//!   command  the rules the decision runs
+//!   command  the rules the decision runs, off a clone made beforehand
 //!   report   the observation a caller that wants one derives
+//!   node     the two a search pays, which is a clone and a command
 //! ```
 //!
-//! The clone and the report are timed on their own, the report by asking the
-//! run that stands after the step for another one. The command is what is
-//! left of the total once those two come off.
+//! `command` is the one criterion makes honest. Its clone is built in the
+//! setup of each batch, so the number is the rules alone. It used to be what a
+//! total had left once the other two came off.
 //!
-//! `total` is a step through `Play`, which reports. `search` is a clone and a
-//! step through `Sim::advance`, which does not. The gap is what a search
-//! stopped paying. That column races `spikes/spike17-dod`, at 135-233 ns for
-//! a decision and about 60 to clone its whole fight.
+//! The bar is the deleted `spikes/spike17-dod`: 135-233 ns a decision, about
+//! 60 to clone its fight. `node` races it. To compare two revisions, save a
+//! baseline on each and let criterion do the statistics:
 //!
-//! One decision of each kind, the last the recording plays. A median of nine
-//! rounds, with the allocations counted in a pass of their own.
+//! ```text
+//! git checkout main
+//! cargo bench -p sts2-golden --bench decision -- --save-baseline main
+//! git checkout -
+//! cargo bench -p sts2-golden --bench decision -- --baseline main
+//! ```
+//!
+//! The allocation counts live in `allocations`, because a counting allocator
+//! and a sampling harness cannot share a binary.
 
-use std::time::Instant;
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{Construct, Play, Step};
 use sts2_golden::bench::{kind, reached, upto};
-use sts2_golden::{Counted, allocations, every_run, recording};
+use sts2_golden::{every_run, recording};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
 
-#[global_allocator]
-static ALLOCATOR: Counted = Counted::system();
-
-const ROUNDS: usize = 9;
-const LAPS: u32 = 10_000;
-
-fn main() {
+fn decisions(c: &mut Criterion) {
     for name in every_run() {
         let recorded = recording::<V>(&name);
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
         let supported = reached::<V, Sim<V>>(&start, &steps);
 
-        println!(
-            "{name}, nanoseconds and allocations per decision\n  \
-             {:<18} {:>7} {:>8} {:>7} {:>7} {:>7}    {:>5} {:>7} {:>6} {:>6}",
-            "",
-            "clone",
-            "command",
-            "report",
-            "total",
-            "search",
-            "clone",
-            "command",
-            "report",
-            "search"
-        );
         for at in last_of_each_kind(&steps[..supported]) {
             let step = &steps[at];
             let base: Sim<V> = upto(&start, &steps, at);
-
-            let whole = time(|| {
-                let mut sim = base.clone();
-                std::hint::black_box(sim.step(step).ok());
-            });
-            let cloned = time(|| {
-                std::hint::black_box(base.clone());
-            });
-            // The run as the step leaves it, which is what the command
-            // reported from.
+            // The run as the step leaves it, which is what a report reports
+            // from.
             let mut after = base.clone();
             let _ = after.step(step);
-            let reported = time(|| {
-                std::hint::black_box(after.observe().ok());
+
+            let mut group = c.benchmark_group(format!("{}@{at}", kind(step)));
+
+            group.bench_function("clone", |b| b.iter(|| base.clone()));
+
+            group.bench_function("command", |b| {
+                b.iter_batched_ref(
+                    || base.clone(),
+                    |sim| sim.advance(step).ok(),
+                    BatchSize::SmallInput,
+                )
             });
 
-            // A search node: the clone and the step, with no observation
-            // derived off either end.
-            let searched = time(|| {
-                let mut sim = base.clone();
-                std::hint::black_box(sim.advance(step).ok());
+            group.bench_function("report", |b| b.iter(|| after.observe().ok()));
+
+            group.bench_function("node", |b| {
+                b.iter(|| {
+                    let mut sim = base.clone();
+                    sim.advance(step).ok()
+                })
             });
 
-            let (_, whole_calls) = allocations(|| {
-                let mut sim = base.clone();
-                let _ = sim.step(step);
-            });
-            let (_, clone_calls) = allocations(|| {
-                std::hint::black_box(base.clone());
-            });
-            let (_, report_calls) = allocations(|| {
-                std::hint::black_box(after.observe().ok());
-            });
-            let (_, search_calls) = allocations(|| {
-                let mut sim = base.clone();
-                let _ = sim.advance(step);
-            });
-
-            println!(
-                "  {:<18} {:>7.0} {:>8.0} {:>7.0} {:>7.0} {:>7.0}    {:>5} {:>7} {:>6} {:>6}",
-                format!("{} @{at}", kind(step)),
-                cloned,
-                whole - cloned - reported,
-                reported,
-                whole,
-                searched,
-                clone_calls.calls,
-                whole_calls.calls - clone_calls.calls - report_calls.calls,
-                report_calls.calls,
-                search_calls.calls,
-            );
+            group.finish();
         }
     }
 }
@@ -133,20 +97,5 @@ fn last_of_each_kind(steps: &[Step<V>]) -> Vec<usize> {
     last.into_iter().map(|(_, at)| at).collect()
 }
 
-/// A median of [`ROUNDS`] rounds, each of [`LAPS`] laps, in nanoseconds.
-///
-/// Laps because the parts of a decision are hundreds of nanoseconds. Reading
-/// the clock twice costs enough at that size to be worth amortising.
-fn time(mut take: impl FnMut()) -> f64 {
-    let mut rounds: Vec<f64> = (0..ROUNDS)
-        .map(|_| {
-            let began = Instant::now();
-            for _ in 0..LAPS {
-                take();
-            }
-            began.elapsed().as_nanos() as f64 / f64::from(LAPS)
-        })
-        .collect();
-    rounds.sort_by(f64::total_cmp);
-    rounds[ROUNDS / 2]
-}
+criterion_group!(benches, decisions);
+criterion_main!(benches);

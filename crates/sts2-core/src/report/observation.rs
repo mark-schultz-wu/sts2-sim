@@ -478,7 +478,7 @@ pub struct Stack<V: ContentVersion> {
 }
 
 /// The move a monster has chosen, and what it amounts to.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct NextMove<V: ContentVersion> {
     /// Which move, by the name the game and the observation both spell it with.
     ///
@@ -489,7 +489,26 @@ pub struct NextMove<V: ContentVersion> {
     pub id: V::MoveId,
     /// A move carries a list, so an attack that also blocks reports two, in the
     /// order the game draws them.
-    pub intents: Vec<Intent<V>>,
+    ///
+    /// Inline, because two is the longest any ported move draws, and a fight
+    /// carries one of these per monster.
+    pub intents: SmallVec<[Intent<V>; INTENTS_INLINE]>,
+}
+
+/// How many intents one move telegraphs, before reaching the heap.
+const INTENTS_INLINE: usize = 2;
+
+impl<V: ContentVersion> Clone for NextMove<V> {
+    /// Copies the intents rather than walking them.
+    ///
+    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
+    /// see that the item is `Copy`. An [`Intent`] is.
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            intents: SmallVec::from_slice(&self.intents),
+        }
+    }
 }
 
 /// One thing a move telegraphs.
