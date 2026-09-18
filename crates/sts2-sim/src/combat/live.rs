@@ -50,6 +50,16 @@ pub(crate) type PowerList<V> = SmallVec<[HeldPower<V>; POWERS_INLINE]>;
 /// them. More than this spills.
 const POWERS_INLINE: usize = 4;
 
+/// One of the build's game numbers, as a card holds it.
+///
+/// # Panics
+///
+/// A number no [`Amount`] holds. Every cost a card names is a printed one,
+/// and every read of a cost clamps at `u8::MAX - 1`.
+fn amount<N: std::fmt::Debug + Copy + num_traits::ToPrimitive>(number: N) -> Amount {
+    num_traits::NumCast::from(number).unwrap_or_else(|| unimplemented!("a card cost of {number:?}"))
+}
+
 /// How many numbers one copy of a card holds.
 ///
 /// Eleven, because `Event(MadScience)` prints eleven and nothing in either
@@ -60,9 +70,6 @@ const VARS: usize = 11;
 /// How many local price changes one copy of a card carries, before reaching
 /// the heap.
 const MODIFIERS_INLINE: usize = 2;
-
-/// How many keywords one copy of a card gains, before reaching the heap.
-const KEYWORDS_INLINE: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Asker<V: Rules> {
@@ -132,9 +139,9 @@ impl<V: Rules> CardIds<V> {
 
 /// `LocalCostType`: what a modifier does to the cost so far.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum CostChange<N> {
-    Relative(N),
-    Absolute(N),
+pub(super) enum CostChange {
+    Relative(Amount),
+    Absolute(Amount),
 }
 
 /// One entry of a card's cost modifier list.
@@ -142,9 +149,10 @@ pub(super) enum CostChange<N> {
 /// `LocalCostModifier`, minus `reduceOnly`: no ported effect passes it, and an
 /// effect that does adds it here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct CostModifier<V: Rules> {
+pub(super) struct CostModifier {
     pub(super) pool: sts2_core::CostPool,
-    pub(super) change: CostChange<V::Number>,
+    /// Held as an [`Amount`], because every read clamps at `u8::MAX - 1`.
+    pub(super) change: CostChange,
     pub(super) lasting: sts2_core::Lasting,
 }
 
@@ -184,15 +192,15 @@ pub(crate) struct CardInstance<V: Rules> {
     /// were written, which is what decides what a stack of them comes to.
     ///
     /// Empty for almost every card, and inline for the rest.
-    cost_modifiers: SmallVec<[CostModifier<V>; MODIFIERS_INLINE]>,
+    cost_modifiers: SmallVec<[CostModifier; MODIFIERS_INLINE]>,
     /// `CardModel.AddKeyword`, which writes words the table did not print.
     ///
     /// Beside the printed set rather than folded into it. The table's answer
     /// is the card's, and this is the copy's. Only the copy is written on.
     ///
-    /// Inline, because a keyword is one byte and a card gains few. One of
-    /// these on the heap cost a branch an allocation of a single byte.
-    added_keywords: SmallVec<[V::CardKeyword; KEYWORDS_INLINE]>,
+    /// A set, which is what the build spells it as: one bit per word, in a
+    /// byte.
+    added_keywords: V::CardKeywordSet,
     /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
@@ -214,7 +222,7 @@ impl<V: Rules> Clone for CardInstance<V> {
             cost: self.cost,
             star_cost: self.star_cost,
             cost_modifiers: SmallVec::from_slice(&self.cost_modifiers),
-            added_keywords: SmallVec::from_slice(&self.added_keywords),
+            added_keywords: self.added_keywords,
             replays: self.replays,
         }
     }
@@ -316,7 +324,7 @@ impl<V: Rules> CardInstance<V> {
             cost: ident.card.cost(),
             star_cost: ident.card.star_cost(),
             cost_modifiers: SmallVec::new(),
-            added_keywords: SmallVec::new(),
+            added_keywords: sts2_core::FlagSet::from_members(&[]),
             replays: num_traits::zero(),
         };
         if card.ident.upgrade != 0 {
@@ -347,9 +355,17 @@ impl<V: Rules> CardInstance<V> {
                 .cost_modifiers
                 .iter()
                 .filter(|held| held.pool == pool)
-                .fold(printed, |cost, held| match held.change {
-                    CostChange::Relative(amount) => cost + amount,
-                    CostChange::Absolute(amount) => amount,
+                .fold(printed, |cost, held| {
+                    let amount: V::Number = match held.change {
+                        CostChange::Relative(amount) | CostChange::Absolute(amount) => {
+                            num_traits::NumCast::from(amount)
+                                .expect("a cost change fits a game number")
+                        }
+                    };
+                    match held.change {
+                        CostChange::Relative(_) => cost + amount,
+                        CostChange::Absolute(_) => amount,
+                    }
                 });
             // `Math.Max(0, num)`, which every read clamps at.
             let largest: V::Number =
@@ -376,17 +392,15 @@ impl<V: Rules> CardInstance<V> {
             sts2_core::Change::Upgrade => self.upgrade(),
             sts2_core::Change::Raise(key, amount) => self.raise(key, amount),
             sts2_core::Change::ChangeCost(pool, by) => {
-                self.modify_cost(pool, CostChange::Relative(by), lasting)
+                self.modify_cost(pool, CostChange::Relative(amount(by)), lasting)
             }
             sts2_core::Change::SetCost(pool, to) => {
-                self.modify_cost(pool, CostChange::Absolute(to), lasting)
+                self.modify_cost(pool, CostChange::Absolute(amount(to)), lasting)
             }
             // `AddKeyword`, which is a set: a word already on the copy is not
             // added twice.
             sts2_core::Change::AddKeyword(keyword) => {
-                if !self.added_keywords.contains(&keyword) {
-                    self.added_keywords.push(keyword);
-                }
+                self.added_keywords = sts2_core::FlagSet::with(self.added_keywords, keyword);
             }
         }
     }
@@ -400,9 +414,10 @@ impl<V: Rules> CardInstance<V> {
         use sts2_core::{CardTable as _, KeywordKinds};
 
         self.ident.card.innate()
-            || self
-                .added_keywords
-                .contains(&<V::CardKeyword as KeywordKinds<V>>::INNATE)
+            || sts2_core::FlagSet::contains(
+                self.added_keywords,
+                <V::CardKeyword as KeywordKinds<V>>::INNATE,
+            )
     }
 
     /// Append one cost modifier, which is what every `Set` and `Add` on
@@ -414,7 +429,7 @@ impl<V: Rules> CardInstance<V> {
     fn modify_cost(
         &mut self,
         pool: sts2_core::CostPool,
-        change: CostChange<V::Number>,
+        change: CostChange,
         lasting: sts2_core::Lasting,
     ) {
         let printed = match pool {
