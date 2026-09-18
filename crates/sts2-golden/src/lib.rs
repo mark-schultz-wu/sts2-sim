@@ -10,6 +10,19 @@
 //! the game means depending on both, and nothing depends on this. It is also
 //! the only crate whose tests need a real game. That is why the build script
 //! filling the oracle cache lives here, and nowhere else.
+//!
+//! What measures what:
+//!
+//! ```text
+//!   benches/replay        the whole recording, on the clock
+//!   benches/decision      one step of each kind, taken apart
+//!   benches/allocations   the allocator, counted rather than clocked
+//!   examples/where_it_goes  every step timed where it falls, by kind
+//!   examples/clone_sites    one branch and nothing else, under a profiler
+//! ```
+//!
+//! The first two are criterion, so they compare against a saved baseline. The
+//! rest print a table.
 
 pub mod bench;
 mod counted;
