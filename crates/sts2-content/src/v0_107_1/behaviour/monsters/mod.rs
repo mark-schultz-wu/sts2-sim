@@ -78,11 +78,11 @@ pub(crate) fn health_after_added(
 /// # Panics
 ///
 /// A conditional nobody has ported.
-pub(crate) fn conditional(
+pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
     monster: Monster,
     at: u8,
     spawn: MonsterSpawn<Encounter>,
-    powers: &[sts2_core::Listener<'_, V>],
+    powers: &[sts2_core::Listener<'_, V, P>],
 ) -> Result<u8, ContentError> {
     match monster {
         Monster::BowlbugRock | Monster::SlumberingBeetle => hive::conditional(monster, at, powers),

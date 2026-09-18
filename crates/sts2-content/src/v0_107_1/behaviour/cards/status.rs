@@ -3,7 +3,7 @@
 use sts2_core::{Amount, Effect, EventHook, Fight, HookEffect, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, Cards, StatusCard};
-use super::{CardNumber, V};
+use super::V;
 
 pub(super) fn on_play<F: Fight<V>>(card: StatusCard, fight: &mut F) -> Played<V> {
     match card {
@@ -28,9 +28,9 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
 }
 
 /// Deliver a notification to one status card in the fight.
-pub(super) fn event_hook(
+pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: StatusCard,
-    printed: &[CardNumber],
+    printed: &P,
     hook: EventHook<V>,
 ) -> Vec<HookEffect<V>> {
     match (card, hook) {
@@ -42,10 +42,7 @@ pub(super) fn event_hook(
                 card: Cards::Status(StatusCard::Void),
             },
         ) => {
-            vec![HookEffect::LoseEnergy(super::face(
-                printed,
-                CardVar::Energy,
-            ))]
+            vec![HookEffect::LoseEnergy(printed.face(CardVar::Energy))]
         }
         _ => Vec::new(),
     }

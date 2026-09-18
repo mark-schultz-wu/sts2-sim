@@ -93,10 +93,10 @@ pub(super) fn health_after_added(
 }
 
 /// Which move a Hive monster selects from a conditional state.
-pub(super) fn conditional(
+pub(super) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
     monster: Monster,
     at: u8,
-    powers: &[sts2_core::Listener<'_, V>],
+    powers: &[sts2_core::Listener<'_, V, P>],
 ) -> Result<u8, sts2_core::ContentError> {
     let held = |wanted| {
         powers.iter().find_map(|listener| match listener {

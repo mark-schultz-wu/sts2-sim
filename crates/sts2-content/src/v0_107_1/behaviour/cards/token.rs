@@ -4,7 +4,7 @@ use sts2_core::{Amount, CardVars, CostPool, Effect, Fight, Played, Scaling};
 
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
-use super::{CardNumber, Change, Number, V, face};
+use super::{Change, Number, V};
 
 /// `Upgrade`, which raises what these cards print.
 pub(super) fn upgrade(card: TokenCard) -> &'static [Change] {
@@ -18,10 +18,10 @@ pub(super) fn upgrade(card: TokenCard) -> &'static [Change] {
 }
 
 /// What a card works out from the fight for a number it prints.
-pub(super) fn calculated(
+pub(super) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: TokenCard,
     key: CardVar,
-    printed: &[CardNumber],
+    printed: &P,
     powers: &[sts2_core::Stack<V>],
 ) -> Number {
     match (card, key) {
@@ -29,8 +29,8 @@ pub(super) fn calculated(
         // whatever the card counts. Sovereign Blade counts the player's Parry,
         // and prints no block without one.
         (TokenCard::SovereignBlade, CardVar::CalculatedBlock) => {
-            face(printed, CardVar::CalculationBase)
-                + face(printed, CardVar::CalculationExtra) * parry(powers)
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * parry(powers)
         }
         (card, key) => unimplemented!("the {} {card:?} works out", key.name()),
     }

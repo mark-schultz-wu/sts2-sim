@@ -137,16 +137,29 @@ pub(super) struct CostModifier<V: Rules> {
     pub(super) lasting: sts2_core::Lasting,
 }
 
+/// A listener of this fight's, which is a hook's audience of one.
+///
+/// The card a hook reaches is one of this fight's copies, so these name that
+/// type once rather than at every call. See [`sts2_core::Printed`].
+pub(crate) type Heard<'a, V> = sts2_core::Listener<'a, V, CardInstance<V>>;
+
+/// The same, for a hook that a listener answers by writing on itself.
+pub(crate) type HeardEvent<'a, V> = sts2_core::EventListener<'a, V, CardInstance<V>>;
+
 /// A pile holds copies rather than ids, because a fight writes on a card. Two
 /// copies of one card are two objects. A rule that raises the damage on one
 /// leaves the other where it was.
 #[derive(Debug, PartialEq, Eq)]
-pub(super) struct CardInstance<V: Rules> {
+pub(crate) struct CardInstance<V: Rules> {
     /// Which copy this is, for as long as the fight holds it.
     pub(super) id: CardId<V>,
     pub(super) ident: CardIdent<V>,
     /// The numbers this copy prints, which start as the table's and move.
-    pub(super) vars: CardVarList<V>,
+    ///
+    /// Private, because how a copy keeps them is nobody else's business. A
+    /// rule asks [`sts2_core::Printed::face`] for one by name, and the fight
+    /// asks [`CardInstance::numbers`] for all of them.
+    vars: CardVarList<V>,
     /// `CardModel.EnergyCost` and `StarCost` for this copy.
     ///
     /// Per copy, because an upgrade writes on them. The table prices a fresh
@@ -160,7 +173,7 @@ pub(super) struct CardInstance<V: Rules> {
     /// were written, which is what decides what a stack of them comes to.
     ///
     /// Empty for almost every card, and inline for the rest.
-    pub(super) cost_modifiers: SmallVec<[CostModifier<V>; MODIFIERS_INLINE]>,
+    cost_modifiers: SmallVec<[CostModifier<V>; MODIFIERS_INLINE]>,
     /// `CardModel.AddKeyword`, which writes words the table did not print.
     ///
     /// Beside the printed set rather than folded into it. The table's answer
@@ -168,7 +181,7 @@ pub(super) struct CardInstance<V: Rules> {
     ///
     /// Inline, because a keyword is one byte and a card gains few. One of
     /// these on the heap cost a branch an allocation of a single byte.
-    pub(super) added_keywords: SmallVec<[V::CardKeyword; KEYWORDS_INLINE]>,
+    added_keywords: SmallVec<[V::CardKeyword; KEYWORDS_INLINE]>,
     /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
@@ -196,7 +209,40 @@ impl<V: Rules> Clone for CardInstance<V> {
     }
 }
 
+impl<V: Rules> sts2_core::Printed<V> for CardInstance<V> {
+    fn face(&self, key: V::CardVar) -> V::Number {
+        self.number(key).base
+    }
+}
+
 impl<V: Rules> CardInstance<V> {
+    /// The entry this copy holds for `key`.
+    ///
+    /// A key the card does not print is a mistake in the port, the way a card
+    /// asking for a number no card prints is.
+    pub(super) fn number(&self, key: V::CardVar) -> CardNumber<V::CardVar, V::Number> {
+        *self
+            .vars
+            .iter()
+            .find(|var| var.id == key)
+            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
+    }
+
+    /// Every number this copy prints, in the order its table prints them.
+    pub(super) fn numbers(&self) -> impl Iterator<Item = CardNumber<V::CardVar, V::Number>> + '_ {
+        self.vars.iter().copied()
+    }
+
+    /// Add to what this copy prints for `key`.
+    pub(super) fn raise(&mut self, key: V::CardVar, by: V::Number) {
+        let printed = self
+            .vars
+            .iter_mut()
+            .find(|var| var.id == key)
+            .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()));
+        printed.base = printed.base + by;
+    }
+
     /// A fresh copy, printing what the table prints.
     pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {
         let vars = ident
@@ -279,16 +325,7 @@ impl<V: Rules> CardInstance<V> {
     pub(super) fn modify(&mut self, change: sts2_core::Change<V>, lasting: sts2_core::Lasting) {
         match change {
             sts2_core::Change::Upgrade => self.upgrade(),
-            sts2_core::Change::Raise(key, amount) => {
-                let printed = self
-                    .vars
-                    .iter_mut()
-                    .find(|var| var.id == key)
-                    .unwrap_or_else(|| {
-                        unimplemented!("the {} this card does not print", key.name())
-                    });
-                printed.base = printed.base + amount;
-            }
+            sts2_core::Change::Raise(key, amount) => self.raise(key, amount),
             sts2_core::Change::ChangeCost(pool, by) => {
                 self.modify_cost(pool, CostChange::Relative(by), lasting)
             }
@@ -435,7 +472,7 @@ impl<V: Rules> HeldPower<V> {
     ///
     /// `owner` is the side of the creature carrying it. A power is held by a
     /// creature and does not know which, so the caller that found it says.
-    pub(crate) fn listener(&self, owner: V::CombatSide) -> sts2_core::Listener<'_, V> {
+    pub(crate) fn listener(&self, owner: V::CombatSide) -> Heard<'_, V> {
         sts2_core::Listener::Power {
             power: self.power,
             amount: self.amount,
@@ -444,10 +481,7 @@ impl<V: Rules> HeldPower<V> {
         }
     }
 
-    pub(crate) fn event_listener(
-        &mut self,
-        owner: V::CombatSide,
-    ) -> sts2_core::EventListener<'_, V> {
+    pub(crate) fn event_listener(&mut self, owner: V::CombatSide) -> HeardEvent<'_, V> {
         sts2_core::EventListener::Power {
             power: self.power,
             amount: self.amount,

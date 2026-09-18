@@ -1651,6 +1651,23 @@ pub trait PowerModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + E
     fn new(power: V::Power) -> Self;
 }
 
+/// What one copy of a card prints, as a rule reads it.
+///
+/// `CardModel` saves its fields in the numbers on its own face. A card that
+/// raised its own damage as it was drawn has raised what this answers.
+///
+/// One method, because a rule asks for one number by name and never for the
+/// set. The table already says which numbers a card prints.
+pub trait Printed<V: ContentVersion> {
+    /// The number this copy prints for `key`.
+    ///
+    /// # Panics
+    ///
+    /// A key the card does not print. That is a mistake in the port, the same
+    /// way a card asking for a number no card prints is.
+    fn face(&self, key: V::CardVar) -> V::Number;
+}
+
 /// One model instance a hook is delivered to, with what that instance saves.
 ///
 /// `AbstractModel`'s subclasses read their own fields off `this`. A power's
@@ -1658,8 +1675,7 @@ pub trait PowerModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + E
 /// carries. The hook carries what the fight knows, and this carries the rest.
 ///
 /// A kind of model gets a variant when something asks it a hook.
-#[derive(Debug)]
-pub enum Listener<'a, V: Hooks> {
+pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
     Power {
         power: V::Power,
         amount: PowerAmount<V::Number>,
@@ -1671,18 +1687,14 @@ pub enum Listener<'a, V: Hooks> {
         state: &'a V::PowerState,
     },
     Relic(&'a V::RelicState),
-    /// A card in the fight, with the numbers this copy of it prints.
-    ///
-    /// `CardModel` saves its fields in those numbers: a card that raises its
-    /// own damage as it is drawn has raised what this slice carries.
+    /// A card in the fight, and what this copy of it prints.
     Card {
         card: V::Card,
-        printed: &'a [CardNumber<V::CardVar, V::Number>],
+        printed: &'a P,
     },
 }
 
-#[derive(Debug)]
-pub enum EventListener<'a, V: Hooks> {
+pub enum EventListener<'a, V: Hooks, P: Printed<V> + ?Sized> {
     Power {
         power: V::Power,
         amount: PowerAmount<V::Number>,
@@ -1692,7 +1704,7 @@ pub enum EventListener<'a, V: Hooks> {
     Relic(&'a mut V::RelicState),
     Card {
         card: V::Card,
-        printed: &'a [CardNumber<V::CardVar, V::Number>],
+        printed: &'a P,
     },
 }
 
@@ -1707,15 +1719,18 @@ pub trait Hooks: ContentVersion {
     /// What one power's own model saves, which the creature carries for it.
     type PowerState: PowerModel<Self>;
 
-    fn modify_hook(listener: Listener<'_, Self>, hook: ModifyHook<Self>) -> Modify<Self::Number>;
+    fn modify_hook<P: Printed<Self> + ?Sized>(
+        listener: Listener<'_, Self, P>,
+        hook: ModifyHook<Self>,
+    ) -> Modify<Self::Number>;
 
-    fn decide_hook(
-        listener: Listener<'_, Self>,
+    fn decide_hook<P: Printed<Self> + ?Sized>(
+        listener: Listener<'_, Self, P>,
         hook: DecisionHook<Self>,
     ) -> crate::HookResponse<bool>;
 
-    fn event_hook(
-        listener: EventListener<'_, Self>,
+    fn event_hook<P: Printed<Self> + ?Sized>(
+        listener: EventListener<'_, Self, P>,
         hook: EventHook<Self>,
     ) -> Vec<HookEffect<Self>>;
 }
@@ -2416,11 +2431,11 @@ pub trait Rules: Hooks {
     ///
     /// `None` is a machine on a built state it has yet to perform. Nothing
     /// here names that state, so the monster keeps advertising it.
-    fn roll_monster_move<'a, R: crate::rng::GameRng>(
+    fn roll_monster_move<'a, R: crate::rng::GameRng, P: Printed<Self> + ?Sized + 'a>(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         spawn: MonsterSpawn<Self::Encounter>,
-        powers: impl IntoIterator<Item = crate::Listener<'a, Self>>,
+        powers: impl IntoIterator<Item = crate::Listener<'a, Self, P>>,
         machine: &mut MoveMachine,
         rng: &mut R,
     ) -> Result<Option<crate::NextMove<Self>>, ContentError>;
@@ -2504,15 +2519,15 @@ pub trait Rules: Hooks {
     ///
     /// `CalculatedVar.Calculate`, which is a base plus an extra times a
     /// multiplier the card names. Both halves are on the card's own face, so
-    /// this is handed the copy's printed numbers rather than the table's.
+    /// this asks the copy rather than the table.
     ///
     /// # Panics
     ///
     /// A number nobody has ported the calculation for.
-    fn calculated_card_var(
+    fn calculated_card_var<P: Printed<Self> + ?Sized>(
         card: Self::Card,
         key: Self::CardVar,
-        numbers: &[CardNumber<Self::CardVar, Self::Number>],
+        printed: &P,
         powers: &[crate::Stack<Self>],
     ) -> Self::Number;
 

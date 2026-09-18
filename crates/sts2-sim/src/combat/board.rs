@@ -228,7 +228,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // Not a `Stack`, because nothing carries it yet. The side is the
         // creature it is landing on, which is the owner it is about to have.
         let mut state = <V::PowerState as sts2_core::PowerModel<V>>::new(power);
-        let listener = sts2_core::EventListener::Power {
+        let listener = super::live::HeardEvent::<V>::Power {
             power,
             amount,
             owner: self.live.creatures[at].side,
@@ -733,24 +733,11 @@ pub(crate) fn var<V: Rules>(
     key: V::CardVar,
     creatures: &[Fighter<V>],
 ) -> V::Number {
-    let number = number::<V>(held, key);
+    let number = held.number(key);
     match number.calculated {
         false => number.base,
-        true => V::calculated_card_var(held.ident.card, key, &held.vars, &powers::<V>(creatures)),
+        true => V::calculated_card_var(held.ident.card, key, held, &powers::<V>(creatures)),
     }
-}
-
-/// The entry this copy of the card holds for `key`.
-fn number<V: Rules>(
-    held: &CardInstance<V>,
-    key: V::CardVar,
-) -> &sts2_core::CardNumber<V::CardVar, V::Number> {
-    // A key the card does not print is a mistake in the port, the same way a
-    // card asking for a number no card prints is.
-    held.vars
-        .iter()
-        .find(|var| var.id == key)
-        .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
 }
 
 /// The player's own powers, which is what a card reads about the fight.
@@ -949,7 +936,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let held = self
             .playing
             .unwrap_or_else(|| unimplemented!("a number printed by no card being played"));
-        if number::<V>(held, key).modifier.is_some() {
+        if held.number(key).modifier.is_some() {
             // The hooks it runs through name creatures to run against, and a
             // bare read has none. `Fight::resolve` is where both arrive.
             unimplemented!(
@@ -1012,12 +999,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             &mut self.live.exhaust,
         ] {
             for held in pile.iter_mut().filter(|held| held.ident.card == card) {
-                let var = held
-                    .vars
-                    .iter_mut()
-                    .find(|var| var.id == key)
-                    .unwrap_or_else(|| unimplemented!("the {} a forge raises", key.name()));
-                var.base = var.base + amount;
+                held.raise(key, amount);
             }
         }
         // The blade goes through `AddGeneratedCardToCombat`, so it enters the
@@ -1236,7 +1218,7 @@ pub(super) fn draw<V: Rules>(
         let asked = V::event_hook(
             sts2_core::EventListener::Card {
                 card: drawn.ident.card,
-                printed: &drawn.vars,
+                printed: &drawn,
             },
             sts2_core::EventHook::CardDrawn {
                 card: drawn.ident.card,
