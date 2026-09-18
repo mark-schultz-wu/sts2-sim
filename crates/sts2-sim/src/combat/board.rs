@@ -304,7 +304,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         .get_mut(index)
                         .filter(|held| held.id == at.id())
                         .expect("the card is still at its named place");
-                    held.replays = held.replays + amount;
+                    held.replay(amount);
                 }
                 // `PlayerCombatState.AllCards`, which the exhaust pile is
                 // among. A blade taken out of the fight is written on and
@@ -317,7 +317,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         &mut self.live.exhaust,
                     ] {
                         for held in pile.iter_mut().filter(|held| held.ident.card == card) {
-                            held.replays = held.replays + amount;
+                            held.replay(amount);
                         }
                     }
                 }
