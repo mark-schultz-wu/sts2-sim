@@ -560,7 +560,27 @@ pub trait FlagSet: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
     fn from_members(members: &[Self::Member]) -> Self;
 
     fn contains(self, member: Self::Member) -> bool;
+
+    /// This set, and one more member.
+    ///
+    /// A set, so a member already in it is not added twice. Walks
+    /// [`FlagSet::MEMBERS`] rather than asking for a bitwise `or`, because a
+    /// set is generated per build and this is the same for all of them.
+    fn with(self, member: Self::Member) -> Self {
+        let held: smallvec::SmallVec<[Self::Member; MEMBERS_HELD]> = Self::MEMBERS
+            .iter()
+            .copied()
+            .filter(|&held| held == member || self.contains(held))
+            .collect();
+        Self::from_members(&held)
+    }
 }
+
+/// How many members one set holds while it is being rebuilt.
+///
+/// Every flag set this build generates is a byte wide, so eight covers them
+/// with nothing to spare and nothing wasted.
+const MEMBERS_HELD: usize = 8;
 
 /// The nine kinds of node an act's map holds, as consts a rule can name.
 ///
@@ -2070,6 +2090,13 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + serde::Serialize
         + serde::de::DeserializeOwned
         + 'static;
+
+    /// The words one card carries, as the set the build generates for them.
+    ///
+    /// A set rather than a list, because that is what a card holds: a word
+    /// already on one is not added twice. The build spells it as a bitfield,
+    /// which is what makes a copy cheap to carry.
+    type CardKeywordSet: FlagSet<Member = Self::CardKeyword> + PartialEq + Eq + 'static;
 
     /// One of the numbers this build's cards print, by the game's key for it.
     type CardVar: CardVars

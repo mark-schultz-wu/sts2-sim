@@ -77,6 +77,7 @@ impl sts2_core::ContentVersion for V0_111_0 {
     type Affliction = generated::afflictions::Affliction;
     type Card = generated::cards::Cards;
     type CardKeyword = generated::cards::CardKeyword;
+    type CardKeywordSet = generated::cards::KeywordSet;
     type CardVar = generated::cards::CardVar;
     type Character = generated::characters::Character;
     type Enchantment = generated::enchantments::Enchantment;
