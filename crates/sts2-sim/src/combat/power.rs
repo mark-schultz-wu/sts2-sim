@@ -90,21 +90,16 @@ fn asked_of<V: Rules>(
 
     // `PowerCmd.Decrement`, which takes the instance off at zero the way a
     // duration tick does.
-    let one = num_traits::one();
     for (id, power) in decremented {
         let Some(creature) = live.creatures.iter_mut().find(|creature| creature.id == id) else {
             continue;
         };
         for held in creature.powers.iter_mut() {
-            if held.power == power
-                && let sts2_core::PowerAmount::Counted(amount) = held.amount
-            {
-                held.amount = sts2_core::PowerAmount::Counted(amount - one);
+            if held.power == power && held.amount.count().is_some() {
+                held.amount = held.amount.ticked();
             }
         }
-        creature
-            .powers
-            .retain(|held| held.amount != sts2_core::PowerAmount::Counted(num_traits::zero()));
+        creature.powers.retain(|held| !held.amount.spent());
     }
     asked
 }

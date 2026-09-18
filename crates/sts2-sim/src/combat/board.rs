@@ -184,21 +184,26 @@ impl<'a, V: Rules> Board<'a, V> {
             .iter_mut()
             .find(|held| held.power == power);
         match (held, amount) {
-            (Some(held), PowerAmount::Counted(more)) => match held.amount {
-                PowerAmount::Counted(had) => held.amount = PowerAmount::Counted(had + more),
-                PowerAmount::Endless => unimplemented!("a count landing on an endless power"),
-            },
+            (Some(held), PowerAmount::Counted(more)) => {
+                let had = held
+                    .amount
+                    .count()
+                    .unwrap_or_else(|| unimplemented!("a count landing on an endless power"));
+                let more: super::live::Amount = num_traits::NumCast::from(more)
+                    .unwrap_or_else(|| unimplemented!("a power stacked by {more:?}"));
+                held.amount = super::live::Stacked::counted(had + more);
+            }
             (Some(_), PowerAmount::Endless) => {}
             (None, amount) => self.live.creatures[at]
                 .powers
-                .push(HeldPower::new(power, amount)),
+                .push(HeldPower::new(power, amount.into())),
         }
         // A counted power whose stack reaches zero is gone. Temporary
         // Strength returns exactly what it took, so leaving a zero instance
         // here would make a creature observably carry Strength.
         self.live.creatures[at]
             .powers
-            .retain(|held| held.amount != PowerAmount::Counted(V::Number::zero()));
+            .retain(|held| !held.amount.spent());
 
         // `AfterPowerAmountChanged`, once the power is on. It carries what
         // landed rather than the stack the creature now holds, and an amount
@@ -1269,7 +1274,10 @@ mod tests {
             max_hp: 10,
             block: 0,
             alive: true,
-            powers: smallvec::smallvec![HeldPower::new(power, PowerAmount::Counted(2))],
+            powers: smallvec::smallvec![HeldPower::new(
+                power,
+                crate::combat::live::Stacked::counted(2)
+            )],
             next_move: None,
         }];
         let card = CardInstance::new(

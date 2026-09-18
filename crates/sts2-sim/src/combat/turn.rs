@@ -275,7 +275,6 @@ fn tick_powers<V: Rules>(
     skipping: &mut Vec<(CombatId, V::Power)>,
     side: V::CombatSide,
 ) -> Vec<(CombatId, V::Power, PowerAmount<V::Number>)> {
-    let one = num_traits::one();
     let mut applying = Vec::new();
     let mut leaving: Vec<(CombatId, V::Power)> = Vec::new();
 
@@ -286,9 +285,9 @@ fn tick_powers<V: Rules>(
             let power = held.power;
             // An endless power sits out every tick. There is no number to
             // count, which is the whole of what endless means.
-            let PowerAmount::Counted(amount) = held.amount else {
+            if held.amount.count().is_none() {
                 continue;
-            };
+            }
             let asked = <V as sts2_core::Hooks>::event_hook(
                 held.event_listener(owner),
                 sts2_core::EventHook::SideTurnEnd { side },
@@ -314,7 +313,7 @@ fn tick_powers<V: Rules>(
                 }
             }
             if asked.contains(&sts2_core::HookEffect::Decrement) {
-                held.amount = PowerAmount::Counted(amount - one);
+                held.amount = held.amount.ticked();
                 continue;
             }
             if !asked.contains(&sts2_core::HookEffect::TickDownDuration) {
@@ -326,11 +325,9 @@ fn tick_powers<V: Rules>(
                 skipping.remove(at);
                 continue;
             }
-            held.amount = PowerAmount::Counted(amount - one);
+            held.amount = held.amount.ticked();
         }
-        creature
-            .powers
-            .retain(|held| held.amount != PowerAmount::Counted(num_traits::zero()));
+        creature.powers.retain(|held| !held.amount.spent());
     }
     for (id, power) in leaving {
         let Some(creature) = live.creatures.iter_mut().find(|creature| creature.id == id) else {
