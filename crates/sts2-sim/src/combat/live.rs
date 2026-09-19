@@ -640,7 +640,72 @@ impl<V: Rules> sts2_core::CreatureView<V> for Fighter<V> {
         self.powers
             .iter()
             .find(|held| held.power == power)
-            .map(|held| held.amount)
+            .map(|held| held.amount.amount())
+    }
+}
+
+/// How much of a power a creature carries, as the fight holds one.
+///
+/// [`sts2_core::PowerAmount`] narrowed. The count is an [`Amount`] and the
+/// endless flag is its niche, not a tag beside it. So this is two bytes where
+/// the report's is eight, and `PowerModel.Amount` is one number either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Stacked(Option<NonMaxI16>);
+
+impl Stacked {
+    /// One instance with no number to run out, which is `IsInfinite`.
+    pub(crate) const ENDLESS: Self = Self(None);
+
+    /// A number that stacks, and counts down where the power counts down.
+    ///
+    /// # Panics
+    ///
+    /// A stack no [`Amount`] holds.
+    pub(crate) fn counted<N: std::fmt::Debug + Copy + num_traits::ToPrimitive>(amount: N) -> Self {
+        Self(Some(
+            num_traits::NumCast::from(amount)
+                .and_then(NonMaxI16::new)
+                .unwrap_or_else(|| unimplemented!("a power stacked to {amount:?}")),
+        ))
+    }
+
+    /// The number, or nothing for a power with none to run out.
+    pub(crate) fn count(self) -> Option<Amount> {
+        self.0.map(|amount| amount.get())
+    }
+
+    /// Counted down to nothing, which is a power the fight drops.
+    pub(crate) fn spent(self) -> bool {
+        self.count() == Some(0)
+    }
+
+    /// One less of it. An endless power has no number to count.
+    pub(crate) fn ticked(self) -> Self {
+        match self.count() {
+            Some(amount) => Self::counted(amount - 1),
+            None => self,
+        }
+    }
+
+    /// What a report shows of it, and what a rule names one with.
+    pub(crate) fn amount<N: num_traits::NumCast>(self) -> sts2_core::PowerAmount<N> {
+        match self.count() {
+            Some(amount) => sts2_core::PowerAmount::Counted(
+                num_traits::NumCast::from(amount).expect("a stack fits a game number"),
+            ),
+            None => sts2_core::PowerAmount::Endless,
+        }
+    }
+}
+
+impl<N: std::fmt::Debug + Copy + num_traits::ToPrimitive> From<sts2_core::PowerAmount<N>>
+    for Stacked
+{
+    fn from(amount: sts2_core::PowerAmount<N>) -> Self {
+        match amount {
+            sts2_core::PowerAmount::Counted(count) => Self::counted(count),
+            sts2_core::PowerAmount::Endless => Self::ENDLESS,
+        }
     }
 }
 
@@ -652,13 +717,13 @@ impl<V: Rules> sts2_core::CreatureView<V> for Fighter<V> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HeldPower<V: Rules> {
     pub(crate) power: V::Power,
-    pub(crate) amount: sts2_core::PowerAmount<V::Number>,
+    pub(crate) amount: Stacked,
     pub(crate) state: V::PowerState,
 }
 
 impl<V: Rules> HeldPower<V> {
     /// A power as `PowerCmd.Apply` lands one, its model as new as it is.
-    pub(crate) fn new(power: V::Power, amount: sts2_core::PowerAmount<V::Number>) -> Self {
+    pub(crate) fn new(power: V::Power, amount: Stacked) -> Self {
         Self {
             power,
             amount,
@@ -674,7 +739,7 @@ impl<V: Rules> HeldPower<V> {
     pub(crate) fn listener(&self, owner: V::CombatSide) -> Heard<'_, V> {
         sts2_core::Listener::Power {
             power: self.power,
-            amount: self.amount,
+            amount: self.amount.amount(),
             owner,
             state: &self.state,
         }
@@ -683,7 +748,7 @@ impl<V: Rules> HeldPower<V> {
     pub(crate) fn event_listener(&mut self, owner: V::CombatSide) -> HeardEvent<'_, V> {
         sts2_core::EventListener::Power {
             power: self.power,
-            amount: self.amount,
+            amount: self.amount.amount(),
             owner,
             state: &mut self.state,
         }
@@ -693,7 +758,7 @@ impl<V: Rules> HeldPower<V> {
     pub(crate) fn stack(&self) -> sts2_core::Stack<V> {
         sts2_core::Stack {
             power: self.power,
-            amount: self.amount,
+            amount: self.amount.amount(),
         }
     }
 }

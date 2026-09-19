@@ -5,7 +5,7 @@ use sts2_core::rng::{Choices, GameRng};
 use sts2_core::{CombatId, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
-use super::live::{Fighter, HeldPower, Live, PowerList};
+use super::live::{Fighter, HeldPower, Live, PowerList, Stacked};
 use crate::stream::Streams;
 
 /// Roll a monster's health, avoiding healths already rolled in this fight
@@ -115,7 +115,7 @@ pub(crate) fn initialize<V: Rules>(
             block: num_traits::zero(),
             alive: true,
             powers: V::monster_starting_powers(monster, ascension)
-                .map(|(power, amount)| HeldPower::new(power, amount))
+                .map(|(power, amount)| HeldPower::new(power, Stacked::from(amount)))
                 .collect(),
             // A fresh machine stands on no built state, so the walk always
             // names the move a monster opens on.

@@ -414,7 +414,7 @@ mod tests {
         let mut creatures = fight();
         creatures[0].powers.push(super::super::live::HeldPower::new(
             power,
-            sts2_core::PowerAmount::Counted(amount),
+            crate::combat::live::Stacked::counted(amount),
         ));
         creatures
     }
@@ -449,7 +449,7 @@ mod tests {
         let mut creatures = fight();
         creatures[1].powers.push(super::super::live::HeldPower::new(
             Power::VulnerablePower,
-            sts2_core::PowerAmount::Counted(1),
+            crate::combat::live::Stacked::counted(1),
         ));
         let damage = |targets: &[CombatId]| {
             effect::<V>(&strike, &creatures, targets)[0].vars[&CardVar::Damage]
