@@ -52,7 +52,7 @@ pub(crate) fn notify_creature<V: Rules>(
                 }
                 machine.machine.interpose();
                 if let Some(owner) = live.creatures.iter_mut().find(|owner| owner.id == creature) {
-                    owner.next_move = Some(stunned);
+                    owner.next_move = Some(stunned.into());
                 }
             }
             effect => remaining.push(effect),
