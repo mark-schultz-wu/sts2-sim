@@ -1285,8 +1285,8 @@ mod tests {
 
         assert_eq!(obs.potions[0].reason, None);
         assert_eq!(
-            obs.potions[0].targets,
-            vec![at(3), at(4)],
+            obs.potions[0].targets.as_slice(),
+            [at(3), at(4)],
             "a potion names the creatures it can be drunk at"
         );
     }

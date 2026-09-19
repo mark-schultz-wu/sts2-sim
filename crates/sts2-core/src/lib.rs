@@ -57,7 +57,7 @@ pub use report::observation::{
     ActMap, Attack, Blocked, Carried, Channelled, ChestOption, Combat, CombatId, Creature, Entry,
     EventOption, EventOptionKey, EventOptionKinds, Held, Intent, Keyed, Map, NextMove, NoNode,
     Node, Observation, Orbs, Playable, Position, Positions, Preview, Reachable, RestOption, Room,
-    ShopCard, Stack, Stock, Take, Undrinkable,
+    ShopCard, Stack, Stock, Take, Targets, Undrinkable,
 };
 pub use report::question::{
     CardOption, Cell, FoundItem, Question, QuestionKind, RewardCard, RewardDetail, RewardKind,

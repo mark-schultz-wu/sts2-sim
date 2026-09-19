@@ -110,7 +110,12 @@ fn a_cards_targets_are_the_creatures_it_can_be_pointed_at() {
     for play in &combat.legal {
         match play.target {
             TargetType::AnyEnemy => {
-                assert_eq!(play.targets, [at(1), at(2), at(3),], "{:?}", play.card)
+                assert_eq!(
+                    play.targets.as_slice(),
+                    [at(1), at(2), at(3)],
+                    "{:?}",
+                    play.card
+                )
             }
             TargetType::SelfTarget => assert!(play.targets.is_empty(), "{:?}", play.card),
             other => panic!("the opening hand has no {other:?} card"),
