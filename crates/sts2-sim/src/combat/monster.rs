@@ -119,7 +119,7 @@ pub(crate) fn initialize<V: Rules>(
                 .collect(),
             // A fresh machine stands on no built state, so the walk always
             // names the move a monster opens on.
-            next_move: opening,
+            next_move: opening.map(Into::into),
         });
     }
 
@@ -240,6 +240,7 @@ pub(super) fn summon<V: Rules>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::combat::live::Telegraphed;
     use sts2_content::v0_107_1::{
         V0_107_1,
         ascension::AscensionLevel,
@@ -398,7 +399,7 @@ mod tests {
         assert_eq!(
             creatures
                 .iter()
-                .map(|c| c.next_move.clone())
+                .map(|c| c.next_move.as_ref().map(Telegraphed::telegraph))
                 .collect::<Vec<_>>(),
             vec![
                 Some(NextMove {

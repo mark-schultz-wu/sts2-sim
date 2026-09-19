@@ -12,7 +12,7 @@
 //! it and nothing else does.
 
 use bitfield_struct::bitfield;
-use nonmax::NonMaxI16;
+use nonmax::{NonMaxI16, NonMaxU8};
 use num_traits::CheckedAdd;
 use smallvec::SmallVec;
 use sts2_core::{
@@ -709,6 +709,139 @@ impl<N: std::fmt::Debug + Copy + num_traits::ToPrimitive> From<sts2_core::PowerA
     }
 }
 
+/// The move a monster has chosen, as the fight holds one.
+///
+/// [`sts2_core::NextMove`] narrowed. The report's is a name beside a
+/// `SmallVec`. That pays a capacity word and a heap branch for a list the
+/// same type's own comment says never exceeds two. This is a fixed pair, so
+/// it is fourteen bytes where the report's is fifty-six, and `Option` takes
+/// its niche from the move name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Telegraphed<V: Rules> {
+    /// The name, at the width the build spells it. 275 moves outrun a byte.
+    pub(crate) id: V::MoveId,
+    /// Each slot in the order the game draws it, and a hole for a move that
+    /// draws fewer. The kinds carry a niche, so the holes cost nothing.
+    intents: [Option<Intended<V>>; INTENTS],
+}
+
+/// How many intents one move telegraphs.
+///
+/// An attack that also blocks draws two, and no ported move draws three.
+/// [`sts2_core::NextMove`] inlines to the same number and says why.
+const INTENTS: usize = 2;
+
+impl<V: Rules> Telegraphed<V> {
+    /// What the move draws, in the order the game draws it.
+    fn intents(&self) -> impl Iterator<Item = &Intended<V>> {
+        self.intents.iter().flatten()
+    }
+
+    /// The numbers of the first intent that attacks, which is what the move
+    /// performs with.
+    pub(crate) fn attack(&self) -> Option<Landing> {
+        self.intents().find_map(|intent| intent.attack)
+    }
+
+    /// What a report shows of it.
+    pub(crate) fn telegraph(&self) -> sts2_core::NextMove<V> {
+        sts2_core::NextMove {
+            id: self.id,
+            intents: self.intents().map(Intended::intent).collect(),
+        }
+    }
+}
+
+impl<V: Rules> From<sts2_core::NextMove<V>> for Telegraphed<V> {
+    /// # Panics
+    ///
+    /// A move drawing more intents than [`INTENTS`].
+    fn from(next: sts2_core::NextMove<V>) -> Self {
+        let drawn = next.intents.len();
+        if drawn > INTENTS {
+            unimplemented!("a move drawing {drawn} intents");
+        }
+        let mut intents = [None; INTENTS];
+        for (slot, intent) in intents.iter_mut().zip(&next.intents) {
+            *slot = Some(Intended::from(*intent));
+        }
+        Self {
+            id: next.id,
+            intents,
+        }
+    }
+}
+
+/// One thing a move telegraphs, as the fight holds one.
+///
+/// [`sts2_core::Intent`] narrowed: six bytes rather than sixteen, because the
+/// numbers beside the kind fit their own widths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Intended<V: Rules> {
+    kind: V::IntentKind,
+    attack: Option<Landing>,
+}
+
+impl<V: Rules> Intended<V> {
+    /// What a report shows of it.
+    fn intent(&self) -> sts2_core::Intent<V> {
+        sts2_core::Intent {
+            kind: self.kind,
+            attack: self.attack.map(Landing::attack),
+        }
+    }
+}
+
+impl<V: Rules> From<sts2_core::Intent<V>> for Intended<V> {
+    fn from(intent: sts2_core::Intent<V>) -> Self {
+        Self {
+            kind: intent.kind,
+            attack: intent.attack.map(Landing::from),
+        }
+    }
+}
+
+/// What an attack will land, as the fight holds one.
+///
+/// [`sts2_core::Attack`] narrowed. The content types the damage a
+/// `Scaled<u16>` and the hit count a `Scaled<u8>`, and the report widens both
+/// to a game number. The damage keeps a width that survives `ModifyDamage`,
+/// which adds Strength with no ceiling. The hit count keeps the width the
+/// content gave it. Both are `NonMax`, so `Option<Landing>` costs no tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Landing {
+    damage: NonMaxI16,
+    repeats: NonMaxU8,
+}
+
+impl Landing {
+    /// What a report shows of it, and what a move performs with.
+    pub(crate) fn attack<V: Rules>(self) -> sts2_core::Attack<V> {
+        sts2_core::Attack {
+            damage: num_traits::NumCast::from(self.damage.get())
+                .expect("damage fits a game number"),
+            repeats: num_traits::NumCast::from(self.repeats.get())
+                .expect("a hit count fits a game count"),
+        }
+    }
+}
+
+impl<V: Rules> From<sts2_core::Attack<V>> for Landing {
+    /// # Panics
+    ///
+    /// Damage or a hit count neither field holds.
+    fn from(attack: sts2_core::Attack<V>) -> Self {
+        Self {
+            damage: num_traits::NumCast::from(attack.damage)
+                .and_then(NonMaxI16::new)
+                .unwrap_or_else(|| unimplemented!("an attack landing {:?}", attack.damage)),
+            repeats: num_traits::NumCast::from(attack.repeats)
+                .and_then(NonMaxU8::new)
+                .unwrap_or_else(|| unimplemented!("an attack landing {:?} times", attack.repeats)),
+        }
+    }
+}
+
 /// One power on a creature, with the fields its own model saves.
 ///
 /// [`sts2_core::Stack`] is what a report shows of a power: which one, and the
@@ -777,7 +910,7 @@ pub(crate) struct Fighter<V: Rules> {
     pub(crate) block: V::Number,
     pub(crate) alive: bool,
     pub(crate) powers: PowerList<V>,
-    pub(crate) next_move: Option<sts2_core::NextMove<V>>,
+    pub(crate) next_move: Option<Telegraphed<V>>,
 }
 
 impl<V: Rules> Fighter<V> {
@@ -792,7 +925,7 @@ impl<V: Rules> Fighter<V> {
             block: self.block,
             alive: self.alive,
             powers: self.powers.iter().map(HeldPower::stack).collect(),
-            next_move: self.next_move.clone(),
+            next_move: self.next_move.as_ref().map(Telegraphed::telegraph),
         }
     }
 }
@@ -1100,5 +1233,31 @@ mod tests {
         }
         wide::<sts2_content::v0_107_1::V0_107_1>("v0.107.1");
         wide::<sts2_content::v0_111_0::V0_111_0>("v0.111.0");
+    }
+}
+
+#[cfg(test)]
+mod sizes {
+    use super::*;
+
+    /// The widths the comments above claim, so that a change has to restate
+    /// them rather than quietly widen a fight.
+    ///
+    /// One build's content types, because a size needs a concrete `V`. The
+    /// numbers move when a build's own enums do, which is the point.
+    #[test]
+    fn a_fight_holds_what_it_says_it_holds() {
+        use sts2_content::v0_107_1::V0_107_1 as V;
+        assert_eq!(size_of::<Landing>(), 4);
+        assert_eq!(size_of::<Option<Landing>>(), 4, "the niche carries the tag");
+        assert_eq!(size_of::<Intended<V>>(), 6);
+        assert_eq!(size_of::<Telegraphed<V>>(), 14);
+        assert_eq!(
+            size_of::<Option<Telegraphed<V>>>(),
+            14,
+            "the move name carries the tag"
+        );
+        assert_eq!(size_of::<Stacked>(), 2);
+        assert_eq!(size_of::<Fighter<V>>(), 104);
     }
 }

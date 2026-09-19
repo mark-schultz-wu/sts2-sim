@@ -422,7 +422,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     sts2_core::HookEffect::InstallMove(next) => {
                         if V::can_leave_current_move(held.monster, &held.machine) {
                             held.machine.interpose();
-                            self.live.creatures[at].next_move = Some(next);
+                            self.live.creatures[at].next_move = Some(next.into());
                         }
                     }
                     // A state the graph already holds, which walks on by
@@ -435,7 +435,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         if let Ok(next) =
                             V::set_move_immediate(monster, ascension, move_id, &mut held.machine)
                         {
-                            self.live.creatures[at].next_move = Some(next);
+                            self.live.creatures[at].next_move = Some(next.into());
                         }
                     }
                     other => unimplemented!("a power asking for {other:?} over a death"),
@@ -475,7 +475,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             .iter_mut()
                             .find(|creature| creature.id == id)
                             .expect("a summoned monster is in the fight");
-                        summoned.next_move = Some(opening.clone());
+                        summoned.next_move = Some(opening.clone().into());
                     }
                 }
                 other => unimplemented!("a dead power asking for {other:?}"),

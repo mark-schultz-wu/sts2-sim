@@ -12,7 +12,7 @@ use sts2_core::{CardTable, CombatId, PowerAmount, Rules, SideKinds, TurnPhaseKin
 
 use super::Error;
 use super::board::{Board, draw};
-use super::live::Live;
+use super::live::{Landing, Live};
 use super::power;
 use super::relic;
 use super::start::{hand_size, upgraded};
@@ -380,7 +380,6 @@ fn enemy_turn<V: Rules>(
         };
         let next_move = creature
             .next_move
-            .clone()
             .unwrap_or_else(|| unimplemented!("an enemy with no move to make"));
         let held = live
             .machines
@@ -392,7 +391,7 @@ fn enemy_turn<V: Rules>(
         // happens beside `PerformMove` rather than after what the move does.
         held.machine.performed();
 
-        let attack = next_move.intents.iter().find_map(|intent| intent.attack);
+        let attack = next_move.attack().map(Landing::attack::<V>);
         let damage = attack.map_or_else(num_traits::zero, |attack| attack.damage);
         let repeats = attack.map_or_else(num_traits::zero, |attack| attack.repeats);
 
@@ -454,7 +453,7 @@ fn roll_moves<V: Rules>(
         // it, which goes on advertising what that caller set.
         let Some(rolled) = rolled else { continue };
         if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {
-            creature.next_move = Some(rolled);
+            creature.next_move = Some(rolled.into());
         }
     }
     Ok(())
