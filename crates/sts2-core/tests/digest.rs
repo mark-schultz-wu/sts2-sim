@@ -75,7 +75,7 @@ fn held(n: usize) -> Held<V> {
         title: Some(format!("Potion {n}")),
         text: Some(format!("It does thing {n}.")),
         reason: None,
-        targets: vec![at(1), at(2)],
+        targets: smallvec::smallvec![at(1), at(2)],
     }
 }
 
@@ -174,7 +174,7 @@ fn full() -> Observation<V> {
                     UnplayableReason::EnergyCostTooHigh,
                 ])),
                 preventer: Some(ModelId::Power(nth::<Power>(1))),
-                targets: vec![at(1), at(2)],
+                targets: smallvec::smallvec![at(1), at(2)],
                 effect: vec![Preview {
                     target: Some(at(1)),
                     text: Some("Deal {Damage} damage.".into()),

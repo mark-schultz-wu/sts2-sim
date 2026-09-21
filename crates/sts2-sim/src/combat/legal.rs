@@ -11,7 +11,8 @@
 use smallvec::{SmallVec, smallvec};
 use sts2_core::{
     CardIdent, CardTable, CombatId, Cost, EffectResolution, FlagSet, Held, Playable, PotionTable,
-    PotionUsage, Preview, Rules, SideKinds, TargetKinds, Undrinkable, UnplayableReasonKinds,
+    PotionUsage, Preview, Rules, SideKinds, TargetKinds, Targets, Undrinkable,
+    UnplayableReasonKinds,
 };
 
 use super::live::{CardInstance, Fighter, Live};
@@ -40,7 +41,11 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, creatures: &[Fighter<V>]
     })
 }
 
-/// Why this card cannot be played, which is empty for one that can.
+/// Why this card cannot be played, or nothing for one that can.
+///
+/// The set itself rather than a list to fold into one. Six reasons fit a byte
+/// the build already generates, and a card in hand is asked this on every
+/// report.
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
     creatures: &[Fighter<V>],
@@ -48,17 +53,26 @@ pub(super) fn reasons<V: Rules>(
     star_cost: Cost,
     energy: V::Count,
     stars: V::Count,
-) -> Vec<V::UnplayableReason> {
+) -> Option<V::UnplayableReasons> {
     let target = target_type::<V>(card, creatures);
-    let mut reasons = Vec::new();
+    let mut why = None;
     if card.card.unplayable() {
-        reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::HAS_UNPLAYABLE_KEYWORD);
+        why = refused::<V>(
+            why,
+            <V::UnplayableReason as UnplayableReasonKinds>::HAS_UNPLAYABLE_KEYWORD,
+        );
     }
     if spend(cost, energy).is_none_or(|spent| spent > energy) {
-        reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::ENERGY_COST_TOO_HIGH);
+        why = refused::<V>(
+            why,
+            <V::UnplayableReason as UnplayableReasonKinds>::ENERGY_COST_TOO_HIGH,
+        );
     }
     if spend(star_cost, stars).is_none_or(|spent| spent > stars) {
-        reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::STAR_COST_TOO_HIGH);
+        why = refused::<V>(
+            why,
+            <V::UnplayableReason as UnplayableReasonKinds>::STAR_COST_TOO_HIGH,
+        );
     }
     // One player creature is the player's own, so a card pointed at an ally
     // needs a second one alive.
@@ -69,23 +83,36 @@ pub(super) fn reasons<V: Rules>(
             .count()
             <= 1
     {
-        reasons.push(<V::UnplayableReason as UnplayableReasonKinds>::NO_LIVING_ALLIES);
+        why = refused::<V>(
+            why,
+            <V::UnplayableReason as UnplayableReasonKinds>::NO_LIVING_ALLIES,
+        );
     }
-    reasons
+    why
 }
 
-/// The creatures this card can be pointed at right now.
+/// That set with one more reason in it, starting one where there is none.
+fn refused<V: Rules>(
+    why: Option<V::UnplayableReasons>,
+    reason: V::UnplayableReason,
+) -> Option<V::UnplayableReasons> {
+    Some(match why {
+        Some(held) => held.with(reason),
+        None => <V::UnplayableReasons as FlagSet>::from_members(&[reason]),
+    })
+}
+
+/// The creatures this card can legally be pointed at.
 ///
-/// `CanPlayTargeting` is a valid target *and* a card that can be played. So a
-/// card refused for any reason names nobody. It does not name who it was going
-/// to hit.
+/// Empty for a card that cannot be played at all, because the game stops
+/// asking once a rule has refused it.
 pub(super) fn targets<V: Rules>(
     target: V::TargetType,
     creatures: &[Fighter<V>],
     refused: bool,
-) -> Vec<CombatId> {
+) -> Targets {
     if refused {
-        return Vec::new();
+        return Targets::new();
     }
     creatures
         .iter()
@@ -103,16 +130,15 @@ fn playable<V: Rules>(
     let card = &held.ident;
     let target = target_type::<V>(*card, creatures);
     let (cost, star_cost) = held.costs();
-    let reasons = reasons::<V>(*card, creatures, cost, star_cost, energy, stars);
-    let targets = targets::<V>(target, creatures, !reasons.is_empty());
+    let reason = reasons::<V>(*card, creatures, cost, star_cost, energy, stars);
+    let targets = targets::<V>(target, creatures, reason.is_some());
 
     Playable {
         card: *card,
         cost,
         star_cost,
         target,
-        reason: (!reasons.is_empty())
-            .then(|| <V::UnplayableReasons as FlagSet>::from_members(&reasons)),
+        reason,
         // `BlockedByHook` is the only reason that names one, and nothing in a
         // fight raises it yet.
         preventer: None,
@@ -146,7 +172,7 @@ pub(crate) fn belt<V: Rules>(
                     (None, Some(fight)) => aimable::<V>(potion, &fight.creatures),
                     // A potion nobody can drink names nobody, and one drunk
                     // outside a fight has no creature to name.
-                    _ => Vec::new(),
+                    _ => Targets::new(),
                 },
                 reason,
             }
@@ -187,7 +213,7 @@ fn undrinkable<V: Rules>(
 }
 
 /// The creatures a potion can be pointed at.
-fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Vec<CombatId> {
+fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
     let Some(target) = potion.target() else {
         // One of the potions that work their target out from the fight.
         unimplemented!("a potion that decides its own target");

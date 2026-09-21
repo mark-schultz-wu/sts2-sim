@@ -9,7 +9,7 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
-use sts2_core::{CardTable, CombatId, Cost, FlagSet, HandIndex, Reason, Rules};
+use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
 use super::board::Board;
 use super::live::{Asked, Asker, CardInstance, Live, Plays, Resuming};
@@ -61,7 +61,7 @@ pub(crate) fn resolve<V: Rules>(
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
     let takes = legal::target_type::<V>(card, &live.creatures);
-    let refusals = legal::reasons::<V>(
+    let refused = legal::reasons::<V>(
         card,
         &live.creatures,
         cost,
@@ -69,10 +69,10 @@ pub(crate) fn resolve<V: Rules>(
         live.energy,
         live.stars,
     );
-    if !refusals.is_empty() {
+    if let Some(why) = refused {
         return Err(Reason::Unplayable {
             card,
-            why: <V::UnplayableReasons as FlagSet>::from_members(&refusals),
+            why,
             // `BlockedByHook` is the only reason that names one, and nothing
             // in a fight raises it yet.
             preventer: None,

@@ -582,7 +582,7 @@ pub struct Held<V: ContentVersion> {
     /// Empty is not "it cannot be drunk". A potion that takes no target has
     /// none, and so does one drunk outside combat, where there are no combat
     /// ids to name. Both are drunk with no target at all.
-    pub targets: Vec<CombatId>,
+    pub targets: Targets,
 }
 
 /// Why a potion cannot be drunk right now.
@@ -639,10 +639,27 @@ pub struct Playable<V: ContentVersion> {
     /// Which model said no, for the rule that is one model saying no.
     pub preventer: Option<ModelId<V>>,
     /// The creatures this card can legally be pointed at.
-    pub targets: Vec<CombatId>,
+    pub targets: Targets,
     /// What it does, with everything applied.
+    ///
+    /// On the heap, although 99 of every 100 hold a single preview. A
+    /// [`Preview`] is 128 bytes, so inlining one grows a `Playable` from 72
+    /// to 184. Moving that through the hand costs more than the allocation it
+    /// saves, and measured 6% slower to build a report.
     pub effect: Vec<Preview<V>>,
 }
+
+/// The creatures one card or potion can be pointed at.
+///
+/// Inline to eight, which is free. A `SmallVec` unions its inline array with
+/// the pointer and length it otherwise holds. So up to eight one-byte ids
+/// take the same 24 bytes as a `Vec`, and sixteen take 32.
+///
+/// The widest fight in the recordings puts five creatures on the board.
+pub type Targets = SmallVec<[CombatId; TARGETS_INLINE]>;
+
+/// How many creatures a card can name without reaching the heap.
+const TARGETS_INLINE: usize = 8;
 
 /// What a card does right now, against one target.
 ///
