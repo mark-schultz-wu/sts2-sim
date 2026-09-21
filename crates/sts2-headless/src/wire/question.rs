@@ -37,8 +37,8 @@ pub(crate) enum WireQuestion {
     },
     Divine {
         left: u32,
-        width: usize,
-        height: usize,
+        width: u8,
+        height: u8,
         tool: WireReportedTool,
         cleared: Vec<WireCell>,
         revealed: Vec<WireFoundItem>,
@@ -59,8 +59,8 @@ pub(crate) struct WireCardOption {
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WireCell {
-    x: usize,
-    y: usize,
+    x: u8,
+    y: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,10 +68,10 @@ pub(crate) struct WireCell {
 pub(crate) struct WireFoundItem {
     item: String,
     good: bool,
-    x: usize,
-    y: usize,
-    width: usize,
-    height: usize,
+    x: u8,
+    y: u8,
+    width: u8,
+    height: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
