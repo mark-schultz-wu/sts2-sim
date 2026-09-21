@@ -5,7 +5,7 @@
 //!
 //! ```text
 //! cargo build --release -p sts2-golden --example clone_sites
-//! valgrind --tool=dhat --dhat-out-file=dhat.json \
+//! valgrind --tool=dhat --fullpath-after= --dhat-out-file=dhat.json \
 //!     ./target/release/examples/clone_sites
 //! ./tools/dhat-sites.py dhat.json
 //! ```
