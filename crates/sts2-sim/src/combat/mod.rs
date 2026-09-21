@@ -15,7 +15,7 @@ mod power;
 mod relic;
 mod start;
 mod turn;
-pub(crate) use legal::belt;
+pub(crate) use legal::{belt, drinks, moves as legal_moves};
 pub(crate) use live::Live;
 pub(crate) use play::{answer, apply_power, play, resolve};
 pub(crate) use potion::drink;

@@ -976,26 +976,13 @@ impl<V: Rules> Live<V> {
     /// The card-selection question on which this fight is parked.
     pub(crate) fn question(&self) -> Option<sts2_core::Question<V>> {
         let asked = self.asking.as_ref()?;
-        let (min, max, options) = match &asked.question {
-            Asked::Pile { pile, selection } => {
-                let (min, max) = match *selection {
-                    sts2_core::Selection::Exactly(count) => {
-                        let count =
-                            u32::try_from(count.get()).expect("a selection count fits the wire");
-                        (count, count)
-                    }
-                    sts2_core::Selection::UpTo(count) => (
-                        0,
-                        u32::try_from(count.get()).expect("a selection count fits the wire"),
-                    ),
-                };
-                let options = super::play::pile(self, *pile)
-                    .iter()
-                    .map(|card| card.ident)
-                    .collect();
-                (min, max, options)
-            }
-            Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.to_vec()),
+        let (min, max, _) = self.selecting()?;
+        let options: Vec<_> = match &asked.question {
+            Asked::Pile { pile, .. } => super::play::pile(self, *pile)
+                .iter()
+                .map(|card| card.ident)
+                .collect(),
+            Asked::Offered { offered, .. } => offered.to_vec(),
         };
         Some(sts2_core::Question::SelectCards {
             min,
@@ -1013,6 +1000,32 @@ impl<V: Rules> Live<V> {
                     text: None,
                 })
                 .collect(),
+        })
+    }
+
+    /// How many cards the parked selection takes at least and at most, and
+    /// how many it offers.
+    ///
+    /// The whole of what the legal answers read, so they are listed without
+    /// building the question.
+    pub(crate) fn selecting(&self) -> Option<(u32, u32, usize)> {
+        let asked = self.asking.as_ref()?;
+        Some(match &asked.question {
+            Asked::Pile { pile, selection } => {
+                let (min, max) = match *selection {
+                    sts2_core::Selection::Exactly(count) => {
+                        let count =
+                            u32::try_from(count.get()).expect("a selection count fits the wire");
+                        (count, count)
+                    }
+                    sts2_core::Selection::UpTo(count) => (
+                        0,
+                        u32::try_from(count.get()).expect("a selection count fits the wire"),
+                    ),
+                };
+                (min, max, super::play::pile(self, *pile).len())
+            }
+            Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.len()),
         })
     }
 

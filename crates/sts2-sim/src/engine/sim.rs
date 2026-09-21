@@ -38,6 +38,15 @@ impl<V: Rules> Play<V> for Sim<V> {
 }
 
 impl<V: Rules> Sim<V> {
+    /// Every decision the run accepts right now, in the order a driver picks
+    /// from.
+    ///
+    /// The moves the observation lists, read off the run instead. A search
+    /// asks this at every node, and builds nothing but the moves.
+    pub fn legal(&self) -> crate::Legal<V> {
+        self.state.legal()
+    }
+
     /// Plays one decision and reports what it decided, and nothing more.
     ///
     /// A search steps through here. Building the observation costs more than

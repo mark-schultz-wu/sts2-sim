@@ -12,7 +12,8 @@
 //! Three tables:
 //!
 //! ```text
-//!   per decision kind   clone, command, report, and the node a search pays
+//!   per decision kind   clone, command, report, the node a search pays, and
+//!                       the legal moves it picks from
 //!   the whole replay    calls and bytes per step
 //!   per step            which steps ask for the most
 //! ```
@@ -48,8 +49,8 @@ fn main() {
 fn kinds(name: &str, start: &Start<V>, steps: &[Step<V>], supported: usize) {
     println!(
         "{name}, allocations per decision\n  \
-         {:<18} {:>6} {:>8} {:>7} {:>6}",
-        "", "clone", "command", "report", "node"
+         {:<18} {:>6} {:>8} {:>7} {:>6} {:>6}",
+        "", "clone", "command", "report", "node", "legal"
     );
     for at in last_of_each_kind(&steps[..supported]) {
         let step = &steps[at];
@@ -68,14 +69,18 @@ fn kinds(name: &str, start: &Start<V>, steps: &[Step<V>], supported: usize) {
         let (_, reported) = allocations(|| {
             std::hint::black_box(after.observe().ok());
         });
+        let (_, offered) = allocations(|| {
+            std::hint::black_box(base.legal());
+        });
 
         println!(
-            "  {:<18} {:>6} {:>8} {:>7} {:>6}",
+            "  {:<18} {:>6} {:>8} {:>7} {:>6} {:>6}",
             format!("{} @{at}", kind(step)),
             cloned.calls,
             node.calls - cloned.calls,
             reported.calls,
             node.calls,
+            offered.calls,
         );
     }
 }

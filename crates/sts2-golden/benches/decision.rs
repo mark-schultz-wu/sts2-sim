@@ -2,14 +2,15 @@
 //!
 //! `replay` says what a step costs. This says where that cost goes.
 //!
-//! A search node is a clone and a step. So a decision splits four ways, and
-//! each is timed on its own rather than taken as what is left of a total:
+//! A search node is a clone and a step, picked from the legal moves. So a
+//! decision splits five ways, each timed on its own and not as a remainder:
 //!
 //! ```text
 //!   clone    the run a node branches from
 //!   command  the rules the decision runs, off a clone made beforehand
 //!   report   the observation a caller that wants one derives
 //!   node     the two a search pays, which is a clone and a command
+//!   legal    the moves a search picks from, asked where the decision is made
 //! ```
 //!
 //! `command` is the one criterion makes honest. Its clone is built in the
@@ -68,6 +69,8 @@ fn decisions(c: &mut Criterion) {
             });
 
             group.bench_function("report", |b| b.iter(|| after.observe().ok()));
+
+            group.bench_function("legal", |b| b.iter(|| base.legal()));
 
             group.bench_function("node", |b| {
                 b.iter(|| {
