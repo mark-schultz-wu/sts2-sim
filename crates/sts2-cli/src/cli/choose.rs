@@ -10,7 +10,7 @@
 
 use super::Taking;
 use anyhow::{Result, bail};
-use sts2_core::{Answer as GameAnswer, Decision, Question, Room, Snapshot};
+use sts2_core::{Answer as GameAnswer, Decision, Picks, Question, Room, Snapshot};
 
 /// What the game is currently waiting to be told.
 pub enum Awaiting {
@@ -119,11 +119,11 @@ pub fn command<V: sts2_content_wire::WireContentVersion>(
     };
 
     Ok(match awaiting {
-        Awaiting::Cards => Decision::Answer(GameAnswer::Cards(
-            flat("a card selection")?.into_iter().collect(),
-        )),
+        Awaiting::Cards => Decision::Answer(GameAnswer::Cards(Picks::try_from(
+            flat("a card selection")?.as_slice(),
+        )?)),
         Awaiting::Rewards => match indices {
-            [one] => Decision::Answer(GameAnswer::Take(one.take())),
+            [one] => Decision::Answer(GameAnswer::Take(one.take()?)),
             _ => bail!("a reward screen takes one reward per answer, and asks again"),
         },
         // A cell is a pair and a tool, which no list of indices spells. Said
@@ -167,5 +167,45 @@ pub fn describe(awaiting: &Awaiting) -> &'static str {
         Awaiting::Divine => "answer divine",
         Awaiting::RoomOption => "choose-option",
         Awaiting::ShopEntry => "buy",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sts2_core::TakeReward;
+
+    type V = sts2_content::v0_107_1::V0_107_1;
+
+    fn typed(indices: &[&str]) -> Vec<Taking> {
+        indices
+            .iter()
+            .map(|index| index.parse().expect("a well-formed index"))
+            .collect()
+    }
+
+    /// What someone types is refused with a reason, never a crash. The
+    /// selection and the reward are narrower than what the parser reads.
+    #[test]
+    fn a_choice_nothing_can_hold_is_an_error() {
+        let repeated = command::<V>(&Awaiting::Cards, &typed(&["1", "1"]));
+        assert!(repeated.is_err(), "the same card twice");
+        let distant = command::<V>(&Awaiting::Cards, &typed(&["300"]));
+        assert!(distant.is_err(), "an option past any a selection names");
+        let far = command::<V>(&Awaiting::Rewards, &typed(&["300"]));
+        assert!(far.is_err(), "a reward past any a screen offers");
+        let two = command::<V>(&Awaiting::Rewards, &typed(&["0", "1"]));
+        assert!(two.is_err(), "two rewards in one answer");
+    }
+
+    #[test]
+    fn a_choice_in_reach_is_the_answer_it_names() {
+        let picked = command::<V>(&Awaiting::Cards, &typed(&["2", "0"])).expect("in reach");
+        assert_eq!(picked, Decision::Answer(GameAnswer::Cards([2, 0].into())));
+        let taken = command::<V>(&Awaiting::Rewards, &typed(&["1.2"])).expect("in reach");
+        assert_eq!(
+            taken,
+            Decision::Answer(GameAnswer::Take(TakeReward::Card { index: 1, card: 2 }))
+        );
     }
 }

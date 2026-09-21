@@ -409,17 +409,10 @@ impl From<WireTool> for Tool {
 
 /// The options a `cards` answer lists, in its order.
 ///
-/// A repeat is an error rather than a panic. It is a malformed recording, the
-/// way `{"skip": false}` is, and never a selection the game can be given.
+/// A list no selection can hold is an error rather than a panic. It is a
+/// malformed recording, the way `{"skip": false}` is.
 fn picks<E: serde::de::Error>(options: Vec<usize>) -> Result<Picks, E> {
-    for (at, option) in options.iter().enumerate() {
-        if options[..at].contains(option) {
-            return Err(E::custom(format_args!(
-                "'cards' lists option {option} twice"
-            )));
-        }
-    }
-    Ok(options.into_iter().collect())
+    Picks::try_from(options.as_slice()).map_err(|why| E::custom(format_args!("'cards' {why}")))
 }
 
 /// A [`TakeReward`] on the wire.
@@ -741,8 +734,8 @@ mod tests {
         );
     }
 
-    /// A selection's order survives the wire, and a repeat is refused there
-    /// rather than turned into a smaller selection.
+    /// A selection's order survives the wire. One no selection can hold is
+    /// refused there, rather than panicking or turning into a smaller one.
     #[test]
     fn a_card_selection_keeps_its_order_and_refuses_a_repeat() {
         let command: Wire =
@@ -752,6 +745,12 @@ mod tests {
             Some(Decision::Answer(Answer::Cards([2, 0].into())).into())
         );
         assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","cards":[1,1]}"#).is_err());
+        assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","cards":[300]}"#).is_err());
+        let eleven = r#"{"cmd":"answer","cards":[0,1,2,3,4,5,6,7,8,9,10]}"#;
+        assert!(
+            serde_json::from_str::<Wire>(eleven).is_err(),
+            "more than a selection holds is refused, not a panic"
+        );
     }
 
     /// The protocol's `take` is a list, and an answer holds one reward. Two in

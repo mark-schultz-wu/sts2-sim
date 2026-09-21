@@ -13,7 +13,7 @@ use clap::{Args, Subcommand};
 use std::path::Path;
 use sts2_core::Seed;
 use sts2_core::{
-    Answer as GameAnswer, Coord, Decision, Gift, Setup, Start, Step, TakeReward, Tool,
+    Answer as GameAnswer, Coord, Decision, Gift, Picks, Setup, Start, Step, TakeReward, Tool,
 };
 
 /// An ascension level by the game's own name for it, such as `None`.
@@ -166,11 +166,19 @@ impl Taking {
         self.card
     }
 
-    pub(crate) fn take(&self) -> TakeReward {
-        match self.card {
-            Some(card) => TakeReward::card(self.reward, card),
-            None => TakeReward::non_card(self.reward),
-        }
+    /// The reward this names, or why no reward screen offers it.
+    pub(crate) fn take(&self) -> Result<TakeReward> {
+        let position =
+            |at: usize| u8::try_from(at).with_context(|| format!("no reward screen offers {at}"));
+        Ok(match self.card {
+            Some(card) => TakeReward::Card {
+                index: position(self.reward)?,
+                card: position(card)?,
+            },
+            None => TakeReward::NonCard {
+                index: position(self.reward)?,
+            },
+        })
     }
 }
 
@@ -331,9 +339,11 @@ impl Play {
             Play::ChooseOption { index } => Decision::ChooseOption { index: *index }.into(),
             Play::Buy { index } => Decision::Buy { index: *index }.into(),
             Play::Answer(answering) => Decision::Answer(match answering {
-                Answering::Cards { cards } => GameAnswer::Cards(cards.iter().copied().collect()),
+                Answering::Cards { cards } => GameAnswer::Cards(
+                    Picks::try_from(cards.as_slice()).context("as a card selection")?,
+                ),
                 Answering::Skip => GameAnswer::Skip,
-                Answering::Take { reward } => GameAnswer::Take(reward.take()),
+                Answering::Take { reward } => GameAnswer::Take(reward.take()?),
                 Answering::Divine { x, y, big } => GameAnswer::Divine {
                     x: *x,
                     y: *y,

@@ -49,19 +49,35 @@ impl Picks {
 
     /// Take one more option, after the ones already taken.
     ///
+    /// For a selection built from the question's own options, where one this
+    /// cannot hold is a selection the simulator has not modelled.
+    ///
     /// # Panics
     ///
-    /// An option already taken, or a selection larger than one can be.
+    /// Where [`Picks::try_push`] refuses.
     pub fn push(&mut self, option: usize) {
-        if self.iter().any(|taken| taken == option) {
-            unimplemented!("a selection taking option {option} twice");
+        if let Err(why) = self.try_push(option) {
+            unimplemented!("a selection that {why}");
         }
-        let len = usize::from(self.len);
-        let (Some(slot), Ok(option)) = (self.at.get_mut(len), u8::try_from(option)) else {
-            unimplemented!("a selection taking option {option} as pick {}", len + 1);
+    }
+
+    /// Take one more option, or say why it cannot be taken.
+    ///
+    /// For a selection read from outside: a recording, or what someone typed.
+    /// A refusal leaves the selection as it was.
+    pub fn try_push(&mut self, option: usize) -> Result<(), Unpickable> {
+        if self.iter().any(|taken| taken == option) {
+            return Err(Unpickable::Repeated(option));
+        }
+        let Ok(at) = u8::try_from(option) else {
+            return Err(Unpickable::Distant(option));
         };
-        *slot = option;
+        let Some(slot) = self.at.get_mut(usize::from(self.len)) else {
+            return Err(Unpickable::Full);
+        };
+        *slot = at;
         self.len += 1;
+        Ok(())
     }
 
     /// The options taken, in the order they were taken.
@@ -101,10 +117,36 @@ impl FromIterator<usize> for Picks {
     }
 }
 
+impl TryFrom<&[usize]> for Picks {
+    type Error = Unpickable;
+
+    fn try_from(options: &[usize]) -> Result<Self, Unpickable> {
+        let mut picks = Self::none();
+        for &option in options {
+            picks.try_push(option)?;
+        }
+        Ok(picks)
+    }
+}
+
 impl<const N: usize> From<[usize; N]> for Picks {
     fn from(options: [usize; N]) -> Self {
         options.into_iter().collect()
     }
+}
+
+/// Why an option cannot join a [`Picks`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum Unpickable {
+    /// The selection already takes it.
+    #[error("takes option {0} twice")]
+    Repeated(usize),
+    /// The selection already takes as many as one can.
+    #[error("takes more options than a selection holds")]
+    Full,
+    /// No selection names an option that far along.
+    #[error("names option {0}, past any a selection names")]
+    Distant(usize),
 }
 
 impl std::fmt::Debug for Picks {
@@ -207,6 +249,22 @@ mod tests {
         assert!(Picks::none().is_empty());
     }
 
+    /// What cannot be read comes back as a reason, and the selection is left
+    /// as it was.
+    #[test]
+    fn a_selection_read_from_outside_says_why_it_cannot_be_held() {
+        let mut picks = Picks::from([1]);
+        assert_eq!(picks.try_push(1), Err(Unpickable::Repeated(1)));
+        assert_eq!(
+            picks.try_push(usize::MAX),
+            Err(Unpickable::Distant(usize::MAX))
+        );
+        assert_eq!(picks, Picks::from([1]), "a refusal changes nothing");
+
+        let full: Vec<usize> = (0..=PICKS).collect();
+        assert_eq!(Picks::try_from(full.as_slice()), Err(Unpickable::Full));
+    }
+
     #[test]
     #[should_panic(expected = "twice")]
     fn a_repeated_pick_panics() {
@@ -214,13 +272,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "as pick")]
+    #[should_panic(expected = "more options than a selection holds")]
     fn a_selection_past_what_one_holds_panics() {
         let _: Picks = (0..=PICKS).collect();
     }
 
     #[test]
-    #[should_panic(expected = "as pick")]
+    #[should_panic(expected = "past any a selection names")]
     fn an_option_past_what_one_holds_panics() {
         let _ = Picks::from([usize::from(u8::MAX) + 1]);
     }
