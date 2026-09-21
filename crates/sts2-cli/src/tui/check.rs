@@ -182,7 +182,7 @@ impl<V: sts2_content_wire::WireContentVersion, G: Play<V>> Play<V> for Spy<V, G>
     }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-        self.sent.note(decision.clone());
+        self.sent.note(*decision);
         self.game.play(decision)
     }
 
@@ -542,13 +542,8 @@ where
         .iter()
         .find(|detail| !detail.taken && detail.populated)
         .map(|detail| match &detail.reward {
-            RewardKind::Card { .. } => TakeReward::Card {
-                index: detail.index,
-                card: 0,
-            },
-            _ => TakeReward::NonCard {
-                index: detail.index,
-            },
+            RewardKind::Card { .. } => TakeReward::card(detail.index, 0),
+            _ => TakeReward::non_card(detail.index),
         })
     else {
         return Outcome::Unreachable("nothing is still on offer".into());
@@ -556,9 +551,7 @@ where
     app.press(Action::Nth(0));
 
     match sent.since(before).as_slice() {
-        [Decision::Answer(Answer::Take(taken))] if taken.as_slice() == [first.clone()] => {
-            Outcome::Passed
-        }
+        [Decision::Answer(Answer::Take(taken))] if *taken == first => Outcome::Passed,
         other => failed(format!("expected to take {first:?}, got {other:?}")),
     }
 }

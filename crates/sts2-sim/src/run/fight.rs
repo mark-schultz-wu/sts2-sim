@@ -11,7 +11,7 @@ use crate::combat::Error;
 impl<V: Rules> State<V> {
     /// Answer the selection on which a card play stopped.
     pub(super) fn answer_fight(&mut self, answer: &Answer) -> Result<Decided, Error> {
-        let Answer::Cards(chosen) = answer else {
+        let Answer::Cards(chosen) = *answer else {
             unimplemented!("an answer that is not a card selection");
         };
         let Some(fighting) = self.fighting() else {

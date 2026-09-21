@@ -169,12 +169,12 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
             );
         }
 
-        let chosen = legal[dice.below(legal.len())].clone();
+        let chosen = legal[dice.below(legal.len())];
         // Before the move is sent, because it is read against the state the
         // move was chosen in: afterwards the hand it indexes into is gone.
         cover.did::<V>(&chosen, &seen);
 
-        seen = match send(&mut game, &mut tape, &chosen.clone().into()) {
+        seen = match send(&mut game, &mut tape, &chosen.into()) {
             Ok(seen) => seen,
             Err(e) => {
                 let e = e.context(format!("move {taken}: {chosen:?}"));

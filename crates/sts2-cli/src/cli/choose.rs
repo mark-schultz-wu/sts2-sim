@@ -119,10 +119,13 @@ pub fn command<V: sts2_content_wire::WireContentVersion>(
     };
 
     Ok(match awaiting {
-        Awaiting::Cards => Decision::Answer(GameAnswer::Cards(flat("a card selection")?)),
-        Awaiting::Rewards => {
-            Decision::Answer(GameAnswer::Take(indices.iter().map(Taking::take).collect()))
-        }
+        Awaiting::Cards => Decision::Answer(GameAnswer::Cards(
+            flat("a card selection")?.into_iter().collect(),
+        )),
+        Awaiting::Rewards => match indices {
+            [one] => Decision::Answer(GameAnswer::Take(one.take())),
+            _ => bail!("a reward screen takes one reward per answer, and asks again"),
+        },
         // A cell is a pair and a tool, which no list of indices spells. Said
         // rather than guessed: taking the first two numbers as `x` and `y` would
         // make `choose 3 4` a divination with a tool nobody named.

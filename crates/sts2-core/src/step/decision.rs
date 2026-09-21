@@ -22,7 +22,7 @@ use crate::Coord;
 /// advancing, and a deterministic game between commands cannot answer it twice
 /// differently. `quit` ends the session, not the run, so it is `Drop` on an
 /// implementation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decision<V: ContentVersion> {
     EnterRoom {
         room: V::RoomType,

@@ -102,7 +102,7 @@ impl Play<V> for Stub {
     }
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-        self.asked.push(Step::Decision(decision.clone()));
+        self.asked.push(Step::Decision(*decision));
         self.answer()
     }
 

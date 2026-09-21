@@ -168,11 +168,8 @@ impl Taking {
 
     pub(crate) fn take(&self) -> TakeReward {
         match self.card {
-            Some(card) => TakeReward::Card {
-                index: self.reward,
-                card,
-            },
-            None => TakeReward::NonCard { index: self.reward },
+            Some(card) => TakeReward::card(self.reward, card),
+            None => TakeReward::non_card(self.reward),
         }
     }
 }
@@ -209,16 +206,13 @@ pub enum Answering {
     },
     /// Declines a reward screen. Refused if it is not skippable.
     Skip,
-    /// Takes rewards from a reward screen.
+    /// Takes one reward from a reward screen, which then asks again.
     ///
     /// A reward is `N`, and a card inside a card reward is `N.M`. `take 0.1`
     /// is the second card of the first reward. The game refuses a card reward
     /// taken without a card rather than choosing one, so the pair is not
     /// optional there.
-    Take {
-        #[arg(value_delimiter = ' ', num_args = 1..)]
-        rewards: Vec<Taking>,
-    },
+    Take { reward: Taking },
     /// Uncovers a cell of the Crystal Sphere's grid.
     ///
     /// Costs one divination whichever tool it uses, so `--big` is a gamble and
@@ -337,11 +331,9 @@ impl Play {
             Play::ChooseOption { index } => Decision::ChooseOption { index: *index }.into(),
             Play::Buy { index } => Decision::Buy { index: *index }.into(),
             Play::Answer(answering) => Decision::Answer(match answering {
-                Answering::Cards { cards } => GameAnswer::Cards(cards.clone()),
+                Answering::Cards { cards } => GameAnswer::Cards(cards.iter().copied().collect()),
                 Answering::Skip => GameAnswer::Skip,
-                Answering::Take { rewards } => {
-                    GameAnswer::Take(rewards.iter().map(Taking::take).collect())
-                }
+                Answering::Take { reward } => GameAnswer::Take(reward.take()),
                 Answering::Divine { x, y, big } => GameAnswer::Divine {
                     x: *x,
                     y: *y,

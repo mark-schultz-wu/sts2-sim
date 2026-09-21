@@ -305,12 +305,9 @@ where
                                 .map(widget::words)
                                 .unwrap_or_default();
                             face.faded = detail.taken;
-                            face.key = takeable.iter().position(|t| {
-                                *t == TakeReward::Card {
-                                    index,
-                                    card: card_at,
-                                }
-                            });
+                            face.key = takeable
+                                .iter()
+                                .position(|t| *t == TakeReward::card(index, card_at));
                             faces.push(face);
                         }
                     }
@@ -330,7 +327,7 @@ where
                         face.faded = detail.taken;
                         face.key = takeable
                             .iter()
-                            .position(|t| *t == TakeReward::NonCard { index });
+                            .position(|t| *t == TakeReward::non_card(index));
                         faces.push(face);
                     }
                     other => {
@@ -338,7 +335,7 @@ where
                         face.faded = detail.taken;
                         face.key = takeable
                             .iter()
-                            .position(|t| *t == TakeReward::NonCard { index });
+                            .position(|t| *t == TakeReward::non_card(index));
                         faces.push(face);
                     }
                 }

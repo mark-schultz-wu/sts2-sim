@@ -115,7 +115,7 @@ impl<V: sts2_content_wire::WireContentVersion> Play<V> for Scripted<V> {
     type Error = std::convert::Infallible;
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
-        self.sent.note(decision.clone());
+        self.sent.note(*decision);
         Ok(self.next("play a decision"))
     }
 

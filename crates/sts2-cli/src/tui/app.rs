@@ -13,8 +13,8 @@ use anyhow::{Context, Result};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
-    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Observation, Play, Question,
-    Room, Snapshot, TakeReward,
+    Answer, BeltIndex, CombatId, Cost, Decided, Decision, HandIndex, Observation, Picks, Play,
+    Question, Room, Snapshot, TakeReward,
 };
 
 use super::keys::{self, Action};
@@ -521,11 +521,11 @@ where
             // cursor, because a card still has to be aimed.
             Action::Nth(n) if n < moves.len() => {
                 self.ui.at = n;
-                return Intent::Send(moves[n].clone());
+                return Intent::Send(moves[n]);
             }
             Action::Confirm => {
                 return match moves.get(self.ui.at) {
-                    Some(one) => Intent::Send(one.clone()),
+                    Some(one) => Intent::Send(*one),
                     None => Intent::Nothing,
                 };
             }
@@ -586,13 +586,15 @@ where
                     );
                 } else {
                     self.ui.aim = Aim::Idle;
-                    return Intent::Send(Decision::Answer(Answer::Cards(marked)));
+                    return Intent::Send(Decision::Answer(Answer::Cards(
+                        marked.into_iter().collect(),
+                    )));
                 }
             }
             // Declining, where declining is allowed.
             Action::Skip if min == 0 => {
                 self.ui.aim = Aim::Idle;
-                return Intent::Send(Decision::Answer(Answer::Cards(Vec::new())));
+                return Intent::Send(Decision::Answer(Answer::Cards(Picks::none())));
             }
             _ => {}
         }
@@ -615,11 +617,11 @@ where
             Action::Down | Action::Right => self.ui.step(1, takeable.len()),
             Action::Nth(n) if n < takeable.len() => {
                 self.ui.at = n;
-                return Intent::Send(Decision::Answer(Answer::Take(vec![takeable[n].clone()])));
+                return Intent::Send(Decision::Answer(Answer::Take(takeable[n])));
             }
             Action::Confirm => {
                 if let Some(take) = takeable.get(self.ui.at) {
-                    return Intent::Send(Decision::Answer(Answer::Take(vec![take.clone()])));
+                    return Intent::Send(Decision::Answer(Answer::Take(*take)));
                 }
             }
             Action::Skip => {
