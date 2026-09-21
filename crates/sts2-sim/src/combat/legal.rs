@@ -8,10 +8,11 @@
 //! `IsPlayable` override. Nothing raises either one yet: this fight has no
 //! powers, no relic that listens, and no card that overrides it.
 
+use crate::legal::{Legal, aimed, belt_index, hand_index, selections};
 use smallvec::{SmallVec, smallvec};
 use sts2_core::{
-    CardIdent, CardTable, CombatId, Cost, EffectResolution, FlagSet, Held, Playable, PotionTable,
-    PotionUsage, Preview, Rules, SideKinds, TargetKinds, Targets, Undrinkable,
+    CardIdent, CardTable, CombatId, Cost, Decision, EffectResolution, FlagSet, Held, Playable,
+    PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Targets, Undrinkable,
     UnplayableReasonKinds,
 };
 
@@ -144,6 +145,67 @@ fn playable<V: Rules>(
         preventer: None,
         effect: effect::<V>(held, creatures, &targets),
         targets,
+    }
+}
+
+/// Every decision a live fight accepts, in the order its report implies them.
+///
+/// What [`sts2_core::legal::implied`] reads off the report, read from the
+/// fight instead. The rules are the ones the report runs: the belt's reasons,
+/// and each card's reasons and targets. Nothing computes a preview, and
+/// nothing is collected but the moves.
+pub(crate) fn moves<V: Rules>(live: &Live<V>, potions: &[V::Potion], alive: bool) -> Legal<V> {
+    let mut moves = Legal::new();
+    if let Some((min, max, offered)) = live.selecting() {
+        selections(min as usize, max as usize, offered, &mut moves);
+        return moves;
+    }
+
+    drinks::<V>(potions, Some(live), alive, &mut moves);
+
+    for (at, card) in live.hand.iter().enumerate() {
+        let (cost, star_cost) = card.costs();
+        let refused = reasons::<V>(
+            card.ident,
+            &live.creatures,
+            cost,
+            star_cost,
+            live.energy,
+            live.stars,
+        );
+        if refused.is_none() {
+            let target = target_type::<V>(card.ident, &live.creatures);
+            let targets = targets::<V>(target, &live.creatures, false);
+            aimed(hand_index(at), &targets, &mut moves, |index, target| {
+                Decision::PlayCard { index, target }
+            });
+        }
+    }
+    moves.push(Decision::EndTurn);
+    moves
+}
+
+/// Every drink the belt allows, aimed at each creature it can be.
+///
+/// What [`belt`] reports, as moves: a potion with no reason against it, aimed
+/// only inside a live fight, where there are creatures to name.
+pub(crate) fn drinks<V: Rules>(
+    potions: &[V::Potion],
+    fight: Option<&Live<V>>,
+    alive: bool,
+    moves: &mut Legal<V>,
+) {
+    for (at, &potion) in potions.iter().enumerate() {
+        if undrinkable::<V>(potion, fight, alive).is_some() {
+            continue;
+        }
+        let targets = match fight {
+            Some(fight) => aimable::<V>(potion, &fight.creatures),
+            None => Targets::new(),
+        };
+        aimed(belt_index(at), &targets, moves, |index, target| {
+            Decision::UsePotion { index, target }
+        });
     }
 }
 

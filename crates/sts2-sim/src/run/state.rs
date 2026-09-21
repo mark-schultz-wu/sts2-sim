@@ -6,14 +6,15 @@ use smallvec::SmallVec;
 use sts2_core::ActMap as _;
 use sts2_core::rng::stream_seed;
 use sts2_core::{
-    ActTable, Answer, CardIdent, CardOption, Carried, Combat, Coord, Decided, EventOption,
-    EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Positions, Question,
-    Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules, RunStreamKinds,
-    Seed, Snapshot, Table, TakeReward,
+    ActTable, Answer, CardIdent, CardOption, Carried, Combat, Coord, Decided, Decision,
+    EventOption, EventOptionKey, EventOptionKinds, Map, Observation, PlayerStreamKinds, Positions,
+    Question, Reachable, RelicModel as _, RewardCard, RewardDetail, RewardKind, Room, Rules,
+    RunStreamKinds, Seed, Snapshot, Table, TakeReward,
 };
 
 use crate::combat::Error;
 use crate::event::Blessing;
+use crate::legal::{Legal, selections};
 use crate::map::ActMap;
 use crate::reward::{Odds, Offer};
 use crate::run::{Opening, Rarity};
@@ -1493,6 +1494,159 @@ impl<V: Rules> State<V> {
         crate::combat::belt::<V>(&self.player.potions, self.fight(), self.standing().alive)
     }
 
+    /// Every decision the run accepts right now, in the order a driver picks
+    /// from.
+    ///
+    /// Read off the run, never off its report. Each phase reads what its
+    /// report reads and runs the rules the report runs, in the report's order:
+    /// a pending question alone, or the belt, then the room, then the map.
+    pub(crate) fn legal(&self) -> Legal<V> {
+        let alive = self.standing().alive;
+        if let Phase::Combat(live) = &self.phase {
+            return crate::combat::legal_moves::<V>(live, &self.player.potions, alive);
+        }
+
+        let mut moves = Legal::new();
+        if self.answers(&mut moves) {
+            return moves;
+        }
+        // No fight is live here, so a drink names no creature.
+        crate::combat::drinks::<V>(&self.player.potions, None, alive, &mut moves);
+        let before = moves.len();
+        self.room_moves(&mut moves);
+        if moves.len() > before {
+            return moves;
+        }
+
+        let at_boss = self.visited.last().is_some_and(|&at| {
+            self.map
+                .at(at)
+                .expect("the run stands on a point of its own map")
+                .kind
+                == <V::MapPointType as sts2_core::MapPointKinds>::BOSS
+        });
+        // `MapLegality.CanProceed`. No fight is running here, so a boss room
+        // is one the run has won.
+        if at_boss {
+            moves.push(Decision::Proceed);
+        } else {
+            moves.extend(
+                self.travelable()
+                    .into_iter()
+                    .map(|point| Decision::Travel { to: point.at }),
+            );
+        }
+        moves
+    }
+
+    /// The answers to the question the run is parked on, if it is parked.
+    ///
+    /// Each is the question [`State::report`] asks in that phase, read for its
+    /// sizes and its rewards alone.
+    fn answers(&self, moves: &mut Legal<V>) -> bool {
+        match &self.phase {
+            Phase::Neow {
+                selection: Some(cards),
+                ..
+            } => selections(0, 1, cards.len(), moves),
+            Phase::RestSite {
+                upgrading: true, ..
+            } => selections(1, 1, self.upgradable().count(), moves),
+            Phase::Shop {
+                unfinished: Some(unfinished),
+                ..
+            } => {
+                let offered = match unfinished {
+                    Unfinished::Removal => self.player.deck.len(),
+                    Unfinished::Pickup { excluding, .. } => self.clonable(*excluding).len(),
+                };
+                selections(1, 1, offered, moves);
+            }
+            Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
+                for (index, offer) in offered.iter().enumerate() {
+                    if offer.taken() {
+                        continue;
+                    }
+                    match offer {
+                        Offer::Card { cards, .. } => moves.extend((0..cards.len()).map(|card| {
+                            Decision::Answer(Answer::Take(TakeReward::card(index, card)))
+                        })),
+                        _ => {
+                            moves.push(Decision::Answer(Answer::Take(TakeReward::non_card(index))))
+                        }
+                    }
+                }
+                // Nothing a fight offers disallows skipping. See `asked`.
+                moves.push(Decision::Answer(Answer::Skip));
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// The options a room lets the run take, and the stock it lets it buy.
+    ///
+    /// The rules the report's flags carry. A rest option can be disabled, a
+    /// chest answered, and an event option chosen or locked. Stock can be gone,
+    /// cost more than the purse, or be a potion for a full belt.
+    fn room_moves(&self, moves: &mut Legal<V>) {
+        let finished = self.phase.finished();
+        match &self.phase {
+            Phase::Neow {
+                options, chosen, ..
+            } if !finished => moves.extend(
+                (0..options.len())
+                    .map(option_index)
+                    .filter(|&index| *chosen != Some(index))
+                    .map(|index| Decision::ChooseOption { index }),
+            ),
+            // An event's options are the content's to spell, so its room is
+            // built. That is the room alone, and only in an event.
+            Phase::Event { state, .. } => {
+                if let Room::Event { options, .. } = V::observe_event(state, self) {
+                    moves.extend(
+                        options
+                            .iter()
+                            .filter(|option| !option.locked && !option.chosen)
+                            .map(|option| Decision::ChooseOption {
+                                index: option.index,
+                            }),
+                    );
+                }
+            }
+            Phase::Treasure {
+                finished: false, ..
+            } => moves.extend([0, 1].map(|index| Decision::ChooseOption { index })),
+            Phase::RestSite { options, .. } => moves.extend(
+                options
+                    .iter()
+                    .enumerate()
+                    .filter(|&(_, &id)| self.rest_option_enabled(id))
+                    .map(|(index, _)| Decision::ChooseOption {
+                        index: option_index(index),
+                    }),
+            ),
+            Phase::Shop { entries, .. } => {
+                let gold = self.player.gold;
+                let room_for_a_potion = num_traits::cast::<_, usize>(self.player.potion_slots)
+                    .expect("a potion slot count fits this machine")
+                    > self.player.potions.len();
+                moves.extend(
+                    entries
+                        .iter()
+                        .filter(|entry| {
+                            entry.stocked
+                                && entry.cost <= gold
+                                && (room_for_a_potion
+                                    || !matches!(entry.stock, sts2_core::Stock::Potion(_)))
+                        })
+                        .map(|entry| Decision::Buy { index: entry.index }),
+                );
+            }
+            _ => {}
+        }
+    }
+
     /// Where the run can move to from where it stands.
     ///
     /// `MapLegality.TravelableFrom`, which reads the last point visited rather
@@ -1868,6 +2022,11 @@ struct Standing<V: Rules> {
 ///
 /// Every reward stays in the list once it is taken, because the indices an
 /// answer names never renumber.
+/// A room option's position, as `ChooseOption` names it.
+fn option_index(at: usize) -> u8 {
+    u8::try_from(at).expect("a room offers few enough options to number")
+}
+
 fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
     Question::Rewards {
         // `RewardsSet` disallows skipping only where something says so, and

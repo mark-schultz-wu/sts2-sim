@@ -6,6 +6,7 @@
 pub mod combat;
 mod engine;
 pub mod event;
+mod legal;
 pub mod map;
 mod reward;
 pub mod rng;
@@ -14,3 +15,4 @@ mod stream;
 
 pub use combat::Error;
 pub use engine::Sim;
+pub use legal::Legal;
