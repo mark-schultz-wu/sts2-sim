@@ -178,10 +178,10 @@ struct Player<V: Rules> {
     deck: Arc<Vec<CardIdent<V>>>,
     /// What the run carries between fights.
     ///
-    /// The game keeps one number. Here a fight holds a copy, because a fight
-    /// is resolved whole and thrown away if it cannot be. The creature is
-    /// built from this and written back to it. A report reads the fight's
-    /// while there is one.
+    /// The game keeps one number. Here the player's creature holds its own
+    /// while a fight lasts. It is built from this and written back to it
+    /// when the fight is won, and a report reads the fight's while there is
+    /// one.
     hp: V::Health,
     max_hp: V::Health,
     gold: V::Number,
@@ -535,11 +535,6 @@ impl<V: Rules> State<V> {
             .filter(|(_, card)| card.upgrade < card.card.max_upgrade())
     }
 
-    /// The belt as the relics in it stand, which a fight hands back written.
-    pub(super) fn relics(&self) -> &[HeldRelic<V>] {
-        &self.player.relics
-    }
-
     /// Take the potion at this index out of the belt, which is
     /// `RemoveBeforeUse`.
     pub(super) fn drank(&mut self, at: usize) {
@@ -564,22 +559,42 @@ impl<V: Rules> State<V> {
         true
     }
 
-    /// Put the belt a fight handed back in place of the one it was given.
-    pub(super) fn hold(&mut self, relics: Vec<HeldRelic<V>>) {
-        self.player.relics = relics.into_iter().collect();
-    }
-
-    /// Put the fight a decision left behind in place of the one it acted on.
+    /// The fight the run is standing in, with the streams and the belt its
+    /// rules draw from and write on, or nothing outside one.
     ///
-    /// Whole, rather than edited where it stands. A decision the simulator
-    /// cannot carry out never reaches this, so the run keeps the fight it had.
-    pub(super) fn fought(&mut self, live: crate::combat::Live<V>) {
-        self.phase = Phase::Combat(live);
+    /// Borrowed apart, so that a decision can work on all three at once.
+    pub(super) fn fighting(&mut self) -> Option<crate::combat::Fighting<'_, V>> {
+        let Phase::Combat(live) = &mut self.phase else {
+            return None;
+        };
+        Some(crate::combat::Fighting {
+            live,
+            streams: &mut self.streams,
+            relics: &mut self.player.relics,
+        })
     }
 
-    /// Remove the deck copies a combat command took permanently.
-    pub(super) fn lose_cards(&mut self, cards: &[CardIdent<V>]) {
-        for card in cards {
+    /// Take the fight out of the run, for a decision that ended it.
+    ///
+    /// What replaces it is the caller's to say, straight after.
+    pub(super) fn left_fight(&mut self) -> crate::combat::Live<V> {
+        match std::mem::replace(&mut self.phase, Phase::Map) {
+            Phase::Combat(live) => live,
+            _ => unreachable!("a fight that ended is the one the run stood in"),
+        }
+    }
+
+    /// Remove from the deck the copies the fight took for good, from `since`
+    /// on in the fight's own list of them.
+    ///
+    /// The fight keeps every copy it took, because a won fight offers each one
+    /// back. So a decision passes the length the list had before it began, and
+    /// only what it added leaves the deck.
+    pub(super) fn lose_cards(&mut self, since: usize) {
+        let Phase::Combat(live) = &self.phase else {
+            return;
+        };
+        for card in &live.removed_from_deck()[since..] {
             let Some(at) = self.player.deck.iter().position(|held| held == card) else {
                 continue;
             };
@@ -1120,15 +1135,10 @@ impl<V: Rules> State<V> {
         power: V::Power,
         amount: sts2_core::PowerAmount<V::Number>,
     ) -> Result<Decided, Error> {
-        let Some(ongoing) = self.fight() else {
+        let Some(fighting) = self.fighting() else {
             unimplemented!("a power applied outside a fight");
         };
-        let applied =
-            crate::combat::apply_power(ongoing, at, power, amount, self.streams(), self.relics())?;
-
-        self.drew(applied.streams);
-        self.hold(applied.relics);
-        self.fought(applied.live);
+        crate::combat::apply_power(fighting, at, power, amount);
         Ok(Decided::Resolved)
     }
 
@@ -2176,6 +2186,41 @@ mod tests {
             "five printed, three for the quiet turn"
         );
         assert_eq!(shown(&run), 0, "the new turn has played nothing");
+    }
+
+    /// A card a monster takes for good leaves the deck once, however many
+    /// decisions the fight goes on for.
+    ///
+    /// The fight keeps every copy it took, to offer back if it is won. So each
+    /// decision takes out only what it added. Otherwise a deck of identical
+    /// cards loses one more copy on every decision after the theft.
+    #[test]
+    fn a_stolen_card_leaves_the_deck_once() {
+        use sts2_content::v0_107_1::cards::{Cards, RegentCard};
+        use sts2_content::v0_107_1::encounters::Encounter;
+        use sts2_core::fixture::{at, hand};
+
+        let mut run = opened();
+        run.player.deck = Arc::new(
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20).collect(),
+        );
+        // The hopper's graph opens on `ThieveryMove`.
+        run.fight_here(Encounter::ThievingHopperWeak)
+            .expect("the simulator can build this fight");
+
+        run.end_turn()
+            .expect("the simulator can end this turn")
+            .expect("and the turn is not refused");
+        assert_eq!(run.player.deck.len(), 19, "the hopper took one Strike");
+
+        run.play_card(hand(0), Some(at(1)))
+            .expect("a Strike is ported")
+            .expect("and is legal here");
+        assert_eq!(
+            run.player.deck.len(),
+            19,
+            "a decision after the theft takes nothing more"
+        );
     }
 
     /// A fight takes the player's hit points with it, and hands them back.

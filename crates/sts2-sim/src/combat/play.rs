@@ -13,8 +13,7 @@ use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
 use super::board::Board;
 use super::live::{Asked, Asker, CardInstance, Live, Plays, Resuming};
-use super::{Error, hook, legal, power, relic};
-use crate::stream::Streams;
+use super::{Error, Fighting, hook, legal, power, relic};
 
 /// A play the fight allows, resolved but not yet made.
 ///
@@ -113,41 +112,29 @@ pub(crate) fn resolve<V: Rules>(
 /// Scenario construction. The command a card applies a power with, reached
 /// without a card, so the state it leaves is the state a card leaves.
 pub(crate) fn apply_power<V: Rules>(
-    live: &Live<V>,
+    fighting: Fighting<'_, V>,
     at: CombatId,
     power: V::Power,
     amount: sts2_core::PowerAmount<V::Number>,
-    streams: &Streams<V>,
-    relics: &[crate::run::HeldRelic<V>],
-) -> Result<super::Fought<V>, Error> {
-    let mut next = live.clone();
-    let mut relics = relics.to_vec();
+) -> Option<super::Ended> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
     // Nothing here draws. A board is built with the set, and building one
     // leaves every counter where it was.
-    let mut streams = streams.clone();
-
-    let mut board = Board::for_card(
-        &mut next,
-        streams.combat(),
-        &mut relics,
-        live.ascension,
-        None,
-        None,
-    );
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
     sts2_core::Fight::apply_power(&mut board, at, power, amount);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
 
-    next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+    live.skip_tick = merged::<V>(&live.skip_tick, skipped);
     if ended == Some(super::Ended::Won) {
-        relic::combat_ended::<V>(&mut relics);
+        relic::combat_ended::<V>(relics);
     }
-    Ok(super::Fought {
-        live: next,
-        streams,
-        relics,
-        ended,
-    })
+    ended
 }
 
 /// The skipped ticks a fight already held, and the ones an effect just added.
@@ -164,45 +151,47 @@ pub(super) fn merged<V: Rules>(
     out
 }
 
-/// Make a resolved play, and give back the fight it leaves behind.
+/// Make a resolved play, on the fight where it stands.
 ///
-/// Nothing is committed until this returns. It works on a copy, so a card
-/// asking for a rule the simulator lacks costs the caller nothing.
+/// Whatever the play ended, if it ended the fight.
 pub(crate) fn play<V: Rules>(
-    live: &Live<V>,
+    fighting: Fighting<'_, V>,
     play: Play<V>,
-    streams: &Streams<V>,
-    relics: &[crate::run::HeldRelic<V>],
-) -> Result<super::Fought<V>, Error> {
-    let mut next = live.clone();
-    let mut relics = relics.to_vec();
-    let mut streams = streams.clone();
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
 
     // `SpendResources`, before the card leaves the hand.
-    next.energy = next.energy - play.energy;
-    next.stars = next.stars - play.stars;
+    live.energy = live.energy - play.energy;
+    live.stars = live.stars - play.stars;
 
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
-    let card = next.hand.remove(play.index);
+    let card = live.hand.remove(play.index);
+    let ascension = live.ascension;
     let mut board = Board::for_card(
-        &mut next,
+        live,
         streams.combat(),
-        &mut relics,
-        live.ascension,
+        relics,
+        ascension,
         play.target,
         Some(&card),
     );
     let played = V::on_play(card.ident.card, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
-    next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+    live.skip_tick = merged::<V>(&live.skip_tick, skipped);
 
     carry_on::<V>(
-        next,
-        streams,
-        relics,
-        live.ascension,
+        Fighting {
+            live,
+            streams,
+            relics,
+        },
+        ascension,
         Resuming {
             // `GeneratePlayCount`, worked out once and before the first play.
             plays: Plays {
@@ -219,13 +208,15 @@ pub(crate) fn play<V: Rules>(
 
 /// Resume the card play the fight parked on a selection.
 pub(crate) fn answer<V: Rules>(
-    live: &Live<V>,
+    fighting: Fighting<'_, V>,
     chosen: &[usize],
-    streams: &Streams<V>,
-    relics: &[crate::run::HeldRelic<V>],
-) -> Result<super::Fought<V>, Error> {
-    let mut next = live.clone();
-    let asking = next
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let asking = live
         .asking
         .take()
         .unwrap_or_else(|| unimplemented!("an answer to a fight that asked nothing"));
@@ -234,7 +225,7 @@ pub(crate) fn answer<V: Rules>(
             pile: from,
             selection,
         } => {
-            let held = pile(&next, *from);
+            let held = pile(live, *from);
             let cards: Option<Vec<_>> = chosen
                 .iter()
                 .map(|&index| {
@@ -276,30 +267,31 @@ pub(crate) fn answer<V: Rules>(
         }
     };
 
-    let mut streams = streams.clone();
-    let mut relics = relics.to_vec();
     let mut effect = asking.effect;
     let playing = match &effect.asker {
         Asker::Card(card) => Some(card.clone()),
         Asker::Potion(_) => None,
     };
+    let ascension = live.ascension;
     let mut board = Board::for_card(
-        &mut next,
+        live,
         streams.combat(),
-        &mut relics,
-        live.ascension,
+        relics,
+        ascension,
         effect.target,
         playing.as_ref(),
     );
     let played = V::resume_play(&mut board, asking.at, taken);
     effect.ended = effect.ended.or(board.ended);
     let skipped = std::mem::take(&mut board.skipped);
-    next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+    live.skip_tick = merged::<V>(&live.skip_tick, skipped);
     carry_on(
-        next,
-        streams.clone(),
-        relics,
-        live.ascension,
+        Fighting {
+            live,
+            streams,
+            relics,
+        },
+        ascension,
         effect,
         played,
     )
@@ -311,13 +303,16 @@ pub(crate) fn answer<V: Rules>(
 /// comes back here with the answer. The first call and each resumption use
 /// this loop.
 pub(super) fn carry_on<V: Rules>(
-    mut next: Live<V>,
-    mut streams: Streams<V>,
-    mut relics: Vec<crate::run::HeldRelic<V>>,
+    fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
     mut effect: Resuming<V>,
     mut played: sts2_core::Played<V>,
-) -> Result<super::Fought<V>, Error> {
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
     loop {
         let (at, question, answer) = match played {
             // One turn of `GeneratePlayCount`'s loop is over. A card carrying
@@ -332,9 +327,9 @@ pub(super) fn carry_on<V: Rules>(
                 }
                 let card = card.clone();
                 let mut board = Board::for_card(
-                    &mut next,
+                    next,
                     streams.combat(),
-                    &mut relics,
+                    relics,
                     ascension,
                     effect.target,
                     Some(&card),
@@ -352,7 +347,7 @@ pub(super) fn carry_on<V: Rules>(
             } => (
                 at,
                 Asked::Pile { pile, selection },
-                taken::<V>(&next, pile, selection).map(sts2_core::Taken::Selected),
+                taken::<V>(next, pile, selection).map(sts2_core::Taken::Selected),
             ),
             sts2_core::Played::Choosing {
                 offered,
@@ -367,12 +362,7 @@ pub(super) fn carry_on<V: Rules>(
                 at,
                 question,
             });
-            return Ok(super::Fought {
-                live: next,
-                streams,
-                relics,
-                ended,
-            });
+            return Ok(ended);
         };
 
         let playing = match &effect.asker {
@@ -380,9 +370,9 @@ pub(super) fn carry_on<V: Rules>(
             Asker::Potion(_) => None,
         };
         let mut board = Board::for_card(
-            &mut next,
+            next,
             streams.combat(),
-            &mut relics,
+            relics,
             ascension,
             effect.target,
             playing.as_ref(),
@@ -396,14 +386,9 @@ pub(super) fn carry_on<V: Rules>(
     let ended = effect.ended;
     let Asker::Card(mut card) = effect.asker else {
         if ended == Some(super::Ended::Won) {
-            relic::combat_ended::<V>(&mut relics);
+            relic::combat_ended::<V>(relics);
         }
-        return Ok(super::Fought {
-            live: next,
-            streams,
-            relics,
-            ended,
-        });
+        return Ok(ended);
     };
 
     card.was_played();
@@ -425,34 +410,22 @@ pub(super) fn carry_on<V: Rules>(
     // `AfterCardPlayed`, once the card has left the play pile. A relic that
     // answers it acts through the board a card acts through, and draws from
     // the same stream, so this is before the streams are written back.
-    let mut asked = relic::card_played::<V>(&mut relics, card_played);
+    let mut asked = relic::card_played::<V>(relics, card_played);
     asked.extend(power::notify::<V>(
-        &mut next,
+        next,
         sts2_core::EventHook::CardPlayed { card: card_played },
     ));
     if !asked.is_empty() {
-        let mut board = Board::for_card(
-            &mut next,
-            streams.combat(),
-            &mut relics,
-            ascension,
-            None,
-            None,
-        );
+        let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
         hook::apply::<V, _>(&mut board, asked);
         let skipped = std::mem::take(&mut board.skipped);
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
 
     if ended == Some(super::Ended::Won) {
-        relic::combat_ended::<V>(&mut relics);
+        relic::combat_ended::<V>(relics);
     }
-    Ok(super::Fought {
-        live: next,
-        streams,
-        relics,
-        ended,
-    })
+    Ok(ended)
 }
 
 /// What a selection takes without asking, or nothing for one that is a

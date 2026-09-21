@@ -27,19 +27,17 @@ pub mod pile;
 
 use sts2_core::Rules;
 
-/// What one decision leaves behind.
+/// What a decision in a fight is handed, all borrowed out of the run.
 ///
-/// The streams travel with the fight because a decision can draw, and the run
-/// writes both back together or neither.
-pub(crate) struct Fought<V: Rules> {
-    pub(crate) live: Live<V>,
-    pub(crate) streams: crate::stream::Streams<V>,
-    /// The belt as the relics in it left it. They are notified inside the
-    /// fight and their models save what they counted, so the run writes these
-    /// back beside the fight or neither.
-    pub(crate) relics: Vec<crate::run::HeldRelic<V>>,
-    /// How this decision ended the fight, for one that ended it.
-    pub(crate) ended: Option<Ended>,
+/// A decision works on these where they stand. One the simulator cannot carry
+/// out is a fault, and [`sts2_core::Play`] makes no promise about a run after
+/// a fault. A refusal is decided before any of this is touched.
+pub(crate) struct Fighting<'a, V: Rules> {
+    pub(crate) live: &'a mut Live<V>,
+    pub(crate) streams: &'a mut crate::stream::Streams<V>,
+    /// The belt. Relics are notified inside the fight and their models save
+    /// what they counted.
+    pub(crate) relics: &'a mut [crate::run::HeldRelic<V>],
 }
 
 /// How a fight finished.

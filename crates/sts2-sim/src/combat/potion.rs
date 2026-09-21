@@ -6,43 +6,36 @@
 
 use sts2_core::{CombatId, Rules};
 
-use super::Error;
 use super::board::Board;
-use super::live::Live;
-use crate::stream::Streams;
+use super::{Error, Fighting};
 
-/// Drink one potion, and give back the fight it leaves behind.
+/// Drink one potion into the fight where it stands.
 ///
-/// Nothing is committed until this returns, as playing a card is.
+/// Whatever the drink ended, if it ended the fight.
 pub(crate) fn drink<V: Rules>(
-    live: &Live<V>,
+    fighting: Fighting<'_, V>,
     potion: V::Potion,
     target: Option<CombatId>,
-    streams: &Streams<V>,
-    relics: &[crate::run::HeldRelic<V>],
-) -> Result<super::Fought<V>, Error> {
-    let mut next = live.clone();
-    let mut relics = relics.to_vec();
-    let mut streams = streams.clone();
-
-    let mut board = Board::for_card(
-        &mut next,
-        streams.combat(),
-        &mut relics,
-        live.ascension,
-        target,
-        None,
-    );
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, streams.combat(), relics, ascension, target, None);
     let used = V::on_use(potion, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
 
-    next.skip_tick = super::play::merged::<V>(&next.skip_tick, skipped);
+    live.skip_tick = super::play::merged::<V>(&live.skip_tick, skipped);
     super::play::carry_on(
-        next,
-        streams,
-        relics,
-        live.ascension,
+        Fighting {
+            live,
+            streams,
+            relics,
+        },
+        ascension,
         super::live::Resuming {
             // A drink runs once. `GeneratePlayCount` belongs to a card.
             plays: super::live::Plays {

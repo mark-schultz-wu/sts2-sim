@@ -14,17 +14,18 @@ impl<V: Rules> State<V> {
         let Answer::Cards(chosen) = answer else {
             unimplemented!("an answer that is not a card selection");
         };
-        let Some(live) = self.fight() else {
+        let Some(fighting) = self.fighting() else {
             unreachable!("a fight answer has a live fight");
         };
-        let fought = combat::answer(live, chosen, self.streams(), self.relics())?;
-        Ok(self.settle(fought))
+        let since = fighting.live.removed_from_deck().len();
+        let ended = combat::answer(fighting, chosen)?;
+        Ok(self.settle(ended, since))
     }
 
     /// Play one card from the hand.
     ///
-    /// The fight is resolved on a copy and swapped in whole, so a card the
-    /// simulator cannot play leaves the run exactly as it was.
+    /// A refused play leaves the run exactly as it was. Everything that can
+    /// refuse is asked before the fight is touched.
     pub(crate) fn play_card(
         &mut self,
         index: HandIndex,
@@ -37,22 +38,22 @@ impl<V: Rules> State<V> {
             }))
         };
 
-        let Some(live) = self.fight() else {
+        let Some(fighting) = self.fighting() else {
             return refused(Reason::NotInCombat);
         };
-        let play = match combat::resolve(live, index, target) {
+        let play = match combat::resolve(fighting.live, index, target) {
             Ok(play) => play,
             Err(reason) => return refused(reason),
         };
 
-        let played = combat::play(live, play, self.streams(), self.relics())?;
-        Ok(Ok(self.settle(played)))
+        let since = fighting.live.removed_from_deck().len();
+        let ended = combat::play(fighting, play)?;
+        Ok(Ok(self.settle(ended, since)))
     }
 
     /// Drink one potion from the belt.
     ///
     /// `OnUseWrapper` takes the potion out of the belt before its effect runs.
-    /// The belt and the fight are written back together or neither.
     ///
     /// What can be drunk is the belt's own question, and the observation
     /// carries that answer beside every potion. This holds the decision to it
@@ -101,56 +102,51 @@ impl<V: Rules> State<V> {
         }
 
         let potion = held.potion;
-        let Some(live) = self.fight() else {
+        let Some(fighting) = self.fighting() else {
             unimplemented!("a potion drunk outside a fight");
         };
-        let drunk = combat::drink(live, potion, target, self.streams(), self.relics())?;
+        let since = fighting.live.removed_from_deck().len();
+        let ended = combat::drink(fighting, potion, target)?;
         self.drank(at);
-        Ok(Ok(self.settle(drunk)))
+        Ok(Ok(self.settle(ended, since)))
     }
 
     /// End the player's turn, and set up the next one.
-    ///
-    /// On a copy of the fight and the graphs beside it, as playing a card is.
     pub(crate) fn end_turn(&mut self) -> Result<Settled<V>, Error> {
-        let Some(live) = self.fight() else {
+        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
+            .expect("the turn's energy fits the build's count type");
+        let ascension = self.ascension();
+        let Some(fighting) = self.fighting() else {
             return Ok(Err(Refusal {
                 what: "end_turn".into(),
                 reason: Reason::NotInCombat,
             }));
         };
 
-        let max_energy: V::Count = num_traits::cast(V::max_energy(self.character()))
-            .expect("the turn's energy fits the build's count type");
-        let ended = combat::end_turn(
-            live,
-            self.ascension(),
-            self.streams(),
-            max_energy,
-            self.relics(),
-        )?;
-        Ok(Ok(self.settle(ended)))
+        let since = fighting.live.removed_from_deck().len();
+        let ended = combat::end_turn(fighting, ascension, max_energy)?;
+        Ok(Ok(self.settle(ended, since)))
     }
 
-    /// Put what a decision left behind in place of the fight it acted on.
+    /// Carry what a decision did to the fight over to the rest of the run.
     ///
-    /// A decision that won the fight goes on to the rewards, which is
-    /// `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
-    fn settle(&mut self, fought: combat::Fought<V>) -> Decided {
-        self.drew(fought.streams);
-        self.lose_cards(fought.live.removed_from_deck());
-        // The belt the fight wrote, beside the streams it drew from. Neither
-        // is committed until the decision is one the simulator could carry
-        // out whole.
-        self.hold(fought.relics);
-        match fought.ended {
-            None => self.fought(fought.live),
+    /// `since` is how many deck copies the fight had taken before the
+    /// decision began. A decision that won the fight goes on to the rewards,
+    /// which is `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
+    fn settle(&mut self, ended: Option<combat::Ended>, since: usize) -> Decided {
+        self.lose_cards(since);
+        match ended {
+            None => {}
             // Not `finish`: the run never left the fight, and the piles and
             // the powers are where the player fell.
-            Some(combat::Ended::Lost) => self.lost(fought.live.report()),
+            Some(combat::Ended::Lost) => {
+                let live = self.left_fight();
+                self.lost(live.report());
+            }
             Some(combat::Ended::Won) => {
-                let returned = fought.live.removed_from_deck().to_vec();
-                let combat = fought.live.finish();
+                let live = self.left_fight();
+                let returned = live.removed_from_deck().to_vec();
+                let combat = live.finish();
                 let mut offered = self.combat_rewards(&combat);
                 let at = offered
                     .iter()

@@ -3,46 +3,41 @@
 //! A port of the run of `CombatManager` methods a turn end sets off, in the
 //! order they run. The player's hand is flushed, the enemy side takes its
 //! turn, and the player's next turn is set up.
-//!
-//! The whole of it happens on a copy, so a turn the simulator cannot finish
-//! leaves the fight where it stood.
 
 use crate::rng::MegaRng;
 use sts2_core::{CardTable, CombatId, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
-use super::Error;
 use super::board::{Board, draw};
 use super::live::{Landing, Live};
 use super::power;
 use super::relic;
 use super::start::{hand_size, upgraded};
+use super::{Error, Fighting};
 use crate::stream::CombatRngs;
-use crate::stream::Streams;
 
-/// End the player's turn and set up the next one.
+/// End the player's turn and set up the next one, on the fight where it
+/// stands.
+///
+/// Whatever the enemy turn ended, if it ended the fight.
 pub(crate) fn end<V: Rules>(
-    live: &Live<V>,
+    fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
-    streams: &Streams<V>,
     max_energy: V::Count,
-    relics: &[crate::run::HeldRelic<V>],
-) -> Result<super::Fought<V>, Error> {
-    let mut next = live.clone();
-    let mut relics = relics.to_vec();
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
     let mut skipping = std::mem::take(&mut next.skip_tick);
-    let mut streams = streams.clone();
 
-    turn_end(&mut next, streams.combat(), &mut relics, ascension);
+    turn_end(next, streams.combat(), relics, ascension);
     power::before_turn_end::<V>(&mut next.creatures, <V::CombatSide as SideKinds>::PLAYER);
-    flush_hand(&mut next);
-    end_of_turn_cleanup(&mut next);
+    flush_hand(next);
+    end_of_turn_cleanup(next);
     // `AfterSideTurnEnd` for the side that just ended.
-    let asked = tick_powers::<V>(
-        &mut next,
-        &mut skipping,
-        <V::CombatSide as SideKinds>::PLAYER,
-    );
-    applied::<V>(&mut next, streams.combat(), &mut relics, ascension, asked);
+    let asked = tick_powers::<V>(next, &mut skipping, <V::CombatSide as SideKinds>::PLAYER);
+    applied::<V>(next, streams.combat(), relics, ascension, asked);
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
@@ -51,18 +46,18 @@ pub(crate) fn end<V: Rules>(
     // back only for a turn the player is taking. So the phase a fight ending
     // here reports is the one the enemy turn ran under.
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
-    clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::ENEMY);
+    clear_block::<V>(next, <V::CombatSide as SideKinds>::ENEMY);
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
     side_turn_started::<V>(
-        &mut next,
+        next,
         streams.combat(),
-        &mut relics,
+        relics,
         ascension,
         <V::CombatSide as SideKinds>::ENEMY,
     );
-    let ended = enemy_turn(&mut next, streams.combat(), &mut relics, &mut skipping);
+    let ended = enemy_turn(next, streams.combat(), relics, &mut skipping);
     // `EndEnemyTurn` is gated on `IsInProgress`, which both endings clear:
     // `ProcessPendingLoss` for a death and `EndCombatInternal` for a win. So
     // a fight that ended during the enemy turn ends the turn with it, and
@@ -70,23 +65,14 @@ pub(crate) fn end<V: Rules>(
     if let Some(ended) = ended {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
-            relic::combat_ended::<V>(&mut relics);
+            relic::combat_ended::<V>(relics);
         }
-        return Ok(super::Fought {
-            live: next,
-            streams,
-            relics,
-            ended: Some(ended),
-        });
+        return Ok(Some(ended));
     }
     power::before_turn_end::<V>(&mut next.creatures, <V::CombatSide as SideKinds>::ENEMY);
 
-    let asked = tick_powers::<V>(
-        &mut next,
-        &mut skipping,
-        <V::CombatSide as SideKinds>::ENEMY,
-    );
-    applied::<V>(&mut next, streams.combat(), &mut relics, ascension, asked);
+    let asked = tick_powers::<V>(next, &mut skipping, <V::CombatSide as SideKinds>::ENEMY);
+    applied::<V>(next, streams.combat(), relics, ascension, asked);
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
@@ -94,29 +80,29 @@ pub(crate) fn end<V: Rules>(
     next.turn = next.turn + num_traits::one();
 
     // `PrepareForNextTurn`, before the player draws anything.
-    roll_moves(&mut next, ascension, streams.combat().ai)?;
+    roll_moves(next, ascension, streams.combat().ai)?;
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
-    clear_block::<V>(&mut next, <V::CombatSide as SideKinds>::PLAYER);
+    clear_block::<V>(next, <V::CombatSide as SideKinds>::PLAYER);
     next.energy = max_energy;
-    spend_on_energy_reset(&mut next);
+    spend_on_energy_reset(next);
 
     // `BeforeSideTurnStart`, which is where a relic counting a turn's plays
     // moves the count on, then the draw that reads it.
-    relic::turn_starting::<V>(&mut relics, next.turn);
+    relic::turn_starting::<V>(relics, next.turn);
     power::before_turn_start::<V>(
         &mut next.creatures,
         <V::CombatSide as SideKinds>::PLAYER,
         next.turn,
     );
-    let drawn = hand_size::<V>(&mut relics, next.turn);
-    draw(&mut next, streams.combat(), &mut relics, ascension, drawn);
-    let started = relic::turn_started::<V>(&mut relics, next.turn);
+    let drawn = hand_size::<V>(relics, next.turn);
+    draw(next, streams.combat(), relics, ascension, drawn);
+    let started = relic::turn_started::<V>(relics, next.turn);
     upgraded::<V>(&mut next.hand, started);
     side_turn_started::<V>(
-        &mut next,
+        next,
         streams.combat(),
-        &mut relics,
+        relics,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
     );
@@ -124,12 +110,7 @@ pub(crate) fn end<V: Rules>(
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
     next.skip_tick = skipping;
-    Ok(super::Fought {
-        live: next,
-        streams,
-        relics,
-        ended: None,
-    })
+    Ok(None)
 }
 
 /// `DoTurnEnd`: the cards in hand that answer to a turn ending.
