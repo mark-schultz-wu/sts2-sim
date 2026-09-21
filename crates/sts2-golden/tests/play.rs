@@ -29,7 +29,7 @@ fn fighting() -> Sim<V> {
     sim.play(&Decision::ChooseOption { index: 0 })
         .expect("the choice is implemented")
         .expect("the choice is legal");
-    sim.play(&Decision::Answer(Answer::Cards(vec![1])))
+    sim.play(&Decision::Answer(Answer::Cards([1].into())))
         .expect("the answer is implemented")
         .expect("the answer is legal");
     sim.play(&Decision::Travel {

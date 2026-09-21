@@ -15,8 +15,8 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeMap};
 use sts2_core::Seed;
 use sts2_core::{
-    Answer, Coord, Decision, Gift, PowerAmount, PowerTable as _, Setup, Start, Step, TakeReward,
-    Tool,
+    Answer, Coord, Decision, Gift, Picks, PowerAmount, PowerTable as _, Setup, Start, Step,
+    TakeReward, Tool,
 };
 
 /// One request, in the protocol's own shape.
@@ -127,7 +127,7 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Decision<V>> for Command<V>
             },
             Decision::ChooseOption { index } => Self::ChooseOption { index: *index },
             Decision::Buy { index } => Self::Buy { index: *index },
-            Decision::Answer(a) => Self::Answer(WireAnswer(a.clone())),
+            Decision::Answer(a) => Self::Answer(WireAnswer(*a)),
         }
     }
 }
@@ -248,12 +248,12 @@ impl Serialize for WireAnswer {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(Some(1))?;
         match &self.0 {
-            Answer::Cards(cards) => map.serialize_entry("cards", cards)?,
-            Answer::Skip => map.serialize_entry("skip", &true)?,
-            Answer::Take(take) => {
-                let wire: Vec<WireTake> = take.iter().map(WireTake::from).collect();
-                map.serialize_entry("take", &wire)?;
+            Answer::Cards(picks) => {
+                map.serialize_entry("cards", &picks.iter().collect::<Vec<_>>())?;
             }
+            Answer::Skip => map.serialize_entry("skip", &true)?,
+            // The protocol's list, holding the one reward an answer takes.
+            Answer::Take(take) => map.serialize_entry("take", &[WireTake::from(*take)])?,
             Answer::Divine { x, y, tool } => map.serialize_entry(
                 "divine",
                 &WireDivine {
@@ -288,13 +288,15 @@ impl<'de> Deserialize<'de> for WireAnswer {
 
                 while let Some(key) = map.next_key::<String>()? {
                     let found = match key.as_str() {
-                        "cards" => Answer::Cards(map.next_value()?),
-                        "take" => Answer::Take(
-                            map.next_value::<Vec<WireTake>>()?
-                                .into_iter()
-                                .map(WireTake::into_domain)
-                                .collect(),
-                        ),
+                        "cards" => Answer::Cards(picks(map.next_value()?)?),
+                        "take" => match map.next_value::<Vec<WireTake>>()?[..] {
+                            [one] => Answer::Take(one.into_domain()),
+                            _ => {
+                                return Err(serde::de::Error::custom(
+                                    "a 'take' names one reward; take several as several answers",
+                                ));
+                            }
+                        },
                         "divine" => {
                             let WireDivine { x, y, tool } = map.next_value()?;
                             Answer::Divine {
@@ -405,6 +407,14 @@ impl From<WireTool> for Tool {
     }
 }
 
+/// The options a `cards` answer lists, in its order.
+///
+/// A list no selection can hold is an error rather than a panic. It is a
+/// malformed recording, the way `{"skip": false}` is.
+fn picks<E: serde::de::Error>(options: Vec<usize>) -> Result<Picks, E> {
+    Picks::try_from(options.as_slice()).map_err(|why| E::custom(format_args!("'cards' {why}")))
+}
+
 /// A [`TakeReward`] on the wire.
 ///
 /// Untagged, so each variant serializes flat and a card reward is the only one
@@ -414,21 +424,18 @@ impl From<WireTool> for Tool {
 ///
 /// `Card` comes first because untagged tries the variants in order, and a
 /// `NonCard` also accepts an object that carries a card.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(untagged)]
 enum WireTake {
-    Card { index: usize, card: usize },
-    NonCard { index: usize },
+    Card { index: u8, card: u8 },
+    NonCard { index: u8 },
 }
 
-impl From<&TakeReward> for WireTake {
-    fn from(t: &TakeReward) -> Self {
+impl From<TakeReward> for WireTake {
+    fn from(t: TakeReward) -> Self {
         match t {
-            TakeReward::Card { index, card } => Self::Card {
-                index: *index,
-                card: *card,
-            },
-            TakeReward::NonCard { index } => Self::NonCard { index: *index },
+            TakeReward::Card { index, card } => Self::Card { index, card },
+            TakeReward::NonCard { index } => Self::NonCard { index },
         }
     }
 }
@@ -574,7 +581,7 @@ mod tests {
     #[test]
     fn each_answer_carries_only_its_own_field() {
         assert_eq!(
-            wire(Decision::Answer(Answer::Cards(vec![0, 2]))),
+            wire(Decision::Answer(Answer::Cards([0, 2].into()))),
             json!({"cmd": "answer", "cards": [0, 2]})
         );
         assert_eq!(
@@ -582,10 +589,10 @@ mod tests {
             json!({"cmd": "answer", "skip": true})
         );
         assert_eq!(
-            wire(Decision::Answer(Answer::Take(vec![TakeReward::Card {
+            wire(Decision::Answer(Answer::Take(TakeReward::Card {
                 index: 1,
                 card: 0,
-            }]))),
+            }))),
             json!({"cmd": "answer", "take": [{"index": 1, "card": 0}]})
         );
     }
@@ -646,10 +653,10 @@ mod tests {
             Decision::Proceed.into(),
             Decision::ChooseOption { index: 2 }.into(),
             Decision::Buy { index: 0 }.into(),
-            Decision::Answer(Answer::Cards(vec![0, 2])).into(),
+            Decision::Answer(Answer::Cards([0, 2].into())).into(),
             Decision::Answer(Answer::Skip).into(),
-            Decision::Answer(Answer::Take(vec![TakeReward::Card { index: 1, card: 0 }])).into(),
-            Decision::Answer(Answer::Take(vec![TakeReward::NonCard { index: 2 }])).into(),
+            Decision::Answer(Answer::Take(TakeReward::Card { index: 1, card: 0 })).into(),
+            Decision::Answer(Answer::Take(TakeReward::NonCard { index: 2 })).into(),
             Setup::Fight {
                 encounter: Encounter::ShrinkerBeetleWeak,
             }
@@ -697,9 +704,9 @@ mod tests {
     #[test]
     fn only_a_card_reward_carries_a_card() {
         assert_eq!(
-            wire(Decision::Answer(Answer::Take(vec![TakeReward::NonCard {
+            wire(Decision::Answer(Answer::Take(TakeReward::NonCard {
                 index: 2
-            }]))),
+            }))),
             json!({"cmd": "answer", "take": [{"index": 2}]})
         );
     }
@@ -712,7 +719,7 @@ mod tests {
         let back: Wire = serde_json::from_str(line).expect("an older file still opens");
         assert_eq!(
             back.into_step(),
-            Some(Decision::Answer(Answer::Take(vec![TakeReward::NonCard { index: 2 }])).into())
+            Some(Decision::Answer(Answer::Take(TakeReward::NonCard { index: 2 })).into())
         );
     }
 
@@ -725,6 +732,34 @@ mod tests {
             serde_json::from_str::<Wire>(r#"{"cmd":"answer","skip":true,"cards":[0]}"#).is_err(),
             "two answers in one is not one of them"
         );
+    }
+
+    /// A selection's order survives the wire. One no selection can hold is
+    /// refused there, rather than panicking or turning into a smaller one.
+    #[test]
+    fn a_card_selection_keeps_its_order_and_refuses_a_repeat() {
+        let command: Wire =
+            serde_json::from_str(r#"{"cmd":"answer","cards":[2,0]}"#).expect("a selection");
+        assert_eq!(
+            command.into_step(),
+            Some(Decision::Answer(Answer::Cards([2, 0].into())).into())
+        );
+        assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","cards":[1,1]}"#).is_err());
+        assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","cards":[300]}"#).is_err());
+        let eleven = r#"{"cmd":"answer","cards":[0,1,2,3,4,5,6,7,8,9,10]}"#;
+        assert!(
+            serde_json::from_str::<Wire>(eleven).is_err(),
+            "more than a selection holds is refused, not a panic"
+        );
+    }
+
+    /// The protocol's `take` is a list, and an answer holds one reward. Two in
+    /// one is refused, where it used to take both.
+    #[test]
+    fn a_take_names_one_reward() {
+        let two = r#"{"cmd":"answer","take":[{"index":0},{"index":1}]}"#;
+        assert!(serde_json::from_str::<Wire>(two).is_err());
+        assert!(serde_json::from_str::<Wire>(r#"{"cmd":"answer","take":[]}"#).is_err());
     }
 }
 

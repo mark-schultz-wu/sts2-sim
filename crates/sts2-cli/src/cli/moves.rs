@@ -59,14 +59,9 @@ pub fn takeable<V: sts2_content_wire::WireContentVersion>(
         .filter(|detail| !detail.taken)
         .flat_map(|detail| match &detail.reward {
             RewardKind::Card { cards } => (0..cards.len())
-                .map(|card| TakeReward::Card {
-                    index: detail.index,
-                    card,
-                })
+                .map(|card| TakeReward::card(detail.index, card))
                 .collect(),
-            _ => vec![TakeReward::NonCard {
-                index: detail.index,
-            }],
+            _ => vec![TakeReward::non_card(detail.index)],
         })
         .collect()
 }
@@ -90,7 +85,7 @@ fn answers<V: sts2_content_wire::WireContentVersion>(question: &Question<V>) -> 
         Question::Rewards { skippable, .. } => {
             let mut moves: Vec<Decision<V>> = takeable(question)
                 .into_iter()
-                .map(|take| Decision::Answer(Answer::Take(vec![take])))
+                .map(|take| Decision::Answer(Answer::Take(take)))
                 .collect();
 
             if *skippable {
@@ -282,11 +277,10 @@ pub fn describe<V: sts2_content_wire::WireContentVersion>(decision: &Decision<V>
         Decision::Answer(Answer::Skip) => "skipped".into(),
         Decision::Answer(Answer::Cards(cards)) if cards.is_empty() => "chose no cards".into(),
         Decision::Answer(Answer::Cards(cards)) => format!("chose cards {cards:?}"),
-        Decision::Answer(Answer::Take(taken)) => match taken.first() {
-            Some(TakeReward::Card { index, card }) => format!("took {index}.{card}"),
-            Some(TakeReward::NonCard { index }) => format!("took {index}"),
-            None => "took nothing".into(),
-        },
+        Decision::Answer(Answer::Take(TakeReward::Card { index, card })) => {
+            format!("took {index}.{card}")
+        }
+        Decision::Answer(Answer::Take(TakeReward::NonCard { index })) => format!("took {index}"),
         Decision::Answer(Answer::Divine { x, y, .. }) => format!("divined {x},{y}"),
         Decision::EnterRoom { room } => format!("entered {}", crate::render::spelling(room)),
     }
@@ -503,10 +497,10 @@ mod tests {
         // Gold, two cards, and a skip. The taken potion is not a move.
         assert_eq!(out.len(), 4, "{out:?}");
         assert!(
-            out.contains(&Decision::Answer(Answer::Take(vec![TakeReward::Card {
+            out.contains(&Decision::Answer(Answer::Take(TakeReward::Card {
                 index: 7,
                 card: 1
-            }])))
+            })))
         );
         assert!(out.contains(&Decision::Answer(Answer::Skip)));
     }
@@ -541,7 +535,7 @@ mod tests {
 
         // Nought, one or two — `max` is 3 but only two cards are there.
         assert_eq!(out.len(), 3, "{out:?}");
-        assert!(out.contains(&Decision::Answer(Answer::Cards(vec![]))));
-        assert!(out.contains(&Decision::Answer(Answer::Cards(vec![0, 1]))));
+        assert!(out.contains(&Decision::Answer(Answer::Cards([].into()))));
+        assert!(out.contains(&Decision::Answer(Answer::Cards([0, 1].into()))));
     }
 }

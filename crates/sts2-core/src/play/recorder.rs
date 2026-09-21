@@ -145,7 +145,7 @@ where
 
     fn play(&mut self, decision: &Decision<V>) -> Result<Answered<V>, Self::Error> {
         let outcome = self.inner.play(decision);
-        self.keep(Step::Decision(decision.clone()), &outcome);
+        self.keep(Step::Decision(*decision), &outcome);
         outcome
     }
 

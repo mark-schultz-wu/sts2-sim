@@ -209,7 +209,7 @@ pub(crate) fn play<V: Rules>(
 /// Resume the card play the fight parked on a selection.
 pub(crate) fn answer<V: Rules>(
     fighting: Fighting<'_, V>,
-    chosen: &[usize],
+    chosen: sts2_core::Picks,
 ) -> Result<Option<super::Ended>, Error> {
     let Fighting {
         live,
@@ -228,7 +228,7 @@ pub(crate) fn answer<V: Rules>(
             let held = pile(live, *from);
             let cards: Option<Vec<_>> = chosen
                 .iter()
-                .map(|&index| {
+                .map(|index| {
                     held.get(index).map(|card| {
                         let index = num_traits::NumCast::from(index).unwrap_or_else(|| {
                             unimplemented!("a pile deeper than a fight can number")
@@ -239,13 +239,6 @@ pub(crate) fn answer<V: Rules>(
                 .collect();
             let cards =
                 cards.unwrap_or_else(|| unimplemented!("a selection naming a card not offered"));
-            let distinct = cards
-                .iter()
-                .map(|card| card.id())
-                .collect::<std::collections::HashSet<_>>();
-            if chosen.len() != distinct.len() {
-                unimplemented!("a selection naming the same card twice");
-            }
             sts2_core::Taken::Selected(
                 selection
                     .validate_answer(cards.into_boxed_slice())
@@ -255,13 +248,18 @@ pub(crate) fn answer<V: Rules>(
             )
         }
         Asked::Offered { offered, skippable } => {
-            let chosen = match chosen {
-                [] if *skippable => None,
-                [] => unimplemented!("skipping a choice that cannot be skipped"),
-                [only] => Some(*offered.get(*only).unwrap_or_else(|| {
+            let chosen = if chosen.is_empty() {
+                if !*skippable {
+                    unimplemented!("skipping a choice that cannot be skipped");
+                }
+                None
+            } else {
+                let Some(only) = chosen.only() else {
+                    unimplemented!("a choice taking more than one card");
+                };
+                Some(*offered.get(only).unwrap_or_else(|| {
                     unimplemented!("a choice naming a card that was not offered")
-                })),
-                _ => unimplemented!("a choice taking more than one card"),
+                }))
             };
             sts2_core::Taken::Chosen(chosen)
         }

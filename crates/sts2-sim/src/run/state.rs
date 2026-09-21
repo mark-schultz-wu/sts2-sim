@@ -909,11 +909,11 @@ impl<V: Rules> State<V> {
             unreachable!("the phase was a shop when this began");
         };
         let unfinished = unfinished.expect("the merchant was waiting when this began");
-        let Answer::Cards(indices) = answer else {
+        let Answer::Cards(picks) = answer else {
             unimplemented!("an answer to a purchase that is not a card selection");
         };
-        let [index] = indices[..] else {
-            unimplemented!("a purchase answered with more than one card");
+        let Some(index) = picks.only() else {
+            unimplemented!("a purchase answered with other than one card");
         };
         match unfinished {
             Unfinished::Removal => self.removed(index),
@@ -1318,15 +1318,15 @@ impl<V: Rules> State<V> {
         let cards = selection
             .as_ref()
             .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"));
-        let Answer::Cards(indices) = answer else {
+        let Answer::Cards(picks) = answer else {
             unimplemented!("an answer that is not a card selection");
         };
-        if indices.len() > 1 {
+        if picks.len() > 1 {
             unimplemented!("a card selection of more than one");
         }
-        let chosen: Option<Vec<_>> = indices
+        let chosen: Option<Vec<_>> = picks
             .iter()
-            .map(|&index| cards.get(index).copied().map(CardIdent::new))
+            .map(|index| cards.get(index).copied().map(CardIdent::new))
             .collect();
         let Some(chosen) = chosen else {
             unimplemented!("a card selection naming a card that was not offered");
@@ -1346,10 +1346,10 @@ impl<V: Rules> State<V> {
     /// The rest site is spent once this lands: its options empty, which is how
     /// the game reports a rest site nobody can act at again.
     fn smith(&mut self, answer: &Answer) -> Result<Decided, Error> {
-        let Answer::Cards(indices) = answer else {
+        let Answer::Cards(picks) = answer else {
             unimplemented!("an answer to the smith that is not a card selection");
         };
-        let [index] = indices[..] else {
+        let Some(index) = picks.only() else {
             unimplemented!("a smith selection that is not one card");
         };
         let (at, _) = self
@@ -1390,54 +1390,52 @@ impl<V: Rules> State<V> {
             }
             return Ok(Decided::Resolved);
         }
-        let Answer::Take(taking) = answer else {
+        let Answer::Take(take) = *answer else {
             unimplemented!("an answer the reward screen does not accept");
         };
         let slots: usize = num_traits::cast(self.player.potion_slots)
             .expect("the belt has an addressable number of slots");
-        for take in taking {
-            let Phase::Rewards { offered, .. } = &mut self.phase else {
-                unreachable!("the phase was a reward screen when this began");
-            };
-            let offer = offered
-                .get_mut(take.index())
-                .unwrap_or_else(|| unimplemented!("a reward the screen does not offer"));
-            match (offer, take) {
-                (Offer::Gold { amount, taken }, TakeReward::NonCard { .. }) => {
-                    let amount = *amount;
-                    *taken = true;
-                    self.player.gold = self.player.gold + amount;
-                }
-                (Offer::Potion { potion, taken }, TakeReward::NonCard { .. }) => {
-                    let potion = *potion;
-                    // `PotionCmd.TryToProcure` fails on a full belt, and the
-                    // reward is then neither taken nor gone.
-                    if self.player.potions.len() >= slots {
-                        unimplemented!("a potion offered to a full belt");
-                    }
-                    *taken = true;
-                    self.procure(potion);
-                }
-                (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
-                    let chosen = cards
-                        .get(*card)
-                        .copied()
-                        .unwrap_or_else(|| unimplemented!("a card the reward does not offer"));
-                    *taken = true;
-                    self.player.deck_mut().push(chosen);
-                }
-                (Offer::SpecialCard { card, taken }, TakeReward::NonCard { .. }) => {
-                    let card = *card;
-                    *taken = true;
-                    self.player.deck_mut().push(card);
-                }
-                (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
-                    let relic = *relic;
-                    *taken = true;
-                    self.obtain_here(relic);
-                }
-                _ => unimplemented!("a reward taken as the wrong kind"),
+        let Phase::Rewards { offered, .. } = &mut self.phase else {
+            unreachable!("the phase was a reward screen when this began");
+        };
+        let offer = offered
+            .get_mut(take.index())
+            .unwrap_or_else(|| unimplemented!("a reward the screen does not offer"));
+        match (offer, take) {
+            (Offer::Gold { amount, taken }, TakeReward::NonCard { .. }) => {
+                let amount = *amount;
+                *taken = true;
+                self.player.gold = self.player.gold + amount;
             }
+            (Offer::Potion { potion, taken }, TakeReward::NonCard { .. }) => {
+                let potion = *potion;
+                // `PotionCmd.TryToProcure` fails on a full belt, and the
+                // reward is then neither taken nor gone.
+                if self.player.potions.len() >= slots {
+                    unimplemented!("a potion offered to a full belt");
+                }
+                *taken = true;
+                self.procure(potion);
+            }
+            (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
+                let chosen = cards
+                    .get(usize::from(card))
+                    .copied()
+                    .unwrap_or_else(|| unimplemented!("a card the reward does not offer"));
+                *taken = true;
+                self.player.deck_mut().push(chosen);
+            }
+            (Offer::SpecialCard { card, taken }, TakeReward::NonCard { .. }) => {
+                let card = *card;
+                *taken = true;
+                self.player.deck_mut().push(card);
+            }
+            (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
+                let relic = *relic;
+                *taken = true;
+                self.obtain_here(relic);
+            }
+            _ => unimplemented!("a reward taken as the wrong kind"),
         }
 
         Ok(self.decided())
@@ -1445,9 +1443,8 @@ impl<V: Rules> State<V> {
 
     /// Where the player stands.
     ///
-    /// A live fight holds these numbers, because a card can move them and the
-    /// fight is resolved on a copy. Anywhere else the run holds them. See
-    /// `Player::hp`.
+    /// A live fight holds these numbers, because a card can move them.
+    /// Anywhere else the run holds them. See `Player::hp`.
     fn standing(&self) -> Standing<V> {
         match &self.phase {
             Phase::Combat(live) => {
@@ -2023,7 +2020,7 @@ mod tests {
             "the copy already upgraded is not offered"
         );
 
-        run.answer(&Answer::Cards(vec![1]))
+        run.answer(&Answer::Cards([1].into()))
             .expect("the second offered card can be upgraded");
         assert_eq!(
             *run.player.deck,

@@ -584,7 +584,7 @@ fn a_refusal_leaves_the_session_usable() {
 
     // Nothing is pending, so this is refused — and the refusal names the command.
     let refusal = game
-        .play(&Decision::Answer(Answer::Cards(vec![0])))
+        .play(&Decision::Answer(Answer::Cards([0].into())))
         .expect("a refusal is still a reply, not a transport failure")
         .expect_err("nothing is pending, so this must be refused");
     assert_eq!(refusal.what, "answer");
@@ -936,7 +936,7 @@ fn buying_card_removal_asks_which_card_rather_than_hanging() {
     }
 
     // Returning is not the same as working: answer it and check the run moved.
-    let after = played(&mut game, &Decision::Answer(Answer::Cards(vec![0])));
+    let after = played(&mut game, &Decision::Answer(Answer::Cards([0].into())));
     assert_eq!(
         after.snapshot.observation.deck.len(),
         deck - 1,
@@ -988,7 +988,7 @@ fn a_rest_site_option_that_asks_a_question_still_replies() {
     }
 
     // Returning is not the same as working: answer it and check the run moved.
-    let after = played(&mut game, &Decision::Answer(Answer::Cards(vec![0])));
+    let after = played(&mut game, &Decision::Answer(Answer::Cards([0].into())));
 
     let upgraded = after.state["deck"]
         .as_array()
@@ -1207,7 +1207,7 @@ fn an_enchantment_travels_in_a_card_identity() {
         other => panic!("expected a card selection, got {other:?}"),
     }
 
-    let after = played(&mut game, &Decision::Answer(Answer::Cards(vec![0])));
+    let after = played(&mut game, &Decision::Answer(Answer::Cards([0].into())));
 
     let enchanted: Vec<&str> = deck(&after.state)
         .into_iter()
