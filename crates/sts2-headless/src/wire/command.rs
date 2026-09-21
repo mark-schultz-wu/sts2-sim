@@ -346,8 +346,8 @@ impl<'de> Deserialize<'de> for WireAnswer {
 /// what `SetTool` is given.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WireDivine {
-    x: usize,
-    y: usize,
+    x: u8,
+    y: u8,
     tool: WireTool,
 }
 

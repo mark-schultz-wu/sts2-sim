@@ -225,8 +225,8 @@ pub enum Answering {
     /// not a saving. It uncovers the neighbours too, and one of the things
     /// under them can be a curse.
     Divine {
-        x: usize,
-        y: usize,
+        x: u8,
+        y: u8,
         /// Uncover the neighbouring cells as well.
         #[arg(long)]
         big: bool,

@@ -12,7 +12,7 @@ pub enum Answer {
     /// Take rewards from a reward set.
     Take(Vec<TakeReward>),
     /// Uncover a cell, in the Crystal Sphere's minigame.
-    Divine { x: usize, y: usize, tool: Tool },
+    Divine { x: u8, y: u8, tool: Tool },
 }
 
 /// What a [`Answer::Divine`] uncovers with.

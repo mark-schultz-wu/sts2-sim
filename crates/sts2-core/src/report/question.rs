@@ -40,8 +40,8 @@ pub enum Question<V: ContentVersion> {
     Divine {
         /// Divinations remaining. Three or six, by the option taken.
         left: u32,
-        width: usize,
-        height: usize,
+        width: u8,
+        height: u8,
         /// The tool the next click uses. [`Tool::Big`] at the start.
         ///
         /// Carried because the game keeps it between clicks, so an answer that
@@ -127,8 +127,8 @@ pub struct RewardCard<V: ContentVersion> {
 /// One square of the Crystal Sphere's grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cell {
-    pub x: usize,
-    pub y: usize,
+    pub x: u8,
+    pub y: u8,
 }
 
 /// Something the Crystal Sphere was hiding, once every cell over it is clear.
@@ -144,10 +144,10 @@ pub struct FoundItem {
     /// False for a curse.
     pub good: bool,
     /// Top-left corner, and how many cells it covers.
-    pub x: usize,
-    pub y: usize,
-    pub width: usize,
-    pub height: usize,
+    pub x: u8,
+    pub y: u8,
+    pub width: u8,
+    pub height: u8,
 }
 
 /// One reward on offer.
