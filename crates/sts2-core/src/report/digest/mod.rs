@@ -83,6 +83,17 @@ impl Digest {
     pub const fn from_u64(bytes: u64) -> Digest {
         Digest(bytes)
     }
+
+    /// An act's map points, digested on their own.
+    ///
+    /// The whole map sits in every observation and never changes while the act
+    /// is played. So a digest writes this in its place, and a run that holds
+    /// its map settled works it out once. See [`Observed::points_digest`].
+    pub fn of_points<V: ContentVersion>(points: &[Node<V>]) -> Digest {
+        let mut sink = Sink::rules();
+        sink.points(points);
+        Digest(sink.finish())
+    }
 }
 
 impl std::fmt::Display for Digest {
@@ -219,9 +230,10 @@ impl std::hash::Hasher for Sink {
         self.hash.write_array(n.to_le_bytes());
     }
 
+    /// A length, as [`Sink::len`] writes one.
     #[inline]
     fn write_usize(&mut self, n: usize) {
-        self.write_u64(n as u64);
+        self.len(n);
     }
 
     #[inline]
@@ -244,9 +256,11 @@ impl std::hash::Hasher for Sink {
         self.write_u64(n as u64);
     }
 
+    /// Two bytes, because this is how a derived `Hash` writes an enum's
+    /// discriminant. Every id is one, and none has 65,536 variants.
     #[inline]
     fn write_isize(&mut self, n: isize) {
-        self.write_i64(n as i64);
+        self.write_u16(u16::try_from(n).expect("a discriminant must fit the digest format"));
     }
 
     fn finish(&self) -> u64 {
@@ -336,11 +350,13 @@ impl Sink {
         }
     }
 
-    /// A count, always eight bytes, so a `usize` of another width digests the
-    /// same.
+    /// A count, always two bytes, so a `usize` of another width digests the
+    /// same. Nothing an observation holds, down to an event's text, runs past
+    /// 65,535.
     #[inline]
     fn len(&mut self, value: usize) {
-        self.u64(value as u64);
+        let value = u16::try_from(value).expect("a length must fit the digest format");
+        self.hash.write_array(value.to_le_bytes());
     }
 
     /// Length then bytes, so `["ab"]` and `["a", "b"]` cannot collide.
@@ -418,26 +434,12 @@ impl Sink {
         }
     }
 
-    /// A map digested without reading its order.
-    ///
-    /// The count, then the wrapping sum of a sub-digest per entry. The crate
-    /// README says why a sum.
-    ///
-    /// Each entry is digested whole, key and value together, so two maps that
-    /// swap two values differ. The streams are sorted now, and this still
-    /// takes the sum. Walking them in order instead moves every committed
-    /// digest.
+    /// Each stream and how far it has been drawn, in the streams' own order.
     fn positions<K: Hash>(&mut self, streams: impl ExactSizeIterator<Item = (K, crate::Position)>) {
-        self.len(streams.len());
-
-        let mut total: u64 = 0;
-        for (stream, position) in streams {
-            let mut entry = Sink::new();
-            entry.id(&stream);
-            entry.u32(position.counter);
-            total = total.wrapping_add(entry.finish());
-        }
-        self.u64(total);
+        self.seq(streams, |sink, (stream, position)| {
+            sink.id(&stream);
+            sink.u32(position.counter);
+        });
     }
 
     /// A map that has an order, walked in it.
@@ -579,13 +581,18 @@ impl Sink {
             sink.coord(&at);
             sink.id(&kind);
         });
-        self.list(observed.points(), |sink, node| {
+        self.u64(observed.points_digest().0);
+        self.bool(observed.proceed());
+    }
+
+    /// An act's points, which [`Digest::of_points`] takes on their own.
+    fn points<V: ContentVersion>(&mut self, points: &[Node<V>]) {
+        self.list(points, |sink, node| {
             let Node { at, kind, to } = node;
             sink.coord(at);
             sink.id(kind);
             sink.list(to, |sink, at| sink.coord(at));
         });
-        self.bool(observed.proceed());
     }
 
     /// The draw counts, and deliberately not the generator words beside them.
@@ -828,19 +835,21 @@ impl Sink {
         self.maybe(playable.reason(), |sink, reasons| sink.flags(&reasons));
         self.maybe(playable.preventer(), |sink, model| sink.model(&model));
         self.list(playable.targets(), |sink, id| sink.id(id));
-        self.seq(playable.effect(), |sink, preview| {
-            let Preview {
-                target,
-                text,
-                vars,
-                base,
-            } = preview.borrow();
-            sink.option(target, |sink, id| sink.id(id));
-            // The numbers this sentence has in it are `vars` and `base`, which
-            // are digested either way. This is the sentence.
-            sink.prose_option(text);
-            sink.vars(vars);
-            sink.vars(base);
+        playable.effect(|previews| {
+            self.list(previews, |sink, preview| {
+                let Preview {
+                    target,
+                    text,
+                    vars,
+                    base,
+                } = preview;
+                sink.option(target, |sink, id| sink.id(id));
+                // The numbers this sentence has in it are `vars` and `base`,
+                // which are digested either way. This is the sentence.
+                sink.prose_option(text);
+                sink.vars(vars);
+                sink.vars(base);
+            });
         });
     }
 }

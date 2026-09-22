@@ -214,8 +214,8 @@ impl<V: Rules> sts2_core::ObservedPlayable<V> for InHand<'_, V> {
         &self.targets
     }
 
-    fn effect(&self) -> impl ExactSizeIterator<Item = impl std::borrow::Borrow<Preview<V>>> + '_ {
-        self.previews().into_iter()
+    fn effect<R>(&self, read: impl FnOnce(&[Preview<V>]) -> R) -> R {
+        read(&self.previews())
     }
 }
 

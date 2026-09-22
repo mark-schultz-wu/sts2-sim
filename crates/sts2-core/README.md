@@ -201,17 +201,24 @@ and a discriminant answers it.
 
 It used to hash the name, so that a codegen renumbering a table without renaming
 anything left the digest where it was. Nothing wanted that. A digest is compared
-against another implementation of the *same build*, compiled into the *same
-process*. None is persisted, no test pins one, and one taken against another
-build is meaningless whatever it hashed. It cost one read of the name out of a
-`#[serde(rename)]`. Serializing the value through a whitelist `Serializer` did
-that, per id, per observation, after every decision.
+against another implementation of the *same build*. The golden files and the
+scenario answers pin some, and each is rewritten from its cached transcript when
+the format moves. One taken against another build is meaningless whatever it
+hashed. It cost one read of the name out of a `#[serde(rename)]`. Serializing
+the value through a whitelist `Serializer` did that, per id, per observation,
+after every decision.
 
-A counter map is digested as the count and then the wrapping sum of a sub-digest
-per entry. A sum, because the order is not part of the state. These are two sets of named
-counters, and which order they are held in says nothing about the run. The map
-holding them is sorted now, and the sum stays. Walking it in order instead
-moves every digest the golden files commit.
+The widths are the smallest the content fits. A discriminant is two bytes and a
+length is two, and a conversion that does not fit panics. Every byte written
+is a byte hashed, after every decision of every run.
+
+A counter map is walked in its keys' order. Both sides hold every stream, sorted
+by the stream's own type, so the order is the same on each.
+
+An act's map is hashed on its own, and its digest stands in for the points. The
+points are settled when the act is generated, and they are the largest thing in
+most observations. So the simulator digests them once and keeps the answer
+beside them.
 
 ## The model id
 

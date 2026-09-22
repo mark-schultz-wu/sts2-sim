@@ -253,10 +253,10 @@ impl<V: Rules> ObservedPlayable<V> for Card<'_, V> {
         }
     }
 
-    fn effect(&self) -> impl ExactSizeIterator<Item = impl std::borrow::Borrow<Preview<V>>> + '_ {
+    fn effect<R>(&self, read: impl FnOnce(&[Preview<V>]) -> R) -> R {
         match self {
-            Card::Live(held) => Either::Left(held.previews().into_iter().map(Cow::Owned)),
-            Card::Over(playable) => Either::Right(playable.effect.iter().map(Cow::Borrowed)),
+            Card::Live(held) => held.effect(read),
+            Card::Over(playable) => read(&playable.effect),
         }
     }
 }

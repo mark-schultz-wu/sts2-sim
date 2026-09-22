@@ -21,7 +21,7 @@ mod types;
 use std::sync::Arc;
 
 use sts2_core::rng::{GameRng, RngInteger, Span};
-use sts2_core::{Coord, Layout, MapPointKinds, NoNode, Node, Rules};
+use sts2_core::{Coord, Digest, Layout, MapPointKinds, NoNode, Node, Rules};
 
 use set::Order;
 
@@ -91,6 +91,8 @@ impl<V: Rules> Point<V> {
 pub struct ActMap<V: Rules> {
     /// In the observation's order, which is what lets [`ActMap::at`] search.
     nodes: Arc<[Node<V>]>,
+    /// The nodes' digest, which a comparison asks for after every decision.
+    digest: Digest,
 }
 
 impl<V: Rules> ActMap<V> {
@@ -113,13 +115,20 @@ impl<V: Rules> ActMap<V> {
     pub fn shared(&self) -> Arc<[Node<V>]> {
         Arc::clone(&self.nodes)
     }
+
+    /// The nodes, as [`Digest::of_points`] has them.
+    pub fn digest(&self) -> Digest {
+        self.digest
+    }
 }
 
 /// A map is what a finished builder holds, once its order is settled.
 impl<V: Rules> From<ActMapBuilder<V>> for ActMap<V> {
     fn from(built: ActMapBuilder<V>) -> Self {
+        let nodes: Arc<[Node<V>]> = built.nodes().into();
         ActMap {
-            nodes: built.nodes().into(),
+            digest: Digest::of_points(&nodes),
+            nodes,
         }
     }
 }

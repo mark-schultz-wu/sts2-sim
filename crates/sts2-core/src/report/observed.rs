@@ -16,8 +16,9 @@
 use std::borrow::Borrow;
 
 use crate::{
-    CardIdent, Carried, Combat, CombatId, ContentVersion, Coord, Cost, Creature, Held, ModelId,
-    NextMove, Node, Observation, Orbs, Playable, Position, Preview, Reachable, Room, Stack,
+    CardIdent, Carried, Combat, CombatId, ContentVersion, Coord, Cost, Creature, Digest, Held,
+    ModelId, NextMove, Node, Observation, Orbs, Playable, Position, Preview, Reachable, Room,
+    Stack,
 };
 
 /// Everything a digest reads from a run at one decision point.
@@ -43,9 +44,18 @@ pub trait Observed<V: ContentVersion> {
     fn visited(&self) -> impl ExactSizeIterator<Item = Coord> + '_;
     fn travelable(&self) -> impl ExactSizeIterator<Item = Reachable<V>> + '_;
     fn points(&self) -> &[Node<V>];
+
+    /// [`Observed::points`], as the only thing a digest reads of them.
+    ///
+    /// The points are settled when an act's map is generated, so a run that
+    /// keeps this beside them answers without walking them again.
+    fn points_digest(&self) -> Digest {
+        Digest::of_points(self.points())
+    }
+
     fn proceed(&self) -> bool;
 
-    /// Where each run stream stands, in any order. A digest sums them.
+    /// Where each run stream stands, in the order of the streams' own type.
     fn run_streams(&self) -> impl ExactSizeIterator<Item = (V::RunRngType, Position)> + '_;
     fn player_streams(&self) -> impl ExactSizeIterator<Item = (V::PlayerRngType, Position)> + '_;
 
@@ -92,7 +102,12 @@ pub trait ObservedPlayable<V: ContentVersion> {
     fn reason(&self) -> Option<V::UnplayableReasons>;
     fn preventer(&self) -> Option<ModelId<V>>;
     fn targets(&self) -> &[CombatId];
-    fn effect(&self) -> impl ExactSizeIterator<Item = impl Borrow<Preview<V>>> + '_;
+
+    /// The previews, handed to `read` as one list.
+    ///
+    /// Lent through a call rather than returned, so an implementation that
+    /// works them out keeps them where it built them.
+    fn effect<R>(&self, read: impl FnOnce(&[Preview<V>]) -> R) -> R;
 }
 
 impl<V: ContentVersion> Observed<V> for Observation<V> {
@@ -306,7 +321,7 @@ impl<V: ContentVersion> ObservedPlayable<V> for &Playable<V> {
         &self.targets
     }
 
-    fn effect(&self) -> impl ExactSizeIterator<Item = impl Borrow<Preview<V>>> + '_ {
-        self.effect.iter()
+    fn effect<R>(&self, read: impl FnOnce(&[Preview<V>]) -> R) -> R {
+        read(&self.effect)
     }
 }

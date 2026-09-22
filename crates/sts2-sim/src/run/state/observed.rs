@@ -7,8 +7,8 @@
 use std::borrow::Borrow;
 
 use sts2_core::{
-    CardIdent, Carried, Coord, Held, Node, Observed, ObservedFight, Position, Reachable, Room,
-    Rules,
+    CardIdent, Carried, Coord, Digest, Held, Node, Observed, ObservedFight, Position, Reachable,
+    Room, Rules,
 };
 
 use super::{Phase, State};
@@ -81,6 +81,10 @@ impl<V: Rules> Observed<V> for State<V> {
 
     fn points(&self) -> &[Node<V>] {
         sts2_core::ActMap::nodes(&*self.map)
+    }
+
+    fn points_digest(&self) -> Digest {
+        self.map.digest()
     }
 
     fn proceed(&self) -> bool {
