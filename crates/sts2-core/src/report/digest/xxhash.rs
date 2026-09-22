@@ -34,6 +34,24 @@ impl XxHash64 {
         }
     }
 
+    /// Bytes of a width known when this is compiled.
+    ///
+    /// Nearly everything a digest writes is a byte, a word or a count. While it
+    /// fits in the part-filled stripe it goes in as one store of that width.
+    /// [`XxHash64::write`] copies a length it only learns when it runs, which is
+    /// a call to `memmove` per field. The bytes the hash sees are the same.
+    #[inline]
+    pub(super) fn write_array<const N: usize>(&mut self, bytes: [u8; N]) {
+        let filled = self.filled;
+        if filled + N < 32 {
+            self.held[filled..filled + N].copy_from_slice(&bytes);
+            self.filled = filled + N;
+            self.total += N as u64;
+            return;
+        }
+        self.write(&bytes);
+    }
+
     pub(super) fn write(&mut self, mut bytes: &[u8]) {
         self.total += bytes.len() as u64;
 
@@ -178,6 +196,29 @@ mod tests {
                 h.write(part);
             }
             assert_eq!(h.finish(), whole, "in chunks of {chunk}");
+        }
+    }
+
+    /// A fixed-width write is the same bytes as the general one, wherever the
+    /// stripe stands when it arrives.
+    #[test]
+    fn a_fixed_width_write_is_the_same_bytes() {
+        let bytes: Vec<u8> = (0..200u32).map(|i| (i * 37 % 251) as u8).collect();
+        let whole = hash(&bytes);
+
+        for lead in 0..32 {
+            let mut h = XxHash64::new();
+            h.write(&bytes[..lead]);
+            let mut rest = &bytes[lead..];
+            while rest.len() >= 8 {
+                let (word, tail) = rest.split_first_chunk::<8>().expect("eight bytes");
+                h.write_array(*word);
+                rest = tail;
+            }
+            for &byte in rest {
+                h.write_array([byte]);
+            }
+            assert_eq!(h.finish(), whole, "after {lead} bytes written whole");
         }
     }
 }

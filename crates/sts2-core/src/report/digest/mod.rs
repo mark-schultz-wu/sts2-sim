@@ -180,7 +180,7 @@ struct Sink {
     hash: XxHash64,
     /// Whether strings a person reads are part of the answer.
     ///
-    /// See [`Observation::rules_digest`]. The nested sinks this crate takes are
+    /// See [`Digested::rules_digest`]. The nested sinks this crate takes are
     /// over ids and counts, so they carry no prose either way.
     prose: bool,
 }
@@ -199,42 +199,52 @@ impl std::hash::Hasher for Sink {
         self.hash.write(bytes);
     }
 
+    #[inline]
     fn write_u8(&mut self, n: u8) {
-        self.write(&n.to_le_bytes());
+        self.hash.write_array(n.to_le_bytes());
     }
 
+    #[inline]
     fn write_u16(&mut self, n: u16) {
-        self.write(&n.to_le_bytes());
+        self.hash.write_array(n.to_le_bytes());
     }
 
+    #[inline]
     fn write_u32(&mut self, n: u32) {
-        self.write(&n.to_le_bytes());
+        self.hash.write_array(n.to_le_bytes());
     }
 
+    #[inline]
     fn write_u64(&mut self, n: u64) {
-        self.write(&n.to_le_bytes());
+        self.hash.write_array(n.to_le_bytes());
     }
 
+    #[inline]
     fn write_usize(&mut self, n: usize) {
         self.write_u64(n as u64);
     }
 
+    #[inline]
     fn write_i8(&mut self, n: i8) {
         self.write_u8(n as u8);
     }
 
+    #[inline]
     fn write_i16(&mut self, n: i16) {
         self.write_u16(n as u16);
     }
 
+    #[inline]
     fn write_i32(&mut self, n: i32) {
         self.write_u32(n as u32);
     }
 
+    #[inline]
     fn write_i64(&mut self, n: i64) {
         self.write_u64(n as u64);
     }
 
+    #[inline]
     fn write_isize(&mut self, n: isize) {
         self.write_i64(n as i64);
     }
@@ -276,16 +286,19 @@ impl Sink {
         self.hash.finish()
     }
 
+    #[inline]
     fn u8(&mut self, value: u8) {
-        self.hash.write(&[value]);
+        self.hash.write_array([value]);
     }
 
+    #[inline]
     fn u32(&mut self, value: u32) {
-        self.hash.write(&value.to_le_bytes());
+        self.hash.write_array(value.to_le_bytes());
     }
 
+    #[inline]
     fn i32(&mut self, value: i32) {
-        self.hash.write(&value.to_le_bytes());
+        self.hash.write_array(value.to_le_bytes());
     }
 
     /// A game-domain number, encoded in the legacy digest width.
@@ -297,10 +310,12 @@ impl Sink {
         );
     }
 
+    #[inline]
     fn u64(&mut self, value: u64) {
-        self.hash.write(&value.to_le_bytes());
+        self.hash.write_array(value.to_le_bytes());
     }
 
+    #[inline]
     fn bool(&mut self, value: bool) {
         self.u8(u8::from(value));
     }
@@ -323,6 +338,7 @@ impl Sink {
 
     /// A count, always eight bytes, so a `usize` of another width digests the
     /// same.
+    #[inline]
     fn len(&mut self, value: usize) {
         self.u64(value as u64);
     }
