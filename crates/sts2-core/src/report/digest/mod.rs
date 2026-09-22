@@ -50,16 +50,17 @@ mod xxhash;
 
 pub use section::Section;
 
+use std::borrow::Borrow;
 use std::hash::Hash;
 
 use num_traits::ToPrimitive;
 use xxhash::XxHash64;
 
 use crate::{
-    Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, Combat, ContentVersion,
-    Coord, Cost, Creature, Entry, EventOption, EventOptionKey, EventOptionKinds, FlagSet, Held,
-    Intent, Keyed, Map, ModelId, NextMove, Node, Observation, Orbs, Playable, PowerAmount, Preview,
-    Reachable, RestOption, Room, Stack, Stock, Take,
+    Attack, Blocked, CardIdent, CardVars, Carried, Channelled, ChestOption, ContentVersion, Coord,
+    Cost, Entry, EventOption, EventOptionKey, EventOptionKinds, FlagSet, Held, Intent, Keyed,
+    ModelId, NextMove, Node, Observed, ObservedCreature, ObservedFight, ObservedPlayable, Orbs,
+    PowerAmount, Preview, Reachable, RestOption, Room, Stack, Stock, Take,
 };
 
 /// One observation, as eight bytes.
@@ -92,12 +93,14 @@ impl std::fmt::Display for Digest {
     }
 }
 
-impl<V: ContentVersion> Observation<V> {
-    /// This observation, as eight bytes.
-    ///
+/// An observation, or anything that lends its facts, as eight bytes.
+///
+/// Provided for every [`Observed`], so an owned observation and a run that
+/// lends its facts are hashed by the same walk.
+pub trait Digested<V: ContentVersion>: Observed<V> + Sized {
     /// Everything, prose included. What two copies of the *game* are compared
     /// on, where a changed description is a difference worth seeing.
-    pub fn digest(&self) -> Digest {
+    fn digest(&self) -> Digest {
         let mut sink = Sink::new();
         sink.observation(self);
         Digest(sink.finish())
@@ -113,12 +116,20 @@ impl<V: ContentVersion> Observation<V> {
     ///
     /// Everything a rule can observe stays, down to the RNG draw counts. A
     /// card's numbers stay through `Preview::vars`. Only sentences go.
-    pub fn rules_digest(&self) -> Digest {
+    fn rules_digest(&self) -> Digest {
         let mut sink = Sink::rules();
         sink.observation(self);
         Digest(sink.finish())
     }
+
+    /// One rules digest per [`Section`], so a comparison that disagrees can
+    /// name the part that moved.
+    fn sections(&self) -> [(Section, Digest); Section::ALL.len()] {
+        section::sections(self)
+    }
 }
+
+impl<V: ContentVersion, O: Observed<V>> Digested<V> for O {}
 
 // The tags. Written out as constants rather than as `as u8` on some Rust enum,
 // because a tag is part of the digest's definition and a variant's position is
@@ -342,6 +353,30 @@ impl Sink {
         }
     }
 
+    /// A [`Sink::list`] of what an iterator lends, which knows its count before
+    /// it is walked.
+    fn seq<T>(
+        &mut self,
+        values: impl ExactSizeIterator<Item = T>,
+        mut each: impl FnMut(&mut Sink, T),
+    ) {
+        self.len(values.len());
+        for value in values {
+            each(self, value);
+        }
+    }
+
+    /// A [`Sink::option`] of what is lent by value.
+    fn maybe<T>(&mut self, value: Option<T>, each: impl FnOnce(&mut Sink, T)) {
+        match value {
+            None => self.u8(NONE),
+            Some(value) => {
+                self.u8(SOME);
+                each(self, value);
+            }
+        }
+    }
+
     /// An id, by the only thing about it this crate can see: which value it is.
     ///
     /// Through [`Hash`], which every generated id derives and which for a
@@ -360,8 +395,11 @@ impl Sink {
         S: FlagSet,
         S::Member: Hash,
     {
-        let held: Vec<&S::Member> = S::MEMBERS.iter().filter(|m| set.contains(**m)).collect();
-        self.list(&held, |sink, member| sink.id(*member));
+        let held = || S::MEMBERS.iter().filter(|m| set.contains(**m));
+        self.len(held().count());
+        for member in held() {
+            self.id(member);
+        }
     }
 
     /// A map digested without reading its order.
@@ -373,13 +411,13 @@ impl Sink {
     /// swap two values differ. The streams are sorted now, and this still
     /// takes the sum. Walking them in order instead moves every committed
     /// digest.
-    fn positions<K: Hash + Copy>(&mut self, streams: &Keyed<K, crate::Position>) {
+    fn positions<K: Hash>(&mut self, streams: impl ExactSizeIterator<Item = (K, crate::Position)>) {
         self.len(streams.len());
 
         let mut total: u64 = 0;
-        for (stream, position) in streams.iter() {
+        for (stream, position) in streams {
             let mut entry = Sink::new();
-            entry.id(stream);
+            entry.id(&stream);
             entry.u32(position.counter);
             total = total.wrapping_add(entry.finish());
         }
@@ -488,73 +526,50 @@ impl Sink {
         }
     }
 
-    fn observation<V: ContentVersion>(&mut self, observed: &Observation<V>) {
-        let Observation {
-            act,
-            floor,
-            hp,
-            max_hp,
-            alive,
-            run_over,
-            victory,
-            gold,
-            relics,
-            potions,
-            potion_slots,
-            deck,
-            in_combat,
-            map,
-            rng,
-            room,
-            combat,
-        } = observed;
-
-        self.number(act);
-        self.number(floor);
-        self.number(hp);
-        self.number(max_hp);
-        self.bool(*alive);
-        self.bool(*run_over);
-        self.option(victory, |sink, won| sink.bool(*won));
-        self.number(gold);
-        self.list(relics, |sink, relic| sink.carried(relic));
-        self.list(potions, |sink, potion| sink.held(potion));
+    fn observation<V: ContentVersion>(&mut self, observed: &impl Observed<V>) {
+        self.number(&observed.act());
+        self.number(&observed.floor());
+        self.number(&observed.hp());
+        self.number(&observed.max_hp());
+        self.bool(observed.alive());
+        self.bool(observed.run_over());
+        self.maybe(observed.victory(), |sink, won| sink.bool(won));
+        self.number(&observed.gold());
+        self.seq(observed.relics(), |sink, relic| {
+            sink.carried(relic.borrow())
+        });
+        self.seq(observed.potions(), |sink, potion| {
+            sink.held(potion.borrow())
+        });
         self.len(
-            potion_slots
+            observed
+                .potion_slots()
                 .to_usize()
                 .expect("potion slot count must fit the digest format"),
         );
-        self.list(deck, |sink, card| sink.card(card));
-        self.bool(*in_combat);
-        self.map(map);
-        self.counters_of(rng);
-        self.option(room, |sink, room| sink.room(room));
-        self.option(combat, |sink, combat| sink.combat(combat));
+        self.seq(observed.deck(), |sink, card| sink.card(&card));
+        self.bool(observed.in_combat());
+        self.map(observed);
+        self.counters_of(observed);
+        self.maybe(observed.room(), |sink, room| sink.room(room.borrow()));
+        self.maybe(observed.combat(), |sink, combat| sink.combat(&combat));
     }
 
-    fn map<V: ContentVersion>(&mut self, map: &Map<V>) {
-        let Map {
-            at,
-            visited,
-            travelable,
-            points,
-            proceed,
-        } = map;
-
-        self.option(at, |sink, at| sink.coord(at));
-        self.list(visited, |sink, at| sink.coord(at));
-        self.list(travelable, |sink, step| {
+    fn map<V: ContentVersion>(&mut self, observed: &impl Observed<V>) {
+        self.maybe(observed.at(), |sink, at| sink.coord(&at));
+        self.seq(observed.visited(), |sink, at| sink.coord(&at));
+        self.seq(observed.travelable(), |sink, step| {
             let Reachable { at, kind } = step;
-            sink.coord(at);
-            sink.id(kind);
+            sink.coord(&at);
+            sink.id(&kind);
         });
-        self.list(points, |sink, node| {
+        self.list(observed.points(), |sink, node| {
             let Node { at, kind, to } = node;
             sink.coord(at);
             sink.id(kind);
             sink.list(to, |sink, at| sink.coord(at));
         });
-        self.bool(*proceed);
+        self.bool(observed.proceed());
     }
 
     /// The draw counts, and deliberately not the generator words beside them.
@@ -563,10 +578,9 @@ impl Sink {
     /// makes two builds of one game disagree by construction, so the words are
     /// compared where both sides carry them. That is a check the digest cannot
     /// express.
-    fn counters_of<V: ContentVersion>(&mut self, rng: &crate::Positions<V>) {
-        let crate::Positions { run, player } = rng;
-        self.positions(run);
-        self.positions(player);
+    fn counters_of<V: ContentVersion>(&mut self, observed: &impl Observed<V>) {
+        self.positions(observed.run_streams());
+        self.positions(observed.player_streams());
     }
 
     fn room<V: ContentVersion>(&mut self, room: &Room<V>) {
@@ -689,35 +703,19 @@ impl Sink {
     ///
     /// Split out because a scenario hashes it on its own. See
     /// [`crate::Section`].
-    fn fight_scalars<V: ContentVersion>(&mut self, combat: &Combat<V>) {
-        let Combat {
-            turn,
-            phase,
-            energy,
-            stars,
-            round,
-            encounter,
-            orbs: _,
-            hand: _,
-            draw: _,
-            discard: _,
-            exhaust: _,
-            creatures: _,
-            legal: _,
-        } = combat;
-
-        self.number(turn);
-        self.id(phase);
-        self.number(energy);
-        self.number(stars);
-        self.number(round);
-        self.option(encounter, |sink, encounter| sink.id(encounter));
+    fn fight_scalars<V: ContentVersion>(&mut self, fight: &impl ObservedFight<V>) {
+        self.number(&fight.turn());
+        self.id(&fight.phase());
+        self.number(&fight.energy());
+        self.number(&fight.stars());
+        self.number(&fight.round());
+        self.maybe(fight.encounter(), |sink, encounter| sink.id(&encounter));
     }
 
     /// The orb queue, which sits at the end of a fight's walk because that is
     /// where it has always sat. Its own method so a section reaches it too.
-    fn orbs<V: ContentVersion>(&mut self, orbs: &Option<Orbs<V>>) {
-        self.option(orbs, |sink, orbs| {
+    fn orbs<V: ContentVersion>(&mut self, orbs: Option<&Orbs<V>>) {
+        self.maybe(orbs, |sink, orbs| {
             let Orbs { capacity, queue } = orbs;
             sink.number(capacity);
             sink.list(queue, |sink, channelled| {
@@ -733,65 +731,38 @@ impl Sink {
         });
     }
 
-    fn combat<V: ContentVersion>(&mut self, combat: &Combat<V>) {
-        let Combat {
-            hand,
-            draw,
-            discard,
-            exhaust,
-            creatures,
-            legal,
-            turn: _,
-            phase: _,
-            energy: _,
-            stars: _,
-            round: _,
-            encounter: _,
-            orbs,
-        } = combat;
-
-        self.fight_scalars(combat);
-        for pile in [hand, draw, discard, exhaust] {
-            self.list(pile, |sink, card| sink.card(card));
-        }
-        self.list(creatures, |sink, creature| sink.creature(creature));
-        self.list(legal, |sink, playable| sink.playable(playable));
-        self.orbs(orbs);
+    fn combat<V: ContentVersion>(&mut self, fight: &impl ObservedFight<V>) {
+        self.fight_scalars(fight);
+        self.seq(fight.hand(), |sink, card| sink.card(&card));
+        self.seq(fight.draw(), |sink, card| sink.card(&card));
+        self.seq(fight.discard(), |sink, card| sink.card(&card));
+        self.seq(fight.exhaust(), |sink, card| sink.card(&card));
+        self.seq(fight.creatures(), |sink, creature| sink.creature(&creature));
+        self.seq(fight.legal(), |sink, playable| sink.playable(&playable));
+        self.orbs(fight.orbs());
     }
 
-    fn creature<V: ContentVersion>(&mut self, creature: &Creature<V>) {
-        let Creature {
-            id,
-            model,
-            side,
-            hp,
-            max_hp,
-            block,
-            alive,
-            powers,
-            next_move,
-        } = creature;
-
-        self.id(id);
-        self.option(model, |sink, model| sink.model(model));
-        self.id(side);
-        self.number(hp);
-        self.number(max_hp);
-        self.number(block);
-        self.bool(*alive);
-        self.list(powers, |sink, stack| {
+    fn creature<V: ContentVersion>(&mut self, creature: &impl ObservedCreature<V>) {
+        self.id(&creature.id());
+        self.maybe(creature.model(), |sink, model| sink.model(&model));
+        self.id(&creature.side());
+        self.number(&creature.hp());
+        self.number(&creature.max_hp());
+        self.number(&creature.block());
+        self.bool(creature.alive());
+        self.seq(creature.powers(), |sink, stack| {
             let Stack { power, amount } = stack;
-            sink.id(power);
+            sink.id(&power);
             match amount {
                 PowerAmount::Counted(amount) => {
                     sink.u8(POWER_COUNTED);
-                    sink.number(amount);
+                    sink.number(&amount);
                 }
                 PowerAmount::Endless => sink.u8(POWER_ENDLESS),
             }
         });
-        self.option(next_move, |sink, next| {
-            let NextMove { id, intents } = next;
+        self.maybe(creature.next_move(), |sink, next| {
+            let NextMove { id, intents } = next.borrow();
             sink.id(id);
             sink.list(intents, |sink, intent| {
                 let Intent { kind, attack } = intent;
@@ -833,32 +804,21 @@ impl Sink {
         self.list(targets, |sink, id| sink.id(id));
     }
 
-    fn playable<V: ContentVersion>(&mut self, playable: &Playable<V>) {
-        let Playable {
-            card,
-            cost,
-            star_cost,
-            target,
-            reason,
-            preventer,
-            targets,
-            effect,
-        } = playable;
-
-        self.card(card);
-        self.cost(*cost);
-        self.cost(*star_cost);
-        self.id(target);
-        self.option(reason, |sink, reasons| sink.flags(reasons));
-        self.option(preventer, |sink, model| sink.model(model));
-        self.list(targets, |sink, id| sink.id(id));
-        self.list(effect, |sink, preview| {
+    fn playable<V: ContentVersion>(&mut self, playable: &impl ObservedPlayable<V>) {
+        self.card(&playable.card());
+        self.cost(playable.cost());
+        self.cost(playable.star_cost());
+        self.id(&playable.target());
+        self.maybe(playable.reason(), |sink, reasons| sink.flags(&reasons));
+        self.maybe(playable.preventer(), |sink, model| sink.model(&model));
+        self.list(playable.targets(), |sink, id| sink.id(id));
+        self.seq(playable.effect(), |sink, preview| {
             let Preview {
                 target,
                 text,
                 vars,
                 base,
-            } = preview;
+            } = preview.borrow();
             sink.option(target, |sink, id| sink.id(id));
             // The numbers this sentence has in it are `vars` and `base`, which
             // are digested either way. This is the sentence.
@@ -933,9 +893,9 @@ mod tests {
 
         let of = |entries: [(Stream, u32); 3]| {
             let mut sink = Sink::new();
-            sink.positions(&Keyed::from(
-                entries.map(|(stream, at)| (stream, crate::Position::counted(at))),
-            ));
+            let keyed =
+                Keyed::from(entries.map(|(stream, at)| (stream, crate::Position::counted(at))));
+            sink.positions(keyed.iter().map(|(&stream, &at)| (stream, at)));
             sink.finish()
         };
 

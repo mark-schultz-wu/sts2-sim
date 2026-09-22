@@ -14,6 +14,7 @@ use serial_test::serial;
 use std::time::{Duration, Instant};
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
+use sts2_core::Digested;
 use sts2_core::Seed;
 use sts2_core::fixture::{at, belt, hand};
 use sts2_core::{

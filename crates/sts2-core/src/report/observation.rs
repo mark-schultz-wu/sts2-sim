@@ -755,7 +755,7 @@ impl<K, N> Keyed<K, N> {
     }
 
     /// Every pair, in key order.
-    pub fn iter(&self) -> impl Iterator<Item = (&K, &N)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&K, &N)> {
         self.0.iter().map(|(key, value)| (key, value))
     }
 

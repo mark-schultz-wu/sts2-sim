@@ -12,13 +12,14 @@
 //! Three tables:
 //!
 //! ```text
-//!   per decision kind   clone, command, report, the node a search pays, and
-//!                       the legal moves it picks from
+//!   per decision kind   clone, command, report, the digest a comparison takes
+//!                       instead, the node a search pays, and the legal moves
 //!   the whole replay    calls and bytes per step
 //!   per step            which steps ask for the most
 //! ```
 
 use sts2_content::v0_107_1::V0_107_1;
+use sts2_core::Digested;
 use sts2_core::{Construct, Play, Start, Step};
 use sts2_golden::bench::{kind, named, reached, upto};
 use sts2_golden::{Counted, allocations, every_run, recording};
@@ -49,8 +50,8 @@ fn main() {
 fn kinds(name: &str, start: &Start<V>, steps: &[Step<V>], supported: usize) {
     println!(
         "{name}, allocations per decision\n  \
-         {:<18} {:>6} {:>8} {:>7} {:>6} {:>6}",
-        "", "clone", "command", "report", "node", "legal"
+         {:<18} {:>6} {:>8} {:>7} {:>6} {:>6} {:>6}",
+        "", "clone", "command", "report", "digest", "node", "legal"
     );
     for at in last_of_each_kind(&steps[..supported]) {
         let step = &steps[at];
@@ -69,16 +70,20 @@ fn kinds(name: &str, start: &Start<V>, steps: &[Step<V>], supported: usize) {
         let (_, reported) = allocations(|| {
             std::hint::black_box(after.observe().ok());
         });
+        let (_, digested) = allocations(|| {
+            std::hint::black_box(after.observed().rules_digest());
+        });
         let (_, offered) = allocations(|| {
             std::hint::black_box(base.legal());
         });
 
         println!(
-            "  {:<18} {:>6} {:>8} {:>7} {:>6} {:>6}",
+            "  {:<18} {:>6} {:>8} {:>7} {:>6} {:>6} {:>6}",
             format!("{} @{at}", kind(step)),
             cloned.calls,
             node.calls - cloned.calls,
             reported.calls,
+            digested.calls,
             node.calls,
             offered.calls,
         );

@@ -14,7 +14,9 @@
 //! section takes the next number.
 
 use super::{Digest, Sink};
-use crate::{ContentVersion, Observation};
+use std::borrow::Borrow;
+
+use crate::{ContentVersion, Observation, Observed, ObservedFight};
 
 /// One part of an observation, as the comparison names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -86,79 +88,91 @@ impl std::fmt::Display for Section {
     }
 }
 
-impl<V: ContentVersion> Observation<V> {
-    /// This observation, as one digest per section.
-    ///
-    /// Prose is left out, for the reason [`Observation::rules_digest`] leaves
-    /// it out. A simulator has no localisation tables, and holding it to a
-    /// sentence tests a text formatter.
-    ///
-    /// Every field reaches exactly one section. The destructuring below is
-    /// exhaustive, so a field added to an observation fails to compile until
-    /// somebody says which section it belongs to.
-    pub fn sections(&self) -> [(Section, Digest); Section::ALL.len()] {
-        let Observation {
-            act,
-            floor,
-            hp,
-            max_hp,
-            alive,
-            run_over,
-            victory,
-            gold,
-            relics,
-            potions,
-            potion_slots,
-            deck,
-            in_combat,
-            map,
-            rng,
-            room,
-            combat,
-        } = self;
-
-        let fight = combat.as_ref();
-        Section::ALL.map(|section| {
-            let mut sink = Sink::rules();
-            match section {
-                Section::Run => {
-                    sink.number(act);
-                    sink.number(floor);
-                    sink.number(hp);
-                    sink.number(max_hp);
-                    sink.bool(*alive);
-                    sink.bool(*run_over);
-                    sink.option(victory, |sink, won| sink.bool(*won));
-                    sink.number(gold);
-                    sink.number(potion_slots);
-                    sink.bool(*in_combat);
-                }
-                Section::Relics => sink.list(relics, |sink, relic| sink.carried(relic)),
-                Section::Potions => sink.list(potions, |sink, potion| sink.held(potion)),
-                Section::Deck => sink.list(deck, |sink, card| sink.card(card)),
-                Section::Map => sink.map(map),
-                Section::Rng => sink.counters_of(rng),
-                Section::Room => sink.option(room, |sink, room| sink.room(room)),
-                Section::Turn => sink.option(&fight, |sink, fight| {
-                    sink.fight_scalars(fight);
-                    sink.orbs(&fight.orbs);
-                }),
-                Section::Creatures => sink.option(&fight, |sink, fight| {
-                    sink.list(&fight.creatures, |sink, creature| sink.creature(creature));
-                }),
-                Section::Hand => sink.option(&fight, |sink, fight| {
-                    sink.list(&fight.hand, |sink, card| sink.card(card));
-                }),
-                Section::Piles => sink.option(&fight, |sink, fight| {
-                    for pile in [&fight.draw, &fight.discard, &fight.exhaust] {
-                        sink.list(pile, |sink, card| sink.card(card));
-                    }
-                }),
-                Section::Legal => sink.option(&fight, |sink, fight| {
-                    sink.list(&fight.legal, |sink, playable| sink.playable(playable));
-                }),
+/// This observation, as one digest per section.
+///
+/// Prose is left out, for the reason [`super::Digested::rules_digest`] leaves
+/// it out. A simulator has no localisation tables, and holding it to a sentence
+/// tests a text formatter.
+pub(super) fn sections<V: ContentVersion>(
+    observed: &impl Observed<V>,
+) -> [(Section, Digest); Section::ALL.len()] {
+    let fight = observed.combat();
+    Section::ALL.map(|section| {
+        let mut sink = Sink::rules();
+        match section {
+            Section::Run => {
+                sink.number(&observed.act());
+                sink.number(&observed.floor());
+                sink.number(&observed.hp());
+                sink.number(&observed.max_hp());
+                sink.bool(observed.alive());
+                sink.bool(observed.run_over());
+                sink.maybe(observed.victory(), |sink, won| sink.bool(won));
+                sink.number(&observed.gold());
+                sink.number(&observed.potion_slots());
+                sink.bool(observed.in_combat());
             }
-            (section, Digest(sink.finish()))
-        })
-    }
+            Section::Relics => {
+                sink.seq(observed.relics(), |sink, relic| {
+                    sink.carried(relic.borrow())
+                });
+            }
+            Section::Potions => {
+                sink.seq(observed.potions(), |sink, potion| {
+                    sink.held(potion.borrow())
+                });
+            }
+            Section::Deck => sink.seq(observed.deck(), |sink, card| sink.card(&card)),
+            Section::Map => sink.map(observed),
+            Section::Rng => sink.counters_of(observed),
+            Section::Room => sink.maybe(observed.room(), |sink, room| sink.room(room.borrow())),
+            Section::Turn => sink.maybe(fight.as_ref(), |sink, fight| {
+                sink.fight_scalars(fight);
+                sink.orbs(fight.orbs());
+            }),
+            Section::Creatures => sink.maybe(fight.as_ref(), |sink, fight| {
+                sink.seq(fight.creatures(), |sink, creature| sink.creature(&creature));
+            }),
+            Section::Hand => sink.maybe(fight.as_ref(), |sink, fight| {
+                sink.seq(fight.hand(), |sink, card| sink.card(&card));
+            }),
+            Section::Piles => sink.maybe(fight.as_ref(), |sink, fight| {
+                sink.seq(fight.draw(), |sink, card| sink.card(&card));
+                sink.seq(fight.discard(), |sink, card| sink.card(&card));
+                sink.seq(fight.exhaust(), |sink, card| sink.card(&card));
+            }),
+            Section::Legal => sink.maybe(fight.as_ref(), |sink, fight| {
+                sink.seq(fight.legal(), |sink, playable| sink.playable(&playable));
+            }),
+        }
+        (section, Digest(sink.finish()))
+    })
+}
+
+/// Every field of an observation, named against the section that holds it.
+///
+/// Never called. The destructuring is exhaustive. So a field added to an
+/// observation fails to compile here until somebody gives it a section, and
+/// [`Observed`] a way to lend it.
+#[allow(dead_code)]
+fn every_field_has_a_section<V: ContentVersion>(observation: &Observation<V>) {
+    let Observation {
+        act: _,          // Run
+        floor: _,        // Run
+        hp: _,           // Run
+        max_hp: _,       // Run
+        alive: _,        // Run
+        run_over: _,     // Run
+        victory: _,      // Run
+        gold: _,         // Run
+        relics: _,       // Relics
+        potions: _,      // Potions
+        potion_slots: _, // Run
+        deck: _,         // Deck
+        in_combat: _,    // Run
+        map: _,          // Map
+        rng: _,          // Rng
+        room: _,         // Room
+        combat: _,       // Turn, Creatures, Hand, Piles, Legal
+    } = observation;
 }

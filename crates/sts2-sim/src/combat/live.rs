@@ -1029,6 +1029,32 @@ impl<V: Rules> Live<V> {
         })
     }
 
+    /// What a creature's next move shows, with each attack's damage as it
+    /// will land on the player.
+    ///
+    /// `Attack::damage` is the number that will land, not the one the move
+    /// prints. The game works it out on every read.
+    pub(crate) fn telegraphed(&self, fighter: &Fighter<V>) -> Option<sts2_core::NextMove<V>> {
+        let mut next = fighter.next_move.as_ref()?.telegraph();
+        let player = self
+            .creatures
+            .iter()
+            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER);
+        if let Some(player) = player {
+            for intent in &mut next.intents {
+                if let Some(attack) = &mut intent.attack {
+                    attack.damage = super::board::modified::<V>(
+                        &self.creatures,
+                        fighter.id,
+                        Some(player.id),
+                        attack.damage,
+                    );
+                }
+            }
+        }
+        Some(next)
+    }
+
     /// The player, which every fight has one of.
     pub(crate) fn player(&self) -> &Fighter<V> {
         self.creatures
@@ -1045,27 +1071,14 @@ impl<V: Rules> Live<V> {
     /// `Attack::damage` comes out as the number that will land, not the one
     /// the move prints. The game works it out on every read.
     pub(crate) fn report(&self) -> Combat<V> {
-        let mut creatures: Vec<_> = self.creatures.iter().map(Fighter::creature).collect();
-        let player = self
+        let creatures = self
             .creatures
             .iter()
-            .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
-            .map(|creature| creature.id);
-        for creature in &mut creatures {
-            let (Some(player), Some(next)) = (player, &mut creature.next_move) else {
-                continue;
-            };
-            for intent in &mut next.intents {
-                if let Some(attack) = &mut intent.attack {
-                    attack.damage = super::board::modified::<V>(
-                        &self.creatures,
-                        creature.id,
-                        Some(player),
-                        attack.damage,
-                    );
-                }
-            }
-        }
+            .map(|fighter| Creature {
+                next_move: self.telegraphed(fighter),
+                ..fighter.creature()
+            })
+            .collect();
         Combat {
             turn: self.turn,
             phase: self.phase,

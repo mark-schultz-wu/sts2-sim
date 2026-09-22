@@ -38,6 +38,14 @@ impl<V: Rules> Play<V> for Sim<V> {
 }
 
 impl<V: Rules> Sim<V> {
+    /// The run's facts, lent to a comparison.
+    ///
+    /// What [`Play::observe`] reports, read off the run instead of built. A
+    /// digest of this is the digest of that report, and costs no allocation.
+    pub fn observed(&self) -> &impl sts2_core::Observed<V> {
+        &self.state
+    }
+
     /// Every decision the run accepts right now, in the order a driver picks
     /// from.
     ///

@@ -4,9 +4,9 @@
 //! deterministic, so driving those decisions into any correct implementation
 //! must produce the same observations.
 //!
-//! Both are driven with the same steps and compared on
-//! `Observation::rules_digest`. That covers the map, the legal moves and the
-//! per-stream draw counts, and leaves out the strings a person reads.
+//! Both are compared on their rules digests, which leave out the strings a
+//! person reads. The simulator's comes off `Sim::observed`, so a step that
+//! agrees builds no observation on its side.
 //!
 //! The oracle's half comes from the transcript `build.rs` filled, so this
 //! needs no game. Holding the whole observation, rather than its hash alone,
@@ -16,11 +16,12 @@
 //! test fails if it gets less far, and says to raise it if it gets further.
 
 use std::panic::{self, AssertUnwindSafe};
+use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{
-    Combat, Construct, Creature, Decided, Play, Playable, Position, Positions, PowerAmount, Rules,
-    Snapshot, Step,
+    Combat, Construct, Creature, Decided, Observed, Play, Playable, Position, Positions,
+    PowerAmount, Rules, Snapshot, Step,
 };
 use sts2_golden::{golden_dir, oracle_or_explain, recording};
 
@@ -100,7 +101,7 @@ fn replay<V: Rules + sts2_content_wire::WireContentVersion>(
     };
 
     for (at, step) in golden.steps.iter().enumerate() {
-        let stepped = panic::catch_unwind(AssertUnwindSafe(|| sim.step(step)));
+        let stepped = panic::catch_unwind(AssertUnwindSafe(|| sim.advance(step)));
         if let Some(stopped) = compare(stepped, &mut sim, &mut oracle, step, at, golden) {
             return (at, Some(stopped));
         }
@@ -110,7 +111,7 @@ fn replay<V: Rules + sts2_content_wire::WireContentVersion>(
 
 /// What one step decided, and where it left the run, against the oracle's.
 fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Display>(
-    stepped: std::thread::Result<Result<sts2_core::Answered<V>, E>>,
+    stepped: std::thread::Result<Result<sts2_sim::run::Settled<V>, E>>,
     sim: &mut sts2_sim::Sim<V>,
     oracle: &mut impl Construct<V, Error = impl std::fmt::Display>,
     step: &Step<V>,
@@ -134,36 +135,46 @@ fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Displa
     // A rule nobody has ported panics naming itself, rather than shape every
     // signature around not being written yet. That is a fault like any other,
     // and this is what keeps it one: the run still reports how far it got.
-    let answered = match stepped {
-        Ok(Ok(answered)) => answered,
+    let settled = match stepped {
+        Ok(Ok(settled)) => settled,
         Ok(Err(e)) => return Some(Stopped::Fault(e.to_string())),
         Err(panicked) => return Some(Stopped::Fault(panic_message(&panicked))),
     };
-    let Ok(made) = answered else {
+    let Ok(made) = settled else {
         return Some(Stopped::Refused);
     };
-    let (made, _) = made.split();
 
     // A decision says what it decided; where it left the run is the second
     // question, and comparing two implementations means asking both.
     let want = oracle
         .observe()
         .unwrap_or_else(|e| panic!("{}: step {at}: {e}", golden.name));
-    let looked = panic::catch_unwind(AssertUnwindSafe(|| sim.observe()));
-    let got = match looked {
-        Ok(Ok(got)) => got,
-        Ok(Err(e)) => return Some(Stopped::Fault(e.to_string())),
+    // The simulator's half is hashed off the run itself, which builds nothing.
+    // Its report is built only once the two disagree, to name the fields.
+    let looked = panic::catch_unwind(AssertUnwindSafe(|| {
+        let lent = sim.observed();
+        (
+            lent.rules_digest(),
+            words_apart(&want.observation.rng, lent),
+        )
+    }));
+    let (got, apart) = match looked {
+        Ok(looked) => looked,
         Err(panicked) => return Some(Stopped::Fault(panic_message(&panicked))),
     };
 
-    let diverged = made != wanted
-        || digest_of(&got) != digest_of(&want)
-        || words_apart(&want.observation.rng, &got.observation.rng);
-
-    diverged.then(|| Stopped::Diverged {
+    if made == wanted && got == want.observation.rules_digest() && !apart {
+        return None;
+    }
+    let reported = match panic::catch_unwind(AssertUnwindSafe(|| sim.observe())) {
+        Ok(Ok(reported)) => reported,
+        Ok(Err(e)) => return Some(Stopped::Fault(e.to_string())),
+        Err(panicked) => return Some(Stopped::Fault(panic_message(&panicked))),
+    };
+    Some(Stopped::Diverged {
         want: digest_of(&want),
-        got: digest_of(&got),
-        fields: differences(&wanted, &want, &made, &got),
+        got: got.to_string(),
+        fields: differences(&wanted, &want, &made, &reported),
     })
 }
 
@@ -175,16 +186,14 @@ fn compare<V: Rules + sts2_content_wire::WireContentVersion, E: std::fmt::Displa
 /// different numbers. The next draw off them says so, several moves late.
 fn words_apart<V: sts2_content_wire::WireContentVersion>(
     want: &Positions<V>,
-    got: &Positions<V>,
+    got: &impl Observed<V>,
 ) -> bool {
-    let run = want
-        .run
-        .iter()
-        .any(|(stream, at)| got.run.get(stream).is_some_and(|mine| apart(*at, *mine)));
-    let player = want
-        .player
-        .iter()
-        .any(|(stream, at)| got.player.get(stream).is_some_and(|mine| apart(*at, *mine)));
+    let run = got
+        .run_streams()
+        .any(|(stream, mine)| want.run.get(&stream).is_some_and(|at| apart(*at, mine)));
+    let player = got
+        .player_streams()
+        .any(|(stream, mine)| want.player.get(&stream).is_some_and(|at| apart(*at, mine)));
     run || player
 }
 
