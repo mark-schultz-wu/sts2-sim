@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+mod observed;
+
 use crate::rng::MegaRng;
 use num_traits::ToPrimitive as _;
 use smallvec::SmallVec;
@@ -1492,6 +1494,7 @@ impl<V: Rules> State<V> {
         // A fight that is over is not one a potion can be drunk in, so a live
         // fight is the only one read.
         crate::combat::belt::<V>(&self.player.potions, self.fight(), self.standing().alive)
+            .collect()
     }
 
     /// Every decision the run accepts right now, in the order a driver picks
@@ -1518,21 +1521,11 @@ impl<V: Rules> State<V> {
             return moves;
         }
 
-        let at_boss = self.visited.last().is_some_and(|&at| {
-            self.map
-                .at(at)
-                .expect("the run stands on a point of its own map")
-                .kind
-                == <V::MapPointType as sts2_core::MapPointKinds>::BOSS
-        });
-        // `MapLegality.CanProceed`. No fight is running here, so a boss room
-        // is one the run has won.
-        if at_boss {
+        if self.can_proceed() {
             moves.push(Decision::Proceed);
         } else {
             moves.extend(
-                self.travelable()
-                    .into_iter()
+                self.reachable()
                     .map(|point| Decision::Travel { to: point.at }),
             );
         }
@@ -1656,44 +1649,196 @@ impl<V: Rules> State<V> {
     /// Beside the report rather than inside it, because deciding whether a
     /// move is legal reads this list and nothing else around it.
     pub(crate) fn travelable(&self) -> Vec<Reachable<V>> {
+        self.reachable().collect()
+    }
+
+    /// [`State::travelable`], lent rather than collected.
+    fn reachable(&self) -> impl ExactSizeIterator<Item = Reachable<V>> + '_ {
         let map = &self.map;
-        let standing = self.visited.last().map(|&at| {
-            map.at(at)
-                .expect("the run stands on a point of its own map")
-        });
-        let reachable: Vec<Coord> = match standing {
-            Some(point) => point.to.clone(),
-            None => vec![
-                map.ancient()
+        let from: &[Coord] = match self.visited.last() {
+            Some(&at) => {
+                &map.at(at)
+                    .expect("the run stands on a point of its own map")
+                    .to
+            }
+            None => std::slice::from_ref(
+                &map.ancient()
                     .expect("a generated act map opens somewhere")
                     .at,
-            ],
+            ),
         };
-        reachable
-            .into_iter()
-            .map(|at| Reachable {
-                at,
-                kind: map.at(at).expect("a map edge leads to a node").kind,
-            })
-            .collect()
+        from.iter().map(move |&at| Reachable {
+            at,
+            kind: map.at(at).expect("a map edge leads to a node").kind,
+        })
     }
 
     /// Derive the comparison snapshot from the run's authoritative state.
     pub(crate) fn report(&self) -> Snapshot<V> {
-        let map = &self.map;
-        let standing = self.visited.last().map(|&at| {
-            map.at(at)
+        let standing = self.standing();
+
+        Snapshot {
+            observation: Observation {
+                act: num_traits::cast(self.act).expect("an act index is a game number"),
+                floor: self.floor,
+                hp: standing.hp,
+                max_hp: standing.max_hp,
+                alive: standing.alive,
+                // `RunState.IsGameOver` is every player being dead, and a run
+                // with one player has its answer in `alive`.
+                run_over: !standing.alive,
+                // `CurrentRoom.IsVictoryRoom`, asked only once the run is
+                // over. No room a run can reach is one yet, because the act
+                // that ends a run in victory is not ported.
+                victory: (!standing.alive).then_some(false),
+                gold: self.player.gold,
+                relics: self.carried().collect(),
+                potions: self.belt(),
+                potion_slots: self.player.potion_slots,
+                deck: self.player.deck.to_vec(),
+                in_combat: self.in_combat(),
+                map: Map {
+                    at: self.visited.last().copied(),
+                    visited: self.visited.to_vec(),
+                    travelable: self.travelable(),
+                    points: self.map.shared(),
+                    proceed: self.can_proceed(),
+                },
+                rng: self.positions(),
+                room: self.room(),
+                combat: self.fight_report(),
+            },
+            asking: self.asking(),
+        }
+    }
+
+    /// Whether a fight is running, which is `CombatManager.IsInProgress`.
+    fn in_combat(&self) -> bool {
+        matches!(self.phase, Phase::Combat(_))
+    }
+
+    /// `MapLegality.CanProceed`, and the fight it is standing in being over.
+    /// A boss room with its combat still running is an ordinary fight, and
+    /// leaving one is not a move.
+    fn can_proceed(&self) -> bool {
+        let at_boss = self.visited.last().is_some_and(|&at| {
+            self.map
+                .at(at)
                 .expect("the run stands on a point of its own map")
+                .kind
+                == <V::MapPointType as sts2_core::MapPointKinds>::BOSS
         });
-        let travelable = self.travelable();
-        let at_boss = standing
-            .is_some_and(|point| point.kind == <V::MapPointType as sts2_core::MapPointKinds>::BOSS);
+        at_boss && !self.in_combat()
+    }
+
+    /// The relics the run carries, as a report lists them.
+    fn carried(&self) -> impl ExactSizeIterator<Item = Carried<V>> + '_ {
+        self.player.relics.iter().map(|held| Carried {
+            relic: held.relic,
+            amount: held.amount(),
+            title: None,
+            text: None,
+        })
+    }
+
+    /// The fight the run is standing in, as its report shows it.
+    fn fight_report(&self) -> Option<Combat<V>> {
+        match &self.phase {
+            Phase::Combat(live) => Some(live.report()),
+            // `IsInProgress` is false once the loss is processed, and the
+            // room it was fought in is still the room the run is standing in.
+            // A won fight is still reported for the same reason: the run has
+            // not left the room it was fought in.
+            Phase::Lost { combat } | Phase::Rewards { combat, .. } => Some(combat.clone()),
+            Phase::Map
+            | Phase::Neow { .. }
+            | Phase::Event { .. }
+            | Phase::Treasure { .. }
+            | Phase::RestSite { .. }
+            | Phase::Shop { .. } => None,
+        }
+    }
+
+    /// The question the run is parked on, if it is parked.
+    fn asking(&self) -> Option<Question<V>> {
+        match &self.phase {
+            Phase::Neow { selection, .. } => {
+                selection.as_ref().map(|cards| Question::SelectCards {
+                    min: 0,
+                    max: 1,
+                    asker: None,
+                    options: cards
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .map(|(index, card)| CardOption {
+                            index,
+                            card: CardIdent::new(card),
+                            text: None,
+                        })
+                        .collect(),
+                })
+            }
+            Phase::Combat(live) => live.question(),
+            Phase::Rewards { offered, .. } => offered
+                .iter()
+                .any(|offer| !offer.taken())
+                .then(|| asked::<V>(offered)),
+            // `CardSelectCmd.FromDeckForUpgrade` offers the deck's upgradable
+            // cards alone, so a card already at its highest is not offered and
+            // the indices are that list's rather than the deck's. One card, and
+            // the selection cannot be empty.
+            Phase::RestSite { upgrading, .. } => upgrading.then(|| Question::SelectCards {
+                min: 1,
+                max: 1,
+                asker: None,
+                options: self
+                    .upgradable()
+                    .enumerate()
+                    .map(|(index, (_, card))| CardOption {
+                        index,
+                        card,
+                        text: None,
+                    })
+                    .collect(),
+            }),
+            // Each selection offers a different list. The removal reads the
+            // whole deck, and a pickup reads the deck less what its own filter
+            // leaves out. One card either way, and neither can be empty.
+            Phase::Shop { unfinished, .. } => {
+                let offered = match unfinished {
+                    None => None,
+                    Some(Unfinished::Removal) => Some(self.player.deck.to_vec()),
+                    Some(Unfinished::Pickup { excluding, .. }) => Some(self.clonable(*excluding)),
+                };
+                offered.map(|offered| Question::SelectCards {
+                    min: 1,
+                    max: 1,
+                    asker: None,
+                    options: offered
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, card)| CardOption {
+                            index,
+                            card,
+                            text: None,
+                        })
+                        .collect(),
+                })
+            }
+            // An act opens on its map, which is no room and asks nothing.
+            Phase::Map | Phase::Lost { .. } | Phase::Event { .. } | Phase::Treasure { .. } => None,
+        }
+    }
+
+    /// The room the run is standing in, as its report shows it.
+    fn room(&self) -> Option<Room<V>> {
         let finished = self.phase.finished();
-        let (asking, room, combat, in_combat) = match &self.phase {
+        match &self.phase {
             Phase::Neow {
                 options: neow_options,
                 chosen: neow_chosen,
-                selection: card_selection,
+                ..
             } => {
                 let options = neow_options
                     .iter()
@@ -1717,51 +1862,15 @@ impl<V: Rules> State<V> {
                         }
                     })
                     .collect();
-                let asking = card_selection.as_ref().map(|cards| Question::SelectCards {
-                    min: 0,
-                    max: 1,
-                    asker: None,
-                    options: cards
-                        .iter()
-                        .copied()
-                        .enumerate()
-                        .map(|(index, card)| CardOption {
-                            index,
-                            card: CardIdent::new(card),
-                            text: None,
-                        })
-                        .collect(),
-                });
-                let room = Room::Event {
+                Some(Room::Event {
                     event: V::neow_event(),
                     finished,
                     title: None,
                     text: None,
                     options: if finished { Vec::new() } else { options },
-                };
-                (asking, Some(room), None, false)
+                })
             }
-            Phase::Combat(live) => {
-                let asking = live.question();
-                (asking, None, Some(live.report()), true)
-            }
-            // `IsInProgress` is false once the loss is processed, and the
-            // room it was fought in is still the room the run is standing in.
-            Phase::Lost { combat } => (None, None, Some(combat.clone()), false),
-            Phase::Rewards { combat, offered } => (
-                offered
-                    .iter()
-                    .any(|offer| !offer.taken())
-                    .then(|| asked::<V>(offered)),
-                None,
-                Some(combat.clone()),
-                // The fight is over. It is still reported, because the run has
-                // not left the room it was fought in.
-                false,
-            ),
-            // An act opens on its map, which is no room and asks nothing.
-            Phase::Map => (None, None, None, false),
-            Phase::Event { state, .. } => (None, Some(V::observe_event(state, self)), None, false),
+            Phase::Event { state, .. } => Some(V::observe_event(state, self)),
             Phase::Treasure { relic, finished } => {
                 let options = if *finished {
                     Vec::new()
@@ -1779,38 +1888,13 @@ impl<V: Rules> State<V> {
                         },
                     ]
                 };
-                (
-                    None,
-                    Some(Room::Treasure {
-                        finished: *finished,
-                        options,
-                    }),
-                    None,
-                    false,
-                )
+                Some(Room::Treasure {
+                    finished: *finished,
+                    options,
+                })
             }
-            Phase::RestSite {
-                options, upgrading, ..
-            } => {
-                // `CardSelectCmd.FromDeckForUpgrade` offers the deck's
-                // upgradable cards alone, so a card already at its highest is
-                // not offered and the indices are that list's rather than the
-                // deck's. One card, and the selection cannot be empty.
-                let asking = upgrading.then(|| Question::SelectCards {
-                    min: 1,
-                    max: 1,
-                    asker: None,
-                    options: self
-                        .upgradable()
-                        .enumerate()
-                        .map(|(index, (_, card))| CardOption {
-                            index,
-                            card,
-                            text: None,
-                        })
-                        .collect(),
-                });
-                let offered = options
+            Phase::RestSite { options, .. } => Some(Room::RestSite {
+                options: options
                     .iter()
                     .copied()
                     .enumerate()
@@ -1819,41 +1903,9 @@ impl<V: Rules> State<V> {
                         id,
                         enabled: self.rest_option_enabled(id),
                     })
-                    .collect();
-                (
-                    asking,
-                    Some(Room::RestSite { options: offered }),
-                    None,
-                    false,
-                )
-            }
-            Phase::Shop {
-                entries,
-                unfinished,
-            } => {
-                // Each selection offers a different list. The removal reads the
-                // whole deck, and a pickup reads the deck less what its own
-                // filter leaves out. One card either way, and neither can be
-                // empty.
-                let offered = match unfinished {
-                    None => None,
-                    Some(Unfinished::Removal) => Some(self.player.deck.to_vec()),
-                    Some(Unfinished::Pickup { excluding, .. }) => Some(self.clonable(*excluding)),
-                };
-                let asking = offered.map(|offered| Question::SelectCards {
-                    min: 1,
-                    max: 1,
-                    asker: None,
-                    options: offered
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, card)| CardOption {
-                            index,
-                            card,
-                            text: None,
-                        })
-                        .collect(),
-                });
+                    .collect(),
+            }),
+            Phase::Shop { entries, .. } => {
                 // `EnoughGold` and the potion slot check are derived, the way
                 // the belt is. Both move as the run buys, and neither is a
                 // fact about the shelf.
@@ -1875,56 +1927,9 @@ impl<V: Rules> State<V> {
                         ..entry
                     })
                     .collect();
-                (asking, Some(Room::Shop { entries }), None, false)
+                Some(Room::Shop { entries })
             }
-        };
-        let standing = self.standing();
-
-        Snapshot {
-            observation: Observation {
-                act: num_traits::cast(self.act).expect("an act index is a game number"),
-                floor: self.floor,
-                hp: standing.hp,
-                max_hp: standing.max_hp,
-                alive: standing.alive,
-                // `RunState.IsGameOver` is every player being dead, and a run
-                // with one player has its answer in `alive`.
-                run_over: !standing.alive,
-                // `CurrentRoom.IsVictoryRoom`, asked only once the run is
-                // over. No room a run can reach is one yet, because the act
-                // that ends a run in victory is not ported.
-                victory: (!standing.alive).then_some(false),
-                gold: self.player.gold,
-                relics: self
-                    .player
-                    .relics
-                    .iter()
-                    .map(|held| Carried {
-                        relic: held.relic,
-                        amount: held.amount(),
-                        title: None,
-                        text: None,
-                    })
-                    .collect(),
-                potions: self.belt(),
-                potion_slots: self.player.potion_slots,
-                deck: self.player.deck.to_vec(),
-                in_combat,
-                map: Map {
-                    at: self.visited.last().copied(),
-                    visited: self.visited.to_vec(),
-                    travelable,
-                    points: map.shared(),
-                    // `MapLegality.CanProceed`, and the fight it is standing
-                    // in being over. A boss room with its combat still running
-                    // is an ordinary fight, and leaving one is not a move.
-                    proceed: at_boss && !in_combat,
-                },
-                rng: self.positions(),
-                room,
-                combat,
-            },
-            asking,
+            Phase::Map | Phase::Combat(_) | Phase::Lost { .. } | Phase::Rewards { .. } => None,
         }
     }
 }

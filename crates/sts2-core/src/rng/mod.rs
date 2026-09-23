@@ -379,7 +379,7 @@ const INCR_DOUBLE: f64 = 1.110_223_024_625_156_5e-16;
 /// `StringHelper.GetDeterministicHashCode`: two interleaved lanes over UTF-16
 /// code units, in wrapping `i32`.
 ///
-/// Public because a stream is not always named through [`GameRng::named`]. An
+/// Public because a stream is not always named through [`named`]. An
 /// event mixes its own id in beside the player's slot. That sum is the seed, so
 /// a caller needs the number and not a stream built from it.
 ///

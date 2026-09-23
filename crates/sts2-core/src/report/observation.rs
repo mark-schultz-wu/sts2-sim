@@ -434,7 +434,7 @@ impl CombatId {
         Self(id)
     }
 
-    /// The creature this number names, or [`OutOfRange`] for one no fight
+    /// The creature this number names, or [`OutOfRange`](crate::OutOfRange) for one no fight
     /// assigns.
     pub fn try_new(id: u8) -> Result<Self, crate::OutOfRange> {
         nonmax::NonMaxU8::new(id).map(Self).ok_or(crate::OutOfRange)
@@ -755,7 +755,7 @@ impl<K, N> Keyed<K, N> {
     }
 
     /// Every pair, in key order.
-    pub fn iter(&self) -> impl Iterator<Item = (&K, &N)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&K, &N)> {
         self.0.iter().map(|(key, value)| (key, value))
     }
 

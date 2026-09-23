@@ -13,6 +13,7 @@
 
 use std::fmt::Write as _;
 use std::path::Path;
+use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::Construct;

@@ -26,7 +26,7 @@ pub(super) fn hand<V: Rules>(
     stars: V::Count,
 ) -> Vec<Playable<V>> {
     hand.iter()
-        .map(|card| playable::<V>(card, creatures, energy, stars))
+        .map(|card| InHand::new(card, creatures, energy, stars).playable())
         .collect()
 }
 
@@ -122,31 +122,109 @@ pub(super) fn targets<V: Rules>(
         .collect()
 }
 
-fn playable<V: Rules>(
-    held: &CardInstance<V>,
-    creatures: &[Fighter<V>],
-    energy: V::Count,
-    stars: V::Count,
-) -> Playable<V> {
-    let card = &held.ident;
-    let target = target_type::<V>(*card, creatures);
-    let (cost, star_cost) = held.costs();
-    let reason = reasons::<V>(*card, creatures, cost, star_cost, energy, stars);
-    let targets = targets::<V>(target, creatures, reason.is_some());
+/// One card in hand, with the facts a report and a comparison both read off it.
+///
+/// Everything but the previews is worked out when this is made. The previews
+/// are the dear part, and are worked out when asked for.
+pub(crate) struct InHand<'a, V: Rules> {
+    held: &'a CardInstance<V>,
+    creatures: &'a [Fighter<V>],
+    cost: Cost,
+    star_cost: Cost,
+    target: V::TargetType,
+    reason: Option<V::UnplayableReasons>,
+    targets: Targets,
+}
 
-    Playable {
-        card: *card,
-        cost,
-        star_cost,
-        target,
-        reason,
-        // `BlockedByHook` is the only reason that names one, and nothing in a
-        // fight raises it yet.
-        preventer: None,
-        effect: effect::<V>(held, creatures, &targets),
-        targets,
+impl<'a, V: Rules> InHand<'a, V> {
+    pub(super) fn new(
+        held: &'a CardInstance<V>,
+        creatures: &'a [Fighter<V>],
+        energy: V::Count,
+        stars: V::Count,
+    ) -> Self {
+        let target = target_type::<V>(held.ident, creatures);
+        let (cost, star_cost) = held.costs();
+        let reason = reasons::<V>(held.ident, creatures, cost, star_cost, energy, stars);
+        Self {
+            held,
+            creatures,
+            cost,
+            star_cost,
+            target,
+            reason,
+            targets: targets::<V>(target, creatures, reason.is_some()),
+        }
+    }
+
+    /// What playing it does, per target it varies by.
+    pub(super) fn previews(&self) -> Previews<V> {
+        effect::<V>(self.held, self.creatures, &self.targets)
+    }
+
+    /// The card as a report lists it.
+    fn playable(&self) -> Playable<V> {
+        // Sized to the previews. `into_vec` keeps the inline capacity, and a
+        // `collect` that cannot trust the length starts at four, so either
+        // allocates four previews for the one a card usually has.
+        let previews = self.previews();
+        let mut effect = Vec::with_capacity(previews.len());
+        effect.extend(previews);
+        Playable {
+            card: self.held.ident,
+            cost: self.cost,
+            star_cost: self.star_cost,
+            target: self.target,
+            reason: self.reason,
+            // `BlockedByHook` is the only reason that names one, and nothing
+            // in a fight raises it yet.
+            preventer: None,
+            effect,
+            targets: self.targets.clone(),
+        }
     }
 }
+
+impl<V: Rules> sts2_core::ObservedPlayable<V> for InHand<'_, V> {
+    fn card(&self) -> CardIdent<V> {
+        self.held.ident
+    }
+
+    fn cost(&self) -> Cost {
+        self.cost
+    }
+
+    fn star_cost(&self) -> Cost {
+        self.star_cost
+    }
+
+    fn target(&self) -> V::TargetType {
+        self.target
+    }
+
+    fn reason(&self) -> Option<V::UnplayableReasons> {
+        self.reason
+    }
+
+    fn preventer(&self) -> Option<sts2_core::ModelId<V>> {
+        None
+    }
+
+    fn targets(&self) -> &[CombatId] {
+        &self.targets
+    }
+
+    fn effect<R>(&self, read: impl FnOnce(&[Preview<V>]) -> R) -> R {
+        read(&self.previews())
+    }
+}
+
+/// A card's previews, held inline because a comparison asks for them one card
+/// at a time and keeps none.
+///
+/// Four, which holds a card aimed at every enemy the recordings field. A
+/// report copies them into its own list.
+pub(super) type Previews<V> = SmallVec<[Preview<V>; 4]>;
 
 /// Every decision a live fight accepts, in the order its report implies them.
 ///
@@ -215,31 +293,28 @@ pub(crate) fn drinks<V: Rules>(
 /// slice cannot raise. Nothing is queued, because a decision resolves whole.
 /// Nothing is stuck, because that is a relic and none is ported. The player is
 /// alive, because a dead one stops the run.
-pub(crate) fn belt<V: Rules>(
-    potions: &[V::Potion],
-    fight: Option<&Live<V>>,
+pub(crate) fn belt<'a, V: Rules>(
+    potions: &'a [V::Potion],
+    fight: Option<&'a Live<V>>,
     alive: bool,
-) -> Vec<Held<V>> {
-    potions
-        .iter()
-        .map(|&potion| {
-            let reason = undrinkable::<V>(potion, fight, alive);
-            Held {
-                potion,
-                // The game reads both out of its localisation tables, which
-                // the simulator does not have.
-                title: None,
-                text: None,
-                targets: match (reason, fight) {
-                    (None, Some(fight)) => aimable::<V>(potion, &fight.creatures),
-                    // A potion nobody can drink names nobody, and one drunk
-                    // outside a fight has no creature to name.
-                    _ => Targets::new(),
-                },
-                reason,
-            }
-        })
-        .collect()
+) -> impl ExactSizeIterator<Item = Held<V>> + 'a {
+    potions.iter().map(move |&potion| {
+        let reason = undrinkable::<V>(potion, fight, alive);
+        Held {
+            potion,
+            // The game reads both out of its localisation tables, which
+            // the simulator does not have.
+            title: None,
+            text: None,
+            targets: match (reason, fight) {
+                (None, Some(fight)) => aimable::<V>(potion, &fight.creatures),
+                // A potion nobody can drink names nobody, and one drunk
+                // outside a fight has no creature to name.
+                _ => Targets::new(),
+            },
+            reason,
+        }
+    })
 }
 
 /// Why one potion cannot be drunk, or nothing for one that can.
@@ -339,7 +414,7 @@ fn effect<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Fighter<V>],
     targets: &[CombatId],
-) -> Vec<Preview<V>> {
+) -> Previews<V> {
     let per_target = matches!(
         Some(target_type::<V>(held.ident, creatures)),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
@@ -358,7 +433,7 @@ fn effect<V: Rules>(
 
     // Sized up front. A `SmallVec` does not promise its length the way a
     // `Vec` does, and a collect that cannot read one grows by doubling.
-    let mut previews: Vec<Preview<V>> = Vec::with_capacity(against.len());
+    let mut previews: Previews<V> = Previews::with_capacity(against.len());
     previews.extend(against.into_iter().map(|target| Preview {
         target,
         // The game formats this from its localisation tables, which the

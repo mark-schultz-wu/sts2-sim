@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use sts2_core::fixture::at;
-use sts2_core::{PowerAmount, Section};
+use sts2_core::{Digested, PowerAmount, Section};
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{

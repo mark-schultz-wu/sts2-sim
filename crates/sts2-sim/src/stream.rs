@@ -104,17 +104,29 @@ impl<V: Rules> Streams<V> {
     /// two are compared on what they both carry.
     pub(crate) fn positions(&self) -> Positions<V> {
         Positions {
-            run: V::run_rng_types()
-                .iter()
-                .copied()
-                .zip(self.run.iter().map(position_of))
-                .collect(),
-            player: V::player_rng_types()
-                .iter()
-                .copied()
-                .zip(self.player.iter().map(position_of))
-                .collect(),
+            run: self.run_positions().collect(),
+            player: self.player_positions().collect(),
         }
+    }
+
+    /// Where each run stream stands, lent rather than collected.
+    pub(crate) fn run_positions(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (V::RunRngType, Position)> + '_ {
+        V::run_rng_types()
+            .iter()
+            .copied()
+            .zip(self.run.iter().map(position_of))
+    }
+
+    /// Where each of the player's streams stands, lent rather than collected.
+    pub(crate) fn player_positions(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (V::PlayerRngType, Position)> + '_ {
+        V::player_rng_types()
+            .iter()
+            .copied()
+            .zip(self.player.iter().map(position_of))
     }
 }
 

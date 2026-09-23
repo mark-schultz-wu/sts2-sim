@@ -17,6 +17,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use sts2_core::Digested;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{Construct, ContentVersion, Play, Section, Snapshot};

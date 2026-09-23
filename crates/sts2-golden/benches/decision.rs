@@ -9,6 +9,7 @@
 //!   clone    the run a node branches from
 //!   command  the rules the decision runs, off a clone made beforehand
 //!   report   the observation a caller that wants one derives
+//!   digest   what a comparison takes instead: the rules digest of the lent facts
 //!   node     the two a search pays, which is a clone and a command
 //!   legal    the moves a search picks from, asked where the decision is made
 //! ```
@@ -34,6 +35,7 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 
 use sts2_content::v0_107_1::V0_107_1;
+use sts2_core::Digested;
 use sts2_core::{Construct, Play, Step};
 use sts2_golden::bench::{kind, reached, upto};
 use sts2_golden::{every_run, recording};
@@ -69,6 +71,8 @@ fn decisions(c: &mut Criterion) {
             });
 
             group.bench_function("report", |b| b.iter(|| after.observe().ok()));
+
+            group.bench_function("digest", |b| b.iter(|| after.observed().rules_digest()));
 
             group.bench_function("legal", |b| b.iter(|| base.legal()));
 

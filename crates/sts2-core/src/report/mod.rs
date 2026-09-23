@@ -16,4 +16,5 @@
 
 pub mod digest;
 pub mod observation;
+pub mod observed;
 pub mod question;
