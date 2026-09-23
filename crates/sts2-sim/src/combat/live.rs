@@ -915,7 +915,10 @@ pub(crate) struct Fighter<V: Rules> {
 
 impl<V: Rules> Fighter<V> {
     /// What a report shows of it, which is everything but the models.
-    pub(crate) fn creature(&self) -> Creature<V> {
+    ///
+    /// The move is the fight's to give, because the fight modifies its damage.
+    /// See [`Live::telegraphed`].
+    pub(crate) fn creature(&self, next_move: Option<sts2_core::NextMove<V>>) -> Creature<V> {
         Creature {
             id: self.id,
             model: self.model,
@@ -925,7 +928,7 @@ impl<V: Rules> Fighter<V> {
             block: self.block,
             alive: self.alive,
             powers: self.powers.iter().map(HeldPower::stack).collect(),
-            next_move: self.next_move.as_ref().map(Telegraphed::telegraph),
+            next_move,
         }
     }
 }
@@ -1074,10 +1077,7 @@ impl<V: Rules> Live<V> {
         let creatures = self
             .creatures
             .iter()
-            .map(|fighter| Creature {
-                next_move: self.telegraphed(fighter),
-                ..fighter.creature()
-            })
+            .map(|fighter| fighter.creature(self.telegraphed(fighter)))
             .collect();
         Combat {
             turn: self.turn,
