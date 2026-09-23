@@ -63,7 +63,7 @@ pub enum Rests {
 /// The acts differ in three numbers and in nothing else, so the generator
 /// takes them rather than knowing about acts. Which numbers an act uses is
 /// `BaseNumberOfRooms` and `GetMapPointTypes`, both of them per build, which
-/// is why [`ContentVersion::act_layout`] is what answers it.
+/// is why [`Rules::act_layout`] is what answers it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Layout {
     /// `BaseNumberOfRooms`, which is one less than the grid's height.
@@ -2629,7 +2629,7 @@ pub trait Rules: Hooks {
     /// The curses that take a blessing off the table with them.
     fn neow_pairs() -> &'static [(Self::Relic, Self::Relic)];
 
-    /// The curse that suppresses the first of [`ContentVersion::neow_flips`].
+    /// The curse that suppresses the first of [`Rules::neow_flips`].
     fn neow_suppresses_flip() -> Self::Relic;
 
     /// Whether Neow can offer this relic to a run of this shape.

@@ -434,7 +434,7 @@ impl CombatId {
         Self(id)
     }
 
-    /// The creature this number names, or [`OutOfRange`] for one no fight
+    /// The creature this number names, or [`OutOfRange`](crate::OutOfRange) for one no fight
     /// assigns.
     pub fn try_new(id: u8) -> Result<Self, crate::OutOfRange> {
         nonmax::NonMaxU8::new(id).map(Self).ok_or(crate::OutOfRange)
