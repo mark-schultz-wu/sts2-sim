@@ -1213,7 +1213,7 @@ pub(super) fn draw<V: Rules>(
             reshuffle(live, rngs.shuffle);
         }
         let drawn = live.draw.remove(0);
-        live.hand.push(drawn.clone());
+        live.hand.push(drawn);
         // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
         // than once for the whole draw. So a card that spends the pool as it
         // arrives has spent it before the next card is taken.

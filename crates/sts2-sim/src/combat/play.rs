@@ -267,7 +267,7 @@ pub(crate) fn answer<V: Rules>(
 
     let mut effect = asking.effect;
     let playing = match &effect.asker {
-        Asker::Card(card) => Some(card.clone()),
+        Asker::Card(card) => Some(*card),
         Asker::Potion(_) => None,
     };
     let ascension = live.ascension;
@@ -323,7 +323,7 @@ pub(super) fn carry_on<V: Rules>(
                 if effect.plays.done >= effect.plays.count {
                     break;
                 }
-                let card = card.clone();
+                let card = *card;
                 let mut board = Board::for_card(
                     next,
                     streams.combat(),
@@ -364,7 +364,7 @@ pub(super) fn carry_on<V: Rules>(
         };
 
         let playing = match &effect.asker {
-            Asker::Card(card) => Some(card.clone()),
+            Asker::Card(card) => Some(*card),
             Asker::Potion(_) => None,
         };
         let mut board = Board::for_card(
