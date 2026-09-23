@@ -16,7 +16,7 @@
 use super::{Digest, Sink};
 use std::borrow::Borrow;
 
-use crate::{ContentVersion, Observation, Observed, ObservedFight};
+use crate::{ContentVersion, Observed, ObservedFight};
 
 /// One part of an observation, as the comparison names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -147,32 +147,4 @@ pub(super) fn sections<V: ContentVersion>(
         }
         (section, Digest(sink.finish()))
     })
-}
-
-/// Every field of an observation, named against the section that holds it.
-///
-/// Never called. The destructuring is exhaustive. So a field added to an
-/// observation fails to compile here until somebody gives it a section, and
-/// [`Observed`] a way to lend it.
-#[allow(dead_code)]
-fn every_field_has_a_section<V: ContentVersion>(observation: &Observation<V>) {
-    let Observation {
-        act: _,          // Run
-        floor: _,        // Run
-        hp: _,           // Run
-        max_hp: _,       // Run
-        alive: _,        // Run
-        run_over: _,     // Run
-        victory: _,      // Run
-        gold: _,         // Run
-        relics: _,       // Relics
-        potions: _,      // Potions
-        potion_slots: _, // Run
-        deck: _,         // Deck
-        in_combat: _,    // Run
-        map: _,          // Map
-        rng: _,          // Rng
-        room: _,         // Room
-        combat: _,       // Turn, Creatures, Hand, Piles, Legal
-    } = observation;
 }

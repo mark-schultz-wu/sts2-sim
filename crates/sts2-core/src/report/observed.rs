@@ -325,3 +325,83 @@ impl<V: ContentVersion> ObservedPlayable<V> for &Playable<V> {
         read(&self.effect)
     }
 }
+
+/// Every field the owned side lends, named against the method that lends it.
+///
+/// Never called. Each destructuring is exhaustive, so a field added to one of
+/// these structs fails to compile here. It compiles again once the field is
+/// named, which is the moment to give its trait a method and the walk a read.
+#[allow(dead_code)]
+fn every_field_is_lent<V: ContentVersion>(
+    observation: &Observation<V>,
+    combat: &Combat<V>,
+    creature: &Creature<V>,
+    playable: &Playable<V>,
+) {
+    let Observation {
+        act: _,
+        floor: _,
+        hp: _,
+        max_hp: _,
+        alive: _,
+        run_over: _,
+        victory: _,
+        gold: _,
+        relics: _,
+        potions: _,
+        potion_slots: _,
+        deck: _,
+        in_combat: _,
+        map:
+            crate::Map {
+                at: _,
+                visited: _,
+                travelable: _,
+                points: _,
+                proceed: _,
+            },
+        rng:
+            crate::Positions {
+                run: _,    // run_streams
+                player: _, // player_streams
+            },
+        room: _,
+        combat: _,
+    } = observation;
+    let Combat {
+        turn: _,
+        phase: _,
+        energy: _,
+        stars: _,
+        round: _,
+        encounter: _,
+        hand: _,
+        draw: _,
+        discard: _,
+        exhaust: _,
+        creatures: _,
+        legal: _,
+        orbs: _,
+    } = combat;
+    let Creature {
+        id: _,
+        model: _,
+        side: _,
+        hp: _,
+        max_hp: _,
+        block: _,
+        alive: _,
+        powers: _,
+        next_move: _,
+    } = creature;
+    let Playable {
+        card: _,
+        cost: _,
+        star_cost: _,
+        target: _,
+        reason: _,
+        preventer: _,
+        targets: _,
+        effect: _,
+    } = playable;
+}

@@ -34,10 +34,15 @@
 //!
 //! # Adding a field
 //!
-//! Every walk below destructures its struct exhaustively. A field added to
-//! [`Observation`] and not to the digest is then a compile error, rather than a
-//! divergence the digest silently cannot see. That is the whole reason the
-//! walks are written out instead of derived.
+//! A field the digest cannot see is a divergence it silently misses. So a field
+//! added anywhere it reads is a compile error until the walk reads it too.
+//!
+//! - An item lent whole, such as a `Room` or a `Preview`, is destructured
+//!   exhaustively by the walk below. That is why the walks are written out
+//!   instead of derived.
+//! - [`Observation`], `Combat`, `Creature` and `Playable` are read through
+//!   [`Observed`] and its item traits. Their fields are destructured where the
+//!   owned side lends them, in `observed.rs`.
 //!
 //! # The one neighbour
 //!
