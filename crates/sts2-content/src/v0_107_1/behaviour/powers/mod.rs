@@ -17,7 +17,7 @@ use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     Stateless(Power),
     Slow { counted: Number },

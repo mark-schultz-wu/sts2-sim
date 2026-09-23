@@ -164,8 +164,6 @@ pub trait GameRng: Sized {
     /// Seeded, at counter zero.
     fn new(seed: u64) -> Self;
 
-    fn seed(&self) -> u64;
-
     /// How many draws this stream has taken. Observations report it, and it is
     /// the position [`GameRng::with_counter`] rebuilds from.
     fn counter(&self) -> i32;

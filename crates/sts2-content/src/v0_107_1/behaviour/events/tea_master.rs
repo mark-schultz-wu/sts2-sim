@@ -136,9 +136,6 @@ mod tests {
         fn new(_: u64) -> Self {
             Self
         }
-        fn seed(&self) -> u64 {
-            0
-        }
         fn counter(&self) -> i32 {
             0
         }

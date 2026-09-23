@@ -1663,7 +1663,7 @@ pub trait RelicModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + E
 /// `PowerModel`'s subclasses read their own fields off `this`, the way a
 /// relic's do. The stack is the amount the creature carries, and everything
 /// beside it a power saves for itself is here.
-pub trait PowerModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
+pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq + Sized {
     /// The model as `PowerCmd.Apply` builds one.
     ///
     /// Every power reaches this, because every power that lands is an

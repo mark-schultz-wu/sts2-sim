@@ -95,11 +95,6 @@ fn draws<G: GameRng<Int = i32>>() -> usize {
         };
 
         assert_eq!(actual, expected, "line {lineno}: diverged from the game");
-        assert_eq!(
-            rng.seed(),
-            seed,
-            "line {lineno}: the stream forgot its seed"
-        );
 
         // A value that matches while the counter drifts is still a divergence:
         // the counter is what streams are rebuilt from.
@@ -160,8 +155,8 @@ fn named_streams_land_on_the_right_seed() {
         };
         let name = String::from_utf16(&units).unwrap();
         assert_eq!(
-            sts2_core::rng::named::<V0_107_1, MegaRng>(1000, &name).seed(),
-            expected_seed,
+            sts2_core::rng::named::<V0_107_1, MegaRng>(1000, &name),
+            MegaRng::new(expected_seed),
             "line {lineno}: {name:?}"
         );
         checked += 1;

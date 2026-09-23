@@ -27,8 +27,8 @@ use crate::rng::MegaRng;
 /// is what a decision does before it draws.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Streams<V: Rules> {
-    run: SmallVec<[MegaRng; 16]>,
-    player: SmallVec<[MegaRng; 4]>,
+    run: SmallVec<[MegaRng; 12]>,
+    player: SmallVec<[MegaRng; 3]>,
     version: PhantomData<fn() -> V>,
 }
 

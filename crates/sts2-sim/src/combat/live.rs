@@ -303,25 +303,12 @@ pub(crate) struct CardInstance<V: Rules> {
 }
 
 impl<V: Rules> Clone for CardInstance<V> {
-    /// Copies the printed numbers rather than walking them.
-    ///
-    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
-    /// see that the item is `Copy`. A [`CardNumber`] is, and every card in
-    /// every pile is cloned each time a decision branches the run.
     fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            ident: self.ident,
-            vars: self.vars,
-            cost: self.cost,
-            star_cost: self.star_cost,
-            cost_modifiers: self.cost_modifiers,
-            modifiers: self.modifiers,
-            added_keywords: self.added_keywords,
-            replays: self.replays,
-        }
+        *self
     }
 }
+
+impl<V: Rules> Copy for CardInstance<V> {}
 
 impl<V: Rules> sts2_core::Printed<V> for CardInstance<V> {
     fn face(&self, key: V::CardVar) -> V::Number {
@@ -847,12 +834,20 @@ impl<V: Rules> From<sts2_core::Attack<V>> for Landing {
 /// [`sts2_core::Stack`] is what a report shows of a power: which one, and the
 /// amount. This is what the fight carries, which is that pair and the model
 /// beside it. See [`Fighter`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct HeldPower<V: Rules> {
     pub(crate) power: V::Power,
     pub(crate) amount: Stacked,
     pub(crate) state: V::PowerState,
 }
+
+impl<V: Rules> Clone for HeldPower<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for HeldPower<V> {}
 
 impl<V: Rules> HeldPower<V> {
     /// A power as `PowerCmd.Apply` lands one, its model as new as it is.
@@ -900,7 +895,7 @@ impl<V: Rules> HeldPower<V> {
 ///
 /// [`sts2_core::Creature`] is what a report shows. This is what the fight
 /// holds: the same facts, and a model per power rather than a bare stack.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct Fighter<V: Rules> {
     pub(crate) id: CombatId,
     pub(crate) model: Option<sts2_core::ModelId<V>>,
@@ -911,6 +906,15 @@ pub(crate) struct Fighter<V: Rules> {
     pub(crate) alive: bool,
     pub(crate) powers: PowerList<V>,
     pub(crate) next_move: Option<Telegraphed<V>>,
+}
+
+impl<V: Rules> Clone for Fighter<V> {
+    fn clone(&self) -> Self {
+        Self {
+            powers: PowerList::from_slice(&self.powers),
+            ..*self
+        }
+    }
 }
 
 impl<V: Rules> Fighter<V> {
