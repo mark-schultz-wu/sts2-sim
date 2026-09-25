@@ -6,8 +6,13 @@ use crate::{ContentVersion, Question, RewardKind, Room};
 /// The read-only run facts event behavior can inspect.
 pub trait EventView<V: ContentVersion> {
     fn act(&self) -> V::Count;
+    /// `RunState.TotalFloor`: every room the run has entered, across acts.
+    fn floor(&self) -> V::Count;
     fn gold(&self) -> V::Number;
-    fn has_potion(&self) -> bool;
+    fn hp(&self) -> V::Health;
+    fn max_hp(&self) -> V::Health;
+    /// The potions in the belt, in slot order.
+    fn potions(&self) -> impl Iterator<Item = V::Potion> + '_;
     /// Who the run is being played as.
     ///
     /// Not in an observation, which reports what a run holds rather than who
@@ -17,6 +22,9 @@ pub trait EventView<V: ContentVersion> {
     fn relics(&self) -> impl Iterator<Item = V::Relic> + '_;
     /// The deck as it stands, in deck order.
     fn deck(&self) -> &[crate::CardIdent<V>];
+    /// `RelicGrabBag.HasAvailableRelics` on the player's own bag: whether a
+    /// relic reward still has a relic to deal.
+    fn relics_left(&self) -> bool;
 }
 
 /// The run operations an event is allowed to perform.

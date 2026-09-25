@@ -99,8 +99,17 @@ mod tests {
         fn gold(&self) -> i32 {
             self.gold
         }
-        fn has_potion(&self) -> bool {
-            false
+        fn floor(&self) -> u32 {
+            unreachable!("Tea Master does not inspect the floor")
+        }
+        fn hp(&self) -> i32 {
+            unreachable!("Tea Master does not inspect HP")
+        }
+        fn max_hp(&self) -> i32 {
+            unreachable!("Tea Master does not inspect HP")
+        }
+        fn potions(&self) -> impl Iterator<Item = <V as sts2_core::ContentVersion>::Potion> + '_ {
+            std::iter::empty()
         }
         fn character(&self) -> <V as sts2_core::ContentVersion>::Character {
             unreachable!("Tea Master does not inspect the character")
@@ -110,6 +119,9 @@ mod tests {
         }
         fn deck(&self) -> &[CardIdent<V>] {
             &[]
+        }
+        fn relics_left(&self) -> bool {
+            unreachable!("Tea Master does not inspect the relic bag")
         }
     }
 

@@ -106,6 +106,11 @@ pub enum State {
 }
 
 /// Deliver a notification to one relic.
+/// `RelicModel.AddsPet`, which two relics override.
+pub(crate) fn adds_pet(relic: Relic) -> bool {
+    matches!(relic, Relic::Byrdpip | Relic::PaelsLegion)
+}
+
 pub(crate) fn event_hook(
     state: &mut State,
     hook: EventHook<V>,

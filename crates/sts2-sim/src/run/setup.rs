@@ -94,6 +94,28 @@ impl<V: Rules> RelicBag<V> {
         self.pull(rarity, dealt, allowed, true)
     }
 
+    /// `RelicGrabBag.HasAvailableRelics`: whether a deal from the front finds
+    /// a relic at any of the rarities a bag deals.
+    ///
+    /// Every drafted rarity is walked up to rare, so any undealt relic at any
+    /// of the four answers yes. `IsAllowed` is not read, as in [`Self::front`].
+    ///
+    /// # Panics
+    ///
+    /// A bag with nothing left, where the game refreshes a spent deque or
+    /// falls back to a relic of its own. Neither is reached.
+    pub fn has_left(&self, dealt: &[V::Relic]) -> bool {
+        let left = self
+            .deques
+            .iter()
+            .filter(|(rarity, _)| Rarity::<V>::DRAFTED.contains(rarity))
+            .any(|(_, relics)| relics.iter().any(|relic| !dealt.contains(relic)));
+        if !left {
+            unimplemented!("a relic bag with nothing left to deal");
+        }
+        left
+    }
+
     /// The body both ends share: walk the rarities, then read one deque.
     fn pull(
         &self,
