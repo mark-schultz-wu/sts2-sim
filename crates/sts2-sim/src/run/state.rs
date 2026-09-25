@@ -1144,6 +1144,13 @@ impl<V: Rules> State<V> {
                     self.gain_gold(amount);
                     continue;
                 }
+                HookEffect::MimicRestSiteHeal => {
+                    self.rest_site_heal(true);
+                    continue;
+                }
+                HookEffect::FightInEvent(_) => {
+                    unreachable!("a fight in an event is the whole of its option")
+                }
                 HookEffect::FinishEvent => {
                     let Phase::Event { finished, .. } = &mut self.phase else {
                         unreachable!("only an event's option finishes it")
@@ -1389,13 +1396,14 @@ impl<V: Rules> State<V> {
     }
 
     /// `HealRestSiteOption.ExecuteRestSiteHeal`: three tenths of the maximum,
-    /// `AfterRestSiteHeal`, then the rewards a relic adds.
+    /// `AfterRestSiteHeal`, then the rewards a relic adds. `mimicked` for an
+    /// event's heal.
     ///
     /// # Panics
     ///
     /// A relic changing the amount or adding a reward, or one asking for
     /// something the run cannot carry out here.
-    fn rest_site_heal(&mut self) {
+    fn rest_site_heal(&mut self, mimicked: bool) {
         use sts2_core::ModelHook;
 
         self.unheard(ModelHook::ModifyRestSiteHealAmount);
@@ -1404,7 +1412,7 @@ impl<V: Rules> State<V> {
         let healed: V::Health =
             num_traits::cast(max_hp * 3 / 10).expect("rest healing fits the build's health type");
         self.heal(healed);
-        let asked = self.notify_belt(sts2_core::EventHook::RestSiteHeal);
+        let asked = self.notify_belt(sts2_core::EventHook::RestSiteHeal { mimicked });
         if let Some(asked) = self.carry_out(asked) {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
@@ -2057,13 +2065,23 @@ impl<V: Rules> State<V> {
         queue: EncounterQueue,
         at: Location,
     ) -> Result<CreatedFight<V>, Error> {
+        let floor = self.floor + num_traits::one();
+        self.build_fight(encounter, queue, at, floor)
+    }
+
+    /// [`State::create_fight`] on a floor the caller names.
+    fn build_fight(
+        &mut self,
+        encounter: V::Encounter,
+        queue: EncounterQueue,
+        at: Location,
+        floor: V::Count,
+    ) -> Result<CreatedFight<V>, Error> {
         let standing = self.standing();
         let (raw_seed, character, ascension) =
             (self.raw_seed(), self.character(), self.ascension());
         let entering = crate::combat::Entering {
-            // The run steps up to the floor it fights on, and the encounter
-            // is rolled against that one rather than the one behind it.
-            floor: self.floor + num_traits::one(),
+            floor,
             hp: standing.hp,
             max_hp: standing.max_hp,
             alive: standing.alive,
@@ -2089,6 +2107,31 @@ impl<V: Rules> State<V> {
             queue,
             ended,
         })
+    }
+
+    /// `EventModel.EnterCombatWithoutExitingEvent`: a fight inside the event's
+    /// room.
+    ///
+    /// `EnterRoomWithoutExitingCurrentRoom` adds a room to the point the run
+    /// stands on rather than a point, so the floor stays where it is. The
+    /// room stack is two deep, so `MarkRoomVisited` counts nothing. The fight
+    /// is won to the rewards a monster room gives, and the run travels on
+    /// from the event's point.
+    fn fight_in_event(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
+        let CreatedFight {
+            live,
+            streams,
+            ended,
+            ..
+        } = self.build_fight(
+            encounter,
+            EncounterQueue::Named,
+            Location::NoLocation,
+            self.floor,
+        )?;
+        self.drew(streams);
+        self.phase = Phase::Combat(live);
+        Ok(self.settle(ended, 0))
     }
 
     /// Put the run into a named fight, rather than travel to one.
@@ -2189,7 +2232,7 @@ impl<V: Rules> State<V> {
                 .get(usize::from(index))
                 .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
             if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HEAL {
-                self.rest_site_heal();
+                self.rest_site_heal(false);
                 let Phase::RestSite { options, .. } = &mut self.phase else {
                     unreachable!("the phase was a rest site when this began");
                 };
@@ -2236,6 +2279,9 @@ impl<V: Rules> State<V> {
                 asking: None,
                 finished: false,
             };
+            if let [sts2_core::HookEffect::FightInEvent(encounter)] = effects.as_slice() {
+                return self.fight_in_event(*encounter);
+            }
             return Ok(match self.carry_out(effects) {
                 None => Decided::Resolved,
                 Some(asked) => self.park(asked),

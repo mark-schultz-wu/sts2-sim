@@ -1985,8 +1985,11 @@ pub enum EventHook<V: ContentVersion> {
     CombatEnd {
         room: V::RoomType,
     },
-    /// `AfterRestSiteHeal`, once a rest site's heal has landed.
-    RestSiteHeal,
+    /// `AfterRestSiteHeal`, once a rest site's heal has landed. `mimicked`
+    /// for a heal an event gives the way a rest site does.
+    RestSiteHeal {
+        mimicked: bool,
+    },
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won, in a room of this type.
     CombatVictory {
@@ -2139,7 +2142,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
-            EventHook::RestSiteHeal => ModelHook::AfterRestSiteHeal,
+            EventHook::RestSiteHeal { .. } => ModelHook::AfterRestSiteHeal,
             EventHook::CombatVictory { .. } => ModelHook::AfterCombatVictory,
             EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
@@ -2358,6 +2361,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `EventModel.SetEventFinished`, the last thing an option that ends its
     /// event does. The room then offers nothing, and the run goes on.
     FinishEvent,
+    /// `PlayerCmd.MimicRestSiteHeal`: a rest site's heal, given by an event.
+    MimicRestSiteHeal,
+    /// `EventModel.EnterCombatWithoutExitingEvent`, which fights inside the
+    /// event's room and does not come back to it. It is the whole of the
+    /// option that starts it.
+    FightInEvent(V::Encounter),
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
     /// `PlayerCmd.GainEnergy`.
