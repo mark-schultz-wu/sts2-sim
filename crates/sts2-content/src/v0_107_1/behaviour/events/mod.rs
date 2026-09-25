@@ -4,11 +4,13 @@ mod aroma_of_chaos;
 mod brain_leech;
 mod byrdonis_nest;
 mod dense_vegetation;
+mod jungle_maze_adventure;
 mod morphic_grove;
 mod orobas;
 mod room_full_of_cheese;
 mod sapphire_seed;
 mod sunken_statue;
+mod tablet_of_truth;
 mod tea_master;
 mod the_legends_were_true;
 mod this_or_that;
@@ -36,11 +38,13 @@ pub enum State {
     BrainLeech(brain_leech::State),
     ByrdonisNest(byrdonis_nest::State),
     DenseVegetation(dense_vegetation::State),
+    JungleMazeAdventure(jungle_maze_adventure::State),
     MorphicGrove(morphic_grove::State),
     Orobas(orobas::State),
     RoomFullOfCheese(room_full_of_cheese::State),
     SapphireSeed(sapphire_seed::State),
     SunkenStatue(sunken_statue::State),
+    TabletOfTruth(tablet_of_truth::State),
     TeaMaster(tea_master::State),
     TheLegendsWereTrue(the_legends_were_true::State),
     ThisOrThat(this_or_that::State),
@@ -92,6 +96,8 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
     let removable = |card: &sts2_core::CardIdent<V>| !card.card.eternal();
     let basic = |card: &sts2_core::CardIdent<V>| card.card.rarity() == CardRarity::Basic;
     match event {
+        Event::JungleMazeAdventure => jungle_maze_adventure::JungleMazeAdventure.allowed(run),
+        Event::TabletOfTruth => tablet_of_truth::TabletOfTruth.allowed(run),
         Event::DenseVegetation => dense_vegetation::DenseVegetation.allowed(run),
         Event::BrainLeech => brain_leech::BrainLeech.allowed(run),
         Event::SapphireSeed => sapphire_seed::SapphireSeed.allowed(run),
@@ -174,6 +180,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::DenseVegetation => {
             State::DenseVegetation(dense_vegetation::DenseVegetation.enter(run, rng))
         }
+        Event::JungleMazeAdventure => {
+            State::JungleMazeAdventure(jungle_maze_adventure::JungleMazeAdventure.enter(run, rng))
+        }
         Event::MorphicGrove => State::MorphicGrove(morphic_grove::MorphicGrove.enter(run, rng)),
         Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
         Event::RoomFullOfCheese => {
@@ -181,6 +190,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::SapphireSeed => State::SapphireSeed(sapphire_seed::SapphireSeed.enter(run, rng)),
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
+        Event::TabletOfTruth => {
+            State::TabletOfTruth(tablet_of_truth::TabletOfTruth.enter(run, rng))
+        }
         Event::TeaMaster => State::TeaMaster(tea_master::TeaMaster.enter(run, rng)),
         Event::TheLegendsWereTrue => {
             State::TheLegendsWereTrue(the_legends_were_true::TheLegendsWereTrue.enter(run, rng))
@@ -201,11 +213,15 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::BrainLeech(state) => brain_leech::BrainLeech.observe(state, run),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.observe(state, run),
         State::DenseVegetation(state) => dense_vegetation::DenseVegetation.observe(state, run),
+        State::JungleMazeAdventure(state) => {
+            jungle_maze_adventure::JungleMazeAdventure.observe(state, run)
+        }
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.observe(state, run),
         State::Orobas(state) => orobas::Orobas.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
+        State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
         State::TheLegendsWereTrue(state) => {
             the_legends_were_true::TheLegendsWereTrue.observe(state, run)
@@ -230,6 +246,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::DenseVegetation(state) => {
             dense_vegetation::DenseVegetation.choose(state, option, run, rng)
         }
+        State::JungleMazeAdventure(state) => {
+            jungle_maze_adventure::JungleMazeAdventure.choose(state, option, run, rng)
+        }
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.choose(state, option, run, rng),
         State::Orobas(state) => orobas::Orobas.choose(state, option, run, rng),
         State::RoomFullOfCheese(state) => {
@@ -237,6 +256,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.choose(state, option, run, rng),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
+        State::TabletOfTruth(state) => {
+            tablet_of_truth::TabletOfTruth.choose(state, option, run, rng)
+        }
         State::TeaMaster(state) => tea_master::TeaMaster.choose(state, option, run, rng),
         State::TheLegendsWereTrue(state) => {
             the_legends_were_true::TheLegendsWereTrue.choose(state, option, run, rng)

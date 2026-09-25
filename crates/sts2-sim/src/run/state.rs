@@ -872,13 +872,7 @@ impl<V: Rules> State<V> {
             // order the cards were taken. The originals leave the deck, and
             // the replacements join its end in the originals' deck order.
             sts2_core::DeckAct::Transform(stream) => {
-                let rng = match (stream, &mut self.phase) {
-                    (sts2_core::Stream::Event, Phase::Event { rng, .. }) => rng,
-                    (sts2_core::Stream::Event, _) => {
-                        unreachable!("an event's stream outside its room")
-                    }
-                    (stream, _) => self.streams.of(stream),
-                };
+                let rng = stream_of(&mut self.phase, &mut self.streams, stream);
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
                     .map(|&at| {
@@ -1218,9 +1212,15 @@ impl<V: Rules> State<V> {
                     use sts2_core::rng::GameRng as _;
 
                     let upgradable: Vec<usize> = self.upgradable().map(|(at, _)| at).collect();
-                    if let Ok(&at) = self.streams.run(stream).choose(&upgradable) {
+                    let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+                    if let Ok(&at) = rng.choose(&upgradable) {
                         self.act_on_deck(sts2_core::DeckAct::Upgrade, &[at]);
                     }
+                    continue;
+                }
+                HookEffect::UpgradeDeck => {
+                    let upgradable: Vec<usize> = self.upgradable().map(|(at, _)| at).collect();
+                    self.act_on_deck(sts2_core::DeckAct::Upgrade, &upgradable);
                     continue;
                 }
                 HookEffect::OnDeckCards { act, picks } => {
@@ -3271,6 +3271,23 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                 },
             })
             .collect(),
+    }
+}
+
+/// The generator a stream names: one of the run's or the player's, or the
+/// event the run stands in.
+///
+/// Over the two fields rather than the run, so a caller keeps the rest of the
+/// run to read while it draws.
+fn stream_of<'a, V: Rules>(
+    phase: &'a mut Phase<V>,
+    streams: &'a mut Streams<V>,
+    stream: sts2_core::Stream<V>,
+) -> &'a mut MegaRng {
+    match (stream, phase) {
+        (sts2_core::Stream::Event, Phase::Event { rng, .. }) => rng,
+        (sts2_core::Stream::Event, _) => unreachable!("an event's stream outside its room"),
+        (stream, _) => streams.of(stream),
     }
 }
 

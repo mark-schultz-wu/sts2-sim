@@ -1,6 +1,6 @@
 //! `FishingRod`: a random card upgraded every third monster fight.
 
-use sts2_core::{EventHook, HookEffect};
+use sts2_core::{EventHook, HookEffect, Stream};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::encounters::RoomType;
@@ -30,7 +30,7 @@ pub(super) fn event_hook(
         state.combats_seen += 1;
         if state.combats_seen % COMBATS == 0 {
             asked.push(HookEffect::UpgradeRandomDeckCard {
-                stream: RunRngType::Niche,
+                stream: Stream::Run(RunRngType::Niche),
             });
         }
     }
