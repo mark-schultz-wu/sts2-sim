@@ -4,6 +4,7 @@
 //! first pool. The third pool holds the relics that inspect the run before
 //! they are offered.
 
+use nonmax::NonMaxU8;
 use sts2_core::rng::{GameRng, Span};
 use sts2_core::{
     EventBehavior, EventOption, EventOptionKey, EventView, HookEffect, HookEffects,
@@ -61,7 +62,7 @@ const TRANSCENDS: [Cards; 5] = [
 pub struct State {
     offered: Vec<Relic>,
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct Orobas;
@@ -119,7 +120,7 @@ impl EventBehavior<V> for Orobas {
                 text: None,
                 locked: false,
                 proceed: false,
-                chosen: state.chosen == Some(index as u8),
+                chosen: state.chosen == NonMaxU8::new(index as u8),
                 relic: Some(relic),
             })
             .collect();
@@ -140,7 +141,7 @@ impl EventBehavior<V> for Orobas {
         _rng: &mut R,
     ) -> HookEffects<V> {
         let relic = state.offered[usize::from(option)];
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         smallvec::smallvec![HookEffect::ObtainRelic(relic), HookEffect::FinishEvent]
     }
 }

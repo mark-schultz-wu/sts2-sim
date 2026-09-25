@@ -410,6 +410,10 @@ impl sts2_core::Rules for V0_107_1 {
         generated::potions::reward_potions(character)
     }
 
+    fn unlocked_potions(character: Self::Character) -> &'static [Self::Potion] {
+        generated::potions::unlocked_potions(character)
+    }
+
     fn encounter_gold(
         encounter: Self::Encounter,
         ascension: Self::AscensionLevel,

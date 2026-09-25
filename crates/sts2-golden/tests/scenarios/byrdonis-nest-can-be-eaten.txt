@@ -1,0 +1,51 @@
+# This seed's first unknown room is Byrdonis Nest. Forty Mercury Hourglasses end
+# the fight before it as it opens.
+#
+# Eating grows Max HP by seven, and the HP with it. A port that grows another
+# amount, or heals instead, ends on other HP.
+{"cmd":"start","seed":"C000000085","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"choose_option","index":1}
+{"cmd":"travel","col":0,"row":1}
+{"cmd":"answer","skip":true}
+{"cmd":"travel","col":0,"row":2}
+{"cmd":"choose_option","index":0}

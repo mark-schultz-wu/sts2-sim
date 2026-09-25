@@ -1,5 +1,6 @@
 //! Whispering Hollow: two potions bought, or a card transformed for HP.
 
+use nonmax::NonMaxU8;
 use sts2_core::rng::Span;
 use sts2_core::{
     CustomReward, DeckAct, EventBehavior, EventView, HookEffect, HookEffects, Room, Stream,
@@ -19,7 +20,7 @@ pub struct State {
     /// What the potions cost, drawn as the event opens.
     gold: i32,
     /// The option taken, while what it asked is open.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct WhisperingHollow;
@@ -65,7 +66,7 @@ impl EventBehavior<V> for WhisperingHollow {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::LoseGold(state.gold),

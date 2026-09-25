@@ -1,5 +1,6 @@
 //! Room Full of Cheese: two commons of eight, or a relic for HP.
 
+use nonmax::NonMaxU8;
 use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, RewardRarity, Room};
 
 use super::super::super::V0_107_1 as V;
@@ -12,7 +13,7 @@ const DAMAGE: i32 = 14;
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// The option taken, while what it asked is open.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct RoomFullOfCheese;
@@ -49,7 +50,7 @@ impl EventBehavior<V> for RoomFullOfCheese {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::ChooseUniformCards {

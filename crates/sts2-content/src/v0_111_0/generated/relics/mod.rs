@@ -1546,7 +1546,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterEnergyResetLate)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // BOWLER_HAT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingGoldGained)
+        .with(sts2_core::ModelHook::ModifyGoldGained),
     // BREAD
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // BRILLIANT_SCARF
@@ -1629,7 +1631,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // DOWSING_ROD
     sts2_core::Overrides::from_bits(0),
     // DRAGON_FRUIT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterGoldGained),
     // DREAM_CATCHER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // DRIFTWOOD
@@ -1637,7 +1639,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // DUSTY_TOME
     sts2_core::Overrides::from_bits(0),
     // ECTOPLASM
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingGoldGained)
+        .with(sts2_core::ModelHook::ModifyGoldGained),
     // ELECTRIC_SHRYMP
     sts2_core::Overrides::from_bits(0),
     // EMBER_TEA

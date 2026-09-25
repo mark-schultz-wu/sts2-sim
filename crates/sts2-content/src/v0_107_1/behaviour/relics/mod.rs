@@ -45,6 +45,7 @@ mod precise_scissors;
 mod ring_of_the_snake;
 mod sand_castle;
 mod stone_humidifier;
+mod sword_of_stone;
 mod winged_boots;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
@@ -104,6 +105,7 @@ pub enum State {
     RingOfTheSnake,
     SandCastle,
     StoneHumidifier,
+    SwordOfStone(sword_of_stone::State),
     WingedBoots(winged_boots::State),
 }
 
@@ -159,6 +161,7 @@ pub(crate) fn event_hook(
         },
         State::SandCastle => sand_castle::event_hook(hook, asked),
         State::StoneHumidifier => stone_humidifier::event_hook(hook, asked),
+        State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
         State::WingedBoots(state) => winged_boots::event_hook(state, hook),
     }
 }
@@ -218,6 +221,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PreciseScissors
         | State::SandCastle
         | State::StoneHumidifier
+        | State::SwordOfStone(_)
         | State::WingedBoots(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
@@ -264,6 +268,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RingOfTheSnake => State::RingOfTheSnake,
             Relic::SandCastle => State::SandCastle,
             Relic::StoneHumidifier => State::StoneHumidifier,
+            Relic::SwordOfStone => State::SwordOfStone(sword_of_stone::State::default()),
             Relic::WingedBoots => State::WingedBoots(winged_boots::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
@@ -284,6 +289,7 @@ impl sts2_core::RelicModel<V> for State {
             Field::Computed => match self {
                 State::BoneTea(state) => bone_tea::display_amount(state),
                 State::FishingRod(state) => fishing_rod::display_amount(state),
+                State::SwordOfStone(state) => sword_of_stone::display_amount(state),
                 State::WingedBoots(state) => winged_boots::display_amount(state),
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),

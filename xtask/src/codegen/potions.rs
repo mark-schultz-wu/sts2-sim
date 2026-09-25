@@ -597,6 +597,21 @@ fn emit_rewards(
     if named == 0 {
         return Err(Error::NoPlayable);
     }
+    let mut flat = String::new();
+    for row in characters.of("character") {
+        if row[2] != "1" {
+            continue;
+        }
+        let own = stocked.get(&row[11]).ok_or_else(|| Error::EmptyPool {
+            character: row[1].clone(),
+            pool: row[11].clone(),
+        })?;
+        writeln!(flat, "        Character::{} => &[", camel(&row[1])).unwrap();
+        for potion in own.iter().chain(shared) {
+            writeln!(flat, "            Potion::{},", camel(potion)).unwrap();
+        }
+        writeln!(flat, "        ],").unwrap();
+    }
     writeln!(
         out,
         "        _ => Drafted {{\n\
@@ -606,6 +621,24 @@ fn emit_rewards(
          \x20       }},"
     )
     .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
+        "/// Every potion the character's pool holds, then every one the shared\n\
+         /// pool holds, each in its pool's order: `GetUnlockedPotions` over both,\n\
+         /// with everything unlocked. Empty for a character no run is played as."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn unlocked_potions(character: Character) -> &'static [Potion] {{"
+    )
+    .unwrap();
+    writeln!(out, "    match character {{").unwrap();
+    out.push_str(&flat);
+    writeln!(out, "        _ => &[],").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
     Ok(())

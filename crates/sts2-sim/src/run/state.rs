@@ -421,7 +421,7 @@ pub(super) struct EnteredEvent<V: Rules> {
 pub(super) enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
-        chosen: Option<u8>,
+        chosen: Option<nonmax::NonMaxU8>,
         asking: Option<Asked<V>>,
     },
     /// The map itself, which an act opens on and no room owns.
@@ -1116,7 +1116,7 @@ impl<V: Rules> State<V> {
                     continue;
                 }
                 HookEffect::GainGold(amount) => {
-                    self.player.gold = self.player.gold + amount;
+                    self.gain_gold(amount);
                     continue;
                 }
                 HookEffect::FinishEvent => {
@@ -1133,13 +1133,24 @@ impl<V: Rules> State<V> {
                 }
                 // The relic's own pickup asks first, and the effects after
                 // it wait behind what it asked.
-                HookEffect::ObtainRelic(relic) => match self.obtain(relic) {
-                    None => continue,
-                    Some(mut asked) => {
-                        asked.rest.extend(effects);
-                        return Some(asked);
+                HookEffect::ObtainRelic(_) | HookEffect::ObtainNextRelic => {
+                    let relic = match effect {
+                        HookEffect::ObtainRelic(relic) => relic,
+                        _ => {
+                            let rarity = crate::reward::relic_rarity::<V, _>(
+                                self.streams.player(V::PlayerRngType::REWARDS),
+                            );
+                            self.pull_relic(rarity)
+                        }
+                    };
+                    match self.obtain(relic) {
+                        None => continue,
+                        Some(mut asked) => {
+                            asked.rest.extend(effects);
+                            return Some(asked);
+                        }
                     }
-                },
+                }
                 HookEffect::AddToDeck(card) => {
                     self.player.deck_mut().push(CardIdent::new(card));
                     continue;
@@ -1271,6 +1282,24 @@ impl<V: Rules> State<V> {
         found.map(|(at, _)| at)
     }
 
+    /// `PlayerCmd.GainGold`, outside a fight.
+    ///
+    /// # Panics
+    ///
+    /// A relic listening to one of the hooks it raises.
+    fn gain_gold(&mut self, amount: V::Number) {
+        use sts2_core::ModelHook;
+
+        for hook in [
+            ModelHook::ModifyGoldGained,
+            ModelHook::AfterModifyingGoldGained,
+            ModelHook::AfterGoldGained,
+        ] {
+            self.unheard(hook);
+        }
+        self.player.gold = self.player.gold + amount;
+    }
+
     /// A game number as the run's health.
     ///
     /// # Panics
@@ -1374,6 +1403,15 @@ impl<V: Rules> State<V> {
                         potion: crate::reward::potion::rolled::<V, _>(rng, character),
                         taken: false,
                     },
+                    CustomReward::UnlockedPotion => {
+                        use sts2_core::rng::GameRng as _;
+                        Offer::Potion {
+                            potion: *rng
+                                .choose(V::unlocked_potions(character))
+                                .unwrap_or_else(|_| unimplemented!("a character with no potion")),
+                            taken: false,
+                        }
+                    }
                 }
             })
             .collect();
@@ -2156,7 +2194,7 @@ impl<V: Rules> State<V> {
         let option = *options
             .get(index as usize)
             .unwrap_or_else(|| unimplemented!("an option the blessing does not offer"));
-        *chosen = Some(index);
+        *chosen = nonmax::NonMaxU8::new(index);
         if option != V::lead_paperweight() {
             // `RelicCmd.Obtain`, and whatever the relic's `AfterObtained`
             // asks, which Neow's screen parks on.
@@ -2381,7 +2419,7 @@ impl<V: Rules> State<V> {
             (Offer::Gold { amount, taken }, TakeReward::NonCard { .. }) => {
                 let amount = *amount;
                 *taken = true;
-                self.player.gold = self.player.gold + amount;
+                self.gain_gold(amount);
             }
             (Offer::Potion { potion, taken }, TakeReward::NonCard { .. }) => {
                 let potion = *potion;
@@ -2562,7 +2600,7 @@ impl<V: Rules> State<V> {
             } if !finished => moves.extend(
                 (0..options.len())
                     .map(option_index)
-                    .filter(|&index| *chosen != Some(index))
+                    .filter(|&index| *chosen != nonmax::NonMaxU8::new(index))
                     .map(|index| Decision::ChooseOption { index }),
             ),
             // An event's options are the content's to spell, so its room is
@@ -2909,7 +2947,7 @@ impl<V: Rules> State<V> {
                             text: None,
                             locked: false,
                             proceed: false,
-                            chosen: *neow_chosen == Some(index),
+                            chosen: *neow_chosen == nonmax::NonMaxU8::new(index),
                             relic: Some(relic),
                         }
                     })
