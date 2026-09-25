@@ -23,8 +23,11 @@ mod gremlin_horn;
 mod lead_paperweight;
 mod mercury_hourglass;
 mod neows_torment;
+mod new_leaf;
 mod permafrost;
 mod pocketwatch;
+mod pomander;
+mod precise_scissors;
 mod ring_of_the_snake;
 mod sand_castle;
 
@@ -56,8 +59,11 @@ pub enum State {
     LeadPaperweight,
     MercuryHourglass,
     NeowsTorment,
+    NewLeaf,
     Permafrost(permafrost::State),
     Pocketwatch(pocketwatch::State),
+    Pomander,
+    PreciseScissors,
     RingOfTheSnake,
     SandCastle,
 }
@@ -81,8 +87,11 @@ pub(crate) fn event_hook(
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
         State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
+        State::NewLeaf => new_leaf::event_hook(hook, asked),
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
+        State::Pomander => pomander::event_hook(hook, asked),
+        State::PreciseScissors => precise_scissors::event_hook(hook, asked),
         // Its one hook is `ModifyHandDraw`, which the fight asks of it
         // rather than tells it. `AfterObtained` reaches every relic, and its
         // own does nothing.
@@ -113,7 +122,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LeadPaperweight
         | State::MercuryHourglass
         | State::NeowsTorment
+        | State::NewLeaf
         | State::Permafrost(_)
+        | State::Pomander
+        | State::PreciseScissors
         | State::SandCastle => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
@@ -138,8 +150,11 @@ impl sts2_core::RelicModel<V> for State {
             Relic::LeadPaperweight => State::LeadPaperweight,
             Relic::MercuryHourglass => State::MercuryHourglass,
             Relic::NeowsTorment => State::NeowsTorment,
+            Relic::NewLeaf => State::NewLeaf,
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
+            Relic::Pomander => State::Pomander,
+            Relic::PreciseScissors => State::PreciseScissors,
             Relic::RingOfTheSnake => State::RingOfTheSnake,
             Relic::SandCastle => State::SandCastle,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),

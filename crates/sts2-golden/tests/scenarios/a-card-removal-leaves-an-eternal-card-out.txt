@@ -1,0 +1,12 @@
+# `FromDeckForRemoval` offers only cards with `IsRemovable`, which an
+# `Eternal` card is not. Greed and Injury are both curses, and Greed joined
+# the deck first, so Greed would lead the list if it were offered. It is not,
+# so taking the first card removes the Injury.
+#
+# A port that offers the whole deck removes Greed.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"GREED"}
+{"cmd":"grant","card":"INJURY"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":13}
+{"cmd":"answer","cards":[0]}

@@ -347,6 +347,43 @@ impl sts2_core::Rules for V0_107_1 {
         narrowed(generated::cards::merchant_colorless_cards(), None, rarity)
     }
 
+    /// A quest card, and an event, ancient or token one, transforms within
+    /// the colorless pool. Any other transforms within its own. The shop
+    /// lists are each pool's unlocked cards, in the pool's own order.
+    ///
+    /// # Panics
+    ///
+    /// A curse or a status, whose pools the table lists nowhere yet.
+    fn transform_options(card: Self::Card) -> Vec<Self::Card> {
+        use generated::cards::CardRarity;
+        use sts2_core::CardTable as _;
+
+        let rarity = card.rarity();
+        let colorless = matches!(
+            rarity,
+            CardRarity::Event | CardRarity::Ancient | CardRarity::Token
+        ) || Self::card_kind(card) == Some(sts2_core::CardKind::Quest);
+        let pool = match (colorless, card.pool()) {
+            (false, Some(pool)) => generated::cards::merchant_cards(pool),
+            _ if matches!(rarity, CardRarity::Status | CardRarity::Curse) => {
+                unimplemented!("transforming {card:?}, whose pool the table does not list")
+            }
+            _ => generated::cards::merchant_colorless_cards(),
+        };
+        let any_rarity = matches!(rarity, CardRarity::Status | CardRarity::Curse);
+        pool.iter()
+            .copied()
+            .filter(|option| {
+                any_rarity
+                    || matches!(
+                        option.rarity(),
+                        CardRarity::Common | CardRarity::Uncommon | CardRarity::Rare
+                    )
+            })
+            .filter(|option| *option != card)
+            .collect()
+    }
+
     fn reward_potions(character: Self::Character) -> sts2_core::Drafted<'static, Self::Potion> {
         generated::potions::reward_potions(character)
     }

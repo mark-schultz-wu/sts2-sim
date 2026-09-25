@@ -1,0 +1,10 @@
+# `FromDeckForRemoval` sorts curses ahead of every other card. So the first
+# card the merchant's removal offers is the Injury, though the deck holds it
+# last, and taking the first removes it.
+#
+# A port that offers the deck in its own order removes a Strike.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"INJURY"}
+{"cmd":"enter_room","type":"Shop"}
+{"cmd":"buy","index":13}
+{"cmd":"answer","cards":[0]}

@@ -418,7 +418,7 @@ pub(super) enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
         chosen: Option<u8>,
-        selection: Option<SmallVec<[V::Card; 4]>>,
+        asking: Option<NeowAsks<V>>,
     },
     /// The map itself, which an act opens on and no room owns.
     Map,
@@ -477,10 +477,27 @@ pub(super) enum Phase<V: Rules> {
 /// relic was picked up in is what parks on it. A room that cannot park on one
 /// says so rather than answer it itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Pickup {
+pub(super) enum Pickup<V: Rules> {
     /// `CardSelectCmd.FromDeckGeneric`, and a clone of what it takes. The card
     /// type the relic's own filter leaves out comes with it.
     CloneDeckCard { excluding: sts2_core::CardKind },
+    /// `CardSelectCmd.FromDeckFor*`, and what happens to each card it takes.
+    FromDeck {
+        act: sts2_core::DeckAct<V>,
+        count: usize,
+    },
+}
+
+/// What Neow's screen is asking once a blessing is chosen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum NeowAsks<V: Rules> {
+    /// Lead Paperweight's offer: one of these colorless cards, or none.
+    Colorless(SmallVec<[V::Card; 4]>),
+    /// A relic's pickup, choosing `count` cards of the deck for `act`.
+    Deck {
+        act: sts2_core::DeckAct<V>,
+        count: usize,
+    },
 }
 
 /// A fight built and not yet entered.
@@ -540,9 +557,7 @@ impl<V: Rules> Phase<V> {
     /// way.
     fn finished(&self) -> bool {
         match self {
-            Phase::Neow {
-                chosen, selection, ..
-            } => chosen.is_some() && selection.is_none(),
+            Phase::Neow { chosen, asking, .. } => chosen.is_some() && asking.is_none(),
             Phase::Treasure { finished, .. } => *finished,
             Phase::RestSite { options, .. } => options.is_empty(),
             // A merchant never runs out. The run leaves when it decides to,
@@ -566,7 +581,7 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => live
                 .selecting()
                 .map(|_| sts2_core::QuestionKind::SelectCards),
-            Phase::Neow { selection, .. } if selection.is_some() => {
+            Phase::Neow { asking, .. } if asking.is_some() => {
                 Some(sts2_core::QuestionKind::SelectCards)
             }
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
@@ -679,7 +694,7 @@ impl<V: Rules> State<V> {
             phase: Phase::Neow {
                 options: neow_options.into_iter().collect(),
                 chosen: None,
-                selection: None,
+                asking: None,
             },
         }
     }
@@ -739,6 +754,83 @@ impl<V: Rules> State<V> {
             .copied()
             .enumerate()
             .filter(|(_, card)| card.upgrade < card.card.max_upgrade())
+    }
+
+    /// The cards a selection for `act` offers, in the order it offers them,
+    /// each with where it sits in the deck.
+    ///
+    /// An answer names this list's indices, so the deck's own place comes
+    /// with each card. A removal lists curses first, which is the sort
+    /// `FromDeckForRemoval` hands the screen.
+    fn offered(&self, act: sts2_core::DeckAct<V>) -> Vec<(usize, CardIdent<V>)> {
+        use sts2_core::CardTable as _;
+
+        let deck = self.player.deck.iter().copied().enumerate();
+        match act {
+            sts2_core::DeckAct::Remove => {
+                let mut offered: Vec<_> = deck.filter(|(_, card)| !card.card.eternal()).collect();
+                offered.sort_by_key(|(_, card)| {
+                    V::card_kind(card.card) != Some(sts2_core::CardKind::Curse)
+                });
+                offered
+            }
+            sts2_core::DeckAct::Upgrade => self.upgradable().collect(),
+            // `IsTransformable` in the deck is `IsRemovable`, and a quest
+            // card is never offered.
+            sts2_core::DeckAct::Transform(_) => deck
+                .filter(|(_, card)| {
+                    !card.card.eternal()
+                        && V::card_kind(card.card) != Some(sts2_core::CardKind::Quest)
+                })
+                .collect(),
+        }
+    }
+
+    /// Carry `act` out on the deck cards at `taken`, in the order they were
+    /// taken.
+    fn act_on_deck(&mut self, act: sts2_core::DeckAct<V>, taken: &[usize]) {
+        use sts2_core::rng::GameRng as _;
+
+        match act {
+            sts2_core::DeckAct::Remove => {
+                let mut taken = taken.to_vec();
+                taken.sort_unstable_by(|a, b| b.cmp(a));
+                for at in taken {
+                    self.player.deck_mut().remove(at);
+                }
+            }
+            sts2_core::DeckAct::Upgrade => {
+                for &at in taken {
+                    self.player.deck_mut()[at].upgrade += 1;
+                }
+            }
+            // `CardCmd.Transform`: every replacement is drawn first, in the
+            // order the cards were taken. The originals leave the deck, and
+            // the replacements join its end in the originals' deck order.
+            sts2_core::DeckAct::Transform(stream) => {
+                let mut replaced: Vec<(usize, CardIdent<V>)> = taken
+                    .iter()
+                    .map(|&at| {
+                        let options = V::transform_options(self.player.deck[at].card);
+                        let card = *self
+                            .streams
+                            .run(stream)
+                            .choose(&options)
+                            .unwrap_or_else(|_| unimplemented!("a transform with no option"));
+                        (at, CardIdent::new(card))
+                    })
+                    .collect();
+                replaced.sort_by_key(|(at, _)| *at);
+                let mut gone: Vec<usize> = replaced.iter().map(|(at, _)| *at).collect();
+                gone.sort_unstable_by(|a, b| b.cmp(a));
+                for at in gone {
+                    self.player.deck_mut().remove(at);
+                }
+                self.player
+                    .deck_mut()
+                    .extend(replaced.into_iter().map(|(_, card)| card));
+            }
+        }
     }
 
     /// Take the potion at this index out of the belt, which is
@@ -936,7 +1028,7 @@ impl<V: Rules> State<V> {
     /// here, because `AfterObtained` does not return until the answer does.
     /// The room the relic was picked up in is what parks on it.
     #[must_use]
-    pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Pickup> {
+    pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Pickup<V>> {
         let mut held = HeldRelic::new(relic);
         let effects = crate::combat::obtained::<V>(&mut held);
         self.player.relics.push(held);
@@ -948,6 +1040,9 @@ impl<V: Rules> State<V> {
                 }
                 sts2_core::HookEffect::CloneDeckCard { excluding } => {
                     asking = Some(Pickup::CloneDeckCard { excluding });
+                }
+                sts2_core::HookEffect::SelectFromDeck { act, count } => {
+                    asking = Some(Pickup::FromDeck { act, count });
                 }
                 sts2_core::HookEffect::GainGold(amount) => {
                     self.player.gold = self.player.gold + amount;
@@ -1071,13 +1166,13 @@ impl<V: Rules> State<V> {
                 self.player.deck_mut().push(on_sale.card);
                 None
             }
-            sts2_core::Stock::Relic(Some(relic)) => {
-                self.obtain(relic)
-                    .map(|Pickup::CloneDeckCard { excluding }| Unfinished::Pickup {
-                        shelf: index,
-                        excluding,
-                    })
-            }
+            sts2_core::Stock::Relic(Some(relic)) => self.obtain(relic).map(|pickup| match pickup {
+                Pickup::CloneDeckCard { excluding } => Unfinished::Pickup {
+                    shelf: index,
+                    excluding,
+                },
+                pickup => unimplemented!("{pickup:?} asked for where a shop sells it"),
+            }),
             sts2_core::Stock::Potion(Some(potion)) => {
                 if !self.procure(potion) {
                     unimplemented!("buying a potion with no slot to put it in");
@@ -1161,12 +1256,13 @@ impl<V: Rules> State<V> {
 
     /// Take the card the merchant's removal was pointed at out of the deck.
     ///
-    /// The selection offers the whole deck, so the index is the deck's.
+    /// The index is the removal list's, which is the deck less its `Eternal`
+    /// cards, curses first.
     fn removed(&mut self, index: usize) {
-        if index >= self.player.deck.len() {
-            unimplemented!("a removal naming a card the deck does not hold");
-        }
-        self.player.deck_mut().remove(index);
+        let Some(&(at, _)) = self.offered(sts2_core::DeckAct::Remove).get(index) else {
+            unimplemented!("a removal naming a card the selection did not offer");
+        };
+        self.player.deck_mut().remove(at);
         // `DoLocalMerchantCardRemoval` spends the gold once the card comes
         // back, and `CardShopRemovalsUsed` climbs over the run.
         let spent = removal_cost::<V>(self.removals_used);
@@ -1500,9 +1596,12 @@ impl<V: Rules> State<V> {
         *chosen = Some(index);
         if option != V::lead_paperweight() {
             // `RelicCmd.Obtain`, and whatever the relic's `AfterObtained`
-            // asks. Neow's own screen offers no way to park a question.
-            self.obtain_here(option);
-            return Ok(Decided::Resolved);
+            // asks, which Neow's screen parks on.
+            return Ok(match self.obtain(option) {
+                None => Decided::Resolved,
+                Some(Pickup::FromDeck { act, count }) => self.select_from_deck(act, count),
+                Some(pickup) => unimplemented!("{pickup:?} asked for at Neow"),
+            });
         }
 
         // Not through `obtain`. The blessing is the one path that carries out
@@ -1511,19 +1610,36 @@ impl<V: Rules> State<V> {
         self.player
             .relics
             .push(HeldRelic::new(V::lead_paperweight()));
-        let Phase::Neow { selection, .. } = &mut self.phase else {
+        let offered = crate::reward::card::regular::<V, _>(
+            self.streams.player(V::PlayerRngType::REWARDS),
+            V::colorless_cards(),
+            2,
+        )
+        .into_iter()
+        .collect();
+        let Phase::Neow { asking, .. } = &mut self.phase else {
             unreachable!("the phase was the blessing when this began")
         };
-        *selection = Some(
-            crate::reward::card::regular::<V, _>(
-                self.streams.player(V::PlayerRngType::REWARDS),
-                V::colorless_cards(),
-                2,
-            )
-            .into_iter()
-            .collect(),
-        );
+        *asking = Some(NeowAsks::Colorless(offered));
         Ok(Decided::Abandoned)
+    }
+
+    /// A selection of `count` deck cards for `act`, on Neow's screen.
+    ///
+    /// `CardSelectCmd` takes the whole list without asking when it holds no
+    /// more than it must take, and returns nothing from an empty one.
+    fn select_from_deck(&mut self, act: sts2_core::DeckAct<V>, count: usize) -> Decided {
+        let offered = self.offered(act);
+        if offered.len() <= count {
+            let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
+            self.act_on_deck(act, &taken);
+            return Decided::Resolved;
+        }
+        let Phase::Neow { asking, .. } = &mut self.phase else {
+            unreachable!("a deck selection this run parks is Neow's")
+        };
+        *asking = Some(NeowAsks::Deck { act, count });
+        Decided::Abandoned
     }
 
     pub(crate) fn answer(&mut self, answer: &Answer) -> Result<Decided, Error> {
@@ -1539,28 +1655,47 @@ impl<V: Rules> State<V> {
         if matches!(&self.phase, Phase::Shop { unfinished, .. } if unfinished.is_some()) {
             return self.finish_purchase(answer);
         }
-        let Phase::Neow { selection, .. } = &mut self.phase else {
+        let Phase::Neow { asking, .. } = &mut self.phase else {
             unimplemented!("answering a question inside a fight");
         };
-        let cards = selection
-            .as_ref()
-            .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"));
         let Answer::Cards(picks) = answer else {
             unimplemented!("an answer that is not a card selection");
         };
-        if picks.len() > 1 {
-            unimplemented!("a card selection of more than one");
+        match asking
+            .take()
+            .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"))
+        {
+            NeowAsks::Colorless(cards) => {
+                if picks.len() > 1 {
+                    unimplemented!("a card selection of more than one");
+                }
+                let chosen: Option<Vec<_>> = picks
+                    .iter()
+                    .map(|index| cards.get(index).copied().map(CardIdent::new))
+                    .collect();
+                let Some(chosen) = chosen else {
+                    unimplemented!("a card selection naming a card that was not offered");
+                };
+                self.player.deck_mut().extend(chosen);
+            }
+            NeowAsks::Deck { act, count } => {
+                let offered = self.offered(act);
+                let taken: Option<Vec<usize>> = picks
+                    .iter()
+                    .map(|index| offered.get(index).map(|(at, _)| *at))
+                    .collect();
+                let Some(taken) = taken else {
+                    unimplemented!("a deck selection naming a card that was not offered");
+                };
+                let mut distinct = taken.clone();
+                distinct.sort_unstable();
+                distinct.dedup();
+                if taken.len() != count || distinct.len() != count {
+                    unimplemented!("a deck selection of other than {count} different cards");
+                }
+                self.act_on_deck(act, &taken);
+            }
         }
-        let chosen: Option<Vec<_>> = picks
-            .iter()
-            .map(|index| cards.get(index).copied().map(CardIdent::new))
-            .collect();
-        let Some(chosen) = chosen else {
-            unimplemented!("a card selection naming a card that was not offered");
-        };
-
-        self.player.deck_mut().extend(chosen);
-        *selection = None;
         Ok(Decided::Resolved)
     }
 
@@ -1763,9 +1898,13 @@ impl<V: Rules> State<V> {
     fn answers(&self, moves: &mut Legal<V>) -> bool {
         match &self.phase {
             Phase::Neow {
-                selection: Some(cards),
+                asking: Some(NeowAsks::Colorless(cards)),
                 ..
             } => selections(0, 1, cards.len(), moves),
+            Phase::Neow {
+                asking: Some(NeowAsks::Deck { act, count }),
+                ..
+            } => selections(*count, *count, self.offered(*act).len(), moves),
             Phase::RestSite {
                 upgrading: true, ..
             } => selections(1, 1, self.upgradable().count(), moves),
@@ -1774,7 +1913,7 @@ impl<V: Rules> State<V> {
                 ..
             } => {
                 let offered = match unfinished {
-                    Unfinished::Removal => self.player.deck.len(),
+                    Unfinished::Removal => self.offered(sts2_core::DeckAct::Remove).len(),
                     Unfinished::Pickup { excluding, .. } => self.clonable(*excluding).len(),
                 };
                 selections(1, 1, offered, moves);
@@ -1986,23 +2125,35 @@ impl<V: Rules> State<V> {
     /// The question the run is parked on, if it is parked.
     fn asking(&self) -> Option<Question<V>> {
         match &self.phase {
-            Phase::Neow { selection, .. } => {
-                selection.as_ref().map(|cards| Question::SelectCards {
-                    min: 0,
-                    max: 1,
+            Phase::Neow { asking, .. } => asking.as_ref().map(|asking| {
+                let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match asking {
+                    NeowAsks::Colorless(cards) => {
+                        (0, 1, cards.iter().copied().map(CardIdent::new).collect())
+                    }
+                    NeowAsks::Deck { act, count } => (
+                        u32::try_from(*count).expect("a selection counts in a few cards"),
+                        u32::try_from(*count).expect("a selection counts in a few cards"),
+                        self.offered(*act)
+                            .into_iter()
+                            .map(|(_, card)| card)
+                            .collect(),
+                    ),
+                };
+                Question::SelectCards {
+                    min,
+                    max,
                     asker: None,
                     options: cards
-                        .iter()
-                        .copied()
+                        .into_iter()
                         .enumerate()
                         .map(|(index, card)| CardOption {
                             index,
-                            card: CardIdent::new(card),
+                            card,
                             text: None,
                         })
                         .collect(),
-                })
-            }
+                }
+            }),
             Phase::Combat(live) => live.question(),
             Phase::Rewards { offered, .. } => offered
                 .iter()
@@ -2027,12 +2178,18 @@ impl<V: Rules> State<V> {
                     .collect(),
             }),
             // Each selection offers a different list. The removal reads the
-            // whole deck, and a pickup reads the deck less what its own filter
-            // leaves out. One card either way, and neither can be empty.
+            // deck less its `Eternal` cards, curses first, and a pickup reads
+            // the deck less what its own filter leaves out. One card either
+            // way, and neither can be empty.
             Phase::Shop { unfinished, .. } => {
                 let offered = match unfinished {
                     None => None,
-                    Some(Unfinished::Removal) => Some(self.player.deck.to_vec()),
+                    Some(Unfinished::Removal) => Some(
+                        self.offered(sts2_core::DeckAct::Remove)
+                            .into_iter()
+                            .map(|(_, card)| card)
+                            .collect(),
+                    ),
                     Some(Unfinished::Pickup { excluding, .. }) => Some(self.clonable(*excluding)),
                 };
                 offered.map(|offered| Question::SelectCards {

@@ -285,6 +285,10 @@ pub trait CardTable: Table {
     /// Whether an unplayed copy stays in hand when the turn ends.
     fn retains(self) -> bool;
 
+    /// Whether it carries `Eternal`, which keeps it in the deck: no removal
+    /// takes it, and no transform takes it from the deck.
+    fn eternal(self) -> bool;
+
     /// Whether the table prints the keyword that opens a fight in hand.
     ///
     /// What the table prints, which an upgrade can add to. A copy is what
@@ -1949,6 +1953,23 @@ pub type Opponents = smallvec::SmallVec<[crate::CombatId; 8]>;
 /// How many effects a notification's answers hold before they reach the heap.
 pub const HOOK_EFFECTS: usize = 4;
 
+/// What a selection from the deck does to each card it takes.
+///
+/// Each is its own `CardSelectCmd` in the game, and each offers the deck
+/// narrowed its own way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeckAct<V: ContentVersion> {
+    /// `FromDeckForRemoval`, then `CardPileCmd.RemoveFromDeck`. It offers
+    /// the cards with no `Eternal`, curses first.
+    Remove,
+    /// `FromDeckForUpgrade`, then `CardCmd.Upgrade`. It offers the cards an
+    /// upgrade can still raise.
+    Upgrade,
+    /// `FromDeckForTransformation`, then `CardCmd.TransformToRandom` off the
+    /// named stream. It offers the cards that can be transformed.
+    Transform(V::RunRngType),
+}
+
 /// One command requested by a content model in response to an event hook.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HookEffect<V: ContentVersion> {
@@ -1958,6 +1979,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// whose type the filter names is offered by no such selection.
     CloneDeckCard {
         excluding: CardKind,
+    },
+    /// `CardSelectCmd.FromDeckFor*`: the player picks `count` cards of the
+    /// deck, and `act` is what happens to each one.
+    SelectFromDeck {
+        act: DeckAct<V>,
+        count: usize,
     },
     /// `CardSelectCmd` over the run's upgradable cards.
     UpgradeRandomDeckCards {
@@ -2918,6 +2945,14 @@ pub trait Rules: Hooks {
     /// The same pool narrowed the same way, at one rarity. A colourless shelf
     /// stocks by rarity alone, so it asks for no card type.
     fn merchant_colorless_cards(rarity: RewardRarity) -> Vec<Self::Card>;
+
+    /// The cards a transform of `card` draws its replacement from, in the
+    /// order `Rng.NextItem` reads them.
+    ///
+    /// `CardFactory.GetDefaultTransformationOptions`, which is the card's own
+    /// pool, unlocked. It keeps common, uncommon and rare cards unless the card
+    /// is a status or a curse, and it leaves the card itself out.
+    fn transform_options(card: Self::Card) -> Vec<Self::Card>;
 
     /// The potions a reward draws from, split by rarity.
     ///

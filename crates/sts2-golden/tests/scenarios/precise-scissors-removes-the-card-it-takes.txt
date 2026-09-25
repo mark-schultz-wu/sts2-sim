@@ -1,0 +1,7 @@
+# `PreciseScissors.AfterObtained` asks for one card of the deck and removes
+# it. The first Strike goes, and the deck holds nine.
+#
+# A port that takes the relic and skips its pickup asks nothing.
+{"cmd":"start","seed":"C000000010","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0]}

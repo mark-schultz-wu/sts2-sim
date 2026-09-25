@@ -1,0 +1,7 @@
+# `Pomander.AfterObtained` asks for one upgradable card of the deck and
+# upgrades it. Bash comes out upgraded.
+#
+# A port that takes the relic and skips its pickup asks nothing.
+{"cmd":"start","seed":"C000000022","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[9]}
