@@ -17,6 +17,7 @@ mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
 mod burning_blood;
+mod chosen_cheese;
 mod cracked_core;
 mod cursed_pearl;
 mod divine_right;
@@ -75,6 +76,7 @@ pub enum State {
     BoomingConch,
     BoundPhylactery,
     BurningBlood,
+    ChosenCheese,
     CrackedCore,
     CursedPearl,
     DivineRight,
@@ -105,12 +107,12 @@ pub enum State {
     WingedBoots(winged_boots::State),
 }
 
-/// Deliver a notification to one relic.
 /// `RelicModel.AddsPet`, which two relics override.
 pub(crate) fn adds_pet(relic: Relic) -> bool {
     matches!(relic, Relic::Byrdpip | Relic::PaelsLegion)
 }
 
+/// Deliver a notification to one relic.
 pub(crate) fn event_hook(
     state: &mut State,
     hook: EventHook<V>,
@@ -123,6 +125,7 @@ pub(crate) fn event_hook(
         State::BoomingConch => booming_conch::event_hook(hook, asked),
         State::BoundPhylactery => bound_phylactery::event_hook(hook, asked),
         State::BurningBlood => burning_blood::event_hook(hook, asked),
+        State::ChosenCheese => chosen_cheese::event_hook(hook, asked),
         State::CrackedCore => cracked_core::event_hook(hook, asked),
         State::CursedPearl => cursed_pearl::event_hook(hook, asked),
         State::DivineRight => divine_right::event_hook(hook, asked),
@@ -189,6 +192,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::BoneTea(_)
         | State::BoundPhylactery
         | State::BurningBlood
+        | State::ChosenCheese
         | State::CrackedCore
         | State::CursedPearl
         | State::DivineRight
@@ -232,6 +236,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BoomingConch => State::BoomingConch,
             Relic::BoundPhylactery => State::BoundPhylactery,
             Relic::BurningBlood => State::BurningBlood,
+            Relic::ChosenCheese => State::ChosenCheese,
             Relic::CrackedCore => State::CrackedCore,
             Relic::CursedPearl => State::CursedPearl,
             Relic::DivineRight => State::DivineRight,

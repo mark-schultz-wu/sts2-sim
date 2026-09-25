@@ -13,9 +13,11 @@ const CARDS: usize = 3;
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     if let EventHook::Obtained = hook {
         asked.extend([
-            HookEffect::ChooseUniformCard {
+            HookEffect::ChooseUniformCards {
                 count: CARDS,
                 rarity: RewardRarity::Rare,
+                min: 0,
+                max: 1,
             },
             HookEffect::AddToDeck(Cards::Curse(CurseCard::Injury)),
         ]);

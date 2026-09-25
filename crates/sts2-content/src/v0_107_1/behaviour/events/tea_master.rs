@@ -1,17 +1,15 @@
 //! Tea Master eligibility, choices, and outcomes.
 
-use sts2_core::{
-    EventBehavior, EventContext, EventFlow, EventOption, EventOptionKey, EventView, Room,
-};
+use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
 
-use super::super::super::EventOptionId;
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::events::{Event, EventOption as Said};
 use super::super::super::generated::relics::Relic;
 
 #[derive(Debug, Clone, Default)]
 pub struct State {
-    finished: bool,
+    /// The option taken.
+    chosen: Option<u8>,
 }
 
 pub struct TeaMaster;
@@ -27,56 +25,45 @@ impl EventBehavior<V> for TeaMaster {
         State::default()
     }
 
+    /// A tea the purse cannot pay for is locked.
     fn observe(&self, state: &State, run: &impl EventView<V>) -> Room<V> {
-        let options = [
-            (Said::TeaMasterBoneTea, 50),
-            (Said::TeaMasterEmberTea, 150),
-            (Said::TeaMasterTeaOfDiscourtesy, 0),
-        ]
-        .into_iter()
-        .enumerate()
-        .map(|(index, (option, cost))| EventOption {
-            index: index as u8,
-            key: EventOptionKey {
-                event: Event::TeaMaster,
-                option: EventOptionId::Said(option),
-            },
-            title: None,
-            text: None,
-            locked: run.gold() < cost,
-            proceed: false,
-            chosen: false,
-            relic: None,
-        })
-        .collect();
-        Room::Event {
-            event: Event::TeaMaster,
-            finished: state.finished,
-            title: None,
-            text: None,
-            options: if state.finished { Vec::new() } else { options },
-        }
+        super::page(
+            Event::TeaMaster,
+            &[
+                (Said::TeaMasterBoneTea, run.gold() < 50),
+                (Said::TeaMasterEmberTea, run.gold() < 150),
+                (Said::TeaMasterTeaOfDiscourtesy, false),
+            ],
+            state.chosen,
+        )
     }
 
-    fn choose<R: sts2_core::rng::GameRng, C: EventContext<V>>(
+    /// `PlayerCmd.LoseGold` for the tea, where it costs any, then
+    /// `RelicCmd.Obtain`, which finishes the event.
+    fn choose<R: sts2_core::rng::GameRng>(
         &self,
         state: &mut State,
         option: u8,
-        run: &mut C,
+        _run: &impl EventView<V>,
         _rng: &mut R,
-    ) -> EventFlow<V> {
-        let (cost, relic) = match option {
-            0 => (50, Relic::BoneTea),
-            1 => (150, Relic::EmberTea),
-            2 => (0, Relic::TeaOfDiscourtesy),
-            _ => return EventFlow::Stay,
-        };
-        if !run.spend_gold(cost) {
-            return EventFlow::Stay;
+    ) -> HookEffects<V> {
+        state.chosen = Some(option);
+        match option {
+            0 => smallvec::smallvec![
+                HookEffect::LoseGold(50),
+                HookEffect::ObtainRelic(Relic::BoneTea),
+                HookEffect::FinishEvent,
+            ],
+            1 => smallvec::smallvec![
+                HookEffect::LoseGold(150),
+                HookEffect::ObtainRelic(Relic::EmberTea),
+                HookEffect::FinishEvent,
+            ],
+            _ => smallvec::smallvec![
+                HookEffect::ObtainRelic(Relic::TeaOfDiscourtesy),
+                HookEffect::FinishEvent,
+            ],
         }
-        run.obtain_relic(relic);
-        state.finished = true;
-        EventFlow::Finished
     }
 }
 
@@ -126,22 +113,6 @@ mod tests {
         }
     }
 
-    impl EventContext<V> for Run {
-        fn gold(&self) -> i32 {
-            self.gold
-        }
-        fn spend_gold(&mut self, amount: i32) -> bool {
-            if self.gold < amount {
-                return false;
-            }
-            self.gold -= amount;
-            true
-        }
-        fn obtain_relic(&mut self, relic: Relic) {
-            self.relics.push(relic);
-        }
-    }
-
     struct Rng;
 
     impl GameRng for Rng {
@@ -178,25 +149,19 @@ mod tests {
 
     #[test]
     fn buying_bone_tea_finishes_the_event() {
-        let mut run = Run {
+        let run = Run {
             gold: 175,
             ..Run::default()
         };
         let mut rng = Rng;
         let mut state = TeaMaster.enter(&run, &mut rng);
-        assert!(matches!(
-            TeaMaster.choose(&mut state, 0, &mut run, &mut rng),
-            EventFlow::Finished
-        ));
-        assert_eq!(run.gold, 125);
-        assert_eq!(run.relics, [Relic::BoneTea]);
-        let Room::Event {
-            finished, options, ..
-        } = TeaMaster.observe(&state, &run)
-        else {
-            panic!("Tea Master is an event room")
-        };
-        assert!(finished);
-        assert!(options.is_empty());
+        assert_eq!(
+            TeaMaster.choose(&mut state, 0, &run, &mut rng).as_slice(),
+            [
+                HookEffect::LoseGold(50),
+                HookEffect::ObtainRelic(Relic::BoneTea),
+                HookEffect::FinishEvent,
+            ]
+        );
     }
 }
