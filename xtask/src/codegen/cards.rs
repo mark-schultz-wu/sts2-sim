@@ -1170,11 +1170,11 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         out,
         "/// The colourless pool, split by rarity.\n\
          ///\n\
-         /// `ColorlessCardPool.GenerateAllCards`, which no character holds and\n\
-         /// so no reward pool covers. One relic draws from it. The pool's own\n\
-         /// order is not the id order: it deals Jack of All Trades before\n\
-         /// Jackpot, and the two are the same rarity, so the draw lands\n\
-         /// differently."
+         /// `ColorlessCardPool.GetUnlockedCards` for a run of one player, which\n\
+         /// leaves out the cards only a multiplayer run deals. No character\n\
+         /// holds it, so no reward pool covers it. The pool's own order is not\n\
+         /// the id order: it deals Jack of All Trades before Jackpot, and the\n\
+         /// two are the same rarity, so the draw lands differently."
     )
     .unwrap();
     writeln!(
@@ -1182,8 +1182,8 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         "pub fn colorless_cards() -> Drafted<'static, Cards> {{"
     )
     .unwrap();
-    let colorless = pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
-        kind: "pool",
+    let colorless = shop_pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
+        kind: "shoppool",
         pool: COLORLESS.to_string(),
     })?;
     writeln!(out, "    Drafted {{").unwrap();

@@ -1,6 +1,6 @@
 //! Which cards an enchantment takes.
 
-use sts2_core::{CardIdent, CardKind, CardTable as _, Rules as _};
+use sts2_core::{CardIdent, CardKind, CardTable as _, Cost, Rules as _};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{CardRarity, CardTag};
@@ -23,6 +23,27 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
                 && (card.card.tagged(CardTag::Strike) || card.card.tagged(CardTag::Defend))
         }
         Enchantment::SoulsPower => base && card.card.exhausts(),
+        // Its own check adds an X cost to the base's refusals.
+        Enchantment::Slither => base && card.card.cost() != Cost::X,
+        Enchantment::Sown => base,
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
+    }
+}
+
+/// `CardCmd.Enchant` with an amount of one, and the enchantment's `OnEnchant`.
+///
+/// # Panics
+///
+/// An enchantment whose `OnEnchant` changes the card, which this port has
+/// not reached.
+pub(crate) fn enchant(enchantment: Enchantment, card: &mut CardIdent<V>) {
+    match enchantment {
+        Enchantment::PerfectFit
+        | Enchantment::Slither
+        | Enchantment::Sown
+        | Enchantment::Spiral => {
+            card.enchantment = Some(enchantment);
+        }
+        _ => unimplemented!("what enchanting a card with {enchantment:?} does to it"),
     }
 }

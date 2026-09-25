@@ -2208,6 +2208,12 @@ pub enum DeckAct<V: ContentVersion> {
     /// `FromDeckForTransformation`, then `CardCmd.TransformToRandom` off the
     /// named stream. It offers the cards that can be transformed.
     Transform(Stream<V>),
+    /// `FromDeckGeneric` over the deck's basic cards that can be transformed,
+    /// then `CardCmd.TransformTo` this card.
+    TransformBasicInto(V::Card),
+    /// `FromDeckForEnchantment` over the cards the enchantment takes, in deck
+    /// order, then `CardCmd.Enchant` with an amount of one.
+    Enchant(V::Enchantment),
 }
 
 /// One stream to draw from: one of the run's, one of the player's, or the
@@ -2232,6 +2238,18 @@ pub enum CustomReward {
     /// `PotionReward(potion, player)` for one `Rng.NextItem` over
     /// [`Rules::unlocked_potions`] off the rewards stream.
     UnlockedPotion,
+    /// `CardReward` over the colourless pool at `RegularEncounter` odds, with
+    /// no upgrade roll, offering this many cards.
+    ColorlessCards(usize),
+}
+
+/// How [`HookEffect::ChooseCards`] draws each card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardDraw {
+    /// `Uniform` odds at one rarity: one `NextItem` over what is left of it.
+    Uniform(RewardRarity),
+    /// `RegularEncounter` odds, which roll a rarity first.
+    Regular,
 }
 
 /// A deck card a relic names rather than asks for.
@@ -2292,12 +2310,14 @@ pub enum HookEffect<V: ContentVersion> {
     AddUniformCard {
         rarity: crate::RewardRarity,
     },
-    /// `count` such cards, and a screen that takes between `min` and `max`
-    /// of them into the deck, in the order picked. `FromChooseACardScreen`
-    /// takes one or none, and `FromSimpleGridForRewards` its own count.
-    ChooseUniformCards {
+    /// `CardFactory.CreateForReward` for `count` cards of the character's
+    /// pool, with no upgrade roll. A screen then takes between `min` and
+    /// `max` of them into the deck, in the order picked.
+    /// `FromChooseACardScreen` takes one or none, and
+    /// `FromSimpleGridForRewards` its own count.
+    ChooseCards {
+        draw: CardDraw,
         count: usize,
-        rarity: crate::RewardRarity,
         min: usize,
         max: usize,
     },
@@ -3321,6 +3341,13 @@ pub trait Rules: Hooks {
     /// pool, unlocked. It keeps common, uncommon and rare cards unless the card
     /// is a status or a curse, and it leaves the card itself out.
     fn transform_options(card: Self::Card) -> Vec<Self::Card>;
+
+    /// `EnchantmentModel.CanEnchant`, for a card in the deck.
+    fn can_enchant(enchantment: Self::Enchantment, card: &crate::CardIdent<Self>) -> bool;
+
+    /// `CardCmd.Enchant` with an amount of one on a card that takes it, which
+    /// is the enchantment's own `OnEnchant` as well.
+    fn enchant(enchantment: Self::Enchantment, card: &mut crate::CardIdent<Self>);
 
     /// The potions a reward draws from, split by rarity.
     ///

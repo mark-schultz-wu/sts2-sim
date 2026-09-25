@@ -7,20 +7,24 @@ use super::Odds;
 
 /// Draw distinct cards with regular-encounter rarity odds.
 ///
-/// Each card costs three draws: rarity, the item in that rarity, and the
-/// upgrade roll. At Neow the upgrade chance is zero, but the roll still happens.
+/// Each card costs two draws, rarity and the item in that rarity, and a third
+/// for the upgrade roll unless `CardCreationFlags.NoUpgradeRoll` is set. At
+/// Neow the upgrade chance is zero, but the roll still happens.
 pub(crate) fn regular<V: Rules, R: GameRng>(
     rng: &mut R,
     cards: Drafted<'_, V::Card>,
     count: usize,
+    upgrade_roll: bool,
 ) -> Vec<V::Card> {
     let mut drawn = Vec::with_capacity(count);
     for _ in 0..count {
+        // `RollWithBaseOdds`, which holds the roll to the uncommon odds
+        // alone. The offset roll a fight makes adds them to the rare's.
         let (rare, uncommon) = RarityOdds::Regular.bands();
         let roll = rng.next_double() as f32;
         let wanted = if roll < rare {
             RewardRarity::Rare
-        } else if roll < uncommon + rare {
+        } else if roll < uncommon {
             RewardRarity::Uncommon
         } else {
             RewardRarity::Common
@@ -39,7 +43,9 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
                 .copied()
                 .expect("the draw is inside the count"),
         );
-        let _upgrade_roll = rng.next_double();
+        if upgrade_roll {
+            let _roll = rng.next_double();
+        }
     }
     drawn
 }

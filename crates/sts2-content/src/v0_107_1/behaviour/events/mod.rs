@@ -1,16 +1,19 @@
 //! Event behavior dispatch for this build.
 
 mod aroma_of_chaos;
+mod brain_leech;
 mod byrdonis_nest;
 mod morphic_grove;
 mod orobas;
 mod room_full_of_cheese;
+mod sapphire_seed;
 mod sunken_statue;
 mod tea_master;
 mod the_legends_were_true;
 mod this_or_that;
 mod wellspring;
 mod whispering_hollow;
+mod wood_carvings;
 
 use nonmax::NonMaxU8;
 use sts2_core::{
@@ -29,16 +32,19 @@ use super::relics::adds_pet;
 #[derive(Debug, Clone)]
 pub enum State {
     AromaOfChaos(aroma_of_chaos::State),
+    BrainLeech(brain_leech::State),
     ByrdonisNest(byrdonis_nest::State),
     MorphicGrove(morphic_grove::State),
     Orobas(orobas::State),
     RoomFullOfCheese(room_full_of_cheese::State),
+    SapphireSeed(sapphire_seed::State),
     SunkenStatue(sunken_statue::State),
     TeaMaster(tea_master::State),
     TheLegendsWereTrue(the_legends_were_true::State),
     ThisOrThat(this_or_that::State),
     Wellspring(wellspring::State),
     WhisperingHollow(whispering_hollow::State),
+    WoodCarvings(wood_carvings::State),
 }
 
 /// A page of the options its keys name, each with whether it is locked, and
@@ -84,6 +90,9 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
     let removable = |card: &sts2_core::CardIdent<V>| !card.card.eternal();
     let basic = |card: &sts2_core::CardIdent<V>| card.card.rarity() == CardRarity::Basic;
     match event {
+        Event::BrainLeech => brain_leech::BrainLeech.allowed(run),
+        Event::SapphireSeed => sapphire_seed::SapphireSeed.allowed(run),
+        Event::WoodCarvings => wood_carvings::WoodCarvings.allowed(run),
         Event::AromaOfChaos => aroma_of_chaos::AromaOfChaos.allowed(run),
         Event::ByrdonisNest => byrdonis_nest::ByrdonisNest.allowed(run),
         Event::MorphicGrove => morphic_grove::MorphicGrove.allowed(run),
@@ -99,7 +108,6 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::DollRoom | Event::StoneOfAllTime if act != 1 => false,
         Event::DollRoom => true,
         Event::StoneOfAllTime => run.potions().next().is_some(),
-        Event::BrainLeech => act < 2,
         Event::PotionCourier | Event::Symbiote => act > 0,
         Event::WelcomeToWongos => act == 1 && gold >= 100,
         Event::CrystalSphere => gold >= 100 && act > 0,
@@ -128,7 +136,6 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
             act >= 1 && (gold >= 100 || run.potions().any(|potion| potion == Potion::FoulPotion))
         }
 
-        Event::WoodCarvings => run.deck().iter().any(|card| basic(card) && removable(card)),
         Event::Amalgamator => [CardTag::Strike, CardTag::Defend].into_iter().all(|tag| {
             let valid = |card: &&sts2_core::CardIdent<V>| {
                 card.card.tagged(tag) && basic(card) && removable(card)
@@ -161,12 +168,14 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
 ) -> State {
     match event {
         Event::AromaOfChaos => State::AromaOfChaos(aroma_of_chaos::AromaOfChaos.enter(run, rng)),
+        Event::BrainLeech => State::BrainLeech(brain_leech::BrainLeech.enter(run, rng)),
         Event::ByrdonisNest => State::ByrdonisNest(byrdonis_nest::ByrdonisNest.enter(run, rng)),
         Event::MorphicGrove => State::MorphicGrove(morphic_grove::MorphicGrove.enter(run, rng)),
         Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
         Event::RoomFullOfCheese => {
             State::RoomFullOfCheese(room_full_of_cheese::RoomFullOfCheese.enter(run, rng))
         }
+        Event::SapphireSeed => State::SapphireSeed(sapphire_seed::SapphireSeed.enter(run, rng)),
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
         Event::TeaMaster => State::TeaMaster(tea_master::TeaMaster.enter(run, rng)),
         Event::TheLegendsWereTrue => {
@@ -177,6 +186,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::WhisperingHollow => {
             State::WhisperingHollow(whispering_hollow::WhisperingHollow.enter(run, rng))
         }
+        Event::WoodCarvings => State::WoodCarvings(wood_carvings::WoodCarvings.enter(run, rng)),
         _ => unimplemented!("entering event {event:?}"),
     }
 }
@@ -184,10 +194,12 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
 pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
     match state {
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
+        State::BrainLeech(state) => brain_leech::BrainLeech.observe(state, run),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.observe(state, run),
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.observe(state, run),
         State::Orobas(state) => orobas::Orobas.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
+        State::SapphireSeed(state) => sapphire_seed::SapphireSeed.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
         State::TheLegendsWereTrue(state) => {
@@ -196,6 +208,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::ThisOrThat(state) => this_or_that::ThisOrThat.observe(state, run),
         State::Wellspring(state) => wellspring::Wellspring.observe(state, run),
         State::WhisperingHollow(state) => whispering_hollow::WhisperingHollow.observe(state, run),
+        State::WoodCarvings(state) => wood_carvings::WoodCarvings.observe(state, run),
     }
 }
 
@@ -207,12 +220,14 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
 ) -> HookEffects<V> {
     match state {
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
+        State::BrainLeech(state) => brain_leech::BrainLeech.choose(state, option, run, rng),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.choose(state, option, run, rng),
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.choose(state, option, run, rng),
         State::Orobas(state) => orobas::Orobas.choose(state, option, run, rng),
         State::RoomFullOfCheese(state) => {
             room_full_of_cheese::RoomFullOfCheese.choose(state, option, run, rng)
         }
+        State::SapphireSeed(state) => sapphire_seed::SapphireSeed.choose(state, option, run, rng),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
         State::TeaMaster(state) => tea_master::TeaMaster.choose(state, option, run, rng),
         State::TheLegendsWereTrue(state) => {
@@ -223,5 +238,6 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::WhisperingHollow(state) => {
             whispering_hollow::WhisperingHollow.choose(state, option, run, rng)
         }
+        State::WoodCarvings(state) => wood_carvings::WoodCarvings.choose(state, option, run, rng),
     }
 }

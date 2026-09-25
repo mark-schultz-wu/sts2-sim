@@ -1,7 +1,7 @@
 //! Room Full of Cheese: two commons of eight, or a relic for HP.
 
 use nonmax::NonMaxU8;
-use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, RewardRarity, Room};
+use sts2_core::{CardDraw, EventBehavior, EventView, HookEffect, HookEffects, RewardRarity, Room};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::events::{Event, EventOption as Said};
@@ -53,9 +53,9 @@ impl EventBehavior<V> for RoomFullOfCheese {
         state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
-                HookEffect::ChooseUniformCards {
+                HookEffect::ChooseCards {
+                    draw: CardDraw::Uniform(RewardRarity::Common),
                     count: 8,
-                    rarity: RewardRarity::Common,
                     min: 2,
                     max: 2,
                 },
