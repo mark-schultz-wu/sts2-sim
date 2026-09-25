@@ -17,6 +17,7 @@ use super::{ActMapBuilder, COLS, Id};
 /// Only when two columns at one end are empty and two at the other are not.
 /// Anything shifted off the end is dropped, which the emptiness check makes
 /// unreachable.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn center<V: Rules>(map: &mut ActMapBuilder<V>) {
     let left_clear = column_empty(map, 0) && column_empty(map, 1);
     let right_clear = column_empty(map, COLS - 1) && column_empty(map, COLS - 2);
@@ -61,14 +62,19 @@ fn column_empty<V: Rules>(map: &ActMapBuilder<V>, col: usize) -> bool {
 /// the room it has is the overlap of those. It takes the free column that
 /// leaves the widest gap to its neighbours, and the row settles when nothing
 /// moves.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn spread<V: Rules>(map: &mut ActMapBuilder<V>) {
     for row in 0..map.rows {
-        let nodes = map.row(row);
+        let nodes: smallvec::SmallVec<[Id; COLS]> =
+            (0..COLS).filter_map(|col| map.cell(col, row)).collect();
+        // Each node's column, beside it in `nodes`, kept as nodes move.
+        let mut cols: smallvec::SmallVec<[usize; COLS]> =
+            nodes.iter().map(|&id| map.points[id].col).collect();
         loop {
             let mut moved = false;
-            for &id in &nodes {
-                let from = map.points[id].col;
-                let here = gap(map, from, &nodes, id);
+            for (at, &id) in nodes.iter().enumerate() {
+                let from = cols[at];
+                let here = gap(&cols, at, from);
                 let mut best = (from, here);
                 for col in allowed(map, id) {
                     if col == from {
@@ -77,7 +83,7 @@ pub(super) fn spread<V: Rules>(map: &mut ActMapBuilder<V>) {
                     if map.cell(col, row).is_some_and(|held| held != id) {
                         continue;
                     }
-                    let widened = gap(map, col, &nodes, id);
+                    let widened = gap(&cols, at, col);
                     if widened > best.1 {
                         best = (col, widened);
                     }
@@ -86,6 +92,7 @@ pub(super) fn spread<V: Rules>(map: &mut ActMapBuilder<V>) {
                     map.put(from, row, None);
                     map.put(best.0, row, Some(id));
                     map.points[id].col = best.0;
+                    cols[at] = best.0;
                     moved = true;
                 }
             }
@@ -100,28 +107,31 @@ pub(super) fn spread<V: Rules>(map: &mut ActMapBuilder<V>) {
 ///
 /// Ascending, which is the order the game's own set comes back in: it starts
 /// at every column and only ever removes.
-fn allowed<V: Rules>(map: &ActMapBuilder<V>, id: Id) -> Vec<usize> {
+///
+/// Within one column of each linked node is one run of columns: from one
+/// left of the rightmost to one right of the leftmost.
+fn allowed<V: Rules>(map: &ActMapBuilder<V>, id: Id) -> std::ops::RangeInclusive<usize> {
     let point = &map.points[id];
-    let linked: Vec<usize> = point
-        .parents
-        .iter()
-        .chain(point.children.iter())
-        .map(|other| map.points[other].col)
-        .collect();
-    (0..COLS)
-        .filter(|&col| linked.iter().all(|&at| col + 1 >= at && at + 1 >= col))
-        .collect()
+    let (mut low, mut high) = (0, COLS - 1);
+    for other in point.parents.iter().chain(point.children.iter()) {
+        let at = map.points[other].col;
+        low = low.max(at.saturating_sub(1));
+        high = high.min(at + 1);
+    }
+    low..=high
 }
 
 /// How far a candidate column is from the nearest other node in the row.
 ///
 /// `usize::MAX` for a row holding nothing else, which is the game's own
 /// `int.MaxValue` and makes a lone node stay put.
-fn gap<V: Rules>(map: &ActMapBuilder<V>, candidate: usize, nodes: &[Id], id: Id) -> usize {
-    nodes
-        .iter()
-        .filter(|&&other| other != id)
-        .map(|&other| candidate.abs_diff(map.points[other].col))
+///
+/// `cols` holds the row's columns, and the node itself stands at `at`.
+fn gap(cols: &[usize], at: usize, candidate: usize) -> usize {
+    cols.iter()
+        .enumerate()
+        .filter(|&(other, _)| other != at)
+        .map(|(_, &col)| candidate.abs_diff(col))
         .min()
         .unwrap_or(usize::MAX)
 }
@@ -130,6 +140,7 @@ fn gap<V: Rules>(map: &ActMapBuilder<V>, candidate: usize, nodes: &[Id], id: Id)
 ///
 /// Only a node with exactly one parent and one child, sitting outside both. It
 /// moves one column towards them if that column is free.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn straighten<V: Rules>(map: &mut ActMapBuilder<V>) {
     for row in 0..map.rows {
         for col in 0..COLS {

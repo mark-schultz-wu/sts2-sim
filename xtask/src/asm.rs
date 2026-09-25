@@ -178,7 +178,14 @@ fn counts(profile: &Path, name: &str) -> Result<Counts, String> {
     let (mut last_at, mut last_line) = (0u64, 0u64);
     for line in text.lines() {
         if let Some(field) = line.strip_prefix("fn=") {
-            inside = named(field) == name;
+            // A recursive function's deeper calls are named `name'2`, and are
+            // the same code.
+            let field = named(field);
+            inside = field == name
+                || field
+                    .strip_prefix(name)
+                    .and_then(|rest| rest.strip_prefix('\''))
+                    .is_some_and(|depth| depth.chars().all(|c| c.is_ascii_digit()));
             continue;
         }
         if let Some(field) = line.strip_prefix("cfn=") {

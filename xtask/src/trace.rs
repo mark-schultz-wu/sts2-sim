@@ -7,12 +7,16 @@
 //! tree in instructions per step, and `--callers` turns it the other way up.
 //! `svg` draws it as a flamegraph.
 //!
+//! Map generation is kept apart, since a search inside a fight never runs it.
+//! `--map` reads it instead of the rest, per map built rather than per step.
+//!
 //! ```text
 //! cargo xtask trace record before
 //! cargo xtask trace show before --root notify --depth 3
 //! cargo xtask trace show after --vs before --root turn::end
 //! cargo xtask trace show after --callers modified_by
 //! cargo xtask trace svg after
+//! cargo xtask trace show after --map --depth 3
 //! ```
 //!
 //! A build with live spans inlines a little differently from a release build,
@@ -27,6 +31,9 @@ use std::process::Command;
 /// Where `show` starts when no root is named: the replays themselves.
 const REPLAY: &str = "sts2_trace::replay";
 
+/// Where `show --map` starts when no root is named: each map built.
+const MAP: &str = "act_map";
+
 pub fn run(args: &[String]) -> Result<String, String> {
     let (command, rest) = args
         .split_first()
@@ -34,11 +41,16 @@ pub fn run(args: &[String]) -> Result<String, String> {
     let dir = workspace()?.join("target/profile");
     std::fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
     let mut options = Options::parse(rest)?;
-    let label = options.label.take().unwrap_or_else(|| "current".to_owned());
+    let mut label = options.label.take().unwrap_or_else(|| "current".to_owned());
+    // The map's stacks sit in a file of their own beside the rest.
+    if options.map {
+        label = format!("{label}.map");
+        options.vs = options.vs.map(|vs| format!("{vs}.map"));
+    }
     match command.as_str() {
         "record" => record(&dir, &label),
         "show" => show(&dir, &label, &options),
-        "svg" => svg(&dir, &label),
+        "svg" => svg(&dir, &label, options.map),
         other => Err(format!(
             "unknown trace command '{other}'; try: record, show, svg"
         )),
@@ -54,6 +66,8 @@ struct Options {
     min: Option<f64>,
     vs: Option<String>,
     callers: Option<String>,
+    /// Map generation rather than everything else.
+    map: bool,
 }
 
 impl Options {
@@ -72,6 +86,7 @@ impl Options {
                 "--min" => options.min = Some(parse(&value("--min", &mut args)?, "--min")?),
                 "--vs" => options.vs = Some(value("--vs", &mut args)?),
                 "--callers" => options.callers = Some(value("--callers", &mut args)?),
+                "--map" => options.map = true,
                 other if options.label.is_none() && !other.starts_with("--") => {
                     options.label = Some(other.to_owned())
                 }
@@ -234,7 +249,11 @@ fn show(dir: &Path, label: &str, options: &Options) -> Result<String, String> {
         }
         let (all, worth) = read(dir, label, None)?;
         let mut zoomed = Node::default();
-        all.zoom(options.root.as_deref().unwrap_or(REPLAY), &mut zoomed);
+        let start = match options.map {
+            true => MAP,
+            false => REPLAY,
+        };
+        all.zoom(options.root.as_deref().unwrap_or(start), &mut zoomed);
         Ok((zoomed, worth))
     };
     let (now, worth) = focus(label)?;
@@ -242,11 +261,16 @@ fn show(dir: &Path, label: &str, options: &Options) -> Result<String, String> {
     let root = match (&options.callers, &options.root) {
         (Some(pattern), _) => format!("what calls {pattern}"),
         (None, Some(pattern)) => pattern.clone(),
+        (None, None) if options.map => "map generation".to_owned(),
         (None, None) => "the replay".to_owned(),
+    };
+    let per = match options.map {
+        true => "map",
+        false => "step",
     };
     let mut out = match &then {
         None => format!(
-            "{label}, {root}: {:.0} per step{}\n  per step  share  per call  span\n",
+            "{label}, {root}: {:.0} per {per}{}\n  per {per}  share  per call  span\n",
             now.total as f64 * worth,
             match now.calls {
                 0 => String::new(),
@@ -254,7 +278,7 @@ fn show(dir: &Path, label: &str, options: &Options) -> Result<String, String> {
             }
         ),
         Some((then, then_worth)) => format!(
-            "{label} against {}, {root}: {:.0} -> {:.0} per step\n  before     after   change  span\n",
+            "{label} against {}, {root}: {:.0} -> {:.0} per {per}\n  before     after   change  span\n",
             options.vs.as_deref().unwrap_or_default(),
             then.total as f64 * then_worth,
             now.total as f64 * worth
@@ -359,7 +383,7 @@ fn lines(
 }
 
 /// Draw a recorded profile as a flamegraph, next to its folded file.
-fn svg(dir: &Path, label: &str) -> Result<String, String> {
+fn svg(dir: &Path, label: &str, map: bool) -> Result<String, String> {
     let file = folded_path(dir, label);
     let text = std::fs::read_to_string(&file)
         .map_err(|e| format!("reading {}: {e}; record it first", file.display()))?;
@@ -373,7 +397,10 @@ fn svg(dir: &Path, label: &str) -> Result<String, String> {
     let writer =
         std::fs::File::create(&out).map_err(|e| format!("creating {}: {e}", out.display()))?;
     let mut options = inferno::flamegraph::Options::default();
-    options.title = format!("{label}: a replayed step, outside map generation");
+    options.title = match map {
+        true => format!("{label}: map generation"),
+        false => format!("{label}: a replayed step, outside map generation"),
+    };
     options.count_name = "instructions".into();
     inferno::flamegraph::from_lines(&mut options, lines, std::io::BufWriter::new(writer))
         .map_err(|e| format!("drawing the flamegraph: {e}"))?;

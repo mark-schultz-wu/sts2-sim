@@ -10,7 +10,7 @@
 //! A profile is kept under `target/profile/<label>.callgrind`. `--vs` holds
 //! it against an earlier one, and `--top` lists the costliest functions.
 //! `--callers` lists what calls a function, and `--asm` lists a function's
-//! code with what each instruction ran.
+//! code with what each instruction ran. `--map` counts map generation alone.
 //!
 //! ```text
 //! cargo xtask instructions before
@@ -23,9 +23,11 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Map generation, as callgrind names it. A closure inside it ends in `}`
-/// rather than `>`, so this names the builder alone.
-const MAP: &str = "*ActMapBuilder*>::generate::<*>";
+/// Map generation, as callgrind names it: `ActMap::generate`, which builds
+/// the map, lists its nodes and drops the builder. The builder's own
+/// `ActMapBuilder<` does not match `ActMap<`, and a closure inside ends in
+/// `}` rather than `>`.
+const MAP: &str = "*::ActMap<*>>::generate::<*>";
 
 /// The simulator's own functions, which `--top` lists.
 const OURS: &str = "sts2_";
@@ -48,11 +50,13 @@ pub fn run(args: &[String]) -> Result<String, String> {
     let mut top = 0;
     let mut callers = None;
     let mut asm = None;
+    let mut map = false;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--vs" => vs = Some(args.next().ok_or("--vs names a label")?.clone()),
             "--asm" => asm = Some(args.next().ok_or("--asm names a function")?.clone()),
+            "--map" => map = true,
             "--callers" => {
                 callers = Some(args.next().ok_or("--callers names a pattern")?.clone());
             }
@@ -95,9 +99,13 @@ pub fn run(args: &[String]) -> Result<String, String> {
         .arg("--tool=callgrind")
         // Counting from the start, so the toggle turns it off inside the
         // builder. Naming a toggle turns counting off at the start, so this
-        // comes after it.
+        // comes after it. For the map alone, counting starts off, and the
+        // toggle turns it on inside the builder.
         .arg(format!("--toggle-collect={MAP}"))
-        .arg("--collect-atstart=yes")
+        .arg(format!(
+            "--collect-atstart={}",
+            if map { "no" } else { "yes" }
+        ))
         // A count per instruction as well as per line, which `--asm` reads.
         .arg("--dump-instr=yes")
         .arg(format!("--callgrind-out-file={}", out.display()))
@@ -118,8 +126,9 @@ pub fn run(args: &[String]) -> Result<String, String> {
 
     let current = read(&dir, &label)?;
     let mut report = format!(
-        "{label}: {steps} steps, {} outside map generation, {:.0} per step\n",
+        "{label}: {steps} steps, {} {} map generation, {:.0} per step\n",
         millions(current.total),
+        if map { "inside" } else { "outside" },
         current.per_step(),
     );
     if let Some(pattern) = &callers {
