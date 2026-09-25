@@ -554,10 +554,11 @@ pub enum ModelHook {
     ModifyGoldGained,
     AfterModifyingGoldGained,
     AfterGoldGained,
+    ShouldFlush,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 63] = [
+    pub const ALL: [ModelHook; 64] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -621,6 +622,7 @@ impl ModelHook {
         ModelHook::ModifyGoldGained,
         ModelHook::AfterModifyingGoldGained,
         ModelHook::AfterGoldGained,
+        ModelHook::ShouldFlush,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -695,6 +697,7 @@ impl ModelHook {
             ModelHook::ModifyGoldGained => "ModifyGoldGained",
             ModelHook::AfterModifyingGoldGained => "AfterModifyingGoldGained",
             ModelHook::AfterGoldGained => "AfterGoldGained",
+            ModelHook::ShouldFlush => "ShouldFlush",
         }
     }
 }
@@ -1899,6 +1902,9 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldCountForCombatEnd,
     /// `ShouldClearBlock`, as `creature` starts its turn.
     ShouldClearBlock { creature: crate::CombatId },
+    /// `ShouldFlush`, as `player`'s turn ends. A hand any listener answers no
+    /// for keeps every card.
+    ShouldFlush { player: crate::CombatId },
     /// `ShouldStopCombatFromEnding`, which any listener can answer yes to.
     ShouldStopCombatFromEnding,
     /// `ShouldAllowHitting`, about `creature`. A creature no listener lets be
@@ -1952,6 +1958,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             }
             DecisionHook::ShouldRemovePowerOnDeath { .. } => ModelHook::ShouldPowerBeRemovedOnDeath,
             DecisionHook::ShouldClearBlock { .. } => ModelHook::ShouldClearBlock,
+            DecisionHook::ShouldFlush { .. } => ModelHook::ShouldFlush,
             DecisionHook::TakesUnblockedDamage { .. } => ModelHook::ModifyUnblockedDamageTarget,
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
@@ -2350,6 +2357,9 @@ pub enum HookEffect<V: ContentVersion> {
     DamageOpponents(V::Number),
     /// `PlayerCmd.GainGold`, which a run carries out between rooms.
     GainGold(V::Number),
+    /// `CombatRoom.AddExtraReward` with a `GoldReward` of this much, which
+    /// the fight's rewards offer beside its own.
+    AddGoldReward(V::Number),
     /// `PlayerCmd.LoseGold`, which stops at none.
     LoseGold(V::Number),
     /// `RelicCmd.Obtain`, and whatever the relic's pickup asks.
@@ -2532,6 +2542,9 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         applier: Option<crate::CombatId>,
         /// `Owner.Monster`, which is nothing for a power on the player.
         monster: Option<V::Monster>,
+        /// `PowerModel.AmountOnTurnStart`: the stack as its holder's side
+        /// last began a turn, or zero before one has.
+        on_turn_start: PowerAmount<V::Number>,
         /// What this instance saves for itself, which is every field of its
         /// own model. A power writes here rather than ask the fight to.
         state: &'a V::PowerState,
@@ -2571,6 +2584,8 @@ pub struct EventPower<'a, V: Hooks> {
     pub applier: Option<crate::CombatId>,
     /// `Owner.Monster`, which is nothing for a power on the player.
     pub monster: Option<V::Monster>,
+    /// `PowerModel.AmountOnTurnStart`.
+    pub on_turn_start: PowerAmount<V::Number>,
     pub state: &'a mut V::PowerState,
 }
 

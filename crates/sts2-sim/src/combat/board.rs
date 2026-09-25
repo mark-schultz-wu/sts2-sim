@@ -323,6 +323,7 @@ impl<'a, V: Rules> Board<'a, V> {
             holder: carrier.id,
             applier,
             monster: carrier.monster,
+            on_turn_start: sts2_core::PowerAmount::Counted(num_traits::zero()),
             state: &mut state,
         };
         let mut asked = sts2_core::HookEffects::new();

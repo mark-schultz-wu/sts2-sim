@@ -148,7 +148,11 @@ impl<V: Rules> State<V> {
             Some(combat::Ended::Won) => {
                 let (live, relics) = self.left_fight();
                 let returned = live.returned().to_vec();
-                let leaving = live.leaving().to_vec();
+                // `AddExtraReward`, which the room's own rewards come before.
+                let (extra, leaving): (Vec<_>, Vec<_>) = live
+                    .leaving()
+                    .iter()
+                    .partition(|effect| matches!(effect, sts2_core::HookEffect::AddGoldReward(_)));
                 let combat = live.finish(relics);
                 // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
                 // rewards.
@@ -162,6 +166,24 @@ impl<V: Rules> State<V> {
                         .into_iter()
                         .map(|card| crate::reward::Offer::SpecialCard { card, taken: false }),
                 );
+                // `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
+                // rewards stream, after the room's own, even for a gold
+                // reward whose two bounds are the one amount.
+                for effect in extra {
+                    let sts2_core::HookEffect::AddGoldReward(amount) = effect else {
+                        unreachable!("the extra rewards are gold")
+                    };
+                    let (rng, _) = self.rewarding();
+                    let bound =
+                        |n| num_traits::cast(n).expect("a gold amount fits the RNG integer");
+                    let span = sts2_core::rng::Span::new(bound(amount), bound(amount) + 1)
+                        .expect("a fixed amount spans itself");
+                    let _drawn = sts2_core::rng::GameRng::next_int_range(rng, span);
+                    offered.push(crate::reward::Offer::Gold {
+                        amount,
+                        taken: false,
+                    });
+                }
                 crate::reward::sort(&mut offered);
                 self.won(combat, offered);
             }

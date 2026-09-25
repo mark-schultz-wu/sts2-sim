@@ -2021,7 +2021,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // REPTILE_TRINKET
     sts2_core::Overrides::from_bits(0),
     // RINGING_TRIANGLE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldFlush),
     // RING_OF_THE_DRAKE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
     // RING_OF_THE_SNAKE
@@ -2040,7 +2040,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // RUNIC_CAPACITOR
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // RUNIC_PYRAMID
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldFlush),
     // SAI
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // SAND_CASTLE

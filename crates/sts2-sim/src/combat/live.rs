@@ -940,6 +940,9 @@ impl<V: Rules> Copy for Carrier<V> {}
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct HeldPower<V: Rules> {
     pub(crate) amount: Stacked,
+    /// `PowerModel.AmountOnTurnStart`, which its holder's side writes as it
+    /// begins a turn.
+    pub(crate) on_turn_start: Stacked,
     /// `PowerModel.Applier`.
     pub(crate) applier: Option<CombatId>,
     pub(crate) state: V::PowerState,
@@ -963,6 +966,7 @@ impl<V: Rules> HeldPower<V> {
     pub(crate) fn new(power: V::Power, amount: Stacked, applier: Option<CombatId>) -> Self {
         Self {
             amount,
+            on_turn_start: Stacked::counted(0),
             applier,
             state: <V::PowerState as sts2_core::PowerModel<V>>::new(power),
         }
@@ -981,6 +985,7 @@ impl<V: Rules> HeldPower<V> {
             holder: carrier.id,
             applier: self.applier,
             monster: carrier.monster,
+            on_turn_start: self.on_turn_start.amount(),
             state: &self.state,
         }
     }
@@ -993,6 +998,7 @@ impl<V: Rules> HeldPower<V> {
             holder: carrier.id,
             applier: self.applier,
             monster: carrier.monster,
+            on_turn_start: self.on_turn_start.amount(),
             state: &mut self.state,
         }
     }

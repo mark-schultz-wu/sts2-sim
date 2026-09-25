@@ -320,6 +320,27 @@ pub(crate) fn modify_hook(
         {
             unimplemented!("an endless Dexterity")
         }
+        // `MachineLearningPower.ModifyHandDraw`: its stack more cards for its
+        // owner.
+        (
+            Power::MachineLearningPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::HandDraw { player, .. },
+        ) if player == holder => Modify::Added(amount),
+        // `DrawCardsNextTurnPower.ModifyHandDraw`, which waits for the stack
+        // to have been there as its owner's turn began.
+        (
+            Power::DrawCardsNextTurnPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::HandDraw { player, .. },
+        ) if player == holder && held.on_turn_start != PowerAmount::Counted(0) => {
+            Modify::Added(amount)
+        }
+        (
+            Power::MachineLearningPower | Power::DrawCardsNextTurnPower,
+            PowerAmount::Endless,
+            ModifyHook::HandDraw { .. },
+        ) => unimplemented!("an endless {power:?}"),
         // The overrides above, for a number some other creature is party to.
         (
             Power::SlowPower | Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower,
@@ -328,7 +349,12 @@ pub(crate) fn modify_hook(
         )
         | (Power::StrengthPower, _, ModifyHook::DamageAdditive { .. })
         | (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { .. })
-        | (Power::DexterityPower, _, ModifyHook::BlockAdditive { .. }) => Modify::Nothing,
+        | (Power::DexterityPower, _, ModifyHook::BlockAdditive { .. })
+        | (
+            Power::MachineLearningPower | Power::DrawCardsNextTurnPower,
+            _,
+            ModifyHook::HandDraw { .. },
+        ) => Modify::Nothing,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     }
 }
@@ -397,6 +423,10 @@ pub(crate) fn decide_hook(
                 alive,
             },
         ) => HookResponse::Decision(pet_of == Some(target) && alive && powered),
+        // `RetainHandPower.ShouldFlush`, which keeps its own holder's hand.
+        (Power::RetainHandPower, DecisionHook::ShouldFlush { player }) => {
+            HookResponse::Decision(player != held.holder)
+        }
         // `BurrowedPower.ShouldClearBlock`, which keeps its own holder's.
         (Power::BurrowedPower, DecisionHook::ShouldClearBlock { creature }) => {
             HookResponse::Decision(creature != held.holder)
@@ -424,6 +454,8 @@ pub(crate) struct Held {
     pub(crate) applier: Option<sts2_core::CombatId>,
     /// `Owner.Monster`, which is nothing for a power on the player.
     pub(crate) monster: Option<Monster>,
+    /// `PowerModel.AmountOnTurnStart`.
+    pub(crate) on_turn_start: PowerAmount<Number>,
 }
 
 /// Dispatch one of the event hooks the simulator currently supports.
@@ -446,6 +478,7 @@ pub(crate) fn event_hook(
         holder,
         applier,
         monster,
+        ..
     } = held;
 
     // `TemporaryStrengthPower` asks for two things when a turn ends, and the
@@ -787,6 +820,26 @@ pub(crate) fn event_hook(
         // `IllusionPower.AfterCombatEnd` plays the dead owner's animation,
         // which is all it does.
         (Power::IllusionPower, _, EventHook::CombatEnd { .. }) => None,
+        // `RoyaltiesPower.AfterCombatEnd`: a gold reward of its stack.
+        (Power::RoyaltiesPower, PowerAmount::Counted(amount), EventHook::CombatEnd { .. }) => {
+            Some(HookEffect::AddGoldReward(amount))
+        }
+        (Power::RoyaltiesPower, PowerAmount::Endless, EventHook::CombatEnd { .. }) => {
+            unimplemented!("an endless Royalties")
+        }
+        // `DrawCardsNextTurnPower.AfterSideTurnStart` goes once the turn it
+        // drew for has begun.
+        (Power::DrawCardsNextTurnPower, _, EventHook::SideTurnStart { side, .. })
+            if side == owner && held.on_turn_start != PowerAmount::Counted(0) =>
+        {
+            Some(HookEffect::Remove)
+        }
+        (Power::DrawCardsNextTurnPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `RetainHandPower.AfterSideTurnEnd`, for the side its owner is among.
+        (Power::RetainHandPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::RetainHandPower, _, EventHook::SideTurnEnd { .. }) => None,
         // The overrides above that answer for their own holder, or for their
         // own side's turn, and leave every other event alone.
         (Power::BlockNextTurnPower, PowerAmount::Counted(_), EventHook::BlockCleared { .. })
