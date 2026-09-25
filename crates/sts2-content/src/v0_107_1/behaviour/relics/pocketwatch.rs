@@ -36,7 +36,7 @@ pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
             state.played_last_turn = state.played_this_turn;
             state.played_this_turn = 0;
         }
-        EventHook::CombatEnd => *state = State::default(),
+        EventHook::CombatEnd { .. } => *state = State::default(),
         _ => {}
     }
 }

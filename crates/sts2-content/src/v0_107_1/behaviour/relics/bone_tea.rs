@@ -44,6 +44,7 @@ pub(super) fn event_hook(
         EventHook::SideTurnStart {
             side: CombatSide::Player,
             turn: 1,
+            ..
         } if !state.used_up() => {
             state.combats_left -= 1;
             asked.push(HookEffect::UpgradeHand)

@@ -1045,7 +1045,7 @@ impl<V: Rules> State<V> {
     ///
     /// The question comes back with the effects after it, which wait for the
     /// answer the way `AfterObtained` awaits it.
-    fn carry_out(
+    pub(super) fn carry_out(
         &mut self,
         effects: impl IntoIterator<Item = sts2_core::HookEffect<V>>,
     ) -> Option<Asked<V>> {
@@ -1088,6 +1088,17 @@ impl<V: Rules> State<V> {
                     );
                     for potion in potions {
                         self.procure(potion);
+                    }
+                    continue;
+                }
+                // `NextItem`, which draws nothing from an empty list and
+                // names nothing to upgrade.
+                HookEffect::UpgradeRandomDeckCard { stream } => {
+                    use sts2_core::rng::GameRng as _;
+
+                    let upgradable: Vec<usize> = self.upgradable().map(|(at, _)| at).collect();
+                    if let Ok(&at) = self.streams.run(stream).choose(&upgradable) {
+                        self.act_on_deck(sts2_core::DeckAct::Upgrade, &[at]);
                     }
                     continue;
                 }
@@ -1213,6 +1224,51 @@ impl<V: Rules> State<V> {
             unimplemented!("a run whose player dies outside a fight");
         }
         self.player.hp = self.player.hp - amount;
+    }
+
+    /// `HealRestSiteOption.ExecuteRestSiteHeal`: three tenths of the maximum,
+    /// `AfterRestSiteHeal`, then the rewards a relic adds.
+    ///
+    /// # Panics
+    ///
+    /// A relic changing the amount or adding a reward, or one asking for
+    /// something the run cannot carry out here.
+    fn rest_site_heal(&mut self) {
+        use sts2_core::ModelHook;
+
+        self.unheard(ModelHook::ModifyRestSiteHealAmount);
+        let max_hp: u64 = num_traits::cast(self.player.max_hp)
+            .expect("maximum health fits an unsigned rest calculation");
+        let healed: V::Health =
+            num_traits::cast(max_hp * 3 / 10).expect("rest healing fits the build's health type");
+        self.heal(healed);
+        let asked = self.notify_belt(sts2_core::EventHook::RestSiteHeal);
+        if let Some(asked) = self.carry_out(asked) {
+            let pickup = asked.pickup;
+            unimplemented!("a rest site's heal asking for {pickup:?}");
+        }
+        self.unheard(ModelHook::TryModifyRestSiteHealRewards);
+    }
+
+    /// `hook`, raised on each relic on the belt that overrides it, in slot
+    /// order, and what they ask the run for.
+    ///
+    /// A run with no fight has no other listeners.
+    fn notify_belt(&mut self, hook: sts2_core::EventHook<V>) -> sts2_core::HookEffects<V> {
+        let mut asked = sts2_core::HookEffects::new();
+        let Some(model_hook) = hook.model_hook() else {
+            return asked;
+        };
+        let mut left = self
+            .player
+            .relics
+            .hearing(sts2_core::Overrides::of(model_hook));
+        while left != 0 {
+            let slot = left.trailing_zeros() as usize;
+            left &= left - 1;
+            V::relic_event_hook(&mut self.player.relics[slot].state, hook, &mut asked);
+        }
+        asked
     }
 
     /// A hook the run raises outside a fight and no ported relic answers.
@@ -1495,6 +1551,10 @@ impl<V: Rules> State<V> {
     /// run travelled to is, so a scenario stands in front of the shop a run
     /// walks into.
     pub(crate) fn enter_room(&mut self, room: V::RoomType) -> Result<Decided, Error> {
+        if room == <V::RoomType as sts2_core::RoomKinds>::REST_SITE {
+            self.enter_rest_site(Location::NoLocation);
+            return Ok(Decided::Resolved);
+        }
         if room != <V::RoomType as sts2_core::RoomKinds>::SHOP {
             unimplemented!("constructing a {room:?} room");
         }
@@ -1530,12 +1590,12 @@ impl<V: Rules> State<V> {
     }
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
-    pub(super) fn enter_rest_site(&mut self, to: Coord) {
+    pub(super) fn enter_rest_site(&mut self, at: Location) {
         let deck = self.player.deck.to_vec();
         let options =
             <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&self.held_relics(), &deck);
         self.enter(
-            Location::MapPoint(to),
+            at,
             Phase::RestSite {
                 options,
                 upgrading: false,
@@ -1732,11 +1792,7 @@ impl<V: Rules> State<V> {
                 .get(usize::from(index))
                 .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
             if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HEAL {
-                let max_hp: u64 = num_traits::cast(self.player.max_hp)
-                    .expect("maximum health fits an unsigned rest calculation");
-                let healed: V::Health = num_traits::cast(max_hp * 3 / 10)
-                    .expect("rest healing fits the build's health type");
-                self.player.hp = (self.player.hp + healed).min(self.player.max_hp);
+                self.rest_site_heal();
                 let Phase::RestSite { options, .. } = &mut self.phase else {
                     unreachable!("the phase was a rest site when this began");
                 };

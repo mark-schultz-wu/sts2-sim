@@ -148,7 +148,14 @@ impl<V: Rules> State<V> {
             Some(combat::Ended::Won) => {
                 let (live, relics) = self.left_fight();
                 let returned = live.returned().to_vec();
+                let leaving = live.leaving().to_vec();
                 let combat = live.finish(relics);
+                // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
+                // rewards.
+                if let Some(asked) = self.carry_out(leaving) {
+                    let pickup = asked.pickup;
+                    unimplemented!("a fight's end asking for {pickup:?}");
+                }
                 let mut offered = self.combat_rewards(&combat);
                 let at = offered
                     .iter()

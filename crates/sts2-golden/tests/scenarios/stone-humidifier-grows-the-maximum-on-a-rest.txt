@@ -1,0 +1,8 @@
+# `StoneHumidifier.AfterRestSiteHeal` gains five maximum health once the rest
+# has healed. The Ironclad rests at full, and stands on 85 of 85 after.
+#
+# A port that skips the hook leaves 80 of 80.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"STONE_HUMIDIFIER"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":0}

@@ -539,10 +539,13 @@ pub enum ModelHook {
     AfterSummon,
     BeforeDamageReceived,
     AfterCurrentHpChanged,
+    AfterRestSiteHeal,
+    ModifyRestSiteHealAmount,
+    TryModifyRestSiteHealRewards,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 48] = [
+    pub const ALL: [ModelHook; 51] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -591,6 +594,9 @@ impl ModelHook {
         ModelHook::AfterSummon,
         ModelHook::BeforeDamageReceived,
         ModelHook::AfterCurrentHpChanged,
+        ModelHook::AfterRestSiteHeal,
+        ModelHook::ModifyRestSiteHealAmount,
+        ModelHook::TryModifyRestSiteHealRewards,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -648,6 +654,9 @@ impl ModelHook {
             ModelHook::AfterSummon => "AfterSummon",
             ModelHook::BeforeDamageReceived => "BeforeDamageReceived",
             ModelHook::AfterCurrentHpChanged => "AfterCurrentHpChanged",
+            ModelHook::AfterRestSiteHeal => "AfterRestSiteHeal",
+            ModelHook::ModifyRestSiteHealAmount => "ModifyRestSiteHealAmount",
+            ModelHook::TryModifyRestSiteHealRewards => "TryModifyRestSiteHealRewards",
         }
     }
 }
@@ -1806,16 +1815,19 @@ pub enum ModifyHook<V: ContentVersion> {
     HpLostAfterOstyLate {
         target: crate::CombatId,
     },
-    /// `ModifyHandDraw`: how many cards the player draws to open a turn.
+    /// `ModifyHandDraw`: how many cards the player draws to open a turn, in a
+    /// room of this type.
     HandDraw {
         player: crate::CombatId,
         count: V::Number,
         turn: V::Count,
+        room: V::RoomType,
     },
     HandDrawLate {
         player: crate::CombatId,
         count: V::Number,
         turn: V::Count,
+        room: V::RoomType,
     },
 }
 
@@ -1915,8 +1927,13 @@ pub enum EventHook<V: ContentVersion> {
     CombatRoomEntered,
     /// `BeforeCombatStart`, once the fight is built and before it opens.
     CombatStarting,
-    /// `AfterCombatEnd`, for the fight the run has just finished.
-    CombatEnd,
+    /// `AfterCombatEnd`, for the fight the run has just finished, in a room
+    /// of this type.
+    CombatEnd {
+        room: V::RoomType,
+    },
+    /// `AfterRestSiteHeal`, once a rest site's heal has landed.
+    RestSiteHeal,
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won.
     CombatVictory,
@@ -1977,10 +1994,12 @@ pub enum EventHook<V: ContentVersion> {
         side: V::CombatSide,
         turn: V::Count,
     },
-    /// `AfterSideTurnStart`, which runs once the side has drawn.
+    /// `AfterSideTurnStart`, which runs once the side has drawn, in a room of
+    /// this type.
     SideTurnStart {
         side: V::CombatSide,
         turn: V::Count,
+        room: V::RoomType,
     },
     BeforeSideTurnEndEarly {
         side: V::CombatSide,
@@ -2063,7 +2082,8 @@ impl<V: ContentVersion> EventHook<V> {
         Some(match self {
             EventHook::CombatRoomEntered => ModelHook::AfterRoomEntered,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
-            EventHook::CombatEnd => ModelHook::AfterCombatEnd,
+            EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
+            EventHook::RestSiteHeal => ModelHook::AfterRestSiteHeal,
             EventHook::CombatVictory => ModelHook::AfterCombatVictory,
             EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
@@ -2173,6 +2193,11 @@ pub enum HookEffect<V: ContentVersion> {
     OnDeckCards {
         act: DeckAct<V>,
         picks: &'static [DeckPick<V>],
+    },
+    /// `NextItem` over the deck's upgradable cards off `stream`, then
+    /// `CardCmd.Upgrade` on the one it draws.
+    UpgradeRandomDeckCard {
+        stream: V::RunRngType,
     },
     /// `CreatureCmd.GainMaxHp` on the owner: the maximum grows, and the
     /// health with it.

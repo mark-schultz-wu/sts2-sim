@@ -727,7 +727,7 @@ pub(crate) fn event_hook(
         (
             Power::PlatingPower,
             PowerAmount::Counted(_),
-            EventHook::SideTurnStart { side, turn },
+            EventHook::SideTurnStart { side, turn, .. },
         ) if owner == CombatSide::Enemy
             && side == owner
             && turn > <V as sts2_core::ContentVersion>::Count::from(1u8) =>
@@ -754,7 +754,7 @@ pub(crate) fn event_hook(
         ) if side == owner => Some(HookEffect::GainBlock(amount)),
         // `PlatingPower.AfterSideTurnStart` on a player: one comes off each
         // of its turns but the first, by `PowerCmd.Decrement`.
-        (Power::PlatingPower, PowerAmount::Counted(_), EventHook::SideTurnStart { side, turn })
+        (Power::PlatingPower, PowerAmount::Counted(_), EventHook::SideTurnStart { side, turn, .. })
             if owner != CombatSide::Enemy
                 && side == owner
                 && turn > <V as sts2_core::ContentVersion>::Count::from(1u8) =>
@@ -786,7 +786,7 @@ pub(crate) fn event_hook(
         (Power::BurrowedPower, _, EventHook::Removed) => Some(HookEffect::LoseBlock),
         // `IllusionPower.AfterCombatEnd` plays the dead owner's animation,
         // which is all it does.
-        (Power::IllusionPower, _, EventHook::CombatEnd) => None,
+        (Power::IllusionPower, _, EventHook::CombatEnd { .. }) => None,
         // The overrides above that answer for their own holder, or for their
         // own side's turn, and leave every other event alone.
         (Power::BlockNextTurnPower, PowerAmount::Counted(_), EventHook::BlockCleared { .. })

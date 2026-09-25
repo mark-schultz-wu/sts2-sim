@@ -1,0 +1,7 @@
+# `BoomingConch` draws two more cards and gains an energy on the first turn
+# of an elite fight. The Regent opens on seven cards and four energy.
+#
+# A port that ignores the conch opens on five and three.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"BOOMING_CONCH"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}

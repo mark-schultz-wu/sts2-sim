@@ -14,12 +14,14 @@
 mod anchor;
 mod arcane_scroll;
 mod bone_tea;
+mod booming_conch;
 mod bound_phylactery;
 mod burning_blood;
 mod cracked_core;
 mod cursed_pearl;
 mod divine_right;
 mod dollys_mirror;
+mod fishing_rod;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
@@ -39,6 +41,7 @@ mod precarious_shears;
 mod precise_scissors;
 mod ring_of_the_snake;
 mod sand_castle;
+mod stone_humidifier;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
 
@@ -59,12 +62,14 @@ pub enum State {
     Anchor,
     ArcaneScroll,
     BoneTea(bone_tea::State),
+    BoomingConch,
     BoundPhylactery,
     BurningBlood,
     CrackedCore,
     CursedPearl,
     DivineRight,
     DollysMirror,
+    FishingRod(fishing_rod::State),
     GoldenPearl,
     Gorget,
     GremlinHorn,
@@ -84,6 +89,7 @@ pub enum State {
     PreciseScissors,
     RingOfTheSnake,
     SandCastle,
+    StoneHumidifier,
 }
 
 /// Deliver a notification to one relic.
@@ -96,12 +102,14 @@ pub(crate) fn event_hook(
         State::Anchor => anchor::event_hook(hook, asked),
         State::ArcaneScroll => arcane_scroll::event_hook(hook, asked),
         State::BoneTea(state) => bone_tea::event_hook(state, hook, asked),
+        State::BoomingConch => booming_conch::event_hook(hook, asked),
         State::BoundPhylactery => bound_phylactery::event_hook(hook, asked),
         State::BurningBlood => burning_blood::event_hook(hook, asked),
         State::CrackedCore => cracked_core::event_hook(hook, asked),
         State::CursedPearl => cursed_pearl::event_hook(hook, asked),
         State::DivineRight => divine_right::event_hook(hook, asked),
         State::DollysMirror => dollys_mirror::event_hook(hook, asked),
+        State::FishingRod(state) => fishing_rod::event_hook(state, hook, asked),
         State::GoldenPearl => golden_pearl::event_hook(hook, asked),
         State::Gorget => gorget::event_hook(hook, asked),
         State::GremlinHorn => gremlin_horn::event_hook(hook, asked),
@@ -127,6 +135,7 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what RingOfTheSnake does for {hook:?}"),
         },
         State::SandCastle => sand_castle::event_hook(hook, asked),
+        State::StoneHumidifier => stone_humidifier::event_hook(hook, asked),
     }
 }
 
@@ -135,6 +144,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
+        State::BoomingConch => booming_conch::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::Anchor
@@ -146,6 +156,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::CursedPearl
         | State::DivineRight
         | State::DollysMirror
+        | State::FishingRod(_)
         | State::GoldenPearl
         | State::Gorget
         | State::GremlinHorn
@@ -162,7 +173,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Pomander
         | State::PrecariousShears
         | State::PreciseScissors
-        | State::SandCastle => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::SandCastle
+        | State::StoneHumidifier => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -177,12 +189,14 @@ impl sts2_core::RelicModel<V> for State {
             Relic::Anchor => State::Anchor,
             Relic::ArcaneScroll => State::ArcaneScroll,
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
+            Relic::BoomingConch => State::BoomingConch,
             Relic::BoundPhylactery => State::BoundPhylactery,
             Relic::BurningBlood => State::BurningBlood,
             Relic::CrackedCore => State::CrackedCore,
             Relic::CursedPearl => State::CursedPearl,
             Relic::DivineRight => State::DivineRight,
             Relic::DollysMirror => State::DollysMirror,
+            Relic::FishingRod => State::FishingRod(fishing_rod::State::default()),
             Relic::GoldenPearl => State::GoldenPearl,
             Relic::Gorget => State::Gorget,
             Relic::GremlinHorn => State::GremlinHorn,
@@ -202,6 +216,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreciseScissors => State::PreciseScissors,
             Relic::RingOfTheSnake => State::RingOfTheSnake,
             Relic::SandCastle => State::SandCastle,
+            Relic::StoneHumidifier => State::StoneHumidifier,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -220,6 +235,7 @@ impl sts2_core::RelicModel<V> for State {
             Field::Constant(amount) => Number::from(amount),
             Field::Computed => match self {
                 State::BoneTea(state) => bone_tea::display_amount(state),
+                State::FishingRod(state) => fishing_rod::display_amount(state),
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },

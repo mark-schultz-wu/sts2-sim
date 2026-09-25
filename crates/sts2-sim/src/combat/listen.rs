@@ -456,19 +456,21 @@ fn decides<V: Rules>(
 /// `AfterCombatEnd`, then `AfterCombatVictory`, raised on every listener
 /// once the fight is won.
 ///
-/// The listeners that counted something in the fight forget it at the first.
-/// The belt a run carries out of a fight is then the belt the game's screens
-/// show. A heal at the second lands on the player, whom a won fight leaves
+/// The listeners that counted something in the fight forget it at the first,
+/// and what the first asks is the run's to carry out. The fight keeps it for
+/// the run. A heal at the second lands on the player, whom a won fight leaves
 /// alive.
 ///
 /// # Panics
 ///
-/// A listener asking for anything else as the fight ends, which nothing here
+/// A listener asking for anything else at the second, which nothing here
 /// carries out.
 pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
-    if let Some((_, effect)) = notify::<V>(live, relics, EventHook::CombatEnd).first() {
-        unimplemented!("a listener asking for {effect:?} as a fight ends")
-    }
+    // What a listener asks of the run, which carries it out as it leaves.
+    let room = live.room();
+    let ended = notify::<V>(live, relics, EventHook::CombatEnd { room });
+    live.leaving
+        .extend(ended.into_iter().map(|(_, effect)| effect));
     for (_, effect) in notify::<V>(live, relics, EventHook::CombatVictory) {
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
