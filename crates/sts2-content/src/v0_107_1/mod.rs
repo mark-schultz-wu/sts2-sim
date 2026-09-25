@@ -27,7 +27,7 @@ mod rest_site;
 
 pub use behaviour::events::State as EventState;
 pub use behaviour::relics::State as RelicState;
-pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
+pub use event_options::EventOptionId;
 pub use generated::*;
 
 use sts2_core::Version;

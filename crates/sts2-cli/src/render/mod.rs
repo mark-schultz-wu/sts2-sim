@@ -384,23 +384,7 @@ pub(super) fn render_run(name: &str, count: usize) -> String {
 // The display-safe spelling remains under `render` for existing rendering callers.
 pub use crate::id::display as spelling;
 
-/// An event option's key, spelled the way the game writes it.
-///
-/// The parts are typed, so this is the one place that puts the sentence back
-/// together. A front end is where a name becomes words.
-pub fn option_key<V: sts2_content_wire::WireContentVersion>(
-    option: &sts2_core::EventOption<V>,
-) -> String {
-    use sts2_core::EventOptionKinds;
-    let name = V::event_option_name(option.key.option, option.locked)
-        .map(str::to_owned)
-        .or_else(|| option.key.option.relic().map(|relic| spelling(&relic)))
-        .expect("a comparable event option has a boundary spelling");
-    format!(
-        "{}.pages.INITIAL.options.{name}",
-        spelling(&option.key.event)
-    )
-}
+pub use sts2_content_wire::option_key;
 
 /// A card identity, the way the observation spells one.
 ///
@@ -738,7 +722,7 @@ mod tests {
                 "options": [
                     {"index": 0, "key": "BYRDONIS_NEST.pages.INITIAL.options.EAT",
                      "title": "Eat one", "text": "Gain 10 Max HP. Take 5 damage."},
-                    {"index": 1, "key": "BYRDONIS_NEST.pages.INITIAL.options.LEAVE",
+                    {"index": 1, "key": "BYRDONIS_NEST.pages.INITIAL.options.TAKE",
                      "title": "Leave", "proceed": true}
                 ]
             }

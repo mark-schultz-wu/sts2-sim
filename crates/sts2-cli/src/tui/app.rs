@@ -968,9 +968,9 @@ mod tests {
     /// A room with one numbered option in it.
     fn in_an_event() -> App<V, Scripted<V>> {
         showing(fixture::applied(json!({
-            "room": {"type": "Event", "id": "WELLSPRING",
+            "room": {"type": "Event", "id": "WELCOME_TO_WONGOS",
                      "options": [{"index": 6,
-                                  "key": "WELLSPRING.pages.INITIAL.options.DRINK"}]}
+                                  "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.BARGAIN_BIN"}]}
         })))
     }
 

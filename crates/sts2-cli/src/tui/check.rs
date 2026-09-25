@@ -837,15 +837,15 @@ mod tests {
         fixture::applied(json!({
             "floor": 4,
             "room": {
-                "type": "Event", "id": "WELLSPRING", "title": "The Wellspring",
+                "type": "Event", "id": "WELCOME_TO_WONGOS", "title": "Welcome to Wongo's",
                 "options": [
-                    {"index": 0, "key": "WELLSPRING.pages.INITIAL.options.DRINK", "title": "Drink"},
-                    {"index": 1, "key": "WELLSPRING.pages.INITIAL.options.FILL",
+                    {"index": 0, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.BARGAIN_BIN", "title": "Drink"},
+                    {"index": 1, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.FEATURED_ITEM",
                      "title": "Fill a flask"},
-                    {"index": 2, "key": "WELLSPRING.pages.INITIAL.options.PRAY", "title": "Pray"},
+                    {"index": 2, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.MYSTERY_BOX", "title": "Pray"},
                     // A fourth, so that a list drawn backwards is a different
                     // list at every position rather than only at the ends.
-                    {"index": 3, "key": "WELLSPRING.pages.INITIAL.options.LEAVE",
+                    {"index": 3, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.LEAVE",
                      "title": "Leave", "proceed": true},
                 ]
             }

@@ -4,9 +4,10 @@ use sts2_core::{
     EventBehavior, EventContext, EventFlow, EventOption, EventOptionKey, EventView, Room,
 };
 
+use super::super::super::EventOptionId;
 use super::super::super::V0_107_1 as V;
-use super::super::super::generated::{events::Event, relics::Relic};
-use super::super::super::{EventOptionId, TeaMasterOption};
+use super::super::super::generated::events::{Event, EventOption as Said};
+use super::super::super::generated::relics::Relic;
 
 #[derive(Debug, Clone, Default)]
 pub struct State {
@@ -28,9 +29,9 @@ impl EventBehavior<V> for TeaMaster {
 
     fn observe(&self, state: &State, run: &impl EventView<V>) -> Room<V> {
         let options = [
-            (TeaMasterOption::BoneTea, 50),
-            (TeaMasterOption::EmberTea, 150),
-            (TeaMasterOption::TeaOfDiscourtesy, 0),
+            (Said::TeaMasterBoneTea, 50),
+            (Said::TeaMasterEmberTea, 150),
+            (Said::TeaMasterTeaOfDiscourtesy, 0),
         ]
         .into_iter()
         .enumerate()
@@ -38,7 +39,7 @@ impl EventBehavior<V> for TeaMaster {
             index: index as u8,
             key: EventOptionKey {
                 event: Event::TeaMaster,
-                option: EventOptionId::TeaMaster(option),
+                option: EventOptionId::Said(option),
             },
             title: None,
             text: None,

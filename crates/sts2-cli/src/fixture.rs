@@ -86,13 +86,16 @@ fn fill(state: &mut Value) {
 
     if state.get("room").and_then(|r| r.get("type")) == Some(&json!("Event")) {
         let room = &mut state["room"];
-        let mut whole = json!({"type": "Event", "id": "WELLSPRING", "finished": false,
+        let mut whole = json!({"type": "Event", "id": "WELCOME_TO_WONGOS", "finished": false,
                                "title": null, "text": null, "options": []});
         merge(&mut whole, room.take());
         // An option's key names the event it belongs to, and a reader holds
         // the two to each other. So the default follows whichever event the
         // fixture asked for.
-        let event = whole["id"].as_str().unwrap_or("WELLSPRING").to_string();
+        let event = whole["id"]
+            .as_str()
+            .unwrap_or("WELCOME_TO_WONGOS")
+            .to_string();
         for option in whole["options"].as_array_mut().into_iter().flatten() {
             let mut base = json!({"index": 0,
                                   "key": format!("{event}.pages.INITIAL.options.LEAVE"),

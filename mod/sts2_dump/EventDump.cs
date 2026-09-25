@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using MegaCrit.Sts2.Core.Events;
+using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
@@ -106,6 +107,7 @@ public static class EventDump
         output.Append("# event <id> <ancient> <isShared> <isDeterministic> <layout> ");
         output.Append("<canonicalEncounter> <gated>\n");
         output.Append("# neow <list> <index> <relic> -- Neow's option lists, in order\n");
+        output.Append("# option <event> <page> <option> -- every option a page names\n");
 
         List<EventModel> events = AllEvents();
 
@@ -145,6 +147,8 @@ public static class EventDump
 
         output.Append($"# {events.Count} events\n");
 
+        Options(output, events);
+
         foreach (string name in Enum.GetNames(typeof(EventLayoutType)))
         {
             long value = Convert.ToInt64(Enum.Parse(typeof(EventLayoutType), name));
@@ -156,6 +160,30 @@ public static class EventDump
     }
 
     private static string Flag(bool b) => b ? "1" : "0";
+
+    /// <summary>Every option an event's pages name, sorted.</summary>
+    /// <remarks>
+    /// An option is built in code, from a key the localisation table holds:
+    /// <c>AROMA_OF_CHAOS.pages.INITIAL.options.LET_GO</c>. The table is where
+    /// every key is listed, so an option's name is read from its title there.
+    /// A locked option is its own key, with <c>_LOCKED</c> on the end.
+    /// </remarks>
+    private static void Options(StringBuilder output, List<EventModel> events)
+    {
+        var ids = new HashSet<string>(events.Select(e => e.Id.Entry));
+        IEnumerable<string> keys = LocManager.Instance.GetTable("events").Keys
+            .OrderBy(k => k, StringComparer.Ordinal);
+        foreach (string key in keys)
+        {
+            string[] parts = key.Split('.');
+            if (parts.Length != 6 || parts[1] != "pages" || parts[3] != "options"
+                || parts[5] != "title" || !ids.Contains(parts[0]))
+            {
+                continue;
+            }
+            output.Append($"option {parts[0]} {parts[2]} {parts[4]}\n");
+        }
+    }
 
     /// <summary>
     /// Whether an event replaces a member that has a base implementation.

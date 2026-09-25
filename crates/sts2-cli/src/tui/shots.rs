@@ -446,15 +446,15 @@ mod tests {
             "floor": 4, "hp": 48,
             "room": {
                 "type": "Event",
-                "id": "WELLSPRING",
-                "title": "The Wellspring",
+                "id": "WELCOME_TO_WONGOS",
+                "title": "Welcome to Wongo's",
                 "text": "A spring of [gold]clear water[/gold] runs from the rock.",
                 "options": [
-                    {"index": 0, "key": "WELLSPRING.pages.INITIAL.options.DRINK",
+                    {"index": 0, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.BARGAIN_BIN",
                      "title": "Drink", "text": "Heal [green]12[/green] HP."},
-                    {"index": 1, "key": "WELLSPRING.pages.INITIAL.options.FILL",
+                    {"index": 1, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.FEATURED_ITEM",
                      "title": "Fill a flask", "text": "Gain a potion."},
-                    {"index": 2, "key": "WELLSPRING.pages.INITIAL.options.LEAVE",
+                    {"index": 2, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.LEAVE",
                      "title": "Leave", "proceed": true},
                 ]
             }
@@ -513,18 +513,18 @@ mod tests {
             ],
             "room": {
                 "type": "Event",
-                "id": "WELLSPRING",
+                "id": "WELCOME_TO_WONGOS",
                 "title": null,
                 "text": null,
                 "options": [
                     {"index": 0,
-                     "key": "WELLSPRING.pages.INITIAL.options.LEAD_PAPERWEIGHT",
+                     "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.LEAD_PAPERWEIGHT",
                      "title": "Lead Paperweight", "relic": "LEAD_PAPERWEIGHT"},
-                    {"index": 1, "key": "WELLSPRING.pages.INITIAL.options.KALEIDOSCOPE",
+                    {"index": 1, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.KALEIDOSCOPE",
                      "title": "Kaleidoscope",
                      "text": "Obtain 2 card rewards from other characters.",
                      "relic": "KALEIDOSCOPE"},
-                    {"index": 2, "key": "WELLSPRING.pages.INITIAL.options.HEFTY_TABLET",
+                    {"index": 2, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.HEFTY_TABLET",
                      "title": "Hefty Tablet", "relic": "HEFTY_TABLET"},
                 ]
             }

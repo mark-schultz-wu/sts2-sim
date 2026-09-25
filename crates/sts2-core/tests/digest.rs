@@ -209,7 +209,9 @@ fn rooms() -> Vec<Room<V>> {
         index: 0,
         key: EventOptionKey {
             event: sts2_content::v0_107_1::events::Event::TeaMaster,
-            option: EventOptionId::TeaMaster(sts2_content::v0_107_1::TeaMasterOption::BoneTea),
+            option: EventOptionId::Said(
+                sts2_content::v0_107_1::events::EventOption::TeaMasterBoneTea,
+            ),
         },
         title: Some("Eat".into()),
         text: Some("Swallow it whole.".into()),
@@ -374,8 +376,8 @@ fn rooms() -> Vec<Room<V>> {
             options: vec![EventOption {
                 key: EventOptionKey {
                     event: sts2_content::v0_107_1::events::Event::TeaMaster,
-                    option: EventOptionId::TeaMaster(
-                        sts2_content::v0_107_1::TeaMasterOption::EmberTea,
+                    option: EventOptionId::Said(
+                        sts2_content::v0_107_1::events::EventOption::TeaMasterEmberTea,
                     ),
                 },
                 ..event_option()
