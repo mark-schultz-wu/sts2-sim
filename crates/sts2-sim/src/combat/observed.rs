@@ -14,14 +14,15 @@ use sts2_core::{
 
 use super::legal::InHand;
 use super::live::{Fighter, HeldPower, Live};
-use crate::run::HeldRelic;
+use super::powers::Powers as _;
+use crate::run::Belt;
 
 /// The fight a run is standing in, live or over.
 pub(crate) enum Fight<'a, V: Rules> {
     /// The fight, and the belt its listeners include.
     Live {
         live: &'a Live<V>,
-        relics: &'a [HeldRelic<V>],
+        relics: &'a Belt<V>,
     },
     /// Won or lost, as its last report left it.
     Over(&'a Combat<V>),
@@ -134,7 +135,7 @@ enum Creature<'a, V: Rules> {
     Live {
         fighter: &'a Fighter<V>,
         live: &'a Live<V>,
-        relics: &'a [HeldRelic<V>],
+        relics: &'a Belt<V>,
     },
     Over(&'a sts2_core::Creature<V>),
 }
@@ -191,9 +192,15 @@ impl<V: Rules> ObservedCreature<V> for Creature<'_, V> {
 
     fn powers(&self) -> impl ExactSizeIterator<Item = Stack<V>> + '_ {
         match self {
-            Creature::Live { fighter, .. } => {
-                Either::Left(fighter.powers.iter().map(HeldPower::stack))
-            }
+            // Gathered, because the store promises an order and not a
+            // length.
+            Creature::Live { fighter, live, .. } => Either::Left(
+                live.powers
+                    .of(fighter.id)
+                    .map(HeldPower::stack)
+                    .collect::<smallvec::SmallVec<[Stack<V>; 8]>>()
+                    .into_iter(),
+            ),
             Creature::Over(creature) => Either::Right(creature.powers.iter().copied()),
         }
     }

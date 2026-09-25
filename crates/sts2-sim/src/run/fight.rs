@@ -133,6 +133,7 @@ impl<V: Rules> State<V> {
     /// `since` is how many deck copies the fight had taken before the
     /// decision began. A decision that won the fight goes on to the rewards,
     /// which is `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
+    #[tracing::instrument(level = "trace", skip_all)]
     fn settle(&mut self, ended: Option<combat::Ended>, since: usize) -> Decided {
         self.lose_cards(since);
         match ended {

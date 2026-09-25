@@ -136,6 +136,7 @@ pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
 /// # Panics
 ///
 /// A monster nobody has ported.
+#[tracing::instrument(level = "trace", skip_all, fields(monster = ?monster, move_id = ?move_id))]
 pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
     // Two states no table names. `Creature.Stun` builds one and
     // `IllusionPower` builds the other, and what each does belongs to

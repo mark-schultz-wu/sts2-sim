@@ -28,7 +28,7 @@ pub(crate) fn drink<V: Rules>(
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
 
-    live.skip_tick = super::play::merged::<V>(&live.skip_tick, skipped);
+    super::play::merge::<V>(&mut live.skip_tick, skipped);
     super::play::carry_on(
         Fighting {
             live,

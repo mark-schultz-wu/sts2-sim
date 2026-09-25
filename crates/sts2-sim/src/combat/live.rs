@@ -20,6 +20,7 @@ use sts2_core::{
 };
 
 use super::monster::Machine;
+use super::powers::{PowerStore, Powers as _};
 use crate::bounded::Bounded;
 
 /// The powers that skip their next tick, by the creature holding each.
@@ -656,30 +657,37 @@ impl<V: Rules> Face<V> {
     }
 }
 
-impl<V: Rules> sts2_core::CreatureView<V> for Fighter<V> {
+/// One creature as content reads it: the creature, and the powers the fight
+/// holds for it.
+pub(crate) struct Seen<'a, V: Rules> {
+    pub(crate) fighter: &'a Fighter<V>,
+    pub(crate) powers: &'a PowerStore<V>,
+}
+
+impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
     fn id(&self) -> CombatId {
-        self.id
+        self.fighter.id
     }
 
     fn side(&self) -> V::CombatSide {
-        self.side
+        self.fighter.side
     }
 
     fn alive(&self) -> bool {
-        self.alive
+        self.fighter.alive
     }
 
     fn hp(&self) -> V::Health {
-        self.hp
+        self.fighter.hp
     }
 
     fn max_hp(&self) -> V::Health {
-        self.max_hp
+        self.fighter.max_hp
     }
 
     fn power(&self, power: V::Power) -> Option<sts2_core::PowerAmount<V::Number>> {
         self.powers
-            .iter()
+            .of(self.fighter.id)
             .find(|held| held.power() == power)
             .map(|held| held.amount.amount())
     }
@@ -903,7 +911,7 @@ impl<V: Rules> Copy for Carrier<V> {}
 ///
 /// [`sts2_core::Stack`] is what a report shows of a power: which one, and the
 /// amount. This is what the fight carries, which is that pair and the model
-/// beside it. See [`Fighter`].
+/// beside it. See [`PowerStore`].
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct HeldPower<V: Rules> {
     pub(crate) amount: Stacked,
@@ -973,10 +981,11 @@ impl<V: Rules> HeldPower<V> {
     }
 }
 
-/// One creature in the fight, and what its powers save.
+/// One creature in the fight.
 ///
 /// [`sts2_core::Creature`] is what a report shows. This is what the fight
-/// holds: the same facts, and a model per power rather than a bare stack.
+/// holds of it besides its powers. The fight keeps those in its [`PowerStore`],
+/// with a model each rather than a bare stack.
 #[derive(Debug)]
 pub(crate) struct Fighter<V: Rules> {
     pub(crate) id: CombatId,
@@ -986,7 +995,6 @@ pub(crate) struct Fighter<V: Rules> {
     pub(crate) max_hp: V::Health,
     pub(crate) block: V::Number,
     pub(crate) alive: bool,
-    pub(crate) powers: PowerList<V>,
     pub(crate) next_move: Option<Telegraphed<V>>,
 }
 
@@ -1013,9 +1021,13 @@ impl<V: Rules> Fighter<V> {
 
     /// What a report shows of it, which is everything but the models.
     ///
-    /// The move is the fight's to give, because the fight modifies its damage.
-    /// See [`Live::telegraphed`].
-    pub(crate) fn creature(&self, next_move: Option<sts2_core::NextMove<V>>) -> Creature<V> {
+    /// The powers and the move are the fight's to give. The fight holds the
+    /// one and modifies the other's damage. See [`Live::telegraphed`].
+    pub(crate) fn creature<'a>(
+        &self,
+        powers: impl Iterator<Item = &'a HeldPower<V>>,
+        next_move: Option<sts2_core::NextMove<V>>,
+    ) -> Creature<V> {
         Creature {
             id: self.id,
             model: self.model,
@@ -1024,9 +1036,103 @@ impl<V: Rules> Fighter<V> {
             max_hp: self.max_hp,
             block: self.block,
             alive: self.alive,
-            powers: self.powers.iter().map(HeldPower::stack).collect(),
+            powers: powers.map(HeldPower::stack).collect(),
             next_move,
         }
+    }
+}
+
+/// The creatures in a fight, and how many of their monster models override
+/// each hook.
+///
+/// A creature arrives or leaves only through here, which is what keeps the
+/// counts true. Everything else reads and writes the creatures as a slice.
+#[derive(Debug)]
+pub(crate) struct Creatures<V: Rules> {
+    list: Bounded<Fighter<V>, CREATURES>,
+    counts: super::listen::HookCounts,
+}
+
+impl<V: Rules> Clone for Creatures<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for Creatures<V> {}
+
+impl<V: Rules> std::ops::Deref for Creatures<V> {
+    type Target = [Fighter<V>];
+
+    fn deref(&self) -> &[Fighter<V>] {
+        &self.list
+    }
+}
+
+impl<V: Rules> std::ops::DerefMut for Creatures<V> {
+    fn deref_mut(&mut self) -> &mut [Fighter<V>] {
+        &mut self.list
+    }
+}
+
+impl<V: Rules> FromIterator<Fighter<V>> for Creatures<V> {
+    fn from_iter<I: IntoIterator<Item = Fighter<V>>>(fighters: I) -> Self {
+        let mut creatures = Self::new();
+        for fighter in fighters {
+            creatures.push(fighter);
+        }
+        creatures
+    }
+}
+
+impl<V: Rules> Creatures<V> {
+    pub(crate) fn new() -> Self {
+        Self {
+            list: Bounded::new(),
+            counts: super::listen::HookCounts::default(),
+        }
+    }
+
+    /// The hooks `fighter`'s own model overrides, which is none for the
+    /// player's: a character is not a listener.
+    fn overrides(fighter: &Fighter<V>) -> sts2_core::Overrides {
+        use sts2_core::MonsterTable as _;
+
+        match fighter.model {
+            Some(sts2_core::ModelId::Monster(monster)) => monster.overrides(),
+            _ => sts2_core::Overrides::default(),
+        }
+    }
+
+    pub(crate) fn push(&mut self, fighter: Fighter<V>) {
+        self.counts.add(Self::overrides(&fighter));
+        self.list.push(fighter);
+    }
+
+    pub(crate) fn insert(&mut self, at: usize, fighter: Fighter<V>) {
+        self.counts.add(Self::overrides(&fighter));
+        self.list.insert(at, fighter);
+    }
+
+    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&Fighter<V>) -> bool) {
+        let counts = &mut self.counts;
+        self.list.retain(|fighter| {
+            let kept = keep(fighter);
+            if !kept {
+                counts.remove(Self::overrides(fighter));
+            }
+            kept
+        });
+    }
+
+    pub(crate) fn copy_from(&mut self, source: &Self) {
+        self.list.copy_from(&source.list);
+        self.counts = source.counts;
+    }
+
+    /// Whether any monster model in the fight overrides a hook in `hooks`.
+    pub(crate) fn hear(&self, hooks: sts2_core::Overrides) -> bool {
+        self.counts.hears(hooks)
     }
 }
 
@@ -1050,7 +1156,9 @@ pub(crate) struct Live<V: Rules> {
     /// Cards a listener handed back as it died, which a won fight offers as
     /// `SpecialCardReward`s.
     pub(super) returned: Vec<CardIdent<V>>,
-    pub(super) creatures: Bounded<Fighter<V>, CREATURES>,
+    pub(super) creatures: Creatures<V>,
+    /// What every creature carries, in the order it gained it.
+    pub(super) powers: PowerStore<V>,
     pub(super) orbs: Option<Orbs<V>>,
     /// One per monster in the fight, in the order the encounter fields them.
     pub(super) machines: Bounded<Machine<V>, CREATURES>,
@@ -1074,6 +1182,7 @@ impl<V: Rules> Clone for Live<V> {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
             returned: self.returned.clone(),
+            powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
             asking: self.asking.clone(),
@@ -1097,6 +1206,7 @@ impl<V: Rules> Clone for Live<V> {
             removed_from_deck,
             returned,
             creatures,
+            powers,
             orbs,
             machines,
             skip_tick,
@@ -1115,6 +1225,7 @@ impl<V: Rules> Clone for Live<V> {
         removed_from_deck.clone_from(&source.removed_from_deck);
         returned.clone_from(&source.returned);
         creatures.copy_from(&source.creatures);
+        powers.clone_from(&source.powers);
         orbs.clone_from(&source.orbs);
         machines.copy_from(&source.machines);
         skip_tick.copy_from(&source.skip_tick);
@@ -1194,7 +1305,7 @@ impl<V: Rules> Live<V> {
     /// prints. The game works it out on every read.
     pub(crate) fn telegraphed(
         &self,
-        relics: &[crate::run::HeldRelic<V>],
+        relics: &crate::run::Belt<V>,
         fighter: &Fighter<V>,
     ) -> Option<sts2_core::NextMove<V>> {
         let mut next = fighter.next_move.as_ref()?.telegraph();
@@ -1236,15 +1347,11 @@ impl<V: Rules> Live<V> {
         let Some(creature) = self.creatures.iter_mut().find(|c| c.id == owner) else {
             return;
         };
-        let Some(at) = creature
-            .powers
-            .iter()
-            .position(|held| held.power() == power)
-        else {
+        let Some(at) = self.powers.of(owner).position(|held| held.power() == power) else {
             return;
         };
         let carrier = creature.carrier();
-        let mut held = creature.powers.remove(at);
+        let mut held = self.powers.remove(owner, at);
         let mut asked = sts2_core::HookEffects::new();
         V::event_hook(
             held.event_listener(carrier),
@@ -1272,11 +1379,17 @@ impl<V: Rules> Live<V> {
     ///
     /// `Attack::damage` comes out as the number that will land, not the one
     /// the move prints. The game works it out on every read.
-    pub(crate) fn report(&self, relics: &[crate::run::HeldRelic<V>]) -> Combat<V> {
+    #[tracing::instrument(level = "trace", skip_all)]
+    pub(crate) fn report(&self, relics: &crate::run::Belt<V>) -> Combat<V> {
         let creatures = self
             .creatures
             .iter()
-            .map(|fighter| fighter.creature(self.telegraphed(relics, fighter)))
+            .map(|fighter| {
+                fighter.creature(
+                    self.powers.of(fighter.id),
+                    self.telegraphed(relics, fighter),
+                )
+            })
             .collect();
         Combat {
             turn: self.turn,
@@ -1301,7 +1414,7 @@ impl<V: Rules> Live<V> {
     }
 
     /// Consume a won fight into the report that remains on its reward screen.
-    pub(crate) fn finish(mut self, relics: &[crate::run::HeldRelic<V>]) -> Combat<V> {
+    pub(crate) fn finish(mut self, relics: &crate::run::Belt<V>) -> Combat<V> {
         self.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
         self.cards.clear();
         let player = self
@@ -1309,8 +1422,9 @@ impl<V: Rules> Live<V> {
             .iter_mut()
             .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
             .expect("a fight has the player in it");
-        player.powers.clear();
         player.block = num_traits::zero();
+        let player = player.id;
+        self.powers.clear(player);
         self.report(relics)
     }
 }
@@ -1488,6 +1602,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             removed_from_deck: Vec::new(),
             returned: Vec::new(),
             creatures: creatures.into_iter().collect(),
+            powers: PowerStore::new(),
             orbs: None,
             machines: Bounded::new(),
             skip_tick: Bounded::new(),
@@ -1519,6 +1634,6 @@ mod sizes {
             "the move name carries the tag"
         );
         assert_eq!(size_of::<Stacked>(), 2);
-        assert_eq!(size_of::<Fighter<V>>(), 232);
+        assert_eq!(size_of::<Fighter<V>>(), 36);
     }
 }

@@ -11,7 +11,7 @@ use sts2_core::{CardTable, CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPh
 use super::board::{Board, draw};
 use super::listen::{self, Listener};
 use super::live::{Face, Landing, Live, Skips};
-use super::power;
+use super::powers::Powers as _;
 use super::start::hand_size;
 use super::{Error, Fighting};
 use crate::stream::CombatRngs;
@@ -20,6 +20,7 @@ use crate::stream::CombatRngs;
 /// stands.
 ///
 /// Whatever the enemy turn ended, if it ended the fight.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn end<V: Rules>(
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
@@ -126,10 +127,11 @@ pub(crate) fn end<V: Rules>(
 ///
 /// An ethereal card is exhausted. A card with a turn-end effect of its own
 /// runs it, and that arrives with the port of the card.
+#[tracing::instrument(level = "trace", skip_all)]
 fn turn_end<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
 ) {
     let held: Vec<_> = live.cards.iter(Pile::Hand).collect();
@@ -157,6 +159,7 @@ fn turn_end<V: Rules>(
 }
 
 /// `PlayerCombatState.EndOfTurnCleanup`: what a card carried only for the turn.
+#[tracing::instrument(level = "trace", skip_all)]
 fn end_of_turn_cleanup<V: Rules>(live: &mut Live<V>) {
     live.cards
         .write_all_cards(Face::lasts_the_turn, Face::turn_ended);
@@ -171,9 +174,10 @@ fn end_of_turn_cleanup<V: Rules>(live: &mut Live<V>) {
 /// # Panics
 ///
 /// A listener asking for something no side turn start can carry out.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn before_side_turn_start<V: Rules>(
     live: &mut Live<V>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     side: V::CombatSide,
     turn: V::Count,
 ) {
@@ -199,9 +203,10 @@ pub(super) fn before_side_turn_start<V: Rules>(
 /// # Panics
 ///
 /// A listener asking for something no turn end carries out.
+#[tracing::instrument(level = "trace", skip_all)]
 fn before_turn_end<V: Rules>(
     live: &mut Live<V>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     side: V::CombatSide,
 ) {
     let hook = sts2_core::EventHook::BeforeSideTurnEndEarly { side };
@@ -222,10 +227,11 @@ fn before_turn_end<V: Rules>(
 /// # Panics
 ///
 /// A listener asking for something no side turn start can carry out.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn side_turn_started<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     side: V::CombatSide,
 ) {
@@ -252,6 +258,7 @@ pub(super) fn side_turn_started<V: Rules>(
 ///
 /// A card that retains stays where it is. The keyword is all this reads:
 /// nothing in a fight sets it on a card that does not print it.
+#[tracing::instrument(level = "trace", skip_all)]
 fn flush_hand<V: Rules>(live: &mut Live<V>) {
     live.cards
         .sift(Pile::Hand, Pile::Discard, |held| held.ident.card.retains());
@@ -265,7 +272,8 @@ fn flush_hand<V: Rules>(live: &mut Live<V>) {
 /// # Panics
 ///
 /// A listener asking for something no energy reset carries out.
-fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut [crate::run::HeldRelic<V>]) {
+#[tracing::instrument(level = "trace", skip_all)]
+fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut crate::run::Belt<V>) {
     let player = live.player().id;
     let hook = sts2_core::EventHook::EnergyReset { player };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
@@ -292,9 +300,10 @@ fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut [crate::run::HeldReli
 /// # Panics
 ///
 /// A listener asking for something no block clear carries out.
+#[tracing::instrument(level = "trace", skip_all)]
 fn clear_block<V: Rules>(
     live: &mut Live<V>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     side: V::CombatSide,
 ) {
     let clearing: SmallVec<[CombatId; 8]> = live
@@ -345,9 +354,10 @@ fn clear_block<V: Rules>(
 /// # Panics
 ///
 /// A listener asking for something no turn end carries out.
+#[tracing::instrument(level = "trace", skip_all)]
 fn tick_powers<V: Rules>(
     live: &mut Live<V>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     skipping: &mut Skips<V>,
     side: V::CombatSide,
 ) -> Vec<(CombatId, V::Power, PowerAmount<V::Number>)> {
@@ -381,17 +391,14 @@ fn tick_powers<V: Rules>(
             skipping.remove(at);
             continue;
         }
-        let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) else {
-            continue;
-        };
-        for held in creature
+        for held in live
             .powers
-            .iter_mut()
+            .of_mut(owner)
             .filter(|held| held.power() == power)
         {
             held.amount = held.amount.ticked();
         }
-        creature.powers.retain(|held| !held.amount.spent());
+        live.powers.retain(owner, |held| !held.amount.spent());
     }
     for (owner, power) in leaving {
         live.remove_power(owner, power);
@@ -404,10 +411,11 @@ fn tick_powers<V: Rules>(
 /// After the tick rather than inside it, because a power applying one is
 /// holding the creature it sits on. The order is the belt's, which is the
 /// order they were asked in.
+#[tracing::instrument(level = "trace", skip_all)]
 fn applied<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     asked: Vec<(CombatId, V::Power, PowerAmount<V::Number>)>,
 ) {
@@ -421,10 +429,11 @@ fn applied<V: Rules>(
 ///
 /// The list is taken first, and each is held against the fight again before it
 /// acts. An earlier move can take a later one out of the fight.
+#[tracing::instrument(level = "trace", skip_all)]
 fn enemy_turn<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
-    relics: &mut [crate::run::HeldRelic<V>],
+    relics: &mut crate::run::Belt<V>,
     skipping: &mut Skips<V>,
 ) -> Option<super::Ended> {
     let mut ended = None;
@@ -465,15 +474,43 @@ fn enemy_turn<V: Rules>(
             (id, damage, repeats),
         );
         V::perform_move(monster, next_move.id, &mut board);
-        power::move_performed::<V>(board.live, id, next_move.id);
+        move_performed::<V>(board.live, id, next_move.id);
         ended = ended.or(board.ended);
-        *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));
+        super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
     }
     ended
 }
 
+/// `MonsterMoveState.OnPerform`, which the move state gives the powers on
+/// the creature that performed it.
+///
+/// # Panics
+///
+/// A power asking for something once the move is performed, which nothing
+/// here carries out.
+#[tracing::instrument(level = "trace", skip_all)]
+fn move_performed<V: Rules>(live: &mut Live<V>, creature: CombatId, move_id: V::MoveId) {
+    let hook = sts2_core::EventHook::MonsterMovePerformed { move_id };
+    let mut asked = sts2_core::HookEffects::new();
+    let Some(carrier) = live
+        .creatures
+        .iter()
+        .find(|c| c.id == creature)
+        .map(|performer| performer.carrier())
+    else {
+        return;
+    };
+    for held in live.powers.of_mut(creature) {
+        <V as sts2_core::Hooks>::event_hook(held.event_listener(carrier), hook, &mut asked);
+    }
+    if let Some(effect) = asked.first() {
+        unimplemented!("a power asking for {effect:?} after a monster move")
+    }
+}
+
 /// `PrepareForNextTurn`: every enemy still in the fight advertises its next
 /// move.
+#[tracing::instrument(level = "trace", skip_all)]
 fn roll_moves<V: Rules>(
     live: &mut Live<V>,
     ascension: V::AscensionLevel,
@@ -488,9 +525,9 @@ fn roll_moves<V: Rules>(
                 .iter()
                 .find(|creature| creature.id == held.creature)
                 .expect("a retained move machine has its creature");
-            let powers = creature
+            let powers = live
                 .powers
-                .iter()
+                .of(creature.id)
                 .map(|power| power.listener(creature.carrier()));
             V::roll_monster_move(
                 held.monster,

@@ -176,10 +176,79 @@ impl<V: Rules> HeldRelic<V> {
     }
 }
 
+/// The relics a run carries, and how many of them override each hook.
+///
+/// A relic joins the belt only through here, which keeps the counts true.
+/// Everything else reads and writes the belt as a slice. A slice reaches a
+/// relic's own saved fields, and cannot add a relic or take one away.
+#[derive(Debug)]
+pub(crate) struct Belt<V: Rules> {
+    held: Bounded<HeldRelic<V>, RELICS>,
+    counts: crate::combat::HookCounts,
+}
+
+impl<V: Rules> Clone for Belt<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for Belt<V> {}
+
+impl<V: Rules> std::ops::Deref for Belt<V> {
+    type Target = [HeldRelic<V>];
+
+    fn deref(&self) -> &[HeldRelic<V>] {
+        &self.held
+    }
+}
+
+impl<V: Rules> std::ops::DerefMut for Belt<V> {
+    fn deref_mut(&mut self) -> &mut [HeldRelic<V>] {
+        &mut self.held
+    }
+}
+
+impl<V: Rules> FromIterator<HeldRelic<V>> for Belt<V> {
+    fn from_iter<I: IntoIterator<Item = HeldRelic<V>>>(relics: I) -> Self {
+        let mut belt = Self::new();
+        for held in relics {
+            belt.push(held);
+        }
+        belt
+    }
+}
+
+impl<V: Rules> Belt<V> {
+    pub(crate) fn new() -> Self {
+        Self {
+            held: Bounded::new(),
+            counts: crate::combat::HookCounts::default(),
+        }
+    }
+
+    pub(crate) fn push(&mut self, held: HeldRelic<V>) {
+        use sts2_core::RelicTable as _;
+
+        self.counts.add(held.relic.overrides());
+        self.held.push(held);
+    }
+
+    pub(crate) fn copy_from(&mut self, source: &Self) {
+        self.held.copy_from(&source.held);
+        self.counts = source.counts;
+    }
+
+    /// Whether any relic on the belt overrides a hook in `hooks`.
+    pub(crate) fn hear(&self, hooks: sts2_core::Overrides) -> bool {
+        self.counts.hears(hooks)
+    }
+}
+
 /// The small, mutable part of one player's run state.
 #[derive(Debug)]
 struct Player<V: Rules> {
-    relics: Bounded<HeldRelic<V>, RELICS>,
+    relics: Belt<V>,
     /// The belt, in physical slot order.
     potions: Bounded<V::Potion, BELT>,
     /// The physical slot beside each potion. Empty slots survive drinking.
@@ -498,6 +567,7 @@ impl<V: Rules> State<V> {
     ///
     /// `new Rng(seed, $"act_{CurrentActIndex + 1}_map")`, which is why the
     /// second act's map is not the first act's under another name.
+    #[tracing::instrument(level = "trace", skip_all)]
     fn act_map(
         raw_seed: u64,
         act: V::Act,
@@ -685,7 +755,7 @@ impl<V: Rules> State<V> {
     /// the belt its report reads.
     ///
     /// What replaces it is the caller's to say, straight after.
-    pub(super) fn left_fight(&mut self) -> (Box<crate::combat::Live<V>>, &[HeldRelic<V>]) {
+    pub(super) fn left_fight(&mut self) -> (Box<crate::combat::Live<V>>, &Belt<V>) {
         match std::mem::replace(&mut self.phase, Phase::Map) {
             Phase::Combat(live) => (live, &self.player.relics),
             _ => unreachable!("a fight that ended is the one the run stood in"),
@@ -1186,6 +1256,7 @@ impl<V: Rules> State<V> {
     /// The floor advances first. `EnterRoom` writes the point into
     /// `MapPointHistory` before the room is set up, so `TotalFloor` counts
     /// this room already.
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(super) fn create_fight(
         &mut self,
         encounter: V::Encounter,

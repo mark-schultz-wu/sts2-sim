@@ -8,6 +8,7 @@ members = [
     "crates/sts2-golden",
     "crates/sts2-headless",
     "crates/sts2-sim",
+    "crates/sts2-trace",
     "xtask",
 ]
 
@@ -39,6 +40,11 @@ sts2-core = { path = "crates/sts2-core" }
 sts2-headless = { path = "crates/sts2-headless" }
 sts2-sim = { path = "crates/sts2-sim" }
 thiserror = "2.0.20"
+# Spans and events stay in the code, and a release build compiles every one of
+# them out: `release_max_level_off` applies wherever `debug_assertions` is off.
+# A build that traces is one with debug assertions on, which is a dev build or
+# the `profiling` profile below.
+tracing = { version = "0.1", default-features = false, features = ["attributes", "std", "release_max_level_off"] }
 
 [profile.release]
 debug = true
@@ -47,3 +53,15 @@ debug = true
 # lookup and content hook they call is defined in the build's own crate.
 codegen-units = 1
 lto = "fat"
+
+# Release, with tracing compiled in. It is what a trace is measured on.
+#
+# `tracing` works out its static level from its own debug assertions, so they
+# are on for that crate alone. Every other crate compiles as release does. On
+# for every crate, they turn on the checks inside hash maps and small vectors,
+# which doubled what map generation cost.
+[profile.profiling]
+inherits = "release"
+
+[profile.profiling.package.tracing]
+debug-assertions = true

@@ -1,0 +1,20 @@
+[package]
+name = "sts2-trace"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Where a replayed step's instructions go, span by span. Built with the
+# `profiling` profile, which is release with tracing compiled in, and run by
+# `cargo xtask trace`. Nothing depends on this crate.
+
+[dependencies]
+# The run a trace replays, and how far the simulator gets through it.
+sts2-golden = { path = "../sts2-golden" }
+sts2-content = { workspace = true }
+sts2-core = { workspace = true }
+sts2-sim = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+# The hardware instruction counter, read as each span is entered and left.
+perf-event2 = "0.7"

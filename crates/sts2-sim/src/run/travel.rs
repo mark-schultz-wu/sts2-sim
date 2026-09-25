@@ -79,6 +79,7 @@ impl<V: Rules> State<V> {
     /// The room comes first, and nothing before the last block touches the
     /// run. A room the simulator cannot build yet reports which one, and the
     /// caller still holds the run it had.
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) fn travel(&mut self, moving: Move<V>) -> Result<Decided, crate::combat::Error> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {

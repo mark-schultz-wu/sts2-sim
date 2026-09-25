@@ -13,3 +13,6 @@ nonmax = { workspace = true }
 # Not `sts2-content`, which is what this writes. A generator that has to
 # compile its own output cannot regenerate a tree its last change broke.
 sts2-core = { workspace = true }
+# Drawing `trace`'s folded stacks as a flamegraph. Nothing here uses the
+# command-line half.
+inferno = { version = "0.12", default-features = false }

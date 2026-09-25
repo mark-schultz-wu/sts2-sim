@@ -613,8 +613,18 @@ impl Overrides {
         Overrides(self.0 | 1 << hook as u8)
     }
 
+    /// The set holding `hook` alone.
+    pub const fn of(hook: ModelHook) -> Self {
+        Overrides(1 << hook as u8)
+    }
+
     pub const fn contains(self, hook: ModelHook) -> bool {
         self.0 & 1 << hook as u8 != 0
+    }
+
+    /// Whether the two sets share a hook.
+    pub const fn intersects(self, other: Self) -> bool {
+        self.0 & other.0 != 0
     }
 
     pub const fn union(self, other: Self) -> Self {
@@ -1062,7 +1072,9 @@ pub trait Fight<V: ContentVersion> {
     type ResolvedEffect: EffectResolution<V>;
 
     /// One creature in this fight, as [`Fight::creatures`] hands it over.
-    type Creature: CreatureView<V>;
+    type Creature<'a>: CreatureView<V>
+    where
+        Self: 'a;
 
     /// The creature the card was pointed at.
     ///
@@ -1082,7 +1094,7 @@ pub trait Fight<V: ContentVersion> {
     /// `ICombatState.Creatures`, dead ones included. A rule that reads another
     /// creature reads it here, rather than take a list of ids and then ask
     /// after each one.
-    fn creatures(&self) -> impl Iterator<Item = &Self::Creature>;
+    fn creatures(&self) -> impl Iterator<Item = Self::Creature<'_>>;
 
     /// The side whoever is acting is on, which is `Owner.Creature.Side`.
     fn side(&self) -> V::CombatSide;
@@ -1096,7 +1108,7 @@ pub trait Fight<V: ContentVersion> {
         let side = self.side();
         self.creatures()
             .filter(|creature| creature.side() != side && creature.alive())
-            .map(CreatureView::id)
+            .map(|creature| creature.id())
             .collect()
     }
 
@@ -2101,6 +2113,14 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         printed: &'a P,
     },
 }
+
+impl<V: Hooks, P: Printed<V> + ?Sized> Clone for Listener<'_, V, P> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Hooks, P: Printed<V> + ?Sized> Copy for Listener<'_, V, P> {}
 
 pub enum EventListener<'a, V: Hooks, P: Printed<V> + ?Sized> {
     Power {

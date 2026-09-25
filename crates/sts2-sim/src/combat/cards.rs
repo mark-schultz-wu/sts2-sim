@@ -15,6 +15,7 @@ use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{CardId, CardIdent, CardTable as _, Pile, Rules};
 
+use super::listen::HookCounts;
 use super::live::{CardInstance, Face};
 use super::piles::{Card, Piles, Place};
 use crate::rng::MegaRng;
@@ -32,9 +33,9 @@ pub(crate) struct Cards<V: Rules, P: Piles = PileStore> {
     /// The hooks each state's card overrides, beside [`Cards::faces`]. Which
     /// card a state is never changes, so neither does this.
     heard: Vec<sts2_core::Overrides>,
-    /// Every hook some state's card overrides, so an event no card in the
-    /// fight answers is turned away at once.
-    hearing: sts2_core::Overrides,
+    /// How many of the copies standing in a pile override each hook. A copy is
+    /// counted as it arrives in a pile and uncounted as it leaves them all.
+    counts: HookCounts,
     /// Each card's index into [`Cards::faces`], by its number.
     states: Vec<u16>,
     piles: P,
@@ -45,7 +46,7 @@ impl<V: Rules, P: Piles> Clone for Cards<V, P> {
         Self {
             faces: self.faces.clone(),
             heard: self.heard.clone(),
-            hearing: self.hearing,
+            counts: self.counts,
             states: self.states.clone(),
             piles: self.piles.clone(),
         }
@@ -56,7 +57,7 @@ impl<V: Rules, P: Piles> Clone for Cards<V, P> {
     fn clone_from(&mut self, source: &Self) {
         self.faces.clone_from(&source.faces);
         self.heard.clone_from(&source.heard);
-        self.hearing = source.hearing;
+        self.counts = source.counts;
         self.states.clone_from(&source.states);
         self.piles.clone_from(&source.piles);
     }
@@ -80,7 +81,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         Self {
             faces: Vec::with_capacity(cards),
             heard: Vec::with_capacity(cards),
-            hearing: sts2_core::Overrides::default(),
+            counts: HookCounts::default(),
             states: Vec::with_capacity(cards),
             piles: P::with_cards(cards),
         }
@@ -113,6 +114,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
                 let face = u16::try_from(face).expect("a deck's identities fit an index");
                 cards.set_state(number(card.id), face);
                 cards.piles.push_back(pile, number(card.id));
+                cards.counts.add(cards.heard[usize::from(face)]);
             }
         }
         cards
@@ -157,24 +159,25 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.piles.place(card).map(|_| self.card(card))
     }
 
-    /// Whether any card the fight holds overrides `hook`.
-    pub(crate) fn hears(&self, hook: sts2_core::ModelHook) -> bool {
-        self.hearing.contains(hook)
+    /// Whether any card the fight holds overrides a hook in `hooks`.
+    pub(crate) fn hears(&self, hooks: sts2_core::Overrides) -> bool {
+        self.counts.hears(hooks)
     }
 
-    /// Every copy whose card overrides `hook`, in `AllPiles` order: hand,
-    /// draw, discard, exhaust, then the play pile.
+    /// Every copy whose card overrides a hook in `hooks`, in `AllPiles`
+    /// order: hand, draw, discard, exhaust, then the play pile. Each comes
+    /// with every hook its card overrides.
     ///
     /// The states are asked first. An event no card in the fight answers
     /// reads no pile.
     pub(crate) fn listening(
         &self,
-        hook: sts2_core::ModelHook,
-    ) -> impl Iterator<Item = CardId<V>> + '_ {
-        let hearing: SmallVec<[u16; 8]> = match self.hearing.contains(hook) {
+        hooks: sts2_core::Overrides,
+    ) -> impl Iterator<Item = (CardId<V>, sts2_core::Overrides)> + '_ {
+        let hearing: SmallVec<[u16; 8]> = match self.counts.hears(hooks) {
             false => SmallVec::new(),
             true => (0..self.heard.len())
-                .filter(|&at| self.heard[at].contains(hook))
+                .filter(|&at| self.heard[at].intersects(hooks))
                 .map(|at| at as u16)
                 .collect(),
         };
@@ -194,7 +197,12 @@ impl<V: Rules, P: Piles> Cards<V, P> {
             self.piles
                 .iter(pile)
                 .filter(move |&card| hearing.contains(&self.states[usize::from(card)]))
-                .map(id)
+                .map(|card| {
+                    (
+                        id(card),
+                        self.heard[usize::from(self.states[usize::from(card)])],
+                    )
+                })
         })
     }
 
@@ -218,11 +226,13 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     pub(crate) fn push(&mut self, pile: Pile, card: CardInstance<V>) {
         self.store(card);
         self.piles.push_back(pile.into(), number(card.id));
+        self.counts.add(self.overrides(number(card.id)));
     }
 
     /// Take the copy at `at` out of `pile`.
     pub(crate) fn remove(&mut self, pile: Pile, at: usize) -> CardInstance<V> {
         let card = self.piles.remove_at(pile.into(), at);
+        self.counts.remove(self.overrides(card));
         self.card(card)
     }
 
@@ -242,8 +252,14 @@ impl<V: Rules, P: Piles> Cards<V, P> {
 
     /// Put `card` where the copy at `at` stood.
     pub(crate) fn replace(&mut self, pile: Pile, at: usize, card: CardInstance<V>) {
+        let was = self
+            .piles
+            .get(pile.into(), at)
+            .expect("a card stands at the index named");
+        self.counts.remove(self.overrides(was));
         self.store(card);
         self.piles.replace_at(pile.into(), at, number(card.id));
+        self.counts.add(self.overrides(number(card.id)));
     }
 
     /// `AddDuringManualCardPlay`: the card at `at` in hand goes to the play
@@ -266,8 +282,9 @@ impl<V: Rules, P: Piles> Cards<V, P> {
             unimplemented!("a card leaving play that was not in play");
         }
         self.piles.remove(card);
-        if let Some(to) = to {
-            self.piles.push_back(to.into(), card);
+        match to {
+            Some(to) => self.piles.push_back(to.into(), card),
+            None => self.counts.remove(self.overrides(card)),
         }
     }
 
@@ -384,6 +401,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// Every pile emptied, which is how a fight the player lost leaves them.
     pub(crate) fn clear(&mut self) {
         self.piles.clear();
+        self.counts = HookCounts::default();
     }
 
     fn card(&self, card: Card) -> CardInstance<V> {
@@ -420,10 +438,13 @@ impl<V: Rules, P: Piles> Cards<V, P> {
 
     /// Store a new state, with the hooks its card overrides.
     fn store_face(&mut self, face: Face<V>) {
-        let heard = face.ident.card.overrides();
         self.faces.push(face);
-        self.heard.push(heard);
-        self.hearing = self.hearing.union(heard);
+        self.heard.push(face.ident.card.overrides());
+    }
+
+    /// The hooks the card at number `card` overrides.
+    fn overrides(&self, card: Card) -> sts2_core::Overrides {
+        self.heard[usize::from(self.states[usize::from(card)])]
     }
 
     /// The index `face` is stored at, storing it if nothing is in that state.
