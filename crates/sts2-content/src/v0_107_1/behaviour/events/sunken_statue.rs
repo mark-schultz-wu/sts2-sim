@@ -1,5 +1,6 @@
 //! Sunken Statue: Sword of Stone, or gold for HP.
 
+use nonmax::NonMaxU8;
 use sts2_core::rng::Span;
 use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
 
@@ -18,7 +19,7 @@ pub struct State {
     /// What the option pays or costs, drawn as the event opens.
     gold: i32,
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct SunkenStatue;
@@ -62,7 +63,7 @@ impl EventBehavior<V> for SunkenStatue {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::ObtainRelic(Relic::SwordOfStone),

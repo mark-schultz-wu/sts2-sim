@@ -1,5 +1,6 @@
 //! Tea Master eligibility, choices, and outcomes.
 
+use nonmax::NonMaxU8;
 use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
 
 use super::super::super::V0_107_1 as V;
@@ -9,7 +10,7 @@ use super::super::super::generated::relics::Relic;
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct TeaMaster;
@@ -47,7 +48,7 @@ impl EventBehavior<V> for TeaMaster {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::LoseGold(50),

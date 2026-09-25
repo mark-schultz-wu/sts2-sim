@@ -1,5 +1,6 @@
 //! The Legends Were True: the Spoils Map, or a potion for HP.
 
+use nonmax::NonMaxU8;
 use sts2_core::{CustomReward, EventBehavior, EventView, HookEffect, HookEffects, Room};
 
 use super::super::super::V0_107_1 as V;
@@ -12,7 +13,7 @@ const DAMAGE: i32 = 8;
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct TheLegendsWereTrue;
@@ -49,7 +50,7 @@ impl EventBehavior<V> for TheLegendsWereTrue {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::AddToDeck(Cards::Quest(QuestCard::SpoilsMap)),

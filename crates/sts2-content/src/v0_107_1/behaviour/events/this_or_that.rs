@@ -1,5 +1,6 @@
 //! This or That: gold for HP, or a relic and a curse.
 
+use nonmax::NonMaxU8;
 use sts2_core::rng::Span;
 use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
 
@@ -15,7 +16,7 @@ pub struct State {
     /// What the option pays or costs, drawn as the event opens.
     gold: i32,
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct ThisOrThat;
@@ -59,7 +60,7 @@ impl EventBehavior<V> for ThisOrThat {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::DamageOwner(HP_LOSS),

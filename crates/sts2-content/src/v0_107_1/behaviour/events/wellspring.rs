@@ -1,5 +1,6 @@
 //! Wellspring: a potion, or a card removed for a curse.
 
+use nonmax::NonMaxU8;
 use sts2_core::{CustomReward, DeckAct, EventBehavior, EventView, HookEffect, HookEffects, Room};
 
 use super::super::super::V0_107_1 as V;
@@ -9,7 +10,7 @@ use super::super::super::generated::events::{Event, EventOption as Said};
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct Wellspring;
@@ -46,7 +47,7 @@ impl EventBehavior<V> for Wellspring {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::OfferRewards(&[CustomReward::UnlockedPotion]),

@@ -12,6 +12,7 @@ mod this_or_that;
 mod wellspring;
 mod whispering_hollow;
 
+use nonmax::NonMaxU8;
 use sts2_core::{
     CardTable as _, EventBehavior, EventOption, EventOptionKey, EventView, HookEffects, Room,
 };
@@ -45,7 +46,7 @@ pub enum State {
 ///
 /// An option that asks a question leaves the page up, with its choice
 /// marked, until the question is answered.
-pub(super) fn page(event: Event, options: &[(Said, bool)], chosen: Option<u8>) -> Room<V> {
+pub(super) fn page(event: Event, options: &[(Said, bool)], chosen: Option<NonMaxU8>) -> Room<V> {
     Room::Event {
         event,
         finished: false,
@@ -66,7 +67,7 @@ pub(super) fn page(event: Event, options: &[(Said, bool)], chosen: Option<u8>) -
                     text: None,
                     locked,
                     proceed: false,
-                    chosen: chosen == Some(index),
+                    chosen: chosen == NonMaxU8::new(index),
                     relic: None,
                 }
             })

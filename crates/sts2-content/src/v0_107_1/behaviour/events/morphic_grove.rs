@@ -1,5 +1,6 @@
 //! Morphic Grove: every coin for two transforms, or Max HP.
 
+use nonmax::NonMaxU8;
 use sts2_core::{
     CardTable as _, DeckAct, EventBehavior, EventView, HookEffect, HookEffects, Room, Stream,
 };
@@ -13,7 +14,7 @@ const MAX_HP: i32 = 5;
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct MorphicGrove;
@@ -56,7 +57,7 @@ impl EventBehavior<V> for MorphicGrove {
         run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![
                 HookEffect::LoseGold(run.gold()),

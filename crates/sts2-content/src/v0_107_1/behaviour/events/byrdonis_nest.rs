@@ -1,5 +1,6 @@
 //! Byrdonis Nest: Max HP, or the egg.
 
+use nonmax::NonMaxU8;
 use sts2_core::{EventBehavior, EventView, HookEffect, HookEffects, Room};
 
 use super::super::super::V0_107_1 as V;
@@ -12,7 +13,7 @@ const MAX_HP: i32 = 7;
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// The option taken.
-    chosen: Option<u8>,
+    chosen: Option<NonMaxU8>,
 }
 
 pub struct ByrdonisNest;
@@ -52,7 +53,7 @@ impl EventBehavior<V> for ByrdonisNest {
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        state.chosen = Some(option);
+        state.chosen = NonMaxU8::new(option);
         match option {
             0 => smallvec::smallvec![HookEffect::GainMaxHp(MAX_HP), HookEffect::FinishEvent],
             _ => smallvec::smallvec![

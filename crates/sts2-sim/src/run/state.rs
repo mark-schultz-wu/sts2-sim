@@ -421,7 +421,7 @@ pub(super) struct EnteredEvent<V: Rules> {
 pub(super) enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
-        chosen: Option<u8>,
+        chosen: Option<nonmax::NonMaxU8>,
         asking: Option<Asked<V>>,
     },
     /// The map itself, which an act opens on and no room owns.
@@ -2194,7 +2194,7 @@ impl<V: Rules> State<V> {
         let option = *options
             .get(index as usize)
             .unwrap_or_else(|| unimplemented!("an option the blessing does not offer"));
-        *chosen = Some(index);
+        *chosen = nonmax::NonMaxU8::new(index);
         if option != V::lead_paperweight() {
             // `RelicCmd.Obtain`, and whatever the relic's `AfterObtained`
             // asks, which Neow's screen parks on.
@@ -2600,7 +2600,7 @@ impl<V: Rules> State<V> {
             } if !finished => moves.extend(
                 (0..options.len())
                     .map(option_index)
-                    .filter(|&index| *chosen != Some(index))
+                    .filter(|&index| *chosen != nonmax::NonMaxU8::new(index))
                     .map(|index| Decision::ChooseOption { index }),
             ),
             // An event's options are the content's to spell, so its room is
@@ -2947,7 +2947,7 @@ impl<V: Rules> State<V> {
                             text: None,
                             locked: false,
                             proceed: false,
-                            chosen: *neow_chosen == Some(index),
+                            chosen: *neow_chosen == nonmax::NonMaxU8::new(index),
                             relic: Some(relic),
                         }
                     })
