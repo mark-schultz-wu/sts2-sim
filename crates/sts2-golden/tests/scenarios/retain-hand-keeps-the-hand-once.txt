@@ -1,0 +1,10 @@
+# `RetainHandPower.ShouldFlush` keeps its owner's hand as a turn ends, and
+# one comes off it each turn end. One of it keeps the first hand into the
+# second turn, which then goes to the discard pile as usual.
+#
+# A port that flushes anyway, or keeps the hand twice, shows another hand.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"RETAIN_HAND_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

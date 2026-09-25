@@ -118,6 +118,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 holder,
                 applier,
                 monster,
+                on_turn_start,
                 state,
             } => {
                 let held = behaviour::powers::Held {
@@ -125,6 +126,7 @@ impl sts2_core::Hooks for V0_107_1 {
                     holder,
                     applier,
                     monster,
+                    on_turn_start,
                 };
                 behaviour::powers::modify_hook(power, amount, held, state, hook)
             }
@@ -153,6 +155,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 holder,
                 applier,
                 monster,
+                on_turn_start,
                 state,
                 ..
             } => {
@@ -161,6 +164,7 @@ impl sts2_core::Hooks for V0_107_1 {
                     holder,
                     applier,
                     monster,
+                    on_turn_start,
                 };
                 behaviour::powers::decide_hook(power, held, state, hook)
             }
@@ -188,6 +192,7 @@ impl sts2_core::Hooks for V0_107_1 {
             holder,
             applier,
             monster,
+            on_turn_start,
             state,
         } = power;
         let held = behaviour::powers::Held {
@@ -195,6 +200,7 @@ impl sts2_core::Hooks for V0_107_1 {
             holder,
             applier,
             monster,
+            on_turn_start,
         };
         behaviour::powers::event_hook(power, amount, held, state, hook, asked)
     }

@@ -44,7 +44,7 @@ pub(crate) fn end<V: Rules>(
         return Ok(Some(ended));
     }
     before_turn_end::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
-    flush_hand(next);
+    flush_hand(next, relics);
     end_of_turn_cleanup(next);
     // `AfterSideTurnEnd` for the side that just ended.
     let asked = tick_powers::<V>(
@@ -277,6 +277,19 @@ pub(super) fn before_side_turn_start<V: Rules>(
     side: V::CombatSide,
     turn: V::Count,
 ) {
+    // `Creature.BeforeTurnStart`, which writes every power's stack as its
+    // side begins.
+    let starting: Vec<CombatId> = live
+        .creatures
+        .iter()
+        .filter(|creature| creature.side == side)
+        .map(|creature| creature.id)
+        .collect();
+    for creature in starting {
+        for held in live.powers.of_mut(creature) {
+            held.on_turn_start = held.amount;
+        }
+    }
     let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
@@ -387,8 +400,15 @@ pub(super) fn side_turn_started<V: Rules>(
         turn,
         room: live.room(),
     };
-    for (_, effect) in listen::notify::<V>(live, relics, hook) {
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match effect {
+            // `PowerCmd.Remove(this)`, from a power spent as its side begins.
+            sts2_core::HookEffect::Remove => {
+                let Listener::Power { owner, power, .. } = listener else {
+                    unimplemented!("{listener:?} removing itself as a side turn starts")
+                };
+                live.remove_power(owner, power);
+            }
             sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
                 &[sts2_core::Pile::Hand],
                 |_| true,
@@ -410,12 +430,22 @@ pub(super) fn side_turn_started<V: Rules>(
     }
 }
 
-/// `FlushPlayerHand`: what is left in hand goes to the discard pile.
+/// `FlushPlayerHand`: what is left in hand goes to the discard pile, unless
+/// a listener answers `ShouldFlush` no, which keeps the whole hand.
 ///
 /// A card that retains stays where it is. The keyword is all this reads:
 /// nothing in a fight sets it on a card that does not print it.
 #[tracing::instrument(level = "trace", skip_all)]
-fn flush_hand<V: Rules>(live: &mut Live<V>) {
+fn flush_hand<V: Rules>(live: &mut Live<V>, relics: &crate::run::Belt<V>) {
+    let player = live.player().id;
+    let fight = listen::Walk { live, relics };
+    if listen::any_decides::<V>(
+        fight,
+        sts2_core::DecisionHook::ShouldFlush { player },
+        false,
+    ) {
+        return;
+    }
     live.cards
         .sift(Pile::Hand, Pile::Discard, |held| held.ident.card.retains());
 }

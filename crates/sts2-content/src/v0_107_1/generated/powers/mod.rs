@@ -1869,7 +1869,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // RETAIN_HAND_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ShouldFlush),
     // RINGING_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardEnteredCombat)
