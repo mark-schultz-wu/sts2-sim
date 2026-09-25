@@ -232,9 +232,7 @@ fn ask<V: sts2_content_wire::WireContentVersion>(request: &Request) -> Result<An
     let mut line = String::new();
     match reader.read_line(&mut line) {
         Ok(0) => {
-            return Err(Error::Daemon(
-                "the daemon closed the connection without answering".into(),
-            ));
+            return Err(Error::Unanswered);
         }
         Ok(_) => {}
         Err(e) => return Err(Error::Io("reading the daemon's answer", e)),

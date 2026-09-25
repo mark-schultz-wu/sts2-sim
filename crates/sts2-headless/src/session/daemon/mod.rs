@@ -35,17 +35,49 @@ use std::time::{Duration, Instant};
 use sts2_core::Step;
 use sts2_core::Version;
 
-/// The crate's error, not `anyhow`'s.
-///
-/// A daemon's failures are operator-facing sentences: a path that did not open,
-/// or a socket already bound. So they arrive as [`Error::Daemon`] with the
-/// message built where the context is. Nothing here is a failure a caller
-/// matches on, which is what earns a variant of its own.
 type Result<T> = std::result::Result<T, Error>;
 
-/// A failure with its context, in the crate's own error.
-fn failed_to(what: impl std::fmt::Display) -> Error {
-    Error::Daemon(what.to_string())
+/// What stopped the daemon: a path that did not open, or a socket already
+/// bound. It reaches a client as [`Error::Daemon`], worded, over the socket.
+#[derive(Debug, thiserror::Error)]
+pub enum Failure {
+    #[error("{what} {}: {source}", path.display())]
+    File {
+        what: &'static str,
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("writing the build stamp: {0}")]
+    Stamp(std::io::Error),
+    #[error("{} is empty; there is no recording to carry on", .0.display())]
+    Empty(PathBuf),
+    #[error("this build cannot replay {command}: {source}")]
+    Unreplayable {
+        command: serde_json::Value,
+        source: serde_json::Error,
+    },
+    #[error("{0} is a command but not a step in a run")]
+    NotAStep(serde_json::Value),
+    #[error("a game is already running at {}; stop it first", .0.display())]
+    Running(PathBuf),
+    #[error("the listener has to be pollable so the timeout can fire: {0}")]
+    Blocking(std::io::Error),
+    #[error("spawning the daemon: {0}")]
+    Spawn(std::io::Error),
+    #[error("the daemon (pid {pid}) did not bind {} within ten seconds", socket.display())]
+    Unbound { pid: u32, socket: PathBuf },
+}
+
+/// A file that failed the daemon, by what it was doing to it.
+fn file(what: &'static str, path: &Path) -> impl FnOnce(std::io::Error) -> Error {
+    move |source| {
+        Failure::File {
+            what,
+            path: path.to_path_buf(),
+            source,
+        }
+        .into()
+    }
 }
 
 /// How long the daemon waits before deciding nobody is coming back.
@@ -117,17 +149,14 @@ struct Tape {
 impl Tape {
     /// Begins a recording, replacing whatever was at the path.
     fn open<V: sts2_content_wire::WireContentVersion>(path: &Path) -> Result<Self> {
-        let mut file = File::create(path)
-            .map_err(|e| failed_to(format!("creating {}: {e}", path.display())))?;
+        let mut created = File::create(path).map_err(file("creating", path))?;
 
-        recording::open::<V>(&mut file)
-            .map_err(|e| failed_to(format!("writing the build stamp: {e}")))?;
-        file.flush()
-            .map_err(|e| failed_to(format!("writing {}: {e}", path.display())))?;
+        recording::open::<V>(&mut created).map_err(Failure::Stamp)?;
+        created.flush().map_err(file("writing", path))?;
 
         Ok(Self {
             path: path.to_path_buf(),
-            file,
+            file: created,
             steps: 0,
         })
     }
@@ -139,8 +168,7 @@ impl Tape {
     /// fails halfway then leaves the file somebody opened to investigate
     /// truncated at the failure.
     fn resume(path: &Path) -> Result<Self> {
-        let existing = std::fs::read_to_string(path)
-            .map_err(|e| failed_to(format!("reading {}: {e}", path.display())))?;
+        let existing = std::fs::read_to_string(path).map_err(file("reading", path))?;
 
         // Everything but the stamp. Counted rather than assumed zero, so
         // "stopped recording after N steps" is the run's length rather than
@@ -148,21 +176,18 @@ impl Tape {
         // because a request arrives over a socket and an empty file would take
         // the daemon down with an underflow.
         let lines = existing.lines().filter(|l| !l.trim().is_empty()).count();
-        let steps = lines.checked_sub(1).ok_or_else(|| {
-            failed_to(format!(
-                "{} is empty; there is no recording to carry on",
-                path.display()
-            ))
-        })?;
+        let steps = lines
+            .checked_sub(1)
+            .ok_or_else(|| Failure::Empty(path.to_path_buf()))?;
 
-        let file = File::options()
+        let appending = File::options()
             .append(true)
             .open(path)
-            .map_err(|e| failed_to(format!("appending to {}: {e}", path.display())))?;
+            .map_err(file("appending to", path))?;
 
         Ok(Self {
             path: path.to_path_buf(),
-            file,
+            file: appending,
             steps,
         })
     }
@@ -178,15 +203,18 @@ impl Tape {
         &mut self,
         command: &serde_json::Value,
     ) -> Result<()> {
-        let wire: Command<V> = serde_json::from_value(command.clone())
-            .map_err(|e| failed_to(format!("this build cannot replay {command}: {e}")))?;
+        let wire: Command<V> =
+            serde_json::from_value(command.clone()).map_err(|source| Failure::Unreplayable {
+                command: command.clone(),
+                source,
+            })?;
         let step: Step<V> = wire
             .into_step()
-            .ok_or_else(|| failed_to(format!("{command} is a command but not a step in a run")))?;
+            .ok_or_else(|| Failure::NotAStep(command.clone()))?;
 
         recording::append(&mut self.file, &step)
             .and_then(|()| self.file.flush())
-            .map_err(|e| failed_to(format!("writing {}: {e}", self.path.display())))?;
+            .map_err(file("writing", &self.path))?;
         self.steps += 1;
         Ok(())
     }
@@ -228,24 +256,15 @@ pub fn serve<V: sts2_content_wire::WireContentVersion>(
         Ok(listener) => listener,
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
             if alive(&path) {
-                return Err(failed_to(format!(
-                    "a game is already running at {}; stop it first",
-                    path.display()
-                )));
+                return Err(Failure::Running(path).into());
             }
             // Nobody answered, so this is a dead daemon's leavings.
-            std::fs::remove_file(&path)
-                .map_err(|e| failed_to(format!("clearing a stale {}: {e}", path.display())))?;
-            UnixListener::bind(&path)
-                .map_err(|e| failed_to(format!("binding {}: {e}", path.display())))?
+            std::fs::remove_file(&path).map_err(file("clearing a stale", &path))?;
+            UnixListener::bind(&path).map_err(file("binding", &path))?
         }
-        Err(e) => return Err(failed_to(format!("binding {}: {e}", path.display()))),
+        Err(e) => return Err(file("binding", &path)(e)),
     };
-    listener.set_nonblocking(true).map_err(|e| {
-        failed_to(format!(
-            "the listener has to be pollable so the timeout can fire: {e}"
-        ))
-    })?;
+    listener.set_nonblocking(true).map_err(Failure::Blocking)?;
 
     let mut game: Option<Oracle<V>> = None;
     // Whether a run is open on `game`. See `relay`.
@@ -520,7 +539,7 @@ pub fn spawn(mut command: std::process::Command, socket: &Path) -> Result<()> {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| failed_to(format!("spawning the daemon: {e}")))?;
+        .map_err(Failure::Spawn)?;
 
     // Waiting for the socket rather than for the process: a daemon that has not
     // bound yet is one a client would fail to reach.
@@ -532,9 +551,9 @@ pub fn spawn(mut command: std::process::Command, socket: &Path) -> Result<()> {
         std::thread::sleep(Duration::from_millis(25));
     }
 
-    Err(failed_to(format!(
-        "the daemon (pid {}) did not bind {} within ten seconds",
-        child.id(),
-        socket.display()
-    )))
+    Err(Failure::Unbound {
+        pid: child.id(),
+        socket: socket.to_path_buf(),
+    }
+    .into())
 }

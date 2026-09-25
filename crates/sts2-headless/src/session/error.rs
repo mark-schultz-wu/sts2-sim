@@ -127,14 +127,23 @@ pub enum Error {
     #[error("no game is running (nothing listening at {0})")]
     NoDaemon(std::path::PathBuf),
 
-    /// The daemon holding the game turned the request down.
+    /// The daemon holding the game turned the request down, in its words.
     ///
     /// Beside a [`sts2_core::Refusal`] and not the same thing. A refusal is the
     /// *game* declining a move. This is the session around it declining to carry
     /// the question at all. No run started, a recording that failed to open, a
-    /// request from a client of another build.
+    /// request from a client of another build. Words, because they crossed the
+    /// socket.
     #[error("{0}")]
     Daemon(String),
+
+    /// What stopped the daemon itself, in the process that failed.
+    #[error(transparent)]
+    Serving(#[from] super::daemon::Failure),
+
+    /// The daemon closed the connection where an answer was due.
+    #[error("the daemon closed the connection without answering")]
+    Unanswered,
 
     /// The daemon answered something other than what was asked.
     #[error("unexpected answer to {asked}: {got}")]
