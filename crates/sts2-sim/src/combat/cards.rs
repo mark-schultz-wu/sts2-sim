@@ -29,6 +29,12 @@ pub(crate) struct Cards<V: Rules, P: Piles = PileStore> {
     /// state for the whole fight. A write on every copy of a card rewrites a
     /// state where it stands, so two indexes can come to hold equal states.
     faces: Vec<Face<V>>,
+    /// The hooks each state's card overrides, beside [`Cards::faces`]. Which
+    /// card a state is never changes, so neither does this.
+    heard: Vec<sts2_core::Overrides>,
+    /// Every hook some state's card overrides, so an event no card in the
+    /// fight answers is turned away at once.
+    hearing: sts2_core::Overrides,
     /// Each card's index into [`Cards::faces`], by its number.
     states: Vec<u16>,
     piles: P,
@@ -38,6 +44,8 @@ impl<V: Rules, P: Piles> Clone for Cards<V, P> {
     fn clone(&self) -> Self {
         Self {
             faces: self.faces.clone(),
+            heard: self.heard.clone(),
+            hearing: self.hearing,
             states: self.states.clone(),
             piles: self.piles.clone(),
         }
@@ -47,6 +55,8 @@ impl<V: Rules, P: Piles> Clone for Cards<V, P> {
     /// nothing.
     fn clone_from(&mut self, source: &Self) {
         self.faces.clone_from(&source.faces);
+        self.heard.clone_from(&source.heard);
+        self.hearing = source.hearing;
         self.states.clone_from(&source.states);
         self.piles.clone_from(&source.piles);
     }
@@ -69,6 +79,8 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     pub(super) fn with_cards(cards: usize) -> Self {
         Self {
             faces: Vec::with_capacity(cards),
+            heard: Vec::with_capacity(cards),
+            hearing: sts2_core::Overrides::default(),
             states: Vec::with_capacity(cards),
             piles: P::with_cards(cards),
         }
@@ -93,7 +105,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
                 let face = match found {
                     Some(at) => at,
                     None => {
-                        cards.faces.push(card.face);
+                        cards.store_face(card.face);
                         orders.push(order);
                         cards.faces.len() - 1
                     }
@@ -143,6 +155,47 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     pub(crate) fn named(&self, id: CardId<V>) -> Option<CardInstance<V>> {
         let card = number(id);
         self.piles.place(card).map(|_| self.card(card))
+    }
+
+    /// Whether any card the fight holds overrides `hook`.
+    pub(crate) fn hears(&self, hook: sts2_core::ModelHook) -> bool {
+        self.hearing.contains(hook)
+    }
+
+    /// Every copy whose card overrides `hook`, in `AllPiles` order: hand,
+    /// draw, discard, exhaust, then the play pile.
+    ///
+    /// The states are asked first. An event no card in the fight answers
+    /// reads no pile.
+    pub(crate) fn listening(
+        &self,
+        hook: sts2_core::ModelHook,
+    ) -> impl Iterator<Item = CardId<V>> + '_ {
+        let hearing: SmallVec<[u16; 8]> = match self.hearing.contains(hook) {
+            false => SmallVec::new(),
+            true => (0..self.heard.len())
+                .filter(|&at| self.heard[at].contains(hook))
+                .map(|at| at as u16)
+                .collect(),
+        };
+        let piles = match hearing.is_empty() {
+            true => [].as_slice(),
+            false => [
+                Place::Hand,
+                Place::Draw,
+                Place::Discard,
+                Place::Exhaust,
+                Place::Play,
+            ]
+            .as_slice(),
+        };
+        piles.iter().flat_map(move |&pile| {
+            let hearing = hearing.clone();
+            self.piles
+                .iter(pile)
+                .filter(move |&card| hearing.contains(&self.states[usize::from(card)]))
+                .map(id)
+        })
     }
 
     /// Whether any copy outside the exhaust pile is in a state `pick` picks.
@@ -365,6 +418,14 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         }
     }
 
+    /// Store a new state, with the hooks its card overrides.
+    fn store_face(&mut self, face: Face<V>) {
+        let heard = face.ident.card.overrides();
+        self.faces.push(face);
+        self.heard.push(heard);
+        self.hearing = self.hearing.union(heard);
+    }
+
     /// The index `face` is stored at, storing it if nothing is in that state.
     ///
     /// # Panics
@@ -374,7 +435,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         let at = match self.faces.iter().position(|held| *held == face) {
             Some(at) => at,
             None => {
-                self.faces.push(face);
+                self.store_face(face);
                 self.faces.len() - 1
             }
         };

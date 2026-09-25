@@ -205,7 +205,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     emit_flags(&mut out)?;
     emit_shape(&mut out);
-    emit_relics(&mut out, &relics, &pools_of)?;
+    let overrides = super::overrides(&build)?;
+    emit_relics(&mut out, &relics, &pools_of, &overrides)?;
     emit_bridges(&mut out, &pools, &enums)?;
 
     let mut split = Split::new(root, "relics", "relics.txt", &build)?;
@@ -380,6 +381,7 @@ fn emit_relics(
     out: &mut String,
     relics: &[&Vec<String>],
     pools_of: &BTreeMap<String, Vec<String>>,
+    overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
 ) -> Result<(), String> {
     writeln!(
         out,
@@ -504,7 +506,20 @@ fn emit_relics(
     writeln!(out, "    type Pool = RelicPool;").unwrap();
     writeln!(out, "    type Rarity = RelicRarity;\n").unwrap();
     out.push_str(&extras);
+    writeln!(
+        out,
+        "\n    fn overrides(self) -> sts2_core::Overrides {{\n\
+         \x20       OVERRIDES[self as usize]\n\
+         \x20   }}"
+    )
+    .unwrap();
     writeln!(out, "}}\n").unwrap();
+    super::emit_overrides(
+        out,
+        "indexed by the relic's discriminant.",
+        relics.iter().map(|row| row[1].as_str()),
+        overrides,
+    );
     super::lists(out, "POOLS", "RelicPool", &pool_lists);
 
     Ok(())

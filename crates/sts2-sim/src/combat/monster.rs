@@ -120,7 +120,7 @@ pub(crate) fn initialize<V: Rules>(
             block: num_traits::zero(),
             alive: true,
             powers: V::monster_starting_powers(monster, ascension)
-                .map(|(power, amount)| HeldPower::new(power, Stacked::from(amount)))
+                .map(|(power, amount)| HeldPower::new(power, Stacked::from(amount), Some(id)))
                 .collect(),
             // A fresh machine stands on no built state, so the walk always
             // names the move a monster opens on.

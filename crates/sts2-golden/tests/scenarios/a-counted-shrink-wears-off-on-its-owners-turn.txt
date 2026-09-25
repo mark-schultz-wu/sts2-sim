@@ -1,0 +1,11 @@
+# A counted Shrink loses one at the end of its owner's own turn, which is
+# `ShrinkPower.AfterSideTurnEnd` decrementing for the side its owner is among.
+# The player's turn ending leaves it alone.
+#
+# Two on a slime, so the first enemy turn leaves one and the second none. A
+# port that ticks on either side's turn spends both in the first round.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"SHRINK_POWER","amount":2,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

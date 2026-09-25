@@ -13,7 +13,9 @@ use super::super::super::generated::runstate::CombatSide;
 /// and not for the player holding it.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::AfterDeath { side } if side != <CombatSide as sts2_core::SideKinds>::PLAYER => {
+        EventHook::AfterDeath { side, .. }
+            if side != <CombatSide as sts2_core::SideKinds>::PLAYER =>
+        {
             asked.extend([HookEffect::GainEnergy(1), HookEffect::Draw(1)])
         }
         _ => {}

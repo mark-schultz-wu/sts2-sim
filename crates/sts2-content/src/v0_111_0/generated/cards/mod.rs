@@ -3356,4 +3356,1208 @@ impl sts2_core::CardTable for Cards {
     fn vars(self) -> &'static [sts2_core::CardNumber<CardVar, CardNumber>] {
         self.data().vars
     }
+
+    fn overrides(self) -> sts2_core::Overrides {
+        OVERRIDES[usize::from(<Self as sts2_core::CardTable>::order(self))]
+    }
 }
+
+/// The hooks each class overrides, from `hooks.txt`, indexed by the card's place in the build's id order.
+static OVERRIDES: [sts2_core::Overrides; 596] = [
+    // ABRASIVE
+    sts2_core::Overrides::from_bits(0),
+    // ABUNDANCE
+    sts2_core::Overrides::from_bits(0),
+    // ACCELERANT
+    sts2_core::Overrides::from_bits(0),
+    // ACCURACY
+    sts2_core::Overrides::from_bits(0),
+    // ACROBATICS
+    sts2_core::Overrides::from_bits(0),
+    // ADAPTIVE_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // ADRENALINE
+    sts2_core::Overrides::from_bits(0),
+    // AFTERIMAGE
+    sts2_core::Overrides::from_bits(0),
+    // AFTERLIFE
+    sts2_core::Overrides::from_bits(0),
+    // AGGRESSION
+    sts2_core::Overrides::from_bits(0),
+    // ALCHEMIZE
+    sts2_core::Overrides::from_bits(0),
+    // ALIGNMENT
+    sts2_core::Overrides::from_bits(0),
+    // ALL_FOR_ONE
+    sts2_core::Overrides::from_bits(0),
+    // ANGER
+    sts2_core::Overrides::from_bits(0),
+    // ANOINTED
+    sts2_core::Overrides::from_bits(0),
+    // ANTICIPATE
+    sts2_core::Overrides::from_bits(0),
+    // APOTHEOSIS
+    sts2_core::Overrides::from_bits(0),
+    // APPARITION
+    sts2_core::Overrides::from_bits(0),
+    // ARMAMENTS
+    sts2_core::Overrides::from_bits(0),
+    // ARSENAL
+    sts2_core::Overrides::from_bits(0),
+    // ASCENDERS_BANE
+    sts2_core::Overrides::from_bits(0),
+    // ASHEN_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // ASSASSINATE
+    sts2_core::Overrides::from_bits(0),
+    // ASTRAL_PULSE
+    sts2_core::Overrides::from_bits(0),
+    // AUTOMATION
+    sts2_core::Overrides::from_bits(0),
+    // BACKFLIP
+    sts2_core::Overrides::from_bits(0),
+    // BACKSTAB
+    sts2_core::Overrides::from_bits(0),
+    // BAD_LUCK
+    sts2_core::Overrides::from_bits(0),
+    // BALL_LIGHTNING
+    sts2_core::Overrides::from_bits(0),
+    // BANSHEES_CRY
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterCardPlayed),
+    // BARRAGE
+    sts2_core::Overrides::from_bits(0),
+    // BARRICADE
+    sts2_core::Overrides::from_bits(0),
+    // BASH
+    sts2_core::Overrides::from_bits(0),
+    // BATTLE_TRANCE
+    sts2_core::Overrides::from_bits(0),
+    // BEACON_OF_HOPE
+    sts2_core::Overrides::from_bits(0),
+    // BEAM_CELL
+    sts2_core::Overrides::from_bits(0),
+    // BEAT_DOWN
+    sts2_core::Overrides::from_bits(0),
+    // BEAT_INTO_SHAPE
+    sts2_core::Overrides::from_bits(0),
+    // BECKON
+    sts2_core::Overrides::from_bits(0),
+    // BEGONE
+    sts2_core::Overrides::from_bits(0),
+    // BELIEVE_IN_YOU
+    sts2_core::Overrides::from_bits(0),
+    // BIASED_COGNITION
+    sts2_core::Overrides::from_bits(0),
+    // BIG_BANG
+    sts2_core::Overrides::from_bits(0),
+    // BLACK_HOLE
+    sts2_core::Overrides::from_bits(0),
+    // BLADE_DANCE
+    sts2_core::Overrides::from_bits(0),
+    // BLADE_OF_INK
+    sts2_core::Overrides::from_bits(0),
+    // BLADE_SYMPHONY
+    sts2_core::Overrides::from_bits(0),
+    // BLAZE
+    sts2_core::Overrides::from_bits(0),
+    // BLIGHT_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // BLOODLETTING
+    sts2_core::Overrides::from_bits(0),
+    // BLOOD_WALL
+    sts2_core::Overrides::from_bits(0),
+    // BLUDGEON
+    sts2_core::Overrides::from_bits(0),
+    // BLUR
+    sts2_core::Overrides::from_bits(0),
+    // BODYGUARD
+    sts2_core::Overrides::from_bits(0),
+    // BODY_SLAM
+    sts2_core::Overrides::from_bits(0),
+    // BOLAS
+    sts2_core::Overrides::from_bits(0),
+    // BOMBARDMENT
+    sts2_core::Overrides::from_bits(0),
+    // BONE_SHARDS
+    sts2_core::Overrides::from_bits(0),
+    // BOOST_AWAY
+    sts2_core::Overrides::from_bits(0),
+    // BOOT_SEQUENCE
+    sts2_core::Overrides::from_bits(0),
+    // BORROWED_TIME
+    sts2_core::Overrides::from_bits(0),
+    // BOUNCING_FLASK
+    sts2_core::Overrides::from_bits(0),
+    // BRAND
+    sts2_core::Overrides::from_bits(0),
+    // BREAK
+    sts2_core::Overrides::from_bits(0),
+    // BREAKTHROUGH
+    sts2_core::Overrides::from_bits(0),
+    // BRIGHTEST_FLAME
+    sts2_core::Overrides::from_bits(0),
+    // BUBBLE_BUBBLE
+    sts2_core::Overrides::from_bits(0),
+    // BUFFER
+    sts2_core::Overrides::from_bits(0),
+    // BULK_UP
+    sts2_core::Overrides::from_bits(0),
+    // BULLET_TIME
+    sts2_core::Overrides::from_bits(0),
+    // BULLY
+    sts2_core::Overrides::from_bits(0),
+    // BULWARK
+    sts2_core::Overrides::from_bits(0),
+    // BUNDLE_OF_JOY
+    sts2_core::Overrides::from_bits(0),
+    // BURN
+    sts2_core::Overrides::from_bits(0),
+    // BURNING_PACT
+    sts2_core::Overrides::from_bits(0),
+    // BURST
+    sts2_core::Overrides::from_bits(0),
+    // BURY
+    sts2_core::Overrides::from_bits(0),
+    // BYRDONIS_EGG
+    sts2_core::Overrides::from_bits(0),
+    // BYRD_SWOOP
+    sts2_core::Overrides::from_bits(0),
+    // CACOPHONY
+    sts2_core::Overrides::from_bits(0),
+    // CALAMITY
+    sts2_core::Overrides::from_bits(0),
+    // CALCIFY
+    sts2_core::Overrides::from_bits(0),
+    // CALCULATED_GAMBLE
+    sts2_core::Overrides::from_bits(0),
+    // CALL_OF_THE_VOID
+    sts2_core::Overrides::from_bits(0),
+    // CALTROPS
+    sts2_core::Overrides::from_bits(0),
+    // CAPACITOR
+    sts2_core::Overrides::from_bits(0),
+    // CAPTURE_SPIRIT
+    sts2_core::Overrides::from_bits(0),
+    // CASCADE
+    sts2_core::Overrides::from_bits(0),
+    // CATASTROPHE
+    sts2_core::Overrides::from_bits(0),
+    // CELESTIAL_MIGHT
+    sts2_core::Overrides::from_bits(0),
+    // CHAOS
+    sts2_core::Overrides::from_bits(0),
+    // CHARGE
+    sts2_core::Overrides::from_bits(0),
+    // CHARGE_BATTERY
+    sts2_core::Overrides::from_bits(0),
+    // CHILD_OF_THE_STARS
+    sts2_core::Overrides::from_bits(0),
+    // CHILL
+    sts2_core::Overrides::from_bits(0),
+    // CINDER
+    sts2_core::Overrides::from_bits(0),
+    // CLASH
+    sts2_core::Overrides::from_bits(0),
+    // CLAW
+    sts2_core::Overrides::from_bits(0),
+    // CLEANSE
+    sts2_core::Overrides::from_bits(0),
+    // CLOAK_AND_DAGGER
+    sts2_core::Overrides::from_bits(0),
+    // CLOAK_OF_STARS
+    sts2_core::Overrides::from_bits(0),
+    // CLUMSY
+    sts2_core::Overrides::from_bits(0),
+    // COLD_SNAP
+    sts2_core::Overrides::from_bits(0),
+    // COLLISION_COURSE
+    sts2_core::Overrides::from_bits(0),
+    // COLOSSUS
+    sts2_core::Overrides::from_bits(0),
+    // COMET
+    sts2_core::Overrides::from_bits(0),
+    // COMPACT
+    sts2_core::Overrides::from_bits(0),
+    // COMPILE_DRIVER
+    sts2_core::Overrides::from_bits(0),
+    // CONCOCT
+    sts2_core::Overrides::from_bits(0),
+    // CONFLAGRATION
+    sts2_core::Overrides::from_bits(0),
+    // CONQUEROR
+    sts2_core::Overrides::from_bits(0),
+    // CONSTELLATION
+    sts2_core::Overrides::from_bits(0),
+    // CONSUMING_SHADOW
+    sts2_core::Overrides::from_bits(0),
+    // CONVERGENCE
+    sts2_core::Overrides::from_bits(0),
+    // COOLANT
+    sts2_core::Overrides::from_bits(0),
+    // COOLHEADED
+    sts2_core::Overrides::from_bits(0),
+    // COORDINATE
+    sts2_core::Overrides::from_bits(0),
+    // CORROSIVE_WAVE
+    sts2_core::Overrides::from_bits(0),
+    // CORRUPTION
+    sts2_core::Overrides::from_bits(0),
+    // COSMIC_INDIFFERENCE
+    sts2_core::Overrides::from_bits(0),
+    // COUNTDOWN
+    sts2_core::Overrides::from_bits(0),
+    // CRASH_LANDING
+    sts2_core::Overrides::from_bits(0),
+    // CREATIVE_AI
+    sts2_core::Overrides::from_bits(0),
+    // CRESCENT_SPEAR
+    sts2_core::Overrides::from_bits(0),
+    // CRIMSON_MANTLE
+    sts2_core::Overrides::from_bits(0),
+    // CRUELTY
+    sts2_core::Overrides::from_bits(0),
+    // CRUSH_UNDER
+    sts2_core::Overrides::from_bits(0),
+    // CURSE_OF_THE_BELL
+    sts2_core::Overrides::from_bits(0),
+    // DAGGER_SPRAY
+    sts2_core::Overrides::from_bits(0),
+    // DAGGER_THROW
+    sts2_core::Overrides::from_bits(0),
+    // DANSE_MACABRE
+    sts2_core::Overrides::from_bits(0),
+    // DARKNESS
+    sts2_core::Overrides::from_bits(0),
+    // DARK_EMBRACE
+    sts2_core::Overrides::from_bits(0),
+    // DARK_SHACKLES
+    sts2_core::Overrides::from_bits(0),
+    // DASH
+    sts2_core::Overrides::from_bits(0),
+    // DAZED
+    sts2_core::Overrides::from_bits(0),
+    // DEADLY_POISON
+    sts2_core::Overrides::from_bits(0),
+    // DEATHBRINGER
+    sts2_core::Overrides::from_bits(0),
+    // DEATHS_DOOR
+    sts2_core::Overrides::from_bits(0),
+    // DEATH_MARCH
+    sts2_core::Overrides::from_bits(0),
+    // DEBILITATE
+    sts2_core::Overrides::from_bits(0),
+    // DEBRIS
+    sts2_core::Overrides::from_bits(0),
+    // DEBT
+    sts2_core::Overrides::from_bits(0),
+    // DECAY
+    sts2_core::Overrides::from_bits(0),
+    // DECISIONS_DECISIONS
+    sts2_core::Overrides::from_bits(0),
+    // DEFEND_DEFECT
+    sts2_core::Overrides::from_bits(0),
+    // DEFEND_IRONCLAD
+    sts2_core::Overrides::from_bits(0),
+    // DEFEND_NECROBINDER
+    sts2_core::Overrides::from_bits(0),
+    // DEFEND_REGENT
+    sts2_core::Overrides::from_bits(0),
+    // DEFEND_SILENT
+    sts2_core::Overrides::from_bits(0),
+    // DEFILE
+    sts2_core::Overrides::from_bits(0),
+    // DEFLECT
+    sts2_core::Overrides::from_bits(0),
+    // DEFRAGMENT
+    sts2_core::Overrides::from_bits(0),
+    // DEFY
+    sts2_core::Overrides::from_bits(0),
+    // DELAY
+    sts2_core::Overrides::from_bits(0),
+    // DEMESNE
+    sts2_core::Overrides::from_bits(0),
+    // DEMONIC_SHIELD
+    sts2_core::Overrides::from_bits(0),
+    // DEMON_FORM
+    sts2_core::Overrides::from_bits(0),
+    // DEPRECATED_CARD
+    sts2_core::Overrides::from_bits(0),
+    // DEVASTATE
+    sts2_core::Overrides::from_bits(0),
+    // DEVOUR_LIFE
+    sts2_core::Overrides::from_bits(0),
+    // DIRGE
+    sts2_core::Overrides::from_bits(0),
+    // DISCOVERY
+    sts2_core::Overrides::from_bits(0),
+    // DISINTEGRATION
+    sts2_core::Overrides::from_bits(0),
+    // DISMANTLE
+    sts2_core::Overrides::from_bits(0),
+    // DISTRACTION
+    sts2_core::Overrides::from_bits(0),
+    // DODGE_AND_ROLL
+    sts2_core::Overrides::from_bits(0),
+    // DOMINATE
+    sts2_core::Overrides::from_bits(0),
+    // DOUBLE_ENERGY
+    sts2_core::Overrides::from_bits(0),
+    // DOUBT
+    sts2_core::Overrides::from_bits(0),
+    // DOWSING
+    sts2_core::Overrides::from_bits(0),
+    // DRAIN_POWER
+    sts2_core::Overrides::from_bits(0),
+    // DRAMATIC_ENTRANCE
+    sts2_core::Overrides::from_bits(0),
+    // DREDGE
+    sts2_core::Overrides::from_bits(0),
+    // DRUM_OF_BATTLE
+    sts2_core::Overrides::from_bits(0),
+    // DUALCAST
+    sts2_core::Overrides::from_bits(0),
+    // DUAL_WIELD
+    sts2_core::Overrides::from_bits(0),
+    // DYING_STAR
+    sts2_core::Overrides::from_bits(0),
+    // ECHOING_SLASH
+    sts2_core::Overrides::from_bits(0),
+    // ECHO_FORM
+    sts2_core::Overrides::from_bits(0),
+    // EIDOLON
+    sts2_core::Overrides::from_bits(0),
+    // END_OF_DAYS
+    sts2_core::Overrides::from_bits(0),
+    // ENERGY_SURGE
+    sts2_core::Overrides::from_bits(0),
+    // ENFEEBLING_TOUCH
+    sts2_core::Overrides::from_bits(0),
+    // ENLIGHTENMENT
+    sts2_core::Overrides::from_bits(0),
+    // ENTHRALLED
+    sts2_core::Overrides::from_bits(0),
+    // ENTRENCH
+    sts2_core::Overrides::from_bits(0),
+    // ENTROPY
+    sts2_core::Overrides::from_bits(0),
+    // ENVENOM
+    sts2_core::Overrides::from_bits(0),
+    // EQUILIBRIUM
+    sts2_core::Overrides::from_bits(0),
+    // ERADICATE
+    sts2_core::Overrides::from_bits(0),
+    // ESCAPE_PLAN
+    sts2_core::Overrides::from_bits(0),
+    // ETERNAL_ARMOR
+    sts2_core::Overrides::from_bits(0),
+    // EVIL_EYE
+    sts2_core::Overrides::from_bits(0),
+    // EXPECT_A_FIGHT
+    sts2_core::Overrides::from_bits(0),
+    // EXPERTISE
+    sts2_core::Overrides::from_bits(0),
+    // EXPOSE
+    sts2_core::Overrides::from_bits(0),
+    // EXTERMINATE
+    sts2_core::Overrides::from_bits(0),
+    // FADE
+    sts2_core::Overrides::from_bits(0),
+    // FALLING_STAR
+    sts2_core::Overrides::from_bits(0),
+    // FAN_OF_KNIVES
+    sts2_core::Overrides::from_bits(0),
+    // FASTEN
+    sts2_core::Overrides::from_bits(0),
+    // FEAR
+    sts2_core::Overrides::from_bits(0),
+    // FEED
+    sts2_core::Overrides::from_bits(0),
+    // FEEDING_FRENZY
+    sts2_core::Overrides::from_bits(0),
+    // FEEL_NO_PAIN
+    sts2_core::Overrides::from_bits(0),
+    // FERAL
+    sts2_core::Overrides::from_bits(0),
+    // FETCH
+    sts2_core::Overrides::from_bits(0),
+    // FIEND_FIRE
+    sts2_core::Overrides::from_bits(0),
+    // FIGHT_ME
+    sts2_core::Overrides::from_bits(0),
+    // FIGHT_THROUGH
+    sts2_core::Overrides::from_bits(0),
+    // FINESSE
+    sts2_core::Overrides::from_bits(0),
+    // FINISHER
+    sts2_core::Overrides::from_bits(0),
+    // FISTICUFFS
+    sts2_core::Overrides::from_bits(0),
+    // FLAK_CANNON
+    sts2_core::Overrides::from_bits(0),
+    // FLAME_BARRIER
+    sts2_core::Overrides::from_bits(0),
+    // FLANKING
+    sts2_core::Overrides::from_bits(0),
+    // FLASH_OF_STEEL
+    sts2_core::Overrides::from_bits(0),
+    // FLATTEN
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardEnteredCombat),
+    // FLECHETTES
+    sts2_core::Overrides::from_bits(0),
+    // FLICK_FLACK
+    sts2_core::Overrides::from_bits(0),
+    // FOCUSED_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // FOLLY
+    sts2_core::Overrides::from_bits(0),
+    // FOOTWORK
+    sts2_core::Overrides::from_bits(0),
+    // FORBIDDEN_GRIMOIRE
+    sts2_core::Overrides::from_bits(0),
+    // FOREGONE_CONCLUSION
+    sts2_core::Overrides::from_bits(0),
+    // FORGOTTEN_RITUAL
+    sts2_core::Overrides::from_bits(0),
+    // FRANTIC_ESCAPE
+    sts2_core::Overrides::from_bits(0),
+    // FRIENDSHIP
+    sts2_core::Overrides::from_bits(0),
+    // FTL
+    sts2_core::Overrides::from_bits(0),
+    // FUEL
+    sts2_core::Overrides::from_bits(0),
+    // FURNACE
+    sts2_core::Overrides::from_bits(0),
+    // FUSION
+    sts2_core::Overrides::from_bits(0),
+    // GAMMA_BLAST
+    sts2_core::Overrides::from_bits(0),
+    // GANG_UP
+    sts2_core::Overrides::from_bits(0),
+    // GATHER_LIGHT
+    sts2_core::Overrides::from_bits(0),
+    // GENESIS
+    sts2_core::Overrides::from_bits(0),
+    // GENETIC_ALGORITHM
+    sts2_core::Overrides::from_bits(0),
+    // GIANT_ROCK
+    sts2_core::Overrides::from_bits(0),
+    // GLACIER
+    sts2_core::Overrides::from_bits(0),
+    // GLASSWORK
+    sts2_core::Overrides::from_bits(0),
+    // GLIMMER
+    sts2_core::Overrides::from_bits(0),
+    // GLIMPSE_BEYOND
+    sts2_core::Overrides::from_bits(0),
+    // GLITTERSTREAM
+    sts2_core::Overrides::from_bits(0),
+    // GLOW
+    sts2_core::Overrides::from_bits(0),
+    // GOLD_AXE
+    sts2_core::Overrides::from_bits(0),
+    // GO_FOR_THE_EYES
+    sts2_core::Overrides::from_bits(0),
+    // GRAND_FINALE
+    sts2_core::Overrides::from_bits(0),
+    // GRAVEBLAST
+    sts2_core::Overrides::from_bits(0),
+    // GRAVE_WARDEN
+    sts2_core::Overrides::from_bits(0),
+    // GREED
+    sts2_core::Overrides::from_bits(0),
+    // GUARDS
+    sts2_core::Overrides::from_bits(0),
+    // GUIDING_STAR
+    sts2_core::Overrides::from_bits(0),
+    // GUILTY
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    // GUNK_UP
+    sts2_core::Overrides::from_bits(0),
+    // HAILSTORM
+    sts2_core::Overrides::from_bits(0),
+    // HAMMER_TIME
+    sts2_core::Overrides::from_bits(0),
+    // HAND_OF_GREED
+    sts2_core::Overrides::from_bits(0),
+    // HAND_TRICK
+    sts2_core::Overrides::from_bits(0),
+    // HANG
+    sts2_core::Overrides::from_bits(0),
+    // HAUNT
+    sts2_core::Overrides::from_bits(0),
+    // HAVOC
+    sts2_core::Overrides::from_bits(0),
+    // HAZE
+    sts2_core::Overrides::from_bits(0),
+    // HEADBUTT
+    sts2_core::Overrides::from_bits(0),
+    // HEAVENLY_DRILL
+    sts2_core::Overrides::from_bits(0),
+    // HEGEMONY
+    sts2_core::Overrides::from_bits(0),
+    // HEIRLOOM_HAMMER
+    sts2_core::Overrides::from_bits(0),
+    // HELIX_DRILL
+    sts2_core::Overrides::from_bits(0),
+    // HELLO_WORLD
+    sts2_core::Overrides::from_bits(0),
+    // HELLRAISER
+    sts2_core::Overrides::from_bits(0),
+    // HEMOKINESIS
+    sts2_core::Overrides::from_bits(0),
+    // HIBERNATE
+    sts2_core::Overrides::from_bits(0),
+    // HIDDEN_CACHE
+    sts2_core::Overrides::from_bits(0),
+    // HIDDEN_DAGGERS
+    sts2_core::Overrides::from_bits(0),
+    // HIDDEN_GEM
+    sts2_core::Overrides::from_bits(0),
+    // HIGH_FIVE
+    sts2_core::Overrides::from_bits(0),
+    // HOLOGRAM
+    sts2_core::Overrides::from_bits(0),
+    // HOTFIX
+    sts2_core::Overrides::from_bits(0),
+    // HOWL_FROM_BEYOND
+    sts2_core::Overrides::from_bits(0),
+    // HUDDLE_UP
+    sts2_core::Overrides::from_bits(0),
+    // HYPERBEAM
+    sts2_core::Overrides::from_bits(0),
+    // ICE_LANCE
+    sts2_core::Overrides::from_bits(0),
+    // IGNITION
+    sts2_core::Overrides::from_bits(0),
+    // IMITATION_LEARNING
+    sts2_core::Overrides::from_bits(0),
+    // IMPATIENCE
+    sts2_core::Overrides::from_bits(0),
+    // IMPERVIOUS
+    sts2_core::Overrides::from_bits(0),
+    // INFECTION
+    sts2_core::Overrides::from_bits(0),
+    // INFERNAL_BLADE
+    sts2_core::Overrides::from_bits(0),
+    // INFERNO
+    sts2_core::Overrides::from_bits(0),
+    // INFINITE_BLADES
+    sts2_core::Overrides::from_bits(0),
+    // INFLAME
+    sts2_core::Overrides::from_bits(0),
+    // INJURY
+    sts2_core::Overrides::from_bits(0),
+    // INTERCEPT
+    sts2_core::Overrides::from_bits(0),
+    // INVOKE
+    sts2_core::Overrides::from_bits(0),
+    // IRON_WAVE
+    sts2_core::Overrides::from_bits(0),
+    // ITERATION
+    sts2_core::Overrides::from_bits(0),
+    // I_AM_INVINCIBLE
+    sts2_core::Overrides::from_bits(0),
+    // JACKPOT
+    sts2_core::Overrides::from_bits(0),
+    // JACK_OF_ALL_TRADES
+    sts2_core::Overrides::from_bits(0),
+    // JUGGERNAUT
+    sts2_core::Overrides::from_bits(0),
+    // JUGGLING
+    sts2_core::Overrides::from_bits(0),
+    // KINGLY_KICK
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // KINGLY_PUNCH
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // KNIFE_TRAP
+    sts2_core::Overrides::from_bits(0),
+    // KNOCKDOWN
+    sts2_core::Overrides::from_bits(0),
+    // KNOCKOUT_BLOW
+    sts2_core::Overrides::from_bits(0),
+    // KNOW_THY_PLACE
+    sts2_core::Overrides::from_bits(0),
+    // LANTERN_KEY
+    sts2_core::Overrides::from_bits(0),
+    // LARGESSE
+    sts2_core::Overrides::from_bits(0),
+    // LEADING_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // LEAP
+    sts2_core::Overrides::from_bits(0),
+    // LEGION_OF_BONE
+    sts2_core::Overrides::from_bits(0),
+    // LEG_SWEEP
+    sts2_core::Overrides::from_bits(0),
+    // LETHALITY
+    sts2_core::Overrides::from_bits(0),
+    // LIFT
+    sts2_core::Overrides::from_bits(0),
+    // LIGHTNING_ROD
+    sts2_core::Overrides::from_bits(0),
+    // LOOP
+    sts2_core::Overrides::from_bits(0),
+    // LUMINESCE
+    sts2_core::Overrides::from_bits(0),
+    // LUNAR_BLAST
+    sts2_core::Overrides::from_bits(0),
+    // MACHINE_LEARNING
+    sts2_core::Overrides::from_bits(0),
+    // MAD_SCIENCE
+    sts2_core::Overrides::from_bits(0),
+    // MAKE_IT_SO
+    sts2_core::Overrides::from_bits(0),
+    // MALAISE
+    sts2_core::Overrides::from_bits(0),
+    // MANGLE
+    sts2_core::Overrides::from_bits(0),
+    // MANIFEST_AUTHORITY
+    sts2_core::Overrides::from_bits(0),
+    // MASTER_OF_STRATEGY
+    sts2_core::Overrides::from_bits(0),
+    // MASTER_PLANNER
+    sts2_core::Overrides::from_bits(0),
+    // MAUL
+    sts2_core::Overrides::from_bits(0),
+    // MAYHEM
+    sts2_core::Overrides::from_bits(0),
+    // MELANCHOLY
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // MEMENTO_MORI
+    sts2_core::Overrides::from_bits(0),
+    // METAMORPHOSIS
+    sts2_core::Overrides::from_bits(0),
+    // METEOR_SHOWER
+    sts2_core::Overrides::from_bits(0),
+    // METEOR_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // MIDNIGHT
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardEnteredCombat),
+    // MIMIC
+    sts2_core::Overrides::from_bits(0),
+    // MIND_BLAST
+    sts2_core::Overrides::from_bits(0),
+    // MIND_ROT
+    sts2_core::Overrides::from_bits(0),
+    // MINION_DIVE_BOMB
+    sts2_core::Overrides::from_bits(0),
+    // MINION_SACRIFICE
+    sts2_core::Overrides::from_bits(0),
+    // MINION_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // MIRAGE
+    sts2_core::Overrides::from_bits(0),
+    // MISERY
+    sts2_core::Overrides::from_bits(0),
+    // MODDED
+    sts2_core::Overrides::from_bits(0),
+    // MOLTEN_FIST
+    sts2_core::Overrides::from_bits(0),
+    // MOMENTUM_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // MONARCHS_GAZE
+    sts2_core::Overrides::from_bits(0),
+    // MONOLOGUE
+    sts2_core::Overrides::from_bits(0),
+    // MULTI_CAST
+    sts2_core::Overrides::from_bits(0),
+    // MURDER
+    sts2_core::Overrides::from_bits(0),
+    // NECRO_MASTERY
+    sts2_core::Overrides::from_bits(0),
+    // NEGATIVE_PULSE
+    sts2_core::Overrides::from_bits(0),
+    // NEOWS_FURY
+    sts2_core::Overrides::from_bits(0),
+    // NEUROSURGE
+    sts2_core::Overrides::from_bits(0),
+    // NEUTRALIZE
+    sts2_core::Overrides::from_bits(0),
+    // NEUTRON_AEGIS
+    sts2_core::Overrides::from_bits(0),
+    // NIGHTMARE
+    sts2_core::Overrides::from_bits(0),
+    // NORMALITY
+    sts2_core::Overrides::from_bits(0),
+    // NOSTALGIA
+    sts2_core::Overrides::from_bits(0),
+    // NOT_YET
+    sts2_core::Overrides::from_bits(0),
+    // NOXIOUS_FUMES
+    sts2_core::Overrides::from_bits(0),
+    // NO_ESCAPE
+    sts2_core::Overrides::from_bits(0),
+    // NULL
+    sts2_core::Overrides::from_bits(0),
+    // OBLIVION
+    sts2_core::Overrides::from_bits(0),
+    // OFFERING
+    sts2_core::Overrides::from_bits(0),
+    // OMNISLICE
+    sts2_core::Overrides::from_bits(0),
+    // ONE_FOR_ALL
+    sts2_core::Overrides::from_bits(0),
+    // ONE_TWO_PUNCH
+    sts2_core::Overrides::from_bits(0),
+    // ORBIT
+    sts2_core::Overrides::from_bits(0),
+    // OUTBREAK
+    sts2_core::Overrides::from_bits(0),
+    // OUTMANEUVER
+    sts2_core::Overrides::from_bits(0),
+    // OUTRAGE
+    sts2_core::Overrides::from_bits(0),
+    // OVERCLOCK
+    sts2_core::Overrides::from_bits(0),
+    // PACTS_END
+    sts2_core::Overrides::from_bits(0),
+    // PAGESTORM
+    sts2_core::Overrides::from_bits(0),
+    // PALE_BLUE_DOT
+    sts2_core::Overrides::from_bits(0),
+    // PANACHE
+    sts2_core::Overrides::from_bits(0),
+    // PANIC_BUTTON
+    sts2_core::Overrides::from_bits(0),
+    // PARRY
+    sts2_core::Overrides::from_bits(0),
+    // PARSE
+    sts2_core::Overrides::from_bits(0),
+    // PARTICLE_WALL
+    sts2_core::Overrides::from_bits(0),
+    // PATTER
+    sts2_core::Overrides::from_bits(0),
+    // PECK
+    sts2_core::Overrides::from_bits(0),
+    // PERFECTED_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // PHANTOM_BLADES
+    sts2_core::Overrides::from_bits(0),
+    // PHOTON_CUT
+    sts2_core::Overrides::from_bits(0),
+    // PIERCING_WAIL
+    sts2_core::Overrides::from_bits(0),
+    // PILLAGE
+    sts2_core::Overrides::from_bits(0),
+    // PILLAR_OF_CREATION
+    sts2_core::Overrides::from_bits(0),
+    // PINPOINT
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterCardPlayed),
+    // PLOT
+    sts2_core::Overrides::from_bits(0),
+    // POISONED_STAB
+    sts2_core::Overrides::from_bits(0),
+    // POKE
+    sts2_core::Overrides::from_bits(0),
+    // POMMEL_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // POOR_SLEEP
+    sts2_core::Overrides::from_bits(0),
+    // POUNCE
+    sts2_core::Overrides::from_bits(0),
+    // PRECISE_CUT
+    sts2_core::Overrides::from_bits(0),
+    // PREDATOR
+    sts2_core::Overrides::from_bits(0),
+    // PREPARED
+    sts2_core::Overrides::from_bits(0),
+    // PREP_TIME
+    sts2_core::Overrides::from_bits(0),
+    // PRIMAL_FORCE
+    sts2_core::Overrides::from_bits(0),
+    // PRODUCTION
+    sts2_core::Overrides::from_bits(0),
+    // PROLONG
+    sts2_core::Overrides::from_bits(0),
+    // PROPHESIZE
+    sts2_core::Overrides::from_bits(0),
+    // PROTECTOR
+    sts2_core::Overrides::from_bits(0),
+    // PROWESS
+    sts2_core::Overrides::from_bits(0),
+    // PULL_AGGRO
+    sts2_core::Overrides::from_bits(0),
+    // PULL_FROM_BELOW
+    sts2_core::Overrides::from_bits(0),
+    // PURITY
+    sts2_core::Overrides::from_bits(0),
+    // PUTREFY
+    sts2_core::Overrides::from_bits(0),
+    // PYRE
+    sts2_core::Overrides::from_bits(0),
+    // QUADCAST
+    sts2_core::Overrides::from_bits(0),
+    // QUASAR
+    sts2_core::Overrides::from_bits(0),
+    // RADIATE
+    sts2_core::Overrides::from_bits(0),
+    // RAGE
+    sts2_core::Overrides::from_bits(0),
+    // RAINBOW
+    sts2_core::Overrides::from_bits(0),
+    // RALLY
+    sts2_core::Overrides::from_bits(0),
+    // RAMPAGE
+    sts2_core::Overrides::from_bits(0),
+    // RATTLE
+    sts2_core::Overrides::from_bits(0),
+    // REANIMATE
+    sts2_core::Overrides::from_bits(0),
+    // REAP
+    sts2_core::Overrides::from_bits(0),
+    // REAPER_FORM
+    sts2_core::Overrides::from_bits(0),
+    // REAVE
+    sts2_core::Overrides::from_bits(0),
+    // REBOOT
+    sts2_core::Overrides::from_bits(0),
+    // REBOUND
+    sts2_core::Overrides::from_bits(0),
+    // REFINE_BLADE
+    sts2_core::Overrides::from_bits(0),
+    // REFLECT
+    sts2_core::Overrides::from_bits(0),
+    // REFLEX
+    sts2_core::Overrides::from_bits(0),
+    // REFRACT
+    sts2_core::Overrides::from_bits(0),
+    // REGRET
+    sts2_core::Overrides::from_bits(0),
+    // RELAX
+    sts2_core::Overrides::from_bits(0),
+    // REND
+    sts2_core::Overrides::from_bits(0),
+    // RESONANCE
+    sts2_core::Overrides::from_bits(0),
+    // RESTLESSNESS
+    sts2_core::Overrides::from_bits(0),
+    // RICOCHET
+    sts2_core::Overrides::from_bits(0),
+    // RIGHT_HAND_HAND
+    sts2_core::Overrides::from_bits(0),
+    // RIP_AND_TEAR
+    sts2_core::Overrides::from_bits(0),
+    // ROCKET_PUNCH
+    sts2_core::Overrides::from_bits(0),
+    // ROLLING_BOULDER
+    sts2_core::Overrides::from_bits(0),
+    // ROYALTIES
+    sts2_core::Overrides::from_bits(0),
+    // ROYAL_GAMBLE
+    sts2_core::Overrides::from_bits(0),
+    // RUPTURE
+    sts2_core::Overrides::from_bits(0),
+    // SACRIFICE
+    sts2_core::Overrides::from_bits(0),
+    // SALVO
+    sts2_core::Overrides::from_bits(0),
+    // SCAVENGE
+    sts2_core::Overrides::from_bits(0),
+    // SCOURGE
+    sts2_core::Overrides::from_bits(0),
+    // SCRAPE
+    sts2_core::Overrides::from_bits(0),
+    // SCRAWL
+    sts2_core::Overrides::from_bits(0),
+    // SCULPTING_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // SEANCE
+    sts2_core::Overrides::from_bits(0),
+    // SECOND_WIND
+    sts2_core::Overrides::from_bits(0),
+    // SECRET_TECHNIQUE
+    sts2_core::Overrides::from_bits(0),
+    // SECRET_WEAPON
+    sts2_core::Overrides::from_bits(0),
+    // SEEKER_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // SEEKING_EDGE
+    sts2_core::Overrides::from_bits(0),
+    // SENTRY_MODE
+    sts2_core::Overrides::from_bits(0),
+    // SERPENT_FORM
+    sts2_core::Overrides::from_bits(0),
+    // SETUP_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // SEVEN_STARS
+    sts2_core::Overrides::from_bits(0),
+    // SEVERANCE
+    sts2_core::Overrides::from_bits(0),
+    // SHADOWMELD
+    sts2_core::Overrides::from_bits(0),
+    // SHADOW_SHIELD
+    sts2_core::Overrides::from_bits(0),
+    // SHADOW_STEP
+    sts2_core::Overrides::from_bits(0),
+    // SHAME
+    sts2_core::Overrides::from_bits(0),
+    // SHARED_FATE
+    sts2_core::Overrides::from_bits(0),
+    // SHATTER
+    sts2_core::Overrides::from_bits(0),
+    // SHINING_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // SHIV
+    sts2_core::Overrides::from_bits(0),
+    // SHOCKWAVE
+    sts2_core::Overrides::from_bits(0),
+    // SHROUD
+    sts2_core::Overrides::from_bits(0),
+    // SHRUG_IT_OFF
+    sts2_core::Overrides::from_bits(0),
+    // SIC_EM
+    sts2_core::Overrides::from_bits(0),
+    // SIDESTEP
+    sts2_core::Overrides::from_bits(0),
+    // SIGNAL_BOOST
+    sts2_core::Overrides::from_bits(0),
+    // SKEWER
+    sts2_core::Overrides::from_bits(0),
+    // SKIM
+    sts2_core::Overrides::from_bits(0),
+    // SLEIGHT_OF_FLESH
+    sts2_core::Overrides::from_bits(0),
+    // SLICE
+    sts2_core::Overrides::from_bits(0),
+    // SLIMED
+    sts2_core::Overrides::from_bits(0),
+    // SLOTH
+    sts2_core::Overrides::from_bits(0),
+    // SMOKESTACK
+    sts2_core::Overrides::from_bits(0),
+    // SNAKEBITE
+    sts2_core::Overrides::from_bits(0),
+    // SNAP
+    sts2_core::Overrides::from_bits(0),
+    // SNEAKY
+    sts2_core::Overrides::from_bits(0),
+    // SOLAR_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // SOOT
+    sts2_core::Overrides::from_bits(0),
+    // SOUL
+    sts2_core::Overrides::from_bits(0),
+    // SOULBOUND
+    sts2_core::Overrides::from_bits(0),
+    // SOUL_STORM
+    sts2_core::Overrides::from_bits(0),
+    // SOVEREIGN_BLADE
+    sts2_core::Overrides::from_bits(0),
+    // SOW
+    sts2_core::Overrides::from_bits(0),
+    // SPECTRUM_SHIFT
+    sts2_core::Overrides::from_bits(0),
+    // SPEEDSTER
+    sts2_core::Overrides::from_bits(0),
+    // SPINNER
+    sts2_core::Overrides::from_bits(0),
+    // SPIRIT_OF_ASH
+    sts2_core::Overrides::from_bits(0),
+    // SPITE
+    sts2_core::Overrides::from_bits(0),
+    // SPLASH
+    sts2_core::Overrides::from_bits(0),
+    // SPOILS_MAP
+    sts2_core::Overrides::from_bits(0),
+    // SPOILS_OF_BATTLE
+    sts2_core::Overrides::from_bits(0),
+    // SPORE_MIND
+    sts2_core::Overrides::from_bits(0),
+    // SPUR
+    sts2_core::Overrides::from_bits(0),
+    // SQUASH
+    sts2_core::Overrides::from_bits(0),
+    // SQUEEZE
+    sts2_core::Overrides::from_bits(0),
+    // STACK
+    sts2_core::Overrides::from_bits(0),
+    // STAMPEDE
+    sts2_core::Overrides::from_bits(0),
+    // STARDUST
+    sts2_core::Overrides::from_bits(0),
+    // STOKE
+    sts2_core::Overrides::from_bits(0),
+    // STOMP
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardEnteredCombat),
+    // STONE_ARMOR
+    sts2_core::Overrides::from_bits(0),
+    // STORM
+    sts2_core::Overrides::from_bits(0),
+    // STORM_OF_STEEL
+    sts2_core::Overrides::from_bits(0),
+    // STRANGLE
+    sts2_core::Overrides::from_bits(0),
+    // STRATAGEM
+    sts2_core::Overrides::from_bits(0),
+    // STRIKE_DEFECT
+    sts2_core::Overrides::from_bits(0),
+    // STRIKE_IRONCLAD
+    sts2_core::Overrides::from_bits(0),
+    // STRIKE_NECROBINDER
+    sts2_core::Overrides::from_bits(0),
+    // STRIKE_REGENT
+    sts2_core::Overrides::from_bits(0),
+    // STRIKE_SILENT
+    sts2_core::Overrides::from_bits(0),
+    // SUBROUTINE
+    sts2_core::Overrides::from_bits(0),
+    // SUCKER_PUNCH
+    sts2_core::Overrides::from_bits(0),
+    // SUMMON_FORTH
+    sts2_core::Overrides::from_bits(0),
+    // SUNDER
+    sts2_core::Overrides::from_bits(0),
+    // SUPERCRITICAL
+    sts2_core::Overrides::from_bits(0),
+    // SUPERMASSIVE
+    sts2_core::Overrides::from_bits(0),
+    // SUPPRESS
+    sts2_core::Overrides::from_bits(0),
+    // SURVIVOR
+    sts2_core::Overrides::from_bits(0),
+    // SWEEPING_BEAM
+    sts2_core::Overrides::from_bits(0),
+    // SWEEPING_GAZE
+    sts2_core::Overrides::from_bits(0),
+    // SWORD_BOOMERANG
+    sts2_core::Overrides::from_bits(0),
+    // SWORD_SAGE
+    sts2_core::Overrides::from_bits(0),
+    // SYNCHRONIZE
+    sts2_core::Overrides::from_bits(0),
+    // SYNTHESIS
+    sts2_core::Overrides::from_bits(0),
+    // TACTICIAN
+    sts2_core::Overrides::from_bits(0),
+    // TAG_TEAM
+    sts2_core::Overrides::from_bits(0),
+    // TANK
+    sts2_core::Overrides::from_bits(0),
+    // TAUNT
+    sts2_core::Overrides::from_bits(0),
+    // TEAR_ASUNDER
+    sts2_core::Overrides::from_bits(0),
+    // TEMPEST
+    sts2_core::Overrides::from_bits(0),
+    // TERRAFORMING
+    sts2_core::Overrides::from_bits(0),
+    // TESLA_COIL
+    sts2_core::Overrides::from_bits(0),
+    // THE_BALL
+    sts2_core::Overrides::from_bits(0),
+    // THE_BOMB
+    sts2_core::Overrides::from_bits(0),
+    // THE_GAMBIT
+    sts2_core::Overrides::from_bits(0),
+    // THE_HUNT
+    sts2_core::Overrides::from_bits(0),
+    // THE_SCYTHE
+    sts2_core::Overrides::from_bits(0),
+    // THE_SEALED_THRONE
+    sts2_core::Overrides::from_bits(0),
+    // THE_SMITH
+    sts2_core::Overrides::from_bits(0),
+    // THINKING_AHEAD
+    sts2_core::Overrides::from_bits(0),
+    // THRASH
+    sts2_core::Overrides::from_bits(0),
+    // THRUMMING_HATCHET
+    sts2_core::Overrides::from_bits(0),
+    // THUNDER
+    sts2_core::Overrides::from_bits(0),
+    // THUNDERCLAP
+    sts2_core::Overrides::from_bits(0),
+    // TIMES_UP
+    sts2_core::Overrides::from_bits(0),
+    // TOOLS_OF_THE_TRADE
+    sts2_core::Overrides::from_bits(0),
+    // TORIC_TOUGHNESS
+    sts2_core::Overrides::from_bits(0),
+    // TOXIC
+    sts2_core::Overrides::from_bits(0),
+    // TRACKING
+    sts2_core::Overrides::from_bits(0),
+    // TRANSFIGURE
+    sts2_core::Overrides::from_bits(0),
+    // TRASH_TO_TREASURE
+    sts2_core::Overrides::from_bits(0),
+    // TREMBLE
+    sts2_core::Overrides::from_bits(0),
+    // TRUE_GRIT
+    sts2_core::Overrides::from_bits(0),
+    // TURBO
+    sts2_core::Overrides::from_bits(0),
+    // TUTOR
+    sts2_core::Overrides::from_bits(0),
+    // TWIN_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // TYRANNY
+    sts2_core::Overrides::from_bits(0),
+    // ULTIMATE_DEFEND
+    sts2_core::Overrides::from_bits(0),
+    // ULTIMATE_STRIKE
+    sts2_core::Overrides::from_bits(0),
+    // UNDEATH
+    sts2_core::Overrides::from_bits(0),
+    // UNDERWORLD
+    sts2_core::Overrides::from_bits(0),
+    // UNLEASH
+    sts2_core::Overrides::from_bits(0),
+    // UNMOVABLE
+    sts2_core::Overrides::from_bits(0),
+    // UNRELENTING
+    sts2_core::Overrides::from_bits(0),
+    // UNTOUCHABLE
+    sts2_core::Overrides::from_bits(0),
+    // UPPERCUT
+    sts2_core::Overrides::from_bits(0),
+    // UPROAR
+    sts2_core::Overrides::from_bits(0),
+    // UP_MY_SLEEVE
+    sts2_core::Overrides::from_bits(0),
+    // VEILPIERCER
+    sts2_core::Overrides::from_bits(0),
+    // VENERATE
+    sts2_core::Overrides::from_bits(0),
+    // VICIOUS
+    sts2_core::Overrides::from_bits(0),
+    // VOID
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // VOID_FORM
+    sts2_core::Overrides::from_bits(0),
+    // VOLLEY
+    sts2_core::Overrides::from_bits(0),
+    // VOLTAIC
+    sts2_core::Overrides::from_bits(0),
+    // WASTE_AWAY
+    sts2_core::Overrides::from_bits(0),
+    // WELL_LAID_PLANS
+    sts2_core::Overrides::from_bits(0),
+    // WHIRLWIND
+    sts2_core::Overrides::from_bits(0),
+    // WHISTLE
+    sts2_core::Overrides::from_bits(0),
+    // WHITE_NOISE
+    sts2_core::Overrides::from_bits(0),
+    // WISH
+    sts2_core::Overrides::from_bits(0),
+    // WISP
+    sts2_core::Overrides::from_bits(0),
+    // WITHER
+    sts2_core::Overrides::from_bits(0),
+    // WOUND
+    sts2_core::Overrides::from_bits(0),
+    // WRAITH_FORM
+    sts2_core::Overrides::from_bits(0),
+    // WRITHE
+    sts2_core::Overrides::from_bits(0),
+    // WROUGHT_IN_WAR
+    sts2_core::Overrides::from_bits(0),
+    // ZAP
+    sts2_core::Overrides::from_bits(0),
+];

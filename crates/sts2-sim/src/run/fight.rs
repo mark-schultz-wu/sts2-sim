@@ -140,13 +140,14 @@ impl<V: Rules> State<V> {
             // Not `finish`: the run never left the fight, and the piles and
             // the powers are where the player fell.
             Some(combat::Ended::Lost) => {
-                let live = self.left_fight();
-                self.lost(live.report());
+                let (live, relics) = self.left_fight();
+                let combat = live.report(relics);
+                self.lost(combat);
             }
             Some(combat::Ended::Won) => {
-                let live = self.left_fight();
-                let returned = live.removed_from_deck().to_vec();
-                let combat = live.finish();
+                let (live, relics) = self.left_fight();
+                let returned = live.returned().to_vec();
+                let combat = live.finish(relics);
                 let mut offered = self.combat_rewards(&combat);
                 let at = offered
                     .iter()

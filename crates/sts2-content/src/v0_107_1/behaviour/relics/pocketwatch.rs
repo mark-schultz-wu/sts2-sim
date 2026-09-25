@@ -46,12 +46,15 @@ pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
 /// The first turn of a fight follows nothing and draws its printed hand.
 pub(super) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
+        // A relic's owner is the player, and a fight here has one, so the
+        // player drawing is always its own.
         ModifyHook::HandDraw { turn, .. }
             if turn > 1 && state.played_last_turn <= CARD_THRESHOLD =>
         {
             Modify::Added(CARDS)
         }
-        _ => Modify::Nothing,
+        ModifyHook::HandDraw { .. } => Modify::Nothing,
+        hook => unimplemented!("what Pocketwatch does for {hook:?}"),
     }
 }
 

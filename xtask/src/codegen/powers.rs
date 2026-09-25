@@ -225,31 +225,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         return Err("the dump declares no powers".into());
     }
 
-    // The hooks each power's class overrides. From the hook dump, which has to
-    // have measured the same build.
-    let hooks = Dump::read("hooks.txt")?;
-    if hooks.build != build {
-        return Err("hooks.txt and powers.txt were dumped from different builds".into());
-    }
-    let mut overrides: BTreeMap<&str, Vec<sts2_core::ModelHook>> = BTreeMap::new();
-    for row in hooks.of("implements") {
-        if let Some(hook) = sts2_core::ModelHook::ALL
-            .into_iter()
-            .find(|hook| hook.name() == row[2])
-        {
-            overrides.entry(row[1].as_str()).or_default().push(hook);
-        }
-    }
-    let width = VALUES.len() + FLAGS.len();
-    for row in &powers {
-        if row.len() != width + 2 {
-            return Err(format!(
-                "{}: {} columns, but the table has {width}",
-                row[1],
-                row.len() - 2,
-            ));
-        }
-    }
+    // The hooks each power's class overrides.
+    let overrides = super::overrides(&build)?;
 
     let mut out = banner("Every power's static data.", "powers.txt", &build);
     writeln!(out, "\nuse crate::Field;").unwrap();
@@ -280,7 +257,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     emit_shape(&mut out)?;
     emit_powers(&mut out, &powers)?;
-    emit_overrides(&mut out, &powers, &overrides);
+    super::emit_overrides(
+        &mut out,
+        "indexed by the power's discriminant.",
+        powers.iter().map(|row| row[1].as_str()),
+        &overrides,
+    );
 
     // The rows, one file per kind. `mod.rs` keeps the shape and the enum; a
     // power's data is a named const it points at, so `data()` stays a readable
@@ -543,30 +525,6 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
     .unwrap();
 
     Ok(())
-}
-
-/// Each power's [`sts2_core::Overrides`], in the order the enum declares them.
-fn emit_overrides(
-    out: &mut String,
-    powers: &[&Vec<String>],
-    overrides: &BTreeMap<&str, Vec<sts2_core::ModelHook>>,
-) {
-    writeln!(
-        out,
-        "\n/// The hooks each power's class overrides, from `hooks.txt`, indexed by\n\
-         /// the power's discriminant.\n\
-         static OVERRIDES: [sts2_core::Overrides; {}] = [",
-        powers.len()
-    )
-    .unwrap();
-    for row in powers {
-        let mut entry = String::from("sts2_core::Overrides::from_bits(0)");
-        for hook in overrides.get(row[1].as_str()).into_iter().flatten() {
-            write!(entry, ".with(sts2_core::ModelHook::{hook:?})").unwrap();
-        }
-        writeln!(out, "    // {}\n    {entry},", row[1]).unwrap();
-    }
-    writeln!(out, "];").unwrap();
 }
 
 /// One power's row, as the `const` its bucket file declares.

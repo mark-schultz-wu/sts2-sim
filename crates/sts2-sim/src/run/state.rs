@@ -681,12 +681,13 @@ impl<V: Rules> State<V> {
         })
     }
 
-    /// Take the fight out of the run, for a decision that ended it.
+    /// Take the fight out of the run, for a decision that ended it, and lend
+    /// the belt its report reads.
     ///
     /// What replaces it is the caller's to say, straight after.
-    pub(super) fn left_fight(&mut self) -> Box<crate::combat::Live<V>> {
+    pub(super) fn left_fight(&mut self) -> (Box<crate::combat::Live<V>>, &[HeldRelic<V>]) {
         match std::mem::replace(&mut self.phase, Phase::Map) {
-            Phase::Combat(live) => live,
+            Phase::Combat(live) => (live, &self.player.relics),
             _ => unreachable!("a fight that ended is the one the run stood in"),
         }
     }
@@ -1848,7 +1849,7 @@ impl<V: Rules> State<V> {
     /// The fight the run is standing in, as its report shows it.
     fn fight_report(&self) -> Option<Combat<V>> {
         match &self.phase {
-            Phase::Combat(live) => Some(live.report()),
+            Phase::Combat(live) => Some(live.report(&self.player.relics)),
             // `IsInProgress` is false once the loss is processed, and the
             // room it was fought in is still the room the run is standing in.
             // A won fight is still reported for the same reason: the run has
@@ -2221,7 +2222,10 @@ mod tests {
             .expect("the simulator can build this fight");
 
         // Where the player fell, which is what the run keeps.
-        let mut combat = run.fight().expect("the run is in the fight").report();
+        let mut combat = run
+            .fight()
+            .expect("the run is in the fight")
+            .report(&run.player.relics);
         let player = combat
             .creatures
             .iter_mut()

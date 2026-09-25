@@ -263,7 +263,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
     emit_shape(&mut out, largest);
     emit_moves(&mut out, &machines, &installed(&dump))?;
-    emit_monsters(&mut out, &machines, &act_of)?;
+    // The hooks each monster's class overrides. `IterateHookListeners` asks
+    // a monster's own model beside the powers on its creature.
+    let overrides = super::overrides(&build)?;
+    emit_monsters(&mut out, &machines, &act_of, &overrides)?;
 
     // The graphs, one file per bucket. `mod.rs` keeps the shape and the enum;
     // a monster's data is a named const it points at, so `data()` stays a
@@ -1004,6 +1007,7 @@ fn emit_monsters(
     out: &mut String,
     machines: &BTreeMap<String, Machine>,
     act_of: &BTreeMap<String, Vec<String>>,
+    overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
 ) -> Result<(), String> {
     writeln!(out, "/// Every monster in the build.").unwrap();
     writeln!(
@@ -1051,6 +1055,13 @@ fn emit_monsters(
     }
     writeln!(extras, "        }}").unwrap();
     writeln!(extras, "    }}").unwrap();
+    writeln!(
+        extras,
+        "\n    fn overrides(self) -> sts2_core::Overrides {{\n\
+         \x20       OVERRIDES[self as usize]\n\
+         \x20   }}"
+    )
+    .unwrap();
 
     writeln!(out, "impl sts2_core::Table for Monster {{").unwrap();
     writeln!(out, "    type Data = MonsterData;\n").unwrap();
@@ -1077,6 +1088,12 @@ fn emit_monsters(
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}\n").unwrap();
     super::rows(out, "MonsterData", &table);
+    super::emit_overrides(
+        out,
+        "indexed by the monster's place in the enum.",
+        machines.keys().map(String::as_str),
+        overrides,
+    );
 
     writeln!(out, "impl sts2_core::MonsterTable for Monster {{").unwrap();
     writeln!(out, "    type Act = Act;\n").unwrap();

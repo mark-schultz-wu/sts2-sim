@@ -7,11 +7,12 @@
 //! A monster nobody has ported panics naming itself, so this tree is also the
 //! list of fights the simulator can take a turn in.
 
-use sts2_core::{ContentError, Fight, MonsterSpawn};
+use sts2_core::{ContentError, EventHook, Fight, MonsterSpawn};
 
 use super::super::V0_107_1;
 use super::super::generated::encounters::Encounter;
 use super::super::generated::monsters::{Monster, MoveId, State};
+use super::super::generated::powers::Power;
 
 /// What a move's own numbers are held as.
 pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
@@ -36,6 +37,9 @@ fn revive<F: Fight<V>>(fight: &mut F) {
     else {
         return;
     };
+    fight.write_power(actor, Power::IllusionPower, |state| {
+        state.set_reviving(false)
+    });
     fight.heal(actor, missing);
 }
 
@@ -103,6 +107,28 @@ pub(crate) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
         .position(|state| matches!(state, State::Move(held) if held.id == wanted))
         .and_then(|found| u8::try_from(found).ok())
         .ok_or(ContentError::InvalidMonsterState { index: at })
+}
+
+/// Deliver a notification to one monster's own model.
+///
+/// The fight asks only a monster whose class overrides the hook.
+///
+/// # Panics
+///
+/// An override nobody has ported.
+pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
+    match (monster, hook) {
+        // A Decimillipede segment swaps its texture as it dies, and the
+        // Vantom moves the music on. Neither touches the fight.
+        (
+            Monster::DecimillipedeSegmentFront
+            | Monster::DecimillipedeSegmentMiddle
+            | Monster::DecimillipedeSegmentBack
+            | Monster::Vantom,
+            EventHook::AfterDeath { .. },
+        ) => {}
+        (monster, hook) => unimplemented!("what {monster:?} does for {hook:?}"),
+    }
 }
 
 /// Perform one of a monster's moves.

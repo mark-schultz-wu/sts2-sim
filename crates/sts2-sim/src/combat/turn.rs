@@ -5,13 +5,14 @@
 //! turn, and the player's next turn is set up.
 
 use crate::rng::MegaRng;
+use smallvec::SmallVec;
 use sts2_core::{CardTable, CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
 use super::board::{Board, draw};
+use super::listen::{self, Listener};
 use super::live::{Face, Landing, Live, Skips};
 use super::power;
-use super::relic;
-use super::start::{hand_size, upgraded};
+use super::start::hand_size;
 use super::{Error, Fighting};
 use crate::stream::CombatRngs;
 
@@ -32,11 +33,16 @@ pub(crate) fn end<V: Rules>(
     let mut skipping = std::mem::take(&mut next.skip_tick);
 
     turn_end(next, streams.combat(), relics, ascension);
-    power::before_turn_end::<V>(&mut next.creatures, <V::CombatSide as SideKinds>::PLAYER);
+    before_turn_end::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
     flush_hand(next);
     end_of_turn_cleanup(next);
     // `AfterSideTurnEnd` for the side that just ended.
-    let asked = tick_powers::<V>(next, &mut skipping, <V::CombatSide as SideKinds>::PLAYER);
+    let asked = tick_powers::<V>(
+        next,
+        relics,
+        &mut skipping,
+        <V::CombatSide as SideKinds>::PLAYER,
+    );
     applied::<V>(next, streams.combat(), relics, ascension, asked);
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
@@ -46,7 +52,7 @@ pub(crate) fn end<V: Rules>(
     // back only for a turn the player is taking. So the phase a fight ending
     // here reports is the one the enemy turn ran under.
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
-    clear_block::<V>(next, <V::CombatSide as SideKinds>::ENEMY);
+    clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::ENEMY);
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
@@ -65,13 +71,18 @@ pub(crate) fn end<V: Rules>(
     if let Some(ended) = ended {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
-            relic::combat_ended::<V>(relics);
+            listen::combat_ended::<V>(next, relics);
         }
         return Ok(Some(ended));
     }
-    power::before_turn_end::<V>(&mut next.creatures, <V::CombatSide as SideKinds>::ENEMY);
+    before_turn_end::<V>(next, relics, <V::CombatSide as SideKinds>::ENEMY);
 
-    let asked = tick_powers::<V>(next, &mut skipping, <V::CombatSide as SideKinds>::ENEMY);
+    let asked = tick_powers::<V>(
+        next,
+        relics,
+        &mut skipping,
+        <V::CombatSide as SideKinds>::ENEMY,
+    );
     applied::<V>(next, streams.combat(), relics, ascension, asked);
 
     // `SwitchSides` back. The round and the turn both count up, because this
@@ -83,22 +94,20 @@ pub(crate) fn end<V: Rules>(
     roll_moves(next, ascension, streams.combat().ai)?;
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
-    clear_block::<V>(next, <V::CombatSide as SideKinds>::PLAYER);
+    clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
     next.energy = max_energy;
-    spend_on_energy_reset(next);
+    energy_reset::<V>(next, relics);
 
     // `BeforeSideTurnStart`, which is where a relic counting a turn's plays
     // moves the count on, then the draw that reads it.
-    relic::turn_starting::<V>(relics, next.turn);
-    power::before_turn_start::<V>(
-        &mut next.creatures,
+    before_side_turn_start::<V>(
+        next,
+        relics,
         <V::CombatSide as SideKinds>::PLAYER,
         next.turn,
     );
-    let drawn = hand_size::<V>(relics, next.turn);
+    let drawn = hand_size::<V>(listen::Walk { live: next, relics }, next.turn);
     draw(next, streams.combat(), relics, ascension, drawn);
-    let started = relic::turn_started::<V>(relics, next.turn);
-    upgraded::<V>(&mut next.cards, started);
     side_turn_started::<V>(
         next,
         streams.combat(),
@@ -153,12 +162,67 @@ fn end_of_turn_cleanup<V: Rules>(live: &mut Live<V>) {
         .write_all_cards(Face::lasts_the_turn, Face::turn_ended);
 }
 
-/// `AfterSideTurnStart`, as the powers of the side taking its turn answer it.
+/// `BeforeSideTurnStart`, raised on every listener before the side draws.
+///
+/// Which side's turn a listener answers is its own rule. Block a power asks
+/// for lands on the creature carrying it, and is `ValueProp.Unpowered`, so
+/// nothing that creature carries moves it.
 ///
 /// # Panics
 ///
-/// A power asking for something no side turn start can carry out.
-fn side_turn_started<V: Rules>(
+/// A listener asking for something no side turn start can carry out.
+pub(super) fn before_side_turn_start<V: Rules>(
+    live: &mut Live<V>,
+    relics: &mut [crate::run::HeldRelic<V>],
+    side: V::CombatSide,
+    turn: V::Count,
+) {
+    let hook = sts2_core::EventHook::BeforeSideTurnStart { side, turn };
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
+                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
+                    creature.block = creature.block + amount;
+                }
+            }
+            (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn starts"),
+        }
+    }
+}
+
+/// `BeforeSideTurnEndEarly`, raised on every listener before the side's turn
+/// ends.
+///
+/// Block a power asks for lands on the creature carrying it. Plating re-plates
+/// here, ahead of every later turn-end effect.
+///
+/// # Panics
+///
+/// A listener asking for something no turn end carries out.
+fn before_turn_end<V: Rules>(
+    live: &mut Live<V>,
+    relics: &mut [crate::run::HeldRelic<V>],
+    side: V::CombatSide,
+) {
+    let hook = sts2_core::EventHook::BeforeSideTurnEndEarly { side };
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
+                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
+                    creature.block = creature.block + amount;
+                }
+            }
+            (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
+        }
+    }
+}
+
+/// `AfterSideTurnStart`, raised on every listener once the side has drawn.
+///
+/// # Panics
+///
+/// A listener asking for something no side turn start can carry out.
+pub(super) fn side_turn_started<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut [crate::run::HeldRelic<V>],
@@ -166,15 +230,20 @@ fn side_turn_started<V: Rules>(
     side: V::CombatSide,
 ) {
     let turn = live.turn;
-    let asked = power::notify::<V>(live, sts2_core::EventHook::SideTurnStart { side, turn });
-    for effect in asked {
+    let hook = sts2_core::EventHook::SideTurnStart { side, turn };
+    for (_, effect) in listen::notify::<V>(live, relics, hook) {
         match effect {
+            sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
+                &[sts2_core::Pile::Hand],
+                |_| true,
+                |card| card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight),
+            ),
             sts2_core::HookEffect::Forge { card, key, amount } => {
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 sts2_core::Fight::forge(&mut board, card, key, amount);
             }
-            effect => unimplemented!("a power asking for {effect:?} as a side turn starts"),
+            effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }
 }
@@ -188,138 +257,144 @@ fn flush_hand<V: Rules>(live: &mut Live<V>) {
         .sift(Pile::Hand, Pile::Discard, |held| held.ident.card.retains());
 }
 
-/// `Hook.AfterEnergyReset`: the powers that hand the player energy and go.
+/// `Hook.AfterEnergyReset`, raised on every listener.
 ///
 /// After the reset and before the hand is drawn, which is the order
 /// `SetupPlayerTurn` runs them in.
-fn spend_on_energy_reset<V: Rules>(live: &mut Live<V>) {
+///
+/// # Panics
+///
+/// A listener asking for something no energy reset carries out.
+fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut [crate::run::HeldRelic<V>]) {
     let player = live.player().id;
-    let Some(at) = live.creatures.iter().position(|c| c.id == player) else {
-        return;
-    };
-    let mut gained: V::Count = num_traits::zero();
-
-    let mut answer = sts2_core::HookEffects::new();
-    let hook = sts2_core::EventHook::EnergyReset;
-    live.creatures[at].powers.retain_mut(|held| {
-        if !held.hears(&hook) {
-            return true;
-        }
-        answer.clear();
-        <V as sts2_core::Hooks>::event_hook(
-            held.event_listener(<V::CombatSide as SideKinds>::PLAYER),
-            hook,
-            &mut answer,
-        );
-        let amount = answer.iter().find_map(|effect| match effect {
-            sts2_core::HookEffect::GainEnergyAndRemove(amount) => Some(*amount),
-            _ => None,
-        });
-        let Some(amount) = amount else { return true };
-        let amount: V::Count = num_traits::cast(amount)
-            .unwrap_or_else(|| unimplemented!("a {:?} worth {amount:?} of energy", held.power));
-        gained = gained + amount;
-        false
-    });
-    live.energy = live.energy + gained;
-}
-
-/// `ClearBlock` on every creature of one side.
-fn clear_block<V: Rules>(live: &mut Live<V>, side: V::CombatSide) {
-    let mut answer = sts2_core::HookEffects::new();
-    for creature in live.creatures.iter_mut().filter(|c| c.side == side) {
-        creature.block = num_traits::zero();
-        let mut gained: V::Number = num_traits::zero();
-        let hook = sts2_core::EventHook::BlockCleared;
-        creature.powers.retain_mut(|held| {
-            if !held.hears(&hook) {
-                return true;
+    let hook = sts2_core::EventHook::EnergyReset { player };
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            // `PlayerCmd.GainEnergy`, then `PowerCmd.Remove(this)`.
+            (
+                Listener::Power { owner, power, .. },
+                sts2_core::HookEffect::GainEnergyAndRemove(amount),
+            ) => {
+                let gained: V::Count = num_traits::cast(amount)
+                    .unwrap_or_else(|| unimplemented!("a {power:?} worth {amount:?} of energy"));
+                live.energy = live.energy + gained;
+                live.remove_power(owner, power);
             }
-            answer.clear();
-            <V as sts2_core::Hooks>::event_hook(held.event_listener(side), hook, &mut answer);
-            let block = answer.iter().find_map(|effect| match effect {
-                sts2_core::HookEffect::GainBlockAndRemove(amount) => Some(*amount),
-                _ => None,
-            });
-            let Some(block) = block else { return true };
-            gained = gained + block;
-            false
-        });
-        creature.block = creature.block + gained;
+            (_, effect) => unimplemented!("a listener asking for {effect:?} as energy resets"),
+        }
     }
 }
 
-/// `AfterSideTurnEnd`: the powers that count down when this side's turn ends.
+/// `AfterTurnStart` on every creature of one side, which clears its block
+/// unless a listener says otherwise, then `Hook.AfterBlockCleared` for each
+/// of them in turn.
 ///
-/// Every creature in the fight, not only the ones on that side. Which side's
-/// turn ending counts a power down is the power's own rule.
+/// # Panics
+///
+/// A listener asking for something no block clear carries out.
+fn clear_block<V: Rules>(
+    live: &mut Live<V>,
+    relics: &mut [crate::run::HeldRelic<V>],
+    side: V::CombatSide,
+) {
+    let clearing: SmallVec<[CombatId; 8]> = live
+        .creatures
+        .iter()
+        .filter(|c| c.side == side)
+        .map(|creature| creature.id)
+        .collect();
+    for &creature in &clearing {
+        // `Hook.ShouldClearBlock`.
+        let kept = listen::any_decides::<V>(
+            listen::Walk { live, relics },
+            sts2_core::DecisionHook::ShouldClearBlock { creature },
+            false,
+        );
+        if !kept && let Some(held) = live.creatures.iter_mut().find(|c| c.id == creature) {
+            held.block = num_traits::zero();
+        }
+    }
+    for creature in clearing {
+        let hook = sts2_core::EventHook::BlockCleared { creature };
+        for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+            match (listener, effect) {
+                // `CreatureCmd.GainBlock`, unpowered, then
+                // `PowerCmd.Remove(this)`.
+                (
+                    Listener::Power { owner, power, .. },
+                    sts2_core::HookEffect::GainBlockAndRemove(amount),
+                ) => {
+                    if let Some(holder) = live.creatures.iter_mut().find(|c| c.id == owner) {
+                        holder.block = holder.block + amount;
+                    }
+                    live.remove_power(owner, power);
+                }
+                (_, effect) => {
+                    unimplemented!("a listener asking for {effect:?} as block clears")
+                }
+            }
+        }
+    }
+}
+
+/// `AfterSideTurnEnd`, raised on every listener once this side's turn ends.
+///
+/// Which side's turn ending counts a power down is the power's own rule. What
+/// the powers ask to apply comes back, in the order they asked.
+///
+/// # Panics
+///
+/// A listener asking for something no turn end carries out.
 fn tick_powers<V: Rules>(
     live: &mut Live<V>,
+    relics: &mut [crate::run::HeldRelic<V>],
     skipping: &mut Skips<V>,
     side: V::CombatSide,
 ) -> Vec<(CombatId, V::Power, PowerAmount<V::Number>)> {
     let mut applying = Vec::new();
-    let mut leaving: Vec<(CombatId, V::Power)> = Vec::new();
-    let mut asked = sts2_core::HookEffects::new();
+    let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
+    let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
+    let hook = sts2_core::EventHook::SideTurnEnd { side };
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        let Listener::Power { owner, power, .. } = listener else {
+            unimplemented!("{listener:?} asking for {effect:?} as a turn ends")
+        };
+        match effect {
+            sts2_core::HookEffect::TickDownDuration => ticking.push((owner, power)),
+            // `PowerCmd.Apply` on the creature carrying the power, which is
+            // what a power that grows its owner asks for.
+            sts2_core::HookEffect::ApplyToOwner(power, amount) => {
+                applying.push((owner, power, amount));
+            }
+            // `PowerCmd.Remove(this)`, taken after the ticks for the same
+            // reason a power it applies is.
+            sts2_core::HookEffect::Remove => leaving.push((owner, power)),
+            sts2_core::HookEffect::RemoveFromOwner(power) => leaving.push((owner, power)),
+            other => unimplemented!("a power asking for {other:?} as a turn ends"),
+        }
+    }
 
-    for creature in &mut live.creatures {
-        let id = creature.id;
-        let owner = creature.side;
-        for held in &mut creature.powers {
-            let power = held.power;
-            // An endless power sits out every tick. There is no number to
-            // count, which is the whole of what endless means.
-            if held.amount.count().is_none() {
-                continue;
-            }
-            let hook = sts2_core::EventHook::SideTurnEnd { side };
-            if !held.hears(&hook) {
-                continue;
-            }
-            asked.clear();
-            <V as sts2_core::Hooks>::event_hook(held.event_listener(owner), hook, &mut asked);
-            for effect in &asked {
-                match effect {
-                    sts2_core::HookEffect::TickDownDuration | sts2_core::HookEffect::Decrement => {}
-                    // `PowerCmd.Apply` on the creature carrying the power,
-                    // which is what a power that grows its owner asks for.
-                    sts2_core::HookEffect::ApplyToOwner(power, amount) => {
-                        applying.push((id, *power, *amount));
-                    }
-                    // `PowerCmd.Remove(this)`, taken after the belt is read
-                    // for the same reason a power it applies is.
-                    sts2_core::HookEffect::Remove => leaving.push((id, power)),
-                    sts2_core::HookEffect::RemoveFromOwner(power) => {
-                        leaving.push((id, *power));
-                    }
-                    // The number the instance counts on itself, set back to
-                    // zero. A power that hands back what it took this turn
-                    // asks for this after asking for the handing back.
-                    other => unimplemented!("a power asking for {other:?} as a turn ends"),
-                }
-            }
-            if asked.contains(&sts2_core::HookEffect::Decrement) {
-                held.amount = held.amount.ticked();
-                continue;
-            }
-            if !asked.contains(&sts2_core::HookEffect::TickDownDuration) {
-                continue;
-            }
-            // `TickDownDuration` passes over an instance whose flag is set,
-            // and clears the flag rather than counting down twice later.
-            if let Some(at) = skipping.iter().position(|held| *held == (id, power)) {
-                skipping.remove(at);
-                continue;
-            }
+    for (owner, power) in ticking {
+        // `TickDownDuration` passes over an instance whose flag is set, and
+        // clears the flag rather than counting down twice later.
+        if let Some(at) = skipping.iter().position(|held| *held == (owner, power)) {
+            skipping.remove(at);
+            continue;
+        }
+        let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) else {
+            continue;
+        };
+        for held in creature
+            .powers
+            .iter_mut()
+            .filter(|held| held.power() == power)
+        {
             held.amount = held.amount.ticked();
         }
         creature.powers.retain(|held| !held.amount.spent());
     }
-    for (id, power) in leaving {
-        let Some(creature) = live.creatures.iter_mut().find(|creature| creature.id == id) else {
-            continue;
-        };
-        creature.powers.retain_mut(|held| held.power != power);
+    for (owner, power) in leaving {
+        live.remove_power(owner, power);
     }
     applying
 }
@@ -390,16 +465,7 @@ fn enemy_turn<V: Rules>(
             (id, damage, repeats),
         );
         V::perform_move(monster, next_move.id, &mut board);
-        let asked = power::notify_creature::<V>(
-            board.live,
-            id,
-            sts2_core::EventHook::MonsterMovePerformed {
-                move_id: next_move.id,
-            },
-        );
-        if let Some(effect) = asked.first() {
-            unimplemented!("a power asking for {effect:?} after a monster move")
-        }
+        power::move_performed::<V>(board.live, id, next_move.id);
         ended = ended.or(board.ended);
         *skipping = super::play::merged::<V>(skipping, std::mem::take(&mut board.skipped));
     }
@@ -425,7 +491,7 @@ fn roll_moves<V: Rules>(
             let powers = creature
                 .powers
                 .iter()
-                .map(|power| power.listener(creature.side));
+                .map(|power| power.listener(creature.carrier()));
             V::roll_monster_move(
                 held.monster,
                 ascension,

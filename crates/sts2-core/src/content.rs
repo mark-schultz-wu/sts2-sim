@@ -173,6 +173,10 @@ pub trait MonsterTable: Table {
 
     /// The acts that field it. Empty for one only another monster summons.
     fn acts(self) -> &'static [Self::Act];
+
+    /// The hooks this monster's class overrides, as the hook dump measured
+    /// them. See [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
 }
 
 /// A pool a reward draws from, already split the way a rarity roll asks.
@@ -315,6 +319,10 @@ pub trait CardTable: Table {
     /// [`crate::Preview::base`]. `Preview::vars` is these after the fight has
     /// had its say, and that is not static data.
     fn vars(self) -> &'static [CardNumber<Self::Var, Self::Number>];
+
+    /// The hooks this card's class overrides, as the hook dump measured them.
+    /// See [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
 }
 
 /// An exact finite decimal as the game writes it.
@@ -462,10 +470,11 @@ pub trait PowerTable: Table {
     fn overrides(self) -> Overrides;
 }
 
-/// A hook `AbstractModel` declares, which an [`EventHook`] is raised as.
+/// A hook `AbstractModel` declares, which a fight raises on its listeners.
 ///
-/// Only the hooks some [`EventHook`] is raised as. Each is spelled the way the
-/// hook dump spells it, which is how a model's overrides are read.
+/// Only the hooks some [`EventHook`], [`ModifyHook`] or [`DecisionHook`] is
+/// raised as. Each is spelled the way the hook dump spells it, which is how a
+/// model's overrides are read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ModelHook {
@@ -485,10 +494,28 @@ pub enum ModelHook {
     AfterDeath,
     AfterPowerAmountChanged,
     AfterCardEnteredCombat,
+    ModifyDamageAdditive,
+    ModifyDamageMultiplicative,
+    ModifyDamageCap,
+    ModifyBlockAdditive,
+    ModifyBlockMultiplicative,
+    ModifyHpLostBeforeOsty,
+    ModifyHpLostBeforeOstyLate,
+    ModifyHpLostAfterOsty,
+    ModifyHpLostAfterOstyLate,
+    ModifyHandDraw,
+    ModifyHandDrawLate,
+    ShouldCreatureBeRemovedFromCombatAfterDeath,
+    ShouldPowerBeRemovedOnDeath,
+    ShouldClearBlock,
+    ShouldStopCombatFromEnding,
+    ShouldAllowHitting,
+    BeforeDeath,
+    AfterBlockBroken,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 16] = [
+    pub const ALL: [ModelHook; 34] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -505,6 +532,24 @@ impl ModelHook {
         ModelHook::AfterDeath,
         ModelHook::AfterPowerAmountChanged,
         ModelHook::AfterCardEnteredCombat,
+        ModelHook::ModifyDamageAdditive,
+        ModelHook::ModifyDamageMultiplicative,
+        ModelHook::ModifyDamageCap,
+        ModelHook::ModifyBlockAdditive,
+        ModelHook::ModifyBlockMultiplicative,
+        ModelHook::ModifyHpLostBeforeOsty,
+        ModelHook::ModifyHpLostBeforeOstyLate,
+        ModelHook::ModifyHpLostAfterOsty,
+        ModelHook::ModifyHpLostAfterOstyLate,
+        ModelHook::ModifyHandDraw,
+        ModelHook::ModifyHandDrawLate,
+        ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath,
+        ModelHook::ShouldPowerBeRemovedOnDeath,
+        ModelHook::ShouldClearBlock,
+        ModelHook::ShouldStopCombatFromEnding,
+        ModelHook::ShouldAllowHitting,
+        ModelHook::BeforeDeath,
+        ModelHook::AfterBlockBroken,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -526,21 +571,41 @@ impl ModelHook {
             ModelHook::AfterDeath => "AfterDeath",
             ModelHook::AfterPowerAmountChanged => "AfterPowerAmountChanged",
             ModelHook::AfterCardEnteredCombat => "AfterCardEnteredCombat",
+            ModelHook::ModifyDamageAdditive => "ModifyDamageAdditive",
+            ModelHook::ModifyDamageMultiplicative => "ModifyDamageMultiplicative",
+            ModelHook::ModifyDamageCap => "ModifyDamageCap",
+            ModelHook::ModifyBlockAdditive => "ModifyBlockAdditive",
+            ModelHook::ModifyBlockMultiplicative => "ModifyBlockMultiplicative",
+            ModelHook::ModifyHpLostBeforeOsty => "ModifyHpLostBeforeOsty",
+            ModelHook::ModifyHpLostBeforeOstyLate => "ModifyHpLostBeforeOstyLate",
+            ModelHook::ModifyHpLostAfterOsty => "ModifyHpLostAfterOsty",
+            ModelHook::ModifyHpLostAfterOstyLate => "ModifyHpLostAfterOstyLate",
+            ModelHook::ModifyHandDraw => "ModifyHandDraw",
+            ModelHook::ModifyHandDrawLate => "ModifyHandDrawLate",
+            ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath => {
+                "ShouldCreatureBeRemovedFromCombatAfterDeath"
+            }
+            ModelHook::ShouldPowerBeRemovedOnDeath => "ShouldPowerBeRemovedOnDeath",
+            ModelHook::ShouldClearBlock => "ShouldClearBlock",
+            ModelHook::ShouldStopCombatFromEnding => "ShouldStopCombatFromEnding",
+            ModelHook::ShouldAllowHitting => "ShouldAllowHitting",
+            ModelHook::BeforeDeath => "BeforeDeath",
+            ModelHook::AfterBlockBroken => "AfterBlockBroken",
         }
     }
 }
 
 /// The [`ModelHook`]s one model's class overrides, one bit each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Overrides(u32);
+pub struct Overrides(u64);
 
 impl Overrides {
     /// The set whose bits are `bits`, one per [`ModelHook`] by its position.
-    pub const fn from_bits(bits: u32) -> Self {
+    pub const fn from_bits(bits: u64) -> Self {
         Overrides(bits)
     }
 
-    pub const fn bits(self) -> u32 {
+    pub const fn bits(self) -> u64 {
         self.0
     }
 
@@ -551,12 +616,20 @@ impl Overrides {
     pub const fn contains(self, hook: ModelHook) -> bool {
         self.0 & 1 << hook as u8 != 0
     }
+
+    pub const fn union(self, other: Self) -> Self {
+        Overrides(self.0 | other.0)
+    }
 }
 
 /// What a table says about a relic, beyond its row.
 pub trait RelicTable: Table {
     /// The pools a relic can be drawn from.
     type Pool: RelicPoolKinds + serde::Serialize;
+
+    /// The hooks this relic's class overrides, as the hook dump measured them.
+    /// See [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
 
     /// How often it turns up.
     ///
@@ -1222,6 +1295,20 @@ pub trait Fight<V: ContentVersion> {
     /// healed above zero is alive again.
     fn heal(&mut self, at: crate::CombatId, amount: V::Number);
 
+    /// Write the fields `power` saves on the creature `at`, from inside one
+    /// of that power's own methods.
+    ///
+    /// A move a power builds for its owner, such as a revive, is the power's
+    /// method in the game and writes the power's own data. Nothing when the
+    /// creature does not carry it.
+    fn write_power(
+        &mut self,
+        at: crate::CombatId,
+        power: V::Power,
+        write: impl FnOnce(&mut V::PowerState),
+    ) where
+        V: Hooks;
+
     /// The character whose pool combat generation reads.
     fn character(&self) -> V::Character {
         unimplemented!("the character in this fight")
@@ -1513,25 +1600,96 @@ pub enum Modify<N> {
 }
 
 /// A value-producing hook the simulator asks one content model to apply.
+///
+/// One per `AbstractModel` hook, each carrying the creatures the game hands
+/// it. A listener reads whether it is one of them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModifyHook<V: ContentVersion> {
-    /// The model can change a hit dealt or received by its owner.
-    Damage { holding: Holding },
-    /// The model can change block gained by its owner.
-    Block,
-    /// The model can change the hit points its owner is about to lose, which
-    /// is `ModifyHpLost` over what the block did not take.
-    HpLost,
-    /// The model can change how many cards its owner draws to open a turn,
-    /// which is `ModifyHandDraw`.
-    HandDraw { count: V::Number, turn: V::Count },
+    /// `ModifyDamageAdditive`. The target is absent for a hit previewed
+    /// against nobody.
+    DamageAdditive {
+        target: Option<crate::CombatId>,
+        dealer: crate::CombatId,
+    },
+    /// `ModifyDamageMultiplicative`, over what the additions left.
+    DamageMultiplicative {
+        target: Option<crate::CombatId>,
+        dealer: crate::CombatId,
+    },
+    /// `ModifyDamageCap`, the most a hit can do.
+    DamageCap {
+        target: Option<crate::CombatId>,
+        dealer: crate::CombatId,
+    },
+    /// `ModifyBlockAdditive`, for block `target` is about to gain.
+    BlockAdditive {
+        target: crate::CombatId,
+    },
+    /// `ModifyBlockMultiplicative`, over what the additions left.
+    BlockMultiplicative {
+        target: crate::CombatId,
+    },
+    /// `ModifyHpLostBeforeOsty`, over what the block did not take.
+    HpLostBeforeOsty {
+        target: crate::CombatId,
+    },
+    HpLostBeforeOstyLate {
+        target: crate::CombatId,
+    },
+    HpLostAfterOsty {
+        target: crate::CombatId,
+    },
+    HpLostAfterOstyLate {
+        target: crate::CombatId,
+    },
+    /// `ModifyHandDraw`: how many cards the player draws to open a turn.
+    HandDraw {
+        player: crate::CombatId,
+        count: V::Number,
+        turn: V::Count,
+    },
+    HandDrawLate {
+        player: crate::CombatId,
+        count: V::Number,
+        turn: V::Count,
+    },
+}
+
+impl<V: ContentVersion> ModifyHook<V> {
+    /// The `AbstractModel` hook this is raised as.
+    pub fn model_hook(&self) -> ModelHook {
+        match self {
+            ModifyHook::DamageAdditive { .. } => ModelHook::ModifyDamageAdditive,
+            ModifyHook::DamageMultiplicative { .. } => ModelHook::ModifyDamageMultiplicative,
+            ModifyHook::DamageCap { .. } => ModelHook::ModifyDamageCap,
+            ModifyHook::BlockAdditive { .. } => ModelHook::ModifyBlockAdditive,
+            ModifyHook::BlockMultiplicative { .. } => ModelHook::ModifyBlockMultiplicative,
+            ModifyHook::HpLostBeforeOsty { .. } => ModelHook::ModifyHpLostBeforeOsty,
+            ModifyHook::HpLostBeforeOstyLate { .. } => ModelHook::ModifyHpLostBeforeOstyLate,
+            ModifyHook::HpLostAfterOsty { .. } => ModelHook::ModifyHpLostAfterOsty,
+            ModifyHook::HpLostAfterOstyLate { .. } => ModelHook::ModifyHpLostAfterOstyLate,
+            ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
+            ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
+        }
+    }
 }
 
 /// A yes-or-no hook the simulator asks one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecisionHook<V: ContentVersion> {
-    ShouldRemoveCreatureAfterDeath,
+    /// `ShouldCreatureBeRemovedFromCombatAfterDeath`, about the creature that
+    /// has just died.
+    ShouldRemoveCreatureAfterDeath { creature: crate::CombatId },
+    /// `PowerModel.OwnerIsSecondaryEnemy`, which the game reads off the
+    /// powers on one creature rather than raising.
     ShouldCountForCombatEnd,
+    /// `ShouldClearBlock`, as `creature` starts its turn.
+    ShouldClearBlock { creature: crate::CombatId },
+    /// `ShouldStopCombatFromEnding`, which any listener can answer yes to.
+    ShouldStopCombatFromEnding,
+    /// `ShouldAllowHitting`, about `creature`. A creature no listener lets be
+    /// hit is not hittable, and cannot receive powers.
+    ShouldAllowHitting { creature: crate::CombatId },
     /// `PowerModel.ShouldPowerBeRemovedAfterOwnerDeath`, asked of a power
     /// about itself as its owner dies.
     ShouldRemoveSelfAfterOwnerDeath,
@@ -1541,8 +1699,29 @@ pub enum DecisionHook<V: ContentVersion> {
     /// The other half of the same removal: a power can keep itself, and
     /// something else on the creature can keep it. Either is enough.
     ShouldRemovePowerOnDeath {
+        creature: crate::CombatId,
         power: V::Power,
     },
+}
+
+impl<V: ContentVersion> DecisionHook<V> {
+    /// The `AbstractModel` hook this is raised as.
+    ///
+    /// Nothing for a question the game asks of one power about itself, which
+    /// is not raised.
+    pub fn model_hook(&self) -> Option<ModelHook> {
+        Some(match self {
+            DecisionHook::ShouldRemoveCreatureAfterDeath { .. } => {
+                ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath
+            }
+            DecisionHook::ShouldRemovePowerOnDeath { .. } => ModelHook::ShouldPowerBeRemovedOnDeath,
+            DecisionHook::ShouldClearBlock { .. } => ModelHook::ShouldClearBlock,
+            DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
+            DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
+            DecisionHook::ShouldCountForCombatEnd
+            | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
+        })
+    }
 }
 
 /// A notification delivered to one content model.
@@ -1560,15 +1739,17 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayed {
         card: V::Card,
     },
-    /// `AfterDamageReceived`, for the creature that has just been hit.
+    /// `AfterDamageReceived`, carrying the creature that has just been hit.
     ///
     /// `unblocked` is the `DamageResult`'s own, which is what came off the hit
     /// points after the block and the hooks that cap them.
     DamageReceived {
+        target: crate::CombatId,
         unblocked: V::Number,
     },
-    /// `AfterDamageGiven`, for the creature that dealt the hit.
+    /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
+        dealer: crate::CombatId,
         fully_blocked: bool,
     },
     /// `MonsterMoveState.OnPerform`, after the move's behavior runs.
@@ -1577,11 +1758,12 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterCardDrawn`, carrying the card that has just reached the hand.
     ///
-    /// Raised once per card, inside the draw loop. A listener that is itself
-    /// the drawn card compares the two, which is what every card that answers
-    /// this hook does.
+    /// Raised once per card, inside the draw loop, on every listener. A card
+    /// answering for its own draw compares `id` with its own, which is what
+    /// every card that answers this hook does.
     CardDrawn {
         card: V::Card,
+        id: crate::CardId<V>,
     },
     /// `BeforeApplied`, asked of a power on its way onto a creature.
     ///
@@ -1608,14 +1790,41 @@ pub enum EventHook<V: ContentVersion> {
     SideTurnEnd {
         side: V::CombatSide,
     },
-    EnergyReset,
-    BlockCleared,
-    /// `Hook.AfterDeath`, carrying the side the dead creature fought on.
+    /// `AfterEnergyReset`, carrying the player's creature.
+    EnergyReset {
+        player: crate::CombatId,
+    },
+    /// `AfterBlockCleared`, carrying the creature whose block has just gone.
     ///
-    /// Every model in the fight is asked, not only the dead creature's own.
-    /// So a model whose rule is about the other side reads this. Gremlin Horn
-    /// pays for a kill, and not for its own holder's death.
+    /// Raised once for each creature starting its turn, once every one of
+    /// them has cleared.
+    BlockCleared {
+        creature: crate::CombatId,
+    },
+    /// `PowerModel.AfterRemoved`, asked of a power as it comes off the
+    /// creature that carried it.
+    Removed,
+    /// `Hook.BeforeDeath`, carrying the creature about to die.
+    ///
+    /// Raised once its hit points are gone and before anything decides
+    /// whether it dies.
+    BeforeDeath {
+        creature: crate::CombatId,
+    },
+    /// `Hook.AfterBlockBroken`, carrying the creature whose block a hit has
+    /// just taken the last of.
+    BlockBroken {
+        creature: crate::CombatId,
+    },
+    /// `Hook.AfterDeath`, carrying the dead creature and the side it fought
+    /// on.
+    ///
+    /// Every model in the fight is asked, not only the dead creature's own. A
+    /// power answering for its own holder's death compares `creature` with
+    /// that holder. Gremlin Horn reads `side`, and pays for a kill and not for
+    /// its own holder's death.
     AfterDeath {
+        creature: crate::CombatId,
         side: V::CombatSide,
     },
     /// `AfterPowerAmountChanged`, raised on every listener once a power's
@@ -1623,8 +1832,10 @@ pub enum EventHook<V: ContentVersion> {
     ///
     /// `delta` is the amount that was applied, which is what the hook carries
     /// and not the total the creature now holds. A power reading this one
-    /// compares the power named against itself.
+    /// compares the power named, and the creature carrying it, against
+    /// itself.
     PowerAmountChanged {
+        creature: crate::CombatId,
         power: V::Power,
         delta: V::Number,
     },
@@ -1646,7 +1857,8 @@ impl<V: ContentVersion> EventHook<V> {
     /// The `AbstractModel` hook this is raised as.
     ///
     /// Nothing for a notification the dump has no row for. `AfterObtained` is
-    /// a relic's own virtual, and `BeforeApplied` a power's. A move being
+    /// a relic's own virtual, and `BeforeApplied` and `AfterRemoved` a
+    /// power's. A move being
     /// performed is the move state's. A model's overrides cannot say whether
     /// it answers one of those, so it is always asked.
     pub fn model_hook(&self) -> Option<ModelHook> {
@@ -1662,12 +1874,15 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
-            EventHook::EnergyReset => ModelHook::AfterEnergyReset,
-            EventHook::BlockCleared => ModelHook::AfterBlockCleared,
+            EventHook::EnergyReset { .. } => ModelHook::AfterEnergyReset,
+            EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
+            EventHook::BeforeDeath { .. } => ModelHook::BeforeDeath,
+            EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,
             EventHook::PowerAmountChanged { .. } => ModelHook::AfterPowerAmountChanged,
             EventHook::CardEnteredCombat { .. } => ModelHook::AfterCardEnteredCombat,
             EventHook::Obtained
+            | EventHook::Removed
             | EventHook::BeforeApplied { .. }
             | EventHook::MonsterMovePerformed { .. } => return None,
         })
@@ -1767,8 +1982,20 @@ pub enum HookEffect<V: ContentVersion> {
     /// effect carries, and every answer to every hook is as wide as its widest
     /// effect.
     InstallMove(Box<crate::NextMove<V>>),
-    /// Replace the owner's advertised move with a stunned turn.
-    StunOwner(Box<crate::NextMove<V>>),
+    /// `CreatureCmd.Stun` on the owner: a stunned turn in place of the move
+    /// it advertised.
+    ///
+    /// `then` is `nextMoveId`, as the index of that state in the owner's
+    /// graph. Nothing is the state the stun interrupted.
+    StunOwner {
+        stun: Box<crate::NextMove<V>>,
+        then: Option<u8>,
+    },
+    /// `CreatureCmd.LoseBlock` on the owner, for all of it.
+    LoseBlock,
+    /// A card the fight took from the deck, handed back as a reward once the
+    /// fight is won. `SwipePower.BeforeDeath`'s `SpecialCardReward`.
+    ReturnCard(crate::CardIdent<V>),
     /// Remove another power from the same owner.
     RemoveFromOwner(V::Power),
     /// `CreatureCmd.Add<M>` once per count, in the dead owner's place.
@@ -1812,6 +2039,9 @@ pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     /// Every power reaches this, because every power that lands is an
     /// instance. A power that saves nothing still has a model.
     fn new(power: V::Power) -> Self;
+
+    /// Which power this is the model of.
+    fn power(&self) -> V::Power;
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -1845,14 +2075,29 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// The side its owner is on, which is `Owner.Creature.Side`. A hook
         /// naming a side asks the instance whether it is one of them.
         owner: V::CombatSide,
+        /// The creature carrying it, which a hook naming a creature compares
+        /// with.
+        holder: crate::CombatId,
+        /// `PowerModel.Applier`, the creature whose command put it on.
+        applier: Option<crate::CombatId>,
+        /// `Owner.Monster`, which is nothing for a power on the player.
+        monster: Option<V::Monster>,
         /// What this instance saves for itself, which is every field of its
         /// own model. A power writes here rather than ask the fight to.
         state: &'a V::PowerState,
     },
     Relic(&'a V::RelicState),
+    /// A monster's own model, which the fight asks after the powers on its
+    /// creature.
+    Monster {
+        monster: V::Monster,
+        creature: crate::CombatId,
+    },
     /// A card in the fight, and what this copy of it prints.
     Card {
         card: V::Card,
+        /// Which copy this is.
+        id: crate::CardId<V>,
         printed: &'a P,
     },
 }
@@ -1862,11 +2107,26 @@ pub enum EventListener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
         owner: V::CombatSide,
+        /// The creature carrying it, which a hook naming a creature compares
+        /// with.
+        holder: crate::CombatId,
+        /// `PowerModel.Applier`, the creature whose command put it on.
+        applier: Option<crate::CombatId>,
+        /// `Owner.Monster`, which is nothing for a power on the player.
+        monster: Option<V::Monster>,
         state: &'a mut V::PowerState,
     },
     Relic(&'a mut V::RelicState),
+    /// A monster's own model, which the fight asks after the powers on its
+    /// creature.
+    Monster {
+        monster: V::Monster,
+        creature: crate::CombatId,
+    },
     Card {
         card: V::Card,
+        /// Which copy this is, which a hook naming a card compares with.
+        id: crate::CardId<V>,
         printed: &'a P,
     },
 }
@@ -1923,18 +2183,6 @@ pub enum SideTurnEnd {
     /// Unlike `Decrement`, it passes over an instance whose
     /// `SkipNextDurationTick` is set, and clears the flag instead.
     TicksDownDuration,
-}
-
-/// Which side of a hit the creature holding a power is on.
-///
-/// A power that modifies damage asks this. Vulnerable acts when its owner is
-/// hit, Weak when its owner is doing the hitting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Holding {
-    /// The power's owner is the one taking the hit.
-    Target,
-    /// The power's owner is the one dealing it.
-    Dealer,
 }
 
 /// What an encounter fixed about a monster when it spawned one.
@@ -2118,6 +2366,13 @@ impl MoveMachine {
     pub fn interpose(&mut self) {
         self.built = true;
         self.performed = false;
+    }
+
+    /// [`MoveMachine::interpose`], for a built state whose `FollowUpStateId`
+    /// names `follow_up` rather than the state it interrupted.
+    pub fn interpose_to(&mut self, follow_up: u8) {
+        self.interpose();
+        self.at = follow_up;
     }
 
     /// Leave a built state for the one it follows on to.

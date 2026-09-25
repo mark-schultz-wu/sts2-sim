@@ -11,7 +11,10 @@ use sts2_core::{Fight, HookEffect, Rules};
 /// # Panics
 ///
 /// An effect no fight can carry out here.
-pub(crate) fn apply<V: Rules, F: Fight<V>>(fight: &mut F, asked: sts2_core::HookEffects<V>) {
+pub(crate) fn apply<V: Rules, F: Fight<V>>(
+    fight: &mut F,
+    asked: impl IntoIterator<Item = HookEffect<V>>,
+) {
     for effect in asked {
         match effect {
             HookEffect::GainEnergy(amount) => fight.modify_energy(amount),

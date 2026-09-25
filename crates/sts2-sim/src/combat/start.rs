@@ -1,13 +1,14 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CardIdent, CombatId, EventHook, HookEffect, ModelId, ModifyHook, Pile, Rules, SideKinds,
+    CardIdent, CombatId, EventHook, HookEffect, ModelId, ModifyHook, Rules, SideKinds,
     TurnPhaseKinds,
 };
 
 use super::cards::Cards;
+use super::listen::Walk;
 use super::live::{CardIds, CardInstance, Fighter, Live, PowerList};
-use super::{Error, encounter, monster, pile, relic};
+use super::{Error, encounter, monster, pile};
 use crate::bounded::Bounded;
 use crate::run::HeldRelic;
 use crate::stream::Streams;
@@ -59,6 +60,7 @@ pub(crate) fn enter<V: Rules>(
         encounter,
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
+        returned: Vec::new(),
         creatures: Bounded::new(),
         // Absent rather than an empty queue: the subsystem is inert until
         // something gives the player a slot.
@@ -106,67 +108,90 @@ pub(crate) fn enter<V: Rules>(
     // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
     // turn the fight is about to begin on. Both run before anything is drawn.
     let turn = live.turn;
-    for effect in relic::notify::<V>(relics, EventHook::CombatRoomEntered) {
+    for (_, effect) in super::listen::notify::<V>(&mut live, relics, EventHook::CombatRoomEntered) {
         match effect {
             HookEffect::GainStars(gained) => live.stars = live.stars + count::<V>(gained),
-            other => unimplemented!("a relic asking for {other:?} as a room opens"),
+            other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }
     }
     // `BeforeCombatStart`, after the room and before the fight opens. The
     // player carries no power yet, so block gained here is what was asked for
     // and passes no modifier.
-    for effect in relic::combat_starting::<V>(relics) {
-        match effect {
-            HookEffect::GainBlock(block) => {
-                live.creatures[0].block = live.creatures[0].block + block
+    for (listener, effect) in
+        super::listen::notify::<V>(&mut live, relics, EventHook::CombatStarting)
+    {
+        match (listener, effect) {
+            // On the creature carrying the listener, which for a relic is the
+            // player.
+            (listener, HookEffect::GainBlock(block)) => {
+                let owner = match listener {
+                    super::listen::Listener::Power { owner, .. } => owner,
+                    _ => live.player().id,
+                };
+                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
+                    creature.block = creature.block + block;
+                }
             }
-            other => unimplemented!("a relic asking for {other:?} as a fight starts"),
+            (_, other) => unimplemented!("a listener asking for {other:?} as a fight starts"),
         }
     }
-    relic::turn_starting::<V>(relics, turn);
-    // `BeforeSideTurnStart` for the powers a monster entered with, which is
-    // where one that opens the fight behind block gains it.
-    super::power::before_turn_start::<V>(
-        &mut live.creatures,
+    // `BeforeSideTurnStart`, which is where a monster that opens the fight
+    // behind block gains it.
+    super::turn::before_side_turn_start::<V>(
+        &mut live,
+        relics,
         <V::CombatSide as SideKinds>::PLAYER,
         turn,
     );
 
-    let drawn = hand_size::<V>(relics, turn);
+    let drawn = hand_size::<V>(
+        Walk {
+            live: &live,
+            relics,
+        },
+        turn,
+    );
     let piles = pile::shuffle(streams.combat().shuffle, deck).deal_opening(drawn);
 
     live.cards = Cards::dealt(piles.hand(), piles.draw());
-    upgraded::<V>(&mut live.cards, relic::turn_started::<V>(relics, turn));
+    super::turn::side_turn_started::<V>(
+        &mut live,
+        streams.combat(),
+        relics,
+        ascension,
+        <V::CombatSide as SideKinds>::PLAYER,
+    );
 
     Ok((live, streams))
 }
 
-/// How many cards the fight's first hand is drawn to.
+/// How many cards a turn's hand is drawn to.
 ///
-/// `ModifyHandDraw` over the belt, from `baseHandDrawCount`. The relics that
-/// answer it read the turn, and the first turn of a fight follows no other.
-pub(super) fn hand_size<V: Rules>(relics: &mut [HeldRelic<V>], turn: V::Count) -> usize {
+/// `Hook.ModifyHandDraw` from `baseHandDrawCount`, then its late phase. The
+/// listeners that answer it read the turn, and the first turn of a fight
+/// follows no other.
+pub(super) fn hand_size<V: Rules>(fight: Walk<'_, V>, turn: V::Count) -> usize {
     let base: V::Number =
         num_traits::cast(HAND_SIZE).expect("the printed hand size fits the build's game number");
-    let drawn = relic::modified::<V>(relics, ModifyHook::HandDraw { count: base, turn }, base);
+    let player = fight.live.player().id;
+    let phases = [
+        ModifyHook::HandDraw {
+            player,
+            count: base,
+            turn,
+        },
+        ModifyHook::HandDrawLate {
+            player,
+            count: base,
+            turn,
+        },
+    ];
+    let answers = super::board::answers::<V>(fight, phases);
+    let drawn = super::board::hooked::<V>(base, answers.into_iter());
     num_traits::cast(drawn).unwrap_or_else(|| unimplemented!("a hand of {drawn:?} cards"))
 }
 
 /// One number a relic gave, as the count the fight keeps it in.
 fn count<V: Rules>(amount: V::Number) -> V::Count {
     num_traits::cast(amount).unwrap_or_else(|| unimplemented!("a relic worth {amount:?}"))
-}
-
-/// Apply what the relics asked for once a hand was dealt to them.
-pub(super) fn upgraded<V: Rules>(cards: &mut Cards<V>, effects: sts2_core::HookEffects<V>) {
-    for effect in effects {
-        match effect {
-            HookEffect::UpgradeHand => cards.write_every(
-                &[Pile::Hand],
-                |_| true,
-                |card| card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight),
-            ),
-            other => unimplemented!("a relic asking for {other:?} as a turn starts"),
-        }
-    }
 }
