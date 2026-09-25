@@ -1718,7 +1718,9 @@ static OVERRIDES: [sts2_core::Overrides; 126] = [
     // CROSSBOW_RUBY_RAIDER
     sts2_core::Overrides::from_bits(0),
     // CRUSHER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeDeath),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCurrentHpChanged)
+        .with(sts2_core::ModelHook::BeforeDeath),
     // CUBEX_CONSTRUCT
     sts2_core::Overrides::from_bits(0),
     // DAMP_CULTIST
@@ -1847,7 +1849,9 @@ static OVERRIDES: [sts2_core::Overrides; 126] = [
     // QUEEN
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
     // ROCKET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeDeath),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCurrentHpChanged)
+        .with(sts2_core::ModelHook::BeforeDeath),
     // SCROLL_OF_BITING
     sts2_core::Overrides::from_bits(0),
     // SEAPUNK

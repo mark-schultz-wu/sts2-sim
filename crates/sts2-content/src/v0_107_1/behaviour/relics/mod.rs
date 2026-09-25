@@ -25,13 +25,17 @@ mod gorget;
 mod gremlin_horn;
 mod hefty_tablet;
 mod lead_paperweight;
+mod leafy_poultice;
 mod mercury_hourglass;
+mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
+mod nutritious_oyster;
 mod permafrost;
 mod phial_holster;
 mod pocketwatch;
 mod pomander;
+mod precarious_shears;
 mod precise_scissors;
 mod ring_of_the_snake;
 mod sand_castle;
@@ -66,13 +70,17 @@ pub enum State {
     GremlinHorn,
     HeftyTablet,
     LeadPaperweight,
+    LeafyPoultice,
     MercuryHourglass,
+    NeowsTalisman,
     NeowsTorment,
     NewLeaf,
+    NutritiousOyster,
     Permafrost(permafrost::State),
     PhialHolster,
     Pocketwatch(pocketwatch::State),
     Pomander,
+    PrecariousShears,
     PreciseScissors,
     RingOfTheSnake,
     SandCastle,
@@ -99,13 +107,17 @@ pub(crate) fn event_hook(
         State::GremlinHorn => gremlin_horn::event_hook(hook, asked),
         State::HeftyTablet => hefty_tablet::event_hook(hook, asked),
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
+        State::LeafyPoultice => leafy_poultice::event_hook(hook, asked),
         State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
+        State::NeowsTalisman => neows_talisman::event_hook(hook, asked),
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
         State::NewLeaf => new_leaf::event_hook(hook, asked),
+        State::NutritiousOyster => nutritious_oyster::event_hook(hook, asked),
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::PhialHolster => phial_holster::event_hook(hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
         State::Pomander => pomander::event_hook(hook, asked),
+        State::PrecariousShears => precarious_shears::event_hook(hook, asked),
         State::PreciseScissors => precise_scissors::event_hook(hook, asked),
         // Its one hook is `ModifyHandDraw`, which the fight asks of it
         // rather than tells it. `AfterObtained` reaches every relic, and its
@@ -139,12 +151,16 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::GremlinHorn
         | State::HeftyTablet
         | State::LeadPaperweight
+        | State::LeafyPoultice
         | State::MercuryHourglass
+        | State::NeowsTalisman
         | State::NeowsTorment
         | State::NewLeaf
+        | State::NutritiousOyster
         | State::Permafrost(_)
         | State::PhialHolster
         | State::Pomander
+        | State::PrecariousShears
         | State::PreciseScissors
         | State::SandCastle => unimplemented!("what {state:?} does for {hook:?}"),
     }
@@ -172,13 +188,17 @@ impl sts2_core::RelicModel<V> for State {
             Relic::GremlinHorn => State::GremlinHorn,
             Relic::HeftyTablet => State::HeftyTablet,
             Relic::LeadPaperweight => State::LeadPaperweight,
+            Relic::LeafyPoultice => State::LeafyPoultice,
             Relic::MercuryHourglass => State::MercuryHourglass,
+            Relic::NeowsTalisman => State::NeowsTalisman,
             Relic::NeowsTorment => State::NeowsTorment,
             Relic::NewLeaf => State::NewLeaf,
+            Relic::NutritiousOyster => State::NutritiousOyster,
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::PhialHolster => State::PhialHolster,
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
             Relic::Pomander => State::Pomander,
+            Relic::PrecariousShears => State::PrecariousShears,
             Relic::PreciseScissors => State::PreciseScissors,
             Relic::RingOfTheSnake => State::RingOfTheSnake,
             Relic::SandCastle => State::SandCastle,

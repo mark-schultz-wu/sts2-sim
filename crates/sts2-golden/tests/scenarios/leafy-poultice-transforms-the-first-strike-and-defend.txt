@@ -1,0 +1,8 @@
+# `LeafyPoultice.AfterObtained` takes twelve off the maximum, which the
+# health follows down. It then transforms the first Basic Strike and the
+# first Basic Defend, both drawn off `PlayerRng.Transformations`.
+#
+# A port that draws off another stream gets other cards, and one that skips
+# the loss shows the Ironclad on 80.
+{"cmd":"start","seed":"C000000006","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":2}

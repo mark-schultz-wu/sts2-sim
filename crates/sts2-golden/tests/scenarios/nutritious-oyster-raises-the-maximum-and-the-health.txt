@@ -1,0 +1,7 @@
+# `NutritiousOyster.AfterObtained` is `CreatureCmd.GainMaxHp` for eleven,
+# which raises the maximum and heals by what it grew. The Ironclad stands on
+# 91 of 91.
+#
+# A port that raises the maximum alone leaves the health on 80.
+{"cmd":"start","seed":"C000000035","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":1}

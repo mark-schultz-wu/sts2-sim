@@ -798,9 +798,15 @@ impl<V: Rules> State<V> {
                     self.player.deck_mut().remove(at);
                 }
             }
+            // `CardCmd.Upgrade`, which passes over a card it cannot raise.
             sts2_core::DeckAct::Upgrade => {
+                use sts2_core::CardTable as _;
+
                 for &at in taken {
-                    self.player.deck_mut()[at].upgrade += 1;
+                    let card = &mut self.player.deck_mut()[at];
+                    if card.upgrade < card.card.max_upgrade() {
+                        card.upgrade += 1;
+                    }
                 }
             }
             // `CardCmd.Transform`: every replacement is drawn first, in the
@@ -813,7 +819,7 @@ impl<V: Rules> State<V> {
                         let options = V::transform_options(self.player.deck[at].card);
                         let card = *self
                             .streams
-                            .run(stream)
+                            .of(stream)
                             .choose(&options)
                             .unwrap_or_else(|_| unimplemented!("a transform with no option"));
                         (at, CardIdent::new(card))
@@ -1085,6 +1091,40 @@ impl<V: Rules> State<V> {
                     }
                     continue;
                 }
+                HookEffect::OnDeckCards { act, picks } => {
+                    let taken: Vec<usize> =
+                        picks.iter().filter_map(|&pick| self.picked(pick)).collect();
+                    self.act_on_deck(act, &taken);
+                    continue;
+                }
+                HookEffect::GainMaxHp(amount) => {
+                    let amount = self.health(amount);
+                    self.player.max_hp = self.player.max_hp + amount;
+                    self.heal(amount);
+                    continue;
+                }
+                // The part of the health above the new maximum is lost as
+                // unblockable damage first. The maximum never falls below one.
+                HookEffect::LoseMaxHp(amount) => {
+                    let amount = self.health(amount);
+                    let one: V::Health = num_traits::one();
+                    let max = if self.player.max_hp > amount {
+                        self.player.max_hp - amount
+                    } else {
+                        num_traits::zero()
+                    };
+                    if self.player.hp > max {
+                        self.damage_owner(self.player.hp - max);
+                    }
+                    self.player.max_hp = max.max(one);
+                    self.player.hp = self.player.hp.min(self.player.max_hp);
+                    continue;
+                }
+                HookEffect::DamageOwner(amount) => {
+                    let amount = self.health(amount);
+                    self.damage_owner(amount);
+                    continue;
+                }
                 HookEffect::CloneDeckCard { excluding } => Pickup::CloneDeckCard { excluding },
                 // `CardSelectCmd` takes the whole list without asking when it
                 // holds no more than it must take, and returns nothing from an
@@ -1109,6 +1149,81 @@ impl<V: Rules> State<V> {
             });
         }
         None
+    }
+
+    /// Where in the deck `pick` names, if any card fits it.
+    fn picked(&self, pick: sts2_core::DeckPick<V>) -> Option<usize> {
+        use sts2_core::{CardRarityKinds, CardTable as _};
+
+        let basic = |tag| {
+            move |(_, card): &(usize, &CardIdent<V>)| {
+                card.card.rarity() == CardRarityKinds::BASIC && card.card.tagged(tag)
+            }
+        };
+        let mut deck = self.player.deck.iter().enumerate();
+        let found = match pick {
+            sts2_core::DeckPick::FirstBasic(tag) => deck.find(basic(tag)),
+            sts2_core::DeckPick::LastBasic(tag) => deck.rev().find(basic(tag)),
+        };
+        found.map(|(at, _)| at)
+    }
+
+    /// A game number as the run's health.
+    ///
+    /// # Panics
+    ///
+    /// A number no health can hold.
+    fn health(&self, amount: V::Number) -> V::Health {
+        num_traits::cast(amount).unwrap_or_else(|| unimplemented!("{amount:?} as a health"))
+    }
+
+    /// `CreatureCmd.Heal` outside a fight, which stops at the maximum.
+    ///
+    /// # Panics
+    ///
+    /// A relic listening to `AfterCurrentHpChanged`.
+    fn heal(&mut self, amount: V::Health) {
+        self.unheard(sts2_core::ModelHook::AfterCurrentHpChanged);
+        self.player.hp = (self.player.hp + amount).min(self.player.max_hp);
+    }
+
+    /// `CreatureCmd.Damage` on the player outside a fight: unblockable,
+    /// unpowered and from nobody.
+    ///
+    /// # Panics
+    ///
+    /// A relic listening to a hook the damage raises, or damage that kills.
+    fn damage_owner(&mut self, amount: V::Health) {
+        use sts2_core::ModelHook;
+
+        for hook in [
+            ModelHook::ModifyDamageAdditive,
+            ModelHook::ModifyDamageMultiplicative,
+            ModelHook::ModifyDamageCap,
+            ModelHook::BeforeDamageReceived,
+            ModelHook::ModifyHpLostBeforeOsty,
+            ModelHook::ModifyHpLostBeforeOstyLate,
+            ModelHook::ModifyHpLostAfterOsty,
+            ModelHook::ModifyHpLostAfterOstyLate,
+            ModelHook::AfterCurrentHpChanged,
+        ] {
+            self.unheard(hook);
+        }
+        if amount >= self.player.hp {
+            unimplemented!("a run whose player dies outside a fight");
+        }
+        self.player.hp = self.player.hp - amount;
+    }
+
+    /// A hook the run raises outside a fight and no ported relic answers.
+    ///
+    /// # Panics
+    ///
+    /// A relic on the belt listening to `hook`.
+    fn unheard(&self, hook: sts2_core::ModelHook) {
+        if self.player.relics.hear(sts2_core::Overrides::of(hook)) {
+            unimplemented!("a relic listening to {} outside a fight", hook.name());
+        }
     }
 
     /// `CardFactory.CreateForReward` at `Uniform` odds for cards of one
@@ -1155,7 +1270,7 @@ impl<V: Rules> State<V> {
     /// `CreatureCmd.Heal(MaxHp - CurrentHp)`, which is what an ancient gives a
     /// run before it offers anything.
     pub(super) fn heal_fully(&mut self) {
-        self.player.hp = self.player.max_hp;
+        self.heal(self.player.max_hp - self.player.hp);
     }
 
     /// The ancient this act opens on, which it rolled with its rooms.

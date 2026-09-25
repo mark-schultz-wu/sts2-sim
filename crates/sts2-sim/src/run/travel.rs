@@ -6,10 +6,6 @@ use sts2_core::{AscensionKinds, Coord, Decided, MapPointKinds, Reason, Rules, Ru
 use super::State;
 use super::state::{EncounterQueue, Location};
 
-/// `TreasureRoom`'s normal relic-rarity weights.
-const COMMON_RELIC_CHANCE: f64 = 0.5;
-const UNCOMMON_RELIC_CHANCE: f64 = 0.33;
-
 /// What waits at a reachable map point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Destination<V: Rules> {
@@ -85,16 +81,11 @@ impl<V: Rules> State<V> {
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
                 let mut streams = *self.streams();
-                let roll = streams
-                    .run(V::RunRngType::TREASURE_ROOM_RELICS)
-                    .next_double();
-                let rarity = if roll < COMMON_RELIC_CHANCE {
-                    <super::Rarity<V> as sts2_core::RarityKinds>::COMMON
-                } else if roll < COMMON_RELIC_CHANCE + UNCOMMON_RELIC_CHANCE {
-                    <super::Rarity<V> as sts2_core::RarityKinds>::UNCOMMON
-                } else {
-                    <super::Rarity<V> as sts2_core::RarityKinds>::RARE
-                };
+                // `TreasureRoomRelicSynchronizer`, which rolls `RollRarity`
+                // off its own stream.
+                let rarity = crate::reward::relic_rarity::<V, _>(
+                    streams.run(V::RunRngType::TREASURE_ROOM_RELICS),
+                );
                 let relic = self.next_shared_relic(rarity);
                 self.enter_treasure(to, relic, streams);
                 return Ok(Decided::Resolved);

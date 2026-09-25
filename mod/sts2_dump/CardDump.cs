@@ -59,7 +59,7 @@ public static class CardDump
         // Stamped, so regenerating against a different build fails visibly
         // rather than quietly replacing the table.
         output.Append(Stamp.Header("card"));
-        output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords>\n");
+        output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords> <tags>\n");
         output.Append("# var <card> <name> <base> <calculated> <class>\n");
         output.Append("# pool <pool> <index> <card>\n");
         output.Append("# combatpool <pool> <index> <card>\n");
@@ -153,6 +153,11 @@ public static class CardDump
                 ? "-"
                 : string.Join(",", keywords.Select(k => k.ToString()).OrderBy(k => k, StringComparer.Ordinal));
 
+            // `Tags` is `CanonicalTags` on every card but a mock, so it is a
+            // fact about the card rather than about a fight.
+            List<string> tags = card.Tags.Select(t => t.ToString()).OrderBy(t => t, StringComparer.Ordinal).ToList();
+            string tagList = tags.Count == 0 ? "-" : string.Join(",", tags);
+
             output.Append(string.Join(" ", new[]
             {
                 "card",
@@ -167,6 +172,7 @@ public static class CardDump
                 card.HasStarCostX ? "1" : "0",
                 card.MaxUpgradeLevel.ToString(CultureInfo.InvariantCulture),
                 keywordList,
+                tagList,
             }));
             output.Append('\n');
 
@@ -196,7 +202,7 @@ public static class CardDump
         // matters because it is the discriminant.
         foreach (Type e in new[]
         {
-            typeof(CardType), typeof(CardRarity), typeof(TargetType), typeof(CardKeyword),
+            typeof(CardType), typeof(CardRarity), typeof(TargetType), typeof(CardKeyword), typeof(CardTag),
         })
         {
             foreach (string name in Enum.GetNames(e))

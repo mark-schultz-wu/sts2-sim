@@ -3,7 +3,7 @@
 //! Cards in `DEPRECATED_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::{CardData, CardKeyword, CardRarity, CardType, KeywordSet, TargetType};
+use super::{CardData, CardKeyword, CardRarity, CardType, KeywordSet, TagSet, TargetType};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
@@ -41,4 +41,5 @@ pub(super) static ROWS: [CardData; 1] = [CardData {
     vars: &[],
     max_upgrade: 0,
     keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+    tags: TagSet::new(&[]),
 }];

@@ -4,7 +4,21 @@ pub(crate) mod card;
 pub(crate) mod combat;
 pub(crate) mod potion;
 
-use sts2_core::Rules;
+use sts2_core::rng::GameRng;
+use sts2_core::{RarityKinds, Rules};
+
+/// `RelicFactory.RollRarity`, which is one draw and three bands.
+///
+/// `NextFloat`, as the potion roll reads one. A fight's relic, a merchant's and
+/// a treasure room's all roll it, each off its own stream.
+pub(crate) fn relic_rarity<V: Rules, R: GameRng>(rng: &mut R) -> crate::run::Rarity<V> {
+    let rolled = rng.next_double() as f32;
+    match rolled {
+        r if r < 0.5 => <crate::run::Rarity<V> as RarityKinds>::COMMON,
+        r if r < 0.83 => <crate::run::Rarity<V> as RarityKinds>::UNCOMMON,
+        _ => <crate::run::Rarity<V> as RarityKinds>::RARE,
+    }
+}
 
 /// One thing a reward screen offers, and whether it is still on offer.
 ///

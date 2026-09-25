@@ -241,11 +241,13 @@ pub trait CardTable: Table {
     /// The character pool a card is drawn from.
     type Pool: Copy + serde::Serialize + 'static;
     /// How often it turns up.
-    type Rarity: Copy + serde::Serialize + 'static;
+    type Rarity: CardRarityKinds + serde::Serialize + 'static;
     /// What it can be pointed at.
     type Target: TargetKinds + serde::Serialize + 'static;
     /// Which of the build's printed numbers one of its rows is.
     type Var: CardVars;
+    /// What a relic or card reads a card as, such as a Strike.
+    type Tag: CardTagKinds;
     /// The exact numeric representation used by this build's card variables.
     ///
     /// Not a live game number. This is what the card's face prints, which one
@@ -294,6 +296,9 @@ pub trait CardTable: Table {
     /// What the table prints, which an upgrade can add to. A copy is what
     /// carries the answer, because `AddKeyword` writes on one.
     fn innate(self) -> bool;
+
+    /// Whether `Tags` holds this tag.
+    fn tagged(self, tag: Self::Tag) -> bool;
 
     /// How many times it can be upgraded, which is `MaxUpgradeLevel`.
     ///
@@ -532,10 +537,12 @@ pub enum ModelHook {
     AfterCreatureAddedToCombat,
     ModifySummonAmount,
     AfterSummon,
+    BeforeDamageReceived,
+    AfterCurrentHpChanged,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 46] = [
+    pub const ALL: [ModelHook; 48] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -582,6 +589,8 @@ impl ModelHook {
         ModelHook::AfterCreatureAddedToCombat,
         ModelHook::ModifySummonAmount,
         ModelHook::AfterSummon,
+        ModelHook::BeforeDamageReceived,
+        ModelHook::AfterCurrentHpChanged,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -637,6 +646,8 @@ impl ModelHook {
             ModelHook::AfterCreatureAddedToCombat => "AfterCreatureAddedToCombat",
             ModelHook::ModifySummonAmount => "ModifySummonAmount",
             ModelHook::AfterSummon => "AfterSummon",
+            ModelHook::BeforeDamageReceived => "BeforeDamageReceived",
+            ModelHook::AfterCurrentHpChanged => "AfterCurrentHpChanged",
         }
     }
 }
@@ -852,6 +863,31 @@ pub trait RoomKinds: std::fmt::Debug + Copy + Eq + 'static {
 /// The same bridge as [`MapPointKinds`]. The game's enum has a third member, its
 /// C# zero, which no creature in a fight is on.
 /// The move names the simulator writes itself.
+/// What `CardRarity` names, as consts a rule can name. All ten, so a build
+/// that adds one stops codegen.
+pub trait CardRarityKinds: std::fmt::Debug + Copy + Eq + 'static {
+    const BASIC: Self;
+    const COMMON: Self;
+    const UNCOMMON: Self;
+    const RARE: Self;
+    const ANCIENT: Self;
+    const EVENT: Self;
+    const TOKEN: Self;
+    const STATUS: Self;
+    const CURSE: Self;
+    const QUEST: Self;
+}
+
+/// What `CardTag` names, as consts a rule can name. All five, so a build
+/// that adds one stops codegen.
+pub trait CardTagKinds: std::fmt::Debug + Copy + Eq + 'static {
+    const STRIKE: Self;
+    const DEFEND: Self;
+    const MINION: Self;
+    const OSTY_ATTACK: Self;
+    const SHIV: Self;
+}
+
 /// The monster the simulator names itself.
 pub trait MonsterKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// `Osty`, the pet `OstyCmd.Summon` stands up.
@@ -2095,7 +2131,25 @@ pub enum DeckAct<V: ContentVersion> {
     Upgrade,
     /// `FromDeckForTransformation`, then `CardCmd.TransformToRandom` off the
     /// named stream. It offers the cards that can be transformed.
-    Transform(V::RunRngType),
+    Transform(Stream<V>),
+}
+
+/// One stream to draw from: one of the run's, or one of the player's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stream<V: ContentVersion> {
+    Run(V::RunRngType),
+    Player(V::PlayerRngType),
+}
+
+/// A deck card a relic names rather than asks for.
+///
+/// Among the deck's `Basic` cards, the first or the last that carries a tag,
+/// which is `FirstOrDefault` or `LastOrDefault` over them. A deck without one
+/// names nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeckPick<V: ContentVersion> {
+    FirstBasic(V::CardTag),
+    LastBasic(V::CardTag),
 }
 
 /// One command requested by a content model in response to an event hook.
@@ -2114,6 +2168,20 @@ pub enum HookEffect<V: ContentVersion> {
         act: DeckAct<V>,
         count: usize,
     },
+    /// `CardCmd.Upgrade` or `CardCmd.Transform` on the deck cards the picks
+    /// name, all picked before any is changed.
+    OnDeckCards {
+        act: DeckAct<V>,
+        picks: &'static [DeckPick<V>],
+    },
+    /// `CreatureCmd.GainMaxHp` on the owner: the maximum grows, and the
+    /// health with it.
+    GainMaxHp(V::Number),
+    /// `CreatureCmd.LoseMaxHp` on the owner. The health falls to the new
+    /// maximum when it stood above it.
+    LoseMaxHp(V::Number),
+    /// `CreatureCmd.Damage` on the owner, unpowered and from nobody.
+    DamageOwner(V::Number),
     /// `CardFactory.CreateForReward` for one card of `rarity` from the
     /// character's pool, at `Uniform` odds and with no upgrade roll, into the
     /// deck.
@@ -2772,8 +2840,11 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + CardTable<Target = Self::TargetType, Var = Self::CardVar>
+        + CardTable<Target = Self::TargetType, Var = Self::CardVar, Tag = Self::CardTag>
         + 'static;
+
+    /// What a relic or card reads a card as, such as a Strike.
+    type CardTag: CardTagKinds + std::hash::Hash + 'static;
 
     /// A word a card carries, which a rule can read and an upgrade can add.
     type CardKeyword: KeywordKinds<Self>
