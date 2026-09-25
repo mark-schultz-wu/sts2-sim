@@ -2304,8 +2304,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {
-        stream: V::RunRngType,
+        stream: Stream<V>,
     },
+    /// `CardCmd.Upgrade` on every deck card an upgrade can still raise.
+    UpgradeDeck,
     /// `CreatureCmd.GainMaxHp` on the owner: the maximum grows, and the
     /// health with it.
     GainMaxHp(V::Number),
