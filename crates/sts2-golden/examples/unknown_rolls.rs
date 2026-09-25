@@ -4,10 +4,12 @@
 //! unknown_rolls <character> <first> <count>
 //! ```
 //!
-//! Seeds are the census's, `C` and nine digits. Each prints the seed, the
-//! first draw of the `UnknownMapPoint` stream, and every unknown point of the
-//! act's first three rows. The draw is read off a copy of the stream, so the
-//! run it came from is not moved.
+//! Seeds are the census's, `C` and nine digits. Each prints the seed and the
+//! first draw of the `UnknownMapPoint` stream. Then comes a path to each
+//! unknown point of the act's first three rows that a run can reach first. A
+//! path is its points from the first row, joined by `>`. The draw is read off a copy of the stream, so the
+//! run it came from is not moved. After a `|` come the first act's events in
+//! the order its unknown rooms pull them, drawn the way a run opens.
 
 use std::process::ExitCode;
 
@@ -15,10 +17,11 @@ use clap::Parser;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::characters::Character;
 use sts2_content::v0_107_1::runstate::RunRngType;
-use sts2_core::rng::GameRng as _;
-use sts2_core::{Play as _, Seed, Start};
+use sts2_core::rng::{GameRng as _, stream_seed};
+use sts2_core::{ActTable as _, ContentVersion, Play as _, Seed, Start, Table as _};
 use sts2_sim::Sim;
 use sts2_sim::rng::MegaRng;
+use sts2_sim::run::Opening;
 
 type V = V0_107_1;
 
@@ -69,6 +72,40 @@ fn main() -> ExitCode {
     }
 }
 
+/// A path to each unknown point up to `rows` that no earlier unknown point
+/// stands in front of, in map order.
+fn first_unknowns(points: &[sts2_core::Node<V>], rows: u8) -> Vec<String> {
+    let unknown = <<V as ContentVersion>::MapPointType as sts2_core::MapPointKinds>::UNKNOWN;
+    let node = |at: sts2_core::Coord| points.iter().find(|node| node.at == at);
+    let mut paths: Vec<Vec<sts2_core::Coord>> = points
+        .iter()
+        .filter(|node| node.at.row == 0)
+        .map(|node| vec![node.at])
+        .collect();
+    let mut found = Vec::new();
+    while let Some(path) = paths.pop() {
+        let Some(last) = path.last().copied().and_then(node) else {
+            continue;
+        };
+        if last.at.row > 0 && last.kind == unknown {
+            let steps: Vec<String> = path[1..]
+                .iter()
+                .map(|at| format!("{},{}", at.col, at.row))
+                .collect();
+            found.push((last.at, steps.join(">")));
+            continue;
+        }
+        for &to in last.to.iter().filter(|to| to.row <= rows) {
+            let mut longer = path.clone();
+            longer.push(to);
+            paths.push(longer);
+        }
+    }
+    found.sort_by_key(|(at, _)| (at.row, at.col));
+    found.dedup_by_key(|(at, _)| *at);
+    found.into_iter().map(|(_, path)| path).collect()
+}
+
 fn run(cli: Cli) -> Result<(), Error> {
     let Cli {
         character,
@@ -96,17 +133,29 @@ fn run(cli: Cli) -> Result<(), Error> {
         let words = position.words.ok_or_else(|| Error::NoWords(seed.clone()))?;
         let counter = i32::try_from(position.counter).map_err(|_| Error::Counter(seed.clone()))?;
         let roll = MegaRng::from_words(words, counter).next_double() as f32;
-        let unknown: Vec<String> = seen
-            .observation
-            .map
-            .points
+        let unknown = first_unknowns(&seen.observation.map.points, 3);
+        let acts: Vec<<V as ContentVersion>::Act> = <V as ContentVersion>::Act::ALL
             .iter()
-            .filter(|node| {
-                node.at.row <= 3 && node.kind == <_ as sts2_core::MapPointKinds>::UNKNOWN
-            })
-            .map(|node| format!("{},{}", node.at.col, node.at.row))
+            .copied()
+            .filter(|act| act.played())
             .collect();
-        println!("{seed} {roll:.4} {}", unknown.join(" "));
+        let mut up_front =
+            sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&start.seed), "up_front");
+        let opening = Opening::<V>::draw(&mut up_front, character, &acts);
+        let events: Vec<String> = opening.acts[0]
+            .1
+            .events
+            .iter()
+            .map(|event| match serde_json::to_value(event) {
+                Ok(serde_json::Value::String(id)) => id,
+                _ => format!("{event:?}"),
+            })
+            .collect();
+        println!(
+            "{seed} {roll:.4} {} | {}",
+            unknown.join(" "),
+            events.join(" ")
+        );
     }
     Ok(())
 }

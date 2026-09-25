@@ -1,5 +1,6 @@
-//! `cargo xtask unknown [--character <C>] [--seeds <N>] [--room <ROOM>]`: the
-//! census seeds whose first unknown room rolls a fight, a chest or a shop.
+//! `cargo xtask unknown [--character <C>] [--seeds <N>] [--room <ROOM>]
+//! [--event <EVENT> [--within <N>]]`: the census seeds whose first unknown
+//! room rolls a fight, a chest, a shop or an event.
 //!
 //! A scenario that walks into one needs a seed whose first draw of the
 //! `UnknownMapPoint` stream lands inside that room's odds. This runs the
@@ -8,7 +9,9 @@
 //! of the act's first rows.
 //!
 //! The bands are the odds an act opens with. The shop's needs the point before
-//! to hold none, and the seed's own path says whether it does.
+//! to hold none, and the seed's own path says whether it does. An event room
+//! prints the act's event queue, and `--event` keeps the seeds whose queue
+//! holds that event among its first few.
 
 use std::process::Command;
 
@@ -25,6 +28,12 @@ pub struct Args {
     /// The room the first unknown room rolls.
     #[arg(long, value_enum, default_value_t = Room::Monster)]
     room: Room,
+    /// An event, by id, that the act's event queue holds near its head.
+    #[arg(long)]
+    event: Option<String>,
+    /// How far into the queue `--event` looks.
+    #[arg(long, default_value_t = 6)]
+    within: usize,
 }
 
 /// A room other than an event, with its band of the first draw.
@@ -33,6 +42,7 @@ enum Room {
     Monster,
     Treasure,
     Shop,
+    Event,
 }
 
 impl Room {
@@ -42,6 +52,7 @@ impl Room {
             Room::Monster => (0.0, 0.1),
             Room::Treasure => (0.1, 0.12),
             Room::Shop => (0.12, 0.15),
+            Room::Event => (0.15, 1.0),
         }
     }
 }
@@ -51,6 +62,8 @@ pub fn run(args: Args) -> Result<String, ProcessError> {
         character,
         seeds,
         room,
+        event,
+        within,
     } = args;
     let output = error::output(
         Command::new("cargo")
@@ -76,9 +89,22 @@ pub fn run(args: Args) -> Result<String, ProcessError> {
         let Ok(roll) = roll.parse::<f32>() else {
             continue;
         };
-        let points: Vec<&str> = words.collect();
-        if roll > low && roll <= high && !points.is_empty() {
-            found.push_str(&format!("{seed} {roll:.4} {}\n", points.join(" ")));
+        let rest: Vec<&str> = words.collect();
+        let (points, queue) = match rest.iter().position(|word| *word == "|") {
+            Some(bar) => (&rest[..bar], &rest[bar + 1..]),
+            None => (&rest[..], &[][..]),
+        };
+        let queued = match &event {
+            Some(event) => queue.iter().take(within).any(|id| id == event),
+            None => true,
+        };
+        if roll > low && roll <= high && !points.is_empty() && queued {
+            let mut line = format!("{seed} {roll:.4} {}", points.join(" "));
+            if matches!(room, Room::Event) {
+                line.push_str(&format!(" | {}", queue.join(" ")));
+            }
+            found.push_str(&line);
+            found.push('\n');
         }
     }
     Ok(found)

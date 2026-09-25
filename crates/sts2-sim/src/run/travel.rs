@@ -163,7 +163,7 @@ impl<V: Rules> State<V> {
                 .find_map(|_| {
                     let candidate = events[events_used % events.len()];
                     events_used += 1;
-                    (!visited.contains(&candidate) && V::event_allowed(candidate, self))
+                    (V::event_allowed(candidate, self) && !visited.contains(&candidate))
                         .then_some(candidate)
                 })
                 .unwrap_or_else(|| unimplemented!("an exhausted event queue"));

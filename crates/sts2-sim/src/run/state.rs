@@ -2877,12 +2877,24 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
         num_traits::cast(self.act()).expect("an act index fits the build count")
     }
 
+    fn floor(&self) -> V::Count {
+        self.floor
+    }
+
     fn gold(&self) -> V::Number {
         self.player.gold
     }
 
-    fn has_potion(&self) -> bool {
-        !self.player.potions.is_empty()
+    fn hp(&self) -> V::Health {
+        self.player.hp
+    }
+
+    fn max_hp(&self) -> V::Health {
+        self.player.max_hp
+    }
+
+    fn potions(&self) -> impl Iterator<Item = V::Potion> + '_ {
+        self.player.potions.iter().copied()
     }
 
     fn character(&self) -> V::Character {
@@ -2895,6 +2907,13 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
 
     fn deck(&self) -> &[CardIdent<V>] {
         &self.player.deck
+    }
+
+    fn relics_left(&self) -> bool {
+        self.shared
+            .opening
+            .player_relics
+            .has_left(&self.dealt_relics)
     }
 }
 
