@@ -1,0 +1,10 @@
+# `PlatingPower.AfterSideTurnStart` takes one Plating off a player on each of
+# its turns but the first. The Gorget's four plate the Regent for four as the
+# first turn ends, and three are left when the second starts.
+#
+# A port that never decrements leaves four, and one that decrements on the
+# first turn plates for three.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

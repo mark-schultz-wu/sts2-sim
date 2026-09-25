@@ -188,7 +188,6 @@ impl<V: Rules> State<V> {
         };
 
         let fight = self.create_fight(encounter, queue)?;
-        self.enter_fight(fight, Location::MapPoint(to));
-        Ok(Decided::Resolved)
+        Ok(self.enter_fight(fight, Location::MapPoint(to)))
     }
 }

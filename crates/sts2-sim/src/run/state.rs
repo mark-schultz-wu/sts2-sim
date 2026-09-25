@@ -494,6 +494,8 @@ pub(super) struct CreatedFight<V: Rules> {
     live: Box<crate::combat::Live<V>>,
     streams: Streams<V>,
     queue: EncounterQueue,
+    /// How the fight ended before the player took a turn in it, if it did.
+    ended: Option<crate::combat::Ended>,
 }
 
 /// Where the run stands when it enters a room.
@@ -1253,11 +1255,12 @@ impl<V: Rules> State<V> {
     /// The act counts the fight here rather than where it was built, because
     /// the count is how far down its list the run has walked. A fight the run
     /// never walked into moves no list on.
-    pub(super) fn enter_fight(&mut self, fight: CreatedFight<V>, at: Location) {
+    pub(super) fn enter_fight(&mut self, fight: CreatedFight<V>, at: Location) -> Decided {
         let CreatedFight {
             live,
             streams,
             queue,
+            ended,
         } = fight;
         match queue {
             EncounterQueue::Normal => self.normal_fights += 1,
@@ -1266,6 +1269,9 @@ impl<V: Rules> State<V> {
         }
         self.drew(streams);
         self.enter(at, Phase::Combat(live));
+        // A fight its opening ended goes straight on, the way one a decision
+        // ended does.
+        self.settle(ended, 0)
     }
 
     /// Take back the streams a rule drew from.
@@ -1309,7 +1315,11 @@ impl<V: Rules> State<V> {
             alive: standing.alive,
             deck: &self.player.deck,
         };
-        let (live, streams) = crate::combat::enter::<V>(
+        let crate::combat::Entered {
+            live,
+            streams,
+            ended,
+        } = crate::combat::enter::<V>(
             raw_seed,
             character,
             ascension,
@@ -1322,6 +1332,7 @@ impl<V: Rules> State<V> {
             live,
             streams,
             queue,
+            ended,
         })
     }
 
@@ -1334,8 +1345,7 @@ impl<V: Rules> State<V> {
     /// way. The encounter is named, so the act's own list is not drawn from.
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
         let fight = self.create_fight(encounter, EncounterQueue::Named)?;
-        self.enter_fight(fight, Location::NoLocation);
-        Ok(Decided::Resolved)
+        Ok(self.enter_fight(fight, Location::NoLocation))
     }
 
     /// Put a power on a creature in the fight.

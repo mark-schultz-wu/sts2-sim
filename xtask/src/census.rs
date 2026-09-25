@@ -1,7 +1,8 @@
 //! Which unported path stops the simulator's runs, and how often.
 //!
 //! Each run is `sts2-golden`'s `random_run` for one seed and character, in a
-//! process of its own. A path nobody has ported panics, and the panic ends that
+//! process of its own. It carries 25 Gorgets and a Mercury Hourglass, so a
+//! run stops on what the simulator cannot play rather than on bad play. A path nobody has ported panics, and the panic ends that
 //! process and nothing else.
 //!
 //! A panic inside a decision the run had alternatives to is one a player

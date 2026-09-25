@@ -736,10 +736,14 @@ pub(crate) fn event_hook(
             PowerAmount::Counted(amount),
             EventHook::BeforeSideTurnEndEarly { side },
         ) if side == owner => Some(HookEffect::GainBlock(amount)),
-        (Power::PlatingPower, PowerAmount::Counted(_), EventHook::SideTurnStart { side, .. })
-            if owner != CombatSide::Enemy && side == owner =>
+        // `PlatingPower.AfterSideTurnStart` on a player: one comes off each
+        // of its turns but the first, by `PowerCmd.Decrement`.
+        (Power::PlatingPower, PowerAmount::Counted(_), EventHook::SideTurnStart { side, turn })
+            if owner != CombatSide::Enemy
+                && side == owner
+                && turn > <V as sts2_core::ContentVersion>::Count::from(1u8) =>
         {
-            unimplemented!("Plating on a player")
+            Some(HookEffect::Decrement)
         }
         // `SwipePower.BeforeDeath`, which hands the stolen card back as its
         // owner dies.

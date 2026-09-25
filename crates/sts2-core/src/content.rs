@@ -513,10 +513,11 @@ pub enum ModelHook {
     BeforeDeath,
     AfterBlockBroken,
     AfterCombatVictory,
+    AfterPlayerTurnStart,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 35] = [
+    pub const ALL: [ModelHook; 36] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -552,6 +553,7 @@ impl ModelHook {
         ModelHook::BeforeDeath,
         ModelHook::AfterBlockBroken,
         ModelHook::AfterCombatVictory,
+        ModelHook::AfterPlayerTurnStart,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -594,6 +596,7 @@ impl ModelHook {
             ModelHook::BeforeDeath => "BeforeDeath",
             ModelHook::AfterBlockBroken => "AfterBlockBroken",
             ModelHook::AfterCombatVictory => "AfterCombatVictory",
+            ModelHook::AfterPlayerTurnStart => "AfterPlayerTurnStart",
         }
     }
 }
@@ -1756,6 +1759,11 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won.
     CombatVictory,
+    /// `AfterPlayerTurnStart`, once the player has drawn and before the side
+    /// turn starts.
+    PlayerTurnStart {
+        player: crate::CombatId,
+    },
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
     /// `AfterCardPlayed`, carrying the card its owner just played.
@@ -1890,6 +1898,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd => ModelHook::AfterCombatEnd,
             EventHook::CombatVictory => ModelHook::AfterCombatVictory,
+            EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
             EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
@@ -1959,6 +1968,9 @@ pub enum HookEffect<V: ContentVersion> {
     GainStars(V::Number),
     /// `CreatureCmd.Heal` on the listener's owner.
     Heal(V::Number),
+    /// `CreatureCmd.Damage` on every enemy that can be hit, from the
+    /// listener's owner, for a number no power scales.
+    DamageOpponents(V::Number),
     /// `PlayerCmd.GainGold`, which a run carries out between rooms.
     GainGold(V::Number),
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
