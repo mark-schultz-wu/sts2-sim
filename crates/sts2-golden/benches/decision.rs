@@ -83,6 +83,19 @@ fn decisions(c: &mut Criterion) {
                 })
             });
 
+            group.bench_function("clone_from", |b| {
+                let mut node = base.clone();
+                b.iter(|| node.clone_from(&base))
+            });
+
+            group.bench_function("node_from", |b| {
+                let mut node = base.clone();
+                b.iter(|| {
+                    node.clone_from(&base);
+                    node.advance(step).ok()
+                })
+            });
+
             group.finish();
         }
     }

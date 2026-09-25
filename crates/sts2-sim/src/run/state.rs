@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 mod observed;
 
+use crate::bounded::Bounded;
 use crate::rng::MegaRng;
 use num_traits::ToPrimitive as _;
 use smallvec::SmallVec;
@@ -27,7 +28,7 @@ use sts2_core::Gift;
 ///
 /// Reports are built from this state. They are never stored and edited as if
 /// they were the run itself.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct State<V: Rules> {
     shared: Arc<RunData<V>>,
     /// The act's map, which is generated again for every act.
@@ -42,7 +43,7 @@ pub(crate) struct State<V: Rules> {
     /// own starting node rather than on a point the run stands at.
     ///
     /// Inline: an act's own height bounds it, and a coordinate is two bytes.
-    visited: SmallVec<[Coord; VISITED_INLINE]>,
+    visited: Bounded<Coord, VISITED>,
     player: Player<V>,
     streams: Streams<V>,
     /// How many of this act's normal fights the run has walked into.
@@ -146,11 +147,19 @@ fn removal_cost<V: Rules>(used: usize) -> V::Number {
 /// `RelicModel` is an instance per relic held, and its saved fields outlive
 /// the fight they were written in. So the run carries them, and hands them
 /// back whenever a hook asks that relic something.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct HeldRelic<V: Rules> {
     pub(crate) relic: V::Relic,
     pub(crate) state: V::RelicState,
 }
+
+impl<V: Rules> Clone for HeldRelic<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for HeldRelic<V> {}
 
 impl<V: Rules> HeldRelic<V> {
     /// The relic as a run picks it up, with its model as new as it is.
@@ -168,13 +177,13 @@ impl<V: Rules> HeldRelic<V> {
 }
 
 /// The small, mutable part of one player's run state.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Player<V: Rules> {
-    relics: SmallVec<[HeldRelic<V>; 8]>,
+    relics: Bounded<HeldRelic<V>, RELICS>,
     /// The belt, in physical slot order.
-    potions: SmallVec<[V::Potion; 3]>,
+    potions: Bounded<V::Potion, BELT>,
     /// The physical slot beside each potion. Empty slots survive drinking.
-    potion_positions: SmallVec<[usize; 3]>,
+    potion_positions: Bounded<u8, BELT>,
     /// Shared until one is written. Every write is a room's: a shop, a
     /// reward, a rest site. Nothing inside a fight moves the deck, so a
     /// search expanding a fight copies the pointer and not the cards.
@@ -191,6 +200,94 @@ struct Player<V: Rules> {
     potion_slots: V::Count,
 }
 
+impl<V: Rules> Clone for State<V> {
+    fn clone(&self) -> Self {
+        Self {
+            shared: Arc::clone(&self.shared),
+            map: Arc::clone(&self.map),
+            player: self.player.clone(),
+            visited_events: Arc::clone(&self.visited_events),
+            dealt_relics: Arc::clone(&self.dealt_relics),
+            phase: self.phase.clone(),
+            ..*self
+        }
+    }
+
+    /// Into the run already here, which is how a search reuses a node.
+    ///
+    /// A fight is written into the fight already here, so its lists keep what
+    /// they allocated. Any other phase is cloned.
+    fn clone_from(&mut self, source: &Self) {
+        let State {
+            shared,
+            map,
+            act,
+            floor,
+            visited,
+            player,
+            streams,
+            normal_fights,
+            elite_fights,
+            events_used,
+            visited_events,
+            unknown_odds,
+            odds,
+            dealt_relics,
+            removals_used,
+            phase,
+        } = self;
+        shared.clone_from(&source.shared);
+        map.clone_from(&source.map);
+        *act = source.act;
+        *floor = source.floor;
+        visited.copy_from(&source.visited);
+        player.clone_from(&source.player);
+        *streams = source.streams;
+        *normal_fights = source.normal_fights;
+        *elite_fights = source.elite_fights;
+        *events_used = source.events_used;
+        visited_events.clone_from(&source.visited_events);
+        *unknown_odds = source.unknown_odds;
+        *odds = source.odds;
+        dealt_relics.clone_from(&source.dealt_relics);
+        *removals_used = source.removals_used;
+        match (phase, &source.phase) {
+            (Phase::Combat(live), Phase::Combat(from)) => live.clone_from(from),
+            (phase, from) => *phase = from.clone(),
+        }
+    }
+}
+
+impl<V: Rules> Clone for Player<V> {
+    fn clone(&self) -> Self {
+        Self {
+            deck: Arc::clone(&self.deck),
+            ..*self
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        let Player {
+            relics,
+            potions,
+            potion_positions,
+            deck,
+            hp,
+            max_hp,
+            gold,
+            potion_slots,
+        } = self;
+        relics.copy_from(&source.relics);
+        potions.copy_from(&source.potions);
+        potion_positions.copy_from(&source.potion_positions);
+        deck.clone_from(&source.deck);
+        *hp = source.hp;
+        *max_hp = source.max_hp;
+        *gold = source.gold;
+        *potion_slots = source.potion_slots;
+    }
+}
+
 impl<V: Rules> Player<V> {
     /// The deck, to write on.
     ///
@@ -201,11 +298,14 @@ impl<V: Rules> Player<V> {
     }
 }
 
-/// How many map points one act's run stands on, before reaching the heap.
-///
-/// An act is shorter than this, so the list stays where it is put. A longer
-/// one spills, the way every act's list did.
-const VISITED_INLINE: usize = 24;
+/// How many relics a run carries.
+const RELICS: usize = 64;
+
+/// How many potion slots a belt has.
+const BELT: usize = 8;
+
+/// How many map points one act's run stands on. An act is shorter than this.
+const VISITED: usize = 32;
 
 /// Exactly one room or pending action can own the run at a time.
 #[derive(Debug, Clone)]
@@ -227,7 +327,9 @@ pub(super) enum Phase<V: Rules> {
     },
     /// The map itself, which an act opens on and no room owns.
     Map,
-    Combat(crate::combat::Live<V>),
+    /// Boxed, so a run moves a pointer rather than a fight. A reused node
+    /// writes into the box it already has.
+    Combat(Box<crate::combat::Live<V>>),
     /// A fight that is over, and the rewards it has not handed out yet.
     ///
     /// The fight stays in the observation. It reports the state it ended in
@@ -294,7 +396,7 @@ pub(super) enum Pickup {
 /// the act list it came off.
 #[derive(Debug)]
 pub(super) struct CreatedFight<V: Rules> {
-    live: crate::combat::Live<V>,
+    live: Box<crate::combat::Live<V>>,
     streams: Streams<V>,
     queue: EncounterQueue,
 }
@@ -443,14 +545,14 @@ impl<V: Rules> State<V> {
             map: Arc::new(map),
             act: 0,
             floor: num_traits::one(),
-            visited: smallvec::smallvec![at],
+            visited: [at].into_iter().collect(),
             player: Player {
                 relics: V::starting_relics(character)
                     .into_iter()
                     .map(HeldRelic::new)
                     .collect(),
-                potions: SmallVec::new(),
-                potion_positions: SmallVec::new(),
+                potions: Bounded::new(),
+                potion_positions: Bounded::new(),
                 deck: Arc::new(
                     V::starting_deck(character)
                         .into_iter()
@@ -549,7 +651,9 @@ impl<V: Rules> State<V> {
     fn procure(&mut self, potion: V::Potion) -> bool {
         let slots: usize = num_traits::cast(self.player.potion_slots)
             .expect("the belt has an addressable number of slots");
-        let Some(slot) = (0..slots).find(|slot| !self.player.potion_positions.contains(slot))
+        let Some(slot) = (0..slots)
+            .map(|slot| u8::try_from(slot).expect("a belt slot fits a byte"))
+            .find(|slot| !self.player.potion_positions.contains(slot))
         else {
             return false;
         };
@@ -580,7 +684,7 @@ impl<V: Rules> State<V> {
     /// Take the fight out of the run, for a decision that ended it.
     ///
     /// What replaces it is the caller's to say, straight after.
-    pub(super) fn left_fight(&mut self) -> crate::combat::Live<V> {
+    pub(super) fn left_fight(&mut self) -> Box<crate::combat::Live<V>> {
         match std::mem::replace(&mut self.phase, Phase::Map) {
             Phase::Combat(live) => live,
             _ => unreachable!("a fight that ended is the one the run stood in"),
@@ -999,7 +1103,7 @@ impl<V: Rules> State<V> {
     /// Built rather than entered, because what a merchant stocks does not
     /// depend on how the run reached it.
     pub(super) fn stocked_shop(&mut self) -> Phase<V> {
-        let mut streams = self.streams.clone();
+        let mut streams = self.streams;
         let mut dealt = self.dealt_relics.to_vec();
         let entries = super::shop::Merchant::<V> {
             streams: &mut streams,
@@ -1087,6 +1191,8 @@ impl<V: Rules> State<V> {
         queue: EncounterQueue,
     ) -> Result<CreatedFight<V>, Error> {
         let standing = self.standing();
+        let (raw_seed, character, ascension) =
+            (self.raw_seed(), self.character(), self.ascension());
         let entering = crate::combat::Entering {
             // The run steps up to the floor it fights on, and the encounter
             // is rolled against that one rather than the one behind it.
@@ -1096,17 +1202,15 @@ impl<V: Rules> State<V> {
             alive: standing.alive,
             deck: &self.player.deck,
         };
-        let mut relics = self.player.relics.clone();
         let (live, streams) = crate::combat::enter::<V>(
-            self.raw_seed(),
-            self.character(),
-            self.ascension(),
+            raw_seed,
+            character,
+            ascension,
             encounter,
             &entering,
             &self.streams,
-            &mut relics,
+            &mut self.player.relics,
         )?;
-        self.player.relics = relics;
         Ok(CreatedFight {
             live,
             streams,

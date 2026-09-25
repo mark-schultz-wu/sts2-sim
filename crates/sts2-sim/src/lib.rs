@@ -3,6 +3,7 @@
 //! Gameplay rules live under their domain modules. This first slice generates
 //! the act map from the same random stream and constraints as the game.
 
+mod bounded;
 pub mod combat;
 mod engine;
 pub mod event;

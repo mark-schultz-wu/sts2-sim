@@ -1333,7 +1333,675 @@ impl sts2_core::PowerTable for Power {
             Field::Computed => None,
         }
     }
+
+    fn overrides(self) -> sts2_core::Overrides {
+        OVERRIDES[self as usize]
+    }
 }
+
+/// The hooks each power's class overrides, from `hooks.txt`, indexed by
+/// the power's discriminant.
+static OVERRIDES: [sts2_core::Overrides; 273] = [
+    // ACCELERANT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // ACCURACY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // ADAPTABLE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // AFTERIMAGE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // AGGRESSION_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    // ANTICIPATE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ARSENAL_POWER
+    sts2_core::Overrides::from_bits(0),
+    // ARTIFACT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // ASLEEP_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // AUTOMATION_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // BACK_ATTACK_LEFT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // BACK_ATTACK_RIGHT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // BARRICADE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // BATTLEWORN_DUMMY_TIME_LIMIT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // BEACON_OF_HOPE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // BIASED_COGNITION_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // BLACK_HOLE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // BLOCK_NEXT_TURN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
+    // BLUR_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // BORROWED_TIME_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // BUFFER_POWER
+    sts2_core::Overrides::from_bits(0),
+    // BURROWED_POWER
+    sts2_core::Overrides::from_bits(0),
+    // BURST_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CALAMITY_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // CALCIFY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // CALL_OF_THE_VOID_POWER
+    sts2_core::Overrides::from_bits(0),
+    // CHAINS_OF_BINDING_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // CHILD_OF_THE_STARS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // CLARITY_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // COLOSSUS_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CONFUSED_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // CONQUEROR_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CONSTRICT_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDeath)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CONSUMING_SHADOW_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // COOLANT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // COORDINATE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CORROSIVE_WAVE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardDrawn)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CORRUPTION_POWER
+    sts2_core::Overrides::from_bits(0),
+    // COUNTDOWN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // COVERED_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDeath)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CRAB_RAGE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // CREATIVE_AI_POWER
+    sts2_core::Overrides::from_bits(0),
+    // CRIMSON_MANTLE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // CRUELTY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // CRUSH_UNDER_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // CURIOUS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // CURL_UP_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterDamageReceived),
+    // DAMPEN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // DANSE_MACABRE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // DARK_EMBRACE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // DARK_SHACKLES_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // DEBILITATE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // DEMESNE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // DEMISE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // DEMON_FORM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // DEVOUR_LIFE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // DEXTERITY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // DIAMOND_DIADEM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // DIE_FOR_YOU_POWER
+    sts2_core::Overrides::from_bits(0),
+    // DISINTEGRATION_POWER
+    sts2_core::Overrides::from_bits(0),
+    // DOOM_POWER
+    sts2_core::Overrides::from_bits(0),
+    // DOUBLE_DAMAGE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // DRAW_CARDS_NEXT_TURN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // DUPLICATION_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // DYING_STAR_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ECHO_FORM_POWER
+    sts2_core::Overrides::from_bits(0),
+    // ENERGY_NEXT_TURN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
+    // ENFEEBLING_TOUCH_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ENRAGE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // ENTROPY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // ENVENOM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageGiven),
+    // ESCAPE_ARTIST_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // FAN_OF_KNIVES_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FASTEN_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FEEDING_FRENZY_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // FEEL_NO_PAIN_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FERAL_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // FLAME_BARRIER_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // FLANKING_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // FLEX_POTION_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // FLUTTER_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    // FOCUSED_STRIKE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // FOCUS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FORBIDDEN_GRIMOIRE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    // FOREGONE_CONCLUSION_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FRAIL_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // FREE_ATTACK_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FREE_POWER_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FREE_SKILL_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FRIENDSHIP_POWER
+    sts2_core::Overrides::from_bits(0),
+    // FURNACE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // GALVANIC_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::BeforeCombatStart),
+    // GENESIS_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
+    // GIGANTIFICATION_POWER
+    sts2_core::Overrides::from_bits(0),
+    // GRAVITY_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // GUARDED_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // HAILSTORM_POWER
+    sts2_core::Overrides::from_bits(0),
+    // HAMMER_TIME_POWER
+    sts2_core::Overrides::from_bits(0),
+    // HANG_POWER
+    sts2_core::Overrides::from_bits(0),
+    // HARDENED_SHELL_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::BeforeSideTurnStart),
+    // HARD_TO_KILL_POWER
+    sts2_core::Overrides::from_bits(0),
+    // HATCH_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // HAUNT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // HEIST_POWER
+    sts2_core::Overrides::from_bits(0),
+    // HELICAL_DART_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // HELLO_WORLD_POWER
+    sts2_core::Overrides::from_bits(0),
+    // HELLRAISER_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // HEX_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterDeath),
+    // HIGH_VOLTAGE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // HOTFIX_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ILLUSION_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterDeath),
+    // IMBALANCED_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageGiven),
+    // IMPROVEMENT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    // INFERNO_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    // INFESTED_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // INFINITE_BLADES_POWER
+    sts2_core::Overrides::from_bits(0),
+    // INTANGIBLE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // INTERCEPT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ITERATION_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // JUGGERNAUT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // JUGGLING_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // KNOCKDOWN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // LEADERSHIP_POWER
+    sts2_core::Overrides::from_bits(0),
+    // LETHALITY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // LIGHTNING_ROD_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
+    // LOOP_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MACHINE_LEARNING_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MAGIC_BOMB_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDeath)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // MANGLE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // MASTER_PLANNER_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // MAYHEM_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MIND_ROT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MINION_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_CLONE_CARDS_ON_PLAY_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // MOCK_DO_NOT_SCALE_IN_MULTIPLAYER_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_EXTRA_TURN_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_FREE_CARDS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_GAIN_BLOCK_ON_ATTACK_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_INVINCIBLE_ON_DEATH_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // MOCK_MODIFY_ENERGY_COST_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_MODIFY_STAR_COST_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_PHASE_OBSERVER_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // MOCK_PREVENT_DEATH_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_REMOVE_DRAWN_CARDS_FROM_COMBAT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // MOCK_RESET_COMBAT_ON_SHUFFLE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_REVIVE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_SCALE_IN_MULTIPLAYER_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_TEMPORARY_STRENGTH_LOSS_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // MOCK_UNHITTABLE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // MONARCHS_GAZE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageGiven),
+    // MONARCHS_GAZE_STRENGTH_DOWN_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // MONOLOGUE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // NECRO_MASTERY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // NEMESIS_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // NEUROSURGE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // NIGHTMARE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // NOSTALGIA_POWER
+    sts2_core::Overrides::from_bits(0),
+    // NOXIOUS_FUMES_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // NO_BLOCK_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // NO_DRAW_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // NO_ENERGY_GAIN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // OBLIVION_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ONE_TWO_PUNCH_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ORBIT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // OUTBREAK_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // PAGESTORM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // PAINFUL_STABS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // PALE_BLUE_DOT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // PANACHE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // PAPER_CUTS_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageGiven),
+    // PARRY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // PERSONAL_HIVE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    // PHANTOM_BLADES_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardEnteredCombat),
+    // PIERCING_WAIL_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // PILLAR_OF_CREATION_POWER
+    sts2_core::Overrides::from_bits(0),
+    // PLATING_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::BeforeSideTurnEndEarly)
+        .with(sts2_core::ModelHook::BeforeSideTurnStart),
+    // PLOW_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    // POISON_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // POSSESS_SPEED_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDeath)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // POSSESS_STRENGTH_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDeath)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // PREP_TIME_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // PYRE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // RADIANCE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
+    // RAGE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // RAMPART_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // RAVENOUS_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // REAPER_FORM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageGiven),
+    // REATTACH_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // REBOUND_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // REFLECT_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::AfterSideTurnStart),
+    // REGEN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // REPTILE_TRINKET_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // RETAIN_HAND_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // RINGING_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // RITUAL_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // ROLLING_BOULDER_POWER
+    sts2_core::Overrides::from_bits(0),
+    // ROYALTIES_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    // RUPTURE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterDamageReceived),
+    // SANDPIT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // SEEKING_EDGE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SELF_FORMING_CLAY_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
+    // SENTRY_MODE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SERPENT_FORM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // SETUP_STRIKE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SHACKLING_POTION_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SHADOWMELD_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SHADOW_STEP_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    // SHRIEK_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    // SHRINK_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDeath)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SHROUD_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // SIC_EM_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDamageGiven)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SIGNAL_BOOST_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SKITTISH_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SLEIGHT_OF_FLESH_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // SLIPPERY_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    // SLOTH_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    // SLOW_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnStart),
+    // SLUMBER_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SMOGGY_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SMOKESTACK_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SNEAKY_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // SOAR_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SPECTRUM_SHIFT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SPEEDSTER_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // SPEED_POTION_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // SPINNER_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
+    // SPIRIT_OF_ASH_POWER
+    sts2_core::Overrides::from_bits(0),
+    // STAMPEDE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // STAR_NEXT_TURN_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
+    // STEAM_ERUPTION_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // STOCK_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // STORM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // STRANGLE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // STRATAGEM_POWER
+    sts2_core::Overrides::from_bits(0),
+    // STRENGTH_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SUBROUTINE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // SUCK_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SUMMON_NEXT_TURN_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SURPRISE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // SURROUNDED_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // SWIPE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SWORD_SAGE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // SYNCHRONIZE_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // TAG_TEAM_POWER
+    sts2_core::Overrides::from_bits(0),
+    // TAINTED_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // TANGLED_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // TANK_POWER
+    sts2_core::Overrides::from_bits(0),
+    // TENDER_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // TERRITORIAL_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // THE_BOMB_POWER
+    sts2_core::Overrides::from_bits(0),
+    // THE_GAMBIT_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDamageReceived),
+    // THE_HUNT_POWER
+    sts2_core::Overrides::from_bits(0),
+    // THE_SEALED_THRONE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // THIEVERY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // THORNS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // THUNDER_POWER
+    sts2_core::Overrides::from_bits(0),
+    // TOOLS_OF_THE_TRADE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // TORIC_TOUGHNESS_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
+    // TRACKING_POWER
+    sts2_core::Overrides::from_bits(0),
+    // TRASH_TO_TREASURE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // TYRANNY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // UNMOVABLE_POWER
+    sts2_core::Overrides::from_bits(0),
+    // VEILPIERCER_POWER
+    sts2_core::Overrides::from_bits(0),
+    // VICIOUS_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    // VIGOR_POWER
+    sts2_core::Overrides::from_bits(0),
+    // VITAL_SPARK_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::BeforeCombatStart),
+    // VOID_FORM_POWER
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::BeforeSideTurnStart),
+    // VULNERABLE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // WASTE_AWAY_POWER
+    sts2_core::Overrides::from_bits(0),
+    // WEAK_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    // WELL_LAID_PLANS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // WITHERING_PRESENCE_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // WRAITH_FORM_POWER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+];
 mod buffs;
 mod debuffs;
 mod temporary;

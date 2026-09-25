@@ -9,9 +9,8 @@ use super::Number;
 const BLOCK: Number = 10;
 
 /// `BeforeCombatStart`, which is `CreatureCmd.GainBlock` on its owner.
-pub(super) fn event_hook(hook: EventHook<V>) -> Vec<HookEffect<V>> {
-    match hook {
-        EventHook::CombatStarting => vec![HookEffect::GainBlock(BLOCK)],
-        _ => Vec::new(),
+pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
+    if let EventHook::CombatStarting = hook {
+        asked.push(HookEffect::GainBlock(BLOCK));
     }
 }

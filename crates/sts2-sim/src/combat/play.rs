@@ -12,7 +12,7 @@
 use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
 use super::board::Board;
-use super::live::{Asked, Asker, CardInstance, Live, Plays, Resuming};
+use super::live::{Asked, Asker, Live, Plays, Resuming, Skips};
 use super::{Error, Fighting, hook, legal, power, relic};
 
 /// A play the fight allows, resolved but not yet made.
@@ -42,12 +42,15 @@ pub(crate) fn resolve<V: Rules>(
     target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
     let at = usize::from(index.get());
-    let held = live.hand.get(at).ok_or(Reason::OutOfRange {
-        index: i64::from(index.get()),
-        count: live.hand.len(),
-    })?;
-    let card = held.ident;
-    let (cost, star_cost) = held.costs();
+    let held = live
+        .cards
+        .get(sts2_core::Pile::Hand, at)
+        .ok_or(Reason::OutOfRange {
+            index: i64::from(index.get()),
+            count: live.cards.len(sts2_core::Pile::Hand),
+        })?;
+    let card = held.face.ident;
+    let (cost, star_cost) = held.face.costs();
 
     // The creature the play named has to still be in this fight. An id is
     // chosen against an observation, and a fight moves on from one.
@@ -138,11 +141,8 @@ pub(crate) fn apply_power<V: Rules>(
 }
 
 /// The skipped ticks a fight already held, and the ones an effect just added.
-pub(super) fn merged<V: Rules>(
-    held: &[(CombatId, V::Power)],
-    added: Vec<(CombatId, V::Power)>,
-) -> Vec<(CombatId, V::Power)> {
-    let mut out = held.to_vec();
+pub(super) fn merged<V: Rules>(held: &Skips<V>, added: Vec<(CombatId, V::Power)>) -> Skips<V> {
+    let mut out = *held;
     for one in added {
         if !out.contains(&one) {
             out.push(one);
@@ -170,7 +170,7 @@ pub(crate) fn play<V: Rules>(
 
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
-    let card = live.hand.remove(play.index);
+    let card = live.cards.play(play.index);
     let ascension = live.ascension;
     let mut board = Board::for_card(
         live,
@@ -178,9 +178,9 @@ pub(crate) fn play<V: Rules>(
         relics,
         ascension,
         play.target,
-        Some(&card),
+        Some(card.id),
     );
-    let played = V::on_play(card.ident.card, &mut board);
+    let played = V::on_play(card.face.ident.card, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
     live.skip_tick = merged::<V>(&live.skip_tick, skipped);
@@ -196,9 +196,9 @@ pub(crate) fn play<V: Rules>(
             // `GeneratePlayCount`, worked out once and before the first play.
             plays: Plays {
                 done: num_traits::zero(),
-                count: card.play_count(),
+                count: card.face.play_count(),
             },
-            asker: Asker::Card(card),
+            asker: Asker::Card(card.id),
             target: play.target,
             ended,
         },
@@ -225,11 +225,10 @@ pub(crate) fn answer<V: Rules>(
             pile: from,
             selection,
         } => {
-            let held = pile(live, *from);
             let cards: Option<Vec<_>> = chosen
                 .iter()
                 .map(|index| {
-                    held.get(index).map(|card| {
+                    live.cards.get(*from, index).map(|card| {
                         let index = num_traits::NumCast::from(index).unwrap_or_else(|| {
                             unimplemented!("a pile deeper than a fight can number")
                         });
@@ -277,7 +276,7 @@ pub(crate) fn answer<V: Rules>(
         relics,
         ascension,
         effect.target,
-        playing.as_ref(),
+        playing,
     );
     let played = V::resume_play(&mut board, asking.at, taken);
     effect.ended = effect.ended.or(board.ended);
@@ -324,15 +323,22 @@ pub(super) fn carry_on<V: Rules>(
                     break;
                 }
                 let card = *card;
+                let played_card = next
+                    .cards
+                    .named(card)
+                    .unwrap_or_else(|| unimplemented!("a replay of a card that left play"))
+                    .face
+                    .ident
+                    .card;
                 let mut board = Board::for_card(
                     next,
                     streams.combat(),
                     relics,
                     ascension,
                     effect.target,
-                    Some(&card),
+                    Some(card),
                 );
-                played = V::on_play(card.ident.card, &mut board);
+                played = V::on_play(played_card, &mut board);
                 effect.ended = effect.ended.or(board.ended);
                 let skipped = std::mem::take(&mut board.skipped);
                 next.skip_tick = merged::<V>(&next.skip_tick, skipped);
@@ -373,7 +379,7 @@ pub(super) fn carry_on<V: Rules>(
             relics,
             ascension,
             effect.target,
-            playing.as_ref(),
+            playing,
         );
         played = V::resume_play(&mut board, at, answer);
         effect.ended = effect.ended.or(board.ended);
@@ -382,28 +388,34 @@ pub(super) fn carry_on<V: Rules>(
     }
 
     let ended = effect.ended;
-    let Asker::Card(mut card) = effect.asker else {
+    let Asker::Card(card) = effect.asker else {
         if ended == Some(super::Ended::Won) {
             relic::combat_ended::<V>(relics);
         }
         return Ok(ended);
     };
 
-    card.was_played();
+    next.cards
+        .write_in_play(card, super::live::Face::was_played);
 
-    let card_played = card.ident.card;
-    // `GetResultPileTypeForCardPlay`, once the effect is over.
-    match card
+    let card_played = next
+        .cards
+        .named(card)
+        .unwrap_or_else(|| unimplemented!("a card that left play before its play ended"))
+        .face
         .ident
-        .card
+        .card;
+    // `GetResultPileTypeForCardPlay`, once the effect is over.
+    let to = match card_played
         .power()
         .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
     {
         // A power card leaves the fight rather than going to a pile.
-        true => {}
-        false if card.ident.card.exhausts() => next.exhaust.push(card),
-        false => next.discard.push(card),
-    }
+        true => None,
+        false if card_played.exhausts() => Some(sts2_core::Pile::Exhaust),
+        false => Some(sts2_core::Pile::Discard),
+    };
+    next.cards.leave_play(card, to);
 
     // `AfterCardPlayed`, once the card has left the play pile. A relic that
     // answers it acts through the board a card acts through, and draws from
@@ -436,9 +448,9 @@ fn taken<V: Rules>(
     from: sts2_core::Pile,
     selection: sts2_core::Selection,
 ) -> Option<sts2_core::SelectedCards<V>> {
-    let held = pile(live, from);
-    let cards = held
-        .iter()
+    let cards = live
+        .cards
+        .iter(from)
         .enumerate()
         .map(|(index, card)| {
             let index = num_traits::NumCast::from(index)
@@ -448,13 +460,4 @@ fn taken<V: Rules>(
         .collect::<Vec<_>>()
         .into_boxed_slice();
     selection.validate_automatic(cards)
-}
-
-pub(super) fn pile<V: Rules>(live: &Live<V>, pile: sts2_core::Pile) -> &[CardInstance<V>] {
-    match pile {
-        sts2_core::Pile::Hand => &live.hand,
-        sts2_core::Pile::Draw => &live.draw,
-        sts2_core::Pile::Discard => &live.discard,
-        sts2_core::Pile::Exhaust => &live.exhaust,
-    }
 }

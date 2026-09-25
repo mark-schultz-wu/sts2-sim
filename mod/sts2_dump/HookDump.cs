@@ -15,9 +15,11 @@ namespace Sts2Dump;
 /// Every hook a model can answer, and every model that answers one.
 /// </summary>
 /// <remarks>
-/// Not content — no simulator looks any of this up at runtime. It is the shape
-/// of the interface between an engine and the things that react to it, and it is
-/// dumped for two reasons a table cannot serve.
+/// Mostly not content. It is the shape of the interface between an engine and
+/// the things that react to it, and it is dumped for two reasons a table cannot
+/// serve. One part is also a table: which hooks each power's class overrides,
+/// which the simulator reads so that an event is asked only of the powers that
+/// answer it.
 ///
 /// <b>The trait surface is too wide to design by hand.</b>
 /// <c>AbstractModel</c> declares over 180 virtual hooks. Writing a Rust trait

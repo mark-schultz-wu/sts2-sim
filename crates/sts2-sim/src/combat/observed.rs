@@ -9,7 +9,7 @@ use std::borrow::Cow;
 
 use sts2_core::{
     CardIdent, Combat, CombatId, Cost, ModelId, NextMove, ObservedCreature, ObservedFight,
-    ObservedPlayable, Orbs, Playable, Preview, Rules, Stack,
+    ObservedPlayable, Orbs, Pile, Playable, Preview, Rules, Stack,
 };
 
 use super::legal::InHand;
@@ -67,28 +67,28 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
 
     fn hand(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.hand.iter().map(|card| card.ident)),
+            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Hand)),
             Fight::Over(combat) => Either::Right(combat.hand.iter().copied()),
         }
     }
 
     fn draw(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.draw.iter().map(|card| card.ident)),
+            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Draw)),
             Fight::Over(combat) => Either::Right(combat.draw.iter().copied()),
         }
     }
 
     fn discard(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.discard.iter().map(|card| card.ident)),
+            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Discard)),
             Fight::Over(combat) => Either::Right(combat.discard.iter().copied()),
         }
     }
 
     fn exhaust(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.exhaust.iter().map(|card| card.ident)),
+            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Exhaust)),
             Fight::Over(combat) => Either::Right(combat.exhaust.iter().copied()),
         }
     }
@@ -106,7 +106,7 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
 
     fn legal(&self) -> impl ExactSizeIterator<Item = impl ObservedPlayable<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.hand.iter().map(|card| {
+            Fight::Live(live) => Either::Left(live.cards.iter(Pile::Hand).map(|card| {
                 Card::Live(InHand::new(card, &live.creatures, live.energy, live.stars))
             })),
             Fight::Over(combat) => Either::Right(combat.legal.iter().map(Card::Over)),

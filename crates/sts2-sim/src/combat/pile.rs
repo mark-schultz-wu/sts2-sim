@@ -54,17 +54,20 @@ impl<V: sts2_core::Rules> Shuffled<super::live::CardInstance<V>> {
         if let Some(card) = self
             .cards
             .iter()
-            .find(|card| card.ident.enchantment.is_some())
+            .find(|card| card.face.ident.enchantment.is_some())
         {
             unimplemented!(
                 "where {:?} starts the fight, which its enchantment decides",
-                card.ident
+                card.face.ident
             );
         }
-        let innate = self.cards.iter().filter(|card| card.innate()).count();
+        let innate = self.cards.iter().filter(|card| card.face.innate()).count();
         // `MoveToTopInternal` per card, in pile order. Each insert goes in
         // front of the last, which is what reverses them.
-        let mut moved: Vec<_> = self.cards.extract_if(.., |card| card.innate()).collect();
+        let mut moved: Vec<_> = self
+            .cards
+            .extract_if(.., |card| card.face.innate())
+            .collect();
         moved.reverse();
         moved.append(&mut self.cards);
         self.cards = moved;

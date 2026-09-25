@@ -23,24 +23,28 @@ pub struct State {
 ///
 /// A card that works its own type out from the fight, which no card played
 /// under this relic does yet.
-pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) -> Vec<HookEffect<V>> {
+pub(super) fn event_hook(
+    state: &mut State,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     match hook {
         EventHook::CombatRoomEntered => {
             state.activated_this_combat = false;
-            Vec::new()
+            {}
         }
         EventHook::CardPlayed { card } if !state.activated_this_combat => {
             let power = card
                 .power()
                 .unwrap_or_else(|| unimplemented!("a card that works its own type out"));
             match power {
-                false => Vec::new(),
+                false => {}
                 true => {
                     state.activated_this_combat = true;
-                    vec![HookEffect::GainBlock(BLOCK)]
+                    asked.push(HookEffect::GainBlock(BLOCK))
                 }
             }
         }
-        _ => Vec::new(),
+        _ => {}
     }
 }

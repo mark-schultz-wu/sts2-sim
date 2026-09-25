@@ -8,12 +8,11 @@
 //! build's fights hold no power, relic or card that hooks any of them yet. A
 //! command that needs one stops the run where it stands.
 
-use crate::rng::MegaRng;
 use num_traits::{Saturating as _, Zero};
 use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    Amount, CardAt, CardIdent, CardNumberModifier, CardTable, CardVars, CombatId, Effect,
+    Amount, CardAt, CardId, CardIdent, CardNumberModifier, CardVars, CombatId, Effect,
     EffectResolution, Fight, Holding, Modify, Pile, PowerAmount, PowerTable, Rules, RunStreamKinds,
     Scaling, SideKinds, Stack,
 };
@@ -33,11 +32,11 @@ pub(super) struct Board<'a, V: Rules> {
     actor: CombatId,
     /// The creature a card was pointed at.
     target: Option<CombatId>,
-    /// The card being played, which is in no pile while its effect runs.
-    ///
-    /// `AddDuringManualCardPlay` holds it in the play pile. Nothing here for a
-    /// monster's move, which prints no numbers of its own.
-    playing: Option<&'a CardInstance<V>>,
+    /// The card whose effect this is, by id. A card being played stands in
+    /// the play pile, and one answering a hook stands where the hook found
+    /// it. Nothing here for a monster's move, which prints no numbers of its
+    /// own.
+    playing: Option<CardId<V>>,
     /// What the acting monster's move advertises it will hit for.
     intent_damage: V::Number,
     /// How many times it advertises hitting, which is `WithHitCount`.
@@ -98,7 +97,7 @@ impl<'a, V: Rules> Board<'a, V> {
         relics: &'a mut [HeldRelic<V>],
         ascension: V::AscensionLevel,
         target: Option<CombatId>,
-        playing: Option<&'a CardInstance<V>>,
+        playing: Option<CardId<V>>,
     ) -> Self {
         let actor = live.player().id;
         Board {
@@ -141,7 +140,35 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// The card whose effect this is, as the fight holds it now.
+    ///
+    /// # Panics
+    ///
+    /// A card the fight no longer holds.
+    fn acting(&self) -> Option<CardInstance<V>> {
+        self.playing.map(|id| {
+            self.live
+                .cards
+                .named(id)
+                .unwrap_or_else(|| unimplemented!("a card acting after it left the fight"))
+        })
+    }
+
     /// Where a creature sits, or nothing for one no longer in the fight.
+    /// Where a card the fight named still stands.
+    ///
+    /// # Panics
+    ///
+    /// A card the fight has moved since it named it.
+    fn standing(&self, card: CardAt<V>) -> usize {
+        let at: usize = num_traits::NumCast::from(card.index())
+            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
+        match self.live.cards.get(card.pile(), at) {
+            Some(held) if held.id == card.id() => at,
+            _ => unimplemented!("a card named at {card:?} after the fight moved it"),
+        }
+    }
+
     fn at(&self, at: CombatId) -> Option<usize> {
         self.live
             .creatures
@@ -239,9 +266,11 @@ impl<'a, V: Rules> Board<'a, V> {
             owner: self.live.creatures[at].side,
             state: &mut state,
         };
-        let asked = <V as sts2_core::Hooks>::event_hook(
+        let mut asked = sts2_core::HookEffects::new();
+        <V as sts2_core::Hooks>::event_hook(
             listener,
             sts2_core::EventHook::BeforeApplied { landing: amount },
+            &mut asked,
         );
         for effect in asked {
             match effect {
@@ -290,42 +319,25 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// The two of them ask for one thing. It is the only effect a fight
     /// carries out against its own cards rather than against a creature.
-    fn add_replays(&mut self, asked: Vec<sts2_core::HookEffect<V>>) {
+    fn add_replays(&mut self, asked: sts2_core::HookEffects<V>) {
         for effect in asked {
             let sts2_core::HookEffect::AddReplays { to, amount } = effect else {
                 unimplemented!("a power asking for {effect:?} as it writes on cards")
             };
             match to {
                 sts2_core::Replaying::One(at) => {
-                    let pile = match at.pile() {
-                        Pile::Hand => &mut self.live.hand,
-                        Pile::Draw => &mut self.live.draw,
-                        Pile::Discard => &mut self.live.discard,
-                        Pile::Exhaust => &mut self.live.exhaust,
-                    };
-                    let index: usize = num_traits::NumCast::from(at.index())
-                        .expect("a card's pile index fits this machine");
-                    let held = pile
-                        .get_mut(index)
-                        .filter(|held| held.id == at.id())
-                        .expect("the card is still at its named place");
-                    held.replay(amount);
+                    let index = self.standing(at);
+                    self.live
+                        .cards
+                        .write(at.pile(), index, |held| held.replay(amount));
                 }
-                // `PlayerCombatState.AllCards`, which the exhaust pile is
-                // among. A blade taken out of the fight is written on and
-                // never played again.
-                sts2_core::Replaying::EveryCopyOf(card) => {
-                    for pile in [
-                        &mut self.live.hand,
-                        &mut self.live.draw,
-                        &mut self.live.discard,
-                        &mut self.live.exhaust,
-                    ] {
-                        for held in pile.iter_mut().filter(|held| held.ident.card == card) {
-                            held.replay(amount);
-                        }
-                    }
-                }
+                // `PlayerCombatState.AllCards`, which the exhaust and play
+                // piles are among. A blade taken out of the fight is written
+                // on and never played again.
+                sts2_core::Replaying::EveryCopyOf(card) => self
+                    .live
+                    .cards
+                    .write_all_cards(|held| held.ident.card == card, |held| held.replay(amount)),
             }
         }
     }
@@ -390,16 +402,12 @@ impl<'a, V: Rules> Board<'a, V> {
         let owner = self.live.creatures[at].side;
         let id = self.live.creatures[at].id;
 
-        let mut powers = self.live.creatures[at].powers.clone();
-        let after_death: Vec<_> = powers
-            .iter_mut()
-            .flat_map(|held| {
-                <V as sts2_core::Hooks>::event_hook(
-                    held.event_listener(owner),
-                    sts2_core::EventHook::AfterDeath { side: owner },
-                )
-            })
-            .collect();
+        let mut powers = self.live.creatures[at].powers;
+        let mut after_death = sts2_core::HookEffects::new();
+        let hook = sts2_core::EventHook::AfterDeath { side: owner };
+        for held in powers.iter_mut().filter(|held| held.hears(&hook)) {
+            <V as sts2_core::Hooks>::event_hook(held.event_listener(owner), hook, &mut after_death);
+        }
         let kept = powers.iter().any(|held| {
             <V as sts2_core::Hooks>::decide_hook(
                 held.listener(owner),
@@ -422,7 +430,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     sts2_core::HookEffect::InstallMove(next) => {
                         if V::can_leave_current_move(held.monster, &held.machine) {
                             held.machine.interpose();
-                            self.live.creatures[at].next_move = Some(next.into());
+                            self.live.creatures[at].next_move = Some((*next).into());
                         }
                     }
                     // A state the graph already holds, which walks on by
@@ -475,7 +483,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             .iter_mut()
                             .find(|creature| creature.id == id)
                             .expect("a summoned monster is in the fight");
-                        summoned.next_move = Some(opening.clone().into());
+                        summoned.next_move = Some((*opening).clone().into());
                     }
                 }
                 other => unimplemented!("a dead power asking for {other:?}"),
@@ -494,7 +502,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// takes its powers with it, so this is asked only of one that does not.
     fn strip_powers(&mut self, at: usize) {
         let owner = self.live.creatures[at].side;
-        let powers = self.live.creatures[at].powers.clone();
+        let powers = self.live.creatures[at].powers;
         let kept = |subject: &super::live::HeldPower<V>| {
             let itself = <V as sts2_core::Hooks>::decide_hook(
                 subject.listener(owner),
@@ -738,10 +746,10 @@ pub(crate) fn var<V: Rules>(
     key: V::CardVar,
     creatures: &[Fighter<V>],
 ) -> V::Number {
-    let number = held.number(key);
+    let number = held.face.number(key);
     match number.calculated {
         false => number.base,
-        true => V::calculated_card_var(held.ident.card, key, held, &powers::<V>(creatures)),
+        true => V::calculated_card_var(held.face.ident.card, key, held, &powers::<V>(creatures)),
     }
 }
 
@@ -824,7 +832,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
-        resolve::<V>(&self.live.creatures, self.playing, effect)
+        resolve::<V>(&self.live.creatures, self.acting().as_ref(), effect)
     }
 
     fn apply(&mut self, effect: Self::ResolvedEffect) {
@@ -939,9 +947,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn var(&self, key: V::CardVar) -> V::Number {
         let held = self
-            .playing
+            .acting()
             .unwrap_or_else(|| unimplemented!("a number printed by no card being played"));
-        if held.number(key).modifier.is_some() {
+        if held.face.number(key).modifier.is_some() {
             // The hooks it runs through name creatures to run against, and a
             // bare read has none. `Fight::resolve` is where both arrive.
             unimplemented!(
@@ -949,12 +957,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 key.name()
             );
         }
-        var::<V>(held, key, &self.live.creatures)
+        var::<V>(&held, key, &self.live.creatures)
     }
 
     fn upgraded(&self) -> bool {
-        self.playing
+        self.acting()
             .unwrap_or_else(|| unimplemented!("the upgrade of no card being played"))
+            .face
             .ident
             .upgrade
             != 0
@@ -964,49 +973,36 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // A new model for the replacement, so a new id. The original's own is
         // gone with it.
         let id = self.live.card_ids.mint();
-        let pile = match card.pile() {
-            Pile::Hand => &mut self.live.hand,
-            Pile::Draw => &mut self.live.draw,
-            Pile::Discard => &mut self.live.discard,
-            Pile::Exhaust => &mut self.live.exhaust,
-        };
         // `Transform` puts the replacement where the original stood, in the
         // pile it stood in. The place came with the name, so this looks once.
-        let at: usize = num_traits::NumCast::from(card.index())
-            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
-        let held = pile.get_mut(at);
-        let Some(held) = held.filter(|held| held.id == card.id()) else {
-            unimplemented!("a card transformed after the fight moved it");
-        };
-        *held = CardInstance::new(into, id);
+        let at = self.standing(card);
+        self.live
+            .cards
+            .replace(card.pile(), at, CardInstance::new(into, id));
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
         // `ForgeCmd.Forge` creates one when the fight holds none it can reach.
         // The exhaust pile is not one it can reach, and is forged all the same.
-        let held = [&self.live.hand, &self.live.draw, &self.live.discard]
-            .into_iter()
-            .flatten()
-            .any(|held| held.ident.card == card);
+        let held = self
+            .live
+            .cards
+            .any_outside_exhaust(|held| held.ident.card == card);
         let created = (!held).then(|| {
             let id = self.live.card_ids.mint();
             self.live
-                .hand
-                .push(CardInstance::new(CardIdent::new(card), id));
-            let index = num_traits::NumCast::from(self.live.hand.len() - 1)
+                .cards
+                .push(Pile::Hand, CardInstance::new(CardIdent::new(card), id));
+            let index = num_traits::NumCast::from(self.live.cards.len(Pile::Hand) - 1)
                 .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
             CardAt::new(id, Pile::Hand, index)
         });
-        for pile in [
-            &mut self.live.hand,
-            &mut self.live.draw,
-            &mut self.live.discard,
-            &mut self.live.exhaust,
-        ] {
-            for held in pile.iter_mut().filter(|held| held.ident.card == card) {
-                held.raise(key, amount);
-            }
-        }
+        // `IncreaseSovereignBladeDamage`, over `AllCards`: every copy, in
+        // every pile, the one being played among them.
+        self.live.cards.write_all_cards(
+            |held| held.ident.card == card,
+            |held| held.raise(key, amount),
+        );
         // The blade goes through `AddGeneratedCardToCombat`, so it enters the
         // fight the way a generated card does. It is raised after the raise,
         // which is the order `ForgeCmd` adds and then increases in.
@@ -1075,15 +1071,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
             let id = self.live.card_ids.mint();
-            let held = match pile {
-                Pile::Hand => &mut self.live.hand,
-                Pile::Draw => &mut self.live.draw,
-                Pile::Discard => &mut self.live.discard,
-                Pile::Exhaust => &mut self.live.exhaust,
-            };
-            let index = num_traits::NumCast::from(held.len())
+            let index = num_traits::NumCast::from(self.live.cards.len(pile))
                 .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-            held.push(CardInstance::new(card, id));
+            self.live.cards.push(pile, CardInstance::new(card, id));
             added.push(CardAt::new(id, pile, index));
         }
         for &at in &added {
@@ -1093,13 +1083,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn cards_in(&self, pile: Pile) -> Vec<CardAt<V>> {
-        let held = match pile {
-            Pile::Hand => &self.live.hand,
-            Pile::Draw => &self.live.draw,
-            Pile::Discard => &self.live.discard,
-            Pile::Exhaust => &self.live.exhaust,
-        };
-        held.iter()
+        self.live
+            .cards
+            .iter(pile)
             .enumerate()
             .map(|(at, held)| {
                 let at = num_traits::NumCast::from(at)
@@ -1110,17 +1096,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn card_ident(&self, card: CardAt<V>) -> CardIdent<V> {
-        let pile = match card.pile() {
-            Pile::Hand => &self.live.hand,
-            Pile::Draw => &self.live.draw,
-            Pile::Discard => &self.live.discard,
-            Pile::Exhaust => &self.live.exhaust,
-        };
-        let at: usize = num_traits::NumCast::from(card.index())
-            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
-        pile.get(at)
-            .filter(|held| held.id == card.id())
-            .unwrap_or_else(|| unimplemented!("a card read after the fight moved it"))
+        let at = self.standing(card);
+        self.live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found")
+            .face
             .ident
     }
 
@@ -1142,20 +1123,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn remove_card(&mut self, card: CardAt<V>) -> CardIdent<V> {
-        let pile = match card.pile() {
-            Pile::Hand => &mut self.live.hand,
-            Pile::Draw => &mut self.live.draw,
-            Pile::Discard => &mut self.live.discard,
-            Pile::Exhaust => &mut self.live.exhaust,
-        };
-        let at: usize = num_traits::NumCast::from(card.index())
-            .unwrap_or_else(|| unimplemented!("a pile deeper than this machine can index"));
-        let held = pile
-            .get(at)
-            .filter(|held| held.id == card.id())
-            .unwrap_or_else(|| unimplemented!("a card removed after the fight moved it"));
-        let ident = held.ident;
-        pile.remove(at);
+        let at = self.standing(card);
+        let ident = self.live.cards.remove(card.pile(), at).face.ident;
         self.live.removed_from_deck.push(ident);
         ident
     }
@@ -1166,27 +1135,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         change: sts2_core::Change<V>,
         lasting: sts2_core::Lasting,
     ) {
-        let pile = match card.pile() {
-            Pile::Hand => &mut self.live.hand,
-            Pile::Draw => &mut self.live.draw,
-            Pile::Discard => &mut self.live.discard,
-            Pile::Exhaust => &mut self.live.exhaust,
-        };
-        let at: usize =
-            num_traits::NumCast::from(card.index()).expect("a card's pile index fits this machine");
-        let held = pile
-            .get_mut(at)
-            .filter(|held| held.id == card.id())
-            .expect("the card is still at its named place");
-        held.modify(change, lasting);
+        let at = self.standing(card);
+        self.live
+            .cards
+            .write(card.pile(), at, |held| held.modify(change, lasting));
     }
 
     fn discard_this(&mut self) {
         let playing = self.playing.expect("a card behavior has a card");
-        let Some(at) = self.live.hand.iter().position(|held| held.id == playing.id) else {
+        let Some(at) = self.live.cards.find(Pile::Hand, playing) else {
             return;
         };
-        self.live.discard.push(self.live.hand.remove(at));
+        self.live.cards.move_to(Pile::Hand, at, Pile::Discard);
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
@@ -1206,48 +1166,43 @@ pub(super) fn draw<V: Rules>(
     count: usize,
 ) {
     for _ in 0..count {
-        if live.draw.is_empty() {
-            if live.discard.is_empty() {
+        if live.cards.is_empty(Pile::Draw) {
+            if live.cards.is_empty(Pile::Discard) {
                 return;
             }
-            reshuffle(live, rngs.shuffle);
+            live.cards.reshuffle(rngs.shuffle);
         }
-        let drawn = live.draw.remove(0);
-        live.hand.push(drawn);
+        let drawn = live
+            .cards
+            .draw()
+            .expect("a draw pile just checked for cards");
         // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
         // than once for the whole draw. So a card that spends the pool as it
         // arrives has spent it before the next card is taken.
         //
         // The game raises it on every listener in the fight. This asks the
         // card that arrived, which is the only listener ported to answer it.
-        let asked = V::event_hook(
+        let mut asked = sts2_core::HookEffects::new();
+        V::event_hook(
             sts2_core::EventListener::Card {
-                card: drawn.ident.card,
+                card: drawn.face.ident.card,
                 printed: &drawn,
             },
             sts2_core::EventHook::CardDrawn {
-                card: drawn.ident.card,
+                card: drawn.face.ident.card,
             },
+            &mut asked,
         );
-        let mut board =
-            Board::for_card(live, rngs.reborrow(), relics, ascension, None, Some(&drawn));
+        let mut board = Board::for_card(
+            live,
+            rngs.reborrow(),
+            relics,
+            ascension,
+            None,
+            Some(drawn.id),
+        );
         super::hook::apply::<V, _>(&mut board, asked);
     }
-}
-
-/// `CardPileCmd.Shuffle`: the discard pile and whatever is left of the draw
-/// pile, shuffled together into a new draw pile.
-///
-/// A stable shuffle, unlike the one that deals a fight its opening hand. The
-/// two are different sequences over the same stream, so which one this is
-/// decides every card drawn after it.
-fn reshuffle<V: Rules>(live: &mut Live<V>, shuffle: &mut MegaRng) {
-    let mut shuffled = std::mem::take(&mut live.discard);
-    shuffled.append(&mut live.draw);
-    shuffle.stable_shuffle_by_key(&mut shuffled, |held| {
-        (held.ident.card.order(), held.ident.upgrade)
-    });
-    live.draw = shuffled;
 }
 
 #[cfg(test)]
@@ -1274,10 +1229,12 @@ mod tests {
             max_hp: 10,
             block: 0,
             alive: true,
-            powers: smallvec::smallvec![HeldPower::new(
+            powers: [HeldPower::new(
                 power,
-                crate::combat::live::Stacked::counted(2)
-            )],
+                crate::combat::live::Stacked::counted(2),
+            )]
+            .into_iter()
+            .collect(),
             next_move: None,
         }];
         let card = CardInstance::new(

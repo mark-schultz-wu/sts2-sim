@@ -453,6 +453,104 @@ pub trait PowerTable: Table {
     /// a buff while its amount is below zero. So this is the static half, and a
     /// caller wanting the exact answer needs the creature too.
     fn debuff(self) -> Option<bool>;
+
+    /// The hooks this power's class overrides, as the hook dump measured them.
+    ///
+    /// A power whose class does not override a hook inherits
+    /// `AbstractModel`'s, which does nothing. So an event raised as that hook
+    /// has nothing to ask it.
+    fn overrides(self) -> Overrides;
+}
+
+/// A hook `AbstractModel` declares, which an [`EventHook`] is raised as.
+///
+/// Only the hooks some [`EventHook`] is raised as. Each is spelled the way the
+/// hook dump spells it, which is how a model's overrides are read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ModelHook {
+    AfterRoomEntered,
+    BeforeCombatStart,
+    AfterCombatEnd,
+    AfterCardPlayed,
+    AfterDamageReceived,
+    AfterDamageGiven,
+    AfterCardDrawn,
+    BeforeSideTurnStart,
+    AfterSideTurnStart,
+    BeforeSideTurnEndEarly,
+    AfterSideTurnEnd,
+    AfterEnergyReset,
+    AfterBlockCleared,
+    AfterDeath,
+    AfterPowerAmountChanged,
+    AfterCardEnteredCombat,
+}
+
+impl ModelHook {
+    pub const ALL: [ModelHook; 16] = [
+        ModelHook::AfterRoomEntered,
+        ModelHook::BeforeCombatStart,
+        ModelHook::AfterCombatEnd,
+        ModelHook::AfterCardPlayed,
+        ModelHook::AfterDamageReceived,
+        ModelHook::AfterDamageGiven,
+        ModelHook::AfterCardDrawn,
+        ModelHook::BeforeSideTurnStart,
+        ModelHook::AfterSideTurnStart,
+        ModelHook::BeforeSideTurnEndEarly,
+        ModelHook::AfterSideTurnEnd,
+        ModelHook::AfterEnergyReset,
+        ModelHook::AfterBlockCleared,
+        ModelHook::AfterDeath,
+        ModelHook::AfterPowerAmountChanged,
+        ModelHook::AfterCardEnteredCombat,
+    ];
+
+    /// The hook's name on `AbstractModel`, which is the dump's.
+    pub const fn name(self) -> &'static str {
+        match self {
+            ModelHook::AfterRoomEntered => "AfterRoomEntered",
+            ModelHook::BeforeCombatStart => "BeforeCombatStart",
+            ModelHook::AfterCombatEnd => "AfterCombatEnd",
+            ModelHook::AfterCardPlayed => "AfterCardPlayed",
+            ModelHook::AfterDamageReceived => "AfterDamageReceived",
+            ModelHook::AfterDamageGiven => "AfterDamageGiven",
+            ModelHook::AfterCardDrawn => "AfterCardDrawn",
+            ModelHook::BeforeSideTurnStart => "BeforeSideTurnStart",
+            ModelHook::AfterSideTurnStart => "AfterSideTurnStart",
+            ModelHook::BeforeSideTurnEndEarly => "BeforeSideTurnEndEarly",
+            ModelHook::AfterSideTurnEnd => "AfterSideTurnEnd",
+            ModelHook::AfterEnergyReset => "AfterEnergyReset",
+            ModelHook::AfterBlockCleared => "AfterBlockCleared",
+            ModelHook::AfterDeath => "AfterDeath",
+            ModelHook::AfterPowerAmountChanged => "AfterPowerAmountChanged",
+            ModelHook::AfterCardEnteredCombat => "AfterCardEnteredCombat",
+        }
+    }
+}
+
+/// The [`ModelHook`]s one model's class overrides, one bit each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Overrides(u32);
+
+impl Overrides {
+    /// The set whose bits are `bits`, one per [`ModelHook`] by its position.
+    pub const fn from_bits(bits: u32) -> Self {
+        Overrides(bits)
+    }
+
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    pub const fn with(self, hook: ModelHook) -> Self {
+        Overrides(self.0 | 1 << hook as u8)
+    }
+
+    pub const fn contains(self, hook: ModelHook) -> bool {
+        self.0 & 1 << hook as u8 != 0
+    }
 }
 
 /// What a table says about a relic, beyond its row.
@@ -1544,6 +1642,38 @@ pub enum EventHook<V: ContentVersion> {
     },
 }
 
+impl<V: ContentVersion> EventHook<V> {
+    /// The `AbstractModel` hook this is raised as.
+    ///
+    /// Nothing for a notification the dump has no row for. `AfterObtained` is
+    /// a relic's own virtual, and `BeforeApplied` a power's. A move being
+    /// performed is the move state's. A model's overrides cannot say whether
+    /// it answers one of those, so it is always asked.
+    pub fn model_hook(&self) -> Option<ModelHook> {
+        Some(match self {
+            EventHook::CombatRoomEntered => ModelHook::AfterRoomEntered,
+            EventHook::CombatStarting => ModelHook::BeforeCombatStart,
+            EventHook::CombatEnd => ModelHook::AfterCombatEnd,
+            EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
+            EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
+            EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
+            EventHook::CardDrawn { .. } => ModelHook::AfterCardDrawn,
+            EventHook::BeforeSideTurnStart { .. } => ModelHook::BeforeSideTurnStart,
+            EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
+            EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
+            EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
+            EventHook::EnergyReset => ModelHook::AfterEnergyReset,
+            EventHook::BlockCleared => ModelHook::AfterBlockCleared,
+            EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
+            EventHook::PowerAmountChanged { .. } => ModelHook::AfterPowerAmountChanged,
+            EventHook::CardEnteredCombat { .. } => ModelHook::AfterCardEnteredCombat,
+            EventHook::Obtained
+            | EventHook::BeforeApplied { .. }
+            | EventHook::MonsterMovePerformed { .. } => return None,
+        })
+    }
+}
+
 /// Which cards a [`HookEffect::AddReplays`] writes on.
 ///
 /// `PowerModel` reaches cards two ways, and both are here. `AllCards` is the
@@ -1556,6 +1686,15 @@ pub enum Replaying<V: ContentVersion> {
     /// Every copy of one card the fight holds, in every pile.
     EveryCopyOf(V::Card),
 }
+
+/// What the listeners an event reaches ask for, in the order they ask.
+///
+/// Inline to four. One notification rarely draws more than one answer from
+/// the whole fight.
+pub type HookEffects<V> = smallvec::SmallVec<[HookEffect<V>; HOOK_EFFECTS]>;
+
+/// How many effects a notification's answers hold before they reach the heap.
+pub const HOOK_EFFECTS: usize = 4;
 
 /// One command requested by a content model in response to an event hook.
 #[derive(Debug, Clone, PartialEq)]
@@ -1623,16 +1762,20 @@ pub enum HookEffect<V: ContentVersion> {
     /// [`HookEffect::InstallMove`] is the other half of the same command, for
     /// the states a power builds rather than names.
     EnterMove(V::MoveId),
-    InstallMove(crate::NextMove<V>),
+    ///
+    /// Boxed, as are the other two moves below. A move is the widest thing an
+    /// effect carries, and every answer to every hook is as wide as its widest
+    /// effect.
+    InstallMove(Box<crate::NextMove<V>>),
     /// Replace the owner's advertised move with a stunned turn.
-    StunOwner(crate::NextMove<V>),
+    StunOwner(Box<crate::NextMove<V>>),
     /// Remove another power from the same owner.
     RemoveFromOwner(V::Power),
     /// `CreatureCmd.Add<M>` once per count, in the dead owner's place.
     SummonAfterOwnerDeath {
         monster: V::Monster,
         count: V::Number,
-        opening: crate::NextMove<V>,
+        opening: Box<crate::NextMove<V>>,
     },
 }
 
@@ -1641,7 +1784,7 @@ pub enum HookEffect<V: ContentVersion> {
 /// `RelicModel` is an instance per relic held, and this is the type of that
 /// instance. The two things a run asks one without giving it a hook: build it,
 /// and read the number it shows.
-pub trait RelicModel<V: ContentVersion>: Clone + std::fmt::Debug + PartialEq + Eq + Sized {
+pub trait RelicModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq + Sized {
     /// The model as `RelicCmd.Obtain` builds it.
     ///
     /// # Panics
@@ -1749,10 +1892,17 @@ pub trait Hooks: ContentVersion {
         hook: DecisionHook<Self>,
     ) -> crate::HookResponse<bool>;
 
+    /// What `listener` asks for when `hook` reaches it, pushed onto `asked`
+    /// in the order it asks.
+    ///
+    /// Onto a list the caller owns, because a hook reaches every listener in
+    /// the fight and most answer nothing. An answer of nothing then costs
+    /// nothing.
     fn event_hook<P: Printed<Self> + ?Sized>(
         listener: EventListener<'_, Self, P>,
         hook: EventHook<Self>,
-    ) -> Vec<HookEffect<Self>>;
+        asked: &mut HookEffects<Self>,
+    );
 }
 
 /// What a power does when one side's turn ends, which is its
@@ -1847,7 +1997,7 @@ impl<V: ContentVersion> Spawned<V> {
 ///
 /// The numbers index the build's own state list, so only that build's walk
 /// reads them.
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MoveMachine {
     /// The state the machine stands on.
     pub at: u8,
@@ -1859,10 +2009,7 @@ pub struct MoveMachine {
     pub ever_performed: bool,
     /// `StateLog`: every move state entered, in order. A random branch's
     /// repeat rules read it.
-    ///
-    /// Inline, because one monster logs one state a turn and a fight is
-    /// shorter than this. A branch of a run copies every monster's log.
-    pub log: smallvec::SmallVec<[u8; LOG_INLINE]>,
+    pub log: MoveLog,
     /// Whether the machine stands on a state a caller built.
     ///
     /// `Creature.Stun` and `IllusionPower` both build a `MoveState` rather
@@ -1873,26 +2020,59 @@ pub struct MoveMachine {
     pub built: bool,
 }
 
-/// How many states one monster's log holds before reaching the heap.
+/// `StateLog`, as the three questions a repeat rule asks of it.
 ///
-/// A monster enters about one a turn. The longest fight in the recording logs
-/// twenty, so this is that with room over. A longer one spills, as every log
-/// used to.
-pub const LOG_INLINE: usize = 24;
+/// A rule asks whether a state was ever entered, what the last few entries
+/// were, and how many entries there are. So this keeps the set of states
+/// entered, the latest [`RECENT`] entries, and the count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MoveLog {
+    /// One bit per state index.
+    entered: u64,
+    /// The latest entries, the newest at `count % RECENT` less one.
+    recent: [u8; RECENT],
+    count: u32,
+}
 
-impl Clone for MoveMachine {
-    /// Copies the log rather than walking it.
+/// How far back a repeat rule reads. A build's `RepeatCount` stops at eight.
+pub const RECENT: usize = 8;
+
+impl MoveLog {
+    /// # Panics
     ///
-    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
-    /// see that the item is `Copy`. A state index is a byte.
-    fn clone(&self) -> Self {
-        Self {
-            at: self.at,
-            performed: self.performed,
-            ever_performed: self.ever_performed,
-            log: smallvec::SmallVec::from_slice(&self.log),
-            built: self.built,
+    /// A state index past what the set holds.
+    pub fn push(&mut self, at: u8) {
+        if at >= 64 {
+            unimplemented!("a move state at index {at}, past what a log holds");
         }
+        self.entered |= 1 << at;
+        self.recent[self.count as usize % RECENT] = at;
+        self.count += 1;
+    }
+
+    /// Whether the machine has ever entered `at`.
+    pub fn contains(&self, at: u8) -> bool {
+        at < 64 && self.entered & (1 << at) != 0
+    }
+
+    /// How many entries the log has.
+    pub fn len(&self) -> usize {
+        self.count as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    /// The latest `n` entries, newest first.
+    ///
+    /// # Panics
+    ///
+    /// More than [`RECENT`].
+    pub fn recent(&self, n: usize) -> impl Iterator<Item = u8> + '_ {
+        assert!(n <= RECENT, "a log reads back {RECENT} entries, not {n}");
+        let count = self.count as usize;
+        (1..=n.min(count)).map(move |back| self.recent[(count - back) % RECENT])
     }
 }
 
@@ -1904,13 +2084,13 @@ impl MoveMachine {
     /// it. `logged` is that state's `ShouldAppearInLogs`. Branch states answer
     /// false.
     pub fn new(at: u8, logged: bool) -> Self {
+        let mut log = MoveLog::default();
+        if logged {
+            log.push(at);
+        }
         Self {
             at,
-            log: if logged {
-                smallvec::smallvec![at]
-            } else {
-                smallvec::SmallVec::new()
-            },
+            log,
             ..Self::default()
         }
     }

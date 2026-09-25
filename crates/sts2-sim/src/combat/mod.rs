@@ -3,6 +3,8 @@ mod error;
 pub use error::Error;
 
 mod board;
+mod cards;
+mod piles;
 pub use board::ResolvedEffect;
 mod encounter;
 mod hook;

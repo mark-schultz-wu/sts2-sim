@@ -35,16 +35,20 @@ impl State {
 /// The game returns early for a used-up relic, for a turn after the first, and
 /// for a side turn its owner is not in. Each of those is an arm this does not
 /// match.
-pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) -> Vec<HookEffect<V>> {
+pub(super) fn event_hook(
+    state: &mut State,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     match hook {
         EventHook::SideTurnStart {
             side: CombatSide::Player,
             turn: 1,
         } if !state.used_up() => {
             state.combats_left -= 1;
-            vec![HookEffect::UpgradeHand]
+            asked.push(HookEffect::UpgradeHand)
         }
-        _ => Vec::new(),
+        _ => {}
     }
 }
 
