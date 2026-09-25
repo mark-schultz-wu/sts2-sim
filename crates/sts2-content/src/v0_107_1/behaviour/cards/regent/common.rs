@@ -5,64 +5,10 @@ use sts2_core::{
     Selection,
 };
 
-use super::super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
+use super::super::super::super::generated::cards::{CardVar, Cards, TokenCard};
 use super::super::super::super::generated::powers::Power;
-use super::super::{Change, V};
+use super::super::V;
 use super::Resume;
-
-/// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
-    match card {
-        RegentCard::GuidingStar => &[
-            Change::Raise(CardVar::Damage, 1),
-            Change::Raise(CardVar::Cards, 1),
-        ],
-        // `Begone` prints no number an upgrade raises. Upgraded, its own
-        // `OnPlay` upgrades the Minion Strike it transforms a card into.
-        RegentCard::Begone => &[],
-        RegentCard::CrushUnder => &[
-            Change::Raise(CardVar::Damage, 1),
-            Change::Raise(CardVar::StrengthLoss, 1),
-        ],
-        RegentCard::Glitterstream => &[
-            Change::Raise(CardVar::Block, 2),
-            Change::Raise(CardVar::BlockNextTurn, 2),
-        ],
-        RegentCard::GatherLight => &[Change::Raise(CardVar::Block, 3)],
-        RegentCard::SpoilsOfBattle => &[Change::Raise(CardVar::Forge, 3)],
-        RegentCard::WroughtInWar => &[
-            Change::Raise(CardVar::Damage, 2),
-            Change::Raise(CardVar::Forge, 2),
-        ],
-        card => unimplemented!("card upgrade: {card:?}"),
-    }
-}
-
-/// `GuidingStar`. Deal damage, then draw.
-pub(super) fn guiding_star<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let target = fight.target();
-    let attack = fight.resolve(Effect::Attack {
-        dealer: fight.actor(),
-        target,
-        damage: Amount::Var(CardVar::Damage),
-        scaling: Scaling::Dynamic,
-    });
-    fight.apply(attack);
-    fight.draw(fight.var(CardVar::Cards));
-    Played::Done
-}
-
-/// `GatherLight`. Gain block, and a star with it.
-pub(super) fn gather_light<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let block = fight.resolve(Effect::GainBlock {
-        recipient: fight.actor(),
-        amount: Amount::Var(CardVar::Block),
-        scaling: Scaling::Dynamic,
-    });
-    fight.apply(block);
-    fight.gain_stars(fight.var(CardVar::Stars));
-    Played::Done
-}
 
 /// `Glitterstream`. Gain block now and after the next block clear.
 ///
@@ -119,93 +65,5 @@ pub(super) fn begone_transform<F: Fight<V>>(
         into.upgrade = u8::from(fight.upgraded());
         fight.transform(card, into);
     }
-    Played::Done
-}
-
-/// `CrushUnder`. Hit every enemy, then take a point of Strength off each.
-///
-/// The command takes the creatures across before its first hit lands, and the
-/// powers go to that same list. One the damage took out holds no combat state
-/// by then, and `PowerCmd.Apply` returns on such a creature.
-pub(super) fn crush_under<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    for target in fight.opponents() {
-        let attack = fight.resolve(Effect::Attack {
-            dealer: fight.actor(),
-            target,
-            damage: Amount::Var(CardVar::Damage),
-            scaling: Scaling::Dynamic,
-        });
-        fight.apply(attack);
-    }
-    fight.apply_to_opponents(
-        Power::CrushUnderPower,
-        PowerAmount::Counted(fight.var(CardVar::StrengthLoss)),
-    );
-    Played::Done
-}
-
-/// `KnowThyPlace`. Apply Weak, then Vulnerable, to its target.
-pub(super) fn know_thy_place<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let target = fight.target();
-    fight.apply_power(
-        target,
-        Power::WeakPower,
-        PowerAmount::Counted(fight.var(CardVar::WeakPower)),
-    );
-    fight.apply_power(
-        target,
-        Power::VulnerablePower,
-        PowerAmount::Counted(fight.var(CardVar::VulnerablePower)),
-    );
-    Played::Done
-}
-
-/// `RefineBlade`. Forge every Sovereign Blade, then gain energy next turn.
-///
-/// `ForgeCmd.Forge` creates a blade when the fight holds none it can reach,
-/// and raises the damage on every one it holds. A blade in the exhaust pile is
-/// raised and does not count as one it can reach.
-pub(super) fn refine_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let forge = fight.var(CardVar::Forge);
-    fight.forge(
-        Cards::Token(TokenCard::SovereignBlade),
-        CardVar::Damage,
-        forge,
-    );
-    fight.apply_to_actor(
-        Power::EnergyNextTurnPower,
-        PowerAmount::Counted(fight.var(CardVar::Energy)),
-    );
-    Played::Done
-}
-
-/// `SpoilsOfBattle`. Forge the blade, then draw.
-pub(super) fn spoils_of_battle<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let forge = fight.var(CardVar::Forge);
-    fight.forge(
-        Cards::Token(TokenCard::SovereignBlade),
-        CardVar::Damage,
-        forge,
-    );
-    fight.draw(fight.var(CardVar::Cards));
-    Played::Done
-}
-
-/// `WroughtInWar`. Hit, then forge the blade.
-pub(super) fn wrought_in_war<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let target = fight.target();
-    let attack = fight.resolve(Effect::Attack {
-        dealer: fight.actor(),
-        target,
-        damage: Amount::Var(CardVar::Damage),
-        scaling: Scaling::Dynamic,
-    });
-    fight.apply(attack);
-    let forge = fight.var(CardVar::Forge);
-    fight.forge(
-        Cards::Token(TokenCard::SovereignBlade),
-        CardVar::Damage,
-        forge,
-    );
     Played::Done
 }
