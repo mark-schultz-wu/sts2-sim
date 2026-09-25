@@ -1,0 +1,8 @@
+# `HeftyTablet.AfterObtained` offers three rares and adds the one chosen, then
+# an Injury, in that order.
+#
+# A port that adds the Injury first orders the deck differently, and one that
+# offers other cards offers another question.
+{"cmd":"start","seed":"C000000001","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cards":[1]}

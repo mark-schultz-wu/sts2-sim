@@ -12,6 +12,7 @@
 //! saved it, so no caller can pair a relic with another relic's model.
 
 mod anchor;
+mod arcane_scroll;
 mod bone_tea;
 mod burning_blood;
 mod cursed_pearl;
@@ -20,11 +21,13 @@ mod dollys_mirror;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
+mod hefty_tablet;
 mod lead_paperweight;
 mod mercury_hourglass;
 mod neows_torment;
 mod new_leaf;
 mod permafrost;
+mod phial_holster;
 mod pocketwatch;
 mod pomander;
 mod precise_scissors;
@@ -48,6 +51,7 @@ pub(crate) type Number = <V as sts2_core::ContentVersion>::Number;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     Anchor,
+    ArcaneScroll,
     BoneTea(bone_tea::State),
     BurningBlood,
     CursedPearl,
@@ -56,11 +60,13 @@ pub enum State {
     GoldenPearl,
     Gorget,
     GremlinHorn,
+    HeftyTablet,
     LeadPaperweight,
     MercuryHourglass,
     NeowsTorment,
     NewLeaf,
     Permafrost(permafrost::State),
+    PhialHolster,
     Pocketwatch(pocketwatch::State),
     Pomander,
     PreciseScissors,
@@ -76,6 +82,7 @@ pub(crate) fn event_hook(
 ) {
     match state {
         State::Anchor => anchor::event_hook(hook, asked),
+        State::ArcaneScroll => arcane_scroll::event_hook(hook, asked),
         State::BoneTea(state) => bone_tea::event_hook(state, hook, asked),
         State::BurningBlood => burning_blood::event_hook(hook, asked),
         State::CursedPearl => cursed_pearl::event_hook(hook, asked),
@@ -84,11 +91,13 @@ pub(crate) fn event_hook(
         State::GoldenPearl => golden_pearl::event_hook(hook, asked),
         State::Gorget => gorget::event_hook(hook, asked),
         State::GremlinHorn => gremlin_horn::event_hook(hook, asked),
+        State::HeftyTablet => hefty_tablet::event_hook(hook, asked),
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
         State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
         State::NewLeaf => new_leaf::event_hook(hook, asked),
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
+        State::PhialHolster => phial_holster::event_hook(hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
         State::Pomander => pomander::event_hook(hook, asked),
         State::PreciseScissors => precise_scissors::event_hook(hook, asked),
@@ -111,6 +120,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::Anchor
+        | State::ArcaneScroll
         | State::BoneTea(_)
         | State::BurningBlood
         | State::CursedPearl
@@ -119,11 +129,13 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::GoldenPearl
         | State::Gorget
         | State::GremlinHorn
+        | State::HeftyTablet
         | State::LeadPaperweight
         | State::MercuryHourglass
         | State::NeowsTorment
         | State::NewLeaf
         | State::Permafrost(_)
+        | State::PhialHolster
         | State::Pomander
         | State::PreciseScissors
         | State::SandCastle => unimplemented!("what {state:?} does for {hook:?}"),
@@ -139,6 +151,7 @@ impl sts2_core::RelicModel<V> for State {
     fn new(relic: Relic) -> Self {
         match relic {
             Relic::Anchor => State::Anchor,
+            Relic::ArcaneScroll => State::ArcaneScroll,
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
             Relic::BurningBlood => State::BurningBlood,
             Relic::CursedPearl => State::CursedPearl,
@@ -147,11 +160,13 @@ impl sts2_core::RelicModel<V> for State {
             Relic::GoldenPearl => State::GoldenPearl,
             Relic::Gorget => State::Gorget,
             Relic::GremlinHorn => State::GremlinHorn,
+            Relic::HeftyTablet => State::HeftyTablet,
             Relic::LeadPaperweight => State::LeadPaperweight,
             Relic::MercuryHourglass => State::MercuryHourglass,
             Relic::NeowsTorment => State::NeowsTorment,
             Relic::NewLeaf => State::NewLeaf,
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
+            Relic::PhialHolster => State::PhialHolster,
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
             Relic::Pomander => State::Pomander,
             Relic::PreciseScissors => State::PreciseScissors,

@@ -1986,6 +1986,26 @@ pub enum HookEffect<V: ContentVersion> {
         act: DeckAct<V>,
         count: usize,
     },
+    /// `CardFactory.CreateForReward` for one card of `rarity` from the
+    /// character's pool, at `Uniform` odds and with no upgrade roll, into the
+    /// deck.
+    AddUniformCard {
+        rarity: crate::RewardRarity,
+    },
+    /// `count` such cards, and `FromChooseACardScreen`, which takes one of
+    /// them or none into the deck.
+    ChooseUniformCard {
+        count: usize,
+        rarity: crate::RewardRarity,
+    },
+    /// `PlayerCmd.GainMaxPotionCount`.
+    GainPotionSlots(usize),
+    /// `PotionFactory.CreateRandomPotionsOutOfCombat` off the named stream,
+    /// then `PotionCmd.TryToProcure` for each.
+    ProcureRandomPotions {
+        count: usize,
+        stream: V::RunRngType,
+    },
     /// `CardSelectCmd` over the run's upgradable cards.
     UpgradeRandomDeckCards {
         count: usize,
