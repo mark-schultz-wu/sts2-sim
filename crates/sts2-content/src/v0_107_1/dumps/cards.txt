@@ -2982,7 +2982,7 @@ card PROLONG COLORLESS_CARD_POOL Skill Uncommon Self 0 0 -1 0 1 Exhaust
 card PROPHESIZE REGENT_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 -
 var PROPHESIZE Cards 6 0 CardsVar
 card PROTECTOR NECROBINDER_CARD_POOL Attack Ancient AnyEnemy 1 0 -1 0 1 -
-var PROTECTOR CalculatedDamage 10 1 CalculatedDamageVar
+var PROTECTOR CalculatedDamage 10 1 CalculatedDamageVar+FromOsty
 var PROTECTOR CalculationBase 10 0 CalculationBaseVar
 var PROTECTOR ExtraDamage 1 0 ExtraDamageVar
 card PROWESS COLORLESS_CARD_POOL Power Uncommon Self 1 0 -1 0 1 -
@@ -3214,7 +3214,7 @@ card SQUASH EVENT_CARD_POOL Attack Event AnyEnemy 1 0 -1 0 1 -
 var SQUASH Damage 10 0 DamageVar
 var SQUASH VulnerablePower 2 0 PowerVar
 card SQUEEZE NECROBINDER_CARD_POOL Attack Rare AnyEnemy 3 0 -1 0 1 -
-var SQUEEZE CalculatedDamage 25 1 CalculatedDamageVar
+var SQUEEZE CalculatedDamage 25 1 CalculatedDamageVar+FromOsty
 var SQUEEZE CalculationBase 25 0 CalculationBaseVar
 var SQUEEZE ExtraDamage 5 0 ExtraDamageVar
 card STACK EVENT_CARD_POOL Skill Event Self 1 0 -1 0 1 -
@@ -3356,7 +3356,7 @@ var ULTIMATE_STRIKE Damage 14 0 DamageVar
 card UNDEATH NECROBINDER_CARD_POOL Skill Rare Self 0 0 -1 0 1 -
 var UNDEATH Block 7 0 BlockVar
 card UNLEASH NECROBINDER_CARD_POOL Attack Basic AnyEnemy 1 0 -1 0 1 -
-var UNLEASH CalculatedDamage 6 1 CalculatedDamageVar
+var UNLEASH CalculatedDamage 6 1 CalculatedDamageVar+FromOsty
 var UNLEASH CalculationBase 6 0 CalculationBaseVar
 var UNLEASH ExtraDamage 1 0 ExtraDamageVar
 card UNMOVABLE IRONCLAD_CARD_POOL Power Rare Self 2 0 -1 0 1 -

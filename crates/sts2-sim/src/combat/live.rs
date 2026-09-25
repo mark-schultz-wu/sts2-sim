@@ -655,6 +655,17 @@ impl<V: Rules> Face<V> {
         for &change in V::card_upgrade(self.ident.card) {
             self.modify(change, sts2_core::Lasting::ThisFight);
         }
+        // `RecalculateForUpgradeOrEnchant`, which gives a calculated number
+        // the base its `CalculationBase` now prints.
+        let base = <V::CardVar as sts2_core::CardVars>::CALCULATION_BASE;
+        let calculated: smallvec::SmallVec<[_; 2]> =
+            self.numbers().filter(|n| n.calculated).collect();
+        for number in calculated {
+            let by = self.number(base).base - number.base;
+            if by != num_traits::zero() {
+                self.raise(number.id, by);
+            }
+        }
         self.ident.upgrade += 1;
     }
 }
@@ -685,6 +696,10 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
 
     fn max_hp(&self) -> V::Health {
         self.fighter.max_hp
+    }
+
+    fn owner(&self) -> Option<CombatId> {
+        self.fighter.owner
     }
 
     fn power(&self, power: V::Power) -> Option<sts2_core::PowerAmount<V::Number>> {
@@ -783,6 +798,14 @@ pub(crate) struct Telegraphed<V: Rules> {
 const INTENTS: usize = 2;
 
 impl<V: Rules> Telegraphed<V> {
+    /// `UNSET_MOVE`, which a pet shows and never performs.
+    pub(crate) fn unset() -> Self {
+        Telegraphed {
+            id: <V::MoveId as sts2_core::MoveKinds>::UNSET,
+            intents: [None; INTENTS],
+        }
+    }
+
     /// What the move draws, in the order the game draws it.
     fn intents(&self) -> impl Iterator<Item = &Intended<V>> {
         self.intents.iter().flatten()
@@ -998,6 +1021,9 @@ pub(crate) struct Fighter<V: Rules> {
     pub(crate) block: V::Number,
     pub(crate) alive: bool,
     pub(crate) next_move: Option<Telegraphed<V>>,
+    /// `PetOwner`: the player a pet stands beside. Nothing for a player or a
+    /// monster.
+    pub(crate) owner: Option<CombatId>,
 }
 
 impl<V: Rules> Clone for Fighter<V> {

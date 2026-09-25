@@ -539,9 +539,9 @@ impl sts2_core::Rules for V0_107_1 {
         card: Self::Card,
         key: Self::CardVar,
         printed: &P,
-        powers: &[sts2_core::Stack<Self>],
+        owner: sts2_core::CardOwner<'_, Self>,
     ) -> Self::Number {
-        behaviour::cards::calculated(card, key, printed, powers)
+        behaviour::cards::calculated(card, key, printed, owner)
     }
 
     fn perform_move<F: sts2_core::Fight<Self>>(

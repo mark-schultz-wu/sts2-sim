@@ -90,7 +90,7 @@ struct Card {
 fn previewed(class: &str) -> Option<&'static str> {
     Some(match class {
         "DamageVar" | "CalculatedDamageVar" => "Some(CardNumberModifier::Damage)",
-        "OstyDamageVar" => "Some(CardNumberModifier::OstyDamage)",
+        "OstyDamageVar" | "CalculatedDamageVar+FromOsty" => "Some(CardNumberModifier::OstyDamage)",
         "BlockVar" | "CalculatedBlockVar" => "Some(CardNumberModifier::Block)",
         "CalculationBaseVar"
         | "CalculationExtraVar"
@@ -636,7 +636,16 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
     writeln!(out, "}}\n").unwrap();
 
+    // `CalculatedVar.GetBaseVar`, which the simulator reads by this name.
+    if !keys.contains(&"CalculationBase") {
+        return Err("no card prints a CalculationBase, which a calculated number reads".into());
+    }
     writeln!(out, "impl sts2_core::CardVars for CardVar {{").unwrap();
+    writeln!(
+        out,
+        "    const CALCULATION_BASE: CardVar = CardVar::CalculationBase;\n"
+    )
+    .unwrap();
 
     writeln!(out, "    const ALL: &'static [CardVar] = &[").unwrap();
     for key in &keys {

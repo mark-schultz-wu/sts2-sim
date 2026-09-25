@@ -1532,7 +1532,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // BOUND_PHYLACTERY
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterEnergyResetLate)
+        .with(sts2_core::ModelHook::BeforeCombatStart),
     // BOWLER_HAT
     sts2_core::Overrides::from_bits(0),
     // BREAD
@@ -1682,7 +1684,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // FUNERARY_MASK
     sts2_core::Overrides::from_bits(0),
     // FUR_COAT
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
+        .with(sts2_core::ModelHook::BeforeCombatStart),
     // GALACTIC_DUST
     sts2_core::Overrides::from_bits(0),
     // GAMBLING_CHIP
@@ -1939,7 +1943,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // PHIAL_HOLSTER
     sts2_core::Overrides::from_bits(0),
     // PHILOSOPHERS_STONE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
+        .with(sts2_core::ModelHook::AfterRoomEntered),
     // PHYLACTERY_UNBOUND
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnStart)

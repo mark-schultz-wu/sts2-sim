@@ -158,6 +158,48 @@ struct Kinds {
     cards: bool,
 }
 
+/// `Hook.ModifyUnblockedDamageTarget`: the creature that takes the damage
+/// past `target`'s block.
+///
+/// Each listener is handed the creature the one before it chose, and a power
+/// that answers yes chooses the creature carrying it.
+///
+/// # Panics
+///
+/// A listener other than a power, which nothing ported is.
+pub(crate) fn unblocked_damage_target<V: Rules>(
+    fight: Walk<'_, V>,
+    target: CombatId,
+    powered: bool,
+) -> CombatId {
+    let hooks = Overrides::of(ModelHook::ModifyUnblockedDamageTarget);
+    let Some(kinds) = Kinds::hearing(fight.live, fight.relics, hooks) else {
+        return target;
+    };
+    if kinds.monsters || kinds.belt || kinds.cards {
+        unimplemented!("a listener other than a power choosing where a hit lands");
+    }
+    let mut chosen = target;
+    for creature in fight.live.creatures.iter() {
+        for held in fight.live.powers.of(creature.id) {
+            if !held.power().overrides().intersects(hooks) {
+                continue;
+            }
+            let hook = DecisionHook::TakesUnblockedDamage {
+                target: chosen,
+                powered,
+                pet_of: creature.owner,
+                alive: creature.alive,
+            };
+            let listener = held.listener(creature.carrier());
+            if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
+                chosen = creature.id;
+            }
+        }
+    }
+    chosen
+}
+
 /// Whether anything in the fight overrides `hook`.
 ///
 /// For a hook the fight raises nowhere yet. A listener that answers one is a

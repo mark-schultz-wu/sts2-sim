@@ -857,6 +857,17 @@ fn emit_moves(
     writeln!(out, "    ];").unwrap();
     writeln!(out, "}}\n").unwrap();
 
+    // The one move name the simulator writes itself, for a creature that
+    // has not rolled one.
+    if !names.iter().any(|name| *name == "UNSET_MOVE") {
+        return Err("the dump reflects no UNSET_MOVE, which the simulator names".into());
+    }
+    writeln!(
+        out,
+        "impl sts2_core::MoveKinds for MoveId {{\n    const UNSET: MoveId = MoveId::UnsetMove;\n}}\n"
+    )
+    .unwrap();
+
     Ok(())
 }
 
@@ -1031,6 +1042,16 @@ fn emit_monsters(
         writeln!(out, "    {},", camel(id)).unwrap();
     }
     writeln!(out, "}}\n").unwrap();
+
+    // The one monster the simulator stands up by name, as a pet.
+    if !machines.contains_key("OSTY") {
+        return Err("the dump has no OSTY, which the simulator names".into());
+    }
+    writeln!(
+        out,
+        "impl sts2_core::MonsterKinds for Monster {{\n    const OSTY: Monster = Monster::Osty;\n}}\n"
+    )
+    .unwrap();
 
     let mut extras = String::new();
     writeln!(

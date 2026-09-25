@@ -1339,6 +1339,10 @@ impl sts2_core::PowerTable for Power {
     }
 }
 
+impl sts2_core::PowerKinds for Power {
+    const DIE_FOR_YOU: Power = Power::DieForYouPower;
+}
+
 /// The hooks each class overrides, from `hooks.txt`, indexed by the power's discriminant.
 static OVERRIDES: [sts2_core::Overrides; 273] = [
     // ACCELERANT_POWER
@@ -1494,6 +1498,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // DIE_FOR_YOU_POWER
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyUnblockedDamageTarget)
         .with(sts2_core::ModelHook::ShouldAllowHitting)
         .with(sts2_core::ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath),
     // DISINTEGRATION_POWER
@@ -1880,7 +1885,10 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterDamageReceived),
     // SANDPIT_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
+        .with(sts2_core::ModelHook::AfterOstyRevived)
+        .with(sts2_core::ModelHook::AfterPowerAmountChanged),
     // SEEKING_EDGE_POWER
     sts2_core::Overrides::from_bits(0),
     // SELF_FORMING_CLAY_POWER

@@ -128,6 +128,7 @@ pub(crate) fn initialize<V: Rules>(
             // A fresh machine stands on no built state, so the walk always
             // names the move a monster opens on.
             next_move: opening.as_ref().map(Into::into),
+            owner: None,
         });
         for (power, amount) in V::monster_starting_powers(monster, ascension) {
             powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
@@ -164,8 +165,13 @@ pub(crate) fn initialize<V: Rules>(
 }
 
 /// Add a monster during a fight, before the enemy side prepares its next turn.
+///
+/// # Panics
+///
+/// A listener to `AfterCreatureAddedToCombat`, which `CreatureCmd.Add` ends on.
 pub(super) fn summon<V: Rules>(
     live: &mut Live<V>,
+    relics: &crate::run::Belt<V>,
     monster: V::Monster,
     position: usize,
     niche: &mut MegaRng,
@@ -217,6 +223,7 @@ pub(super) fn summon<V: Rules>(
             block: num_traits::zero(),
             alive: true,
             next_move: None,
+            owner: None,
         },
     );
     live.machines.insert(
@@ -240,6 +247,13 @@ pub(super) fn summon<V: Rules>(
         };
         held.spawn.position = position;
         held.spawn.roster_size = roster_size;
+    }
+    if super::listen::heard::<V>(
+        live,
+        relics,
+        sts2_core::ModelHook::AfterCreatureAddedToCombat,
+    ) {
+        unimplemented!("a listener to a creature added to the fight");
     }
     id
 }

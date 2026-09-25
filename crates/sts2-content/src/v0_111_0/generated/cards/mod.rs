@@ -253,6 +253,8 @@ pub enum CardVar {
 }
 
 impl sts2_core::CardVars for CardVar {
+    const CALCULATION_BASE: CardVar = CardVar::CalculationBase;
+
     const ALL: &'static [CardVar] = &[
         CardVar::Accelerant,
         CardVar::AccuracyPower,

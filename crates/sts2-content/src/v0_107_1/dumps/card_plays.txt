@@ -7,6 +7,7 @@
 # play <card> power <chosen|self|opponents|held> <power> <amount>
 # play <card> <draw|energy|stars|forge> <amount>
 # play <card> channel <orb>
+# play <card> summon <amount>, which is Osty for the player
 # unplayed <card> <what the first statement no command matches is>
 # upgrade <card> raise <var> <by>
 # upgrade <card> cost <by>
@@ -37,7 +38,7 @@ card AFTERIMAGE
 play AFTERIMAGE power self AFTERIMAGE_POWER var AfterimagePower
 upgrade AFTERIMAGE keyword Innate
 card AFTERLIFE
-unplayed AFTERLIFE call OstyCmd.Summon
+play AFTERLIFE summon var Summon
 upgrade AFTERLIFE raise Summon 3
 card AGGRESSION
 play AGGRESSION power self AGGRESSION_POWER number 1
@@ -176,7 +177,7 @@ play BLUR block Block Move
 play BLUR power self BLUR_POWER var Blur
 upgrade BLUR raise Block 3
 card BODYGUARD
-unplayed BODYGUARD call OstyCmd.Summon
+play BODYGUARD summon var Summon
 upgrade BODYGUARD raise Summon 2
 card BODY_SLAM
 unplayed BODY_SLAM call DamageCmd.Attack
@@ -314,7 +315,7 @@ unplayed CLAW call Owner.PlayerCombatState.AllCards.OfType
 upgrade CLAW raise Damage 1
 upgrade CLAW raise Increase 1
 card CLEANSE
-unplayed CLEANSE call OstyCmd.Summon
+unplayed CLEANSE call CardSelectCmd.FromCombatPile
 upgrade CLEANSE raise Summon 2
 card CLOAK_AND_DAGGER
 unplayed CLOAK_AND_DAGGER for
@@ -1086,7 +1087,8 @@ card MURDER
 unplayed MURDER call DamageCmd.Attack
 upgrade MURDER cost -1
 card NECRO_MASTERY
-unplayed NECRO_MASTERY call OstyCmd.Summon
+play NECRO_MASTERY summon var Summon
+play NECRO_MASTERY power self NECRO_MASTERY_POWER number 1
 upgrade NECRO_MASTERY raise Summon 3
 card NEGATIVE_PULSE
 unplayed NEGATIVE_PULSE foreach
@@ -1262,7 +1264,8 @@ play PROWESS power self DEXTERITY_POWER var DexterityPower
 upgrade PROWESS raise DexterityPower 1
 upgrade PROWESS raise StrengthPower 1
 card PULL_AGGRO
-unplayed PULL_AGGRO call OstyCmd.Summon
+play PULL_AGGRO summon var Summon
+play PULL_AGGRO block Block Move
 upgrade PULL_AGGRO raise Summon 1
 upgrade PULL_AGGRO raise Block 2
 card PULL_FROM_BELOW
@@ -1303,7 +1306,7 @@ card RATTLE
 unplayed RATTLE if
 upgrade RATTLE raise OstyDamage 2
 card REANIMATE
-unplayed REANIMATE call OstyCmd.Summon
+play REANIMATE summon var Summon
 upgrade REANIMATE raise Summon 5
 card REAP
 play REAP attack chosen Damage Move number 1
@@ -1554,7 +1557,7 @@ play SPOILS_OF_BATTLE draw var Cards
 upgrade SPOILS_OF_BATTLE raise Forge 3
 card SPORE_MIND
 card SPUR
-unplayed SPUR call OstyCmd.Summon
+unplayed SPUR call CreatureCmd.Heal
 upgrade SPUR raise Summon 2
 upgrade SPUR raise Heal 2
 card SQUASH

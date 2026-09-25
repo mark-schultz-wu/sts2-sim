@@ -120,6 +120,10 @@ fn command(out: &mut String, words: &[String]) -> Result<(), String> {
         ["channel", orb] => writeln!(out, "fight.channel(Orb::{});", camel(orb)).unwrap(),
         // `HittableEnemies`, taken now for a command further on.
         ["hold", "opponents"] => writeln!(out, "let held = fight.opponents();").unwrap(),
+        ["summon", rest @ ..] => {
+            let rest: Vec<String> = rest.iter().map(|w| w.to_string()).collect();
+            writeln!(out, "fight.summon_osty({});", amount(&rest)?).unwrap();
+        }
         [what @ ("draw" | "energy" | "stars" | "forge"), rest @ ..] => {
             let rest: Vec<String> = rest.iter().map(|w| w.to_string()).collect();
             let amount = amount(&rest)?;

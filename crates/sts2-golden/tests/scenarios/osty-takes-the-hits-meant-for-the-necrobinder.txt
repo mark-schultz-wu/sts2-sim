@@ -1,0 +1,14 @@
+# `BoundPhylactery` summons a one-health Osty as the fight opens, and again
+# each later turn. `DieForYouPower` turns a powered hit on the Necrobinder
+# onto Osty while it lives.
+#
+# The Twig Slime's four kills Osty, and the three past its health reach the
+# Necrobinder. Osty is summoned back for the second turn, takes one of the
+# first hit, and the rest land on the Necrobinder.
+#
+# A port that never redirects costs the Necrobinder a point more each turn,
+# and one that never revives shows Osty dead on the second.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

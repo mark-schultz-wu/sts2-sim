@@ -75,6 +75,8 @@ enum Resolved<V: Rules> {
     Attack {
         target: CombatId,
         damage: V::Number,
+        /// `IsPoweredAttack`, which is what a redirect of the damage asks.
+        powered: bool,
     },
     GainBlock {
         recipient: CombatId,
@@ -89,6 +91,17 @@ impl<V: Rules> EffectResolution<V> for ResolvedEffect<V> {
             Resolved::GainBlock { amount, .. } => amount,
         }
     }
+}
+
+/// `OstyCmd.Summon` from a hook, outside any card or move.
+pub(super) fn summon_osty<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    amount: V::Number,
+) {
+    Board::for_card(live, rngs, relics, ascension, None, None).summon_osty(amount);
 }
 
 impl<'a, V: Rules> Board<'a, V> {
@@ -201,9 +214,17 @@ impl<'a, V: Rules> Board<'a, V> {
         if self.ended.is_some() || self.ending() {
             return;
         }
+        let alive = self
+            .live
+            .creatures
+            .iter()
+            .any(|creature| creature.id == at && creature.alive);
         if super::listen::any_decides::<V>(
             self.walk(),
-            sts2_core::DecisionHook::ShouldAllowHitting { creature: at },
+            sts2_core::DecisionHook::ShouldAllowHitting {
+                creature: at,
+                alive,
+            },
             false,
         ) {
             return;
@@ -387,6 +408,26 @@ impl<'a, V: Rules> Board<'a, V> {
     /// A creature a power keeps in the fight is still counted, and still
     /// dead, so keeping one does not hold the fight open.
     #[tracing::instrument(level = "trace", skip_all)]
+    /// `LoseHpInternal`: what `creature` lost, what went past its health,
+    /// and whether this took it from standing to none.
+    fn lose_hp(&mut self, creature: CombatId, amount: V::Number) -> (V::Number, V::Number, bool) {
+        let zero = V::Number::zero();
+        let Some(at) = self.at(creature) else {
+            return (zero, zero, false);
+        };
+        let hp = self.live.creatures[at].hp;
+        let health_zero = V::Health::zero();
+        let killed = hp > health_zero && amount >= V::Number::from(hp);
+        self.live.creatures[at].hp =
+            (hp - V::Health::from(amount.min(V::Number::from(hp)))).max(health_zero);
+        let lost = V::Number::from(hp - self.live.creatures[at].hp);
+        let overkill = match killed {
+            true => (amount - V::Number::from(hp)).max(zero),
+            false => zero,
+        };
+        (lost, overkill, killed)
+    }
+
     fn kill(&mut self, at: usize) {
         self.die(at);
         if !self.ending() {
@@ -463,9 +504,14 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         }
         self.live.creatures[at].alive = false;
-        if owner != <V::CombatSide as SideKinds>::ENEMY {
+        // A pet dies the way a monster does, and whether it stays is what its
+        // powers say. Only a player's death can lose the fight.
+        let pet = self.live.creatures[at].owner.is_some();
+        if owner != <V::CombatSide as SideKinds>::ENEMY && !pet {
             if self.live.creatures.iter().any(|creature| {
-                creature.side == <V::CombatSide as SideKinds>::PLAYER && creature.alive
+                creature.side == <V::CombatSide as SideKinds>::PLAYER
+                    && creature.owner.is_none()
+                    && creature.alive
             }) {
                 unimplemented!("a player dying beside a player still standing");
             }
@@ -543,6 +589,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     for offset in 0..count {
                         let id = super::monster::summon(
                             self.live,
+                            self.relics,
                             monster,
                             position + offset,
                             self.rngs.niche,
@@ -750,22 +797,16 @@ pub(super) fn modified_by<V: Rules>(
     num_traits::cast(number.max(0.0).trunc()).expect("a modified number is a game number")
 }
 
-/// What a hit takes off the hit points, which is `Hook.ModifyHpLost`.
-///
-/// The block has already taken what it can. No companion stands between the
-/// phases, so they run one after another.
-pub(super) fn hp_lost<V: Rules>(
-    fight: Walk<'_, V>,
-    target: CombatId,
-    unblocked: V::Number,
-) -> V::Number {
-    let phases = [
-        ModifyHook::HpLostBeforeOsty { target },
-        ModifyHook::HpLostBeforeOstyLate { target },
-        ModifyHook::HpLostAfterOsty { target },
-        ModifyHook::HpLostAfterOstyLate { target },
-    ];
-    modified_by::<V>(fight, unblocked, &phases)
+/// `ModifyHpLost` in the phases after a hit found who takes it.
+fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number) -> V::Number {
+    modified_by::<V>(
+        fight,
+        amount,
+        &[
+            ModifyHook::HpLostAfterOsty { target },
+            ModifyHook::HpLostAfterOstyLate { target },
+        ],
+    )
 }
 
 /// One hit after every listener in the fight has had its say, which is
@@ -827,6 +868,7 @@ pub(crate) fn resolve<V: Rules>(
             scaling,
         } => Resolved::Attack {
             target,
+            powered: scaling == Scaling::Dynamic,
             damage: {
                 let damage = carried::<V>(playing, fight.live, damage);
                 match scaling {
@@ -881,7 +923,16 @@ pub(crate) fn var<V: Rules>(held: &CardInstance<V>, key: V::CardVar, live: &Live
     let number = held.face.number(key);
     match number.calculated {
         false => number.base,
-        true => V::calculated_card_var(held.face.ident.card, key, held, &powers::<V>(live)),
+        true => {
+            let osty = osty::<V>(&live.creatures)
+                .filter(|osty| osty.alive)
+                .map(|osty| osty.hp);
+            let owner = sts2_core::CardOwner {
+                powers: &powers::<V>(live),
+                osty,
+            };
+            V::calculated_card_var(held.face.ident.card, key, held, owner)
+        }
     }
 }
 
@@ -903,6 +954,8 @@ pub(super) fn powers<V: Rules>(live: &Live<V>) -> SmallVec<[Stack<V>; 8]> {
 /// `DynamicVar`'s subclass decides it: what the number runs through is the
 /// class the card filed it under, not the key it is filed by. A number that
 /// runs through nothing has no effect to build, and is worth what it reads.
+///
+/// `dealer` is whoever [`dealer_of`] names for the modifier.
 pub(crate) fn effect_of<V: Rules>(
     modifier: CardNumberModifier,
     key: V::CardVar,
@@ -910,12 +963,14 @@ pub(crate) fn effect_of<V: Rules>(
     target: Option<CombatId>,
 ) -> Option<Effect<V>> {
     match modifier {
-        CardNumberModifier::Damage => target.map(|target| Effect::Attack {
-            dealer,
-            target,
-            damage: Amount::Var(key),
-            scaling: Scaling::Dynamic,
-        }),
+        CardNumberModifier::Damage | CardNumberModifier::OstyDamage => {
+            target.map(|target| Effect::Attack {
+                dealer,
+                target,
+                damage: Amount::Var(key),
+                scaling: Scaling::Dynamic,
+            })
+        }
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
             amount: Amount::Var(key),
@@ -923,8 +978,39 @@ pub(crate) fn effect_of<V: Rules>(
             // `ValueProp.Move`.
             scaling: Scaling::Dynamic,
         }),
-        CardNumberModifier::OstyDamage => unimplemented!("a card previewing the Osty's damage"),
     }
+}
+
+/// Who deals or gains a card's number: the player, or for an Osty's damage
+/// `Owner.Osty`, which is Osty dead or alive.
+///
+/// # Panics
+///
+/// Osty's damage on a player who never summoned one, where the game hands the
+/// hooks no dealer at all.
+pub(crate) fn dealer_of<V: Rules>(
+    modifier: CardNumberModifier,
+    creatures: &[Fighter<V>],
+) -> CombatId {
+    match modifier {
+        CardNumberModifier::OstyDamage => {
+            osty::<V>(creatures)
+                .unwrap_or_else(|| unimplemented!("Osty's damage with no Osty"))
+                .id
+        }
+        CardNumberModifier::Damage | CardNumberModifier::Block => player::<V>(creatures),
+    }
+}
+
+/// `Owner.Osty`: the player's Osty, dead or alive, once one is summoned.
+pub(super) fn osty<V: Rules>(creatures: &[Fighter<V>]) -> Option<&Fighter<V>> {
+    let player = player::<V>(creatures);
+    let osty = Some(sts2_core::ModelId::Monster(
+        <V::Monster as sts2_core::MonsterKinds>::OSTY,
+    ));
+    creatures
+        .iter()
+        .find(|creature| creature.owner == Some(player) && creature.model == osty)
 }
 
 /// The player, which every fight has one of.
@@ -934,6 +1020,67 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
         .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
         .expect("a fight has the player in it")
         .id
+}
+
+impl<V: Rules> Board<'_, V> {
+    /// `PlayerCmd.AddPet`: `monster` for the player, at the health its own
+    /// row starts on, standing after the last of the player's side.
+    ///
+    /// `CreatureCmd.Add` ends on `AfterCreatureAddedToCombat`.
+    ///
+    /// # Panics
+    ///
+    /// A listener to `AfterCreatureAddedToCombat`.
+    fn add_pet(&mut self, monster: V::Monster) -> CombatId {
+        let Some(id) = self
+            .live
+            .creatures
+            .iter()
+            .map(|creature| creature.id.get())
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
+            .and_then(nonmax::NonMaxU8::new)
+            .map(CombatId::new)
+        else {
+            panic!("combat has too many creatures to assign an id");
+        };
+        let at = self
+            .live
+            .creatures
+            .iter()
+            .rposition(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+            .map_or(0, |last| last + 1);
+        let initial = V::monster_hp_bounds(monster, self.ascension).max();
+        let player = self.live.player().id;
+        self.live.creatures.insert(
+            at,
+            Fighter {
+                id,
+                model: Some(sts2_core::ModelId::Monster(monster)),
+                side: <V::CombatSide as SideKinds>::PLAYER,
+                hp: initial,
+                max_hp: initial,
+                block: V::Number::zero(),
+                alive: true,
+                next_move: Some(super::live::Telegraphed::unset()),
+                owner: Some(player),
+            },
+        );
+        self.unheard(sts2_core::ModelHook::AfterCreatureAddedToCombat);
+        id
+    }
+
+    /// A hook this fight raises and nothing ported answers.
+    ///
+    /// # Panics
+    ///
+    /// Anything in the fight listening to `hook`.
+    fn unheard(&self, hook: sts2_core::ModelHook) {
+        if super::listen::heard::<V>(self.live, self.relics, hook) {
+            unimplemented!("a listener to {}", hook.name());
+        }
+    }
 }
 
 impl<V: Rules> Fight<V> for Board<'_, V> {
@@ -976,9 +1123,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     #[tracing::instrument(level = "trace", skip_all)]
     fn apply(&mut self, effect: Self::ResolvedEffect) {
         match effect.effect {
-            Resolved::Attack { target, damage } => {
+            Resolved::Attack {
+                target,
+                damage,
+                powered,
+            } => {
                 // `CreatureCmd.Damage`: block first, then hit points, then the
-                // death the hit caused. Resolution already ran hooks. A target
+                // deaths the hit caused. Resolution already ran hooks. A target
                 // that has left the fight takes nothing, which is what the
                 // command does against a creature with no combat state.
                 let Some(at) = self.at(target) else { return };
@@ -986,53 +1137,94 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     return;
                 }
                 let zero = V::Number::zero();
-                let blocked = self.live.creatures[at].block.min(damage).max(zero);
-                self.live.creatures[at].block = self.live.creatures[at].block - blocked;
-                // `ModifyHpLost` over what the block left, which is where a
-                // power that caps a hit rather than shrinks it acts.
-                let unblocked = hp_lost::<V>(self.walk(), target, (damage - blocked).max(zero));
+                // `PetOwner?.Creature ?? originalTarget`: a pet's hit meets its
+                // owner's block.
+                let shield = self.live.creatures[at].owner.unwrap_or(target);
+                let Some(shield_at) = self.at(shield) else {
+                    return;
+                };
+                let blocked = self.live.creatures[shield_at].block.min(damage).max(zero);
+                self.live.creatures[shield_at].block =
+                    self.live.creatures[shield_at].block - blocked;
+                // `ModifyHpLost` over what the block left, before and after the
+                // damage finds who takes it. A power that caps a hit rather
+                // than shrinks it acts here.
+                let before = modified_by::<V>(
+                    self.walk(),
+                    (damage - blocked).max(zero),
+                    &[
+                        ModifyHook::HpLostBeforeOsty { target },
+                        ModifyHook::HpLostBeforeOstyLate { target },
+                    ],
+                );
+                let taker =
+                    super::listen::unblocked_damage_target::<V>(self.walk(), target, powered);
+                let unblocked = after_osty::<V>(self.walk(), taker, before);
                 // `WasBlockBroken` and `WasFullyBlocked`, as the command works
-                // them out. A hit a hook takes to nothing is fully blocked by
-                // whatever block it met.
+                // them out, on the creature the hit was aimed at. A hit a hook
+                // takes to nothing is fully blocked by whatever block it met.
                 let block = self.live.creatures[at].block;
                 let block_broken = block <= zero && blocked > zero;
                 let fully_blocked = (blocked > zero || block > zero) && unblocked == zero;
 
-                let hp = self.live.creatures[at].hp;
-                let health_zero = V::Health::zero();
-                let killed = hp > health_zero && unblocked >= V::Number::from(hp);
-                self.live.creatures[at].hp = (hp - V::Health::from(unblocked)).max(health_zero);
-                // The result's hooks, in the command's order. A target the hit
-                // killed is not told it was hit: it dies once they are done.
-                if block_broken {
+                // The taker loses what reached it. Anything past its health
+                // goes back to the creature the hit was aimed at.
+                let mut results: SmallVec<[(CombatId, V::Number, bool); 2]> = SmallVec::new();
+                let (lost, overkill, killed) = self.lose_hp(taker, unblocked);
+                results.push((taker, lost, killed));
+                if taker != target {
+                    let rest = after_osty::<V>(self.walk(), target, overkill);
+                    let (lost, _, killed) = match rest > zero {
+                        true => self.lose_hp(target, rest),
+                        false => (zero, zero, false),
+                    };
+                    results.push((target, lost, killed));
+                }
+                // Each result's hooks, in the command's order. A creature the
+                // hit killed is not told it was hit: it dies once they are
+                // done.
+                let mut dying: SmallVec<[CombatId; 2]> = SmallVec::new();
+                for (receiver, lost, killed) in results {
+                    let aimed = receiver == target;
+                    if aimed && block_broken {
+                        let asked = super::listen::notify::<V>(
+                            self.live,
+                            self.relics,
+                            sts2_core::EventHook::BlockBroken { creature: target },
+                        );
+                        self.after_hit(asked);
+                    }
                     let asked = super::listen::notify::<V>(
                         self.live,
                         self.relics,
-                        sts2_core::EventHook::BlockBroken { creature: target },
+                        sts2_core::EventHook::DamageGiven {
+                            dealer: self.actor,
+                            fully_blocked: aimed && fully_blocked,
+                        },
                     );
                     self.after_hit(asked);
+                    // `AfterDamageReceived` carries the `DamageResult`, so this
+                    // is what the hit took off rather than what it was swung
+                    // for.
+                    match killed {
+                        false => {
+                            let asked = super::listen::notify::<V>(
+                                self.live,
+                                self.relics,
+                                sts2_core::EventHook::DamageReceived {
+                                    target: receiver,
+                                    unblocked: lost,
+                                },
+                            );
+                            self.after_hit(asked);
+                        }
+                        true => dying.push(receiver),
+                    }
                 }
-                let asked = super::listen::notify::<V>(
-                    self.live,
-                    self.relics,
-                    sts2_core::EventHook::DamageGiven {
-                        dealer: self.actor,
-                        fully_blocked,
-                    },
-                );
-                self.after_hit(asked);
-                // `AfterDamageReceived` carries the `DamageResult`, so this is
-                // what the hit took off rather than what it was swung for.
-                if !killed {
-                    let asked = super::listen::notify::<V>(
-                        self.live,
-                        self.relics,
-                        sts2_core::EventHook::DamageReceived { target, unblocked },
-                    );
-                    self.after_hit(asked);
-                }
-                if killed {
-                    self.kill(at);
+                for creature in dying {
+                    if let Some(at) = self.at(creature) {
+                        self.kill(at);
+                    }
                 }
             }
             Resolved::GainBlock { recipient, amount } => {
@@ -1241,6 +1433,68 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    /// `OstyCmd.Summon` for the player.
+    ///
+    /// A living Osty grows by `amount`, a dead one comes back on `amount`, and
+    /// a player with none gains one.
+    ///
+    /// # Panics
+    ///
+    /// A listener to any hook the summon raises, or a summon for more health
+    /// than a creature holds.
+    fn summon_osty(&mut self, amount: V::Number) {
+        use sts2_core::ModelHook;
+
+        self.unheard(ModelHook::ModifySummonAmount);
+        if amount == V::Number::zero() {
+            return;
+        }
+        let health: V::Health = num_traits::cast(amount)
+            .unwrap_or_else(|| unimplemented!("summoning Osty for {amount:?}"));
+        match osty::<V>(&self.live.creatures).map(|osty| (osty.id, osty.alive)) {
+            // `GainMaxHp`, which heals by what the maximum grew.
+            Some((id, true)) => {
+                if let Some(at) = self.at(id) {
+                    let creature = &mut self.live.creatures[at];
+                    creature.max_hp = creature.max_hp + health;
+                }
+                self.heal(id, amount);
+            }
+            // `SetMaxHp`, then a `Heal` that stands it back up.
+            Some((id, false)) => {
+                if let Some(at) = self.at(id) {
+                    self.live.creatures[at].max_hp = health;
+                }
+                self.heal(id, amount);
+                self.unheard(ModelHook::AfterOstyRevived);
+            }
+            // `AddPet<Osty>`, which rolls nothing for a creature on the
+            // player's side. Then `DieForYouPower`, `SetMaxHp` and `Heal`.
+            None => {
+                let id = self.add_pet(<V::Monster as sts2_core::MonsterKinds>::OSTY);
+                self.land(
+                    id,
+                    <V::Power as sts2_core::PowerKinds>::DIE_FOR_YOU,
+                    PowerAmount::Counted(num_traits::one()),
+                    None,
+                );
+                if let Some(at) = self.at(id) {
+                    let creature = &mut self.live.creatures[at];
+                    creature.max_hp = health;
+                    creature.hp = creature.hp.min(health);
+                }
+                self.heal(id, amount);
+            }
+        }
+        self.unheard(ModelHook::AfterSummon);
+    }
+
+    fn osty(&self) -> Option<CombatId> {
+        osty::<V>(&self.live.creatures)
+            .filter(|osty| osty.alive)
+            .map(|osty| osty.id)
+    }
+
     fn orbs_held(&self) -> usize {
         self.live.orbs.as_ref().map_or(0, |orbs| orbs.queue.len())
     }
@@ -1255,7 +1509,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .filter(|&creature| {
                 !super::listen::any_decides::<V>(
                     self.walk(),
-                    sts2_core::DecisionHook::ShouldAllowHitting { creature },
+                    // Every opponent listed is alive.
+                    sts2_core::DecisionHook::ShouldAllowHitting {
+                        creature,
+                        alive: true,
+                    },
                     false,
                 )
             })
@@ -1415,7 +1673,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
-        super::monster::summon(self.live, monster, position, self.rngs.niche)
+        super::monster::summon(self.live, self.relics, monster, position, self.rngs.niche)
     }
 }
 
@@ -1493,6 +1751,7 @@ mod tests {
             block: 0,
             alive: true,
             next_move: None,
+            owner: None,
         }];
         let card = CardInstance::new(
             CardIdent::new(Cards::Status(StatusCard::Infection)),

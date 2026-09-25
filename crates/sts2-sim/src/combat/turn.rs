@@ -100,16 +100,8 @@ pub(crate) fn end<V: Rules>(
     next.round = next.round + num_traits::one();
     next.turn = next.turn + num_traits::one();
 
-    // `PrepareForNextTurn`, before the player draws anything.
-    roll_moves(next, ascension, streams.combat().ai)?;
-
-    // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
-    clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
-    next.energy = max_energy;
-    energy_reset::<V>(next, relics);
-
-    // `BeforeSideTurnStart`, which is where a relic counting a turn's plays
-    // moves the count on, then the draw that reads it.
+    // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
+    // counting a turn's plays moves the count on for the draw to read.
     before_side_turn_start::<V>(
         next,
         streams.combat(),
@@ -118,6 +110,15 @@ pub(crate) fn end<V: Rules>(
         <V::CombatSide as SideKinds>::PLAYER,
         next.turn,
     );
+
+    // `PrepareForNextTurn`, before the player draws anything.
+    roll_moves(next, ascension, streams.combat().ai)?;
+
+    // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
+    clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
+    next.energy = max_energy;
+    energy_reset::<V>(next, relics);
+    energy_reset_late::<V>(next, streams.combat(), relics, ascension);
     let drawn = hand_size::<V>(listen::Walk { live: next, relics }, next.turn);
     draw(next, streams.combat(), relics, ascension, drawn);
     // A relic's damage here can end the fight, and a fight ended in
@@ -418,7 +419,7 @@ fn flush_hand<V: Rules>(live: &mut Live<V>) {
 ///
 /// A listener asking for something no energy reset carries out.
 #[tracing::instrument(level = "trace", skip_all)]
-fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut crate::run::Belt<V>) {
+pub(super) fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut crate::run::Belt<V>) {
     let player = live.player().id;
     let hook = sts2_core::EventHook::EnergyReset { player };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
@@ -434,6 +435,34 @@ fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut crate::run::Belt<V>) 
                 live.remove_power(owner, power);
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} as energy resets"),
+        }
+    }
+}
+
+/// `AfterEnergyResetLate`, which `Hook.AfterEnergyReset` raises once every
+/// listener has heard `AfterEnergyReset`.
+///
+/// # Panics
+///
+/// A listener asking for something no energy reset carries out.
+#[tracing::instrument(level = "trace", skip_all)]
+pub(super) fn energy_reset_late<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+) {
+    let player = live.player().id;
+    let hook = sts2_core::EventHook::EnergyResetLate {
+        player,
+        turn: live.turn,
+    };
+    for (_, effect) in listen::notify::<V>(live, relics, hook) {
+        match effect {
+            sts2_core::HookEffect::Summon(amount) => {
+                super::board::summon_osty::<V>(live, rngs.reborrow(), relics, ascension, amount);
+            }
+            effect => unimplemented!("a listener asking for {effect:?} as energy resets late"),
         }
     }
 }

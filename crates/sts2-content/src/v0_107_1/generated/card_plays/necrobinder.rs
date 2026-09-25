@@ -14,8 +14,10 @@ type V = super::super::super::V0_107_1;
 /// Any other card panics, and `behaviour/` ports it by hand.
 pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
     match card {
-        // `call OstyCmd.Summon`
-        NecrobinderCard::Afterlife => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::Afterlife => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            Played::Done
+        }
         NecrobinderCard::BansheesCry => {
             for target in fight.opponents() {
                 let attack = fight.resolve(Effect::Attack {
@@ -30,8 +32,10 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         // `call DamageCmd.Attack`
         NecrobinderCard::BlightStrike => unimplemented!("what {card:?} does when it is played"),
-        // `call OstyCmd.Summon`
-        NecrobinderCard::Bodyguard => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::Bodyguard => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            Played::Done
+        }
         // `if`
         NecrobinderCard::BoneShards => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::BorrowedTime => {
@@ -69,7 +73,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         // `call CreatureCmd.Damage`
         NecrobinderCard::CaptureSpirit => unimplemented!("what {card:?} does when it is played"),
-        // `call OstyCmd.Summon`
+        // `call CardSelectCmd.FromCombatPile`
         NecrobinderCard::Cleanse => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Countdown => {
             fight.apply_to_actor(
@@ -273,8 +277,11 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         // `statement`
         NecrobinderCard::Misery => unimplemented!("what {card:?} does when it is played"),
-        // `call OstyCmd.Summon`
-        NecrobinderCard::NecroMastery => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::NecroMastery => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            fight.apply_to_actor(Power::NecroMasteryPower, PowerAmount::Counted(1));
+            Played::Done
+        }
         // `foreach`
         NecrobinderCard::NegativePulse => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Neurosurge => {
@@ -312,16 +319,26 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Poke => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::Protector => unimplemented!("what {card:?} does when it is played"),
-        // `call OstyCmd.Summon`
-        NecrobinderCard::PullAggro => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::PullAggro => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
         // `call DamageCmd.Attack`
         NecrobinderCard::PullFromBelow => unimplemented!("what {card:?} does when it is played"),
         // `call PowerCmd.Apply`
         NecrobinderCard::Putrefy => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::Rattle => unimplemented!("what {card:?} does when it is played"),
-        // `call OstyCmd.Summon`
-        NecrobinderCard::Reanimate => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::Reanimate => {
+            fight.summon_osty(fight.var(CardVar::Summon));
+            Played::Done
+        }
         NecrobinderCard::Reap => {
             let target = fight.target();
             let attack = fight.resolve(Effect::Attack {
@@ -407,7 +424,7 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             );
             Played::Done
         }
-        // `call OstyCmd.Summon`
+        // `call CreatureCmd.Heal`
         NecrobinderCard::Spur => unimplemented!("what {card:?} does when it is played"),
         // `if`
         NecrobinderCard::Squeeze => unimplemented!("what {card:?} does when it is played"),

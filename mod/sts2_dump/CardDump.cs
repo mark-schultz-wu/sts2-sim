@@ -221,12 +221,17 @@ public static class CardDump
     ///
     /// A generic var prints without the arity C# spells it with, so
     /// <c>PowerVar`1</c> is dumped as <c>PowerVar</c>.
+    ///
+    /// A <c>CalculatedDamageVar</c> built with <c>FromOsty</c> is dumped as
+    /// <c>CalculatedDamageVar+FromOsty</c>. Its preview runs the damage hooks
+    /// with the owner's Osty dealing, as an <c>OstyDamageVar</c>'s does.
     /// </remarks>
     private static string VarClass(DynamicVar var)
     {
         string name = var.GetType().Name;
         int arity = name.IndexOf('`');
-        return arity < 0 ? name : name.Substring(0, arity);
+        name = arity < 0 ? name : name.Substring(0, arity);
+        return var is CalculatedDamageVar { IsFromOsty: true } ? name + "+FromOsty" : name;
     }
 
     /// <summary>

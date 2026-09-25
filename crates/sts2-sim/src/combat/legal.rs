@@ -424,7 +424,7 @@ fn effect<V: Rules>(
             || t == <V::TargetType as TargetKinds>::ANY_PLAYER
     );
 
-    let numbers = numbers::<V>(held, fight.live);
+    let numbers = numbers::<V>(held);
     // Inline, because the common list is the one entry a card that names no
     // target previews against, and this is built for every card in hand.
     let against: SmallVec<[Option<CombatId>; 4]> = if per_target && !targets.is_empty() {
@@ -474,7 +474,6 @@ fn previewed<V: Rules>(
     target: Option<CombatId>,
 ) -> sts2_core::Keyed<V::CardVar, V::Number> {
     let creatures = &fight.live.creatures;
-    let dealer = super::board::player::<V>(creatures);
     held.face
         .numbers()
         .map(|var| {
@@ -484,10 +483,18 @@ fn previewed<V: Rules>(
                 // `Hook.ModifyDamage` rather than skipping it, so a hit
                 // previewed against nobody still runs the dealer's own powers
                 // and only the ones reading the target sit it out.
-                (Some(sts2_core::CardNumberModifier::Damage), None) => {
+                (
+                    Some(
+                        modifier @ (sts2_core::CardNumberModifier::Damage
+                        | sts2_core::CardNumberModifier::OstyDamage),
+                    ),
+                    None,
+                ) => {
+                    let dealer = super::board::dealer_of::<V>(modifier, creatures);
                     Some(super::board::modified::<V>(fight, dealer, None, printed()))
                 }
                 (Some(modifier), _) => {
+                    let dealer = super::board::dealer_of::<V>(modifier, creatures);
                     super::board::effect_of::<V>(modifier, var.id, dealer, target).map(|effect| {
                         super::board::resolve::<V>(fight, Some(held), effect).amount()
                     })
@@ -500,19 +507,14 @@ fn previewed<V: Rules>(
         .collect()
 }
 
-/// The numbers this copy of the card prints, as they resolve right now.
+/// The numbers this copy of the card prints, which is each one's `BaseValue`.
 ///
 /// This copy's own, not the table's. A fight writes on a card, and what it
 /// wrote is what the card prints afterwards. Nothing in the fight has listened
-/// yet: [`previewed`] is these after it has.
-fn numbers<V: Rules>(
-    held: &CardInstance<V>,
-    live: &Live<V>,
-) -> sts2_core::Keyed<V::CardVar, V::Number> {
-    held.face
-        .numbers()
-        .map(|var| (var.id, super::board::var::<V>(held, var.id, live)))
-        .collect()
+/// yet: [`previewed`] is these after it has. A calculated number's is its
+/// `CalculationBase`, and never what it works out to.
+fn numbers<V: Rules>(held: &CardInstance<V>) -> sts2_core::Keyed<V::CardVar, V::Number> {
+    held.face.numbers().map(|var| (var.id, var.base)).collect()
 }
 
 #[cfg(test)]
@@ -575,6 +577,7 @@ mod tests {
             block: 0,
             alive: true,
             next_move: None,
+            owner: None,
         }
     }
 
@@ -628,7 +631,7 @@ mod tests {
 
         // The same card, previewed at the one enemy and at nobody. Strength
         // belongs to the player, so it lands on both.
-        let printed = super::numbers::<V>(&strike, &fight)[&CardVar::Damage];
+        let printed = super::numbers::<V>(&strike)[&CardVar::Damage];
         assert_eq!(damage(&[at(1)]), printed - 2);
         assert_eq!(damage(&[]), printed - 2);
     }
@@ -646,7 +649,7 @@ mod tests {
                 [&CardVar::Damage]
         };
 
-        let printed = super::numbers::<V>(&strike, &fight)[&CardVar::Damage];
+        let printed = super::numbers::<V>(&strike)[&CardVar::Damage];
         assert!(damage(&[at(1)]) > printed);
         assert_eq!(damage(&[]), printed);
     }

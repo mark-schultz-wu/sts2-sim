@@ -1,0 +1,10 @@
+# `Bodyguard` summons five onto an Osty that is already standing, which
+# raises its maximum and its health by five. The Twig Slime's four then
+# leaves it on two, and the second turn's summon grows it by one more.
+#
+# A port that sets the health rather than adding to it shows Osty on five,
+# and one that ignores a living Osty leaves it on one.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
