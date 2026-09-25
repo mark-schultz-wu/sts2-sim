@@ -93,6 +93,14 @@ impl<V: Rules> Streams<V> {
         &mut self.run[slot(V::run_rng_types(), kind)]
     }
 
+    /// Whichever stream `stream` names, to draw from in place.
+    pub(crate) fn of(&mut self, stream: sts2_core::Stream<V>) -> &mut MegaRng {
+        match stream {
+            sts2_core::Stream::Run(kind) => self.run(kind),
+            sts2_core::Stream::Player(kind) => self.player(kind),
+        }
+    }
+
     /// One of the player's streams, to draw from in place.
     pub(crate) fn player(&mut self, kind: V::PlayerRngType) -> &mut MegaRng {
         &mut self.player[slot(V::player_rng_types(), kind)]

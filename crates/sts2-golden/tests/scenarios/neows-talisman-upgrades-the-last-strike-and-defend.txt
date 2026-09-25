@@ -1,0 +1,6 @@
+# `NeowsTalisman.AfterObtained` upgrades the last Basic Strike and the last
+# Basic Defend in the deck, which is `LastOrDefault` over them.
+#
+# A port that takes the first of each upgrades other cards.
+{"cmd":"start","seed":"C000000025","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":0}

@@ -3,7 +3,7 @@
 //! Cards in `QUEST_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TargetType};
+use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TagSet, TargetType};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +48,7 @@ pub(super) static ROWS: [CardData; 4] = [
         vars: &[],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Quest),
@@ -63,6 +64,7 @@ pub(super) static ROWS: [CardData; 4] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Quest),
@@ -73,6 +75,7 @@ pub(super) static ROWS: [CardData; 4] = [
         vars: &[],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Quest),
@@ -88,5 +91,6 @@ pub(super) static ROWS: [CardData; 4] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
 ];

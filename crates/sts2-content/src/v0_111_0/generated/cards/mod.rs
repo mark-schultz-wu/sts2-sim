@@ -63,6 +63,38 @@ pub enum CardRarity {
     Quest = 10,
 }
 
+impl sts2_core::CardRarityKinds for CardRarity {
+    const BASIC: CardRarity = CardRarity::Basic;
+    const COMMON: CardRarity = CardRarity::Common;
+    const UNCOMMON: CardRarity = CardRarity::Uncommon;
+    const RARE: CardRarity = CardRarity::Rare;
+    const ANCIENT: CardRarity = CardRarity::Ancient;
+    const EVENT: CardRarity = CardRarity::Event;
+    const TOKEN: CardRarity = CardRarity::Token;
+    const STATUS: CardRarity = CardRarity::Status;
+    const CURSE: CardRarity = CardRarity::Curse;
+    const QUEST: CardRarity = CardRarity::Quest;
+}
+
+// `CardTag::None` is not generated: no card carries it. It is the C# zero, and a card with no tag has an empty set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum CardTag {
+    Strike = 1,
+    Defend = 2,
+    Minion = 3,
+    OstyAttack = 4,
+    Shiv = 5,
+}
+
+impl sts2_core::CardTagKinds for CardTag {
+    const STRIKE: CardTag = CardTag::Strike;
+    const DEFEND: CardTag = CardTag::Defend;
+    const MINION: CardTag = CardTag::Minion;
+    const OSTY_ATTACK: CardTag = CardTag::OstyAttack;
+    const SHIV: CardTag = CardTag::Shiv;
+}
+
 // `CardType::None` is not generated: the only way to reach it is a Mad Science whose Tinker Time type has not been set, and all three sites that create one assign it on the next line — `CreateCard<MadScience>()` cannot take the type as an argument, so `_tinkerTimeType` sits at the C# zero for two statements. That is a two-phase constructor, not a value: here the type is a constructor argument, and a card that has not chosen one is `Option<CardType>` at the call site that asks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -600,6 +632,62 @@ impl sts2_core::FlagSet for KeywordSet {
     }
 }
 
+/// A set of [`CardTag`]s: one bit per tag, at its discriminant.
+///
+/// Bit 0 is unused, because the game's zero is `None`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TagSet(u8);
+
+impl TagSet {
+    /// Every member, in the enum's own order.
+    const MEMBERS: [CardTag; 5] = [
+        CardTag::Strike,
+        CardTag::Defend,
+        CardTag::Minion,
+        CardTag::OstyAttack,
+        CardTag::Shiv,
+    ];
+
+    pub const fn new(members: &[CardTag]) -> Self {
+        let mut bits = 0u8;
+        let mut i = 0;
+        while i < members.len() {
+            bits |= 1u8 << members[i] as u8;
+            i += 1;
+        }
+        Self(bits)
+    }
+
+    pub const fn contains(self, member: CardTag) -> bool {
+        self.0 & (1u8 << member as u8) != 0
+    }
+
+    /// The members, in the enum's own order.
+    pub fn iter(self) -> impl Iterator<Item = CardTag> {
+        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
+    }
+}
+
+impl std::fmt::Debug for TagSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_set().entries(self.iter()).finish()
+    }
+}
+
+impl sts2_core::FlagSet for TagSet {
+    type Member = CardTag;
+
+    const MEMBERS: &'static [CardTag] = &Self::MEMBERS;
+
+    fn from_members(members: &[CardTag]) -> Self {
+        Self::new(members)
+    }
+
+    fn contains(self, member: CardTag) -> bool {
+        Self::contains(self, member)
+    }
+}
+
 /// A set of [`CardType`]s: one bit per type, at its discriminant.
 ///
 /// Bit 0 is unused, because the game's zero is `None` and that is
@@ -681,6 +769,8 @@ pub struct CardData {
     /// but `CardModel` branches on higher values, so it is not a flag.
     pub max_upgrade: u8,
     pub keywords: KeywordSet,
+    /// `CanonicalTags`, which no card computes.
+    pub tags: TagSet,
 }
 
 /// Every card, grouped by the pool it belongs to.
@@ -3272,6 +3362,8 @@ impl sts2_core::CardTable for Cards {
     type Target = TargetType;
     type Var = CardVar;
 
+    type Tag = CardTag;
+
     type Number = CardNumber;
     fn pool(self) -> Option<CardPool> {
         match self {
@@ -3331,6 +3423,10 @@ impl sts2_core::CardTable for Cards {
 
     fn retains(self) -> bool {
         self.data().keywords.contains(CardKeyword::Retain)
+    }
+
+    fn tagged(self, tag: CardTag) -> bool {
+        self.data().tags.contains(tag)
     }
 
     fn max_upgrade(self) -> u8 {

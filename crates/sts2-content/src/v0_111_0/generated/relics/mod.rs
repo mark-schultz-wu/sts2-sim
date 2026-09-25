@@ -1824,7 +1824,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // MEAT_CLEAVER
     sts2_core::Overrides::from_bits(0),
     // MEAT_ON_THE_BONE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCurrentHpChanged)
+        .with(sts2_core::ModelHook::BeforeCombatStart),
     // MEMBERSHIP_CARD
     sts2_core::Overrides::from_bits(0),
     // MERCURY_HOURGLASS
@@ -2007,6 +2009,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // RED_SKULL
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterCurrentHpChanged)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // REGALITE
     sts2_core::Overrides::from_bits(0)

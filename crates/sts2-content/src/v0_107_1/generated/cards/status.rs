@@ -3,7 +3,7 @@
 //! Cards in `STATUS_CARD_POOL`.
 //! Source: `dumps/cards.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
-use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TargetType};
+use super::{CardData, CardKeyword, CardRarity, CardType, CardVar, KeywordSet, TagSet, TargetType};
 use crate::{Cost, Field};
 use serde::{Deserialize, Serialize};
 use sts2_core::CardNumberModifier;
@@ -70,6 +70,7 @@ pub(super) static ROWS: [CardData; 12] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -85,6 +86,7 @@ pub(super) static ROWS: [CardData; 12] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -95,6 +97,7 @@ pub(super) static ROWS: [CardData; 12] = [
         vars: &[],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -105,6 +108,7 @@ pub(super) static ROWS: [CardData; 12] = [
         vars: &[],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -115,6 +119,7 @@ pub(super) static ROWS: [CardData; 12] = [
         vars: &[],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -130,6 +135,7 @@ pub(super) static ROWS: [CardData; 12] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -145,6 +151,7 @@ pub(super) static ROWS: [CardData; 12] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -155,6 +162,7 @@ pub(super) static ROWS: [CardData; 12] = [
         vars: &[],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -170,6 +178,7 @@ pub(super) static ROWS: [CardData; 12] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -185,6 +194,7 @@ pub(super) static ROWS: [CardData; 12] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -200,6 +210,7 @@ pub(super) static ROWS: [CardData; 12] = [
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
     CardData {
         kind: Field::Constant(CardType::Status),
@@ -210,5 +221,6 @@ pub(super) static ROWS: [CardData; 12] = [
         vars: &[],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
+        tags: TagSet::new(&[]),
     },
 ];

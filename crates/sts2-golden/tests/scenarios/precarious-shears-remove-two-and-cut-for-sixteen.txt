@@ -1,0 +1,8 @@
+# `PrecariousShears.AfterObtained` asks for two cards to remove, takes them
+# out of the deck, then deals the Ironclad sixteen unpowered.
+#
+# A port that removes one card, or skips the cut, shows another deck or
+# another health.
+{"cmd":"start","seed":"C000000020","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cards":[0,5]}

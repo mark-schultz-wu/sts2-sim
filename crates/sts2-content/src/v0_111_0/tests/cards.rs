@@ -78,6 +78,15 @@ fn the_generated_table_matches_the_dump() {
         };
         assert_eq!(keywords, expected, "{}: keywords", row[1]);
 
+        let mut tags: Vec<String> = d.tags.iter().map(|t| format!("{t:?}")).collect();
+        tags.sort();
+        let expected = if row[12] == "-" {
+            Vec::new()
+        } else {
+            row[12].split(',').map(String::from).collect()
+        };
+        assert_eq!(tags, expected, "{}: tags", row[1]);
+
         checked += 1;
     }
     assert_eq!(checked, 596);
@@ -101,7 +110,7 @@ fn every_card_is_present_and_well_formed() {
     assert_eq!(cards.len(), 596, "the build has 596 cards");
 
     for row in &cards {
-        assert_eq!(row.len(), 12, "a card row has twelve fields: {row:?}");
+        assert_eq!(row.len(), 13, "a card row has thirteen fields: {row:?}");
         assert_eq!(row[0], "card");
     }
 }

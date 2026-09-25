@@ -5,7 +5,7 @@
 //! order is what puts the stream where the next screen finds it.
 
 use sts2_core::rng::{GameRng, Interval, RngInteger, Span};
-use sts2_core::{AscensionKinds, RarityKinds, Rules};
+use sts2_core::{AscensionKinds, Rules};
 
 use crate::run::Rarity;
 
@@ -76,7 +76,7 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     });
     // The rarity is rolled here and the relic is pulled by the caller, which
     // is the half that holds the run's bags.
-    let rarity = elite.then(|| rarity::<V, R>(rng));
+    let rarity = elite.then(|| super::relic_rarity::<V, R>(rng));
     (offered, rarity)
 }
 
@@ -88,18 +88,6 @@ pub(crate) fn relic_slot<V: Rules>(offered: &[Offer<V>]) -> usize {
         .iter()
         .position(|offer| matches!(offer, Offer::Card { .. }))
         .unwrap_or(offered.len())
-}
-
-/// `RelicFactory.RollRarity`, which is one draw and three bands.
-///
-/// `NextFloat`, as the potion roll reads one.
-fn rarity<V: Rules, R: GameRng>(rng: &mut R) -> Rarity<V> {
-    let rolled = rng.next_double() as f32;
-    match rolled {
-        r if r < 0.5 => <Rarity<V> as RarityKinds>::COMMON,
-        r if r < 0.83 => <Rarity<V> as RarityKinds>::UNCOMMON,
-        _ => <Rarity<V> as RarityKinds>::RARE,
-    }
 }
 
 /// `GoldReward.Populate`, which is one draw over the encounter's own range.

@@ -72,6 +72,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
     type CardKeyword = generated::cards::CardKeyword;
     type CardKeywordSet = generated::cards::KeywordSet;
     type CardVar = generated::cards::CardVar;
+    type CardTag = generated::cards::CardTag;
     type Character = generated::characters::Character;
     type Enchantment = generated::enchantments::Enchantment;
     type Encounter = generated::encounters::Encounter;

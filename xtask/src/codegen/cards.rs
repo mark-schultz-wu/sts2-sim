@@ -42,24 +42,55 @@ pub(super) const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
     ("DEPRECATED_CARD_POOL", "deprecated", "DeprecatedCard", None),
 ];
 
-/// The one enum here the simulator names members of.
-const BRIDGES: [Bridge; 1] = [Bridge {
-    enum_name: "TargetType",
-    trait_name: "TargetKinds",
-    named: &[
-        ("NONE", "None"),
-        ("SELF", "Self"),
-        ("ANY_ENEMY", "AnyEnemy"),
-        ("ALL_ENEMIES", "AllEnemies"),
-        ("RANDOM_ENEMY", "RandomEnemy"),
-        ("ANY_PLAYER", "AnyPlayer"),
-        ("ANY_ALLY", "AnyAlly"),
-        ("ALL_ALLIES", "AllAllies"),
-        ("TARGETED_NO_CREATURE", "TargetedNoCreature"),
-        ("OSTY", "Osty"),
-    ],
-    unnamed: &[],
-}];
+/// The enums here the simulator names members of.
+const BRIDGES: [Bridge; 3] = [
+    Bridge {
+        enum_name: "TargetType",
+        trait_name: "TargetKinds",
+        named: &[
+            ("NONE", "None"),
+            ("SELF", "Self"),
+            ("ANY_ENEMY", "AnyEnemy"),
+            ("ALL_ENEMIES", "AllEnemies"),
+            ("RANDOM_ENEMY", "RandomEnemy"),
+            ("ANY_PLAYER", "AnyPlayer"),
+            ("ANY_ALLY", "AnyAlly"),
+            ("ALL_ALLIES", "AllAllies"),
+            ("TARGETED_NO_CREATURE", "TargetedNoCreature"),
+            ("OSTY", "Osty"),
+        ],
+        unnamed: &[],
+    },
+    Bridge {
+        enum_name: "CardRarity",
+        trait_name: "CardRarityKinds",
+        named: &[
+            ("BASIC", "Basic"),
+            ("COMMON", "Common"),
+            ("UNCOMMON", "Uncommon"),
+            ("RARE", "Rare"),
+            ("ANCIENT", "Ancient"),
+            ("EVENT", "Event"),
+            ("TOKEN", "Token"),
+            ("STATUS", "Status"),
+            ("CURSE", "Curse"),
+            ("QUEST", "Quest"),
+        ],
+        unnamed: &["None"],
+    },
+    Bridge {
+        enum_name: "CardTag",
+        trait_name: "CardTagKinds",
+        named: &[
+            ("STRIKE", "Strike"),
+            ("DEFEND", "Defend"),
+            ("MINION", "Minion"),
+            ("OSTY_ATTACK", "OstyAttack"),
+            ("SHIV", "Shiv"),
+        ],
+        unnamed: &["None"],
+    },
+];
 
 #[derive(Default)]
 struct Card {
@@ -74,6 +105,7 @@ struct Card {
     star_costs_x: bool,
     max_upgrade: String,
     keywords: Vec<String>,
+    tags: Vec<String>,
     /// Name, printed value, whether the game recomputes it in a fight, and
     /// the `DynamicVar` subclass it is.
     vars: Vec<(String, String, bool, String)>,
@@ -123,7 +155,13 @@ const COLORLESS: &str = "COLORLESS_CARD_POOL";
 ///
 /// Dropping one does not renumber the rest, so the enum stays a subset of the
 /// game's. `TargetType::None` stays, because 35 cards declare it.
-const DROPPED: [(&str, &str, &str); 3] = [
+const DROPPED: [(&str, &str, &str); 4] = [
+    (
+        "CardTag",
+        "None",
+        "no card carries it. It is the C# zero, and a card with no tag has an \
+         empty set.",
+    ),
     (
         "CardKeyword",
         "None",
@@ -254,6 +292,11 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 Vec::new()
             } else {
                 f[11].split(',').map(String::from).collect()
+            },
+            tags: if f[12] == "-" {
+                Vec::new()
+            } else {
+                f[12].split(',').map(String::from).collect()
             },
             vars: Vec::new(),
         })
@@ -499,6 +542,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                 .map(|k| format!("CardKeyword::{}", sanitize(k)))
                 .collect::<Vec<_>>()
                 .join(", ");
+            let tags = card
+                .tags
+                .iter()
+                .map(|t| format!("CardTag::{}", sanitize(t)))
+                .collect::<Vec<_>>()
+                .join(", ");
 
             let mut row = String::new();
             writeln!(row, "CardData {{").unwrap();
@@ -542,6 +591,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             writeln!(row, "        ],").unwrap();
             writeln!(row, "        max_upgrade: {},", card.max_upgrade).unwrap();
             writeln!(row, "        keywords: KeywordSet::new(&[{keywords}]),").unwrap();
+            writeln!(row, "        tags: TagSet::new(&[{tags}]),").unwrap();
             write!(row, "    }}").unwrap();
             table.push(row);
         }
@@ -695,6 +745,31 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         },
     )?;
 
+    // A card's tags, as keywords are: a `HashSet` the game asks `Contains` of.
+    let tags: Vec<sets::Member<'_>> = enums["CardTag"]
+        .iter()
+        .filter(|(_, m)| !dropped("CardTag", m))
+        .map(|(bit, m)| sets::Member {
+            name: m,
+            bit: *bit as usize,
+            doc: "",
+        })
+        .collect();
+    sets::plain(
+        &mut out,
+        &sets::Set {
+            flag: "CardTag",
+            set: "TagSet",
+            flag_doc: "",
+            set_doc: "A set of [`CardTag`]s: one bit per tag, at its discriminant.\n\
+                      \n\
+                      Bit 0 is unused, because the game's zero is `None`.",
+            members: &tags,
+            declare: false,
+            extras: &[],
+        },
+    )?;
+
     // A set over `CardType`, for whoever needs one. Nothing in this domain
     // does — a card has one type, not a set of them — but the enum lives here,
     // so the set over it does too rather than in whichever domain happens to
@@ -769,6 +844,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     .unwrap();
     writeln!(out, "    pub max_upgrade: u8,").unwrap();
     writeln!(out, "    pub keywords: KeywordSet,").unwrap();
+    writeln!(out, "    /// `CanonicalTags`, which no card computes.").unwrap();
+    writeln!(out, "    pub tags: TagSet,").unwrap();
     writeln!(out, "}}\n").unwrap();
 
     // Untagged, so it round-trips as the flat id the wire already uses: the
@@ -1121,6 +1198,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "    type Rarity = CardRarity;").unwrap();
     writeln!(out, "    type Target = TargetType;").unwrap();
     writeln!(out, "    type Var = CardVar;\n").unwrap();
+    writeln!(out, "    type Tag = CardTag;\n").unwrap();
     writeln!(out, "    type Number = CardNumber;").unwrap();
     writeln!(out, "    fn pool(self) -> Option<CardPool> {{").unwrap();
     writeln!(out, "        match self {{").unwrap();
@@ -1206,6 +1284,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     .unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out).unwrap();
+    writeln!(out, "    fn tagged(self, tag: CardTag) -> bool {{").unwrap();
+    writeln!(out, "        self.data().tags.contains(tag)").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
     writeln!(out, "    fn max_upgrade(self) -> u8 {{").unwrap();
     writeln!(out, "        self.data().max_upgrade").unwrap();
     writeln!(out, "    }}").unwrap();
@@ -1282,9 +1364,11 @@ pub fn generate(root: &Path) -> Result<Build, String> {
                     "CardData",
                     "CardKeyword",
                     "CardRarity",
+                    "CardTag",
                     "CardType",
                     "CardVar",
                     "KeywordSet",
+                    "TagSet",
                     "TargetType",
                 ],
             ),

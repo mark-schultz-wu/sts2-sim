@@ -1762,7 +1762,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // NECRO_MASTERY_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCurrentHpChanged),
     // NEMESIS_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
     // NEUROSURGE_POWER
@@ -2044,7 +2044,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // THIEVERY_POWER
     sts2_core::Overrides::from_bits(0),
     // THORNS_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeDamageReceived),
     // THUNDER_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterOrbEvoked),
     // TOOLS_OF_THE_TRADE_POWER

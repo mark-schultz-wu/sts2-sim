@@ -68,10 +68,6 @@ const RARE_POTION: i32 = 100;
 const UNCOMMON_POTION: i32 = 75;
 const COMMON_POTION: i32 = 50;
 
-/// `RelicFactory.RollRarity`'s two bands, which the treasure room shares.
-const COMMON_RELIC: f64 = 0.5;
-const UNCOMMON_RELIC: f64 = 0.83;
-
 /// How far a card's or a potion's price can wander.
 const CARD_SPREAD: (f32, f32) = (0.95, 1.05);
 
@@ -276,18 +272,8 @@ impl<V: Rules> Merchant<'_, V> {
     }
 
     /// `RelicFactory.RollRarity`, which reads the Rewards stream.
-    ///
-    /// The same three bands the treasure room rolls against, from another
-    /// stream. See `travel`, which spells them for that room.
     fn rolled_relic_rarity(&mut self) -> Rarity<V> {
-        let roll = self.rewards().next_double();
-        if roll < COMMON_RELIC {
-            <Rarity<V> as sts2_core::RarityKinds>::COMMON
-        } else if roll < UNCOMMON_RELIC {
-            <Rarity<V> as sts2_core::RarityKinds>::UNCOMMON
-        } else {
-            <Rarity<V> as sts2_core::RarityKinds>::RARE
-        }
+        crate::reward::relic_rarity::<V, _>(self.rewards())
     }
 
     /// `CalcCost`'s haggle: the base times a draw inside the spread, rounded.
