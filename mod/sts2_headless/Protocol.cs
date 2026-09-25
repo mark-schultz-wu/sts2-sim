@@ -878,7 +878,11 @@ internal static class Protocol
         }
 
         await RunManager.Instance.EnterMapCoord(target.coord);
-        await Observe(req, "travel");
+        // Waited on like every other command that enters a room. A fight the
+        // room opens can end before the player moves, and the rewards it owes
+        // are offered here or by nothing.
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "travel", resolved);
     }
 
     /// <summary>

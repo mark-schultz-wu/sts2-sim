@@ -1,0 +1,23 @@
+# `LavaRock.TryModifyRewards` adds two relic rewards to the first act's boss,
+# once. Each pulls from the front of the bag at a rarity rolled off the
+# Rewards stream, after the rewards the fight fills in itself.
+#
+# A monster fight's rewards are left alone. The boss's carry two more relics,
+# and a second boss in the same act gets none, because the rock has fired.
+# Strength and a Strike win each fight on its first turn.
+#
+# A port that adds relics to every fight, or every boss, or none, offers
+# another set.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"LAVA_ROCK"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":0,"target":1}

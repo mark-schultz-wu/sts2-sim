@@ -29,9 +29,8 @@ pub(super) fn event_hook(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match hook {
-        EventHook::CombatRoomEntered => {
+        EventHook::RoomEntered { room, .. } if super::combat_room(room) => {
             state.activated_this_combat = false;
-            {}
         }
         EventHook::CardPlayed { card } if !state.activated_this_combat => {
             let power = card

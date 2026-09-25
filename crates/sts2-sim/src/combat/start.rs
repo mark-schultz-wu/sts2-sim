@@ -30,6 +30,8 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) max_hp: V::Health,
     pub(crate) alive: bool,
     pub(crate) deck: &'a [CardIdent<V>],
+    /// Whether the run reached this room off the map's lines.
+    pub(crate) strayed: bool,
 }
 
 /// A fight as it opens, with the streams it drew from.
@@ -132,7 +134,11 @@ pub(crate) fn enter<V: Rules>(
     // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
     // turn the fight is about to begin on. Both run before anything is drawn.
     let turn = live.turn;
-    for (_, effect) in super::listen::notify::<V>(&mut live, relics, EventHook::CombatRoomEntered) {
+    let entered = EventHook::RoomEntered {
+        room: live.room(),
+        strayed: entering.strayed,
+    };
+    for (_, effect) in super::listen::notify::<V>(&mut live, relics, entered) {
         match effect {
             HookEffect::GainStars(gained) => live.stars = live.stars + count::<V>(gained),
             // `PowerCmd.Apply` on the relic's owner, which is the player.

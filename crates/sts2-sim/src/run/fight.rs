@@ -206,6 +206,32 @@ impl<V: Rules> State<V> {
                 },
             );
         }
+        // `Hook.ModifyRewards`, once the set is filled in. A reward it adds is
+        // filled in after, and the sort by `RewardsSetIndex` puts a relic
+        // after the ones already there.
+        let room = <_ as sts2_core::EncounterTable>::room(encounter);
+        let hook = sts2_core::EventHook::ModifyRewards { room, act };
+        for effect in self.notify_belt(hook) {
+            match effect {
+                sts2_core::HookEffect::AddRelicRewards(count) => {
+                    for _ in 0..count {
+                        let (rng, _) = self.rewarding();
+                        let rarity = crate::reward::relic_rarity::<V, _>(rng);
+                        let relic = self.pull_relic(rarity);
+                        let at = crate::reward::combat::relic_slot(&offered);
+                        offered.insert(
+                            at,
+                            crate::reward::Offer::Relic {
+                                relic,
+                                taken: false,
+                            },
+                        );
+                    }
+                }
+                effect => unimplemented!("a relic modifying a fight's rewards with {effect:?}"),
+            }
+        }
+        self.unheard(sts2_core::ModelHook::TryModifyRewardsLate);
         offered
     }
 }

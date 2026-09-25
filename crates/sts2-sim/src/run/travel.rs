@@ -178,7 +178,8 @@ impl<V: Rules> State<V> {
             unreachable!()
         };
 
-        let fight = self.create_fight(encounter, queue)?;
-        Ok(self.enter_fight(fight, Location::MapPoint(to)))
+        let at = Location::MapPoint(to);
+        let fight = self.create_fight(encounter, queue, at)?;
+        Ok(self.enter_fight(fight, at))
     }
 }
