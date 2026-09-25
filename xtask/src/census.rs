@@ -305,15 +305,53 @@ fn report(runs: &[Run], top: usize) -> String {
             .or_default()
             .push(run.reached.1);
     }
-    out.push_str("floor reached, by character: median, best\n");
+    out.push_str("floor reached, by character: lowest, median, best\n");
     for (character, mut floors) in by_character {
         floors.sort_unstable();
         writeln(
             &mut out,
             format!(
-                "  {character:<12} {:>3} {:>3}",
+                "  {character:<12} {:>3} {:>3} {:>3}",
+                floors[0],
                 floors[floors.len() / 2],
                 floors.last().copied().unwrap_or(0)
+            ),
+        );
+    }
+
+    // What holds the lowest runs down: each stopper by the lowest floor it
+    // stopped a run on, then by how many runs it stopped there.
+    let mut lowest: BTreeMap<(String, &str), (u32, usize, &str, &Run)> = BTreeMap::new();
+    for run in runs {
+        for ending in run.stoppers() {
+            let (message, at) = match ending {
+                Ending::Panicked { message, at } => (message.as_str(), at.as_str()),
+                Ending::Broken(why) => (why.as_str(), ""),
+                _ => continue,
+            };
+            let key: String = message.chars().filter(|c| !c.is_ascii_digit()).collect();
+            let floor = run.reached.1;
+            let entry = lowest.entry((key, at)).or_insert((floor, 0, message, run));
+            if floor < entry.0 {
+                *entry = (floor, 0, message, run);
+            }
+            if floor == entry.0 {
+                entry.1 += 1;
+            }
+        }
+    }
+    let mut lowest: Vec<_> = lowest.into_values().collect();
+    lowest.sort_by_key(|(floor, count, _, _)| (*floor, std::cmp::Reverse(*count)));
+    out.push_str(&format!(
+        "what stops the lowest runs, the {} lowest: floor, runs stopped there\n",
+        top.min(lowest.len())
+    ));
+    for (floor, count, message, run) in lowest.into_iter().take(top) {
+        writeln(
+            &mut out,
+            format!(
+                "{floor:>5} {count:>5}  {message}\n             e.g. {} {}",
+                run.seed, run.character
             ),
         );
     }
