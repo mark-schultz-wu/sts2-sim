@@ -72,6 +72,7 @@ pub(crate) fn enter<V: Rules>(
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         returned: Vec::new(),
+        leaving: Vec::new(),
         creatures: super::live::Creatures::new(),
         powers: PowerStore::new(),
         // Absent rather than an empty queue: the subsystem is inert until
@@ -247,16 +248,19 @@ pub(super) fn hand_size<V: Rules>(fight: Walk<'_, V>, turn: V::Count) -> usize {
     let base: V::Number =
         num_traits::cast(HAND_SIZE).expect("the printed hand size fits the build's game number");
     let player = fight.live.player().id;
+    let room = fight.live.room();
     let phases = [
         ModifyHook::HandDraw {
             player,
             count: base,
             turn,
+            room,
         },
         ModifyHook::HandDrawLate {
             player,
             count: base,
             turn,
+            room,
         },
     ];
     let drawn = super::board::modified_by::<V>(fight, base, &phases);

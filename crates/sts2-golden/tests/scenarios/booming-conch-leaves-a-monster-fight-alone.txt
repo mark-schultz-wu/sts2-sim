@@ -1,0 +1,7 @@
+# `BoomingConch` reads the room, and a monster room is not an elite one. The
+# Regent opens on five cards and three energy, as it would without it.
+#
+# A port that forgets the room gives this fight seven and four.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"BOOMING_CONCH"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}

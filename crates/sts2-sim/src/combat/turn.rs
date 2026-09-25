@@ -382,7 +382,11 @@ pub(super) fn side_turn_started<V: Rules>(
     side: V::CombatSide,
 ) {
     let turn = live.turn;
-    let hook = sts2_core::EventHook::SideTurnStart { side, turn };
+    let hook = sts2_core::EventHook::SideTurnStart {
+        side,
+        turn,
+        room: live.room(),
+    };
     for (_, effect) in listen::notify::<V>(live, relics, hook) {
         match effect {
             sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
@@ -394,6 +398,12 @@ pub(super) fn side_turn_started<V: Rules>(
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 sts2_core::Fight::forge(&mut board, card, key, amount);
+            }
+            // `PlayerCmd.GainEnergy`.
+            sts2_core::HookEffect::GainEnergy(amount) => {
+                let gained: V::Count = num_traits::cast(amount)
+                    .unwrap_or_else(|| unimplemented!("{amount:?} energy at once"));
+                live.energy = live.energy + gained;
             }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }

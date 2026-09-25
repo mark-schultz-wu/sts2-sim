@@ -1184,6 +1184,9 @@ pub(crate) struct Live<V: Rules> {
     /// Cards a listener handed back as it died, which a won fight offers as
     /// `SpecialCardReward`s.
     pub(super) returned: Vec<CardIdent<V>>,
+    /// What `AfterCombatEnd` asked of the run, which carries it out as it
+    /// takes the fight's rewards.
+    pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
     pub(super) creatures: Creatures<V>,
     /// What every creature carries, in the order it gained it.
     pub(super) powers: PowerStore<V>,
@@ -1210,6 +1213,7 @@ impl<V: Rules> Clone for Live<V> {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
             returned: self.returned.clone(),
+            leaving: self.leaving.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
             card_ids: self.card_ids.clone(),
@@ -1233,6 +1237,7 @@ impl<V: Rules> Clone for Live<V> {
             cards,
             removed_from_deck,
             returned,
+            leaving,
             creatures,
             powers,
             orbs,
@@ -1252,6 +1257,7 @@ impl<V: Rules> Clone for Live<V> {
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
         returned.clone_from(&source.returned);
+        leaving.clone_from(&source.leaving);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
         orbs.clone_from(&source.orbs);
@@ -1271,6 +1277,11 @@ impl<V: Rules> Live<V> {
     /// back.
     pub(crate) fn returned(&self) -> &[CardIdent<V>] {
         &self.returned
+    }
+
+    /// What the fight's end asked of the run, in the order it asked.
+    pub(crate) fn leaving(&self) -> &[sts2_core::HookEffect<V>] {
+        &self.leaving
     }
 
     /// The card-selection question on which this fight is parked.
@@ -1357,6 +1368,11 @@ impl<V: Rules> Live<V> {
     }
 
     /// The player, which every fight has one of.
+    /// `CurrentRoom.RoomType`, which is the encounter's.
+    pub(crate) fn room(&self) -> V::RoomType {
+        <V::Encounter as sts2_core::EncounterTable>::room(self.encounter)
+    }
+
     pub(crate) fn player(&self) -> &Fighter<V> {
         self.creatures
             .iter()
@@ -1629,6 +1645,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
             returned: Vec::new(),
+            leaving: Vec::new(),
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),
             orbs: None,

@@ -1629,7 +1629,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // DRAGON_FRUIT
     sts2_core::Overrides::from_bits(0),
     // DREAM_CATCHER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // DRIFTWOOD
     sts2_core::Overrides::from_bits(0),
     // DUSTY_TOME
@@ -2016,7 +2016,10 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // REGAL_PILLOW
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterRestSiteHeal)
+        .with(sts2_core::ModelHook::AfterRoomEntered)
+        .with(sts2_core::ModelHook::ModifyRestSiteHealAmount),
     // REPTILE_TRINKET
     sts2_core::Overrides::from_bits(0),
     // RINGING_TRIANGLE
@@ -2093,7 +2096,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // STONE_CRACKER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // STONE_HUMIDIFIER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRestSiteHeal),
     // STORYBOOK
     sts2_core::Overrides::from_bits(0),
     // STRAWBERRY
@@ -2125,7 +2128,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // TINGSHA
     sts2_core::Overrides::from_bits(0),
     // TINY_MAILBOX
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // TOASTY_MITTENS
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // TOOLBOX

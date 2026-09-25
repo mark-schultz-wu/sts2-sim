@@ -91,7 +91,7 @@ impl<V: Rules> State<V> {
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::REST_SITE {
-                self.enter_rest_site(to);
+                self.enter_rest_site(Location::MapPoint(to));
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::SHOP {
