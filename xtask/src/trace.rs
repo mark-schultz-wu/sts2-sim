@@ -28,6 +28,8 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::error::{self, FileError, ProcessError};
+
 /// Where `show` starts when no root is named: the replays themselves.
 const REPLAY: &str = "sts2_trace::replay";
 
@@ -88,9 +90,31 @@ struct Show {
     callers: Option<String>,
 }
 
-pub fn run(args: Args) -> Result<String, String> {
-    let dir = crate::instructions::workspace()?.join("target/profile");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Process(#[from] ProcessError),
+    #[error("{0}; record it first")]
+    NotRecorded(FileError),
+    #[error("{} is empty", path.display())]
+    Empty { path: PathBuf },
+    #[error("{} carries no {key}", path.display())]
+    NoHeaderKey { path: PathBuf, key: &'static str },
+    #[error("{line}: {source}")]
+    Line {
+        line: String,
+        #[source]
+        source: std::num::ParseIntError,
+    },
+    #[error("drawing the flamegraph: {0}")]
+    Flamegraph(#[source] std::io::Error),
+}
+
+pub fn run(args: Args) -> Result<String, Error> {
+    let dir = crate::workspace().join("target/profile");
+    error::create_dir(&dir)?;
     match args.command {
         Trace::Record { label } => record(&dir, &label),
         Trace::Show(mut show_args) => {
@@ -118,28 +142,19 @@ fn folded_path(dir: &Path, label: &str) -> PathBuf {
 }
 
 /// Build `sts2-trace`, run it, and keep what it folded.
-fn record(dir: &Path, label: &str) -> Result<String, String> {
-    let root = crate::instructions::workspace()?;
-    let built = Command::new("cargo")
-        .args(["build", "-q", "--profile", "profiling", "-p", "sts2-trace"])
-        .current_dir(&root)
-        .status()
-        .map_err(|e| format!("running cargo: {e}"))?;
-    if !built.success() {
-        return Err("sts2-trace did not build".into());
-    }
+fn record(dir: &Path, label: &str) -> Result<String, Error> {
+    let root = crate::workspace();
+    error::status(
+        Command::new("cargo")
+            .args(["build", "-q", "--profile", "profiling", "-p", "sts2-trace"])
+            .current_dir(&root),
+    )?;
     let file = folded_path(dir, label);
-    let traced = Command::new(root.join("target/profiling/sts2-trace"))
-        .arg(&file)
-        .current_dir(&root)
-        .output()
-        .map_err(|e| format!("running sts2-trace: {e}"))?;
-    if !traced.status.success() {
-        return Err(format!(
-            "sts2-trace failed:\n{}",
-            String::from_utf8_lossy(&traced.stderr)
-        ));
-    }
+    let traced = error::output(
+        Command::new(root.join("target/profiling/sts2-trace"))
+            .arg(&file)
+            .current_dir(&root),
+    )?;
     Ok(format!(
         "{}folded into {}\n",
         String::from_utf8_lossy(&traced.stdout),
@@ -201,19 +216,23 @@ impl Node {
 /// With `callers`, the tree is of what called each frame whose name holds
 /// it, the nearest caller first. A frame that calls itself counts once, at
 /// its outermost call.
-fn read(dir: &Path, label: &str, callers: Option<&str>) -> Result<(Node, f64), String> {
+fn read(dir: &Path, label: &str, callers: Option<&str>) -> Result<(Node, f64), Error> {
     let file = folded_path(dir, label);
-    let text = std::fs::read_to_string(&file)
-        .map_err(|e| format!("reading {}: {e}; record it first", file.display()))?;
+    let text = error::read(&file).map_err(Error::NotRecorded)?;
     let mut lines = text.lines();
-    let header = lines.next().ok_or("an empty folded file")?;
-    let number = |key: &str| -> Result<f64, String> {
+    let header = lines
+        .next()
+        .ok_or_else(|| Error::Empty { path: file.clone() })?;
+    let number = |key: &'static str| -> Result<f64, Error> {
         header
             .split_whitespace()
             .skip_while(|word| *word != key)
             .nth(1)
             .and_then(|n| n.parse().ok())
-            .ok_or_else(|| format!("{} carries no {key}", file.display()))
+            .ok_or_else(|| Error::NoHeaderKey {
+                path: file.clone(),
+                key,
+            })
     };
     let worth = number("period")? / number("steps")?;
     let mut root = Node::default();
@@ -224,8 +243,13 @@ fn read(dir: &Path, label: &str, callers: Option<&str>) -> Result<(Node, f64), S
         else {
             continue;
         };
-        let samples: u64 = samples.parse().map_err(|e| format!("{line}: {e}"))?;
-        let calls: u64 = calls.parse().map_err(|e| format!("{line}: {e}"))?;
+        let parse = |n: &str| {
+            n.parse::<u64>().map_err(|source| Error::Line {
+                line: line.to_owned(),
+                source,
+            })
+        };
+        let (samples, calls) = (parse(samples)?, parse(calls)?);
         let frames: Vec<&str> = stack.split(';').collect();
         match callers {
             None => root.add(&frames, samples, calls),
@@ -241,9 +265,9 @@ fn read(dir: &Path, label: &str, callers: Option<&str>) -> Result<(Node, f64), S
 }
 
 /// The tree under the root `options` names, one frame a line.
-fn show(dir: &Path, label: &str, options: &Show) -> Result<String, String> {
+fn show(dir: &Path, label: &str, options: &Show) -> Result<String, Error> {
     let (depth, min) = (options.depth, options.min);
-    let focus = |label: &str| -> Result<(Node, f64), String> {
+    let focus = |label: &str| -> Result<(Node, f64), Error> {
         if let Some(pattern) = &options.callers {
             return read(dir, label, Some(pattern));
         }
@@ -383,10 +407,9 @@ fn lines(
 }
 
 /// Draw a recorded profile as a flamegraph, next to its folded file.
-fn svg(dir: &Path, label: &str, map: bool) -> Result<String, String> {
+fn svg(dir: &Path, label: &str, map: bool) -> Result<String, Error> {
     let file = folded_path(dir, label);
-    let text = std::fs::read_to_string(&file)
-        .map_err(|e| format!("reading {}: {e}; record it first", file.display()))?;
+    let text = error::read(&file).map_err(Error::NotRecorded)?;
     // A flamegraph takes a stack and a count, so the calls are left off.
     let lines: Vec<&str> = text
         .lines()
@@ -394,8 +417,7 @@ fn svg(dir: &Path, label: &str, map: bool) -> Result<String, String> {
         .filter_map(|line| line.rsplit_once(' ').map(|(stack, _)| stack))
         .collect();
     let out = dir.join(format!("{label}.svg"));
-    let writer =
-        std::fs::File::create(&out).map_err(|e| format!("creating {}: {e}", out.display()))?;
+    let writer = error::create(&out)?;
     let mut options = inferno::flamegraph::Options::default();
     options.title = match map {
         true => format!("{label}: map generation"),
@@ -403,6 +425,6 @@ fn svg(dir: &Path, label: &str, map: bool) -> Result<String, String> {
     };
     options.count_name = "instructions".into();
     inferno::flamegraph::from_lines(&mut options, lines, std::io::BufWriter::new(writer))
-        .map_err(|e| format!("drawing the flamegraph: {e}"))?;
+        .map_err(Error::Flamegraph)?;
     Ok(format!("drawn into {}\n", out.display()))
 }

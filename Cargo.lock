@@ -2416,6 +2416,7 @@ dependencies = [
  "nonmax",
  "serde_json",
  "sts2-core",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

@@ -8,8 +8,6 @@
 
 use std::process::Command;
 
-use crate::instructions::workspace;
-
 #[derive(clap::Args)]
 pub struct Args {
     /// The relic, by id, such as `NEW_LEAF`.
@@ -22,30 +20,39 @@ pub struct Args {
     seeds: u64,
 }
 
-pub fn run(args: Args) -> Result<String, String> {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Process(#[from] crate::error::ProcessError),
+    #[error("no seed of {seeds} offers {relic} to {character}")]
+    NotOffered {
+        relic: String,
+        character: String,
+        seeds: u64,
+    },
+}
+
+pub fn run(args: Args) -> Result<String, Error> {
     let Args {
         relic,
         character,
         seeds,
     } = args;
 
-    let output = Command::new("cargo")
-        .current_dir(workspace()?)
-        .args([
-            "run",
-            "-q",
-            "-p",
-            "sts2-golden",
-            "--example",
-            "neow_offers",
-            "--",
-        ])
-        .args([character.as_str(), "0", &seeds.to_string()])
-        .output()
-        .map_err(|e| format!("running neow_offers: {e}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
-    }
+    let output = crate::error::output(
+        Command::new("cargo")
+            .current_dir(crate::workspace())
+            .args([
+                "run",
+                "-q",
+                "-p",
+                "sts2-golden",
+                "--example",
+                "neow_offers",
+                "--",
+            ])
+            .args([character.as_str(), "0", &seeds.to_string()]),
+    )?;
     let mut found = String::new();
     for line in String::from_utf8_lossy(&output.stdout).lines() {
         let mut words = line.split_whitespace();
@@ -55,7 +62,11 @@ pub fn run(args: Args) -> Result<String, String> {
         }
     }
     if found.is_empty() {
-        return Err(format!("no seed of {seeds} offers {relic} to {character}"));
+        return Err(Error::NotOffered {
+            relic,
+            character,
+            seeds,
+        });
     }
     Ok(found)
 }

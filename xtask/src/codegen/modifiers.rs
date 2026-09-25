@@ -10,10 +10,31 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
+use crate::error::{self, FileError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{0} rules others out but is not a modifier")]
+    NotAModifier(String),
+    #[error("the exclusion groups are not 0..{0}, so one of them is empty")]
+    EmptyGroup(usize),
+    #[error("exclusion group {group} holds {holds} modifier(s), which rules nothing out")]
+    LoneGroup { group: usize, holds: usize },
+    #[error("{modifier}: {kind} is no kind this knows")]
+    UnknownKind { modifier: String, kind: String },
+}
 
 /// How the dump spells each list, and the variant it becomes.
 ///
@@ -48,17 +69,22 @@ const FLAGS: [(&str, usize, &str); 3] = [
     ),
 ];
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("modifiers.txt")?;
     let build = dump.build.clone();
 
     let modifiers: Vec<&Vec<String>> = dump.of("modifier").collect();
     if modifiers.is_empty() {
-        return Err("the dump declares no modifiers".into());
+        return Err(DumpError::Empty("modifiers").into());
     }
     for row in &modifiers {
         if row.len() != 6 {
-            return Err(format!("{}: {} columns, not 5", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 5,
+            }
+            .into());
         }
     }
 
@@ -78,7 +104,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_exclusive(&mut out, &modifiers, &exclusive)?;
 
     let path = root.join("modifiers.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     println!(
         "  modifiers: {} ({} a run can offer, {} exclusive groups)",
@@ -91,16 +117,14 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 }
 
 /// The exclusion groups, in the dump's order, each as a list of ids.
-fn exclusive(dump: &Dump, modifiers: &[&Vec<String>]) -> Result<Vec<Vec<String>>, String> {
+fn exclusive(dump: &Dump, modifiers: &[&Vec<String>]) -> Result<Vec<Vec<String>>, Error> {
     let mut groups: BTreeMap<usize, Vec<String>> = BTreeMap::new();
 
     for row in dump.of("exclusive") {
-        let group: usize = row[1]
-            .parse()
-            .map_err(|e| format!("exclusive group {}: {e}", row[1]))?;
+        let group: usize = DumpError::number("exclusive group", &row[1])?;
 
         if !modifiers.iter().any(|m| m[1] == row[2]) {
-            return Err(format!("{} rules others out but is not a modifier", row[2]));
+            return Err(Error::NotAModifier(row[2].clone()));
         }
 
         groups.entry(group).or_default().push(row[2].clone());
@@ -108,20 +132,17 @@ fn exclusive(dump: &Dump, modifiers: &[&Vec<String>]) -> Result<Vec<Vec<String>>
 
     let ordered: Vec<Vec<String>> = groups.values().cloned().collect();
     if groups.keys().copied().ne(0..ordered.len()) {
-        return Err(format!(
-            "the exclusion groups are not 0..{}, so one of them is empty",
-            ordered.len()
-        ));
+        return Err(Error::EmptyGroup(ordered.len()));
     }
 
     // A group of one rules nothing out, and would be a sign the dump lost a
     // member rather than that the game has a singleton.
     for (at, group) in ordered.iter().enumerate() {
         if group.len() < 2 {
-            return Err(format!(
-                "exclusion group {at} holds {} modifier(s), which rules nothing out",
-                group.len()
-            ));
+            return Err(Error::LoneGroup {
+                group: at,
+                holds: group.len(),
+            });
         }
     }
 
@@ -149,7 +170,7 @@ fn emit_kind(out: &mut String) {
     writeln!(out, "}}\n").unwrap();
 }
 
-fn emit_flags(out: &mut String) -> Result<(), String> {
+fn emit_flags(out: &mut String) -> Result<(), sets::Error> {
     sets::plain(
         out,
         &sets::Set {
@@ -181,7 +202,7 @@ fn emit_shape(out: &mut String) {
     .unwrap();
 }
 
-fn emit_modifiers(out: &mut String, modifiers: &[&Vec<String>]) -> Result<(), String> {
+fn emit_modifiers(out: &mut String, modifiers: &[&Vec<String>]) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every modifier in the build.\n\
@@ -223,7 +244,12 @@ fn emit_modifiers(out: &mut String, modifiers: &[&Vec<String>]) -> Result<(), St
         let kind = match KINDS.iter().find(|(dumped, ..)| *dumped == row[2]) {
             Some((_, variant, _)) => format!("Some(ModifierKind::{variant})"),
             None if row[2] == "unused" => "None".to_string(),
-            None => return Err(format!("{}: {} is no kind this knows", row[1], row[2])),
+            None => {
+                return Err(Error::UnknownKind {
+                    modifier: row[1].clone(),
+                    kind: row[2].clone(),
+                });
+            }
         };
         let flags = FLAGS
             .iter()
@@ -257,7 +283,7 @@ fn emit_exclusive(
     out: &mut String,
     modifiers: &[&Vec<String>],
     exclusive: &[Vec<String>],
-) -> Result<(), String> {
+) -> Result<(), Error> {
     let names: Vec<String> = modifiers.iter().map(|row| camel(&row[1])).collect();
     let members = sets::counted(names.iter().map(|name| (name.as_str(), "")));
 

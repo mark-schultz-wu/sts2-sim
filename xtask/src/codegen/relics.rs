@@ -11,9 +11,45 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::sets;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("a relic is in no pool at all")]
+    NoPool,
+    #[error("{0}: merchant cost is computed, which Price cannot spell")]
+    ComputedPrice(String),
+    #[error("{relic}.{flag}: {value} is not a flag")]
+    NotAFlag {
+        relic: String,
+        flag: String,
+        value: String,
+    },
+    #[error(
+        "the dump reflects no SHARED_RELIC_POOL, which run setup names: the pools it does have are {0:?}"
+    )]
+    NoSharedPool(Vec<String>),
+    #[error(
+        "the dump reflects no RelicRarity::{0}, which a relic bag deals from: see what this build calls it"
+    )]
+    Unreflected(&'static str),
+    #[error("a relic's merchant cost now scales with ascension, which Price cannot spell")]
+    ScalingCost,
+    #[error("the dump reflects no RelicRarity")]
+    NoRarity,
+}
 
 /// The sentinel `MerchantCost` returns for a relic that is not for sale.
 const NOT_SOLD: &str = "999999999";
@@ -78,9 +114,9 @@ const FLAGS: [(&str, usize, &str); 9] = [
 ///
 /// `crossover` and not `shared`, because `SHARED_RELIC_POOL` is itself a pool
 /// and a file named for both names neither.
-fn bucket(pools: &[String]) -> Result<String, String> {
+fn bucket(pools: &[String]) -> Result<String, Error> {
     match pools {
-        [] => Err("a relic is in no pool at all".into()),
+        [] => Err(Error::NoPool),
         [_, _, ..] => Ok("crossover".into()),
         [only] => Ok(only
             .strip_suffix("_RELIC_POOL")
@@ -104,15 +140,14 @@ fn rust_member(enum_name: &str, member: &str) -> String {
         .map_or_else(|| member.to_string(), |&(_, _, rust)| rust.to_string())
 }
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("relics.txt")?;
     let build = dump.build.clone();
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -122,16 +157,16 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     let width = 14;
     let relics: Vec<&Vec<String>> = dump.of("relic").collect();
     if relics.is_empty() {
-        return Err("the dump declares no relics".into());
+        return Err(DumpError::Empty("relics").into());
     }
     for row in &relics {
         if row.len() != width {
-            return Err(format!(
-                "{}: {} columns, but the table has {}",
-                row[1],
-                row.len() - 1,
-                width - 1
-            ));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: width - 1,
+            }
+            .into());
         }
     }
 
@@ -139,9 +174,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // is why `Price` is flat. A build that starts scaling it would generate a
     // table that silently describes ascension 0 only, so it fails here instead.
     if dump.of("scalecost").next().is_some() {
-        return Err(
-            "a relic's merchant cost now scales with ascension, which Price cannot spell".into(),
-        );
+        return Err(Error::ScalingCost);
     }
 
     let mut pools: Vec<String> = Vec::new();
@@ -260,7 +293,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 ///
 /// Two `u8`s, like a power's, because a flag has three answers: `IsUsedUp` and
 /// `ShowCounter` are `virtual` and some relics work them out.
-fn emit_flags(out: &mut String) -> Result<(), String> {
+fn emit_flags(out: &mut String) -> Result<(), sets::Error> {
     sets::computed(
         out,
         &sets::Set {
@@ -320,20 +353,17 @@ fn emit_shape(out: &mut String) {
 }
 
 /// One relic's row, as the `const` its bucket file declares.
-fn literal(row: &[String]) -> Result<String, String> {
+fn literal(row: &[String]) -> Result<String, Error> {
     let id = &row[1];
 
     let price = match row[3].as_str() {
         NOT_SOLD => "Price::NotSold".to_string(),
         "dynamic" => {
-            return Err(format!(
-                "{id}: merchant cost is computed, which Price cannot spell"
-            ));
+            return Err(Error::ComputedPrice(id.to_owned()));
         }
         n => format!(
             "Price::Gold({})",
-            n.parse::<u16>()
-                .map_err(|e| format!("{id}: merchant cost {n}: {e}"))?
+            DumpError::number::<u16>(format_args!("{id}: merchant cost"), n)?
         ),
     };
 
@@ -343,7 +373,13 @@ fn literal(row: &[String]) -> Result<String, String> {
             "1" => yes.push(format!("RelicFlag::{name}")),
             "0" => {}
             "dynamic" => computed.push(format!("RelicFlag::{name}")),
-            other => return Err(format!("{id}.{name}: {other} is not a flag")),
+            other => {
+                return Err(Error::NotAFlag {
+                    relic: id.to_owned(),
+                    flag: name.to_string(),
+                    value: other.to_owned(),
+                });
+            }
         }
     }
 
@@ -351,8 +387,7 @@ fn literal(row: &[String]) -> Result<String, String> {
         "dynamic" => "Field::Computed".to_string(),
         n => format!(
             "Field::Constant({})",
-            n.parse::<u16>()
-                .map_err(|e| format!("{id}: display amount {n}: {e}"))?
+            DumpError::number::<u16>(format_args!("{id}: display amount"), n)?
         ),
     };
 
@@ -382,7 +417,7 @@ fn emit_relics(
     relics: &[&Vec<String>],
     pools_of: &BTreeMap<String, Vec<String>>,
     overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every relic in the build.\n\
@@ -533,27 +568,19 @@ fn emit_bridges(
     out: &mut String,
     pools: &[String],
     enums: &BTreeMap<String, Vec<(u8, String)>>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     if !pools.iter().any(|pool| pool == "SHARED_RELIC_POOL") {
-        return Err(format!(
-            "the dump reflects no SHARED_RELIC_POOL, which run setup names — the \
-             pools it does have are {pools:?}"
-        ));
+        return Err(Error::NoSharedPool(pools.to_vec()));
     }
 
     // `RelicGrabBag._rarities`, which is what a bag is allowed to hold.
     const DRAFTED: [&str; 4] = ["Common", "Uncommon", "Rare", "Shop"];
-    let rarities = enums
-        .get("RelicRarity")
-        .ok_or_else(|| "the dump reflects no RelicRarity".to_string())?;
+    let rarities = enums.get("RelicRarity").ok_or(Error::NoRarity)?;
     // `RelicRarity.None` under the name the rename gives it, which a reward
     // slot carries when it picks no rarity of its own.
     for rarity in DRAFTED.iter().copied().chain(["None"]) {
         if !rarities.iter().any(|(_, have)| have == rarity) {
-            return Err(format!(
-                "the dump reflects no RelicRarity::{rarity}, which a relic bag \
-                 deals from — see what this build calls it"
-            ));
+            return Err(Error::Unreflected(rarity));
         }
     }
 

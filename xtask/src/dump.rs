@@ -5,9 +5,10 @@
 //! Two modes launch nothing. `cardplaydump` and `monstermovedump` read what cards and monsters do off the decompiled assembly, which [`crate::plays`] explains.
 //! Nothing here checks that two dumps came from the same build. Codegen refuses to generate from dumps whose content hashes disagree. That catches a half-finished re-dump before it can do damage.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+use crate::error::{self, FileError, ProcessError};
 
 use crate::codegen::{version_dir, version_module};
 
@@ -24,7 +25,7 @@ enum Destination {
 
 /// A reader of the decompiled assembly: the game directory, the build it has
 /// to hold, and where that build's dumps live.
-type Reader = fn(&Path, &str, &Path) -> Result<String, String>;
+type Reader = fn(&Path, &str, &Path) -> Result<String, crate::plays::Error>;
 
 use Destination::{At, Content, Decompiled};
 
@@ -72,20 +73,48 @@ const DUMPS: &[(&str, Destination)] = &[
 #[derive(clap::Args)]
 pub struct Args {
     /// The modes to dump, such as `carddump`. Every one when none is named.
+    #[arg(value_parser = clap::builder::PossibleValuesParser::new(DUMPS.iter().map(|(mode, _)| *mode)))]
     modes: Vec<String>,
 }
 
-/// Run every mode named, or all of them when none is.
-pub fn run(args: Args) -> Result<String, String> {
-    let modes = args.modes;
-    let game = std::env::var("STS2_GAME_DIR").map_err(|_| {
-        "STS2_GAME_DIR is not set. The repo .envrc exports it: run `direnv allow` in the repo \
-         root, or set it by hand"
-            .to_string()
-    })?;
-    let game = PathBuf::from(game);
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Version(#[from] crate::codegen::VersionError),
+    #[error(transparent)]
+    Plays(#[from] crate::plays::Error),
+    #[error(
+        "STS2_GAME_DIR is not set. The repo .envrc exports it: run `direnv allow` in the repo root, or set it by hand"
+    )]
+    NoGameDir,
+    #[error("{mode}: {source}")]
+    Launch {
+        mode: &'static str,
+        #[source]
+        source: ProcessError,
+    },
+    #[error("{mode}: the game printed non-UTF-8: {source}")]
+    NotText {
+        mode: &'static str,
+        #[source]
+        source: std::string::FromUtf8Error,
+    },
+    #[error("{mode}: printed no '[{mode}] begin'. Are the mods deployed?")]
+    NoBegin { mode: &'static str },
+    #[error("{mode}: printed '[{mode}] begin' but never '[{mode}] end'")]
+    NoEnd { mode: &'static str },
+    #[error("{mode}: printed an empty table")]
+    EmptyTable { mode: &'static str },
+}
 
-    let wanted = select(&modes)?;
+/// Run every mode named, or all of them when none is.
+pub fn run(args: Args) -> Result<String, Error> {
+    let modes = args.modes;
+    let game = PathBuf::from(std::env::var("STS2_GAME_DIR").map_err(|_| Error::NoGameDir)?);
+
+    let wanted = select(&modes);
     let mut done = Vec::new();
 
     for (mode, destination) in wanted {
@@ -104,7 +133,7 @@ pub fn run(args: Args) -> Result<String, String> {
                 PathBuf::from(path.replace("{version}", &version_module()?)),
             ),
         };
-        fs::write(&path, &table).map_err(|e| format!("writing {}: {e}", path.display()))?;
+        error::write(&path, &table)?;
         println!("{mode} -> {}", path.display());
         done.push(mode);
     }
@@ -112,28 +141,16 @@ pub fn run(args: Args) -> Result<String, String> {
     Ok(format!("dumped {} of {}", done.len(), DUMPS.len()))
 }
 
-/// The requested modes, or all of them. An unknown name is a typo worth stopping for, not a mode to skip.
-fn select(modes: &[String]) -> Result<Vec<&'static (&'static str, Destination)>, String> {
+/// The requested modes, or all of them. Clap has refused any name that is not
+/// one.
+fn select(modes: &[String]) -> Vec<&'static (&'static str, Destination)> {
     if modes.is_empty() {
-        return Ok(DUMPS.iter().collect());
+        return DUMPS.iter().collect();
     }
-    modes
-        .iter()
-        .map(|wanted| {
-            DUMPS
-                .iter()
-                .find(|(mode, _)| mode == wanted)
-                .ok_or_else(|| format!("unknown dump mode '{wanted}'; try one of: {}", names()))
-        })
-        .collect()
-}
-
-fn names() -> String {
     DUMPS
         .iter()
-        .map(|(mode, _)| *mode)
-        .collect::<Vec<_>>()
-        .join(", ")
+        .filter(|(mode, _)| modes.iter().any(|wanted| wanted == mode))
+        .collect()
 }
 
 /// One launch of the real game, headless, with the mode set.
@@ -144,28 +161,21 @@ fn names() -> String {
 /// `LD_PRELOAD` is not optional either. MonoMod's native helper imports
 /// `_Unwind_*` from libgcc and declares no dependency on it, and the game does
 /// not link libgcc. Without the preload every Harmony patch throws.
-fn launch(game: &Path, mode: &str) -> Result<String, String> {
-    let out = Command::new("timeout")
-        .args(["-k", "5", "300"])
-        .arg("env")
-        .arg("LD_PRELOAD=libgcc_s.so.1")
-        .arg(format!("STS2_HEADLESS_MODE={mode}"))
-        .arg("./SlayTheSpire2")
-        .args(["--headless", "--force-steam=off"])
-        .current_dir(game)
-        .output()
-        .map_err(|e| format!("launching the game in {}: {e}", game.display()))?;
-
-    if !out.status.success() {
-        return Err(format!(
-            "{mode}: the game exited {}\n{}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr)
-        ));
-    }
+fn launch(game: &Path, mode: &'static str) -> Result<String, Error> {
+    let out = error::output(
+        Command::new("timeout")
+            .args(["-k", "5", "300"])
+            .arg("env")
+            .arg("LD_PRELOAD=libgcc_s.so.1")
+            .arg(format!("STS2_HEADLESS_MODE={mode}"))
+            .arg("./SlayTheSpire2")
+            .args(["--headless", "--force-steam=off"])
+            .current_dir(game),
+    )
+    .map_err(|source| Error::Launch { mode, source })?;
 
     // The dump goes to stdout in full. stderr carries Godot's shutdown grumbling and nothing we want.
-    String::from_utf8(out.stdout).map_err(|e| format!("{mode}: the game printed non-UTF-8: {e}"))
+    String::from_utf8(out.stdout).map_err(|source| Error::NotText { mode, source })
 }
 
 /// The table between the markers.
@@ -173,19 +183,19 @@ fn launch(game: &Path, mode: &str) -> Result<String, String> {
 /// Matched on the end of the line, because the log prefixes its level. A mode that ran prints `[INFO] [carddump] begin`.
 ///
 /// The game also logs the mode name when it *declines* one. A looser match can find that line instead, and then produce nothing at all.
-fn extract(log: &str, mode: &str) -> Result<String, String> {
+fn extract(log: &str, mode: &'static str) -> Result<String, Error> {
     let begin = format!("[{mode}] begin");
     let end = format!("[{mode}] end");
 
     let after = log
         .lines()
         .position(|l| l.ends_with(&begin))
-        .ok_or_else(|| format!("{mode}: printed no '{begin}'. Are the mods deployed?"))?;
+        .ok_or(Error::NoBegin { mode })?;
     let before = log
         .lines()
         .skip(after)
         .position(|l| l.ends_with(&end))
-        .ok_or_else(|| format!("{mode}: printed '{begin}' but never '{end}'"))?;
+        .ok_or(Error::NoEnd { mode })?;
 
     let mut table: Vec<&str> = log.lines().skip(after + 1).take(before - 1).collect();
 
@@ -194,7 +204,7 @@ fn extract(log: &str, mode: &str) -> Result<String, String> {
         table.pop();
     }
     if table.is_empty() {
-        return Err(format!("{mode}: printed an empty table"));
+        return Err(Error::EmptyTable { mode });
     }
 
     let mut text = table.join("\n");

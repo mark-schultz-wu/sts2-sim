@@ -11,10 +11,62 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::bridge::{Bridge, emit_bridge};
 use super::sets;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sanitize};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{card}: costs X {pool} but canonical cost is {cost}")]
+    XCost {
+        card: String,
+        pool: &'static str,
+        cost: String,
+    },
+    #[error("{card}: negative {pool} cost {cost} is not the -1 sentinel")]
+    NegativeCost {
+        card: String,
+        pool: &'static str,
+        cost: String,
+    },
+    #[error("{card}: {pool} cost is the largest byte")]
+    LargestCost { card: String, pool: &'static str },
+    #[error("{0} has variables but is not a card")]
+    NotACard(String),
+    #[error("{at}: index {index}, expected {expected}")]
+    PoolGap {
+        at: PoolAt,
+        index: usize,
+        expected: usize,
+    },
+    #[error("{0}: not a card the dump declares")]
+    UnknownCard(PoolAt),
+    #[error("{at}: the card declares pool {declared}")]
+    OtherPool { at: PoolAt, declared: String },
+    #[error("{card}: {var} has too many decimal places")]
+    Decimals { card: String, var: String },
+    #[error("{card}: {var} is a {class}, which nobody has read the preview of")]
+    Unpreviewed {
+        card: String,
+        var: String,
+        class: String,
+    },
+    #[error("no card prints a CalculationBase, which a calculated number reads")]
+    NoCalculationBase,
+    #[error("{pool}: the dump has no {kind} rows to order it")]
+    NoOrder { kind: &'static str, pool: String },
+}
 
 /// Pool id, module name, Rust enum name, and the id suffix to strip inside it.
 pub(super) const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
@@ -201,7 +253,7 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 /// canonical cost for X-cost cards, and it treats any negative base as "no
 /// cost". An X card with a number, or a negative other than -1, means the game
 /// changed under us. The mapping below is then no longer faithful.
-fn cost(card: &Card) -> Result<String, String> {
+fn cost(card: &Card) -> Result<String, Error> {
     priced(&card.id, "energy", card.costs_x, &card.cost)
 }
 
@@ -209,26 +261,33 @@ fn cost(card: &Card) -> Result<String, String> {
 ///
 /// `CanonicalStarCost` defaults to the same `-1` and `HasStarCostX` to false,
 /// so the two pools encode a cost identically. Two cards cost X stars.
-fn star_cost(card: &Card) -> Result<String, String> {
+fn star_cost(card: &Card) -> Result<String, Error> {
     priced(&card.id, "star", card.star_costs_x, &card.star_cost)
 }
 
-fn priced(id: &str, pool: &str, costs_x: bool, canonical: &str) -> Result<String, String> {
+fn priced(id: &str, pool: &'static str, costs_x: bool, canonical: &str) -> Result<String, Error> {
     match (costs_x, canonical) {
         (true, "0" | "-1") => Ok("Cost::X".into()),
-        (true, n) => Err(format!("{id}: costs X {pool} but canonical cost is {n}")),
+        (true, n) => Err(Error::XCost {
+            card: id.to_owned(),
+            pool,
+            cost: n.to_owned(),
+        }),
         (false, "-1") => Ok("Cost::None".into()),
-        (false, n) if n.starts_with('-') => Err(format!(
-            "{id}: negative {pool} cost {n} is not the -1 sentinel"
-        )),
-        (false, n) => n
-            .parse::<u8>()
-            .map_err(|e| format!("{id}: {pool} cost {n}: {e}"))
-            .and_then(|n| {
-                nonmax::NonMaxU8::new(n)
-                    .map(|_| format!("Cost::fixed({n})"))
-                    .ok_or_else(|| format!("{id}: {pool} cost is the largest byte"))
-            }),
+        (false, n) if n.starts_with('-') => Err(Error::NegativeCost {
+            card: id.to_owned(),
+            pool,
+            cost: n.to_owned(),
+        }),
+        (false, n) => {
+            let n: u8 = DumpError::number(format_args!("{id}: {pool} cost"), n)?;
+            nonmax::NonMaxU8::new(n)
+                .map(|_| format!("Cost::fixed({n})"))
+                .ok_or_else(|| Error::LargestCost {
+                    card: id.to_owned(),
+                    pool,
+                })
+        }
     }
 }
 
@@ -242,6 +301,14 @@ fn variant(card: &Card, suffix: Option<&str>) -> String {
     }
 }
 
+/// A card named as in a pool the build has no enum for.
+#[derive(Debug, thiserror::Error)]
+#[error("{card} is in {pool}, which is not a card pool")]
+pub struct NotAPool {
+    card: String,
+    pool: String,
+}
+
 /// One card, as the path another domain has to spell to name it.
 ///
 /// Card identity is pool-scoped. `Strike` is a variant of five different enums,
@@ -250,11 +317,14 @@ fn variant(card: &Card, suffix: Option<&str>) -> String {
 /// The suffix rule lives here because this is the domain that invented it. A
 /// second copy of it elsewhere is a second chance to get `STRIKE_IRONCLAD`
 /// wrong.
-pub(super) fn card_path(pool: &str, id: &str) -> Result<String, String> {
+pub(super) fn card_path(pool: &str, id: &str) -> Result<String, NotAPool> {
     let (_, _, enum_name, suffix) = POOLS
         .iter()
         .find(|(pool_id, ..)| *pool_id == pool)
-        .ok_or_else(|| format!("{id} is in {pool}, which is not a card pool"))?;
+        .ok_or_else(|| NotAPool {
+            card: id.to_owned(),
+            pool: pool.to_owned(),
+        })?;
 
     let card = Card {
         id: id.to_string(),
@@ -268,10 +338,72 @@ pub(super) fn card_path(pool: &str, id: &str) -> Result<String, String> {
     ))
 }
 
+/// One kind of pool row, as each pool's cards in the order the game lists
+/// them.
+///
+/// Each pool's indices run from zero with no gap, and every card is one the
+/// dump declares. With `own`, the key is a pool and each card declares it.
+fn listed(
+    dump: &Dump,
+    kind: &'static str,
+    cards: &[Card],
+    own: bool,
+) -> Result<BTreeMap<String, Vec<(usize, String)>>, Error> {
+    let mut pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
+    for f in dump.of(kind) {
+        let index = DumpError::number(format_args!("{}: {kind} index", f[1]), &f[2])?;
+        pools
+            .entry(f[1].clone())
+            .or_default()
+            .push((index, f[3].clone()));
+    }
+    for (pool, entries) in &mut pools {
+        entries.sort_by_key(|(index, _)| *index);
+        for (expected, (index, card)) in entries.iter().enumerate() {
+            let at = || PoolAt {
+                kind,
+                pool: pool.clone(),
+                card: card.clone(),
+            };
+            if *index != expected {
+                return Err(Error::PoolGap {
+                    at: at(),
+                    index: *index,
+                    expected,
+                });
+            }
+            let Some(row) = cards.iter().find(|row| row.id == *card) else {
+                return Err(Error::UnknownCard(at()));
+            };
+            if own && row.pool != *pool {
+                return Err(Error::OtherPool {
+                    at: at(),
+                    declared: row.pool.clone(),
+                });
+            }
+        }
+    }
+    Ok(pools)
+}
+
+/// Where in a pool listing a card sits.
+#[derive(Debug)]
+pub struct PoolAt {
+    kind: &'static str,
+    pool: String,
+    card: String,
+}
+
+impl std::fmt::Display for PoolAt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}: {}", self.kind, self.pool, self.card)
+    }
+}
+
 /// Every card, as one module per pool plus the shared field enums.
 ///
 /// Returns the dump's content hash, which stamps the roll-up too.
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("cards.txt")?;
     let build = dump.build.clone();
 
@@ -318,7 +450,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         card.vars = by_id.remove(&card.id).unwrap_or_default();
     }
     if let Some((id, _)) = by_id.into_iter().next() {
-        return Err(format!("{id} has variables but is not a card"));
+        return Err(Error::NotACard(id));
     }
     let cards = cards;
     let fixed_numbers = cards
@@ -329,123 +461,28 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // Runtime order inside each CardPoolModel. Reward generation filters this
     // list by rarity and indexes it with RNG, so the table's id order is not a
     // substitute.
-    let mut pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
-    for f in dump.of("pool") {
-        let index = f[2]
-            .parse::<usize>()
-            .map_err(|e| format!("{}: pool index {}: {e}", f[1], f[2]))?;
-        pools
-            .entry(f[1].clone())
-            .or_default()
-            .push((index, f[3].clone()));
-    }
-    for (pool, entries) in &mut pools {
-        entries.sort_by_key(|(index, _)| *index);
-        for (expected, (index, card)) in entries.iter().enumerate() {
-            if *index != expected {
-                return Err(format!("{pool}: pool index {index}, expected {expected}"));
-            }
-            let Some(row) = cards.iter().find(|row| row.id == *card) else {
-                return Err(format!("{pool}: unknown card {card}"));
-            };
-            if row.pool != *pool {
-                return Err(format!("{pool}: {card} declares pool {}", row.pool));
-            }
-        }
-    }
+    let pools = listed(&dump, "pool", &cards, true)?;
 
     // The same pools, already narrowed to what a combat generation effect can
     // draw. The narrowing is the game's own `CardFactory.FilterForCombat`, run
     // in the dump, because the facts it reads -- `CanBeGeneratedInCombat` and
     // `MultiplayerConstraint` -- are on the model and in no table.
-    let mut combat_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
-    for f in dump.of("combatpool") {
-        let index = f[2]
-            .parse::<usize>()
-            .map_err(|e| format!("{}: combat pool index {}: {e}", f[1], f[2]))?;
-        combat_pools
-            .entry(f[1].clone())
-            .or_default()
-            .push((index, f[3].clone()));
-    }
-    for (pool, entries) in &mut combat_pools {
-        entries.sort_by_key(|(index, _)| *index);
-        for (expected, (index, card)) in entries.iter().enumerate() {
-            if *index != expected {
-                return Err(format!(
-                    "{pool}: combat pool index {index}, expected {expected}"
-                ));
-            }
-            let Some(row) = cards.iter().find(|row| row.id == *card) else {
-                return Err(format!("{pool}: unknown combat card {card}"));
-            };
-            if row.pool != *pool {
-                return Err(format!("{pool}: {card} declares pool {}", row.pool));
-            }
-        }
-    }
+    let combat_pools = listed(&dump, "combatpool", &cards, true)?;
 
     // The same pools again, narrowed the way a merchant sees them. The
     // narrowing is `GetUnlockedCards` with a one-player run's constraint, run
     // in the dump for the same reason `combatpool` is.
-    let mut shop_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
-    for f in dump.of("shoppool") {
-        let index = f[2]
-            .parse::<usize>()
-            .map_err(|e| format!("{}: shop pool index {}: {e}", f[1], f[2]))?;
-        shop_pools
-            .entry(f[1].clone())
-            .or_default()
-            .push((index, f[3].clone()));
-    }
-    for (pool, entries) in &mut shop_pools {
-        entries.sort_by_key(|(index, _)| *index);
-        for (expected, (index, card)) in entries.iter().enumerate() {
-            if *index != expected {
-                return Err(format!(
-                    "{pool}: shop pool index {index}, expected {expected}"
-                ));
-            }
-            let Some(row) = cards.iter().find(|row| row.id == *card) else {
-                return Err(format!("{pool}: unknown shop card {card}"));
-            };
-            if row.pool != *pool {
-                return Err(format!("{pool}: {card} declares pool {}", row.pool));
-            }
-        }
-    }
+    let shop_pools = listed(&dump, "shoppool", &cards, true)?;
 
-    let mut reward_pools: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
-    for f in dump.of("rewardpool") {
-        let index = f[2]
-            .parse::<usize>()
-            .map_err(|e| format!("{}: reward pool index {}: {e}", f[1], f[2]))?;
-        reward_pools
-            .entry(f[1].clone())
-            .or_default()
-            .push((index, f[3].clone()));
-    }
-    for (character, entries) in &mut reward_pools {
-        entries.sort_by_key(|(index, _)| *index);
-        for (expected, (index, card)) in entries.iter().enumerate() {
-            if *index != expected {
-                return Err(format!(
-                    "{character}: reward pool index {index}, expected {expected}"
-                ));
-            }
-            if !cards.iter().any(|row| row.id == *card) {
-                return Err(format!("{character}: unknown reward card {card}"));
-            }
-        }
-    }
+    // Keyed by character rather than by pool, so no card declares the key.
+    let reward_pools = listed(&dump, "rewardpool", &cards, false)?;
 
     // Discriminant and name, because a dropped member leaves a hole that the
     // rest must not slide into.
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -565,26 +602,26 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             for (name, base, calculated, class) in &card.vars {
                 let base = if fixed_numbers {
                     let (whole, fraction) = base.split_once('.').unwrap_or((base, ""));
-                    let scale = u8::try_from(fraction.len())
-                        .map_err(|_| format!("{}: {name} has too many decimal places", card.id))?;
+                    let scale = u8::try_from(fraction.len()).map_err(|_| Error::Decimals {
+                        card: card.id.clone(),
+                        var: name.clone(),
+                    })?;
                     let digits = format!("{whole}{fraction}");
-                    let coefficient = digits
-                        .parse::<i32>()
-                        .map_err(|e| format!("{}: {name} is {base}: {e}", card.id))?;
+                    let coefficient: i32 =
+                        DumpError::number(format_args!("{}: {name}", card.id), &digits)?;
                     format!("super::CardNumber::new({coefficient}, {scale})")
                 } else {
-                    base.parse::<i32>()
-                        .map(|base| base.to_string())
-                        .map_err(|e| format!("{}: {name} is {base}: {e}", card.id))?
+                    DumpError::number::<i32>(format_args!("{}: {name}", card.id), base)?.to_string()
                 };
                 writeln!(
                     row,
                     "            sts2_core::CardNumber {{ id: CardVar::{}, base: {base}, calculated: {calculated}, modifier: {} }},",
                     sanitize(name),
-                    previewed(class).ok_or_else(|| format!(
-                        "{}: {name} is a {class}, which nobody has read the preview of",
-                        card.id
-                    ))?
+                    previewed(class).ok_or_else(|| Error::Unpreviewed {
+                        card: card.id.clone(),
+                        var: name.clone(),
+                        class: class.clone(),
+                    })?
                 )
                 .unwrap();
             }
@@ -688,7 +725,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     // `CalculatedVar.GetBaseVar`, which the simulator reads by this name.
     if !keys.contains(&"CalculationBase") {
-        return Err("no card prints a CalculationBase, which a calculated number reads".into());
+        return Err(Error::NoCalculationBase);
     }
     writeln!(out, "impl sts2_core::CardVars for CardVar {{").unwrap();
     writeln!(
@@ -924,9 +961,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     {
         let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
         writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
-        let entries = pools
-            .get(pool_id)
-            .ok_or_else(|| format!("{pool_id}: dump has no runtime pool order"))?;
+        let entries = pools.get(pool_id).ok_or_else(|| Error::NoOrder {
+            kind: "pool",
+            pool: pool_id.to_string(),
+        })?;
         for (_, id) in entries {
             let card = cards
                 .iter()
@@ -970,9 +1008,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     {
         let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
         writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
-        let entries = combat_pools
-            .get(pool_id)
-            .ok_or_else(|| format!("{pool_id}: dump has no combat pool order"))?;
+        let entries = combat_pools.get(pool_id).ok_or_else(|| Error::NoOrder {
+            kind: "combatpool",
+            pool: pool_id.to_string(),
+        })?;
         for (_, id) in entries {
             let card = cards
                 .iter()
@@ -1015,9 +1054,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     {
         let pool_name = camel(pool_id.trim_end_matches("_CARD_POOL"));
         writeln!(out, "        CardPool::{pool_name} => &[").unwrap();
-        let entries = shop_pools
-            .get(pool_id)
-            .ok_or_else(|| format!("{pool_id}: dump has no shop pool order"))?;
+        let entries = shop_pools.get(pool_id).ok_or_else(|| Error::NoOrder {
+            kind: "shoppool",
+            pool: pool_id.to_string(),
+        })?;
         for (_, id) in entries {
             let card = cards
                 .iter()
@@ -1054,7 +1094,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     {
         let entries = shop_pools
             .get("COLORLESS_CARD_POOL")
-            .ok_or_else(|| "COLORLESS_CARD_POOL: dump has no shop pool order".to_string())?;
+            .ok_or_else(|| Error::NoOrder {
+                kind: "shoppool",
+                pool: COLORLESS.to_string(),
+            })?;
         for (_, id) in entries {
             let card = cards
                 .iter()
@@ -1139,9 +1182,10 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         "pub fn colorless_cards() -> Drafted<'static, Cards> {{"
     )
     .unwrap();
-    let colorless = pools
-        .get(COLORLESS)
-        .ok_or_else(|| format!("the dump has no {COLORLESS} rows"))?;
+    let colorless = pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
+        kind: "pool",
+        pool: COLORLESS.to_string(),
+    })?;
     writeln!(out, "    Drafted {{").unwrap();
     for (field, rarity) in [
         ("common", "Common"),

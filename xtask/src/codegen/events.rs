@@ -12,8 +12,42 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{0} is in the shared pool and in an act's own list, so a map would offer it twice")]
+    Twice(String),
+    #[error(
+        "{list} lists {event} at index {at}, which is not the {is} it is at: the rows are out of order"
+    )]
+    OutOfOrder {
+        list: String,
+        event: String,
+        at: usize,
+        is: usize,
+    },
+    #[error("the dump reflects no Neow {0}")]
+    NoNeowList(String),
+    #[error("{relic} is not one of Neow's {list} any more")]
+    NotNeows {
+        relic: &'static str,
+        list: &'static str,
+    },
+    #[error("Neow's {0} is not one option")]
+    NotOneOption(String),
+}
 
 /// The yes-or-no columns, in the order they become bits.
 const FLAGS: [(&str, usize, &str); 4] = [
@@ -71,25 +105,29 @@ fn bucket_doc(file: &str) -> String {
     }
 }
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("events.txt")?;
     let build = dump.build.clone();
 
     let events: Vec<&Vec<String>> = dump.of("event").collect();
     if events.is_empty() {
-        return Err("the dump declares no events".into());
+        return Err(DumpError::Empty("events").into());
     }
     for row in &events {
         if row.len() != 8 {
-            return Err(format!("{}: {} columns, not 7", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 7,
+            }
+            .into());
         }
     }
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -112,11 +150,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         };
         for row in dump.of(kind) {
             if row.len() != 4 {
-                return Err(format!(
-                    "{kind} {}: {} columns, not 3",
-                    row[1],
-                    row.len() - 1
-                ));
+                return Err(DumpError::Columns {
+                    id: format!("{kind} {}", row[1]),
+                    got: row.len() - 1,
+                    want: 3,
+                }
+                .into());
             }
             if !acts.contains(&row[1]) {
                 acts.push(row[1].clone());
@@ -133,7 +172,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     let mut neow: Vec<(String, Vec<String>)> = Vec::new();
     for row in dump.of("neow") {
         if row.len() != 4 {
-            return Err(format!("neow {}: {} columns, not 3", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: format!("neow {}", row[1]),
+                got: row.len() - 1,
+                want: 3,
+            }
+            .into());
         }
         ordered(&mut neow, &row[1], &row[2], &row[3])?;
     }
@@ -142,11 +186,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     for kind in ["sharedpool", "sharedancient"] {
         for row in dump.of(kind) {
             if row.len() != 3 {
-                return Err(format!(
-                    "{kind} {}: {} columns, not 2",
-                    row[2],
-                    row.len() - 1
-                ));
+                return Err(DumpError::Columns {
+                    id: format!("{kind} {}", row[2]),
+                    got: row.len() - 1,
+                    want: 2,
+                }
+                .into());
             }
             ordered(&mut shared, kind, &row[1], &row[2])?;
         }
@@ -161,9 +206,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // assumed, because an event in both would be offered twice.
     for id in &pooled {
         if acts_of.contains_key(*id) {
-            return Err(format!(
-                "{id} is in the shared pool and in an act's own list, so a map would offer it twice"
-            ));
+            return Err(Error::Twice(id.to_string()));
         }
     }
 
@@ -237,7 +280,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 /// One word and a `contains`, unlike a power's or a relic's. Nothing here is
 /// computed, because every one of these is read off the model with no combat
 /// running.
-fn emit_flags(out: &mut String) -> Result<(), String> {
+fn emit_flags(out: &mut String) -> Result<(), sets::Error> {
     sets::plain(
         out,
         &sets::Set {
@@ -274,7 +317,7 @@ fn emit_shape(out: &mut String) {
     .unwrap();
 }
 
-fn literal(row: &[String]) -> Result<String, String> {
+fn literal(row: &[String]) -> Result<String, Error> {
     let set = FLAGS
         .iter()
         .filter(|(_, column, _)| row[*column] == "1")
@@ -302,7 +345,7 @@ fn emit_events(
     events: &[&Vec<String>],
     acts_of: &BTreeMap<String, Vec<String>>,
     pooled: &[&str],
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every event in the build.\n\
@@ -438,10 +481,8 @@ fn ordered(
     key: &str,
     index: &str,
     id: &str,
-) -> Result<(), String> {
-    let at: usize = index
-        .parse()
-        .map_err(|e| format!("{key} {id}: index {index}: {e}"))?;
+) -> Result<(), Error> {
+    let at: usize = DumpError::number(format_args!("{key} {id}: index"), index)?;
     let list = match listed.iter_mut().find(|(held, _)| held == key) {
         Some((_, list)) => list,
         None => {
@@ -450,11 +491,12 @@ fn ordered(
         }
     };
     if at != list.len() {
-        return Err(format!(
-            "{key} lists {id} at index {at}, which is not the {} it is at — the \
-             rows are out of order",
-            list.len()
-        ));
+        return Err(Error::OutOfOrder {
+            list: key.to_owned(),
+            event: id.to_owned(),
+            at,
+            is: list.len(),
+        });
     }
     list.push(id.to_string());
     Ok(())
@@ -523,12 +565,12 @@ fn emit_shared(out: &mut String, shared: &[(String, Vec<String>)]) {
 /// The lists are reflected. The pairings are not reachable that way: they are
 /// `is` checks inside `GenerateInitialOptions`, so they are named here and
 /// checked against the lists. A build that renames one stops generation.
-fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), String> {
-    let list = |name: &str| -> Result<&Vec<String>, String> {
+fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), Error> {
+    let list = |name: &str| -> Result<&Vec<String>, Error> {
         neow.iter()
             .find(|(held, _)| held == name)
             .map(|(_, list)| list)
-            .ok_or_else(|| format!("the dump reflects no Neow {name}"))
+            .ok_or_else(|| Error::NoNeowList(name.to_owned()))
     };
 
     // A curse that takes a positive off the table with it, because the two do
@@ -546,16 +588,23 @@ fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), Str
     let positives = list("PositiveOptions")?;
     for (curse, positive) in PAIRS {
         if !curses.contains(&curse.to_string()) {
-            return Err(format!("{curse} is not one of Neow's curses any more"));
+            return Err(Error::NotNeows {
+                relic: curse,
+                list: "curses",
+            });
         }
         if !positives.contains(&positive.to_string()) {
-            return Err(format!(
-                "{positive} is not one of Neow's positives any more"
-            ));
+            return Err(Error::NotNeows {
+                relic: positive,
+                list: "positives",
+            });
         }
     }
     if !curses.contains(&SUPPRESSES.to_string()) {
-        return Err(format!("{SUPPRESSES} is not one of Neow's curses any more"));
+        return Err(Error::NotNeows {
+            relic: SUPPRESSES,
+            list: "curses",
+        });
     }
 
     writeln!(
@@ -594,11 +643,11 @@ fn emit_neow(out: &mut String, neow: &[(String, Vec<String>)]) -> Result<(), Str
     .unwrap();
     writeln!(out, "pub const NEOW_FLIPS: [(Relic, Relic); 3] = [").unwrap();
     for (heads, tails) in FLIPS {
-        let one = |name: &str| -> Result<String, String> {
+        let one = |name: &str| -> Result<String, Error> {
             let held = list(name)?;
             match held.as_slice() {
                 [only] => Ok(format!("Relic::{}", camel(only))),
-                _ => Err(format!("Neow's {name} is not one option")),
+                _ => Err(Error::NotOneOption(name.to_owned())),
             }
         };
         writeln!(out, "    ({}, {}),", one(heads)?, one(tails)?).unwrap();

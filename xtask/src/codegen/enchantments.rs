@@ -8,10 +8,27 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
+use crate::error::{self, FileError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{0} is stackable, which no enchantment was when the column was dropped")]
+    Stackable(String),
+    #[error("{0} can be put on nothing at all")]
+    Unplaceable(String),
+}
 
 /// The card types an enchantment can actually be put on.
 ///
@@ -39,25 +56,27 @@ const FLAGS: [(&str, usize, &str); 4] = [
     ),
 ];
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("enchantments.txt")?;
     let build = dump.build.clone();
 
     let enchantments: Vec<&Vec<String>> = dump.of("enchantment").collect();
     if enchantments.is_empty() {
-        return Err("the dump declares no enchantments".into());
+        return Err(DumpError::Empty("enchantments").into());
     }
     for row in &enchantments {
         if row.len() != 7 {
-            return Err(format!("{}: {} columns, not 6", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 6,
+            }
+            .into());
         }
         // The column exists in the dump and is not generated, so a build that
         // starts using it fails here rather than losing it silently.
         if row[5] != "0" {
-            return Err(format!(
-                "{} is stackable, which no enchantment was when the column was dropped",
-                row[1]
-            ));
+            return Err(Error::Stackable(row[1].clone()));
         }
     }
 
@@ -84,7 +103,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_enchantments(&mut out, &enchantments, &types)?;
 
     let path = root.join("enchantments.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     let restricted = enchantments
         .iter()
@@ -98,7 +117,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     Ok(build)
 }
 
-fn emit_flags(out: &mut String) -> Result<(), String> {
+fn emit_flags(out: &mut String) -> Result<(), sets::Error> {
     sets::plain(
         out,
         &sets::Set {
@@ -134,7 +153,7 @@ fn emit_enchantments(
     out: &mut String,
     enchantments: &[&Vec<String>],
     types: &BTreeMap<String, Vec<String>>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every enchantment in the build.\n\
@@ -178,7 +197,7 @@ fn emit_enchantments(
         let empty = Vec::new();
         let allowed = types.get(&row[1]).unwrap_or(&empty);
         if allowed.is_empty() {
-            return Err(format!("{} can be put on nothing at all", row[1]));
+            return Err(Error::Unplaceable(row[1].clone()));
         }
 
         let set = allowed

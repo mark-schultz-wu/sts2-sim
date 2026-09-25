@@ -12,6 +12,20 @@ use std::fmt::Write as _;
 
 use super::DERIVES;
 
+/// A set whose members cannot share one word.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{set}: {first} and {second} are both bit {bit}")]
+    SharedBit {
+        set: String,
+        first: String,
+        second: String,
+        bit: usize,
+    },
+    #[error("{set} needs bit {bit}, which is more than a u32 holds")]
+    Wide { set: String, bit: usize },
+}
+
 /// A method a set gets only where a caller wants it.
 ///
 /// `new`, `contains`, `iter` and `Debug` are the core, and every set has them:
@@ -84,13 +98,15 @@ impl Set<'_> {
     /// The soundness is that no two members share a bit. Two flags on one bit
     /// answer for each other, and that is the mistake a domain numbering its
     /// own members can make.
-    fn word(&self) -> Result<&'static str, String> {
+    fn word(&self) -> Result<&'static str, Error> {
         for (i, m) in self.members.iter().enumerate() {
             if let Some(other) = self.members[..i].iter().find(|o| o.bit == m.bit) {
-                return Err(format!(
-                    "{}: {} and {} are both bit {}",
-                    self.set, other.name, m.name, m.bit
-                ));
+                return Err(Error::SharedBit {
+                    set: self.set.to_owned(),
+                    first: other.name.to_owned(),
+                    second: m.name.to_owned(),
+                    bit: m.bit,
+                });
             }
         }
 
@@ -98,16 +114,16 @@ impl Set<'_> {
             n if n < 8 => Ok("u8"),
             n if n < 16 => Ok("u16"),
             n if n < 32 => Ok("u32"),
-            n => Err(format!(
-                "{} needs bit {n}, which is more than a u32 holds",
-                self.set
-            )),
+            bit => Err(Error::Wide {
+                set: self.set.to_owned(),
+                bit,
+            }),
         }
     }
 }
 
 /// Emits a set whose members can be computed: two words, and `get`.
-pub fn computed(out: &mut String, set: &Set<'_>) -> Result<(), String> {
+pub fn computed(out: &mut String, set: &Set<'_>) -> Result<(), Error> {
     let word = set.word()?;
     let (flag, name) = (set.flag, set.set);
 
@@ -206,7 +222,7 @@ pub fn computed(out: &mut String, set: &Set<'_>) -> Result<(), String> {
 /// The bits are the member's own discriminant, so a bit means the same thing
 /// here as it does wherever the enum came from. That matters when the enum is
 /// another domain's and the numbers are the game's.
-pub fn plain(out: &mut String, set: &Set<'_>) -> Result<(), String> {
+pub fn plain(out: &mut String, set: &Set<'_>) -> Result<(), Error> {
     let word = set.word()?;
     let (flag, name) = (set.flag, set.set);
 
@@ -375,7 +391,7 @@ mod tests {
         all
     }
 
-    fn width(members: &[Member<'_>]) -> Result<&'static str, String> {
+    fn width(members: &[Member<'_>]) -> Result<&'static str, Error> {
         Set {
             flag: "Member",
             set: "MemberSet",
@@ -417,10 +433,9 @@ mod tests {
     #[test]
     fn a_set_too_wide_to_hold_fails_generation() {
         let err = width(&set(3, 32)).unwrap_err();
-        assert!(err.contains("MemberSet"), "the error names the set: {err}");
         assert!(
-            err.contains("bit 32"),
-            "and the bit it could not hold: {err}"
+            matches!(&err, Error::Wide { set, bit: 32 } if set == "MemberSet"),
+            "the error names the set and the bit it could not hold: {err}"
         );
     }
 
@@ -443,7 +458,9 @@ mod tests {
             },
         ];
         let err = width(&members).unwrap_err();
-        assert!(err.contains("Early") && err.contains("Late"), "{err}");
-        assert!(err.contains("bit 3"), "{err}");
+        assert!(
+            matches!(&err, Error::SharedBit { first, second, bit: 3, .. } if first == "Early" && second == "Late"),
+            "{err}"
+        );
     }
 }

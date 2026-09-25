@@ -10,10 +10,47 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::{Build, DERIVES, Dump, banner, camel, repr};
+use crate::error::{self, FileError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error(
+        "{0} is listed in ModelDb.Orbs but no roll can produce it: the two lists have diverged and this module's docs are wrong"
+    )]
+    Unrollable(String),
+    #[error("two orbs claim roll index {0}")]
+    SharedIndex(i32),
+    #[error("the roll indices are not 0..{0}, so the array they came from has gaps")]
+    Gaps(usize),
+    #[error("{orb}: {slot} is neither passive nor evoke")]
+    Slot { orb: String, slot: String },
+    #[error(
+        "{orb}'s {slot} value is 255, which is the number NonMaxU8 spends on saying \"absent\": store this domain's values as something wider than a NonMaxU8"
+    )]
+    Absent { orb: String, slot: String },
+    #[error("{orb} has two {slot} values")]
+    TwoValues { orb: String, slot: String },
+    #[error("{0} has no values at all")]
+    NoValues(String),
+    #[error("{orb} has no {slot} value")]
+    NoValue { orb: String, slot: &'static str },
+    #[error("{0} has values but is not an orb")]
+    NotAnOrb(String),
+    #[error("{orb}: {trigger} is no trigger this knows")]
+    UnknownTrigger { orb: String, trigger: String },
+}
 
 /// How the dump spells each trigger, and the variant it becomes.
 ///
@@ -33,17 +70,22 @@ const TRIGGERS: [(&str, &str, &str); 2] = [
     ),
 ];
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("orbs.txt")?;
     let build = dump.build.clone();
 
     let orbs: Vec<&Vec<String>> = dump.of("orb").collect();
     if orbs.is_empty() {
-        return Err("the dump declares no orbs".into());
+        return Err(DumpError::Empty("orbs").into());
     }
     for row in &orbs {
         if row.len() != 5 {
-            return Err(format!("{}: {} columns, not 4", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 4,
+            }
+            .into());
         }
     }
 
@@ -62,7 +104,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_orbs(&mut out, &orbs, &rollable, &values)?;
 
     let path = root.join("orbs.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     println!(
         "  orbs: {} ({} a roll can produce)",
@@ -77,61 +119,58 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 ///
 /// Built from the index column rather than from dump order, because that column
 /// *is* the array's order and dump order is alphabetical.
-fn rollable(orbs: &[&Vec<String>]) -> Result<Vec<String>, String> {
+fn rollable(orbs: &[&Vec<String>]) -> Result<Vec<String>, Error> {
     let mut placed: BTreeMap<usize, String> = BTreeMap::new();
 
     for row in orbs {
-        let index: i32 = row[3]
-            .parse()
-            .map_err(|e| format!("{}: roll index {}: {e}", row[1], row[3]))?;
+        let index: i32 = DumpError::number(format_args!("{}: roll index", row[1]), &row[3])?;
 
         if index < 0 {
             // Not in `_validOrbs`, and so not something a roll ever produces.
             // Its listing has to agree, or the two lists disagree about an orb
             // that plays.
             if row[4] == "1" {
-                return Err(format!(
-                    "{} is listed in ModelDb.Orbs but no roll can produce it — \
-                     the two lists have diverged and this module's docs are wrong",
-                    row[1]
-                ));
+                return Err(Error::Unrollable(row[1].clone()));
             }
             continue;
         }
 
         if placed.insert(index as usize, row[1].clone()).is_some() {
-            return Err(format!("two orbs claim roll index {index}"));
+            return Err(Error::SharedIndex(index));
         }
     }
 
     let ordered: Vec<String> = placed.values().cloned().collect();
     if placed.keys().copied().ne(0..ordered.len()) {
-        return Err(format!(
-            "the roll indices are not 0..{}, so the array they came from has gaps",
-            ordered.len()
-        ));
+        return Err(Error::Gaps(ordered.len()));
     }
 
     Ok(ordered)
 }
 
 /// Each orb's two values, keyed by id, as `(passive, evoke)` Rust expressions.
-fn values(dump: &Dump, orbs: &[&Vec<String>]) -> Result<BTreeMap<String, [String; 2]>, String> {
+fn values(dump: &Dump, orbs: &[&Vec<String>]) -> Result<BTreeMap<String, [String; 2]>, Error> {
     let mut values: BTreeMap<String, [Option<String>; 2]> = BTreeMap::new();
 
     for row in dump.of("value") {
         if row.len() != 6 {
-            return Err(format!(
-                "{}: {} value columns, not 5",
-                row[1],
-                row.len() - 1
-            ));
+            return Err(DumpError::Columns {
+                id: format!("{} value", row[1]),
+                got: row.len() - 1,
+                want: 5,
+            }
+            .into());
         }
 
         let slot = match row[2].as_str() {
             "passive" => 0,
             "evoke" => 1,
-            other => return Err(format!("{}: {other} is neither passive nor evoke", row[1])),
+            other => {
+                return Err(Error::Slot {
+                    orb: row[1].clone(),
+                    slot: other.to_owned(),
+                });
+            }
         };
 
         // The dump's `stored` column is deliberately not read: the number is
@@ -140,9 +179,7 @@ fn values(dump: &Dump, orbs: &[&Vec<String>]) -> Result<BTreeMap<String, [String
         let amount = match row[3].as_str() {
             "dynamic" => "None".to_string(),
             n => {
-                let n = n
-                    .parse::<u8>()
-                    .map_err(|e| format!("{}: {} value {n}: {e}", row[1], row[2]))?;
+                let n: u8 = DumpError::number(format_args!("{}: {} value", row[1], row[2]), n)?;
                 // `NonMaxU8` spends 255 on being the absent marker, and this
                 // field's absence already means "the getter names no number".
                 // So a real 255 would arrive as `None` and read as no value at
@@ -150,13 +187,10 @@ fn values(dump: &Dump, orbs: &[&Vec<String>]) -> Result<BTreeMap<String, [String
                 // — it is here for the domain that adopts `NonMaxU8` with a
                 // range that reaches the top of a byte.
                 if n == u8::MAX {
-                    return Err(format!(
-                        "{}'s {} value is 255, which is the number NonMaxU8 spends on \
-                         saying \"absent\" — generating it would turn a real value into \
-                         no value at all. Store this domain's values as something wider \
-                         than a NonMaxU8.",
-                        row[1], row[2]
-                    ));
+                    return Err(Error::Absent {
+                        orb: row[1].clone(),
+                        slot: row[2].clone(),
+                    });
                 }
                 format!("NonMaxU8::new({n})")
             }
@@ -164,7 +198,10 @@ fn values(dump: &Dump, orbs: &[&Vec<String>]) -> Result<BTreeMap<String, [String
 
         let entry = values.entry(row[1].clone()).or_default();
         if entry[slot].is_some() {
-            return Err(format!("{} has two {} values", row[1], row[2]));
+            return Err(Error::TwoValues {
+                orb: row[1].clone(),
+                slot: row[2].clone(),
+            });
         }
         entry[slot] = Some(format!(
             "OrbValue {{ amount: {amount}, hooked: {} }}",
@@ -176,19 +213,25 @@ fn values(dump: &Dump, orbs: &[&Vec<String>]) -> Result<BTreeMap<String, [String
     for row in orbs {
         let [passive, evoke] = values
             .remove(&row[1])
-            .ok_or_else(|| format!("{} has no values at all", row[1]))?;
+            .ok_or_else(|| Error::NoValues(row[1].clone()))?;
 
         complete.insert(
             row[1].clone(),
             [
-                passive.ok_or_else(|| format!("{} has no passive value", row[1]))?,
-                evoke.ok_or_else(|| format!("{} has no evoke value", row[1]))?,
+                passive.ok_or_else(|| Error::NoValue {
+                    orb: row[1].clone(),
+                    slot: "passive",
+                })?,
+                evoke.ok_or_else(|| Error::NoValue {
+                    orb: row[1].clone(),
+                    slot: "evoke",
+                })?,
             ],
         );
     }
 
     match values.keys().next() {
-        Some(stray) => Err(format!("{stray} has values but is not an orb")),
+        Some(stray) => Err(Error::NotAnOrb(stray.clone())),
         None => Ok(complete),
     }
 }
@@ -263,7 +306,7 @@ fn emit_orbs(
     orbs: &[&Vec<String>],
     rollable: &[String],
     values: &BTreeMap<String, [String; 2]>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every orb in the build.\n\
@@ -318,7 +361,12 @@ fn emit_orbs(
         let trigger = match TRIGGERS.iter().find(|(dumped, ..)| *dumped == row[2]) {
             Some((_, variant, _)) => format!("Some(OrbTrigger::{variant})"),
             None if row[2] == "none" => "None".to_string(),
-            None => return Err(format!("{}: {} is no trigger this knows", row[1], row[2])),
+            None => {
+                return Err(Error::UnknownTrigger {
+                    orb: row[1].clone(),
+                    trigger: row[2].clone(),
+                });
+            }
         };
         let [passive, evoke] = &values[&row[1]];
 

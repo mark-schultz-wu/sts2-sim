@@ -10,8 +10,53 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("no bucket for an encounter in a {0} room")]
+    NoBucket(String),
+    #[error("{0} has rows but no encounter row")]
+    NoEncounterRow(String),
+    #[error("{0}: gold steps at more than one level")]
+    GoldSteps(String),
+    #[error(
+        "{act} lists {encounter} at index {at}, which is not the {is} it is at: the act rows are out of order"
+    )]
+    OutOfOrder {
+        act: String,
+        encounter: String,
+        at: usize,
+        is: usize,
+    },
+    #[error("an encounter opens with {0} monsters, past the {SPAWN_CAP} a Spawns can hold")]
+    TooManySpawns(usize),
+    #[error("an encounter can field {0} monsters, past the {POSSIBLE_CAP} a Possible can hold")]
+    TooManyPossible(usize),
+    #[error("{encounter} names {slots} slots, past the {SLOT_CAP} a Slot can spell")]
+    TooManySlots { encounter: String, slots: usize },
+    #[error("the dump reflects no {0}")]
+    Unreflected(&'static str),
+    #[error("{encounter}: {roster} is not a roster")]
+    NotARoster { encounter: String, roster: String },
+    #[error("{encounter}: {roster} but has spawn rows")]
+    RolledWithSpawns { encounter: String, roster: String },
+    #[error(
+        "the dump reflects no RoomType::{0}, which run setup names: see what this build calls it"
+    )]
+    NoRoom(&'static str),
+}
 
 /// Members the game declares that are not values of the field they name.
 const DROPPED: [(&str, &str, &str); 2] = [
@@ -96,12 +141,12 @@ fn dropped(enum_name: &str, member: &str) -> bool {
 ///
 /// The game's own grouping: `ActModel` caches `AllRegularEncounters`,
 /// `AllEliteEncounters` and `AllBossEncounters`, each a filter on exactly this.
-fn bucket(room: &str) -> Result<&'static str, String> {
+fn bucket(room: &str) -> Result<&'static str, Error> {
     Ok(match room {
         "Monster" => "normal",
         "Elite" => "elite",
         "Boss" => "boss",
-        other => return Err(format!("no bucket for an encounter in a {other} room")),
+        other => return Err(Error::NoBucket(other.to_owned())),
     })
 }
 
@@ -136,12 +181,8 @@ struct Steps {
 }
 
 impl Steps {
-    fn literal(&self, where_: &str) -> Result<String, String> {
-        let number = |v: &str| {
-            v.parse::<u16>()
-                .map(|n| format!("{n}"))
-                .map_err(|e| format!("{where_}: {v}: {e}"))
-        };
+    fn literal(&self, where_: &str) -> Result<String, Error> {
+        let number = |v: &str| DumpError::number::<u16>(where_, v);
 
         let step = match &self.step {
             None => "None".to_string(),
@@ -155,15 +196,14 @@ impl Steps {
     }
 }
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("encounters.txt")?;
     let build = dump.build.clone();
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -174,7 +214,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     let mut encounters: BTreeMap<String, Encounter> = BTreeMap::new();
     for row in dump.of("encounter") {
         if row.len() != 9 {
-            return Err(format!("{}: {} columns, not 9", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 9,
+            }
+            .into());
         }
         let e = encounters.entry(row[1].clone()).or_default();
         e.room = row[2].clone();
@@ -187,11 +232,11 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         e.roster = row[8].clone();
     }
 
-    let get = |id: &str, encounters: &mut BTreeMap<String, Encounter>| -> Result<(), String> {
+    let get = |id: &str, encounters: &mut BTreeMap<String, Encounter>| -> Result<(), Error> {
         if encounters.contains_key(id) {
             Ok(())
         } else {
-            Err(format!("{id} has rows but no encounter row"))
+            Err(Error::NoEncounterRow(id.to_owned()))
         }
     };
 
@@ -229,20 +274,18 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
     for row in dump.of("scalegold") {
         get(&row[1], &mut encounters)?;
-        let level = row[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{}: ascension {}: {e}", row[1], row[2]))?;
+        let level: u8 = DumpError::number(format_args!("{}: ascension", row[1]), &row[2])?;
         let e = encounters.get_mut(&row[1]).unwrap();
         for (steps, value) in [(&mut e.gold.0, &row[3]), (&mut e.gold.1, &row[4])] {
             if steps.step.is_some() {
-                return Err(format!("{}: gold steps at more than one level", row[1]));
+                return Err(Error::GoldSteps(row[1].clone()));
             }
             steps.step = Some((level, value.clone()));
         }
     }
 
     if encounters.is_empty() {
-        return Err("the dump declares no encounters".into());
+        return Err(DumpError::Empty("encounters").into());
     }
 
     // Which acts can roll an encounter. Empty for one only an event starts, and
@@ -254,7 +297,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     let mut roster: Vec<(String, Vec<String>)> = Vec::new();
     for row in dump.of("act") {
         if row.len() != 4 {
-            return Err(format!("{}: {} columns, not 3", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 3,
+            }
+            .into());
         }
         if !acts.contains(&row[1]) {
             acts.push(row[1].clone());
@@ -264,9 +312,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             .or_default()
             .push(row[1].clone());
 
-        let at: usize = row[2]
-            .parse()
-            .map_err(|e| format!("{} {}: index {}: {e}", row[1], row[3], row[2]))?;
+        let at: usize = DumpError::number(format_args!("{} {}: index", row[1], row[3]), &row[2])?;
         let listed = match roster.iter_mut().find(|(act, _)| *act == row[1]) {
             Some((_, listed)) => listed,
             None => {
@@ -277,13 +323,12 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         // Dense and ascending. A gap would mean the dump dropped one, and an
         // order recovered from rows that arrived out of order is not an order.
         if at != listed.len() {
-            return Err(format!(
-                "{} lists {} at index {at}, which is not the {} it is at — the \
-                 act rows are out of order",
-                row[1],
-                row[3],
-                listed.len()
-            ));
+            return Err(Error::OutOfOrder {
+                act: row[1].clone(),
+                encounter: row[3].clone(),
+                at,
+                is: listed.len(),
+            });
         }
         listed.push(row[3].clone());
     }
@@ -338,26 +383,20 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     for e in encounters.values() {
         if e.spawns.len() > SPAWN_CAP {
-            return Err(format!(
-                "an encounter opens with {} monsters, past the {SPAWN_CAP} a Spawns can hold",
-                e.spawns.len()
-            ));
+            return Err(Error::TooManySpawns(e.spawns.len()));
         }
         if e.possible.len() > POSSIBLE_CAP {
-            return Err(format!(
-                "an encounter can field {} monsters, past the {POSSIBLE_CAP} a Possible can hold",
-                e.possible.len()
-            ));
+            return Err(Error::TooManyPossible(e.possible.len()));
         }
     }
 
     for (id, e) in &encounters {
         let vocabulary = vocabulary(e);
         if vocabulary.len() > SLOT_CAP {
-            return Err(format!(
-                "{id} names {} slots, past the {SLOT_CAP} a Slot can spell",
-                vocabulary.len()
-            ));
+            return Err(Error::TooManySlots {
+                encounter: id.clone(),
+                slots: vocabulary.len(),
+            });
         }
     }
 
@@ -431,10 +470,10 @@ impl Steps {
 /// The two bitsets: tags, which are the game's enum, and flags, which are not.
 /// The two bitsets: families, which are the game's enum, and flags, which are
 /// not.
-fn emit_sets(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), String> {
+fn emit_sets(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), Error> {
     let families: Vec<sets::Member<'_>> = enums
         .get("EncounterTag")
-        .ok_or("the dump reflects no EncounterTag")?
+        .ok_or(Error::Unreflected("EncounterTag"))?
         .iter()
         .filter(|(_, m)| !dropped("Family", m))
         .map(|(bit, m)| sets::Member {
@@ -603,7 +642,7 @@ fn vocabulary(e: &Encounter) -> Vec<&str> {
     vocabulary
 }
 
-fn literal(id: &str, e: &Encounter) -> Result<String, String> {
+fn literal(id: &str, e: &Encounter) -> Result<String, Error> {
     let vocabulary = vocabulary(e);
     let arrivals = e.slots.len();
 
@@ -677,12 +716,20 @@ fn literal(id: &str, e: &Encounter) -> Result<String, String> {
                 .join(", ");
             format!("Roster::Fixed(Spawns::new(&[{spawns}]))")
         }
-        other => return Err(format!("{id}: {other} is not a roster")),
+        other => {
+            return Err(Error::NotARoster {
+                encounter: id.to_owned(),
+                roster: other.to_owned(),
+            });
+        }
     };
 
     // A roll that also listed a roster would be two answers to one question.
     if e.roster != "fixed" && !e.spawns.is_empty() {
-        return Err(format!("{id}: {} but has spawn rows", e.roster));
+        return Err(Error::RolledWithSpawns {
+            encounter: id.to_owned(),
+            roster: e.roster.clone(),
+        });
     }
 
     writeln!(out, "    roster: {roster},").unwrap();
@@ -695,7 +742,7 @@ fn emit_encounters(
     encounters: &BTreeMap<String, Encounter>,
     act_of: &BTreeMap<String, Vec<String>>,
     enums: &BTreeMap<String, Vec<(u8, String)>>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every encounter in the build.\n\
@@ -823,7 +870,7 @@ fn emit_encounters(
 }
 
 /// The three room kinds run setup sorts a roster on.
-fn emit_rooms(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), String> {
+fn emit_rooms(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), Error> {
     const NAMED: [(&str, &str); 7] = [
         ("MONSTER", "Monster"),
         ("ELITE", "Elite"),
@@ -835,13 +882,10 @@ fn emit_rooms(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> 
     ];
     let rooms = enums
         .get("RoomType")
-        .ok_or_else(|| "the dump reflects no RoomType".to_string())?;
+        .ok_or(Error::Unreflected("RoomType"))?;
     for (_, room) in &NAMED {
         if !rooms.iter().any(|(_, have)| have == room) {
-            return Err(format!(
-                "the dump reflects no RoomType::{room}, which run setup names — \
-                 see what this build calls it"
-            ));
+            return Err(Error::NoRoom(room));
         }
     }
 

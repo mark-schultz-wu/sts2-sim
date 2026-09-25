@@ -30,11 +30,31 @@ pub(super) struct Bridge {
     pub(super) unnamed: &'static [&'static str],
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(
+        "the dump reflects no {enum_name}::{member}, which the simulator names: see what this build calls it"
+    )]
+    Unreflected {
+        enum_name: &'static str,
+        member: &'static str,
+    },
+    #[error(
+        "{enum_name} has {members} members and the simulator names {named}: the new one needs a const on sts2_core::{trait_name}"
+    )]
+    Unnamed {
+        enum_name: &'static str,
+        trait_name: &'static str,
+        members: usize,
+        named: usize,
+    },
+}
+
 pub(super) fn emit_bridge(
     out: &mut String,
     bridge: &Bridge,
     members: &[(u8, String)],
-) -> Result<(), String> {
+) -> Result<(), Error> {
     let Bridge {
         enum_name,
         trait_name,
@@ -44,19 +64,16 @@ pub(super) fn emit_bridge(
 
     for (_, member) in *named {
         if !members.iter().any(|(_, have)| have == member) {
-            return Err(format!(
-                "the dump reflects no {enum_name}::{member}, which the simulator \
-                 names — see what this build calls it"
-            ));
+            return Err(Error::Unreflected { enum_name, member });
         }
     }
     if members.len() != named.len() + unnamed.len() {
-        return Err(format!(
-            "{enum_name} has {} members and the simulator names {} — the new one \
-             needs a const on sts2_core::{trait_name}",
-            members.len(),
-            named.len() + unnamed.len()
-        ));
+        return Err(Error::Unnamed {
+            enum_name,
+            trait_name,
+            members: members.len(),
+            named: named.len() + unnamed.len(),
+        });
     }
 
     writeln!(out, "impl sts2_core::{trait_name} for {enum_name} {{").unwrap();

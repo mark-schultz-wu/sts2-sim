@@ -19,6 +19,7 @@
 //! cargo xtask instructions after --asm listen::raise
 //! ```
 
+use crate::error::{self, FileError, ProcessError};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -66,7 +67,29 @@ pub struct Args {
     map: bool,
 }
 
-pub fn run(args: Args) -> Result<String, String> {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Process(#[from] ProcessError),
+    #[error(transparent)]
+    Asm(#[from] crate::asm::Error),
+    #[error("the replay printed no step count:\n{stdout}")]
+    NoStepCount { stdout: String },
+    #[error("no profile named '{label}' under {}", dir.display())]
+    NoProfile { label: String, dir: PathBuf },
+    #[error("{label}'s step count: {source}")]
+    StepCount {
+        label: String,
+        #[source]
+        source: std::num::ParseIntError,
+    },
+    #[error("callgrind_annotate printed no total")]
+    NoTotal,
+}
+
+pub fn run(args: Args) -> Result<String, Error> {
     let Args {
         label,
         vs,
@@ -76,56 +99,33 @@ pub fn run(args: Args) -> Result<String, String> {
         map,
     } = args;
 
-    let root = workspace()?;
+    let root = crate::workspace();
     let dir = root.join("target/profile");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
-
-    let built = Command::new("cargo")
-        .args([
-            "build",
-            "-q",
-            "--release",
-            "-p",
-            "sts2-golden",
-            "--example",
-            "replay_sites",
-        ])
-        .current_dir(&root)
-        .status()
-        .map_err(|e| format!("running cargo: {e}"))?;
-    if !built.success() {
-        return Err("the replay did not build".into());
-    }
+    error::create_dir(&dir)?;
+    let binary = error::build_example(&root, "replay_sites")?;
 
     let out = profile_path(&dir, &label);
-    let replayed = Command::new("valgrind")
-        .arg("--tool=callgrind")
-        // Counting from the start, so the toggle turns it off inside the
-        // builder. Naming a toggle turns counting off at the start, so this
-        // comes after it. For the map alone, counting starts off, and the
-        // toggle turns it on inside the builder.
-        .arg(format!("--toggle-collect={MAP}"))
-        .arg(format!(
-            "--collect-atstart={}",
-            if map { "no" } else { "yes" }
-        ))
-        // A count per instruction as well as per line, which `--asm` reads.
-        .arg("--dump-instr=yes")
-        .arg(format!("--callgrind-out-file={}", out.display()))
-        .arg(root.join("target/release/examples/replay_sites"))
-        .arg("rules")
-        .current_dir(&root)
-        .output()
-        .map_err(|e| format!("running valgrind, which this needs installed: {e}"))?;
-    if !replayed.status.success() {
-        return Err(format!(
-            "the replay failed under callgrind:\n{}",
-            String::from_utf8_lossy(&replayed.stderr)
-        ));
-    }
+    let replayed = error::output(
+        Command::new("valgrind")
+            .arg("--tool=callgrind")
+            // Counting from the start, so the toggle turns it off inside the
+            // builder. Naming a toggle turns counting off at the start, so this
+            // comes after it. For the map alone, counting starts off, and the
+            // toggle turns it on inside the builder.
+            .arg(format!("--toggle-collect={MAP}"))
+            .arg(format!(
+                "--collect-atstart={}",
+                if map { "no" } else { "yes" }
+            ))
+            // A count per instruction as well as per line, which `--asm` reads.
+            .arg("--dump-instr=yes")
+            .arg(format!("--callgrind-out-file={}", out.display()))
+            .arg(&binary)
+            .arg("rules")
+            .current_dir(&root),
+    )?;
     let steps = divide_by(&String::from_utf8_lossy(&replayed.stdout))?;
-    std::fs::write(steps_path(&dir, &label), steps.to_string())
-        .map_err(|e| format!("keeping the step count: {e}"))?;
+    error::write(&steps_path(&dir, &label), steps.to_string())?;
 
     let current = read(&dir, &label)?;
     let mut report = format!(
@@ -138,7 +138,6 @@ pub fn run(args: Args) -> Result<String, String> {
         report.push_str(&callers_of(&out, pattern, current.steps)?);
     }
     if let Some(pattern) = &asm {
-        let binary = root.join("target/release/examples/replay_sites");
         report.push_str(&crate::asm::listing(&out, &binary, pattern, current.steps)?);
     }
     let Some(vs) = vs else {
@@ -191,14 +190,6 @@ pub fn run(args: Args) -> Result<String, String> {
     Ok(report)
 }
 
-/// The repository's root, which is where cargo and the profiles live.
-pub(crate) fn workspace() -> Result<PathBuf, String> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| "xtask sits inside the workspace".into())
-}
-
 fn profile_path(dir: &Path, label: &str) -> PathBuf {
     dir.join(format!("{label}.callgrind"))
 }
@@ -208,39 +199,43 @@ fn steps_path(dir: &Path, label: &str) -> PathBuf {
 }
 
 /// The step count the replay prints, as `divide by <n>`.
-pub(crate) fn divide_by(stdout: &str) -> Result<u64, String> {
+pub(crate) fn divide_by(stdout: &str) -> Result<u64, Error> {
     stdout
         .split("divide by ")
         .nth(1)
         .and_then(|rest| rest.split_whitespace().next())
         .and_then(|n| n.parse().ok())
-        .ok_or_else(|| format!("the replay printed no step count:\n{stdout}"))
+        .ok_or_else(|| Error::NoStepCount {
+            stdout: stdout.to_owned(),
+        })
 }
 
 /// A kept profile's figures.
-fn read(dir: &Path, label: &str) -> Result<Profile, String> {
+fn read(dir: &Path, label: &str) -> Result<Profile, Error> {
     let file = profile_path(dir, label);
     if !file.exists() {
-        return Err(format!(
-            "no profile named '{label}' under {}",
-            dir.display()
-        ));
+        return Err(Error::NoProfile {
+            label: label.to_owned(),
+            dir: dir.to_path_buf(),
+        });
     }
-    let steps = std::fs::read_to_string(steps_path(dir, label))
-        .map_err(|e| format!("reading {label}'s step count: {e}"))?
+    let steps = error::read(&steps_path(dir, label))?
         .trim()
         .parse()
-        .map_err(|e| format!("{label}'s step count: {e}"))?;
+        .map_err(|source| Error::StepCount {
+            label: label.to_owned(),
+            source,
+        })?;
     let total = annotate(&file, false)?
         .lines()
         .find(|line| line.contains("PROGRAM TOTALS"))
         .and_then(count)
-        .ok_or("callgrind_annotate printed no total")?;
+        .ok_or(Error::NoTotal)?;
     Ok(Profile { total, steps })
 }
 
 /// The simulator's own functions, inclusive, costliest first.
-fn ours(file: &Path) -> Result<Vec<(String, u64)>, String> {
+fn ours(file: &Path) -> Result<Vec<(String, u64)>, Error> {
     let annotated = annotate(file, true)?;
     let mut seen = std::collections::BTreeSet::new();
     let mut ours = Vec::new();
@@ -260,19 +255,16 @@ fn ours(file: &Path) -> Result<Vec<(String, u64)>, String> {
     Ok(ours)
 }
 
-fn annotate(file: &Path, inclusive: bool) -> Result<String, String> {
-    let output = Command::new("callgrind_annotate")
-        .arg(format!(
-            "--inclusive={}",
-            if inclusive { "yes" } else { "no" }
-        ))
-        .arg("--threshold=100")
-        .arg(file)
-        .output()
-        .map_err(|e| format!("running callgrind_annotate: {e}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
-    }
+fn annotate(file: &Path, inclusive: bool) -> Result<String, Error> {
+    let output = error::output(
+        Command::new("callgrind_annotate")
+            .arg(format!(
+                "--inclusive={}",
+                if inclusive { "yes" } else { "no" }
+            ))
+            .arg("--threshold=100")
+            .arg(file),
+    )?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -303,17 +295,14 @@ fn function(line: &str) -> Option<String> {
 /// Each function whose name holds `pattern`, what it runs itself, and each
 /// caller with the part of it that caller runs, per step. Callers under a
 /// hundredth of the function are left out.
-fn callers_of(file: &Path, pattern: &str, steps: u64) -> Result<String, String> {
-    let output = Command::new("callgrind_annotate")
-        .arg("--tree=caller")
-        .arg("--inclusive=yes")
-        .arg("--threshold=100")
-        .arg(file)
-        .output()
-        .map_err(|e| format!("running callgrind_annotate: {e}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
-    }
+fn callers_of(file: &Path, pattern: &str, steps: u64) -> Result<String, Error> {
+    let output = error::output(
+        Command::new("callgrind_annotate")
+            .arg("--tree=caller")
+            .arg("--inclusive=yes")
+            .arg("--threshold=100")
+            .arg(file),
+    )?;
     let per_step = |cost: u64| cost as f64 / steps as f64;
     let mut report = String::new();
     // A block is the function's callers, one line each, then the function.

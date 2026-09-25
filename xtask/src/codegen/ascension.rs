@@ -8,37 +8,61 @@
 //! dump's, and what a level does that is not here.
 
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::{Build, DERIVES, Dump, banner, repr};
+use crate::error::{self, FileError};
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{name} is level {value} but sits at position {at}; the ladder is not dense")]
+    NotDense { name: String, value: u8, at: usize },
+    #[error(
+        "the dump reflects no AscensionLevel::{0}, which a ported rule names: see what this build calls it"
+    )]
+    Unreflected(&'static str),
+}
+
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("ascension.txt")?;
     let build = dump.build.clone();
 
     let mut levels: Vec<(u8, String)> = Vec::new();
     for row in dump.of("level") {
         if row.len() != 3 {
-            return Err(format!("{}: {} columns, not 2", row[2], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[2].clone(),
+                got: row.len() - 1,
+                want: 2,
+            }
+            .into());
         }
-        let value = row[1]
-            .parse::<u8>()
-            .map_err(|e| format!("{}: level {}: {e}", row[2], row[1]))?;
+        let value: u8 = DumpError::number(format_args!("{}: level", row[2]), &row[1])?;
         levels.push((value, row[2].clone()));
     }
 
     if levels.is_empty() {
-        return Err("the dump declares no ascension levels".into());
+        return Err(DumpError::Empty("ascension levels").into());
     }
 
     // Dense and ascending, because the whole model is `>=` on the discriminant.
     // A gap or a reorder would make `has` quietly wrong rather than fail.
     for (at, (value, name)) in levels.iter().enumerate() {
         if usize::from(*value) != at {
-            return Err(format!(
-                "{name} is level {value} but sits at position {at}; the ladder is not dense"
-            ));
+            return Err(Error::NotDense {
+                name: name.clone(),
+                value: *value,
+                at,
+            });
         }
     }
 
@@ -48,14 +72,14 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit(&mut out, &levels)?;
 
     let path = root.join("ascension.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     println!("  ascension: {} levels", levels.len());
 
     Ok(build)
 }
 
-fn emit(out: &mut String, levels: &[(u8, String)]) -> Result<(), String> {
+fn emit(out: &mut String, levels: &[(u8, String)]) -> Result<(), Error> {
     writeln!(
         out,
         "/// One rung of the ascension ladder.\n\
@@ -114,7 +138,7 @@ fn emit(out: &mut String, levels: &[(u8, String)]) -> Result<(), String> {
 /// A generated enum is per build, so a rule holding only a `ContentVersion`
 /// cannot write `AscensionLevel::SwarmingElites`. This is the bridge, and a
 /// build that renames a rung stops here rather than reading as no ascension.
-fn emit_ladder(out: &mut String, levels: &[(u8, String)]) -> Result<(), String> {
+fn emit_ladder(out: &mut String, levels: &[(u8, String)]) -> Result<(), Error> {
     // `(const, rung)`, in the trait's own order.
     const NAMED: [(&str, &str); 5] = [
         ("INFLATION", "Inflation"),
@@ -126,10 +150,7 @@ fn emit_ladder(out: &mut String, levels: &[(u8, String)]) -> Result<(), String> 
 
     for (_, rung) in &NAMED {
         if !levels.iter().any(|(_, have)| have == rung) {
-            return Err(format!(
-                "the dump reflects no AscensionLevel::{rung}, which a ported rule \
-                 names — see what this build calls it"
-            ));
+            return Err(Error::Unreflected(rung));
         }
     }
 

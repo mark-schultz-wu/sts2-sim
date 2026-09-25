@@ -11,9 +11,40 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::cards::card_path;
 use super::split::Split;
 use super::{Build, Dump, camel, sanitize, version_module};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{what} of {words:?}")]
+    Unread {
+        what: &'static str,
+        words: Vec<String>,
+    },
+    #[error("{at}: {source}")]
+    In { at: String, source: Box<Error> },
+    #[error(transparent)]
+    NotAPool(#[from] super::cards::NotAPool),
+    #[error("{0} is not a card")]
+    NotACard(String),
+    #[error("a move of {0} before the monster")]
+    BeforeMonster(String),
+    #[error("{monster} {id} before its move row")]
+    BeforeMove { monster: String, id: String },
+    #[error("monster_moves.txt has a row {0:?}")]
+    UnknownRow(Vec<String>),
+}
 
 /// What the dump says of one move.
 #[derive(Default)]
@@ -26,22 +57,21 @@ struct Move {
 }
 
 /// The number an amount names, as a move reads it.
-fn amount(words: &[String]) -> Result<String, String> {
+fn amount(words: &[String]) -> Result<String, Error> {
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
-    let number = |n: &str| {
-        n.parse::<i64>()
-            .map(|n| n.to_string())
-            .map_err(|e| format!("the number {n}: {e}"))
-    };
+    let number = |n: &str| DumpError::number::<i64>("a number", n).map(|n| n.to_string());
     match &words[..] {
-        ["number", n] => number(n),
+        ["number", n] => Ok(number(n)?),
         ["ascension", level, at, below] => Ok(format!(
             "match fight.ascension().has(AscensionLevel::{}) {{ true => {}, false => {} }}",
             sanitize(level),
             number(at)?,
             number(below)?
         )),
-        _ => Err(format!("an amount of {}", words.join(" "))),
+        _ => Err(Error::Unread {
+            what: "an amount",
+            words: words.iter().map(|w| w.to_string()).collect(),
+        }),
     }
 }
 
@@ -50,14 +80,19 @@ fn command(
     out: &mut String,
     words: &[String],
     cards: &BTreeMap<String, String>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     match words {
         [attack] if attack == "attack" => writeln!(out, "fight.attack_opponents();").unwrap(),
         [power, target, id, rest @ ..] if power == "power" => {
             let call = match target.as_str() {
                 "self" => "apply_to_actor",
                 "opponents" => "apply_to_opponents",
-                other => return Err(format!("a power on {other}")),
+                other => {
+                    return Err(Error::Unread {
+                        what: "a power on",
+                        words: vec![other.to_owned()],
+                    });
+                }
             };
             writeln!(
                 out,
@@ -76,7 +111,7 @@ fn command(
         [kind, card, rest @ ..] if kind == "cards" => {
             let pool = cards
                 .get(card)
-                .ok_or_else(|| format!("{card} is not a card"))?;
+                .ok_or_else(|| Error::NotACard(card.clone()))?;
             writeln!(
                 out,
                 "fight.give_cards({}, {});",
@@ -85,7 +120,12 @@ fn command(
             )
             .unwrap();
         }
-        _ => return Err(format!("a move of {}", words.join(" "))),
+        _ => {
+            return Err(Error::Unread {
+                what: "a move",
+                words: words.to_vec(),
+            });
+        }
     }
     Ok(())
 }
@@ -100,7 +140,7 @@ fn comment(out: &mut String, stmt: &str) {
 }
 
 /// Every monster's moves, one module per act.
-pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
+pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
     let dump = Dump::read_any("monster_moves.txt")?;
     if (
         &dump.build.version,
@@ -108,10 +148,12 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
         dump.build.assembly_hash,
     ) != (&build.version, &build.commit, build.assembly_hash)
     {
-        return Err(format!(
-            "monster_moves.txt was read from {}, but the tables come from {build}",
-            dump.build
-        ));
+        return Err(DumpError::ReadFrom {
+            dump: "monster_moves.txt",
+            read: Box::new(dump.build),
+            tables: Box::new(build.clone()),
+        }
+        .into());
     }
 
     // Where each monster's table row is filed, which is where its moves go.
@@ -138,7 +180,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                 let (_, moves) = monsters
                     .iter_mut()
                     .find(|(named, _)| named == monster)
-                    .ok_or_else(|| format!("a move of {monster} before the monster"))?;
+                    .ok_or_else(|| Error::BeforeMonster(monster.to_string()))?;
                 if *kind == "move" {
                     moves.push(Move {
                         id: id.to_string(),
@@ -149,18 +191,25 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                 let held = moves
                     .iter_mut()
                     .find(|held| held.id == *id)
-                    .ok_or_else(|| format!("{monster} {id} before its move row"))?;
+                    .ok_or_else(|| Error::BeforeMove {
+                        monster: monster.to_string(),
+                        id: id.to_string(),
+                    })?;
                 match *kind {
                     "does" => held.rows.push(row[3..].to_vec()),
                     _ => held.blocked = Some(row[3..].join(" ")),
                 }
             }
-            _ => return Err(format!("monster_moves.txt has a row {}", words.join(" "))),
+            _ => {
+                return Err(Error::UnknownRow(
+                    words.iter().map(|w| w.to_string()).collect(),
+                ));
+            }
         }
     }
 
     // The build's type, `V0_107_1` for the module `v0_107_1`.
-    let version = version_module()?.to_uppercase();
+    let version = version_module().map_err(DumpError::from)?.to_uppercase();
     let mut split = Split::new(root, "monster_moves", "monster_moves.txt", &dump.build)?;
     let mut buckets: BTreeMap<String, Vec<&str>> = BTreeMap::new();
     for (id, _) in &monsters {
@@ -198,7 +247,10 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                 }
                 writeln!(out, "{arm} => {{").unwrap();
                 for row in &held.rows {
-                    command(out, row, &cards).map_err(|e| format!("{id} {}: {e}", held.id))?;
+                    command(out, row, &cards).map_err(|source| Error::In {
+                        at: format!("{id} {}", held.id),
+                        source: Box::new(source),
+                    })?;
                 }
                 writeln!(out, "}}").unwrap();
             }
@@ -261,5 +313,6 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                 &["Amount", "Effect", "Fight", "PowerAmount", "Scaling"],
             ),
         ],
-    )
+    )?;
+    Ok(())
 }

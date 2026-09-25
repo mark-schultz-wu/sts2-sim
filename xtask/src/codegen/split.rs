@@ -15,10 +15,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::{Build, banner};
+use crate::error::{self, FileError};
 
 /// Where a bucket file imports from, and the names to consider from each.
 ///
@@ -35,9 +35,9 @@ pub struct Split {
 }
 
 impl Split {
-    pub fn new(root: &Path, module: &str, source: &str, build: &Build) -> Result<Split, String> {
+    pub fn new(root: &Path, module: &str, source: &str, build: &Build) -> Result<Split, FileError> {
         let dir = root.join(module);
-        fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+        error::create_dir(&dir)?;
 
         Ok(Split {
             dir,
@@ -71,7 +71,7 @@ impl Split {
         shape: &str,
         doc: impl Fn(&str) -> String,
         imports: Imports<'_>,
-    ) -> Result<(), String> {
+    ) -> Result<(), FileError> {
         for (name, body) in &self.buckets {
             let mut out = banner(&doc(name), &self.source, &self.build);
             out.push('\n');
@@ -80,11 +80,10 @@ impl Split {
             out.push_str(body);
 
             let path = self.dir.join(format!("{name}.rs"));
-            fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+            error::write(&path, &out)?;
         }
 
-        let path = self.dir.join("mod.rs");
-        fs::write(&path, shape).map_err(|e| format!("writing {}: {e}", path.display()))
+        error::write(&self.dir.join("mod.rs"), shape)
     }
 }
 

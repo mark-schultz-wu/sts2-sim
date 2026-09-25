@@ -15,11 +15,55 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::bridge::{Bridge, emit_bridge};
 use super::{Build, DERIVES, Dump, banner, sets};
+use crate::error::{self, FileError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error(
+        "the dump reflects {0}, which this module does not know what to say about: add it to ENUMS with what it is"
+    )]
+    UnknownEnum(String),
+    #[error(
+        "the dump calls {0:?} a [Flags] enum, and this module is written for UnplayableReason alone"
+    )]
+    OtherFlags(Vec<String>),
+    #[error("the dump reflects no {0}")]
+    Unreflected(&'static str),
+    #[error(
+        "UnplayableReason's zero is called {0}, not None: it used to be the absence of a reason and may not be any more"
+    )]
+    NamedZero(String),
+    #[error(
+        "UnplayableReason::{member} is {value}, which is more than one bit: a combination the game named, and not a rule a card fails"
+    )]
+    Combination { member: String, value: u8 },
+    #[error(
+        "{name}::{member} is {discriminant} and not {at}: a stream is reached by its discriminant, which this numbering would misindex"
+    )]
+    Misnumbered {
+        name: String,
+        member: String,
+        discriminant: u8,
+        at: usize,
+    },
+    #[error(
+        "{enum_name}::{member} has two capitals in a row, which the game's own snake case splits by a rule this does not have"
+    )]
+    Capitals { enum_name: String, member: String },
+}
 
 /// Every enum the dump carries, in the order the generated file declares them,
 /// with what it is.
@@ -145,18 +189,22 @@ const NOTES: [(&str, &str, &str); 10] = [
     ),
 ];
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("runstate.txt")?;
     let build = dump.build.clone();
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for row in dump.of("enum") {
         if row.len() != 4 {
-            return Err(format!("{}: {} columns, not 3", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 3,
+            }
+            .into());
         }
-        let discriminant = row[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", row[1], row[3], row[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", row[1], row[3]), &row[2])?;
         enums
             .entry(row[1].clone())
             .or_default()
@@ -165,10 +213,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     for name in enums.keys() {
         if !ENUMS.iter().any(|(known, _)| known == name) {
-            return Err(format!(
-                "the dump reflects {name}, which this module does not know what to say \
-                 about — add it to ENUMS with what it is"
-            ));
+            return Err(Error::UnknownEnum(name.clone()));
         }
     }
 
@@ -177,10 +222,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // to be looked at rather than generated.
     let flags: Vec<&String> = dump.of("flags").map(|row| &row[1]).collect();
     if flags != ["UnplayableReason"] {
-        return Err(format!(
-            "the dump calls {flags:?} a [Flags] enum, and this module is written for \
-             UnplayableReason alone"
-        ));
+        return Err(Error::OtherFlags(flags.into_iter().cloned().collect()));
     }
 
     let mut out = banner(
@@ -191,9 +233,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "\nuse serde::{{Deserialize, Serialize}};\n").unwrap();
 
     for (name, doc) in ENUMS {
-        let members = enums
-            .get(name)
-            .ok_or_else(|| format!("the dump reflects no {name}"))?;
+        let members = enums.get(name).ok_or(Error::Unreflected(name))?;
 
         match name {
             "UnplayableReason" => emit_reasons(&mut out, doc, members)?,
@@ -209,7 +249,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     }
 
     let path = root.join("runstate.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     println!(
         "  runstate: {} enums, {} members",
@@ -282,7 +322,7 @@ fn emit_all(out: &mut String, name: &str, members: &[&str], extra: &str) {
 }
 
 /// The one `[Flags]` enum, numbered by bit index, and the set over it.
-fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result<(), String> {
+fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result<(), Error> {
     let mut bits: Vec<sets::Member<'_>> = Vec::new();
 
     for (value, member) in members {
@@ -291,19 +331,16 @@ fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result
         // something, and generating an enum with a `None` bit in it would not.
         if *value == 0 {
             if member != "None" {
-                return Err(format!(
-                    "UnplayableReason's zero is called {member}, not None — it used to be \
-                     the absence of a reason and may not be any more"
-                ));
+                return Err(Error::NamedZero(member.clone()));
             }
             continue;
         }
 
         if value.count_ones() != 1 {
-            return Err(format!(
-                "UnplayableReason::{member} is {value}, which is more than one bit — \
-                 a combination the game named, and not a rule a card fails"
-            ));
+            return Err(Error::Combination {
+                member: member.clone(),
+                value: *value,
+            });
         }
 
         bits.push(sets::Member {
@@ -360,7 +397,8 @@ fn emit_reasons(out: &mut String, doc: &str, members: &[(u8, String)]) -> Result
             declare: false,
             extras: &[sets::Extra::IsEmpty],
         },
-    )
+    )?;
+    Ok(())
 }
 
 /// The five enums here the simulator names members of.
@@ -458,17 +496,19 @@ const BRIDGES: [Bridge; 6] = [
 ///
 /// Indexed by the discriminant, so generation stops on an enum numbered from
 /// anything but zero. Empty for the enums here that are not streams.
-fn stream_table(name: &str, members: &[(u8, String)]) -> Result<String, String> {
+fn stream_table(name: &str, members: &[(u8, String)]) -> Result<String, Error> {
     if !name.ends_with("RngType") {
         return Ok(String::new());
     }
 
     for (at, (discriminant, member)) in members.iter().enumerate() {
         if usize::from(*discriminant) != at {
-            return Err(format!(
-                "{name}::{member} is {discriminant} and not {at} — a stream is reached \
-                 by its discriminant, which this numbering would misindex"
-            ));
+            return Err(Error::Misnumbered {
+                name: name.to_owned(),
+                member: member.clone(),
+                discriminant: *discriminant,
+                at,
+            });
         }
     }
 
@@ -504,16 +544,16 @@ fn emit_stream_kinds(out: &mut String, name: &str) {
 ///
 /// The game's snake case has a second rule for runs of capitals, which no
 /// member here has. A member that grows one stops generation.
-fn snake_case(enum_name: &str, member: &str) -> Result<String, String> {
+fn snake_case(enum_name: &str, member: &str) -> Result<String, Error> {
     let mut out = String::with_capacity(member.len() + 4);
     let mut previous_upper = false;
     for (at, letter) in member.char_indices() {
         if letter.is_ascii_uppercase() {
             if previous_upper {
-                return Err(format!(
-                    "{enum_name}::{member} has two capitals in a row, which the \
-                     game's own snake case splits by a rule this does not have"
-                ));
+                return Err(Error::Capitals {
+                    enum_name: enum_name.to_owned(),
+                    member: member.to_owned(),
+                });
             }
             if at > 0 {
                 out.push('_');

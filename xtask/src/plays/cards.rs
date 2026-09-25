@@ -5,11 +5,13 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
 use super::csharp::{self, Stmt, Tok, spell};
-use super::{Call, LOOKS, Locals, arguments, chain, literal, presentation, pure, squash};
+use super::{
+    Blocked, Call, Error, LOOKS, Locals, arguments, chain, literal, presentation, pure, squash,
+};
+use crate::error;
 
 /// The creatures a command points at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,13 +80,12 @@ struct Card<'a> {
 }
 
 /// Every card's play and upgrade, as the dump's rows.
-pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, String> {
+pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, Error> {
     let (release, source) = super::source(game, version)?;
     let build = Build::read(&source, version_dir)?;
     let by_name = super::classes(&source, "MegaCrit.Sts2.Core.Models.Cards")?;
 
-    let cards_txt = fs::read_to_string(version_dir.join("dumps/cards.txt"))
-        .map_err(|e| format!("reading cards.txt: {e}"))?;
+    let cards_txt = error::read(&version_dir.join("dumps/cards.txt"))?;
     let ids: Vec<&str> = cards_txt
         .lines()
         .filter_map(|line| line.strip_prefix("card "))
@@ -110,16 +111,15 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, S
          # An amount is `var <key>` or `number <n>`.\n",
     );
     for id in ids {
-        let path = by_name
-            .get(&squash(id))
-            .ok_or_else(|| format!("no class in the assembly is the card {id}"))?;
+        let path = by_name.get(&squash(id)).ok_or_else(|| Error::NoClass {
+            kind: "card",
+            id: id.to_owned(),
+        })?;
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or_default();
-        let text =
-            fs::read_to_string(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
-        let class = csharp::tokens(&text).map_err(|e| format!("{name}: {e}"))?;
+        let class = csharp::tokens(&error::read(path)?).map_err(Error::syntax(name))?;
         let card = Card {
             id,
             build: &build,
@@ -157,7 +157,7 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, S
         } else {
             match plays(
                 &card,
-                csharp::method(&class, "OnPlay").map_err(|e| format!("{name}: {e}"))?,
+                csharp::method(&class, "OnPlay").map_err(Error::syntax(name))?,
             ) {
                 Ok(commands) => {
                     for command in commands {
@@ -169,7 +169,7 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, S
         }
         match upgrades(
             &card,
-            csharp::method(&class, "OnUpgrade").map_err(|e| format!("{name}: {e}"))?,
+            csharp::method(&class, "OnUpgrade").map_err(Error::syntax(name))?,
         ) {
             Ok(changes) => {
                 for change in changes {
@@ -183,12 +183,10 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, S
 }
 
 impl Build {
-    fn read(source: &Path, version_dir: &Path) -> Result<Build, String> {
+    fn read(source: &Path, version_dir: &Path) -> Result<Build, Error> {
         // `public BlockVar Block => (BlockVar)_vars["Block"];`
         let set = source.join("MegaCrit.Sts2.Core.Localization.DynamicVars/DynamicVarSet.cs");
-        let text =
-            fs::read_to_string(&set).map_err(|e| format!("reading {}: {e}", set.display()))?;
-        let toks = csharp::tokens(&text)?;
+        let toks = csharp::tokens(&error::read(&set)?).map_err(Error::syntax("DynamicVarSet"))?;
         let mut properties = HashMap::new();
         for (at, tok) in toks.iter().enumerate() {
             if !tok.is("=>") {
@@ -209,13 +207,15 @@ impl Build {
             properties.insert(name.to_owned(), key);
         }
 
-        let cards = fs::read_to_string(version_dir.join("dumps/cards.txt"))
-            .map_err(|e| format!("reading cards.txt: {e}"))?;
+        let cards = error::read(&version_dir.join("dumps/cards.txt"))?;
         let mut vars: HashMap<String, HashMap<String, (String, bool)>> = HashMap::new();
         for row in cards.lines().filter_map(|line| line.strip_prefix("var ")) {
             let f: Vec<&str> = row.split_whitespace().collect();
             let [card, key, base, calculated, class] = f[..] else {
-                return Err(format!("a var row with {} fields: {row}", f.len()));
+                return Err(Error::VarRow {
+                    fields: f.len(),
+                    row: row.to_owned(),
+                });
             };
             let printed = calculated == "0" && !base.contains('.');
             vars.entry(card.to_owned())
@@ -223,9 +223,8 @@ impl Build {
                 .insert(key.to_owned(), (class.to_owned(), printed));
         }
 
-        let ids = |dump: &str, kind: &str| -> Result<HashMap<String, String>, String> {
-            let text = fs::read_to_string(version_dir.join("dumps").join(dump))
-                .map_err(|e| format!("reading {dump}: {e}"))?;
+        let ids = |dump: &str, kind: &str| -> Result<HashMap<String, String>, Error> {
+            let text = error::read(&version_dir.join("dumps").join(dump))?;
             Ok(text
                 .lines()
                 .filter_map(|line| line.strip_prefix(kind))
@@ -360,7 +359,7 @@ fn holds(stmt: &Stmt) -> Option<String> {
 }
 
 /// The commands a card's `OnPlay` runs, or the statement none matches.
-fn plays(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, String> {
+fn plays(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, Blocked> {
     let Some(body) = body else {
         return Ok(Vec::new());
     };
@@ -372,7 +371,7 @@ fn plays(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, String> {
         // reads as the list stood here.
         if let Some(name) = holds(stmt) {
             if locals.held.is_some() {
-                return Err(stmt.text());
+                return Err(Blocked::Statement(stmt.text()));
             }
             locals.held = Some(name.clone());
             locals.plain.insert(name.clone());
@@ -384,7 +383,7 @@ fn plays(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, String> {
         }
         match game(card, stmt, &locals) {
             Some(command) => out.push(command),
-            None => return Err(stmt.text()),
+            None => return Err(Blocked::Statement(stmt.text())),
         }
     }
     Ok(out)
@@ -541,7 +540,7 @@ fn attack(card: &Card, damage: &[Vec<Tok>], builders: &[Call], locals: &Locals) 
 }
 
 /// The changes a card's `OnUpgrade` makes, or the statement none matches.
-fn upgrades(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, String> {
+fn upgrades(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, Blocked> {
     let Some(body) = body else {
         return Ok(Vec::new());
     };
@@ -549,7 +548,7 @@ fn upgrades(card: &Card, body: Option<Vec<Tok>>) -> Result<Vec<String>, String> 
     for stmt in csharp::statements(&body)? {
         match upgrade(card, &stmt) {
             Some(change) => out.push(change),
-            None => return Err(stmt.text()),
+            None => return Err(Blocked::Statement(stmt.text())),
         }
     }
     Ok(out)

@@ -16,12 +16,11 @@
 //! cargo xtask census --runs 500 --character REGENT --top 30
 //! ```
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
-
-use crate::instructions::workspace;
 
 /// The characters a census plays when none is named.
 const CHARACTERS: [&str; 5] = ["IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT"];
@@ -31,6 +30,20 @@ const TIMEOUT: &str = "120";
 
 /// The moves one run steps round before the census gives up on it.
 const RETRIES: usize = 200;
+
+/// A run the census itself did not see through, rather than one that
+/// stopped in the simulator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, thiserror::Error)]
+enum Broken {
+    #[error("launching the runner: {0}")]
+    Launching(std::io::ErrorKind),
+    #[error("the runner exited with {0:?}, and no panic")]
+    Exited(Option<i32>),
+}
+
+/// A stop as the rankings group it: its message with the digits left out,
+/// and where it was raised.
+type Stop<'a> = (String, &'a str);
 
 /// How one run stopped.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -47,7 +60,7 @@ enum Ending {
     /// The run outlived its timeout.
     Stuck,
     /// Anything else, which is a fault in the census.
-    Broken(String),
+    Broken(Broken),
 }
 
 /// One run's result.
@@ -111,7 +124,7 @@ pub struct Args {
     characters: Vec<String>,
 }
 
-pub fn run(args: Args) -> Result<String, String> {
+pub fn run(args: Args) -> Result<String, crate::error::ProcessError> {
     let Args {
         runs,
         top,
@@ -121,24 +134,7 @@ pub fn run(args: Args) -> Result<String, String> {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
     }
 
-    let root = workspace()?;
-    let built = Command::new("cargo")
-        .args([
-            "build",
-            "-q",
-            "--release",
-            "-p",
-            "sts2-golden",
-            "--example",
-            "random_run",
-        ])
-        .current_dir(&root)
-        .status()
-        .map_err(|e| format!("running cargo: {e}"))?;
-    if !built.success() {
-        return Err("the runner did not build".into());
-    }
-    let binary = root.join("target/release/examples/random_run");
+    let binary = crate::error::build_example(&crate::workspace(), "random_run")?;
 
     // Every character plays the same seeds, so two characters differ by what
     // they carry and not by the map they drew.
@@ -217,7 +213,7 @@ fn attempt(
         Ok(output) => output,
         Err(e) => {
             return Attempt {
-                ending: Ending::Broken(format!("launching: {e}")),
+                ending: Ending::Broken(Broken::Launching(e.kind())),
                 reached: (0, 0),
                 stopped_in: None,
             };
@@ -252,9 +248,7 @@ fn attempt(
         (Some(0), "over lost") => Ending::Lost,
         (Some(0), "capped") => Ending::Capped,
         (Some(124 | 137), _) => Ending::Stuck,
-        _ => {
-            panicked(&stderr).unwrap_or_else(|| Ending::Broken(format!("exited {}", output.status)))
-        }
+        _ => panicked(&stderr).unwrap_or(Ending::Broken(Broken::Exited(output.status.code()))),
     };
     Attempt {
         ending,
@@ -318,17 +312,19 @@ fn report(runs: &[Run], top: usize) -> String {
 
     // What holds the lowest runs down: each stopper by the lowest floor it
     // stopped a run on, then by how many runs it stopped there.
-    let mut lowest: BTreeMap<(String, &str), (u32, usize, &str, &Run)> = BTreeMap::new();
+    let mut lowest: BTreeMap<Stop, (u32, usize, Cow<str>, &Run)> = BTreeMap::new();
     for run in runs {
         for ending in run.stoppers() {
             let (message, at) = match ending {
-                Ending::Panicked { message, at } => (message.as_str(), at.as_str()),
-                Ending::Broken(why) => (why.as_str(), ""),
+                Ending::Panicked { message, at } => (Cow::Borrowed(message.as_str()), at.as_str()),
+                Ending::Broken(why) => (Cow::Owned(why.to_string()), ""),
                 _ => continue,
             };
             let key: String = message.chars().filter(|c| !c.is_ascii_digit()).collect();
             let floor = run.reached.1;
-            let entry = lowest.entry((key, at)).or_insert((floor, 0, message, run));
+            let entry = lowest
+                .entry((key, at))
+                .or_insert((floor, 0, message.clone(), run));
             if floor < entry.0 {
                 *entry = (floor, 0, message, run);
             }
@@ -374,11 +370,11 @@ fn table<'a>(
 ) {
     // Keyed with the digits left out, so the same hole reached at another
     // creature or amount is one row. The row shows the first message.
-    let mut panics: BTreeMap<(String, &str), (&str, Vec<&Run>)> = BTreeMap::new();
+    let mut panics: BTreeMap<Stop, (Cow<str>, Vec<&Run>)> = BTreeMap::new();
     for (ending, run) in endings {
         let (message, at) = match ending {
-            Ending::Panicked { message, at } => (message.as_str(), at.as_str()),
-            Ending::Broken(why) => (why.as_str(), ""),
+            Ending::Panicked { message, at } => (Cow::Borrowed(message.as_str()), at.as_str()),
+            Ending::Broken(why) => (Cow::Owned(why.to_string()), ""),
             _ => continue,
         };
         let key: String = message.chars().filter(|c| !c.is_ascii_digit()).collect();

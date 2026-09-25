@@ -18,11 +18,13 @@ mod asm;
 mod census;
 mod codegen;
 mod dump;
+mod error;
 mod instructions;
 mod neow;
 mod plays;
 mod trace;
 
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -56,24 +58,54 @@ enum Command {
     Trace(trace::Args),
 }
 
-fn main() -> ExitCode {
-    let (name, done) = match Cli::parse().command {
+/// The repository's root, which is where cargo and the profiles live.
+pub(crate) fn workspace() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask sits inside the workspace")
+        .to_path_buf()
+}
+
+/// A command that failed, by the command.
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("codegen failed: {0}")]
+    Codegen(#[from] codegen::Error),
+    #[error("dump failed: {0}")]
+    Dump(#[from] dump::Error),
+    #[error("instructions failed: {0}")]
+    Instructions(#[from] instructions::Error),
+    #[error("allocations failed: {0}")]
+    Allocations(#[from] allocations::Error),
+    #[error("census failed: {0}")]
+    Census(#[from] error::ProcessError),
+    #[error("neow failed: {0}")]
+    Neow(#[from] neow::Error),
+    #[error("trace failed: {0}")]
+    Trace(#[from] trace::Error),
+}
+
+fn run(command: Command) -> Result<String, Error> {
+    Ok(match command {
         // Both print a line of their own after what they wrote.
-        Command::Codegen => ("codegen", codegen::run().map(|summary| summary + "\n")),
-        Command::Dump(args) => ("dump", dump::run(args).map(|summary| summary + "\n")),
-        Command::Instructions(args) => ("instructions", instructions::run(args)),
-        Command::Allocations(args) => ("allocations", allocations::run(args)),
-        Command::Census(args) => ("census", census::run(args)),
-        Command::Neow(args) => ("neow", neow::run(args)),
-        Command::Trace(args) => ("trace", trace::run(args)),
-    };
-    match done {
+        Command::Codegen => codegen::run()? + "\n",
+        Command::Dump(args) => dump::run(args)? + "\n",
+        Command::Instructions(args) => instructions::run(args)?,
+        Command::Allocations(args) => allocations::run(args)?,
+        Command::Census(args) => census::run(args)?,
+        Command::Neow(args) => neow::run(args)?,
+        Command::Trace(args) => trace::run(args)?,
+    })
+}
+
+fn main() -> ExitCode {
+    match run(Cli::parse().command) {
         Ok(report) => {
             print!("{report}");
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("{name} failed: {e}");
+            eprintln!("{e}");
             ExitCode::FAILURE
         }
     }

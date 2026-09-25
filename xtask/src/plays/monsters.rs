@@ -6,11 +6,13 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
 use super::csharp::{self, Stmt, Tok, spell};
-use super::{Call, LOOKS, Locals, arguments, chain, literal, presentation, pure, squash};
+use super::{
+    Blocked, Call, Error, LOOKS, Locals, arguments, chain, literal, presentation, pure, squash,
+};
+use crate::error;
 
 /// A number a move reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,7 +59,7 @@ struct Monster<'a> {
 }
 
 /// Every monster's moves, as the dump's rows.
-pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String, String> {
+pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String, Error> {
     let (release, source) = super::source(game, version)?;
     // The game's test monsters sit in a namespace of their own, and the table
     // holds them too.
@@ -66,9 +68,8 @@ pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String
         &source,
         "MegaCrit.Sts2.Core.Models.Monsters.Mocks",
     )?);
-    let ids = |dump: &str, kind: &str| -> Result<HashMap<String, String>, String> {
-        let text = fs::read_to_string(version_dir.join("dumps").join(dump))
-            .map_err(|e| format!("reading {dump}: {e}"))?;
+    let ids = |dump: &str, kind: &str| -> Result<HashMap<String, String>, Error> {
+        let text = error::read(&version_dir.join("dumps").join(dump))?;
         Ok(text
             .lines()
             .filter_map(|line| line.strip_prefix(kind))
@@ -79,8 +80,7 @@ pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String
     let powers = ids("powers.txt", "power ")?;
     let cards = ids("cards.txt", "card ")?;
 
-    let table = fs::read_to_string(version_dir.join("dumps/monsters.txt"))
-        .map_err(|e| format!("reading monsters.txt: {e}"))?;
+    let table = error::read(&version_dir.join("dumps/monsters.txt"))?;
     let mut moves: Vec<(&str, Vec<&str>)> = Vec::new();
     for line in table.lines() {
         let f: Vec<&str> = line.split_whitespace().collect();
@@ -89,7 +89,7 @@ pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String
             ["move", monster, state, ..] => moves
                 .iter_mut()
                 .find(|(id, _)| *id == monster)
-                .ok_or_else(|| format!("a move of {monster} before the monster"))?
+                .ok_or_else(|| Error::BeforeMonster(monster.to_owned()))?
                 .1
                 .push(state),
             _ => {}
@@ -108,14 +108,13 @@ pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String
          # An amount is `number <n>` or `ascension <level> <at> <below>`.\n",
     );
     for (id, states) in moves {
-        let read = |path: &Path| -> Result<Vec<Tok>, String> {
-            let text =
-                fs::read_to_string(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
-            csharp::tokens(&text).map_err(|e| format!("{}: {e}", path.display()))
+        let read = |path: &Path| -> Result<Vec<Tok>, Error> {
+            csharp::tokens(&error::read(path)?).map_err(Error::syntax(path.display()))
         };
-        let path = by_name
-            .get(&squash(id))
-            .ok_or_else(|| format!("no class in the assembly is the monster {id}"))?;
+        let path = by_name.get(&squash(id)).ok_or_else(|| Error::NoClass {
+            kind: "monster",
+            id: id.to_owned(),
+        })?;
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -127,10 +126,13 @@ pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String
             Some(parent) => {
                 let path = by_name
                     .get(&squash(parent))
-                    .ok_or_else(|| format!("{name} derives from {parent}, which is no monster"))?;
+                    .ok_or_else(|| Error::NotAMonster {
+                        class: name.to_owned(),
+                        parent: parent.to_owned(),
+                    })?;
                 classes.push(read(path)?);
             }
-            None => return Err(format!("{name} declares no parent")),
+            None => return Err(Error::NoParent(name.to_owned())),
         }
         let mut members = HashMap::new();
         for class in classes.iter().rev() {
@@ -144,7 +146,7 @@ pub fn monsters(game: &Path, version: &str, version_dir: &Path) -> Result<String
         };
 
         writeln!(out, "monster {id}").unwrap();
-        let machine = monster.states()?;
+        let machine = monster.states().map_err(Error::syntax(name))?;
         for state in states {
             writeln!(out, "move {id} {state}").unwrap();
             match monster.performs(machine.get(state)) {
@@ -200,7 +202,7 @@ fn numbers(class: &[Tok]) -> HashMap<String, Vec<Tok>> {
 
 impl Monster<'_> {
     /// The body of a method, from the class or else its parent.
-    fn body(&self, name: &str) -> Result<Option<Vec<Tok>>, String> {
+    fn body(&self, name: &str) -> Result<Option<Vec<Tok>>, csharp::Error> {
         for class in &self.classes {
             if let Some(body) = csharp::body(class, name)? {
                 return Ok(Some(body));
@@ -210,7 +212,7 @@ impl Monster<'_> {
     }
 
     /// Every `MoveState` the state machine builds, by id.
-    fn states(&self) -> Result<HashMap<String, MoveState>, String> {
+    fn states(&self) -> Result<HashMap<String, MoveState>, csharp::Error> {
         let Some(body) = self.body("GenerateMoveStateMachine")? else {
             return Ok(HashMap::new());
         };
@@ -296,15 +298,12 @@ impl Monster<'_> {
     }
 
     /// The commands a move runs, or the statement none matches.
-    fn performs(&self, state: Option<&MoveState>) -> Result<Vec<String>, String> {
-        let state = state.ok_or("no MoveState names it")?;
-        let method = state
-            .method
-            .as_deref()
-            .ok_or("its MoveState performs a lambda")?;
+    fn performs(&self, state: Option<&MoveState>) -> Result<Vec<String>, Blocked> {
+        let state = state.ok_or(Blocked::NoState)?;
+        let method = state.method.as_deref().ok_or(Blocked::Lambda)?;
         let body = self
             .body(method)?
-            .ok_or_else(|| format!("no method {method}"))?;
+            .ok_or_else(|| Blocked::NoMethod(method.to_owned()))?;
         let mut locals = Locals::default();
         // The move's own parameter, `combatState.PlayerCreatures`.
         locals.plain.insert("targets".to_owned());
@@ -315,7 +314,7 @@ impl Monster<'_> {
             }
             match self.command(state, &stmt, &locals) {
                 Some(command) => out.push(command),
-                None => return Err(stmt.text()),
+                None => return Err(Blocked::Statement(stmt.text())),
             }
         }
         Ok(out)

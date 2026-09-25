@@ -9,11 +9,38 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::cards::{POOLS as CARD_POOLS, card_path};
 use super::{Build, DERIVES, Dump, banner, camel, repr};
+use crate::error::{self, FileError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{character} starts with {cards} cards, past the {DECK_CAP} a Deck can hold")]
+    DeckTooLong { character: String, cards: usize },
+    #[error(
+        "{character} starts with {held} relics, past the {RELIC_CAP} a StartingRelics can hold"
+    )]
+    TooManyRelics { character: String, held: usize },
+    #[error("{0} is not a card pool")]
+    NotACardPool(String),
+    #[error(transparent)]
+    NotAPool(#[from] super::cards::NotAPool),
+    #[error(
+        "a character's starting HP or gold now scales with ascension, which this table cannot spell"
+    )]
+    ScalingStart,
+}
 
 /// The most cards a starting deck holds, and the most starting relics.
 ///
@@ -34,17 +61,22 @@ const POOLS: [(&str, &str, usize, &str, bool); 3] = [
     ("potion_pool", "PotionPool", 11, "_POTION_POOL", false),
 ];
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("characters.txt")?;
     let build = dump.build.clone();
 
     let characters: Vec<&Vec<String>> = dump.of("character").collect();
     if characters.is_empty() {
-        return Err("the dump declares no characters".into());
+        return Err(DumpError::Empty("characters").into());
     }
     for row in &characters {
         if row.len() != 13 {
-            return Err(format!("{}: {} columns, not 12", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 12,
+            }
+            .into());
         }
     }
 
@@ -52,18 +84,13 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // moved, so both are plain numbers. A build that starts scaling one would
     // generate a table describing ascension 0 only, so it fails here instead.
     if dump.of("scalestart").next().is_some() {
-        return Err(
-            "a character's starting HP or gold now scales with ascension, which this table \
-             cannot spell"
-                .into(),
-        );
+        return Err(Error::ScalingStart);
     }
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -86,17 +113,17 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     for row in &characters {
         let cards = deck.get(row[1].as_str()).map_or(0, Vec::len);
         if cards > DECK_CAP {
-            return Err(format!(
-                "{} starts with {cards} cards, past the {DECK_CAP} a Deck can hold",
-                row[1]
-            ));
+            return Err(Error::DeckTooLong {
+                character: row[1].clone(),
+                cards,
+            });
         }
         let held = relics.get(row[1].as_str()).map_or(0, Vec::len);
         if held > RELIC_CAP {
-            return Err(format!(
-                "{} starts with {held} relics, past the {RELIC_CAP} a StartingRelics can hold",
-                row[1]
-            ));
+            return Err(Error::TooManyRelics {
+                character: row[1].clone(),
+                held,
+            });
         }
     }
 
@@ -113,7 +140,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             let (_, _, enum_name, _) = CARD_POOLS
                 .iter()
                 .find(|(id, ..)| id == pool)
-                .ok_or_else(|| format!("{pool} is not a card pool"))?;
+                .ok_or_else(|| Error::NotACardPool(pool.to_string()))?;
             if !named.contains(enum_name) {
                 named.push(enum_name);
             }
@@ -211,7 +238,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_characters(&mut out, &characters, &deck, &relics)?;
 
     let dir = root.join("characters.rs");
-    fs::write(&dir, &out).map_err(|e| format!("writing {}: {e}", dir.display()))?;
+    error::write(&dir, &out)?;
 
     let playable = characters.iter().filter(|r| r[2] == "1").count();
     println!("  characters: {} ({playable} playable)", characters.len());
@@ -224,7 +251,7 @@ fn emit_characters(
     characters: &[&Vec<String>],
     deck: &BTreeMap<&str, Vec<(&str, &str)>>,
     relics: &BTreeMap<&str, Vec<&str>>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every character in the build, playable or not.\n\
@@ -285,12 +312,9 @@ fn literal(
     row: &[String],
     deck: &BTreeMap<&str, Vec<(&str, &str)>>,
     relics: &BTreeMap<&str, Vec<&str>>,
-) -> Result<String, String> {
+) -> Result<String, Error> {
     let id = &row[1];
-    let number = |what: &str, v: &str| {
-        v.parse::<u16>()
-            .map_err(|e| format!("{id}: {what} {v}: {e}"))
-    };
+    let number = |what: &str, v: &str| DumpError::number::<u16>(format_args!("{id}: {what}"), v);
 
     let mut out = String::new();
     writeln!(out, "CharacterData {{").unwrap();
