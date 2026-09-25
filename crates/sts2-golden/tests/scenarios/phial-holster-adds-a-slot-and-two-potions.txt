@@ -1,0 +1,6 @@
+# `PhialHolster.AfterObtained` adds a potion slot, then procures two potions
+# drawn off `RunState.Rng.CombatPotionGeneration`, no two the same.
+#
+# A port that draws them off the rewards stream draws other potions.
+{"cmd":"start","seed":"C000000004","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":1}

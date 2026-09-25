@@ -1,0 +1,7 @@
+# `FromChooseACardScreen` with `canSkip` takes no card when skipped, and the
+# Hefty Tablet adds its Injury all the same.
+#
+# A port that stops at a skipped choice leaves the Injury out.
+{"cmd":"start","seed":"C000000001","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","cards":[]}

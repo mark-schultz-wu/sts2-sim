@@ -418,7 +418,7 @@ pub(super) enum Phase<V: Rules> {
     Neow {
         options: SmallVec<[V::Relic; 4]>,
         chosen: Option<u8>,
-        asking: Option<NeowAsks<V>>,
+        asking: Option<Asked<V>>,
     },
     /// The map itself, which an act opens on and no room owns.
     Map,
@@ -476,7 +476,7 @@ pub(super) enum Phase<V: Rules> {
 /// `AfterObtained` does not return until the answer does, so the room the
 /// relic was picked up in is what parks on it. A room that cannot park on one
 /// says so rather than answer it itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Pickup<V: Rules> {
     /// `CardSelectCmd.FromDeckGeneric`, and a clone of what it takes. The card
     /// type the relic's own filter leaves out comes with it.
@@ -486,18 +486,17 @@ pub(super) enum Pickup<V: Rules> {
         act: sts2_core::DeckAct<V>,
         count: usize,
     },
+    /// `FromChooseACardScreen` that can be skipped: one of these into the
+    /// deck, or none.
+    ChooseCard { offered: SmallVec<[V::Card; 4]> },
 }
 
-/// What Neow's screen is asking once a blessing is chosen.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum NeowAsks<V: Rules> {
-    /// Lead Paperweight's offer: one of these colorless cards, or none.
-    Colorless(SmallVec<[V::Card; 4]>),
-    /// A relic's pickup, choosing `count` cards of the deck for `act`.
-    Deck {
-        act: sts2_core::DeckAct<V>,
-        count: usize,
-    },
+/// A pickup's question, and the rest of its `AfterObtained`, which runs once
+/// the question is answered.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Asked<V: Rules> {
+    pub(super) pickup: Pickup<V>,
+    pub(super) rest: SmallVec<[sts2_core::HookEffect<V>; 4]>,
 }
 
 /// A fight built and not yet entered.
@@ -1028,32 +1027,115 @@ impl<V: Rules> State<V> {
     /// here, because `AfterObtained` does not return until the answer does.
     /// The room the relic was picked up in is what parks on it.
     #[must_use]
-    pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Pickup<V>> {
+    pub(super) fn obtain(&mut self, relic: V::Relic) -> Option<Asked<V>> {
         let mut held = HeldRelic::new(relic);
         let effects = crate::combat::obtained::<V>(&mut held);
         self.player.relics.push(held);
-        let mut asking = None;
-        for effect in effects {
-            match effect {
-                sts2_core::HookEffect::UpgradeRandomDeckCards { count, stream } => {
+        self.carry_out(effects)
+    }
+
+    /// Carry out what a pickup asked the run for, in order, as far as the
+    /// first effect that asks a question.
+    ///
+    /// The question comes back with the effects after it, which wait for the
+    /// answer the way `AfterObtained` awaits it.
+    fn carry_out(
+        &mut self,
+        effects: impl IntoIterator<Item = sts2_core::HookEffect<V>>,
+    ) -> Option<Asked<V>> {
+        use sts2_core::HookEffect;
+
+        let mut effects = effects.into_iter();
+        while let Some(effect) = effects.next() {
+            let pickup = match effect {
+                HookEffect::UpgradeRandomDeckCards { count, stream } => {
                     self.upgrade_random_deck_cards(count, stream);
+                    continue;
                 }
-                sts2_core::HookEffect::CloneDeckCard { excluding } => {
-                    asking = Some(Pickup::CloneDeckCard { excluding });
-                }
-                sts2_core::HookEffect::SelectFromDeck { act, count } => {
-                    asking = Some(Pickup::FromDeck { act, count });
-                }
-                sts2_core::HookEffect::GainGold(amount) => {
+                HookEffect::GainGold(amount) => {
                     self.player.gold = self.player.gold + amount;
+                    continue;
                 }
-                sts2_core::HookEffect::AddToDeck(card) => {
+                HookEffect::AddToDeck(card) => {
                     self.player.deck_mut().push(CardIdent::new(card));
+                    continue;
                 }
+                HookEffect::AddUniformCard { rarity } => {
+                    for card in self.uniform_cards(1, rarity) {
+                        self.player.deck_mut().push(CardIdent::new(card));
+                    }
+                    continue;
+                }
+                HookEffect::GainPotionSlots(slots) => {
+                    let slots: V::Count = num_traits::cast(slots)
+                        .unwrap_or_else(|| unimplemented!("{slots} more potion slots"));
+                    self.player.potion_slots = self.player.potion_slots + slots;
+                    continue;
+                }
+                // `TryToProcure` fails on a full belt, and the potion is lost.
+                HookEffect::ProcureRandomPotions { count, stream } => {
+                    let character = self.character();
+                    let potions = crate::reward::potion::distinct::<V, _>(
+                        self.streams.run(stream),
+                        character,
+                        count,
+                    );
+                    for potion in potions {
+                        self.procure(potion);
+                    }
+                    continue;
+                }
+                HookEffect::CloneDeckCard { excluding } => Pickup::CloneDeckCard { excluding },
+                // `CardSelectCmd` takes the whole list without asking when it
+                // holds no more than it must take, and returns nothing from an
+                // empty one.
+                HookEffect::SelectFromDeck { act, count } => {
+                    let offered = self.offered(act);
+                    if offered.len() <= count {
+                        let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
+                        self.act_on_deck(act, &taken);
+                        continue;
+                    }
+                    Pickup::FromDeck { act, count }
+                }
+                HookEffect::ChooseUniformCard { count, rarity } => Pickup::ChooseCard {
+                    offered: self.uniform_cards(count, rarity).into_iter().collect(),
+                },
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
-            }
+            };
+            return Some(Asked {
+                pickup,
+                rest: effects.collect(),
+            });
         }
-        asking
+        None
+    }
+
+    /// `CardFactory.CreateForReward` at `Uniform` odds for cards of one
+    /// rarity, off the rewards stream, no two the same.
+    ///
+    /// Each is one `NextItem` over the character's reward pool at that
+    /// rarity, less what this call drew already. `NoUpgradeRoll` rolls
+    /// nothing else.
+    fn uniform_cards(&mut self, count: usize, rarity: sts2_core::RewardRarity) -> Vec<V::Card> {
+        use sts2_core::rng::GameRng as _;
+
+        let pool = V::reward_cards(self.character()).at(rarity);
+        let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
+        for _ in 0..count {
+            let left: Vec<V::Card> = pool
+                .iter()
+                .copied()
+                .filter(|card| !drawn.contains(card))
+                .collect();
+            let card = *self
+                .streams
+                .player(V::PlayerRngType::REWARDS)
+                .choose(&left)
+                .unwrap_or_else(|_| unimplemented!("a reward pool with no {rarity:?} card left"));
+            drawn.push(card);
+        }
+        drawn
     }
 
     /// Pick a relic up where nothing can park on what its pickup asks.
@@ -1062,7 +1144,8 @@ impl<V: Rules> State<V> {
     /// handover. A pickup that asks a question there stops by name rather than
     /// be answered by whoever happens to be holding the run.
     fn obtain_here(&mut self, relic: V::Relic) {
-        if let Some(pickup) = self.obtain(relic) {
+        if let Some(asked) = self.obtain(relic) {
+            let pickup = asked.pickup;
             unimplemented!("{relic:?} asking for {pickup:?} where it was picked up");
         }
     }
@@ -1166,13 +1249,17 @@ impl<V: Rules> State<V> {
                 self.player.deck_mut().push(on_sale.card);
                 None
             }
-            sts2_core::Stock::Relic(Some(relic)) => self.obtain(relic).map(|pickup| match pickup {
-                Pickup::CloneDeckCard { excluding } => Unfinished::Pickup {
-                    shelf: index,
-                    excluding,
-                },
-                pickup => unimplemented!("{pickup:?} asked for where a shop sells it"),
-            }),
+            sts2_core::Stock::Relic(Some(relic)) => {
+                self.obtain(relic).map(|asked| match asked.pickup {
+                    Pickup::CloneDeckCard { excluding } if asked.rest.is_empty() => {
+                        Unfinished::Pickup {
+                            shelf: index,
+                            excluding,
+                        }
+                    }
+                    pickup => unimplemented!("{pickup:?} asked for where a shop sells it"),
+                })
+            }
             sts2_core::Stock::Potion(Some(potion)) => {
                 if !self.procure(potion) {
                     unimplemented!("buying a potion with no slot to put it in");
@@ -1599,8 +1686,7 @@ impl<V: Rules> State<V> {
             // asks, which Neow's screen parks on.
             return Ok(match self.obtain(option) {
                 None => Decided::Resolved,
-                Some(Pickup::FromDeck { act, count }) => self.select_from_deck(act, count),
-                Some(pickup) => unimplemented!("{pickup:?} asked for at Neow"),
+                Some(asked) => self.park_at_neow(asked),
             });
         }
 
@@ -1617,28 +1703,25 @@ impl<V: Rules> State<V> {
         )
         .into_iter()
         .collect();
-        let Phase::Neow { asking, .. } = &mut self.phase else {
-            unreachable!("the phase was the blessing when this began")
-        };
-        *asking = Some(NeowAsks::Colorless(offered));
-        Ok(Decided::Abandoned)
+        Ok(self.park_at_neow(Asked {
+            pickup: Pickup::ChooseCard { offered },
+            rest: SmallVec::new(),
+        }))
     }
 
-    /// A selection of `count` deck cards for `act`, on Neow's screen.
+    /// Park Neow's screen on what a pickup asks.
     ///
-    /// `CardSelectCmd` takes the whole list without asking when it holds no
-    /// more than it must take, and returns nothing from an empty one.
-    fn select_from_deck(&mut self, act: sts2_core::DeckAct<V>, count: usize) -> Decided {
-        let offered = self.offered(act);
-        if offered.len() <= count {
-            let taken: Vec<usize> = offered.into_iter().map(|(at, _)| at).collect();
-            self.act_on_deck(act, &taken);
-            return Decided::Resolved;
+    /// # Panics
+    ///
+    /// A clone, which only a merchant's shelf asks for.
+    fn park_at_neow(&mut self, asked: Asked<V>) -> Decided {
+        if let Pickup::CloneDeckCard { .. } = asked.pickup {
+            unimplemented!("{:?} asked for at Neow", asked.pickup);
         }
         let Phase::Neow { asking, .. } = &mut self.phase else {
-            unreachable!("a deck selection this run parks is Neow's")
+            unreachable!("a pickup this run parks is Neow's")
         };
-        *asking = Some(NeowAsks::Deck { act, count });
+        *asking = Some(asked);
         Decided::Abandoned
     }
 
@@ -1661,24 +1744,24 @@ impl<V: Rules> State<V> {
         let Answer::Cards(picks) = answer else {
             unimplemented!("an answer that is not a card selection");
         };
-        match asking
+        let asked = asking
             .take()
-            .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"))
-        {
-            NeowAsks::Colorless(cards) => {
+            .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"));
+        match asked.pickup {
+            Pickup::ChooseCard { offered } => {
                 if picks.len() > 1 {
                     unimplemented!("a card selection of more than one");
                 }
                 let chosen: Option<Vec<_>> = picks
                     .iter()
-                    .map(|index| cards.get(index).copied().map(CardIdent::new))
+                    .map(|index| offered.get(index).copied().map(CardIdent::new))
                     .collect();
                 let Some(chosen) = chosen else {
                     unimplemented!("a card selection naming a card that was not offered");
                 };
                 self.player.deck_mut().extend(chosen);
             }
-            NeowAsks::Deck { act, count } => {
+            Pickup::FromDeck { act, count } => {
                 let offered = self.offered(act);
                 let taken: Option<Vec<usize>> = picks
                     .iter()
@@ -1695,6 +1778,11 @@ impl<V: Rules> State<V> {
                 }
                 self.act_on_deck(act, &taken);
             }
+            Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
+        }
+        // The rest of the pickup, which can ask again.
+        if let Some(next) = self.carry_out(asked.rest) {
+            return Ok(self.park_at_neow(next));
         }
         Ok(Decided::Resolved)
     }
@@ -1898,13 +1986,15 @@ impl<V: Rules> State<V> {
     fn answers(&self, moves: &mut Legal<V>) -> bool {
         match &self.phase {
             Phase::Neow {
-                asking: Some(NeowAsks::Colorless(cards)),
+                asking: Some(asked),
                 ..
-            } => selections(0, 1, cards.len(), moves),
-            Phase::Neow {
-                asking: Some(NeowAsks::Deck { act, count }),
-                ..
-            } => selections(*count, *count, self.offered(*act).len(), moves),
+            } => match &asked.pickup {
+                Pickup::ChooseCard { offered } => selections(0, 1, offered.len(), moves),
+                Pickup::FromDeck { act, count } => {
+                    selections(*count, *count, self.offered(*act).len(), moves)
+                }
+                Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
+            },
             Phase::RestSite {
                 upgrading: true, ..
             } => selections(1, 1, self.upgradable().count(), moves),
@@ -2126,11 +2216,12 @@ impl<V: Rules> State<V> {
     fn asking(&self) -> Option<Question<V>> {
         match &self.phase {
             Phase::Neow { asking, .. } => asking.as_ref().map(|asking| {
-                let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match asking {
-                    NeowAsks::Colorless(cards) => {
-                        (0, 1, cards.iter().copied().map(CardIdent::new).collect())
+                let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
+                    Pickup::ChooseCard { offered } => {
+                        (0, 1, offered.iter().copied().map(CardIdent::new).collect())
                     }
-                    NeowAsks::Deck { act, count } => (
+                    Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
+                    Pickup::FromDeck { act, count } => (
                         u32::try_from(*count).expect("a selection counts in a few cards"),
                         u32::try_from(*count).expect("a selection counts in a few cards"),
                         self.offered(*act)

@@ -1,0 +1,7 @@
+# `ArcaneScroll.AfterObtained` adds one rare Ironclad card to the deck, drawn
+# at `Uniform` odds off the rewards stream, with no upgrade roll.
+#
+# A port that draws at another rarity's odds, or rolls for an upgrade, draws
+# another card or moves the stream further.
+{"cmd":"start","seed":"C000000004","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":0}
