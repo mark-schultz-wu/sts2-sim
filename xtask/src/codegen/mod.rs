@@ -26,6 +26,7 @@ mod enchantments;
 mod encounters;
 mod events;
 mod modifiers;
+mod monster_moves;
 mod monsters;
 mod orbs;
 mod potions;
@@ -380,6 +381,7 @@ pub fn run() -> Result<String, String> {
     // Read off the assembly rather than printed by the game, so checked
     // against the tables' build by hand.
     card_plays::generate(&root, build)?;
+    monster_moves::generate(&root, build)?;
 
     // The roll-up. One line per domain, so adding relics is adding a dump, a
     // module, and an entry in `DOMAINS`.
@@ -390,6 +392,7 @@ pub fn run() -> Result<String, String> {
         writeln!(out, "pub mod {domain};").unwrap();
     }
     writeln!(out, "pub mod card_plays;").unwrap();
+    writeln!(out, "pub mod monster_moves;").unwrap();
     let path = root.join("mod.rs");
     fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
 

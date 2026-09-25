@@ -1,12 +1,11 @@
 //! The second act's monsters.
 
-use sts2_core::{
-    Amount, CardAt, CardTable as _, Effect, Fight, Pile, PowerAmount, RunStreamKinds as _, Scaling,
-};
+use sts2_core::{CardAt, CardTable as _, Fight, Pile, PowerAmount, RunStreamKinds as _};
 
 use super::super::super::generated::ascension::AscensionLevel;
 use super::super::super::generated::cards::CardRarity;
 use super::super::super::generated::enchantments::Enchantment;
+use super::super::super::generated::monster_moves;
 use super::super::super::generated::monsters::{Monster, MoveId};
 use super::super::super::generated::powers::Power;
 use super::{Number, V};
@@ -118,40 +117,26 @@ pub(super) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
     super::state_of(monster, wanted, at)
 }
 
-/// Perform one of the Hive monsters' moves.
-pub(super) fn perform<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
-    match move_id {
-        MoveId::ThieveryMove => thievery(fight),
-        MoveId::BiteMove
-        | MoveId::BelowMove
-        | MoveId::PunctureMove
-        | MoveId::HeadbuttMove
-        | MoveId::ThrashMove => fight.attack_opponents(),
-        MoveId::BurrowMove => burrow(fight),
-        MoveId::TenderizingGoopMove => tenderizing_goop(fight),
-        MoveId::ToxicSpitMove => {
-            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(1))
-        }
-        // `SnoreMove` sleeps, which is a sound and nothing else.
-        MoveId::SnoreMove => {}
-        MoveId::RollOutMove => roll_out(fight),
+/// Perform one of the Hive monsters' moves, where the generator left it to a
+/// hand port.
+pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+    let segment = matches!(
+        monster,
+        Monster::DecimillipedeSegmentFront
+            | Monster::DecimillipedeSegmentMiddle
+            | Monster::DecimillipedeSegmentBack
+    );
+    match (monster, move_id) {
+        (Monster::ThievingHopper, MoveId::ThieveryMove) => thievery(fight),
+        (Monster::BowlbugRock, MoveId::HeadbuttMove) => fight.attack_opponents(),
+        (Monster::SlumberingBeetle, MoveId::RollOutMove) => roll_out(fight),
         // `WritheMove`, whose two hits are the intent's own repeat count.
-        MoveId::WritheMove => fight.attack_opponents(),
-        MoveId::BulkMove => bulk(fight),
-        MoveId::ConstrictMove => constrict(fight),
-        // `DeadMove` is a segment lying where it fell, which is nothing.
-        MoveId::DeadMove => {}
-        MoveId::ReattachMove => reattach(fight),
-        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+        (_, MoveId::WritheMove) if segment => fight.attack_opponents(),
+        (_, MoveId::BulkMove) if segment => bulk(fight),
+        (_, MoveId::ConstrictMove) if segment => constrict(fight),
+        (_, MoveId::ReattachMove) if segment => reattach(fight),
+        (monster, move_id) => monster_moves::perform(monster, move_id, fight),
     }
-}
-
-/// Make the target tender: every card it plays costs it a point of each.
-///
-/// One stack, however many targets the move names. The power itself is what
-/// takes the Strength and the Dexterity, and what hands them back.
-fn tenderizing_goop<F: Fight<V>>(fight: &mut F) {
-    fight.apply_to_opponents(Power::TenderPower, PowerAmount::Counted(1));
 }
 
 /// Roll over the target, then harden.
@@ -218,24 +203,6 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
         state.set_reviving(false)
     });
     fight.heal(actor, amount);
-}
-
-/// Hide underground behind block that persists until it is broken.
-fn burrow<F: Fight<V>>(fight: &mut F) {
-    const BLOCK: Number = 32;
-    const TOUGH_BLOCK: Number = 37;
-
-    fight.apply_to_actor(Power::BurrowedPower, PowerAmount::Counted(1));
-    let amount = match fight.ascension().has(AscensionLevel::ToughEnemies) {
-        true => TOUGH_BLOCK,
-        false => BLOCK,
-    };
-    let block = fight.resolve(Effect::GainBlock {
-        recipient: fight.actor(),
-        amount: Amount::Number(amount),
-        scaling: Scaling::Dynamic,
-    });
-    fight.apply(block);
 }
 
 /// Take the highest-priority deck card still in combat, then attack.

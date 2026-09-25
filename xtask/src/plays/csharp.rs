@@ -328,6 +328,30 @@ pub fn method(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, String> {
     Ok(None)
 }
 
+/// The body of the method `name` a class declares, whatever its modifiers,
+/// as tokens. `None` when the class declares none by that name.
+pub fn body(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, String> {
+    for at in 1..class.len() {
+        // `<type> name (`, which a call never is: a call follows `.`, `(`, an
+        // operator or `await`.
+        if !(class[at].is(name) && class.get(at + 1).is_some_and(|tok| tok.is("("))) {
+            continue;
+        }
+        if !matches!(&class[at - 1], Tok::Ident(ty) if ty != "await" && ty != "return" && ty != "new")
+            && !class[at - 1].is(">")
+        {
+            continue;
+        }
+        let close = closing(class, at + 1)?;
+        if !class.get(close + 1).is_some_and(|tok| tok.is("{")) {
+            continue;
+        }
+        let end = closing(class, close + 1)?;
+        return Ok(Some(class[close + 2..end].to_vec()));
+    }
+    Ok(None)
+}
+
 /// Whether a class overrides the member `name`, method or property.
 pub fn overrides(class: &[Tok], name: &str) -> bool {
     class.iter().enumerate().any(|(at, tok)| {

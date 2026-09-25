@@ -11,6 +11,7 @@ use sts2_core::{ContentError, EventHook, Fight, MonsterSpawn};
 
 use super::super::V0_107_1;
 use super::super::generated::encounters::Encounter;
+use super::super::generated::monster_moves;
 use super::super::generated::monsters::{Monster, MoveId, State};
 use super::super::generated::powers::Power;
 
@@ -148,14 +149,14 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
     }
     match monster {
         Monster::ThievingHopper
-        | Monster::Tunneler
-        | Monster::HunterKiller
         | Monster::BowlbugRock
-        | Monster::BowlbugSilk
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront
         | Monster::DecimillipedeSegmentMiddle
-        | Monster::DecimillipedeSegmentBack => hive::perform(move_id, fight),
-        _ => overgrowth::perform(monster, move_id, fight),
+        | Monster::DecimillipedeSegmentBack => hive::perform(monster, move_id, fight),
+        Monster::ShrinkerBeetle | Monster::FuzzyWurmCrawler | Monster::Fogmog => {
+            overgrowth::perform(monster, move_id, fight)
+        }
+        _ => monster_moves::perform(monster, move_id, fight),
     }
 }

@@ -995,7 +995,7 @@ fn describe(file: &str) -> String {
 /// because only another monster summons them, and two `*_CONSTRUCT` turn up in
 /// Glory as well as an earlier act. Those get their own buckets, rather than
 /// being filed somewhere their own `acts()` does not mention.
-fn bucket(acts: Option<&Vec<String>>) -> String {
+pub(super) fn bucket(acts: Option<&Vec<String>>) -> String {
     match acts {
         None => "summoned".to_string(),
         Some(acts) if acts.len() > 1 => "shared".to_string(),

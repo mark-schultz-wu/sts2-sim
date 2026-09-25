@@ -7,7 +7,8 @@ Two commands.
 `dump` runs the game's dump modes and files what each one prints. Most modes
 describe content and land under `crates/sts2-content/src/<version>/dumps/`. Two
 are ground truth for tests, which is not content, and land beside those tests.
-One mode, `cardplaydump`, launches nothing: it reads the decompiled assembly.
+Two modes, `cardplaydump` and `monstermovedump`, launch nothing: they read the
+decompiled assembly.
 
 `codegen` turns those dumps into `sts2-content`'s tables, one domain per dump,
 and fails the build if two dumps came from different builds.
@@ -461,6 +462,32 @@ Generation drops a `maxTimes` on a member that does not read one, and says nothi
 order. So the order branches are emitted in is not presentation. It decides
 which move a given roll produces. Branch rows keep dump order for that reason,
 while states are sorted by id, which is what the dump already did.
+
+### Monster moves
+
+What each monster's move does, read off the decompiled assembly the way card
+plays are. A move is the method its `MoveState` names in
+`GenerateMoveStateMachine`, and the rules are the card rules. One statement
+outside the list leaves the move to a hand port, and presentation drops out
+by what it calls.
+
+#### An attack is the hit its intent advertises
+
+The table already carries each intent's damage and hit count, and
+`attack_opponents` reads them. So an attack matches only when it names the
+same members its intent names: `Attack(PeckDamage).WithHitCount(PeckRepeat)`
+beside `MultiAttackIntent(PeckDamage, PeckRepeat)`. Anything else about the
+hit stops the move.
+
+#### Numbers the class names
+
+A move reads its other numbers off the class: a constant, a property holding
+one, or `AscensionHelper.GetValueIfAscension`. The generated move asks the
+fight's ascension for the last. A field the class can write is not a number
+this reads, because a move can change it.
+
+A negative amount stops a move, as it stops a card. For some powers it means
+one endless instance, and for others a debt.
 
 ### Orbs
 
