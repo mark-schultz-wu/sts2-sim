@@ -114,7 +114,7 @@ fn full() -> Observation<V> {
             points: [Node {
                 at: Coord::new(3, 11),
                 kind: MapPointType::RestSite,
-                to: vec![Coord::new(4, 12)],
+                to: [Coord::new(4, 12)].into_iter().collect(),
             }]
             .into(),
             proceed: false,

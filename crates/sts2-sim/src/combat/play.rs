@@ -215,49 +215,46 @@ pub(crate) fn answer<V: Rules>(
         .asking
         .take()
         .unwrap_or_else(|| unimplemented!("an answer to a fight that asked nothing"));
-    let taken = match &asking.question {
-        Asked::Pile {
-            pile: from,
-            selection,
-        } => {
-            let cards: Option<Vec<_>> = chosen
-                .iter()
-                .map(|index| {
-                    live.cards.get(*from, index).map(|card| {
-                        let index = num_traits::NumCast::from(index).unwrap_or_else(|| {
-                            unimplemented!("a pile deeper than a fight can number")
-                        });
-                        sts2_core::CardAt::new(card.id, *from, index)
+    let taken =
+        match &asking.question {
+            Asked::Pile {
+                pile: from,
+                selection,
+            } => {
+                let cards: Option<sts2_core::Picked<V>> = chosen
+                    .iter()
+                    .map(|index| {
+                        live.cards.get(*from, index).map(|card| {
+                            let index = num_traits::NumCast::from(index).unwrap_or_else(|| {
+                                unimplemented!("a pile deeper than a fight can number")
+                            });
+                            sts2_core::CardAt::new(card.id, *from, index)
+                        })
                     })
-                })
-                .collect();
-            let cards =
-                cards.unwrap_or_else(|| unimplemented!("a selection naming a card not offered"));
-            sts2_core::Taken::Selected(
-                selection
-                    .validate_answer(cards.into_boxed_slice())
-                    .unwrap_or_else(|| {
-                        unimplemented!("a selection with the wrong number of cards")
-                    }),
-            )
-        }
-        Asked::Offered { offered, skippable } => {
-            let chosen = if chosen.is_empty() {
-                if !*skippable {
-                    unimplemented!("skipping a choice that cannot be skipped");
-                }
-                None
-            } else {
-                let Some(only) = chosen.only() else {
-                    unimplemented!("a choice taking more than one card");
-                };
-                Some(*offered.get(only).unwrap_or_else(|| {
-                    unimplemented!("a choice naming a card that was not offered")
+                    .collect();
+                let cards = cards
+                    .unwrap_or_else(|| unimplemented!("a selection naming a card not offered"));
+                sts2_core::Taken::Selected(selection.validate_answer(cards).unwrap_or_else(|| {
+                    unimplemented!("a selection with the wrong number of cards")
                 }))
-            };
-            sts2_core::Taken::Chosen(chosen)
-        }
-    };
+            }
+            Asked::Offered { offered, skippable } => {
+                let chosen = if chosen.is_empty() {
+                    if !*skippable {
+                        unimplemented!("skipping a choice that cannot be skipped");
+                    }
+                    None
+                } else {
+                    let Some(only) = chosen.only() else {
+                        unimplemented!("a choice taking more than one card");
+                    };
+                    Some(*offered.get(only).unwrap_or_else(|| {
+                        unimplemented!("a choice naming a card that was not offered")
+                    }))
+                };
+                sts2_core::Taken::Chosen(chosen)
+            }
+        };
 
     let mut effect = asking.effect;
     let playing = match &effect.asker {
@@ -453,7 +450,6 @@ fn taken<V: Rules>(
                 .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
             sts2_core::CardAt::new(card.id, from, index)
         })
-        .collect::<Vec<_>>()
-        .into_boxed_slice();
+        .collect();
     selection.validate_automatic(cards)
 }

@@ -703,20 +703,23 @@ impl sts2_core::Table for Cards {
     type Data = CardData;
 
     fn data(self) -> &'static CardData {
-        match self {
-            Cards::Ironclad(c) => c.data(),
-            Cards::Silent(c) => c.data(),
-            Cards::Regent(c) => c.data(),
-            Cards::Necrobinder(c) => c.data(),
-            Cards::Defect(c) => c.data(),
-            Cards::Colorless(c) => c.data(),
-            Cards::Curse(c) => c.data(),
-            Cards::Event(c) => c.data(),
-            Cards::Quest(c) => c.data(),
-            Cards::Status(c) => c.data(),
-            Cards::Token(c) => c.data(),
-            Cards::Deprecated(c) => c.data(),
-        }
+        // The pool's table and the place in it. Every arm has the same
+        // shape, so the match is a lookup by pool, and one index follows.
+        let (rows, at): (&'static [CardData], usize) = match self {
+            Cards::Ironclad(c) => (&ironclad::ROWS, c as usize),
+            Cards::Silent(c) => (&silent::ROWS, c as usize),
+            Cards::Regent(c) => (&regent::ROWS, c as usize),
+            Cards::Necrobinder(c) => (&necrobinder::ROWS, c as usize),
+            Cards::Defect(c) => (&defect::ROWS, c as usize),
+            Cards::Colorless(c) => (&colorless::ROWS, c as usize),
+            Cards::Curse(c) => (&curse::ROWS, c as usize),
+            Cards::Event(c) => (&event::ROWS, c as usize),
+            Cards::Quest(c) => (&quest::ROWS, c as usize),
+            Cards::Status(c) => (&status::ROWS, c as usize),
+            Cards::Token(c) => (&token::ROWS, c as usize),
+            Cards::Deprecated(c) => (&deprecated::ROWS, c as usize),
+        };
+        &rows[at]
     }
 
     /// Every card in the build, pools flattened.

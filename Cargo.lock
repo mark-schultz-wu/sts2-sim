@@ -2413,6 +2413,7 @@ version = "0.0.0"
 dependencies = [
  "inferno",
  "nonmax",
+ "serde_json",
  "sts2-core",
 ]
 

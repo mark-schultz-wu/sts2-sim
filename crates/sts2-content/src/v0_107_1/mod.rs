@@ -174,39 +174,54 @@ impl sts2_core::Hooks for V0_107_1 {
         }
     }
 
-    fn event_hook<P: sts2_core::Printed<Self> + ?Sized>(
-        listener: sts2_core::EventListener<'_, Self, P>,
+    fn power_event_hook(
+        power: sts2_core::EventPower<'_, Self>,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        match listener {
-            sts2_core::EventListener::Power {
-                power,
-                amount,
-                owner,
-                holder,
-                applier,
-                monster,
-                state,
-            } => {
-                let held = behaviour::powers::Held {
-                    owner,
-                    holder,
-                    applier,
-                    monster,
-                };
-                behaviour::powers::event_hook(power, amount, held, state, hook, asked)
-            }
-            sts2_core::EventListener::Relic(state) => {
-                behaviour::relics::event_hook(state, hook, asked)
-            }
-            sts2_core::EventListener::Monster { monster, .. } => {
-                behaviour::monsters::event_hook(monster, hook)
-            }
-            sts2_core::EventListener::Card { card, id, printed } => {
-                behaviour::cards::event_hook(card, id, printed, hook, asked)
-            }
-        }
+        let sts2_core::EventPower {
+            power,
+            amount,
+            owner,
+            holder,
+            applier,
+            monster,
+            state,
+        } = power;
+        let held = behaviour::powers::Held {
+            owner,
+            holder,
+            applier,
+            monster,
+        };
+        behaviour::powers::event_hook(power, amount, held, state, hook, asked)
+    }
+
+    fn relic_event_hook(
+        state: &mut Self::RelicState,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) {
+        behaviour::relics::event_hook(state, hook, asked)
+    }
+
+    fn monster_event_hook(
+        monster: Self::Monster,
+        _creature: sts2_core::CombatId,
+        hook: sts2_core::EventHook<Self>,
+        _asked: &mut sts2_core::HookEffects<Self>,
+    ) {
+        behaviour::monsters::event_hook(monster, hook)
+    }
+
+    fn card_event_hook<P: sts2_core::Printed<Self> + ?Sized>(
+        card: Self::Card,
+        id: sts2_core::CardId<Self>,
+        printed: &P,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) {
+        behaviour::cards::event_hook(card, id, printed, hook, asked)
     }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
@@ -613,7 +628,10 @@ fn roll_monster_move<
 ) -> Result<Option<sts2_core::NextMove<V0_107_1>>, sts2_core::ContentError> {
     use generated::monsters::{FollowUp, State};
 
-    let powers: Vec<_> = powers.into_iter().collect();
+    // The powers, read the first time a conditional state asks for them. Few
+    // monsters' graphs hold one.
+    let mut powers = Some(powers);
+    let mut read = Vec::new();
     let data = sts2_core::Table::data(monster);
     let state = |at: u8| {
         data.states
@@ -646,7 +664,8 @@ fn roll_monster_move<
                 },
                 State::Random(branches) => branch(branches, machine, rng)?,
                 State::Conditional(_) => {
-                    behaviour::monsters::conditional(monster, machine.at, spawn, &powers)?
+                    read.extend(powers.take().into_iter().flatten());
+                    behaviour::monsters::conditional(monster, machine.at, spawn, &read)?
                 }
             };
             machine.enter(next);

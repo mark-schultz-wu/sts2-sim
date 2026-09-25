@@ -1,4 +1,4 @@
-//! Combat card piles.
+//! The deck as a fight opens: shuffled, then dealt.
 
 use sts2_core::rng::GameRng;
 
@@ -11,33 +11,28 @@ pub struct Shuffled<T> {
     cards: Vec<T>,
 }
 
-/// A combat's card piles.
+/// A shuffled deck with its opening hand dealt off the front.
 ///
-/// Slice access keeps ownership and representation inside this module. The
-/// storage can change without changing combat rules that inspect the piles.
+/// One list and where the hand ends in it, so dealing moves no card.
 #[derive(Debug)]
-pub struct Piles<T> {
-    hand: Vec<T>,
-    draw: Vec<T>,
-    discard: Vec<T>,
-    exhaust: Vec<T>,
+pub struct Dealt<T> {
+    cards: Vec<T>,
+    hand: usize,
 }
 
 impl<T> Shuffled<T> {
     /// Deal up to `hand_size` cards from the front of the shuffled deck.
-    pub fn deal(mut self, hand_size: usize) -> Piles<T> {
-        let draw = self.cards.split_off(hand_size.min(self.cards.len()));
-        Piles {
-            hand: self.cards,
-            draw,
-            discard: Vec::new(),
-            exhaust: Vec::new(),
+    pub fn deal(self, hand_size: usize) -> Dealt<T> {
+        Dealt {
+            hand: hand_size.min(self.cards.len()),
+            cards: self.cards,
         }
     }
 }
 
-/// `CardPile.MaxCardsInHand`, which the fight's first draw is capped at.
-const MAX_CARDS_IN_HAND: usize = 10;
+/// `CardPile.MaxCardsInHand`: the most a hand holds, and so what the fight's
+/// first draw is capped at.
+pub(super) const MAX_CARDS_IN_HAND: usize = 10;
 
 impl<V: sts2_core::Rules> Shuffled<super::live::CardInstance<V>> {
     /// The same, for the one turn the innate cards are put on top first.
@@ -50,7 +45,7 @@ impl<V: sts2_core::Rules> Shuffled<super::live::CardInstance<V>> {
     /// # Panics
     ///
     /// An enchanted card, whose sink the port has not reached.
-    pub fn deal_opening(mut self, hand_size: usize) -> Piles<super::live::CardInstance<V>> {
+    pub fn deal_opening(mut self, hand_size: usize) -> Dealt<super::live::CardInstance<V>> {
         if let Some(card) = self
             .cards
             .iter()
@@ -61,82 +56,30 @@ impl<V: sts2_core::Rules> Shuffled<super::live::CardInstance<V>> {
                 card.face.ident
             );
         }
-        let innate = self.cards.iter().filter(|card| card.face.innate()).count();
-        // `MoveToTopInternal` per card, in pile order. Each insert goes in
-        // front of the last, which is what reverses them.
-        let mut moved: Vec<_> = self
-            .cards
-            .extract_if(.., |card| card.face.innate())
-            .collect();
-        moved.reverse();
-        moved.append(&mut self.cards);
-        self.cards = moved;
+        let mut innate = 0;
+        // `MoveToTopInternal` per card, in pile order. Each goes in front of
+        // the last, which is what reverses them. The cards behind the one
+        // moved keep their places, so the walk reaches each once.
+        for at in 0..self.cards.len() {
+            if self.cards[at].face.innate() {
+                self.cards[..=at].rotate_right(1);
+                innate += 1;
+            }
+        }
         self.deal(hand_size.max(innate).min(MAX_CARDS_IN_HAND))
     }
 }
 
-impl<T> Piles<T> {
+impl<T> Dealt<T> {
     /// Cards in hand, in hand order.
     pub fn hand(&self) -> &[T] {
-        &self.hand
+        &self.cards[..self.hand]
     }
 
     /// Cards in the draw pile, in draw order.
     pub fn draw(&self) -> &[T] {
-        &self.draw
+        &self.cards[self.hand..]
     }
-
-    /// Cards in the discard pile, in the order they entered it.
-    pub fn discard(&self) -> &[T] {
-        &self.discard
-    }
-
-    /// Cards exhausted this combat, in the order they entered the pile.
-    pub fn exhaust(&self) -> &[T] {
-        &self.exhaust
-    }
-
-    /// Move one card from the hand to the discard pile.
-    ///
-    /// An index outside the current hand moves no card and says so.
-    pub fn discard_from_hand(&mut self, index: usize) -> Result<(), NotInHand> {
-        move_from_hand(&mut self.hand, &mut self.discard, index)
-    }
-
-    /// Move one card from the hand to the exhaust pile.
-    ///
-    /// An index outside the current hand moves no card and says so.
-    pub fn exhaust_from_hand(&mut self, index: usize) -> Result<(), NotInHand> {
-        move_from_hand(&mut self.hand, &mut self.exhaust, index)
-    }
-}
-
-/// An index that names no card in hand.
-///
-/// A decision is applied to the hand it was made against. So this is a caller
-/// holding a stale index, not a move the rules refuse. The rules refuse a card
-/// with a [`sts2_core::Playable`] reason, before the choice. That never
-/// reaches these piles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("no card at {index} in a hand of {held}")]
-pub struct NotInHand {
-    pub index: usize,
-    pub held: usize,
-}
-
-fn move_from_hand<T>(
-    hand: &mut Vec<T>,
-    destination: &mut Vec<T>,
-    index: usize,
-) -> Result<(), NotInHand> {
-    if index >= hand.len() {
-        return Err(NotInHand {
-            index,
-            held: hand.len(),
-        });
-    }
-    destination.push(hand.remove(index));
-    Ok(())
 }
 
 /// Shuffle owned deck storage and return it in the shuffled state.
@@ -152,7 +95,7 @@ mod tests {
     use sts2_core::Seed;
     use sts2_core::rng::{GameRng, stream_seed};
 
-    use super::{NotInHand, Shuffled, shuffle};
+    use super::{Shuffled, shuffle};
 
     fn rng() -> MegaRng {
         let seed = stream_seed::<V0_107_1>(&Seed::new("0RACLE1").expect("a canonical seed"));
@@ -178,49 +121,6 @@ mod tests {
 
         assert_eq!(piles.hand().len(), 2);
         assert!(piles.draw().is_empty());
-    }
-
-    #[test]
-    fn cards_move_from_hand_without_leaving_the_piles() {
-        let mut rng = rng();
-        let mut piles = shuffle(&mut rng, vec![1, 2, 3]).deal(3);
-
-        let discarded = piles.hand()[1];
-        let exhausted = piles.hand()[0];
-        let kept = piles.hand()[2];
-
-        piles
-            .discard_from_hand(1)
-            .expect("the second card is in hand");
-        piles
-            .exhaust_from_hand(0)
-            .expect("the first card is in hand");
-
-        assert_eq!(piles.hand(), [kept]);
-        assert_eq!(piles.discard(), [discarded]);
-        assert_eq!(piles.exhaust(), [exhausted]);
-    }
-
-    #[test]
-    fn an_invalid_hand_index_changes_nothing() {
-        let mut rng = rng();
-        let mut piles = shuffle(&mut rng, vec![1, 2]).deal(2);
-
-        assert_eq!(
-            piles.discard_from_hand(2),
-            Err(NotInHand { index: 2, held: 2 })
-        );
-        assert_eq!(
-            piles.exhaust_from_hand(usize::MAX),
-            Err(NotInHand {
-                index: usize::MAX,
-                held: 2
-            })
-        );
-
-        assert_eq!(piles.hand().len(), 2);
-        assert!(piles.discard().is_empty());
-        assert!(piles.exhaust().is_empty());
     }
 
     /// The fight's first draw puts the innate cards on top and draws them all.

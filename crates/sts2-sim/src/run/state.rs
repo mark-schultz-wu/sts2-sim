@@ -176,15 +176,20 @@ impl<V: Rules> HeldRelic<V> {
     }
 }
 
-/// The relics a run carries, and how many of them override each hook.
+/// The relics a run carries, and which of them override each hook.
 ///
-/// A relic joins the belt only through here, which keeps the counts true.
-/// Everything else reads and writes the belt as a slice. A slice reaches a
-/// relic's own saved fields, and cannot add a relic or take one away.
+/// A relic joins the belt only through here, and none leaves it, which keeps
+/// the slots true. Everything else reads and writes the belt as a slice. A
+/// slice reaches a relic's own saved fields, and cannot add a relic or take
+/// one away.
 #[derive(Debug)]
 pub(crate) struct Belt<V: Rules> {
     held: Bounded<HeldRelic<V>, RELICS>,
-    counts: crate::combat::HookCounts,
+    /// Every hook some relic on the belt overrides.
+    heard: sts2_core::Overrides,
+    /// For each hook, the slots of the relics that override it, one bit a
+    /// slot.
+    slots: [u64; sts2_core::ModelHook::ALL.len()],
 }
 
 impl<V: Rules> Clone for Belt<V> {
@@ -223,25 +228,46 @@ impl<V: Rules> Belt<V> {
     pub(crate) fn new() -> Self {
         Self {
             held: Bounded::new(),
-            counts: crate::combat::HookCounts::default(),
+            heard: sts2_core::Overrides::default(),
+            slots: [0; sts2_core::ModelHook::ALL.len()],
         }
     }
 
     pub(crate) fn push(&mut self, held: HeldRelic<V>) {
         use sts2_core::RelicTable as _;
 
-        self.counts.add(held.relic.overrides());
+        let overrides = held.relic.overrides();
+        let slot = 1 << self.held.len();
+        let mut left = overrides.bits();
+        while left != 0 {
+            self.slots[left.trailing_zeros() as usize] |= slot;
+            left &= left - 1;
+        }
+        self.heard = self.heard.union(overrides);
         self.held.push(held);
     }
 
     pub(crate) fn copy_from(&mut self, source: &Self) {
         self.held.copy_from(&source.held);
-        self.counts = source.counts;
+        self.heard = source.heard;
+        self.slots = source.slots;
     }
 
     /// Whether any relic on the belt overrides a hook in `hooks`.
     pub(crate) fn hear(&self, hooks: sts2_core::Overrides) -> bool {
-        self.counts.hears(hooks)
+        self.heard.intersects(hooks)
+    }
+
+    /// The slots of the relics that override a hook in `hooks`, one bit a
+    /// slot, the first slot lowest.
+    pub(crate) fn hearing(&self, hooks: sts2_core::Overrides) -> u64 {
+        let mut left = hooks.bits();
+        let mut slots = 0;
+        while left != 0 {
+            slots |= self.slots[left.trailing_zeros() as usize];
+            left &= left - 1;
+        }
+        slots
     }
 }
 
@@ -534,7 +560,10 @@ impl<V: Rules> State<V> {
     /// The question that blocks every decision except its answer.
     pub(crate) fn pending(&self) -> Option<sts2_core::QuestionKind> {
         match &self.phase {
-            Phase::Combat(live) => live.question().map(|question| question.kind()),
+            // The kind alone, without building the options the question lists.
+            Phase::Combat(live) => live
+                .selecting()
+                .map(|_| sts2_core::QuestionKind::SelectCards),
             Phase::Neow { selection, .. } if selection.is_some() => {
                 Some(sts2_core::QuestionKind::SelectCards)
             }

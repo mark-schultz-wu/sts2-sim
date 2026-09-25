@@ -20,7 +20,7 @@ use sts2_core::{
     Overrides, PowerTable as _, RelicTable as _, Rules,
 };
 
-use super::live::{Heard, HeardEvent, Live};
+use super::live::{Heard, Live};
 use super::powers::Powers as _;
 use crate::run::Belt;
 
@@ -187,37 +187,26 @@ fn raise<V: Rules>(
         cards,
     } = kinds;
     let hooks = Overrides::of(model_hook);
-    let mut asked = SmallVec::new();
     let mut answer = sts2_core::HookEffects::new();
+    // Returned as it is, so it is built where the caller receives it.
+    let mut asked = SmallVec::new();
     let mut decremented: SmallVec<[Listener<V>; 4]> = SmallVec::new();
-    // Every effect but a power's `Decrement` goes back to the caller, beside
-    // the listener that asked for it.
-    // Most listeners answer nothing, and an empty answer is left alone.
-    let mut gather = |listener: Listener<V>, answer: &mut sts2_core::HookEffects<V>| {
-        if answer.is_empty() {
-            return;
-        }
-        for effect in answer.drain(..) {
-            match (listener, effect) {
-                (Listener::Power { .. }, HookEffect::Decrement) => decremented.push(listener),
-                (listener, effect) => asked.push((listener, effect)),
-            }
-        }
-    };
     for creature in 0..live.creatures.len() {
-        let fighter = live.creatures[creature];
-        let carrier = fighter.carrier();
+        let (id, carrier, model) = {
+            let fighter = &live.creatures[creature];
+            (fighter.id, fighter.carrier(), fighter.model)
+        };
         if powers {
-            for (at, held) in live.powers.of_mut(fighter.id).enumerate() {
+            for (at, held) in live.powers.of_mut(id).enumerate() {
                 let power = held.power();
                 if power.overrides().contains(model_hook) {
-                    V::event_hook(held.event_listener(carrier), hook, &mut answer);
+                    V::power_event_hook(held.event_power(carrier), hook, &mut answer);
                     let listener = Listener::Power {
-                        owner: fighter.id,
+                        owner: id,
                         at: at as u8,
                         power,
                     };
-                    gather(listener, &mut answer);
+                    take(&mut asked, &mut decremented, listener, &mut answer);
                 }
             }
         }
@@ -225,26 +214,30 @@ fn raise<V: Rules>(
             && let Some(monster) = carrier.monster
             && monster.overrides().contains(model_hook)
         {
-            let listener = HeardEvent::<V>::Monster {
-                monster,
-                creature: fighter.id,
-            };
-            V::event_hook(listener, hook, &mut answer);
+            V::monster_event_hook(monster, id, hook, &mut answer);
             let listener = Listener::Monster {
-                creature: fighter.id,
+                creature: id,
                 monster,
             };
-            gather(listener, &mut answer);
+            take(&mut asked, &mut decremented, listener, &mut answer);
         }
-        let Some(ModelId::Character(_)) = fighter.model else {
+        let Some(ModelId::Character(_)) = model else {
             continue;
         };
         if belt {
-            for (slot, held) in relics.iter_mut().enumerate() {
-                if held.relic.overrides().contains(model_hook) {
-                    V::event_hook(HeardEvent::<V>::Relic(&mut held.state), hook, &mut answer);
-                    gather(Listener::Relic { slot: slot as u8 }, &mut answer);
-                }
+            // The listening slots alone, in slot order.
+            let mut left = relics.hearing(hooks);
+            while left != 0 {
+                let slot = left.trailing_zeros() as usize;
+                left &= left - 1;
+                let held = &mut relics[slot];
+                V::relic_event_hook(&mut held.state, hook, &mut answer);
+                take(
+                    &mut asked,
+                    &mut decremented,
+                    Listener::Relic { slot: slot as u8 },
+                    &mut answer,
+                );
             }
         }
         if cards {
@@ -253,20 +246,20 @@ fn raise<V: Rules>(
                     .cards
                     .named(id)
                     .expect("a card the fight lists as listening is in it");
-                let listener = sts2_core::EventListener::Card {
-                    card: card.face.ident.card,
-                    id,
-                    printed: &card,
-                };
-                V::event_hook(listener, hook, &mut answer);
-                gather(Listener::Card { id }, &mut answer);
+                V::card_event_hook(card.face.ident.card, id, &card, hook, &mut answer);
+                take(
+                    &mut asked,
+                    &mut decremented,
+                    Listener::Card { id },
+                    &mut answer,
+                );
             }
         }
     }
 
     // `PowerCmd.Decrement`, which takes the instance off at zero the way a
     // duration tick does.
-    for listener in decremented {
+    for &listener in &decremented {
         let Listener::Power { owner, power, .. } = listener else {
             continue;
         };
@@ -278,6 +271,29 @@ fn raise<V: Rules>(
         live.powers.retain(owner, |held| !held.amount.spent());
     }
     asked
+}
+
+/// Take what `listener` answered, which leaves `answer` empty for the next.
+/// A power's `Decrement` goes to `decremented`, and every other effect goes to
+/// `asked` beside the listener that asked for it. Most listeners answer
+/// nothing.
+#[inline(always)]
+fn take<V: Rules>(
+    asked: &mut SmallVec<[(Listener<V>, HookEffect<V>); 4]>,
+    decremented: &mut SmallVec<[Listener<V>; 4]>,
+    listener: Listener<V>,
+    answer: &mut sts2_core::HookEffects<V>,
+) {
+    if answer.is_empty() {
+        return;
+    }
+    for &effect in answer.iter() {
+        match (listener, effect) {
+            (Listener::Power { .. }, HookEffect::Decrement) => decremented.push(listener),
+            (listener, effect) => asked.push((listener, effect)),
+        }
+    }
+    answer.clear();
 }
 
 /// Ask `ask` of every listener that overrides a hook in `hooks`, in the order
@@ -325,11 +341,12 @@ pub(crate) fn each<V: Rules>(
             continue;
         };
         if belt {
-            for held in relics.iter() {
-                let overrides = held.relic.overrides();
-                if overrides.intersects(hooks) {
-                    ask(Heard::<V>::Relic(&held.state), overrides);
-                }
+            // The listening slots alone, in slot order.
+            let mut left = relics.hearing(hooks);
+            while left != 0 {
+                let held = &relics[left.trailing_zeros() as usize];
+                left &= left - 1;
+                ask(Heard::<V>::Relic(&held.state), held.relic.overrides());
             }
         }
         if cards {
@@ -357,6 +374,7 @@ pub(crate) fn each<V: Rules>(
 /// # Panics
 ///
 /// A question the game asks of one power about itself, which is not raised.
+#[inline(always)]
 pub(crate) fn any_decides<V: Rules>(
     fight: Walk<'_, V>,
     hook: DecisionHook<V>,
@@ -365,8 +383,21 @@ pub(crate) fn any_decides<V: Rules>(
     let model_hook = hook
         .model_hook()
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one power, not raised"));
+    let hooks = Overrides::of(model_hook);
+    Kinds::hearing(fight.live, fight.relics, hooks).is_some()
+        && decides::<V>(fight, hooks, hook, answer)
+}
+
+/// [`any_decides`] once something hears `hook`.
+#[inline(never)]
+fn decides<V: Rules>(
+    fight: Walk<'_, V>,
+    hooks: Overrides,
+    hook: DecisionHook<V>,
+    answer: bool,
+) -> bool {
     let mut decided = false;
-    each::<V>(fight, Overrides::of(model_hook), |listener, _| {
+    each::<V>(fight, hooks, |listener, _| {
         decided |= V::decide_hook(listener, hook).is_decision_and(|said| said == answer);
     });
     decided

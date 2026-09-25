@@ -10,7 +10,8 @@ use sts2_core::{CardTable, CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPh
 
 use super::board::{Board, draw};
 use super::listen::{self, Listener};
-use super::live::{Face, Landing, Live, Skips};
+use super::live::{CREATURES, Face, Landing, Live, Skips};
+use super::pile::MAX_CARDS_IN_HAND;
 use super::powers::Powers as _;
 use super::start::hand_size;
 use super::{Error, Fighting};
@@ -134,7 +135,7 @@ fn turn_end<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
 ) {
-    let held: Vec<_> = live.cards.iter(Pile::Hand).collect();
+    let held: SmallVec<[_; MAX_CARDS_IN_HAND]> = live.cards.iter(Pile::Hand).collect();
     for card in &held {
         let mut board = Board::for_card(
             live,
@@ -146,7 +147,7 @@ fn turn_end<V: Rules>(
         );
         V::on_card_turn_end(card.face.ident.card, &mut board);
     }
-    let ethereal: Vec<usize> = live
+    let ethereal: SmallVec<[usize; MAX_CARDS_IN_HAND]> = live
         .cards
         .idents(Pile::Hand)
         .enumerate()
@@ -360,8 +361,8 @@ fn tick_powers<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     skipping: &mut Skips<V>,
     side: V::CombatSide,
-) -> Vec<(CombatId, V::Power, PowerAmount<V::Number>)> {
-    let mut applying = Vec::new();
+) -> Applying<V> {
+    let mut applying = Applying::<V>::new();
     let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
     let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
     let hook = sts2_core::EventHook::SideTurnEnd { side };
@@ -406,6 +407,16 @@ fn tick_powers<V: Rules>(
     applying
 }
 
+/// The powers a turn end's listeners asked to apply, each beside the creature
+/// that asked, inline to one for each creature a fight holds.
+type Applying<V> = SmallVec<
+    [(
+        CombatId,
+        <V as sts2_core::ContentVersion>::Power,
+        PowerAmount<<V as sts2_core::ContentVersion>::Number>,
+    ); CREATURES],
+>;
+
 /// `PowerCmd.Apply` for what the powers that just ticked asked for.
 ///
 /// After the tick rather than inside it, because a power applying one is
@@ -417,7 +428,7 @@ fn applied<V: Rules>(
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
-    asked: Vec<(CombatId, V::Power, PowerAmount<V::Number>)>,
+    asked: Applying<V>,
 ) {
     for (at, power, amount) in asked {
         let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
@@ -437,7 +448,7 @@ fn enemy_turn<V: Rules>(
     skipping: &mut Skips<V>,
 ) -> Option<super::Ended> {
     let mut ended = None;
-    let acting: Vec<CombatId> = live
+    let acting: SmallVec<[CombatId; CREATURES]> = live
         .creatures
         .iter()
         .filter(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
@@ -501,7 +512,7 @@ fn move_performed<V: Rules>(live: &mut Live<V>, creature: CombatId, move_id: V::
         return;
     };
     for held in live.powers.of_mut(creature) {
-        <V as sts2_core::Hooks>::event_hook(held.event_listener(carrier), hook, &mut asked);
+        <V as sts2_core::Hooks>::power_event_hook(held.event_power(carrier), hook, &mut asked);
     }
     if let Some(effect) = asked.first() {
         unimplemented!("a power asking for {effect:?} after a monster move")
@@ -542,7 +553,7 @@ fn roll_moves<V: Rules>(
         // it, which goes on advertising what that caller set.
         let Some(rolled) = rolled else { continue };
         if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == held.creature) {
-            creature.next_move = Some(rolled.into());
+            creature.next_move = Some((&rolled).into());
         }
     }
     Ok(())

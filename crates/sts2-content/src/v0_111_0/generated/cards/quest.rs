@@ -38,7 +38,7 @@ static ORDER: [u16; 4] = [77, 170, 307, 497];
 
 /// Every row, in the order the enum declares its variants, which is
 /// the index a value casts to.
-static ROWS: [CardData; 4] = [
+pub(super) static ROWS: [CardData; 4] = [
     CardData {
         kind: Field::Constant(CardType::Quest),
         rarity: CardRarity::Quest,

@@ -295,7 +295,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // about to have.
         let mut state = <V::PowerState as sts2_core::PowerModel<V>>::new(power);
         let carrier = self.live.creatures[at].carrier();
-        let listener = super::live::HeardEvent::<V>::Power {
+        let listener = sts2_core::EventPower {
             power,
             amount,
             owner: carrier.side,
@@ -305,7 +305,7 @@ impl<'a, V: Rules> Board<'a, V> {
             state: &mut state,
         };
         let mut asked = sts2_core::HookEffects::new();
-        <V as sts2_core::Hooks>::event_hook(
+        <V as sts2_core::Hooks>::power_event_hook(
             listener,
             sts2_core::EventHook::BeforeApplied { landing: amount },
             &mut asked,
@@ -366,9 +366,10 @@ impl<'a, V: Rules> Board<'a, V> {
             match to {
                 sts2_core::Replaying::One(at) => {
                     let index = self.standing(at);
-                    self.live
-                        .cards
-                        .write(at.pile(), index, |held| held.replay(amount));
+                    self.live.cards.write(at.pile(), index, |held| {
+                        held.replay(amount);
+                        true
+                    });
                 }
                 // `PlayerCombatState.AllCards`, which the exhaust and play
                 // piles are among. A blade taken out of the fight is written
@@ -499,7 +500,7 @@ impl<'a, V: Rules> Board<'a, V> {
                     sts2_core::HookEffect::InstallMove(next) => {
                         if V::can_leave_current_move(held.monster, &held.machine) {
                             held.machine.interpose();
-                            self.live.creatures[at].next_move = Some((*next).into());
+                            self.live.creatures[at].next_move = Some(next.into());
                         }
                     }
                     // A state the graph already holds, which walks on by
@@ -512,7 +513,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         if let Ok(next) =
                             V::set_move_immediate(monster, ascension, move_id, &mut held.machine)
                         {
-                            self.live.creatures[at].next_move = Some(next.into());
+                            self.live.creatures[at].next_move = Some((&next).into());
                         }
                     }
                     other => unimplemented!("a power asking for {other:?} over a death"),
@@ -552,7 +553,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             .iter_mut()
                             .find(|creature| creature.id == id)
                             .expect("a summoned monster is in the fight");
-                        summoned.next_move = Some((*opening).clone().into());
+                        summoned.next_move = Some(opening.into());
                     }
                 }
                 other => unimplemented!("a dead power asking for {other:?}"),
@@ -673,7 +674,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         None => machine.machine.interpose(),
                     }
                     if let Some(at) = self.at(owner) {
-                        self.live.creatures[at].next_move = Some((*stun).into());
+                        self.live.creatures[at].next_move = Some(stun.into());
                     }
                 }
                 effect => unimplemented!("a power asking for {effect:?} after a hit"),
@@ -705,33 +706,47 @@ pub(super) fn modified_by<V: Rules>(
     super::listen::each::<V>(fight, hooks, |listener, overrides| {
         for (at, phase) in phases.iter().enumerate() {
             if overrides.contains(phase.model_hook()) {
-                answers.push((at, <V as sts2_core::Hooks>::modify_hook(listener, *phase)));
+                match <V as sts2_core::Hooks>::modify_hook(listener, *phase) {
+                    Modify::Nothing => {}
+                    answer => answers.push((at, answer)),
+                }
             }
         }
     });
+    // A number nothing changes is only floored.
+    if answers.is_empty() {
+        return amount.max(V::Number::zero());
+    }
 
     let float = |number: V::Number| -> f64 {
         num_traits::cast(number).expect("a number a fight works out fits a float")
     };
+    // Phase by phase, and within a phase in the order the walk asked. The
+    // sort is stable, so it keeps that order.
+    answers.sort_by_key(|&(at, _)| at);
     let mut number = float(amount);
-    for phase in 0..phases.len() {
-        let mut share = 1.0f64;
-        for (_, answer) in answers.iter().filter(|(at, _)| *at == phase) {
-            match *answer {
-                Modify::Nothing => {}
-                Modify::Scaled(by) => share *= by,
-                Modify::Added(more) => {
-                    number = number * share + float(more);
-                    share = 1.0;
-                }
-                Modify::AtMost(most) => {
-                    number = (number * share).min(float(most));
-                    share = 1.0;
-                }
+    let mut share = 1.0f64;
+    let mut phase = answers[0].0;
+    for &(at, answer) in &answers {
+        if at != phase {
+            number *= share;
+            share = 1.0;
+            phase = at;
+        }
+        match answer {
+            Modify::Nothing => {}
+            Modify::Scaled(by) => share *= by,
+            Modify::Added(more) => {
+                number = number * share + float(more);
+                share = 1.0;
+            }
+            Modify::AtMost(most) => {
+                number = (number * share).min(float(most));
+                share = 1.0;
             }
         }
-        number *= share;
     }
+    number *= share;
     num_traits::cast(number.max(0.0).trunc()).expect("a modified number is a game number")
 }
 
@@ -1291,9 +1306,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         lasting: sts2_core::Lasting,
     ) {
         let at = self.standing(card);
-        self.live
-            .cards
-            .write(card.pile(), at, |held| held.modify(change, lasting));
+        self.live.cards.write(card.pile(), at, |held| {
+            held.modify(change, lasting);
+            true
+        });
     }
 
     fn discard_this(&mut self) {

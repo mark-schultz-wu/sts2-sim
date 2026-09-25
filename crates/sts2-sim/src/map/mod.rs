@@ -213,7 +213,7 @@ impl<V: Rules> ActMapBuilder<V> {
             .chain([self.ancient, self.boss])
             .map(|id| {
                 let point = &self.points[id];
-                let mut to: Vec<Coord> = point
+                let mut to: smallvec::SmallVec<[Coord; 7]> = point
                     .children
                     .iter()
                     .map(|child| self.points[child].at())
