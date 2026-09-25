@@ -8,7 +8,6 @@
 //! What this does not know is which binary serves. That is the binary's own
 //! fact, so [`Held::new`] is handed a way back into it.
 
-use anyhow::{Context, Result};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -18,6 +17,27 @@ use sts2_headless::{Config, Recorded, Session, recording};
 
 use crate::Readable;
 
+/// What went wrong with the machinery, rather than with the run.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Headless(#[from] sts2_headless::Error),
+    #[error("finding this binary: {0}")]
+    Exe(std::io::Error),
+    #[error("opening {}: {source}", path.display())]
+    Opening {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("reading {}: {source}", path.display())]
+    Reading {
+        path: PathBuf,
+        source: recording::Error,
+    },
+    #[error("set STS2_GAME_DIR to the game's directory")]
+    NoGameDir,
+}
+
 /// How to re-enter this front end as the daemon.
 ///
 /// A `std::process::Command` that serves when it is run. Handed in because the
@@ -26,7 +46,7 @@ use crate::Readable;
 /// The build's name goes with it, because a daemon serves one build and it must
 /// be the one the client asked for. A name rather than a flag: how to spell it
 /// is the binary's business.
-pub type Serving = fn(Duration, &str) -> Result<std::process::Command>;
+pub type Serving = fn(Duration, &str) -> Result<std::process::Command, Error>;
 
 /// The daemon-held oracle, and every command about the machinery.
 pub struct Held<V: sts2_content_wire::WireContentVersion> {
@@ -47,7 +67,7 @@ impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     /// # Errors
     ///
     /// The daemon failed to start or did not bind in time.
-    fn spawn(&self, idle: Duration) -> Result<()> {
+    fn spawn(&self, idle: Duration) -> Result<(), Error> {
         Ok(daemon::spawn(
             (self.serving)(idle, V::VERSION.name)?,
             &daemon::socket_path(&V::VERSION),
@@ -71,7 +91,7 @@ impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     /// # Errors
     ///
     /// The daemon failed to start.
-    pub fn wake(&self, idle: Duration) -> Result<bool> {
+    pub fn wake(&self, idle: Duration) -> Result<bool, Error> {
         let fresh = !daemon::running(&V::VERSION);
         if fresh {
             self.spawn(idle)?;
@@ -88,7 +108,7 @@ impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     /// # Errors
     ///
     /// The running daemon refused to stop, or a fresh one failed to start.
-    pub fn empty(&self) -> Result<Session<V>> {
+    pub fn empty(&self) -> Result<Session<V>, Error> {
         if daemon::running(&V::VERSION) {
             self.attached().stop()?;
             while daemon::running(&V::VERSION) {
@@ -104,7 +124,7 @@ impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     /// # Errors
     ///
     /// The game directory is unset, or the socket is already taken.
-    pub fn serve(&self, detach: bool, idle: Duration) -> Result<()> {
+    pub fn serve(&self, detach: bool, idle: Duration) -> Result<(), Error> {
         if detach {
             self.spawn(idle)?;
             println!("serving at {}", daemon::socket_path(&V::VERSION).display());
@@ -118,7 +138,7 @@ impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     /// # Errors
     ///
     /// Nothing is holding a game.
-    pub fn status(&self) -> Result<String> {
+    pub fn status(&self) -> Result<String, Error> {
         let status = self.attached().status()?;
         let mut said = format!(
             "running  pid {}\ngame     {}\nidle     {}s of {}s",
@@ -138,7 +158,7 @@ impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     /// # Errors
     ///
     /// The daemon was up and refused to stop.
-    pub fn stop(&self) -> Result<String> {
+    pub fn stop(&self) -> Result<String, Error> {
         if !daemon::running(&V::VERSION) {
             return Ok("nothing running".into());
         }
@@ -151,7 +171,7 @@ impl<V: sts2_content_wire::WireContentVersion> Held<V> {
     /// # Errors
     ///
     /// Nothing is holding a game, or the file cannot be written.
-    pub fn record(&self, file: Option<PathBuf>) -> Result<String> {
+    pub fn record(&self, file: Option<PathBuf>) -> Result<String, Error> {
         Ok(match self.attached().record(file, false)? {
             Recorded { path: Some(p), .. } => format!("recording to {}", p.display()),
             Recorded { steps, .. } => format!("stopped recording after {steps} step(s)"),
@@ -171,7 +191,7 @@ pub fn begin_recording<V: sts2_content_wire::WireContentVersion>(
     game: &Session<V>,
     path: PathBuf,
     append: bool,
-) -> Result<()> {
+) -> Result<(), Error> {
     game.record(Some(path.clone()), append)?;
 
     let verb = match append {
@@ -193,11 +213,15 @@ pub fn begin_recording<V: sts2_content_wire::WireContentVersion>(
 /// and a fragment cannot be read into one.
 pub fn recorded<V: sts2_content_wire::WireContentVersion>(
     file: &Path,
-) -> Result<sts2_core::Recording<V>> {
-    let opened =
-        std::fs::File::open(file).with_context(|| format!("opening {}", file.display()))?;
-    recording::read::<V>(std::io::BufReader::new(opened))
-        .with_context(|| format!("reading {}", file.display()))
+) -> Result<sts2_core::Recording<V>, Error> {
+    let opened = std::fs::File::open(file).map_err(|source| Error::Opening {
+        path: file.to_path_buf(),
+        source,
+    })?;
+    recording::read::<V>(std::io::BufReader::new(opened)).map_err(|source| Error::Reading {
+        path: file.to_path_buf(),
+        source,
+    })
 }
 
 /// Everything the oracle adds to what a simulator says.
@@ -238,9 +262,8 @@ fn envelope(reported: &sts2_headless::Response) -> Option<(u64, &str, &str)> {
 /// # Errors
 ///
 /// `STS2_GAME_DIR` is unset.
-fn config() -> Result<Config> {
-    let dir =
-        sts2_headless::game_dir_from_env().context("set STS2_GAME_DIR to the game's directory")?;
+fn config() -> Result<Config, Error> {
+    let dir = sts2_headless::game_dir_from_env().ok_or(Error::NoGameDir)?;
 
     Ok(Config::new(dir))
 }

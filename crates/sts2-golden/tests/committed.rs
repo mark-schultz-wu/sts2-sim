@@ -31,8 +31,8 @@ fn updating() -> bool {
 fn the_committed_files_say_what_the_game_said() {
     let mut rewritten = Vec::new();
 
-    for name in every_run() {
-        let recorded = recording::<V>(&name);
+    for name in every_run().expect("the recorded runs are readable") {
+        let recorded = recording::<V>(&name).expect("a recorded run reads");
         let mut oracle = oracle_or_explain(&name, recorded.start());
 
         let mut digests = String::new();

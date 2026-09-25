@@ -22,7 +22,7 @@ name = "sts2-fuzz"
 path = "src/bin/fuzz.rs"
 
 [dependencies]
-anyhow = { workspace = true }
+thiserror = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 num-traits = { workspace = true }

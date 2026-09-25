@@ -13,6 +13,8 @@ sts2-headless = { workspace = true }
 # The reviewable files spell an id by its game name, which is the serde rename.
 serde = { workspace = true }
 serde_json = { workspace = true }
+# What reading the recorded runs finds wrong.
+thiserror = { workspace = true }
 
 [build-dependencies]
 sts2-core = { workspace = true }
@@ -32,6 +34,8 @@ sts2-sim = { workspace = true }
 # The clock, with its own sampling and its own baselines. See the bench table
 # below for why the allocator is counted somewhere else.
 criterion = "0.8.2"
+# The examples' arguments.
+clap = { workspace = true }
 
 # Two benches measure the clock and one measures the allocator, because one
 # binary cannot do both. A counting allocator takes in criterion's own working

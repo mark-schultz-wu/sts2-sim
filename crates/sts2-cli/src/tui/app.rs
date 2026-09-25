@@ -9,7 +9,7 @@
 //! a move the game refuses is a *line in the log* rather than an error. A
 //! refusal is the game answering, and the run carries on.
 
-use anyhow::{Context, Result};
+use super::Error;
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 use sts2_core::{
@@ -164,7 +164,7 @@ where
     /// One key press.
     ///
     /// Raw rather than an [`Action`], for a caller that has one.
-    pub fn key(&mut self, key: KeyEvent) -> Result<()> {
+    pub fn key(&mut self, key: KeyEvent) -> Result<(), Error> {
         let intent = self.decide(key);
         self.perform(intent)
     }
@@ -185,7 +185,7 @@ where
     ///
     /// The one place in the front end that talks to the game while it is being
     /// played.
-    fn perform(&mut self, intent: Intent<V>) -> Result<()> {
+    fn perform(&mut self, intent: Intent<V>) -> Result<(), Error> {
         match intent {
             Intent::Nothing => Ok(()),
             Intent::Look => self.look(),
@@ -198,7 +198,7 @@ where
     /// The daemon's game can idle out from under a live screen. What comes back
     /// says which happened, because a run that is gone wants the setup screen
     /// rather than a window onto nothing.
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<Ended> {
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<Ended, Error> {
         // One look before the first frame, so the screen is the run rather than
         // an empty shape waiting for a key.
         self.look()?;
@@ -206,12 +206,15 @@ where
         while !self.ui.leaving {
             terminal
                 .draw(|frame| screen::draw(frame, &self))
-                .context("drawing the screen")?;
+                .map_err(|source| Error::Draw {
+                    screen: "screen",
+                    source,
+                })?;
 
             // Blocked on, not polled. A player thinking about a card sends
             // nothing, and nothing is what should happen: the daemon keeps the
             // game alive on its own, so the screen has no clock to answer to.
-            match event::read().context("reading a key")? {
+            match event::read().map_err(Error::Key)? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => self.key(key)?,
                 // A resize repaints on the next pass round the loop, which is
                 // the next statement. Nothing else to do.
@@ -723,19 +726,27 @@ where
     // Talking to the game.
     // -----------------------------------------------------------------------
 
-    fn look(&mut self) -> Result<()> {
-        let standing = self.game.observe().context("asking the game where it is")?;
+    fn look(&mut self) -> Result<(), Error> {
+        let standing = self
+            .game
+            .observe()
+            .map_err(|e| Error::Looking(Box::new(e)))?;
         self.arrive(standing);
         Ok(())
     }
 
     /// Sends one decision, and reports whether the game accepted it.
-    fn send(&mut self, decision: Decision<V>) -> Result<bool> {
+    fn send(&mut self, decision: Decision<V>) -> Result<bool, Error> {
         let said = moves::describe(&decision);
-        let answered = self
-            .game
-            .play(&decision)
-            .with_context(|| format!("sending {said}"))?;
+        let answered = match self.game.play(&decision) {
+            Ok(answered) => answered,
+            Err(e) => {
+                return Err(Error::Sending {
+                    said,
+                    source: Box::new(e),
+                });
+            }
+        };
         Ok(self.accept(answered, Some(said)))
     }
 

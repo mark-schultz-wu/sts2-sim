@@ -12,6 +12,11 @@
 mod layer;
 
 use std::fmt::Write as _;
+use std::io;
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use clap::Parser;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{Play as _, Step};
@@ -37,21 +42,48 @@ fn map_path(out: &str) -> String {
 /// as it is in the `instructions` replay.
 const REPLAYS: usize = 20;
 
-fn main() {
-    let out = std::env::args()
-        .nth(1)
-        .expect("usage: sts2-trace <folded file to write>");
+/// Replay the recorded run traced, and write where its instructions went.
+#[derive(Parser)]
+struct Cli {
+    /// The folded file to write. Map generation's goes beside it.
+    out: String,
+}
 
-    let name = every_run()
-        .into_iter()
-        .next()
-        .expect("a recorded run to replay");
-    let recorded = recording::<V>(&name);
+/// Why no trace was written.
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    Golden(#[from] sts2_golden::Error),
+    #[error("{name} does not start a run: {source}")]
+    Begin {
+        name: String,
+        source: sts2_sim::Error,
+    },
+    #[error("writing {}: {source}", path.display())]
+    Write { path: PathBuf, source: io::Error },
+}
+
+fn main() -> ExitCode {
+    match run(Cli::parse()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run(Cli { out }: Cli) -> Result<(), Error> {
+    let name = every_run()?.swap_remove(0);
+    let recorded = recording::<V>(&name)?;
     let start = recorded.start().clone();
     let steps: Vec<Step<V>> = recorded.steps().to_vec();
     let supported = reached::<V, Sim<V>>(&start, &steps);
+    if let Err(source) = Sim::<V>::begin((), &start) {
+        return Err(Error::Begin { name, source });
+    }
     let replay = || {
-        let mut sim = Sim::<V>::begin((), &start).expect("a recording starts a run");
+        let mut sim = Sim::<V>::begin((), &start).expect("the run began once already");
         for step in &steps[..supported] {
             let _ = std::hint::black_box(sim.advance(step));
         }
@@ -79,14 +111,14 @@ fn main() {
         writeln!(text, "{path} {own} {calls}").unwrap();
         total += own;
     }
-    std::fs::write(&out, text).unwrap_or_else(|e| panic!("writing {out}: {e}"));
+    write(&out, text)?;
     // Map generation apart, counted per map built rather than per step.
     let mut text = format!("# steps {} period 1\n", folded.splits);
     for (path, own, calls) in &folded.under {
         writeln!(text, "{path} {own} {calls}").unwrap();
     }
     let maps = map_path(&out);
-    std::fs::write(&maps, text).unwrap_or_else(|e| panic!("writing {maps}: {e}"));
+    write(&maps, text)?;
     println!(
         "{name}: {supported} steps, {total} instructions outside map generation, {} per step\n\
          map generation {} left out, and {} per span taken off its parent, \
@@ -97,4 +129,12 @@ fn main() {
         overhead.per_level,
         overhead.own,
     );
+    Ok(())
+}
+
+fn write(path: &str, text: String) -> Result<(), Error> {
+    std::fs::write(path, text).map_err(|source| Error::Write {
+        path: path.into(),
+        source,
+    })
 }

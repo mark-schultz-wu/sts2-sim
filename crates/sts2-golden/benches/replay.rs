@@ -30,8 +30,8 @@ use sts2_sim::Sim;
 type V = V0_107_1;
 
 fn replays(c: &mut Criterion) {
-    for name in every_run() {
-        let recorded = recording::<V>(&name);
+    for name in every_run().expect("the recorded runs are readable") {
+        let recorded = recording::<V>(&name).expect("a recorded run reads");
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
 

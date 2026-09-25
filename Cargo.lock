@@ -1792,7 +1792,6 @@ dependencies = [
 name = "sts2-cli"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "num-traits",
  "ratatui",
@@ -1802,6 +1801,7 @@ dependencies = [
  "sts2-content-wire",
  "sts2-core",
  "sts2-headless",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1844,6 +1844,7 @@ dependencies = [
 name = "sts2-golden"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "criterion",
  "serde",
  "serde_json",
@@ -1852,13 +1853,13 @@ dependencies = [
  "sts2-core",
  "sts2-headless",
  "sts2-sim",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "sts2-headless"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "nonmax",
  "num-traits",
  "serde",
@@ -1875,6 +1876,7 @@ name = "sts2-sim"
 version = "0.1.0"
 dependencies = [
  "bitfield-struct",
+ "clap",
  "indexmap",
  "nonmax",
  "num-traits",
@@ -1889,11 +1891,13 @@ dependencies = [
 name = "sts2-trace"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "perf-event2",
  "sts2-content",
  "sts2-core",
  "sts2-golden",
  "sts2-sim",
+ "thiserror 2.0.20",
  "tracing",
  "tracing-subscriber",
 ]

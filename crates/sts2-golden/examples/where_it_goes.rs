@@ -18,7 +18,10 @@
 //! The lowest of [`ROUNDS`] walks for each step, because a step runs once and
 //! the interruptions only ever add.
 
+use std::process::ExitCode;
 use std::time::{Duration, Instant};
+
+use clap::Parser;
 
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{Construct, Play, Step};
@@ -31,9 +34,32 @@ type V = V0_107_1;
 /// How many times each step is walked.
 const ROUNDS: usize = 40;
 
-fn main() {
-    for name in every_run() {
-        let recorded = recording::<V>(&name);
+/// Time every step of each recorded run where it falls, by kind.
+#[derive(Parser)]
+struct Cli {}
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    Golden(#[from] sts2_golden::Error),
+    #[error("starting the run: {0}")]
+    Begin(#[source] sts2_sim::Error),
+}
+
+fn main() -> ExitCode {
+    let Cli {} = Cli::parse();
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Error> {
+    for name in every_run()? {
+        let recorded = recording::<V>(&name)?;
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
         let supported = reached::<V, Sim<V>>(&start, &steps);
@@ -41,10 +67,10 @@ fn main() {
 
         let reported = walk(&start, played, |sim, step| {
             let _ = sim.step(step);
-        });
+        })?;
         let searched = walk(&start, played, |sim, step| {
             let _ = sim.advance(step);
-        });
+        })?;
 
         let total: Duration = reported.iter().sum();
         let mut kinds: Vec<(String, usize, Duration, Duration)> = Vec::new();
@@ -89,6 +115,7 @@ fn main() {
             (total - searched).as_secs_f64() / total.as_secs_f64() * 100.0,
         );
     }
+    Ok(())
 }
 
 /// The lowest time each step took over [`ROUNDS`] walks of the recording.
@@ -96,15 +123,15 @@ fn walk(
     start: &sts2_core::Start<V>,
     steps: &[Step<V>],
     mut take: impl FnMut(&mut Sim<V>, &Step<V>),
-) -> Vec<Duration> {
+) -> Result<Vec<Duration>, Error> {
     let mut best = vec![Duration::MAX; steps.len()];
     for _ in 0..ROUNDS {
-        let mut sim = Sim::<V>::begin((), start).expect("a recording starts a run");
+        let mut sim = Sim::<V>::begin((), start).map_err(Error::Begin)?;
         for (at, step) in steps.iter().enumerate() {
             let began = Instant::now();
             take(&mut sim, step);
             best[at] = best[at].min(began.elapsed());
         }
     }
-    best
+    Ok(best)
 }
