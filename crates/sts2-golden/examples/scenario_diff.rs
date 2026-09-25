@@ -7,7 +7,10 @@
 //! Walks the scenario on the simulator and on the game's cached transcript,
 //! step by step. It stops at the first step whose sections or question
 //! differ. Each side's whole snapshot goes to `<out dir>/<name>.sim` and
-//! `.game`, and the step and the sections are printed. The cache is what `just scenarios`
+//! `.game`, and the step and the sections are printed.
+//!
+//! With `--sim` it walks the simulator alone, which a scenario the game has
+//! not answered yet needs, and prints how far it got. The cache is what `just scenarios`
 //! left, so no game is launched.
 
 use std::path::{Path, PathBuf};
@@ -26,6 +29,9 @@ struct Cli {
     name: String,
     /// Where the two snapshots are written.
     out: PathBuf,
+    /// Walk the simulator alone.
+    #[arg(long)]
+    sim: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -85,7 +91,13 @@ where
     Play::<V>::observe(driven).map_err(|e| failed(e.to_string()))
 }
 
-fn run(Cli { name, out }: Cli) -> Result<(), Error> {
+fn run(
+    Cli {
+        name,
+        out,
+        sim: alone,
+    }: Cli,
+) -> Result<(), Error> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/scenarios");
     let written = sts2_golden::suite::read_suite(&dir).map_err(Error::Suite)?;
     let entry = written
@@ -108,6 +120,13 @@ fn run(Cli { name, out }: Cli) -> Result<(), Error> {
             name: name.clone(),
             source,
         })?;
+    if alone {
+        for (at, taken) in recorded.steps().iter().enumerate() {
+            step("the simulator", at + 1, &mut sim, taken)?;
+        }
+        println!("the simulator takes all {} steps", recorded.steps().len());
+        return Ok(());
+    }
     let mut game = sts2_golden::oracle_or_explain::<V>(&name, recorded.start());
     for (at, taken) in recorded.steps().iter().enumerate() {
         let at = at + 1;

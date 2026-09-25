@@ -482,7 +482,7 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
             effect => live.leaving.push(effect),
         }
     }
-    for (_, effect) in notify::<V>(live, relics, EventHook::CombatVictory) {
+    for (_, effect) in notify::<V>(live, relics, EventHook::CombatVictory { room }) {
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
             HookEffect::Heal(amount) => {

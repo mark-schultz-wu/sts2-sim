@@ -551,10 +551,13 @@ pub enum ModelHook {
     ModifyCardRewardUpgradeOdds,
     TryModifyCardRewardOptions,
     TryModifyCardRewardOptionsLate,
+    ModifyGoldGained,
+    AfterModifyingGoldGained,
+    AfterGoldGained,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 60] = [
+    pub const ALL: [ModelHook; 63] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -615,6 +618,9 @@ impl ModelHook {
         ModelHook::ModifyCardRewardUpgradeOdds,
         ModelHook::TryModifyCardRewardOptions,
         ModelHook::TryModifyCardRewardOptionsLate,
+        ModelHook::ModifyGoldGained,
+        ModelHook::AfterModifyingGoldGained,
+        ModelHook::AfterGoldGained,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -686,6 +692,9 @@ impl ModelHook {
             ModelHook::ModifyCardRewardUpgradeOdds => "ModifyCardRewardUpgradeOdds",
             ModelHook::TryModifyCardRewardOptions => "TryModifyCardRewardOptions",
             ModelHook::TryModifyCardRewardOptionsLate => "TryModifyCardRewardOptionsLate",
+            ModelHook::ModifyGoldGained => "ModifyGoldGained",
+            ModelHook::AfterModifyingGoldGained => "AfterModifyingGoldGained",
+            ModelHook::AfterGoldGained => "AfterGoldGained",
         }
     }
 }
@@ -1979,8 +1988,10 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterRestSiteHeal`, once a rest site's heal has landed.
     RestSiteHeal,
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
-    /// run won.
-    CombatVictory,
+    /// run won, in a room of this type.
+    CombatVictory {
+        room: V::RoomType,
+    },
     /// `AfterEnergyResetLate`, straight after `AfterEnergyReset`.
     EnergyResetLate {
         player: crate::CombatId,
@@ -2129,7 +2140,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
             EventHook::RestSiteHeal => ModelHook::AfterRestSiteHeal,
-            EventHook::CombatVictory => ModelHook::AfterCombatVictory,
+            EventHook::CombatVictory { .. } => ModelHook::AfterCombatVictory,
             EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
@@ -2218,6 +2229,9 @@ pub enum CustomReward {
     CharacterCards(usize),
     /// `PotionReward(player)`, a random potion out of combat.
     Potion,
+    /// `PotionReward(potion, player)` for one `Rng.NextItem` over
+    /// [`Rules::unlocked_potions`] off the rewards stream.
+    UnlockedPotion,
 }
 
 /// A deck card a relic names rather than asks for.
@@ -2317,6 +2331,10 @@ pub enum HookEffect<V: ContentVersion> {
     LoseGold(V::Number),
     /// `RelicCmd.Obtain`, and whatever the relic's pickup asks.
     ObtainRelic(V::Relic),
+    /// `RelicFactory.PullNextRelicFromFront(player)`: a rarity rolled off the
+    /// rewards stream and the next relic of it from the player's bag, then
+    /// `RelicCmd.Obtain`.
+    ObtainNextRelic,
     /// `EventModel.SetEventFinished`, the last thing an option that ends its
     /// event does. The room then offers nothing, and the run goes on.
     FinishEvent,
@@ -3309,6 +3327,11 @@ pub trait Rules: Hooks {
     /// `Character.PotionPool` and the shared pool together, which is
     /// `PotionFactory.GetPotionOptions`.
     fn reward_potions(character: Self::Character) -> Drafted<'static, Self::Potion>;
+
+    /// `PotionPoolModel.GetUnlockedPotions` over the character's pool, then
+    /// over the shared one, each in its pool's order. A run has every potion
+    /// unlocked.
+    fn unlocked_potions(character: Self::Character) -> &'static [Self::Potion];
 
     /// What winning an encounter pays, which is `MinGoldReward` to
     /// `MaxGoldReward`.
