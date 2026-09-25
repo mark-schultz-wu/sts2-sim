@@ -17,6 +17,7 @@ mod asm;
 mod codegen;
 mod dump;
 mod instructions;
+mod plays;
 mod trace;
 
 use std::process::ExitCode;

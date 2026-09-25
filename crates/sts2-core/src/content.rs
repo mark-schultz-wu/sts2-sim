@@ -1375,7 +1375,8 @@ pub enum Change<V: ContentVersion> {
     /// `CardModel.AddKeyword`: the copy carries a word its table does not.
     ///
     /// The word is on the copy for as long as the copy lasts. `RemoveKeyword`
-    /// exists and nothing on this build calls it.
+    /// has no variant: only Know Thy Place's upgrade calls it, and that
+    /// upgrade panics until someone ports it.
     AddKeyword(V::CardKeyword),
 }
 

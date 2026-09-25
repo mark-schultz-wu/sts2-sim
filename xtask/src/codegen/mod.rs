@@ -19,6 +19,7 @@ mod acts;
 mod afflictions;
 mod ascension;
 mod bridge;
+mod card_plays;
 mod cards;
 mod characters;
 mod enchantments;
@@ -188,16 +189,22 @@ struct Build {
     version: String,
     commit: String,
     assembly_hash: i64,
-    content_hash: u32,
+    /// `None` for a dump read off the assembly, which has no running game to
+    /// work the hash out.
+    content_hash: Option<u32>,
 }
 
 impl std::fmt::Display for Build {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} ({}), assembly {}, content {}",
-            self.version, self.commit, self.assembly_hash, self.content_hash
-        )
+            "{} ({}), assembly {}",
+            self.version, self.commit, self.assembly_hash
+        )?;
+        match self.content_hash {
+            Some(hash) => write!(f, ", content {hash}"),
+            None => Ok(()),
+        }
     }
 }
 
@@ -211,7 +218,18 @@ struct Dump {
 }
 
 impl Dump {
+    /// A dump the game printed, whose header names the content hash.
     fn read(name: &str) -> Result<Dump, String> {
+        let dump = Dump::read_any(name)?;
+        match dump.build.content_hash {
+            Some(_) => Ok(dump),
+            None => Err(format!("{name}'s build header names no content hash")),
+        }
+    }
+
+    /// A dump whose header need not name the content hash, which is one read
+    /// off the decompiled assembly.
+    fn read_any(name: &str) -> Result<Dump, String> {
         let path = version_dir()?.join("dumps").join(name);
         let text =
             fs::read_to_string(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
@@ -245,9 +263,13 @@ impl Dump {
         };
 
         let assembly_hash = number("assembly hash", field("assembly")?)?;
-        let content_hash = number("content hash", field("content")?)?;
-        let content_hash = u32::try_from(content_hash)
-            .map_err(|e| format!("{name}'s content hash does not fit a u32: {e}"))?;
+        let content_hash = match field("content") {
+            Ok(raw) => Some(
+                u32::try_from(number("content hash", raw)?)
+                    .map_err(|e| format!("{name}'s content hash does not fit a u32: {e}"))?,
+            ),
+            Err(_) => None,
+        };
 
         let rows = text
             .lines()
@@ -355,6 +377,10 @@ pub fn run() -> Result<String, String> {
         }
     }
 
+    // Read off the assembly rather than printed by the game, so checked
+    // against the tables' build by hand.
+    card_plays::generate(&root, build)?;
+
     // The roll-up. One line per domain, so adding relics is adding a dump, a
     // module, and an entry in `DOMAINS`.
     let mut out = format!(
@@ -363,6 +389,7 @@ pub fn run() -> Result<String, String> {
     for domain in DOMAINS {
         writeln!(out, "pub mod {domain};").unwrap();
     }
+    writeln!(out, "pub mod card_plays;").unwrap();
     let path = root.join("mod.rs");
     fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
 

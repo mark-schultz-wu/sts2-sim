@@ -1,21 +1,11 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{Amount, CardVars, CostPool, Effect, Fight, Played, Scaling};
+use sts2_core::{Amount, CardVars, Effect, Fight, Played, Scaling};
 
+use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
 use super::super::super::generated::powers::Power;
-use super::{Change, Number, V};
-
-/// `Upgrade`, which raises what these cards print.
-pub(super) fn upgrade(card: TokenCard) -> &'static [Change] {
-    match card {
-        TokenCard::MinionStrike => &[Change::Raise(CardVar::Damage, 3)],
-        // `SovereignBlade.OnUpgrade` is `EnergyCost.UpgradeBy(-1)`, and it
-        // raises nothing the card prints.
-        TokenCard::SovereignBlade => &[Change::ChangeCost(CostPool::Energy, -1)],
-        card => unimplemented!("card upgrade: {card:?}"),
-    }
-}
+use super::{Number, V};
 
 /// What a card works out from the fight for a number it prints.
 pub(super) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
@@ -64,24 +54,9 @@ pub(super) fn computed_target(card: TokenCard, powers: &[sts2_core::Stack<V>]) -
 
 pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> {
     match card {
-        TokenCard::MinionStrike => minion_strike(fight),
         TokenCard::SovereignBlade => sovereign_blade(fight),
-        card => unimplemented!("what {card:?} does when it is played"),
+        card => card_plays::token::on_play(card, fight),
     }
-}
-
-/// `MinionStrike`. Deal damage, then draw.
-fn minion_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let target = fight.target();
-    let attack = fight.resolve(Effect::Attack {
-        dealer: fight.actor(),
-        target,
-        damage: Amount::Var(CardVar::Damage),
-        scaling: Scaling::Dynamic,
-    });
-    fight.apply(attack);
-    fight.draw(fight.var(CardVar::Cards));
-    Played::Done
 }
 
 /// `SovereignBlade`. Deal its damage, as many times as it repeats.

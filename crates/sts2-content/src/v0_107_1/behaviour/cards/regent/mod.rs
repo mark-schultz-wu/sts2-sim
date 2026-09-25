@@ -1,14 +1,12 @@
-//! The Regent's cards, filed by rarity.
+//! The Regent's cards the generator leaves to a hand port, filed by rarity.
 
-use sts2_core::{CardTable, Fight, Played};
+use sts2_core::{Fight, Played};
 
-use super::super::super::generated::cards::{CardRarity, Cards, RegentCard};
-use super::{Change, V};
+use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::RegentCard;
+use super::V;
 
-mod basic;
 mod common;
-mod rare;
-mod uncommon;
 
 /// Where a Regent card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,42 +15,11 @@ pub enum Resume {
     BegoneTransform,
 }
 
-/// `Upgrade` for the Regent's cards, under the rarity the table files each
-/// one by.
-///
-/// A rarity gets a module when its first card is upgraded. A card from a
-/// rarity nobody has reached stops here instead.
-pub(super) fn upgrade(card: RegentCard) -> &'static [Change] {
-    match Cards::Regent(card).rarity() {
-        CardRarity::Basic => basic::upgrade(card),
-        CardRarity::Common => common::upgrade(card),
-        CardRarity::Uncommon => uncommon::upgrade(card),
-        CardRarity::Rare => rare::upgrade(card),
-        _ => unimplemented!("card upgrade: {card:?}"),
-    }
-}
-
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
     match card {
-        RegentCard::Strike => basic::strike(fight),
-        RegentCard::Defend => basic::defend(fight),
-        RegentCard::FallingStar => basic::falling_star(fight),
-        RegentCard::Venerate => basic::venerate(fight),
-        RegentCard::GuidingStar => common::guiding_star(fight),
-        RegentCard::GatherLight => common::gather_light(fight),
         RegentCard::Glitterstream => common::glitterstream(fight),
-        RegentCard::KnowThyPlace => common::know_thy_place(fight),
-        RegentCard::RefineBlade => common::refine_blade(fight),
-        RegentCard::SpoilsOfBattle => common::spoils_of_battle(fight),
-        RegentCard::WroughtInWar => common::wrought_in_war(fight),
         RegentCard::Begone => common::begone(),
-        RegentCard::CrushUnder => common::crush_under(fight),
-        RegentCard::Bulwark => uncommon::bulwark(fight),
-        RegentCard::Furnace => uncommon::furnace(fight),
-        RegentCard::TheSmith => rare::the_smith(fight),
-        RegentCard::BigBang => rare::big_bang(fight),
-        RegentCard::SwordSage => rare::sword_sage(fight),
-        card => unimplemented!("what {card:?} does when it is played"),
+        card => card_plays::regent::on_play(card, fight),
     }
 }
 

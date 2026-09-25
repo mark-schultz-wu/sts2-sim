@@ -1,22 +1,26 @@
-//! `CardModel.OnPlay`, ported.
+//! `CardModel.OnPlay`, and the rest of what a card does, ported.
+//!
+//! `generated/card_plays/` holds every play and upgrade whose statements the
+//! generator matched. What is here is the rest: the plays it left to a hand
+//! port, and every hook a card overrides.
 //!
 //! One module per pool, filed the way `generated/cards/` is, so a card's
 //! behaviour sits under the same name as its row. A pool gets a module when
-//! its first card is ported.
+//! its first card is ported by hand.
 //!
-//! [`on_play`] panics for a card nobody has ported, so this tree is also the
-//! list of what the simulator can play. A card outside it stops the run where
-//! it stands rather than playing as if it did nothing.
+//! [`on_play`] panics for a card neither the generator nor a hand port
+//! covers. A card outside both stops the run where it stands rather than
+//! playing as if it did nothing.
 
 use sts2_core::{CardVars, Fight, Played};
 
 use super::super::V0_107_1;
+use super::super::generated::card_plays;
 use super::super::generated::cards::{CardVar, Cards};
 
 /// What the run holds a card's numbers as.
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
-mod colorless;
 mod regent;
 mod status;
 mod token;
@@ -25,17 +29,26 @@ type V = V0_107_1;
 
 /// What a card's first upgrade writes on the copy being upgraded.
 ///
-/// `CardModel.Upgrade`, which each card overrides to raise the numbers it
-/// prints. Filed the way the play is: by pool here, then by the card's own
-/// rarity.
+/// `CardModel.OnUpgrade`, which each card overrides to raise the numbers it
+/// prints. Every one the generator matched is generated, and nothing on this
+/// build is ported by hand.
 ///
 /// Declared rather than applied: an upgrade writes in the same vocabulary any
 /// other effect does, and the fight owns the copy it writes on.
 pub(crate) fn upgrade(card: Cards) -> &'static [Change] {
     match card {
-        Cards::Regent(card) => regent::upgrade(card),
-        Cards::Token(card) => token::upgrade(card),
-        card => unimplemented!("card upgrade: {card:?}"),
+        Cards::Ironclad(card) => card_plays::ironclad::upgrade(card),
+        Cards::Silent(card) => card_plays::silent::upgrade(card),
+        Cards::Regent(card) => card_plays::regent::upgrade(card),
+        Cards::Necrobinder(card) => card_plays::necrobinder::upgrade(card),
+        Cards::Defect(card) => card_plays::defect::upgrade(card),
+        Cards::Colorless(card) => card_plays::colorless::upgrade(card),
+        Cards::Curse(card) => card_plays::curse::upgrade(card),
+        Cards::Event(card) => card_plays::event::upgrade(card),
+        Cards::Quest(card) => card_plays::quest::upgrade(card),
+        Cards::Status(card) => card_plays::status::upgrade(card),
+        Cards::Token(card) => card_plays::token::upgrade(card),
+        Cards::Deprecated(card) => card_plays::deprecated::upgrade(card),
     }
 }
 
@@ -76,27 +89,36 @@ pub enum Resume {
 #[tracing::instrument(level = "trace", skip_all, fields(card = ?card))]
 pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
     match card {
-        Cards::Colorless(card) => colorless::on_play(card, fight),
+        Cards::Ironclad(card) => card_plays::ironclad::on_play(card, fight),
+        Cards::Silent(card) => card_plays::silent::on_play(card, fight),
         Cards::Regent(card) => regent::on_play(card, fight),
-        Cards::Status(card) => status::on_play(card, fight),
+        Cards::Necrobinder(card) => card_plays::necrobinder::on_play(card, fight),
+        Cards::Defect(card) => card_plays::defect::on_play(card, fight),
+        Cards::Colorless(card) => card_plays::colorless::on_play(card, fight),
+        Cards::Curse(card) => card_plays::curse::on_play(card, fight),
+        Cards::Event(card) => card_plays::event::on_play(card, fight),
+        Cards::Quest(card) => card_plays::quest::on_play(card, fight),
+        Cards::Status(card) => card_plays::status::on_play(card, fight),
         Cards::Token(card) => token::on_play(card, fight),
-        // Nothing from these pools is ported. Named rather than left to a
-        // wildcard, so a build that adds a pool stops here.
-        Cards::Ironclad(_)
-        | Cards::Silent(_)
-        | Cards::Necrobinder(_)
-        | Cards::Defect(_)
-        | Cards::Curse(_)
-        | Cards::Event(_)
-        | Cards::Quest(_)
-        | Cards::Deprecated(_) => unimplemented!("what {card:?} does when it is played"),
+        Cards::Deprecated(card) => card_plays::deprecated::on_play(card, fight),
     }
 }
 
 /// What a card still in the hand does when its owner's turn ends.
 pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
-    if let Cards::Status(card) = card {
-        status::on_turn_end(card, fight);
+    match card {
+        Cards::Ironclad(card) => card_plays::ironclad::on_turn_end(card, fight),
+        Cards::Silent(card) => card_plays::silent::on_turn_end(card, fight),
+        Cards::Regent(card) => card_plays::regent::on_turn_end(card, fight),
+        Cards::Necrobinder(card) => card_plays::necrobinder::on_turn_end(card, fight),
+        Cards::Defect(card) => card_plays::defect::on_turn_end(card, fight),
+        Cards::Colorless(card) => card_plays::colorless::on_turn_end(card, fight),
+        Cards::Curse(card) => card_plays::curse::on_turn_end(card, fight),
+        Cards::Event(card) => card_plays::event::on_turn_end(card, fight),
+        Cards::Quest(card) => card_plays::quest::on_turn_end(card, fight),
+        Cards::Status(card) => status::on_turn_end(card, fight),
+        Cards::Token(card) => card_plays::token::on_turn_end(card, fight),
+        Cards::Deprecated(card) => card_plays::deprecated::on_turn_end(card, fight),
     }
 }
 
