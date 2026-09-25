@@ -414,6 +414,14 @@ impl sts2_core::Rules for V0_107_1 {
         generated::potions::unlocked_potions(character)
     }
 
+    fn can_enchant(enchantment: Self::Enchantment, card: &sts2_core::CardIdent<Self>) -> bool {
+        behaviour::enchantments::can_enchant(enchantment, card)
+    }
+
+    fn enchant(enchantment: Self::Enchantment, card: &mut sts2_core::CardIdent<Self>) {
+        behaviour::enchantments::enchant(enchantment, card);
+    }
+
     fn encounter_gold(
         encounter: Self::Encounter,
         ascension: Self::AscensionLevel,

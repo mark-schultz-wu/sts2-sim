@@ -833,6 +833,14 @@ impl<V: Rules> State<V> {
                         && V::card_kind(card.card) != Some(sts2_core::CardKind::Quest)
                 })
                 .collect(),
+            sts2_core::DeckAct::TransformBasicInto(_) => deck
+                .filter(|(_, card)| {
+                    !card.card.eternal() && card.card.rarity() == sts2_core::CardRarityKinds::BASIC
+                })
+                .collect(),
+            sts2_core::DeckAct::Enchant(enchantment) => deck
+                .filter(|(_, card)| V::can_enchant(enchantment, card))
+                .collect(),
         }
     }
 
@@ -890,6 +898,23 @@ impl<V: Rules> State<V> {
                 self.player
                     .deck_mut()
                     .extend(replaced.into_iter().map(|(_, card)| card));
+            }
+            // `CardCmd.TransformTo`, which lands the named card where
+            // `CardCmd.Transform` lands a drawn one.
+            sts2_core::DeckAct::TransformBasicInto(into) => {
+                let mut gone = taken.to_vec();
+                gone.sort_unstable_by(|a, b| b.cmp(a));
+                for &at in &gone {
+                    self.player.deck_mut().remove(at);
+                }
+                self.player
+                    .deck_mut()
+                    .extend(gone.iter().map(|_| CardIdent::new(into)));
+            }
+            sts2_core::DeckAct::Enchant(enchantment) => {
+                for &at in taken {
+                    V::enchant(enchantment, &mut self.player.deck_mut()[at]);
+                }
             }
         }
     }
@@ -1225,6 +1250,11 @@ impl<V: Rules> State<V> {
                     self.damage_owner(amount);
                     continue;
                 }
+                HookEffect::Heal(amount) => {
+                    let amount = self.health(amount);
+                    self.heal(amount);
+                    continue;
+                }
                 HookEffect::OfferRewards(rewards) => Pickup::Rewards {
                     offered: self.custom_rewards(rewards),
                 },
@@ -1241,20 +1271,31 @@ impl<V: Rules> State<V> {
                     }
                     Pickup::FromDeck { act, count }
                 }
-                HookEffect::ChooseUniformCards {
+                HookEffect::ChooseCards {
+                    draw,
                     count,
-                    rarity,
                     min,
                     max,
-                } => Pickup::Cards {
-                    offered: self
-                        .uniform_cards(count, rarity)
-                        .into_iter()
-                        .map(CardIdent::new)
-                        .collect(),
-                    min,
-                    max,
-                },
+                } => {
+                    let drawn = match draw {
+                        sts2_core::CardDraw::Uniform(rarity) => self.uniform_cards(count, rarity),
+                        sts2_core::CardDraw::Regular => {
+                            self.card_reward_unheard();
+                            let character = self.character();
+                            crate::reward::card::regular::<V, _>(
+                                self.streams.player(V::PlayerRngType::REWARDS),
+                                V::reward_cards(character),
+                                count,
+                                false,
+                            )
+                        }
+                    };
+                    Pickup::Cards {
+                        offered: drawn.into_iter().map(CardIdent::new).collect(),
+                        min,
+                        max,
+                    }
+                }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
             };
             return Some(Asked {
@@ -1377,10 +1418,12 @@ impl<V: Rules> State<V> {
         use sts2_core::CustomReward;
 
         let character = self.character();
-        if rewards
-            .iter()
-            .any(|reward| matches!(reward, CustomReward::CharacterCards(_)))
-        {
+        if rewards.iter().any(|reward| {
+            matches!(
+                reward,
+                CustomReward::CharacterCards(_) | CustomReward::ColorlessCards(_)
+            )
+        }) {
             self.card_reward_unheard();
         }
         let mut offered: Vec<Offer<V>> = rewards
@@ -1393,6 +1436,7 @@ impl<V: Rules> State<V> {
                             rng,
                             V::reward_cards(character),
                             count,
+                            true,
                         )
                         .into_iter()
                         .map(CardIdent::new)
@@ -1401,6 +1445,18 @@ impl<V: Rules> State<V> {
                     },
                     CustomReward::Potion => Offer::Potion {
                         potion: crate::reward::potion::rolled::<V, _>(rng, character),
+                        taken: false,
+                    },
+                    CustomReward::ColorlessCards(count) => Offer::Card {
+                        cards: crate::reward::card::regular::<V, _>(
+                            rng,
+                            V::colorless_cards(),
+                            count,
+                            false,
+                        )
+                        .into_iter()
+                        .map(CardIdent::new)
+                        .collect(),
                         taken: false,
                     },
                     CustomReward::UnlockedPotion => {
@@ -2215,6 +2271,7 @@ impl<V: Rules> State<V> {
             self.streams.player(V::PlayerRngType::REWARDS),
             V::colorless_cards(),
             2,
+            true,
         );
         Ok(self.park(Asked {
             pickup: Pickup::Cards {

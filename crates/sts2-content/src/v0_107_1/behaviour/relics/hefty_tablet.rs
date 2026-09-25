@@ -1,6 +1,6 @@
 //! `HeftyTablet`: one of three rares, and an Injury either way.
 
-use sts2_core::{EventHook, HookEffect, RewardRarity};
+use sts2_core::{CardDraw, EventHook, HookEffect, RewardRarity};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::cards::{Cards, CurseCard};
@@ -13,9 +13,9 @@ const CARDS: usize = 3;
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     if let EventHook::Obtained = hook {
         asked.extend([
-            HookEffect::ChooseUniformCards {
+            HookEffect::ChooseCards {
+                draw: CardDraw::Uniform(RewardRarity::Rare),
                 count: CARDS,
-                rarity: RewardRarity::Rare,
                 min: 0,
                 max: 1,
             },

@@ -3230,19 +3230,17 @@ pub fn reward_cards(character: Character) -> Drafted<'static, Cards> {
 
 /// The colourless pool, split by rarity.
 ///
-/// `ColorlessCardPool.GenerateAllCards`, which no character holds and
-/// so no reward pool covers. One relic draws from it. The pool's own
-/// order is not the id order: it deals Jack of All Trades before
-/// Jackpot, and the two are the same rarity, so the draw lands
-/// differently.
+/// `ColorlessCardPool.GetUnlockedCards` for a run of one player, which
+/// leaves out the cards only a multiplayer run deals. No character
+/// holds it, so no reward pool covers it. The pool's own order is not
+/// the id order: it deals Jack of All Trades before Jackpot, and the
+/// two are the same rarity, so the draw lands differently.
 pub fn colorless_cards() -> Drafted<'static, Cards> {
     Drafted {
         common: &[],
         uncommon: &[
             Cards::Colorless(ColorlessCard::Automation),
-            Cards::Colorless(ColorlessCard::BelieveInYou),
             Cards::Colorless(ColorlessCard::Catastrophe),
-            Cards::Colorless(ColorlessCard::Coordinate),
             Cards::Colorless(ColorlessCard::DarkShackles),
             Cards::Colorless(ColorlessCard::Discovery),
             Cards::Colorless(ColorlessCard::DramaticEntrance),
@@ -3251,12 +3249,8 @@ pub fn colorless_cards() -> Drafted<'static, Cards> {
             Cards::Colorless(ColorlessCard::Finesse),
             Cards::Colorless(ColorlessCard::Fisticuffs),
             Cards::Colorless(ColorlessCard::FlashOfSteel),
-            Cards::Colorless(ColorlessCard::GangUp),
-            Cards::Colorless(ColorlessCard::HuddleUp),
             Cards::Colorless(ColorlessCard::Impatience),
-            Cards::Colorless(ColorlessCard::Intercept),
             Cards::Colorless(ColorlessCard::JackOfAllTrades),
-            Cards::Colorless(ColorlessCard::Lift),
             Cards::Colorless(ColorlessCard::MindBlast),
             Cards::Colorless(ColorlessCard::Omnislice),
             Cards::Colorless(ColorlessCard::Panache),
@@ -3271,7 +3265,6 @@ pub fn colorless_cards() -> Drafted<'static, Cards> {
             Cards::Colorless(ColorlessCard::Shockwave),
             Cards::Colorless(ColorlessCard::Splash),
             Cards::Colorless(ColorlessCard::Stratagem),
-            Cards::Colorless(ColorlessCard::TagTeam),
             Cards::Colorless(ColorlessCard::TheBomb),
             Cards::Colorless(ColorlessCard::ThinkingAhead),
             Cards::Colorless(ColorlessCard::ThrummingHatchet),
@@ -3282,7 +3275,6 @@ pub fn colorless_cards() -> Drafted<'static, Cards> {
         rare: &[
             Cards::Colorless(ColorlessCard::Alchemize),
             Cards::Colorless(ColorlessCard::Anointed),
-            Cards::Colorless(ColorlessCard::BeaconOfHope),
             Cards::Colorless(ColorlessCard::BeatDown),
             Cards::Colorless(ColorlessCard::Bolas),
             Cards::Colorless(ColorlessCard::Calamity),
@@ -3292,12 +3284,9 @@ pub fn colorless_cards() -> Drafted<'static, Cards> {
             Cards::Colorless(ColorlessCard::HandOfGreed),
             Cards::Colorless(ColorlessCard::HiddenGem),
             Cards::Colorless(ColorlessCard::Jackpot),
-            Cards::Colorless(ColorlessCard::Knockdown),
             Cards::Colorless(ColorlessCard::MasterOfStrategy),
             Cards::Colorless(ColorlessCard::Mayhem),
-            Cards::Colorless(ColorlessCard::Mimic),
             Cards::Colorless(ColorlessCard::Nostalgia),
-            Cards::Colorless(ColorlessCard::Rally),
             Cards::Colorless(ColorlessCard::Rend),
             Cards::Colorless(ColorlessCard::RollingBoulder),
             Cards::Colorless(ColorlessCard::Salvo),
