@@ -3,6 +3,7 @@
 mod aroma_of_chaos;
 mod brain_leech;
 mod byrdonis_nest;
+mod dense_vegetation;
 mod morphic_grove;
 mod orobas;
 mod room_full_of_cheese;
@@ -34,6 +35,7 @@ pub enum State {
     AromaOfChaos(aroma_of_chaos::State),
     BrainLeech(brain_leech::State),
     ByrdonisNest(byrdonis_nest::State),
+    DenseVegetation(dense_vegetation::State),
     MorphicGrove(morphic_grove::State),
     Orobas(orobas::State),
     RoomFullOfCheese(room_full_of_cheese::State),
@@ -90,6 +92,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
     let removable = |card: &sts2_core::CardIdent<V>| !card.card.eternal();
     let basic = |card: &sts2_core::CardIdent<V>| card.card.rarity() == CardRarity::Basic;
     match event {
+        Event::DenseVegetation => dense_vegetation::DenseVegetation.allowed(run),
         Event::BrainLeech => brain_leech::BrainLeech.allowed(run),
         Event::SapphireSeed => sapphire_seed::SapphireSeed.allowed(run),
         Event::WoodCarvings => wood_carvings::WoodCarvings.allowed(run),
@@ -124,8 +127,6 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::TrashHeap => run.hp() > 5,
         // `CurrentHp <= MaxHp * 0.70m`, in whole numbers.
         Event::UnrestSite => run.hp() * 100 <= run.max_hp() * 70,
-        // Its HP check is for a run of more than one player.
-        Event::DenseVegetation => true,
 
         Event::PunchOff => run.floor() >= 6,
         Event::SlipperyBridge => run.floor() > 6 && run.deck().iter().any(removable),
@@ -170,6 +171,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::AromaOfChaos => State::AromaOfChaos(aroma_of_chaos::AromaOfChaos.enter(run, rng)),
         Event::BrainLeech => State::BrainLeech(brain_leech::BrainLeech.enter(run, rng)),
         Event::ByrdonisNest => State::ByrdonisNest(byrdonis_nest::ByrdonisNest.enter(run, rng)),
+        Event::DenseVegetation => {
+            State::DenseVegetation(dense_vegetation::DenseVegetation.enter(run, rng))
+        }
         Event::MorphicGrove => State::MorphicGrove(morphic_grove::MorphicGrove.enter(run, rng)),
         Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
         Event::RoomFullOfCheese => {
@@ -196,6 +200,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
         State::BrainLeech(state) => brain_leech::BrainLeech.observe(state, run),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.observe(state, run),
+        State::DenseVegetation(state) => dense_vegetation::DenseVegetation.observe(state, run),
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.observe(state, run),
         State::Orobas(state) => orobas::Orobas.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
@@ -222,6 +227,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
         State::BrainLeech(state) => brain_leech::BrainLeech.choose(state, option, run, rng),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.choose(state, option, run, rng),
+        State::DenseVegetation(state) => {
+            dense_vegetation::DenseVegetation.choose(state, option, run, rng)
+        }
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.choose(state, option, run, rng),
         State::Orobas(state) => orobas::Orobas.choose(state, option, run, rng),
         State::RoomFullOfCheese(state) => {
