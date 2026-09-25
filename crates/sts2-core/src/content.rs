@@ -512,10 +512,11 @@ pub enum ModelHook {
     ShouldAllowHitting,
     BeforeDeath,
     AfterBlockBroken,
+    AfterCombatVictory,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 34] = [
+    pub const ALL: [ModelHook; 35] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -550,6 +551,7 @@ impl ModelHook {
         ModelHook::ShouldAllowHitting,
         ModelHook::BeforeDeath,
         ModelHook::AfterBlockBroken,
+        ModelHook::AfterCombatVictory,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -591,6 +593,7 @@ impl ModelHook {
             ModelHook::ShouldAllowHitting => "ShouldAllowHitting",
             ModelHook::BeforeDeath => "BeforeDeath",
             ModelHook::AfterBlockBroken => "AfterBlockBroken",
+            ModelHook::AfterCombatVictory => "AfterCombatVictory",
         }
     }
 }
@@ -1750,6 +1753,9 @@ pub enum EventHook<V: ContentVersion> {
     CombatStarting,
     /// `AfterCombatEnd`, for the fight the run has just finished.
     CombatEnd,
+    /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
+    /// run won.
+    CombatVictory,
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
     /// `AfterCardPlayed`, carrying the card its owner just played.
@@ -1883,6 +1889,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatRoomEntered => ModelHook::AfterRoomEntered,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd => ModelHook::AfterCombatEnd,
+            EventHook::CombatVictory => ModelHook::AfterCombatVictory,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
             EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
@@ -1950,6 +1957,12 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `PlayerCmd.GainStars`.
     GainStars(V::Number),
+    /// `CreatureCmd.Heal` on the listener's owner.
+    Heal(V::Number),
+    /// `PlayerCmd.GainGold`, which a run carries out between rooms.
+    GainGold(V::Number),
+    /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
+    AddToDeck(V::Card),
     /// `PlayerCmd.GainEnergy`.
     GainEnergy(V::Number),
     /// `PlayerCmd.LoseEnergy`.

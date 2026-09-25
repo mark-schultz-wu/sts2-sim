@@ -13,12 +13,17 @@
 
 mod anchor;
 mod bone_tea;
+mod burning_blood;
+mod cursed_pearl;
 mod divine_right;
 mod dollys_mirror;
+mod golden_pearl;
 mod gremlin_horn;
 mod lead_paperweight;
+mod neows_torment;
 mod permafrost;
 mod pocketwatch;
+mod ring_of_the_snake;
 mod sand_castle;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
@@ -39,12 +44,17 @@ pub(crate) type Number = <V as sts2_core::ContentVersion>::Number;
 pub enum State {
     Anchor,
     BoneTea(bone_tea::State),
+    BurningBlood,
+    CursedPearl,
     DivineRight,
     DollysMirror,
+    GoldenPearl,
     GremlinHorn,
     LeadPaperweight,
+    NeowsTorment,
     Permafrost(permafrost::State),
     Pocketwatch(pocketwatch::State),
+    RingOfTheSnake,
     SandCastle,
 }
 
@@ -57,12 +67,23 @@ pub(crate) fn event_hook(
     match state {
         State::Anchor => anchor::event_hook(hook, asked),
         State::BoneTea(state) => bone_tea::event_hook(state, hook, asked),
+        State::BurningBlood => burning_blood::event_hook(hook, asked),
+        State::CursedPearl => cursed_pearl::event_hook(hook, asked),
         State::DivineRight => divine_right::event_hook(hook, asked),
         State::DollysMirror => dollys_mirror::event_hook(hook, asked),
+        State::GoldenPearl => golden_pearl::event_hook(hook, asked),
         State::GremlinHorn => gremlin_horn::event_hook(hook, asked),
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
+        State::NeowsTorment => neows_torment::event_hook(hook, asked),
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
+        // Its one hook is `ModifyHandDraw`, which the fight asks of it
+        // rather than tells it. `AfterObtained` reaches every relic, and its
+        // own does nothing.
+        State::RingOfTheSnake => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what RingOfTheSnake does for {hook:?}"),
+        },
         State::SandCastle => sand_castle::event_hook(hook, asked),
     }
 }
@@ -71,14 +92,19 @@ pub(crate) fn event_hook(
 pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
+        State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::Anchor
         | State::BoneTea(_)
+        | State::BurningBlood
+        | State::CursedPearl
         | State::DivineRight
         | State::DollysMirror
+        | State::GoldenPearl
         | State::GremlinHorn
         | State::LeadPaperweight
+        | State::NeowsTorment
         | State::Permafrost(_)
         | State::SandCastle => unimplemented!("what {state:?} does for {hook:?}"),
     }
@@ -94,12 +120,17 @@ impl sts2_core::RelicModel<V> for State {
         match relic {
             Relic::Anchor => State::Anchor,
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
+            Relic::BurningBlood => State::BurningBlood,
+            Relic::CursedPearl => State::CursedPearl,
             Relic::DivineRight => State::DivineRight,
             Relic::DollysMirror => State::DollysMirror,
+            Relic::GoldenPearl => State::GoldenPearl,
             Relic::GremlinHorn => State::GremlinHorn,
             Relic::LeadPaperweight => State::LeadPaperweight,
+            Relic::NeowsTorment => State::NeowsTorment,
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
+            Relic::RingOfTheSnake => State::RingOfTheSnake,
             Relic::SandCastle => State::SandCastle,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }

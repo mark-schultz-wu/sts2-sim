@@ -403,19 +403,40 @@ fn decides<V: Rules>(
     decided
 }
 
-/// `AfterCombatEnd`, raised on every listener once the fight is won.
+/// `AfterCombatEnd`, then `AfterCombatVictory`, raised on every listener
+/// once the fight is won.
 ///
-/// The listeners that counted something in the fight forget it here. The
-/// belt a run carries out of a fight is then the belt the game's screens
-/// show.
+/// The listeners that counted something in the fight forget it at the first.
+/// The belt a run carries out of a fight is then the belt the game's screens
+/// show. A heal at the second lands on the player, whom a won fight leaves
+/// alive.
 ///
 /// # Panics
 ///
-/// A listener asking for something as the fight ends, which nothing here
+/// A listener asking for anything else as the fight ends, which nothing here
 /// carries out.
 pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
     if let Some((_, effect)) = notify::<V>(live, relics, EventHook::CombatEnd).first() {
         unimplemented!("a listener asking for {effect:?} as a fight ends")
+    }
+    for (_, effect) in notify::<V>(live, relics, EventHook::CombatVictory) {
+        match effect {
+            // `CreatureCmd.Heal`, which caps at the maximum.
+            HookEffect::Heal(amount) => {
+                let player = live
+                    .creatures
+                    .iter_mut()
+                    .find(|creature| {
+                        creature.side == <V::CombatSide as sts2_core::SideKinds>::PLAYER
+                    })
+                    .expect("a fight has the player in it");
+                let healed: V::Health = num_traits::cast(amount).unwrap_or_else(|| {
+                    unimplemented!("healing by {amount:?}, which is not a health")
+                });
+                player.hp = (player.hp + healed).min(player.max_hp);
+            }
+            effect => unimplemented!("a listener asking for {effect:?} as a fight is won"),
+        }
     }
 }
 

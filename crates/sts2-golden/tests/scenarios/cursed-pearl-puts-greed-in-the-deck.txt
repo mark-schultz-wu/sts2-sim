@@ -1,0 +1,5 @@
+# `CursedPearl.AfterObtained` adds Greed to the deck, then pays 333 gold.
+#
+# A port that pays the gold and forgets the curse leaves a deck of ten.
+{"cmd":"start","seed":"C000000002","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":2}

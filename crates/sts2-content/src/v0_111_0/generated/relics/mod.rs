@@ -1503,6 +1503,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BELT_BUCKLE
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterCombatVictory)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // BIG_HAT
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
@@ -1515,7 +1516,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BING_BONG
     sts2_core::Overrides::from_bits(0),
     // BLACK_BLOOD
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
     // BLACK_STAR
     sts2_core::Overrides::from_bits(0),
     // BLESSED_ANTLER
@@ -1554,7 +1555,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BRONZE_SCALES
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // BURNING_BLOOD
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
     // BURNING_STICKS
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
@@ -2090,7 +2091,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // SWORD_OF_JADE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // SWORD_OF_STONE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
     // SYMBIOTIC_VIRUS
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // TANXS_WHISTLE
@@ -2167,7 +2168,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative)
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // WAR_HAMMER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
     // WAR_PAINT
     sts2_core::Overrides::from_bits(0),
     // WHETSTONE

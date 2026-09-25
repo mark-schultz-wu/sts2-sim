@@ -1,0 +1,17 @@
+//! `BurningBlood`: the Ironclad's heal after every fight he wins.
+
+use sts2_core::{EventHook, HookEffect};
+
+use super::super::super::V0_107_1 as V;
+use super::Number;
+
+/// `HealVar(6)`.
+const HEAL: Number = 6;
+
+/// `AfterCombatVictory`, which heals its owner while its owner is alive. A
+/// fight the run wins leaves the player alive.
+pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
+    if let EventHook::CombatVictory = hook {
+        asked.push(HookEffect::Heal(HEAL));
+    }
+}

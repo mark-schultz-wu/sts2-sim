@@ -947,6 +947,12 @@ impl<V: Rules> State<V> {
                 sts2_core::HookEffect::CloneDeckCard { excluding } => {
                     asking = Some(Pickup::CloneDeckCard { excluding });
                 }
+                sts2_core::HookEffect::GainGold(amount) => {
+                    self.player.gold = self.player.gold + amount;
+                }
+                sts2_core::HookEffect::AddToDeck(card) => {
+                    self.player.deck_mut().push(CardIdent::new(card));
+                }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
             }
         }
@@ -1478,14 +1484,17 @@ impl<V: Rules> State<V> {
         else {
             unimplemented!("choosing an option inside a fight");
         };
-        let option = options
+        let option = *options
             .get(index as usize)
             .unwrap_or_else(|| unimplemented!("an option the blessing does not offer"));
-        if *option != V::lead_paperweight() {
-            unimplemented!("what {option:?} does when Neow offers it");
+        *chosen = Some(index);
+        if option != V::lead_paperweight() {
+            // `RelicCmd.Obtain`, and whatever the relic's `AfterObtained`
+            // asks. Neow's own screen offers no way to park a question.
+            self.obtain_here(option);
+            return Ok(Decided::Resolved);
         }
 
-        *chosen = Some(index);
         // Not through `obtain`. The blessing is the one path that carries out
         // the paperweight's own `AfterObtained`, which is the colorless offer
         // below, and the relic's row carries no `UponPickup` besides.
