@@ -69,13 +69,14 @@ impl<V: Rules> Streams<V> {
     /// the row where it lies, and there is nothing to put back.
     pub(crate) fn combat(&mut self) -> CombatRngs<'_> {
         let kinds = V::run_rng_types();
-        let [shuffle, niche, generation, ai] = self
+        let [shuffle, niche, generation, ai, targets] = self
             .run
             .get_disjoint_mut([
                 slot(kinds, V::RunRngType::SHUFFLE),
                 slot(kinds, V::RunRngType::NICHE),
                 slot(kinds, V::RunRngType::COMBAT_CARD_GENERATION),
                 slot(kinds, V::RunRngType::MONSTER_AI),
+                slot(kinds, V::RunRngType::COMBAT_TARGETS),
             ])
             .expect("a build names each of its streams once");
         CombatRngs {
@@ -83,6 +84,7 @@ impl<V: Rules> Streams<V> {
             niche,
             generation,
             ai,
+            targets,
         }
     }
 
@@ -144,6 +146,8 @@ pub(crate) struct CombatRngs<'a> {
     pub(crate) generation: &'a mut MegaRng,
     /// The stream a monster's move machine rolls against.
     pub(crate) ai: &'a mut MegaRng,
+    /// The stream a random target is drawn from.
+    pub(crate) targets: &'a mut MegaRng,
 }
 
 impl CombatRngs<'_> {
@@ -155,6 +159,7 @@ impl CombatRngs<'_> {
             niche: self.niche,
             generation: self.generation,
             ai: self.ai,
+            targets: self.targets,
         }
     }
 }

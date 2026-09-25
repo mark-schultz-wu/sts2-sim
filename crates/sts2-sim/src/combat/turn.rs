@@ -34,7 +34,15 @@ pub(crate) fn end<V: Rules>(
     } = fighting;
     let mut skipping = std::mem::take(&mut next.skip_tick);
 
-    turn_end(next, streams.combat(), relics, ascension);
+    // `DoTurnEnd` returns once the fight is over, and a fight an orb ended
+    // ends the turn with it.
+    if let Some(ended) = turn_end(next, streams.combat(), relics, ascension) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
     before_turn_end::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
     flush_hand(next);
     end_of_turn_cleanup(next);
@@ -104,7 +112,9 @@ pub(crate) fn end<V: Rules>(
     // moves the count on, then the draw that reads it.
     before_side_turn_start::<V>(
         next,
+        streams.combat(),
         relics,
+        ascension,
         <V::CombatSide as SideKinds>::PLAYER,
         next.turn,
     );
@@ -126,6 +136,20 @@ pub(crate) fn end<V: Rules>(
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
     );
+    // `OrbQueue.AfterTurnStart`, once the side's turn has started.
+    if let Some(ended) = orb_triggers::<V>(
+        next,
+        streams.combat(),
+        relics,
+        ascension,
+        OrbMoment::TurnStart,
+    ) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
 
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY;
 
@@ -133,29 +157,25 @@ pub(crate) fn end<V: Rules>(
     Ok(None)
 }
 
-/// `DoTurnEnd`: the cards in hand that answer to a turn ending.
+/// `DoTurnEnd`: the orbs, then the cards in hand that answer to a turn
+/// ending, and how the fight ended if an orb ended it.
 ///
-/// An ethereal card is exhausted. A card with a turn-end effect of its own
-/// runs it, and that arrives with the port of the card.
+/// Every orb triggers first. The game then looks through the hand once. An
+/// ethereal card is exhausted, and a card with a turn-end effect of its own
+/// runs it after every exhaust. No card is both.
 #[tracing::instrument(level = "trace", skip_all)]
 fn turn_end<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
-) {
-    let held: SmallVec<[_; MAX_CARDS_IN_HAND]> = live.cards.iter(Pile::Hand).collect();
-    for card in &held {
-        let mut board = Board::for_card(
-            live,
-            rngs.reborrow(),
-            relics,
-            ascension,
-            None,
-            Some(card.id),
-        );
-        V::on_card_turn_end(card.face.ident.card, &mut board);
+) -> Option<super::Ended> {
+    if let Some(ended) =
+        orb_triggers::<V>(live, rngs.reborrow(), relics, ascension, OrbMoment::TurnEnd)
+    {
+        return Some(ended);
     }
+    let held: SmallVec<[_; MAX_CARDS_IN_HAND]> = live.cards.iter(Pile::Hand).collect();
     let ethereal: SmallVec<[usize; MAX_CARDS_IN_HAND]> = live
         .cards
         .idents(Pile::Hand)
@@ -166,6 +186,69 @@ fn turn_end<V: Rules>(
     for at in ethereal.into_iter().rev() {
         live.cards.move_to(Pile::Hand, at, Pile::Exhaust);
     }
+    for card in held.iter().filter(|card| !card.face.ident.card.ethereal()) {
+        let mut board = Board::for_card(
+            live,
+            rngs.reborrow(),
+            relics,
+            ascension,
+            None,
+            Some(card.id),
+        );
+        V::on_card_turn_end(card.face.ident.card, &mut board);
+    }
+    None
+}
+
+/// When an orb's own trigger runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OrbMoment {
+    /// `OrbQueue.BeforeTurnEnd`.
+    TurnEnd,
+    /// `OrbQueue.AfterTurnStart`.
+    TurnStart,
+}
+
+/// Each orb's trigger for one moment, in queue order, and how the fight ended
+/// if a trigger ended it.
+///
+/// The queue is read once, before the first trigger, as `Orbs.ToList()` is.
+///
+/// # Panics
+///
+/// A listener that changes how often an orb triggers.
+pub(super) fn orb_triggers<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    at: OrbMoment,
+) -> Option<super::Ended> {
+    let held: Vec<sts2_core::Channelled<V>> = match &live.orbs {
+        Some(orbs) if !orbs.queue.is_empty() => orbs.queue.clone(),
+        _ => return None,
+    };
+    if listen::heard::<V>(
+        live,
+        relics,
+        sts2_core::ModelHook::AfterModifyingOrbPassiveTriggerCount,
+    ) {
+        unimplemented!("a listener changing how often an orb triggers");
+    }
+    if listen::heard::<V>(live, relics, sts2_core::ModelHook::ModifyOrbValue) {
+        unimplemented!("a listener to an orb's value");
+    }
+    for orb in &held {
+        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        match at {
+            OrbMoment::TurnEnd => V::orb_turn_end(orb, &mut board),
+            OrbMoment::TurnStart => V::orb_turn_start(orb, &mut board),
+        }
+        if let Some(ended) = board.ended {
+            return Some(ended);
+        }
+    }
+    None
 }
 
 /// `PlayerCombatState.EndOfTurnCleanup`: what a card carried only for the turn.
@@ -187,7 +270,9 @@ fn end_of_turn_cleanup<V: Rules>(live: &mut Live<V>) {
 #[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn before_side_turn_start<V: Rules>(
     live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
     side: V::CombatSide,
     turn: V::Count,
 ) {
@@ -198,6 +283,12 @@ pub(super) fn before_side_turn_start<V: Rules>(
                 if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
                     creature.block = creature.block + amount;
                 }
+            }
+            // A relic's owner is the player, whose orbs these are.
+            (Listener::Relic { .. }, sts2_core::HookEffect::Channel(orb)) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::channel(&mut board, orb);
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn starts"),
         }

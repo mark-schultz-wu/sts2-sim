@@ -158,6 +158,14 @@ struct Kinds {
     cards: bool,
 }
 
+/// Whether anything in the fight overrides `hook`.
+///
+/// For a hook the fight raises nowhere yet. A listener that answers one is a
+/// path nobody has ported, and asking this is how it stops by name.
+pub(crate) fn heard<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> bool {
+    Kinds::hearing(live, relics, Overrides::of(hook)).is_some()
+}
+
 impl Kinds {
     /// The kinds that hear one of `hooks`, or nothing when none does.
     fn hearing<V: Rules>(live: &Live<V>, relics: &Belt<V>, hooks: Overrides) -> Option<Self> {

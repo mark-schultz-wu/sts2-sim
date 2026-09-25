@@ -258,6 +258,26 @@ impl sts2_core::Rules for V0_107_1 {
         sts2_core::Table::data(character).max_energy
     }
 
+    fn orb_slots(character: Self::Character) -> u8 {
+        sts2_core::Table::data(character).orb_slots
+    }
+
+    fn channelled(orb: Self::Orb) -> sts2_core::Channelled<Self> {
+        behaviour::orbs::channelled(orb)
+    }
+
+    fn orb_turn_end<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
+        behaviour::orbs::turn_end(orb, fight);
+    }
+
+    fn orb_turn_start<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
+        behaviour::orbs::turn_start(orb, fight);
+    }
+
+    fn orb_evoke<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
+        behaviour::orbs::evoke(orb, fight);
+    }
+
     fn starting_potion_slots() -> usize {
         3
     }

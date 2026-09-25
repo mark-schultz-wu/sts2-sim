@@ -1,0 +1,13 @@
+# `OrbCmd.Channel` into a full queue evokes the first orb to make room. Cracked
+# Core and two Zaps fill the three slots, and the third Zap evokes Cracked
+# Core's Lightning, which hits a random enemy for eight.
+#
+# A port that refuses the orb, or evokes the last, leaves another queue.
+{"cmd":"start","seed":"C000000004","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"grant","card":"ZAP"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":0}

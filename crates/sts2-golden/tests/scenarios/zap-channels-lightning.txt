@@ -1,0 +1,6 @@
+# `Zap` channels one Lightning, which joins the queue behind Cracked Core's.
+#
+# A port that channels nothing leaves one orb in the queue.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":2}
