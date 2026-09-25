@@ -25,6 +25,14 @@ type V = V0_107_1;
 /// The span map generation runs under.
 const MAP: &str = "act_map";
 
+/// Where map generation's own folded stacks go, beside `out`.
+fn map_path(out: &str) -> String {
+    match out.strip_suffix(".folded") {
+        Some(stem) => format!("{stem}.map.folded"),
+        None => format!("{out}.map"),
+    }
+}
+
 /// Replays traced, so a per-replay cost such as starting the run is spread
 /// as it is in the `instructions` replay.
 const REPLAYS: usize = 20;
@@ -64,14 +72,21 @@ fn main() {
     }
     let supported = supported * REPLAYS;
 
-    let stacks = layer::folded(overhead, MAP);
+    let folded = layer::folded(overhead, MAP);
     let mut text = format!("# steps {supported} period 1\n");
     let mut total = 0;
-    for (path, own, calls) in &stacks {
+    for (path, own, calls) in &folded.outside {
         writeln!(text, "{path} {own} {calls}").unwrap();
         total += own;
     }
     std::fs::write(&out, text).unwrap_or_else(|e| panic!("writing {out}: {e}"));
+    // Map generation apart, counted per map built rather than per step.
+    let mut text = format!("# steps {} period 1\n", folded.splits);
+    for (path, own, calls) in &folded.under {
+        writeln!(text, "{path} {own} {calls}").unwrap();
+    }
+    let maps = map_path(&out);
+    std::fs::write(&maps, text).unwrap_or_else(|e| panic!("writing {maps}: {e}"));
     println!(
         "{name}: {supported} steps, {total} instructions outside map generation, {} per step\n\
          map generation {} left out, and {} per span taken off its parent, \

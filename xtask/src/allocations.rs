@@ -20,7 +20,7 @@ use crate::instructions::{divide_by, workspace};
 
 /// A frame in map generation, which a search inside a fight never runs.
 fn in_map_generation(frame: &str) -> bool {
-    frame.contains("ActMapBuilder") && frame.contains(">::generate")
+    frame.contains("::ActMap<") && frame.contains(">::generate")
 }
 
 /// A frame of the simulator's own, by where its source lives. An inlined

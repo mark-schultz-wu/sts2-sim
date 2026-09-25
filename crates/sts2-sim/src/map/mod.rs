@@ -103,6 +103,10 @@ impl<V: Rules> ActMap<V> {
     ///
     /// `ascension` reaches only the elite count. Every other rung of the ladder
     /// leaves a map alone, which `tests/maps.txt` checks rather than assumes.
+    ///
+    /// Never inlined, so a profile can name it. All a map costs runs under it.
+    #[tracing::instrument(level = "trace", skip_all)]
+    #[inline(never)]
     pub fn generate<R: GameRng>(
         rng: &mut R,
         layout: Layout,
@@ -126,10 +130,16 @@ impl<V: Rules> ActMap<V> {
 impl<V: Rules> From<ActMapBuilder<V>> for ActMap<V> {
     fn from(built: ActMapBuilder<V>) -> Self {
         let nodes: Arc<[Node<V>]> = built.nodes().into();
-        ActMap {
-            digest: Digest::of_points(&nodes),
-            nodes,
+        let digest = {
+            let _digest = tracing::trace_span!("digest").entered();
+            Digest::of_points(&nodes)
+        };
+        {
+            // The builder's own lists, which the map keeps none of.
+            let _teardown = tracing::trace_span!("teardown").entered();
+            drop(built);
         }
+        ActMap { digest, nodes }
     }
 }
 
@@ -175,6 +185,17 @@ impl<V: Rules> ActMapBuilder<V> {
         layout: Layout,
         ascension: V::AscensionLevel,
     ) -> Result<Self, Error> {
+        let mut map = Self::dealt(rng, layout, ascension);
+        prune::prune_and_repair(&mut map, rng)?;
+        tidy::center(&mut map);
+        tidy::spread(&mut map);
+        tidy::straighten(&mut map);
+        Ok(map)
+    }
+
+    /// Every path walked and every point given a type, which is the map
+    /// pruning starts from.
+    fn dealt<R: GameRng>(rng: &mut R, layout: Layout, ascension: V::AscensionLevel) -> Self {
         let rows = layout.rooms + 1;
         let counts = types::Counts::roll(rng, layout, ascension);
         let mut map = ActMapBuilder {
@@ -195,38 +216,43 @@ impl<V: Rules> ActMapBuilder<V> {
 
         map.walk_paths(rng);
         map.assign_types(rng);
-        prune::prune_and_repair(&mut map, rng)?;
-        tidy::center(&mut map);
-        tidy::spread(&mut map);
-        tidy::straighten(&mut map);
-        Ok(map)
+        map
     }
 
-    /// Every node the run can stand on, in the observation's own order.
+    /// Every node the run can stand on, in the observation's own order: row,
+    /// then column, as the game's reporting sorts them. The first node and the
+    /// boss are in here, unlike in `GetAllMapPoints`. This is the only place
+    /// that order is decided.
     ///
-    /// Row then column, which is how the game's own reporting sorts them. The
-    /// first node and the boss are in here, unlike in `GetAllMapPoints`. This
-    /// is the only place that order is decided.
+    /// Built in that order. At one place, the grid's point comes first, then
+    /// the first node, then the boss, which is where a stable sort left them.
+    #[tracing::instrument(level = "trace", skip_all)]
     fn nodes(&self) -> Vec<Node<V>> {
-        let mut nodes: Vec<Node<V>> = self
-            .live()
-            .chain([self.ancient, self.boss])
-            .map(|id| {
-                let point = &self.points[id];
-                let mut to: smallvec::SmallVec<[Coord; 7]> = point
-                    .children
-                    .iter()
-                    .map(|child| self.points[child].at())
-                    .collect();
-                to.sort_by_key(|at| (at.row, at.col));
-                Node {
-                    at: point.at(),
-                    kind: point.kind,
-                    to,
+        let node = |id: Id| {
+            let point = &self.points[id];
+            let mut to: smallvec::SmallVec<[Coord; 7]> = point
+                .children
+                .iter()
+                .map(|child| self.points[child].at())
+                .collect();
+            to.sort_by_key(|at| (at.row, at.col));
+            Node {
+                at: point.at(),
+                kind: point.kind,
+                to,
+            }
+        };
+        let mut nodes = Vec::with_capacity(self.points.len());
+        for row in 0..=self.rows {
+            for col in 0..COLS {
+                nodes.extend(self.cell(col, row).map(node));
+                for id in [self.ancient, self.boss] {
+                    if (self.points[id].col, self.points[id].row) == (col, row) {
+                        nodes.push(node(id));
+                    }
                 }
-            })
-            .collect();
-        nodes.sort_by_key(|node| (node.at.row, node.at.col));
+            }
+        }
         nodes
     }
 
@@ -323,6 +349,7 @@ impl<V: Rules> ActMapBuilder<V> {
     ///
     /// The second of the seven is redrawn until it starts somewhere the first
     /// did not, so a map always offers at least two openings.
+    #[tracing::instrument(level = "trace", skip_all)]
     fn walk_paths<R: GameRng>(&mut self, rng: &mut R) {
         let columns = num_traits::cast(COLS).expect("the map width fits the RNG integer");
         let span = Span::new(R::Int::ZERO, columns).expect("seven columns is not an empty span");

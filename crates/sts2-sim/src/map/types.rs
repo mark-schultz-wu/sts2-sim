@@ -37,6 +37,7 @@ impl Counts {
     /// Three shops always. Five elites, or eight from the first rung of the
     /// ascension ladder upwards. Nothing else on the ladder reaches a map, and
     /// `tests/maps.txt` holds every rung for ten seeds to say so.
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) fn roll<R: GameRng, A: AscensionKinds>(
         rng: &mut R,
         layout: Layout,
@@ -98,6 +99,7 @@ impl<V: Rules> ActMapBuilder<V> {
     ///
     /// The treasure row becomes elites under the Warden ascension, which this
     /// does not offer yet.
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(super) fn assign_types<R: GameRng>(&mut self, rng: &mut R) {
         self.stamp(self.rows - 1, V::MapPointType::REST_SITE);
         self.stamp(self.rows - 7, V::MapPointType::TREASURE);
@@ -225,22 +227,16 @@ impl<V: Rules> ActMapBuilder<V> {
             V::MapPointType::ELITE,
             V::MapPointType::SHOP,
         ];
+        // A sibling is every other child of this point's parents, which is
+        // `GetSiblings`.
         if never_beside.contains(&kind) {
-            return !self
-                .siblings(id)
-                .into_iter()
-                .any(|other| self.points[other].kind == kind);
+            return !point.parents.iter().any(|parent| {
+                self.points[parent]
+                    .children
+                    .iter()
+                    .any(|other| other != id && self.points[other].kind == kind)
+            });
         }
         true
-    }
-
-    /// Every other child of this point's parents, which is `GetSiblings`.
-    fn siblings(&self, id: Id) -> Vec<Id> {
-        self.points[id]
-            .parents
-            .iter()
-            .flat_map(|parent| self.points[parent].children.iter().collect::<Vec<_>>())
-            .filter(|&other| other != id)
-            .collect()
     }
 }

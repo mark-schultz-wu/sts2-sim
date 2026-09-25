@@ -21,9 +21,12 @@ enum Slot<T> {
 }
 
 /// A set in insertion order, with the game's slot reuse.
+///
+/// Inline to four slots. A point on the map links to three at most, save
+/// the first node and the boss, which link to a whole row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Order<T> {
-    slots: Vec<Slot<T>>,
+    slots: smallvec::SmallVec<[Slot<T>; 4]>,
     free: Option<usize>,
     taken: usize,
 }
@@ -31,7 +34,7 @@ pub struct Order<T> {
 impl<T> Default for Order<T> {
     fn default() -> Self {
         Order {
-            slots: Vec::new(),
+            slots: smallvec::SmallVec::new(),
             free: None,
             taken: 0,
         }

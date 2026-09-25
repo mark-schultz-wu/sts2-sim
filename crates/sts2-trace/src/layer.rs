@@ -235,21 +235,36 @@ fn empty_spans(depth: u64) -> (u64, u64) {
     })
 }
 
-/// Every path in the tree as a folded stack, root first, with what its own
-/// span ran and how many times it ran. `overhead` comes off for the span and
-/// for each child it opened.
+/// The tree as folded stacks, split at every span whose key names `split`.
+pub struct Folded {
+    /// Every path outside those spans, root first, with what its own span ran
+    /// and how many times it ran.
+    pub outside: Vec<(String, u64, u64)>,
+    /// Every path from one of those spans down, with that span first.
+    pub under: Vec<(String, u64, u64)>,
+    /// How many times those spans ran.
+    pub splits: u64,
+}
+
+/// Every path in the tree as a folded stack, with what its own span ran and
+/// how many times it ran. `overhead` comes off for the span and for each
+/// child it opened.
 ///
-/// A path through a span whose key names `leave_out` is left out with
-/// everything under it.
-pub fn folded(overhead: Overhead, leave_out: &str) -> Vec<(String, u64, u64)> {
+/// A path through a span whose key names `split` goes to [`Folded::under`],
+/// starting at that span, and the rest to [`Folded::outside`].
+pub fn folded(overhead: Overhead, split: &str) -> Folded {
     STATE.with(|state| {
+        let mut folded = Folded {
+            outside: Vec::new(),
+            under: Vec::new(),
+            splits: 0,
+        };
         let state = state.borrow();
         let Some(state) = state.as_ref() else {
-            return Vec::new();
+            return folded;
         };
-        let mut out = Vec::new();
-        let mut stack = vec![(0usize, 0u64, String::new())];
-        while let Some((at, depth, path)) = stack.pop() {
+        let mut stack = vec![(0usize, 0u64, String::new(), false)];
+        while let Some((at, depth, path, under)) = stack.pop() {
             let node = &state.nodes[at];
             let mut own = node.inclusive.saturating_sub(overhead.own * node.calls);
             for &child in node.children.values() {
@@ -257,21 +272,25 @@ pub fn folded(overhead: Overhead, leave_out: &str) -> Vec<(String, u64, u64)> {
                 own = own.saturating_sub(child.inclusive + overhead.parent_at(depth) * child.calls);
             }
             if at != 0 {
-                out.push((path.clone(), own, node.calls));
+                match under {
+                    true => folded.under.push((path.clone(), own, node.calls)),
+                    false => folded.outside.push((path.clone(), own, node.calls)),
+                }
             }
             for &child in node.children.values() {
                 let key = &state.nodes[child].key;
-                if key.contains(leave_out) {
-                    continue;
+                let splits = !under && key.contains(split);
+                if splits {
+                    folded.splits += state.nodes[child].calls;
                 }
-                let path = match path.is_empty() {
+                let path = match splits || path.is_empty() {
                     true => key.clone(),
                     false => format!("{path};{key}"),
                 };
-                stack.push((child, depth + 1, path));
+                stack.push((child, depth + 1, path, under || splits));
             }
         }
-        out
+        folded
     })
 }
 
