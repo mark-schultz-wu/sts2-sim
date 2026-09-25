@@ -1,0 +1,7 @@
+# The second kind of company is one medium slime, one more `NextItem` over the
+# two.
+#
+# A port that skips the second draw fields the wrong slime and leaves the
+# encounter's stream a draw behind.
+{"cmd":"start","seed":"C000000001","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLITHERING_STRANGLER_NORMAL"}

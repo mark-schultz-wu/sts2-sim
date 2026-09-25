@@ -1,0 +1,6 @@
+# `SlitheringStranglerNormal.GenerateMonsters` draws one of three kinds of
+# company, and the Strangler stands behind it.
+#
+# A port that draws the kinds in another order fields other company.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLITHERING_STRANGLER_NORMAL"}

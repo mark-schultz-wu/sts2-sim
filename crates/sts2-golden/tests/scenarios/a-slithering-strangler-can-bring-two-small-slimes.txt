@@ -1,0 +1,7 @@
+# The third kind of company is two small slimes, each its own `NextItem` over
+# the two, so they can differ or match.
+#
+# A port that draws the pair without repeats, or once for both, fields
+# another pair.
+{"cmd":"start","seed":"C000000002","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLITHERING_STRANGLER_NORMAL"}

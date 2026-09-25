@@ -24,6 +24,8 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Spa
         Encounter::SlimesWeak => slimes_weak(rng),
         Encounter::SlimesNormal => slimes_normal(rng),
         Encounter::DecimillipedeElite => decimillipede_elite(rng),
+        Encounter::RubyRaidersNormal => ruby_raiders_normal(rng),
+        Encounter::SlitheringStranglerNormal => slithering_strangler_normal(rng),
         encounter => unimplemented!("the roster {encounter:?} rolls"),
     }
 }
@@ -92,4 +94,57 @@ fn slimes_normal<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
         .into_iter()
         .map(Spawned::new)
         .collect()
+}
+
+/// `RubyRaidersNormal`. Three raiders, no two the same.
+///
+/// Each is one `NextItem` over the five, less those already standing, in the
+/// order the game's own table lists them.
+fn ruby_raiders_normal<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    const RAIDERS: [Monster; 5] = [
+        Monster::AxeRubyRaider,
+        Monster::AssassinRubyRaider,
+        Monster::BruteRubyRaider,
+        Monster::CrossbowRubyRaider,
+        Monster::TrackerRubyRaider,
+    ];
+
+    let mut standing: Vec<Monster> = Vec::with_capacity(3);
+    for _ in 0..3 {
+        let left: Vec<Monster> = RAIDERS
+            .into_iter()
+            .filter(|raider| !standing.contains(raider))
+            .collect();
+        standing.push(
+            *rng.choose(&left)
+                .expect("five raiders leave some for a third"),
+        );
+    }
+    standing.into_iter().map(Spawned::new).collect()
+}
+
+/// `SlitheringStranglerNormal`. A Snapping Jaxfruit, a medium slime or two
+/// small ones, then the Strangler.
+///
+/// One `NextItem` over the three kinds, in the order the game's enum lists
+/// them. The medium slime is one more, and each small slime its own, so the
+/// two small ones can be the same.
+fn slithering_strangler_normal<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    const SMALL: [Monster; 2] = [Monster::LeafSlimeS, Monster::TwigSlimeS];
+    const MEDIUM: [Monster; 2] = [Monster::LeafSlimeM, Monster::TwigSlimeM];
+
+    let kind: usize = num_traits::cast(
+        rng.next_int(Bound::try_new(three::<R>()).expect("three kinds of company")),
+    )
+    .expect("a three-way draw is a valid kind");
+    let mut roster = match kind {
+        0 => vec![Monster::SnappingJaxfruit],
+        1 => vec![*rng.choose(&MEDIUM).expect("two medium slimes")],
+        _ => vec![
+            *rng.choose(&SMALL).expect("two small slimes"),
+            *rng.choose(&SMALL).expect("two small slimes"),
+        ],
+    };
+    roster.push(Monster::SlitheringStrangler);
+    roster.into_iter().map(Spawned::new).collect()
 }
