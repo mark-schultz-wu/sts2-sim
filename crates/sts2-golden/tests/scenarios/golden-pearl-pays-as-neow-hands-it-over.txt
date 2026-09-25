@@ -1,0 +1,6 @@
+# `GoldenPearl.AfterObtained` pays 150 gold as Neow hands the relic over, so
+# the purse goes from 99 to 249.
+#
+# A port that takes the relic and skips its pickup leaves the purse at 99.
+{"cmd":"start","seed":"C000000001","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":1}

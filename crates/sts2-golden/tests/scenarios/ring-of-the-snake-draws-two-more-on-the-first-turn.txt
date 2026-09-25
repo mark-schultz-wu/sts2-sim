@@ -1,0 +1,8 @@
+# `RingOfTheSnake.ModifyHandDraw` adds two cards on the fight's first turn and
+# none after. The Silent opens on seven and draws five on the second turn.
+#
+# A port that adds the cards every turn draws seven again, and one that never
+# adds them opens on five.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

@@ -1,0 +1,5 @@
+# `NeowsTorment.AfterObtained` adds one Neow's Fury to the deck.
+#
+# A port that takes the relic and skips its pickup leaves a deck of ten.
+{"cmd":"start","seed":"C000000002","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":1}
