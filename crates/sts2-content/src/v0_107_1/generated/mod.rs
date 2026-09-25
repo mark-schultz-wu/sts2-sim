@@ -13,6 +13,7 @@ pub mod enchantments;
 pub mod encounters;
 pub mod events;
 pub mod modifiers;
+pub mod monster_moves;
 pub mod monsters;
 pub mod orbs;
 pub mod potions;
