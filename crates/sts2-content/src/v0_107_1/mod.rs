@@ -114,12 +114,30 @@ impl sts2_core::Hooks for V0_107_1 {
                 power,
                 amount,
                 owner,
+                holder,
+                applier,
+                monster,
                 state,
-            } => behaviour::powers::modify_hook(power, amount, owner, state, hook),
+            } => {
+                let held = behaviour::powers::Held {
+                    owner,
+                    holder,
+                    applier,
+                    monster,
+                };
+                behaviour::powers::modify_hook(power, amount, held, state, hook)
+            }
             sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
-            // No card modifies a number a hook carries. `CardModel` overrides
-            // the numbers it prints instead, which the table already holds.
-            sts2_core::Listener::Card { .. } => sts2_core::Modify::Nothing,
+            // The fight asks only a monster whose class overrides the hook,
+            // and no monster this build ports overrides one of these.
+            sts2_core::Listener::Monster { monster, .. } => {
+                unimplemented!("what {monster:?} does for {hook:?}")
+            }
+            // The fight asks only a card whose class overrides the hook, and
+            // no card in this build overrides one of these.
+            sts2_core::Listener::Card { card, .. } => {
+                unimplemented!("what {card:?} does for {hook:?}")
+            }
         }
     }
 
@@ -128,10 +146,31 @@ impl sts2_core::Hooks for V0_107_1 {
         hook: sts2_core::DecisionHook<Self>,
     ) -> sts2_core::HookResponse<bool> {
         match listener {
-            sts2_core::Listener::Power { power, .. } => behaviour::powers::decide_hook(power, hook),
-            sts2_core::Listener::Relic(_) | sts2_core::Listener::Card { .. } => {
-                sts2_core::HookResponse::DoesNotImplement
+            sts2_core::Listener::Power {
+                power,
+                owner,
+                holder,
+                applier,
+                monster,
+                state,
+                ..
+            } => {
+                let held = behaviour::powers::Held {
+                    owner,
+                    holder,
+                    applier,
+                    monster,
+                };
+                behaviour::powers::decide_hook(power, held, state, hook)
             }
+            // A raised hook reaches only a listener that overrides it, and no
+            // relic, monster or card this build ports overrides one of these.
+            sts2_core::Listener::Relic(_)
+            | sts2_core::Listener::Monster { .. }
+            | sts2_core::Listener::Card { .. } => match hook.model_hook() {
+                Some(_) => unimplemented!("a relic, a monster or a card deciding {hook:?}"),
+                None => sts2_core::HookResponse::DoesNotImplement,
+            },
         }
     }
 
@@ -145,13 +184,27 @@ impl sts2_core::Hooks for V0_107_1 {
                 power,
                 amount,
                 owner,
+                holder,
+                applier,
+                monster,
                 state,
-            } => behaviour::powers::event_hook(power, amount, owner, state, hook, asked),
+            } => {
+                let held = behaviour::powers::Held {
+                    owner,
+                    holder,
+                    applier,
+                    monster,
+                };
+                behaviour::powers::event_hook(power, amount, held, state, hook, asked)
+            }
             sts2_core::EventListener::Relic(state) => {
                 behaviour::relics::event_hook(state, hook, asked)
             }
-            sts2_core::EventListener::Card { card, printed } => {
-                behaviour::cards::event_hook(card, printed, hook, asked)
+            sts2_core::EventListener::Monster { monster, .. } => {
+                behaviour::monsters::event_hook(monster, hook)
+            }
+            sts2_core::EventListener::Card { card, id, printed } => {
+                behaviour::cards::event_hook(card, id, printed, hook, asked)
             }
         }
     }

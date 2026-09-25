@@ -1,0 +1,13 @@
+# `BurrowedPower.AfterBlockBroken`: a Tunneler whose block a hit breaks is
+# stunned, and stops burrowing. The stun follows on to its bite rather than
+# back to the move it was advertising, and the turn after shows it.
+#
+# A port that raises no hook for a broken block leaves it burrowed and
+# attacking from below.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"TUNNELER_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":40,"target":0}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"end_turn"}

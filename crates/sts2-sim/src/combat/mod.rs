@@ -9,6 +9,7 @@ pub use board::ResolvedEffect;
 mod encounter;
 mod hook;
 mod legal;
+mod listen;
 mod live;
 mod monster;
 mod observed;

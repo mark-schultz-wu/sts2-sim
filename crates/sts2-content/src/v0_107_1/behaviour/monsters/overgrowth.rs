@@ -58,6 +58,7 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
     match monster {
         Monster::LeafSlimeM => leaf_slime_m(move_id, fight),
         Monster::ShrinkerBeetle => shrinker_beetle(move_id, fight),
+        Monster::FuzzyWurmCrawler => fuzzy_wurm_crawler(move_id, fight),
         Monster::LeafSlimeS => leaf_slime_s(move_id, fight),
         Monster::TwigSlimeM => twig_slime_m(move_id, fight),
         Monster::TwigSlimeS => twig_slime_s(move_id, fight),
@@ -269,6 +270,27 @@ fn shrinker_beetle<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
     match move_id {
         MoveId::ShrinkerMove => fight.apply_to_opponents(Power::ShrinkPower, PowerAmount::Endless),
         MoveId::ChompMove | MoveId::StompMove => fight.attack_opponents(),
+        move_id => unimplemented!("what {move_id:?} does when it is performed"),
+    }
+}
+
+/// `FuzzyWurmCrawler`. Spits acid, and draws a breath between spits that
+/// makes it stronger.
+///
+/// Inhale's Strength is a constant in the move itself. Its `BuffIntent`
+/// advertises none.
+///
+/// # Panics
+///
+/// A move of its graph nobody has ported.
+fn fuzzy_wurm_crawler<F: Fight<V>>(move_id: MoveId, fight: &mut F) {
+    const INHALE_STRENGTH: Number = 7;
+
+    match move_id {
+        MoveId::FirstAcidGoop | MoveId::AcidGoop => fight.attack_opponents(),
+        MoveId::Inhale => {
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(INHALE_STRENGTH))
+        }
         move_id => unimplemented!("what {move_id:?} does when it is performed"),
     }
 }

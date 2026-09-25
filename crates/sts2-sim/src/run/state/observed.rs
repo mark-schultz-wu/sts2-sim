@@ -105,7 +105,10 @@ impl<V: Rules> Observed<V> for State<V> {
 
     fn combat(&self) -> Option<impl ObservedFight<V> + '_> {
         match &self.phase {
-            Phase::Combat(live) => Some(Fight::Live(live)),
+            Phase::Combat(live) => Some(Fight::Live {
+                live,
+                relics: &self.player.relics,
+            }),
             Phase::Lost { combat } | Phase::Rewards { combat, .. } => Some(Fight::Over(combat)),
             Phase::Map
             | Phase::Neow { .. }

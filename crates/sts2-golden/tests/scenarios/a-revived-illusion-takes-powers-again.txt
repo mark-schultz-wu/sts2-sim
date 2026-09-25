@@ -1,0 +1,12 @@
+# `IllusionPower.ReviveMove` clears `isReviving` as it heals the eye back. So
+# once the eye has revived, Weak put on it lands.
+#
+# A port that sets the flag on death and never clears it refuses the eye
+# powers for the rest of the fight.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"FOGMOG_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"WEAK_POWER","amount":2,"target":2}

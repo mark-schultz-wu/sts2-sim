@@ -1,0 +1,11 @@
+# `ShrinkPower.AfterDeath` takes the power off when the creature that applied
+# it dies. The beetle shrinks the player on its first turn, and the player
+# kills it with the crawler still standing, so the fight goes on without it
+# and without the Shrink.
+#
+# A port that forgets who applied a power leaves the player shrunk for good.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"OVERGROWTH_CRAWLERS"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":1}

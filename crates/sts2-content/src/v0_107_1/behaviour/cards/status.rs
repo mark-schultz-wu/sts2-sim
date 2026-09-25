@@ -2,7 +2,7 @@
 
 use sts2_core::{Amount, Effect, EventHook, Fight, HookEffect, Played, Scaling};
 
-use super::super::super::generated::cards::{CardVar, Cards, StatusCard};
+use super::super::super::generated::cards::{CardVar, StatusCard};
 use super::V;
 
 pub(super) fn on_play<F: Fight<V>>(card: StatusCard, fight: &mut F) -> Played<V> {
@@ -30,20 +30,20 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
 /// Deliver a notification to one status card in the fight.
 pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: StatusCard,
+    id: sts2_core::CardId<V>,
     printed: &P,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     // `Void.AfterCardDrawn`, which acts on the draw that brought it here and
     // on no other card's.
-    if let (
-        StatusCard::Void,
-        EventHook::CardDrawn {
-            card: Cards::Status(StatusCard::Void),
-        },
-    ) = (card, hook)
-    {
-        asked.push(HookEffect::LoseEnergy(printed.face(CardVar::Energy)));
+    match (card, hook) {
+        (StatusCard::Void, EventHook::CardDrawn { id: drawn, .. }) => {
+            if drawn == id {
+                asked.push(HookEffect::LoseEnergy(printed.face(CardVar::Energy)));
+            }
+        }
+        (card, hook) => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }
 

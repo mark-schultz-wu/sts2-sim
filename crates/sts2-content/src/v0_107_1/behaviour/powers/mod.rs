@@ -8,7 +8,7 @@
 //! because ported behaviour put it there. So an unported power reaching here
 //! is a gap in the port, and not a state a run can reach.
 
-use sts2_core::{Holding, Modify, ModifyHook, PowerAmount};
+use sts2_core::{Modify, ModifyHook, PowerAmount, PowerModel as _};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{Cards, TokenCard};
@@ -20,9 +20,27 @@ type Number = <V as sts2_core::ContentVersion>::Number;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     Stateless(Power),
-    Slow { counted: Number },
-    Tender { counted: Number },
-    Imbalanced { off_balance: bool },
+    Slow {
+        counted: Number,
+    },
+    Tender {
+        counted: Number,
+    },
+    Imbalanced {
+        off_balance: bool,
+    },
+    /// `IllusionPower`'s `isReviving`.
+    Illusion {
+        reviving: bool,
+    },
+    /// `ReattachPower`'s `isReviving`.
+    Reattach {
+        reviving: bool,
+    },
+    /// `SwipePower.StolenCard`.
+    Swipe {
+        stolen: Option<sts2_core::CardIdent<V>>,
+    },
 }
 
 impl sts2_core::PowerModel<V> for State {
@@ -31,21 +49,27 @@ impl sts2_core::PowerModel<V> for State {
             Power::SlowPower => Self::Slow { counted: 0 },
             Power::TenderPower => Self::Tender { counted: 0 },
             Power::ImbalancedPower => Self::Imbalanced { off_balance: false },
+            Power::IllusionPower => Self::Illusion { reviving: false },
+            Power::ReattachPower => Self::Reattach { reviving: false },
+            Power::SwipePower => Self::Swipe { stolen: None },
             power => Self::Stateless(power),
         }
     }
-}
 
-impl State {
     fn power(&self) -> Power {
         match self {
             Self::Stateless(power) => *power,
             Self::Slow { .. } => Power::SlowPower,
             Self::Tender { .. } => Power::TenderPower,
             Self::Imbalanced { .. } => Power::ImbalancedPower,
+            Self::Illusion { .. } => Power::IllusionPower,
+            Self::Reattach { .. } => Power::ReattachPower,
+            Self::Swipe { .. } => Power::SwipePower,
         }
     }
+}
 
+impl State {
     fn counted(&self) -> Number {
         match self {
             Self::Slow { counted } | Self::Tender { counted } => *counted,
@@ -80,6 +104,48 @@ impl State {
     pub(crate) fn is_off_balance(&self) -> bool {
         matches!(self, Self::Imbalanced { off_balance: true })
     }
+
+    /// `isReviving`, which a reviving power sets as its owner dies and clears
+    /// as it brings the owner back.
+    pub(crate) fn set_reviving(&mut self, to: bool) {
+        match self {
+            Self::Illusion { reviving } | Self::Reattach { reviving } => *reviving = to,
+            state => unreachable!("reviving state for {:?}", state.power()),
+        }
+    }
+
+    fn reviving(&self) -> bool {
+        matches!(
+            self,
+            Self::Illusion { reviving: true } | Self::Reattach { reviving: true }
+        )
+    }
+
+    /// `SwipePower.Steal`, which remembers the card taken.
+    pub(crate) fn steal(&mut self, card: sts2_core::CardIdent<V>) {
+        let Self::Swipe { stolen } = self else {
+            unreachable!("stolen state for {:?}", self.power())
+        };
+        *stolen = Some(card);
+    }
+}
+
+/// `CreatureCmd.Stun`'s own state, which advertises a stunned turn.
+fn stunned(then: Option<u8>) -> sts2_core::HookEffect<V> {
+    use super::super::generated::monsters::{IntentKind, MoveId};
+
+    sts2_core::HookEffect::StunOwner {
+        stun: Box::new(sts2_core::NextMove {
+            id: MoveId::Stunned,
+            intents: [sts2_core::Intent {
+                kind: IntentKind::Stun,
+                attack: None,
+            }]
+            .into_iter()
+            .collect(),
+        }),
+        then,
+    }
 }
 
 /// `VulnerablePower`'s `DamageIncrease`.
@@ -99,8 +165,6 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 /// one, and truncates to the same whole number.
 const SLOW_PER_CARD: f64 = 0.1;
 
-/// Apply a value-producing hook for one power.
-///
 /// `TemporaryStrengthPower`, which is Strength that gives itself back.
 ///
 /// `BeforeApplied` lands the Strength, signed by `IsPositive`, before this
@@ -110,9 +174,10 @@ const SLOW_PER_CARD: f64 = 0.1;
 /// `positive` is `IsPositive`. Crush Under's is false, so it lands negative
 /// Strength and returns it.
 fn temporary_strength(
+    power: Power,
     positive: bool,
     amount: PowerAmount<Number>,
-    owner: CombatSide,
+    held: Held,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -133,7 +198,7 @@ fn temporary_strength(
                 PowerAmount::Counted(signed(landing)),
             ))
         }
-        (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side }) if side == owner => {
+        (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side }) if side == held.owner => {
             // `PowerCmd.Remove(this)` and then the Strength back, which is the
             // order the game hands them over in.
             asked.extend([
@@ -147,178 +212,188 @@ fn temporary_strength(
         (PowerAmount::Endless, EventHook::SideTurnEnd { .. }) => {
             unimplemented!("an endless temporary Strength")
         }
-        _ => {}
+        (_, EventHook::SideTurnEnd { .. }) => {}
+        // `AfterPowerAmountChanged` on its own instance. The instance being
+        // put on is `BeforeApplied`'s, and changes by the whole of its
+        // amount, which the override passes over.
+        (
+            PowerAmount::Counted(total),
+            EventHook::PowerAmountChanged {
+                creature,
+                power: changed,
+                delta,
+            },
+        ) if creature == held.holder && changed == power && delta != total => {
+            unimplemented!("a temporary Strength stacked onto its own instance")
+        }
+        (_, EventHook::PowerAmountChanged { .. }) => {}
+        // Asked of every power, and not ones this class overrides.
+        (_, EventHook::MonsterMovePerformed { .. } | EventHook::Removed) => {}
+        (_, hook) => unimplemented!("what a temporary Strength does for {hook:?}"),
     }
 }
 
+/// Apply a value-producing hook for one power.
+///
 /// `amount` is the stack the creature carries this power as, which is what an
-/// override reads off itself.
+/// override reads off itself. Each override reads whether the creature the
+/// hook names is its own holder.
+///
+/// None of these reads `ValueProp`. Every hit and every block a fight asks
+/// about here is a powered attack or a powered card's, which is what each
+/// override pays for.
 pub(crate) fn modify_hook(
     power: Power,
     amount: PowerAmount<Number>,
-    _owner: CombatSide,
+    held: Held,
     state: &State,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     let one: Number = num_traits::one();
     debug_assert_eq!(state.power(), power);
     let counted = state.counted();
+    let holder = held.holder;
     match (power, amount, hook) {
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
         // since its owner's turn began and takes a tenth more for each.
-        (
-            Power::SlowPower,
-            _,
-            ModifyHook::Damage {
-                holding: Holding::Target,
-            },
-        ) => Modify::Scaled(1.0 + SLOW_PER_CARD * f64::from(counted)),
+        (Power::SlowPower, _, ModifyHook::DamageMultiplicative { target, .. })
+            if target == Some(holder) =>
+        {
+            Modify::Scaled(1.0 + SLOW_PER_CARD * f64::from(counted))
+        }
+        (Power::VulnerablePower, _, ModifyHook::DamageMultiplicative { target, .. })
+            if target == Some(holder) =>
+        {
+            Modify::Scaled(DAMAGE_INCREASE)
+        }
+        (Power::WeakPower, _, ModifyHook::DamageMultiplicative { dealer, .. })
+            if dealer == holder =>
+        {
+            Modify::Scaled(DAMAGE_DECREASE)
+        }
+        (Power::ShrinkPower, _, ModifyHook::DamageMultiplicative { dealer, .. })
+            if dealer == holder =>
+        {
+            Modify::Scaled(SHRUNK)
+        }
         (
             Power::StrengthPower,
             PowerAmount::Counted(amount),
-            ModifyHook::Damage {
-                holding: Holding::Dealer,
-            },
-        ) => Modify::Added(amount),
-        (
-            Power::StrengthPower,
-            PowerAmount::Endless,
-            ModifyHook::Damage {
-                holding: Holding::Dealer,
-            },
-        ) => unimplemented!("an endless Strength"),
-        (Power::StrengthPower, _, ModifyHook::Damage { .. }) => Modify::Nothing,
-        (
-            Power::VulnerablePower,
-            _,
-            ModifyHook::Damage {
-                holding: Holding::Target,
-            },
-        ) => Modify::Scaled(DAMAGE_INCREASE),
-        (
-            Power::WeakPower,
-            _,
-            ModifyHook::Damage {
-                holding: Holding::Dealer,
-            },
-        ) => Modify::Scaled(DAMAGE_DECREASE),
-        (
-            Power::ShrinkPower,
-            _,
-            ModifyHook::Damage {
-                holding: Holding::Dealer,
-            },
-        ) => Modify::Scaled(SHRUNK),
-        (
-            Power::VulnerablePower
-            | Power::WeakPower
-            | Power::ShrinkPower
-            | Power::BlockNextTurnPower
-            | Power::EnergyNextTurnPower
-            | Power::EscapeArtistPower
-            | Power::TerritorialPower
-            | Power::InfestedPower
-            | Power::IllusionPower
-            | Power::MinionPower
-            | Power::DexterityPower
-            | Power::SlowPower
-            | Power::SlipperyPower
-            | Power::BurrowedPower
-            | Power::SwipePower
-            | Power::SwordSagePower
-            | Power::TenderPower
-            | Power::ImbalancedPower
-            | Power::PlatingPower
-            | Power::SlumberPower
-            | Power::FurnacePower
-            | Power::ReattachPower,
-            _,
-            ModifyHook::Damage { .. },
-        ) => Modify::Nothing,
+            ModifyHook::DamageAdditive { dealer, .. },
+        ) if dealer == holder => Modify::Added(amount),
+        (Power::StrengthPower, PowerAmount::Endless, ModifyHook::DamageAdditive { dealer, .. })
+            if dealer == holder =>
+        {
+            unimplemented!("an endless Strength")
+        }
         // `SlipperyPower.ModifyHpLostAfterOsty`, which hands back one however
         // much its owner was about to lose. A hit that the block took whole
         // loses nothing, and this leaves that where it is.
-        (Power::SlipperyPower, _, ModifyHook::HpLost) => Modify::AtMost(one),
-        // No other ported power reads what a hit takes off the hit points.
-        (_, _, ModifyHook::HpLost) => Modify::Nothing,
-        // `ModifyBlockAdditive`, which pays only a powered card's block or a
-        // monster move's. Every block this hook is asked about is one of
-        // those, so the condition is the call site and not an arm here. An
-        // unpowered source, such as a relic's, will need the props that say
-        // so.
-        (Power::DexterityPower, PowerAmount::Counted(amount), ModifyHook::Block) => {
-            Modify::Added(amount)
+        (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { target }) if target == holder => {
+            Modify::AtMost(one)
         }
-        (Power::DexterityPower, PowerAmount::Endless, ModifyHook::Block) => {
+        // `DexterityPower.ModifyBlockAdditive` pays block from a card its
+        // owner plays, or block its owner gains otherwise. A fight here has
+        // one player, whose cards give the player block, so both are the
+        // block its holder is gaining.
+        (
+            Power::DexterityPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::BlockAdditive { target },
+        ) if target == holder => Modify::Added(amount),
+        (Power::DexterityPower, PowerAmount::Endless, ModifyHook::BlockAdditive { target })
+            if target == holder =>
+        {
             unimplemented!("an endless Dexterity")
         }
-        // A `TemporaryStrengthPower` moves no number itself. The Strength it
-        // lands is what a hit reads.
-        (Power::CrushUnderPower, _, _) => Modify::Nothing,
+        // The overrides above, for a number some other creature is party to.
         (
-            Power::VulnerablePower
-            | Power::WeakPower
-            | Power::ShrinkPower
-            | Power::BlockNextTurnPower
-            | Power::EnergyNextTurnPower
-            | Power::StrengthPower
-            | Power::TerritorialPower
-            | Power::IllusionPower
-            | Power::MinionPower
-            | Power::SlowPower
-            | Power::SlipperyPower
-            | Power::BurrowedPower
-            | Power::SwipePower
-            | Power::SwordSagePower
-            | Power::TenderPower
-            | Power::ImbalancedPower
-            | Power::PlatingPower
-            | Power::SlumberPower
-            | Power::FurnacePower
-            | Power::ReattachPower,
+            Power::SlowPower | Power::VulnerablePower | Power::WeakPower | Power::ShrinkPower,
             _,
-            ModifyHook::Block,
-        ) => Modify::Nothing,
+            ModifyHook::DamageMultiplicative { .. },
+        )
+        | (Power::StrengthPower, _, ModifyHook::DamageAdditive { .. })
+        | (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { .. })
+        | (Power::DexterityPower, _, ModifyHook::BlockAdditive { .. }) => Modify::Nothing,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     }
 }
 
 /// Answer a yes-or-no hook for one power.
+///
+/// A hook the fight raises reaches only a power that overrides it. A question
+/// the game asks every power about itself reaches all of them, and one with
+/// no override does not implement it.
 pub(crate) fn decide_hook(
     power: Power,
+    held: Held,
+    state: &State,
     hook: sts2_core::DecisionHook<V>,
 ) -> sts2_core::HookResponse<bool> {
+    use sts2_core::{DecisionHook, HookResponse};
+
     match (power, hook) {
+        // `ShouldCreatureBeRemovedFromCombatAfterDeath`, which keeps its own
+        // holder and no other.
         (
             Power::IllusionPower | Power::ReattachPower,
-            sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath,
-        ) => sts2_core::HookResponse::Decision(false),
-        (Power::MinionPower, sts2_core::DecisionHook::ShouldCountForCombatEnd) => {
-            sts2_core::HookResponse::Decision(false)
+            DecisionHook::ShouldRemoveCreatureAfterDeath { creature },
+        ) => HookResponse::Decision(creature != held.holder),
+        // `OwnerIsSecondaryEnemy`.
+        (Power::MinionPower, DecisionHook::ShouldCountForCombatEnd) => {
+            HookResponse::Decision(false)
         }
         // `ShouldPowerBeRemovedAfterOwnerDeath`. A power that keeps its owner
         // in the fight keeps itself, or the creature would come back without
         // whatever brought it back.
         (
             Power::ReattachPower | Power::MinionPower,
-            sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
-        ) => sts2_core::HookResponse::Decision(false),
-        // `IllusionPower.ShouldPowerBeRemovedOnDeath`: an illusion keeps its
-        // buffs, its own power among them, and loses the debuffs on it. A
-        // temporary power is a debuff's own doing and goes with it, and none
-        // is ported.
-        (Power::IllusionPower, sts2_core::DecisionHook::ShouldRemovePowerOnDeath { power }) => {
+            DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
+        ) => HookResponse::Decision(false),
+        // `IllusionPower.ShouldPowerBeRemovedOnDeath`, which reads the power
+        // and not whose it is: a debuff goes, and anything else stays. An
+        // `ITemporaryPower` is a debuff that goes regardless, and none is
+        // ported, so a debuff here is a debuff.
+        (Power::IllusionPower, DecisionHook::ShouldRemovePowerOnDeath { power, .. }) => {
             use sts2_core::PowerTable as _;
 
             let debuff = power.debuff().unwrap_or_else(|| {
-                unimplemented!("whether {power:?} is a debuff on a dying illusion")
+                unimplemented!("whether {power:?} is a debuff on a dying creature")
             });
-            // `ITemporaryPower` is a debuff's own doing and goes with it.
-            // None is ported, so a debuff here is a debuff.
-            sts2_core::HookResponse::Decision(debuff)
+            HookResponse::Decision(debuff)
         }
-        _ => sts2_core::HookResponse::DoesNotImplement,
+        // `ShouldAllowHitting`, which refuses its own holder while it revives.
+        (
+            Power::IllusionPower | Power::ReattachPower,
+            DecisionHook::ShouldAllowHitting { creature },
+        ) => HookResponse::Decision(creature != held.holder || !state.reviving()),
+        // `BurrowedPower.ShouldClearBlock`, which keeps its own holder's.
+        (Power::BurrowedPower, DecisionHook::ShouldClearBlock { creature }) => {
+            HookResponse::Decision(creature != held.holder)
+        }
+        // `InfestedPower.ShouldStopCombatFromEnding`, for as long as it is on
+        // a creature in the fight.
+        (Power::InfestedPower, DecisionHook::ShouldStopCombatFromEnding) => {
+            HookResponse::Decision(true)
+        }
+        (power, hook) if hook.model_hook().is_some() => {
+            unimplemented!("what {power:?} decides for {hook:?}")
+        }
+        _ => HookResponse::DoesNotImplement,
     }
+}
+
+/// Whose a power is, as a hook reaching it reads that.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Held {
+    /// The side of the creature carrying it.
+    pub(crate) owner: CombatSide,
+    /// The creature carrying it, which is `PowerModel.Owner`.
+    pub(crate) holder: sts2_core::CombatId,
+    /// `PowerModel.Applier`.
+    pub(crate) applier: Option<sts2_core::CombatId>,
+    /// `Owner.Monster`, which is nothing for a power on the player.
+    pub(crate) monster: Option<Monster>,
 }
 
 /// Dispatch one of the event hooks the simulator currently supports.
@@ -327,7 +402,7 @@ pub(crate) fn decide_hook(
 pub(crate) fn event_hook(
     power: Power,
     amount: PowerAmount<Number>,
-    owner: CombatSide,
+    held: Held,
     state: &mut State,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
@@ -337,27 +412,32 @@ pub(crate) fn event_hook(
 
     debug_assert_eq!(state.power(), power);
     let counted = state.counted();
+    let Held {
+        owner,
+        holder,
+        applier,
+        monster,
+    } = held;
 
     // `TemporaryStrengthPower` asks for two things when a turn ends, and the
     // match below spells one. Its subclasses answer there instead.
     if let Power::CrushUnderPower = power {
-        return temporary_strength(false, amount, owner, hook, asked);
+        return temporary_strength(power, false, amount, held, hook, asked);
     }
 
     let one: Number = num_traits::one();
 
     let effect = match (power, amount, hook) {
-        (Power::ImbalancedPower, _, EventHook::DamageGiven { fully_blocked: true }) => {
+        (
+            Power::ImbalancedPower,
+            _,
+            EventHook::DamageGiven {
+                dealer,
+                fully_blocked: true,
+            },
+        ) if dealer == holder => {
             state.set_off_balance(true);
-            asked.push(HookEffect::StunOwner(Box::new(sts2_core::NextMove {
-                id: MoveId::Stunned,
-                intents: [sts2_core::Intent {
-                    kind: IntentKind::Stun,
-                    attack: None,
-                }]
-                .into_iter()
-                .collect(),
-            })));
+            asked.push(stunned(None));
             return;
         }
         (
@@ -377,8 +457,21 @@ pub(crate) fn event_hook(
                 side: CombatSide::Enemy,
             },
         ) => Some(HookEffect::TickDownDuration),
-        (Power::ShrinkPower, _, EventHook::SideTurnEnd { .. }) => {
-            unimplemented!("what a counted Shrink does when a turn ends")
+        // `ShrinkPower.AfterSideTurnEnd`, for the side its owner is among the
+        // participants of. An infinite Shrink, the one the game gives a
+        // negative amount, lasts the fight.
+        (Power::ShrinkPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::Decrement)
+        }
+        (Power::ShrinkPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ShrinkPower.AfterDeath`, which goes with the creature that applied
+        // it.
+        (Power::ShrinkPower, _, EventHook::AfterDeath { creature, .. })
+            if applier == Some(creature) =>
+        {
+            Some(HookEffect::Remove)
         }
         // `AfterSideTurnEnd` for the side its owner is among the participants
         // of, which is its owner's own side.
@@ -429,32 +522,23 @@ pub(crate) fn event_hook(
             _,
             EventHook::SideTurnEnd { .. },
         ) => None,
-        (Power::EnergyNextTurnPower, PowerAmount::Counted(amount), EventHook::EnergyReset) => {
+        (
+            Power::EnergyNextTurnPower,
+            PowerAmount::Counted(amount),
+            EventHook::EnergyReset { player },
+        ) if player == holder => {
             Some(HookEffect::GainEnergyAndRemove(amount))
         }
-        (Power::EnergyNextTurnPower, PowerAmount::Endless, EventHook::EnergyReset) => {
+        (Power::EnergyNextTurnPower, PowerAmount::Endless, EventHook::EnergyReset { player })
+            if player == holder =>
+        {
             unimplemented!("an endless EnergyNextTurnPower handing over energy")
         }
         (
-            Power::VulnerablePower
-            | Power::WeakPower
-            | Power::ShrinkPower
-            | Power::BlockNextTurnPower
-            | Power::StrengthPower
-            | Power::IllusionPower
-            | Power::MinionPower
-            | Power::DexterityPower
-            | Power::SwordSagePower
-            | Power::TenderPower
-            | Power::ImbalancedPower
-            | Power::PlatingPower
-            | Power::SlumberPower
-            | Power::FurnacePower
-            | Power::ReattachPower,
-            _,
-            EventHook::EnergyReset,
-        ) => None,
-        (Power::BlockNextTurnPower, PowerAmount::Counted(amount), EventHook::BlockCleared) => {
+            Power::BlockNextTurnPower,
+            PowerAmount::Counted(amount),
+            EventHook::BlockCleared { creature },
+        ) if creature == holder => {
             Some(HookEffect::GainBlockAndRemove(amount))
         }
         // `ReattachPower.AfterDeath`, which sends the segment to the dead move
@@ -464,10 +548,15 @@ pub(crate) fn event_hook(
         // A segment whose row is otherwise dead is left where it lies. The
         // fight is over by then, and the game spends that branch on the fade
         // every segment plays.
-        (Power::ReattachPower, _, EventHook::AfterDeath { .. }) => {
+        //
+        // `isReviving` is set too. The segment that dies with the rest of its
+        // row sets nothing in the game, and the fight ends with it.
+        (Power::ReattachPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
+            state.set_reviving(true);
             Some(HookEffect::EnterMove(MoveId::DeadMove))
         }
-        (Power::IllusionPower, _, EventHook::AfterDeath { .. }) => {
+        (Power::IllusionPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
+            state.set_reviving(true);
             Some(HookEffect::InstallMove(Box::new(sts2_core::NextMove {
                 id: MoveId::ReviveMove,
                 intents: [sts2_core::Intent {
@@ -481,8 +570,8 @@ pub(crate) fn event_hook(
         (
             Power::InfestedPower,
             PowerAmount::Counted(amount),
-            EventHook::AfterDeath { .. },
-        ) => Some(HookEffect::SummonAfterOwnerDeath {
+            EventHook::AfterDeath { creature, .. },
+        ) if creature == holder => Some(HookEffect::SummonAfterOwnerDeath {
             monster: Monster::Wriggler,
             count: amount,
             opening: Box::new(sts2_core::NextMove {
@@ -495,7 +584,9 @@ pub(crate) fn event_hook(
                 .collect(),
             }),
         }),
-        (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath { .. }) => {
+        (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath { creature, .. })
+            if creature == holder =>
+        {
             unimplemented!("an endless Infested power")
         }
         // `TenderPower.AfterCardPlayed`, which counts only its owner's own
@@ -561,33 +652,27 @@ pub(crate) fn event_hook(
         (
             Power::SlumberPower,
             PowerAmount::Counted(amount),
-            EventHook::DamageReceived { unblocked },
-        ) if unblocked >= one => {
+            EventHook::DamageReceived { target, unblocked },
+        ) if target == holder && unblocked >= one => {
             if amount == one {
                 asked.extend([
                     HookEffect::Decrement,
                     HookEffect::RemoveFromOwner(Power::PlatingPower),
-                    HookEffect::StunOwner(Box::new(sts2_core::NextMove {
-                        id: MoveId::Stunned,
-                        intents: [sts2_core::Intent {
-                            kind: IntentKind::Stun,
-                            attack: None,
-                        }]
-                        .into_iter()
-                        .collect(),
-                    })),
+                    stunned(None),
                 ]);
                 return;
             }
             Some(HookEffect::Decrement)
         }
-        (Power::SlumberPower, PowerAmount::Endless, EventHook::DamageReceived { .. }) => {
+        (Power::SlumberPower, PowerAmount::Endless, EventHook::DamageReceived { target, .. })
+            if target == holder =>
+        {
             unimplemented!("an endless Slumber power")
         }
         // `SlipperyPower.AfterDamageReceived`, which spends an instance on
         // every hit that reaches its owner's hit points.
-        (Power::SlipperyPower, _, EventHook::DamageReceived { unblocked })
-            if unblocked >= one =>
+        (Power::SlipperyPower, _, EventHook::DamageReceived { target, unblocked })
+            if target == holder && unblocked >= one =>
         {
             Some(HookEffect::Decrement)
         }
@@ -602,10 +687,11 @@ pub(crate) fn event_hook(
             Power::SwordSagePower,
             _,
             EventHook::PowerAmountChanged {
+                creature,
                 power: Power::SwordSagePower,
                 delta,
             },
-        ) => Some(HookEffect::AddReplays {
+        ) if creature == holder => Some(HookEffect::AddReplays {
             to: sts2_core::Replaying::EveryCopyOf(Cards::Token(TokenCard::SovereignBlade)),
             amount: delta,
         }),
@@ -653,22 +739,74 @@ pub(crate) fn event_hook(
             PowerAmount::Counted(amount),
             EventHook::BeforeSideTurnEndEarly { side },
         ) if side == owner => Some(HookEffect::GainBlock(amount)),
-        // Each of these is an override on an empty base, so a power that does
-        // not have one does nothing when the fight raises it.
+        (Power::PlatingPower, PowerAmount::Counted(_), EventHook::SideTurnStart { side, .. })
+            if owner != CombatSide::Enemy && side == owner =>
+        {
+            unimplemented!("Plating on a player")
+        }
+        // `SwipePower.BeforeDeath`, which hands the stolen card back as its
+        // owner dies.
+        (Power::SwipePower, _, EventHook::BeforeDeath { creature }) if creature == holder => {
+            match state {
+                State::Swipe { stolen } => stolen.map(HookEffect::ReturnCard),
+                state => unreachable!("stolen state for {:?}", state.power()),
+            }
+        }
+        // `BurrowedPower.AfterBlockBroken`: a Tunneler whose block breaks is
+        // stunned, comes back with a bite, and stops burrowing.
+        (Power::BurrowedPower, _, EventHook::BlockBroken { creature })
+            if creature == holder && monster == Some(Monster::Tunneler) =>
+        {
+            let bite = super::monsters::state_of(Monster::Tunneler, MoveId::BiteMove, 0)
+                .unwrap_or_else(|_| unreachable!("the Tunneler's graph holds its bite"));
+            asked.extend([
+                stunned(Some(bite)),
+                HookEffect::RemoveFromOwner(Power::BurrowedPower),
+            ]);
+            return;
+        }
+        // `BurrowedPower.AfterRemoved`, which takes all of its owner's block.
+        (Power::BurrowedPower, _, EventHook::Removed) => Some(HookEffect::LoseBlock),
+        // `IllusionPower.AfterCombatEnd` plays the dead owner's animation,
+        // which is all it does.
+        (Power::IllusionPower, _, EventHook::CombatEnd) => None,
+        // The overrides above that answer for their own holder, or for their
+        // own side's turn, and leave every other event alone.
+        (Power::BlockNextTurnPower, PowerAmount::Counted(_), EventHook::BlockCleared { .. })
+        | (Power::EnergyNextTurnPower, _, EventHook::EnergyReset { .. })
+        | (Power::FurnacePower, PowerAmount::Counted(_), EventHook::SideTurnStart { .. })
+        | (
+            Power::IllusionPower
+            | Power::InfestedPower
+            | Power::ReattachPower
+            | Power::ShrinkPower,
+            _,
+            EventHook::AfterDeath { .. },
+        )
+        | (Power::ImbalancedPower, _, EventHook::DamageGiven { .. })
+        | (Power::SwipePower, _, EventHook::BeforeDeath { .. })
+        | (Power::BurrowedPower, _, EventHook::BlockBroken { .. })
+        | (Power::SlipperyPower | Power::SlumberPower, _, EventHook::DamageReceived { .. })
+        | (
+            Power::PlatingPower,
+            PowerAmount::Counted(_),
+            EventHook::SideTurnStart { .. }
+            | EventHook::BeforeSideTurnStart { .. }
+            | EventHook::BeforeSideTurnEndEarly { .. },
+        )
+        | (
+            Power::SwordSagePower,
+            _,
+            EventHook::PowerAmountChanged { .. } | EventHook::CardEnteredCombat { .. },
+        ) => None,
+        // `BeforeApplied` and `AfterRemoved` are a power's own, and a move
+        // being performed is the move state's. Every power is asked these,
+        // and one whose class does not override them does nothing.
         (
             _,
             _,
-            EventHook::BlockCleared
-            | EventHook::AfterDeath { .. }
-            | EventHook::BeforeApplied { .. }
-            | EventHook::CardPlayed { .. }
-            | EventHook::SideTurnStart { .. }
-            | EventHook::DamageReceived { .. }
-            | EventHook::PowerAmountChanged { .. }
-            | EventHook::CardEnteredCombat { .. }
-            | EventHook::BeforeSideTurnStart { .. }
-            | EventHook::BeforeSideTurnEndEarly { .. }
-            | EventHook::DamageGiven { .. }
+            EventHook::BeforeApplied { .. }
+            | EventHook::Removed
             | EventHook::MonsterMovePerformed { .. },
         ) => None,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),

@@ -71,7 +71,8 @@ pub(crate) fn event_hook(
 pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
-        // The rest change no value a hook asks about.
+        // The fight asks only a relic that overrides the hook, and none of
+        // the rest overrides one of these.
         State::Anchor
         | State::BoneTea(_)
         | State::DivineRight
@@ -79,7 +80,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::GremlinHorn
         | State::LeadPaperweight
         | State::Permafrost(_)
-        | State::SandCastle => Modify::Nothing,
+        | State::SandCastle => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 

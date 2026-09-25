@@ -13,7 +13,7 @@ use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
 use super::board::Board;
 use super::live::{Asked, Asker, Live, Plays, Resuming, Skips};
-use super::{Error, Fighting, hook, legal, power, relic};
+use super::{Error, Fighting, hook, legal};
 
 /// A play the fight allows, resolved but not yet made.
 ///
@@ -129,13 +129,14 @@ pub(crate) fn apply_power<V: Rules>(
     // leaves every counter where it was.
     let ascension = live.ascension;
     let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
-    sts2_core::Fight::apply_power(&mut board, at, power, amount);
+    // `ApplyPowerConsoleCmd` hands `PowerCmd.Apply` no applier.
+    board.land(at, power, amount, None);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
 
     live.skip_tick = merged::<V>(&live.skip_tick, skipped);
     if ended == Some(super::Ended::Won) {
-        relic::combat_ended::<V>(relics);
+        super::listen::combat_ended::<V>(live, relics);
     }
     ended
 }
@@ -390,7 +391,7 @@ pub(super) fn carry_on<V: Rules>(
     let ended = effect.ended;
     let Asker::Card(card) = effect.asker else {
         if ended == Some(super::Ended::Won) {
-            relic::combat_ended::<V>(relics);
+            super::listen::combat_ended::<V>(next, relics);
         }
         return Ok(ended);
     };
@@ -420,20 +421,20 @@ pub(super) fn carry_on<V: Rules>(
     // `AfterCardPlayed`, once the card has left the play pile. A relic that
     // answers it acts through the board a card acts through, and draws from
     // the same stream, so this is before the streams are written back.
-    let mut asked = relic::card_played::<V>(relics, card_played);
-    asked.extend(power::notify::<V>(
+    let asked = super::listen::notify::<V>(
         next,
+        relics,
         sts2_core::EventHook::CardPlayed { card: card_played },
-    ));
+    );
     if !asked.is_empty() {
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
-        hook::apply::<V, _>(&mut board, asked);
+        hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
         let skipped = std::mem::take(&mut board.skipped);
         next.skip_tick = merged::<V>(&next.skip_tick, skipped);
     }
 
     if ended == Some(super::Ended::Won) {
-        relic::combat_ended::<V>(relics);
+        super::listen::combat_ended::<V>(next, relics);
     }
     Ok(ended)
 }

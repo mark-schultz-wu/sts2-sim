@@ -1,0 +1,12 @@
+# `SwipePower.BeforeDeath` hands the stolen card back as the thief dies, as a
+# card reward of its own. The hopper steals on its first turn and the player
+# kills it on the next, so the rewards offer the card back, and taking it
+# puts it in the deck again.
+#
+# A port that forgets what the Swipe took has nothing to hand back.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"THIEVING_HOPPER_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","take":[{"index":1}]}

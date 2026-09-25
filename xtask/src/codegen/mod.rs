@@ -35,6 +35,7 @@ mod runstate;
 mod sets;
 mod split;
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -264,6 +265,49 @@ impl Dump {
     fn of(&self, kind: &str) -> impl Iterator<Item = &Vec<String>> {
         self.rows.iter().filter(move |r| r[0] == kind)
     }
+}
+
+/// The hooks each model's class overrides, by the model's id, from the hook
+/// dump. Only the hooks some [`sts2_core::EventHook`] is raised as.
+fn overrides(build: &Build) -> Result<BTreeMap<String, Vec<sts2_core::ModelHook>>, String> {
+    let hooks = Dump::read("hooks.txt")?;
+    if hooks.build != *build {
+        return Err("hooks.txt was dumped from another build than the table it feeds".into());
+    }
+    let mut overrides: BTreeMap<String, Vec<sts2_core::ModelHook>> = BTreeMap::new();
+    for row in hooks.of("implements") {
+        if let Some(hook) = sts2_core::ModelHook::ALL
+            .into_iter()
+            .find(|hook| hook.name() == row[2])
+        {
+            overrides.entry(row[1].clone()).or_default().push(hook);
+        }
+    }
+    Ok(overrides)
+}
+
+/// `static OVERRIDES`, one entry per id in the order given.
+fn emit_overrides<'a>(
+    out: &mut String,
+    doc: &str,
+    ids: impl ExactSizeIterator<Item = &'a str>,
+    overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
+) {
+    writeln!(
+        out,
+        "\n/// The hooks each class overrides, from `hooks.txt`, {doc}\n\
+         static OVERRIDES: [sts2_core::Overrides; {}] = [",
+        ids.len()
+    )
+    .unwrap();
+    for id in ids {
+        let mut entry = String::from("sts2_core::Overrides::from_bits(0)");
+        for hook in overrides.get(id).into_iter().flatten() {
+            write!(entry, ".with(sts2_core::ModelHook::{hook:?})").unwrap();
+        }
+        writeln!(out, "    // {id}\n    {entry},").unwrap();
+    }
+    writeln!(out, "];").unwrap();
 }
 
 pub fn run() -> Result<String, String> {

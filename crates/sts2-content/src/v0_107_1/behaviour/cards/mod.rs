@@ -105,14 +105,15 @@ pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
 /// reads its own numbers off.
 pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
+    id: sts2_core::CardId<V>,
     printed: &P,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    // A card that overrides no hook answers nothing, which is what
-    // `AbstractModel` does for all but a handful of them.
-    if let Cards::Status(card) = card {
-        status::event_hook(card, printed, hook, asked);
+    // The fight asks only a card whose class overrides the hook.
+    match card {
+        Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
+        card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }
 

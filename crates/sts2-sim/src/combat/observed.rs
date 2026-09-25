@@ -14,10 +14,15 @@ use sts2_core::{
 
 use super::legal::InHand;
 use super::live::{Fighter, HeldPower, Live};
+use crate::run::HeldRelic;
 
 /// The fight a run is standing in, live or over.
 pub(crate) enum Fight<'a, V: Rules> {
-    Live(&'a Live<V>),
+    /// The fight, and the belt its listeners include.
+    Live {
+        live: &'a Live<V>,
+        relics: &'a [HeldRelic<V>],
+    },
     /// Won or lost, as its last report left it.
     Over(&'a Combat<V>),
 }
@@ -25,89 +30,92 @@ pub(crate) enum Fight<'a, V: Rules> {
 impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
     fn turn(&self) -> V::Count {
         match self {
-            Fight::Live(live) => live.turn,
+            Fight::Live { live, .. } => live.turn,
             Fight::Over(combat) => combat.turn,
         }
     }
 
     fn phase(&self) -> V::PlayerTurnPhase {
         match self {
-            Fight::Live(live) => live.phase,
+            Fight::Live { live, .. } => live.phase,
             Fight::Over(combat) => combat.phase,
         }
     }
 
     fn energy(&self) -> V::Count {
         match self {
-            Fight::Live(live) => live.energy,
+            Fight::Live { live, .. } => live.energy,
             Fight::Over(combat) => combat.energy,
         }
     }
 
     fn stars(&self) -> V::Count {
         match self {
-            Fight::Live(live) => live.stars,
+            Fight::Live { live, .. } => live.stars,
             Fight::Over(combat) => combat.stars,
         }
     }
 
     fn round(&self) -> V::Count {
         match self {
-            Fight::Live(live) => live.round,
+            Fight::Live { live, .. } => live.round,
             Fight::Over(combat) => combat.round,
         }
     }
 
     fn encounter(&self) -> Option<V::Encounter> {
         match self {
-            Fight::Live(live) => Some(live.encounter),
+            Fight::Live { live, .. } => Some(live.encounter),
             Fight::Over(combat) => combat.encounter,
         }
     }
 
     fn hand(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Hand)),
+            Fight::Live { live, .. } => Either::Left(live.cards.idents(Pile::Hand)),
             Fight::Over(combat) => Either::Right(combat.hand.iter().copied()),
         }
     }
 
     fn draw(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Draw)),
+            Fight::Live { live, .. } => Either::Left(live.cards.idents(Pile::Draw)),
             Fight::Over(combat) => Either::Right(combat.draw.iter().copied()),
         }
     }
 
     fn discard(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Discard)),
+            Fight::Live { live, .. } => Either::Left(live.cards.idents(Pile::Discard)),
             Fight::Over(combat) => Either::Right(combat.discard.iter().copied()),
         }
     }
 
     fn exhaust(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.cards.idents(Pile::Exhaust)),
+            Fight::Live { live, .. } => Either::Left(live.cards.idents(Pile::Exhaust)),
             Fight::Over(combat) => Either::Right(combat.exhaust.iter().copied()),
         }
     }
 
     fn creatures(&self) -> impl ExactSizeIterator<Item = impl ObservedCreature<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(
-                live.creatures
-                    .iter()
-                    .map(|fighter| Creature::Live { fighter, live }),
-            ),
+            Fight::Live { live, relics } => {
+                Either::Left(live.creatures.iter().map(|fighter| Creature::Live {
+                    fighter,
+                    live,
+                    relics,
+                }))
+            }
             Fight::Over(combat) => Either::Right(combat.creatures.iter().map(Creature::Over)),
         }
     }
 
     fn legal(&self) -> impl ExactSizeIterator<Item = impl ObservedPlayable<V>> + '_ {
         match self {
-            Fight::Live(live) => Either::Left(live.cards.iter(Pile::Hand).map(|card| {
-                Card::Live(InHand::new(card, &live.creatures, live.energy, live.stars))
+            Fight::Live { live, relics } => Either::Left(live.cards.iter(Pile::Hand).map(|card| {
+                let fight = super::listen::Walk { live, relics };
+                Card::Live(InHand::new(card, fight, live.energy, live.stars))
             })),
             Fight::Over(combat) => Either::Right(combat.legal.iter().map(Card::Over)),
         }
@@ -115,7 +123,7 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
 
     fn orbs(&self) -> Option<&Orbs<V>> {
         match self {
-            Fight::Live(live) => live.orbs.as_ref(),
+            Fight::Live { live, .. } => live.orbs.as_ref(),
             Fight::Over(combat) => combat.orbs.as_ref(),
         }
     }
@@ -126,6 +134,7 @@ enum Creature<'a, V: Rules> {
     Live {
         fighter: &'a Fighter<V>,
         live: &'a Live<V>,
+        relics: &'a [HeldRelic<V>],
     },
     Over(&'a sts2_core::Creature<V>),
 }
@@ -191,7 +200,11 @@ impl<V: Rules> ObservedCreature<V> for Creature<'_, V> {
 
     fn next_move(&self) -> Option<impl std::borrow::Borrow<NextMove<V>> + '_> {
         match self {
-            Creature::Live { fighter, live } => live.telegraphed(fighter).map(Cow::Owned),
+            Creature::Live {
+                fighter,
+                live,
+                relics,
+            } => live.telegraphed(relics, fighter).map(Cow::Owned),
             Creature::Over(creature) => creature.next_move.as_ref().map(Cow::Borrowed),
         }
     }

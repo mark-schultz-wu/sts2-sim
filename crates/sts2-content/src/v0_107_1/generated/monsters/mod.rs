@@ -1663,6 +1663,268 @@ static ROWS: [MonsterData; 126] = [
     glory::ZAPBOT,
 ];
 
+/// The hooks each class overrides, from `hooks.txt`, indexed by the monster's place in the enum.
+static OVERRIDES: [sts2_core::Overrides; 126] = [
+    // AEONGLASS
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // ARCHITECT
+    sts2_core::Overrides::from_bits(0),
+    // ASSASSIN_RUBY_RAIDER
+    sts2_core::Overrides::from_bits(0),
+    // AXEBOT
+    sts2_core::Overrides::from_bits(0),
+    // AXE_RUBY_RAIDER
+    sts2_core::Overrides::from_bits(0),
+    // BATTLE_FRIEND_V1
+    sts2_core::Overrides::from_bits(0),
+    // BATTLE_FRIEND_V2
+    sts2_core::Overrides::from_bits(0),
+    // BATTLE_FRIEND_V3
+    sts2_core::Overrides::from_bits(0),
+    // BIG_DUMMY
+    sts2_core::Overrides::from_bits(0),
+    // BOWLBUG_EGG
+    sts2_core::Overrides::from_bits(0),
+    // BOWLBUG_NECTAR
+    sts2_core::Overrides::from_bits(0),
+    // BOWLBUG_ROCK
+    sts2_core::Overrides::from_bits(0),
+    // BOWLBUG_SILK
+    sts2_core::Overrides::from_bits(0),
+    // BRUTE_RUBY_RAIDER
+    sts2_core::Overrides::from_bits(0),
+    // BYGONE_EFFIGY
+    sts2_core::Overrides::from_bits(0),
+    // BYRDONIS
+    sts2_core::Overrides::from_bits(0),
+    // BYRDPIP
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
+    // CALCIFIED_CULTIST
+    sts2_core::Overrides::from_bits(0),
+    // CEREMONIAL_BEAST
+    sts2_core::Overrides::from_bits(0),
+    // CHOMPER
+    sts2_core::Overrides::from_bits(0),
+    // CORPSE_SLUG
+    sts2_core::Overrides::from_bits(0),
+    // CROSSBOW_RUBY_RAIDER
+    sts2_core::Overrides::from_bits(0),
+    // CRUSHER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeDeath),
+    // CUBEX_CONSTRUCT
+    sts2_core::Overrides::from_bits(0),
+    // DAMP_CULTIST
+    sts2_core::Overrides::from_bits(0),
+    // DECIMILLIPEDE_SEGMENT_BACK
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // DECIMILLIPEDE_SEGMENT_FRONT
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // DECIMILLIPEDE_SEGMENT_MIDDLE
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // DEPRECATED_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // DEVOTED_SCULPTOR
+    sts2_core::Overrides::from_bits(0),
+    // ENTOMANCER
+    sts2_core::Overrides::from_bits(0),
+    // EXOSKELETON
+    sts2_core::Overrides::from_bits(0),
+    // EYE_WITH_TEETH
+    sts2_core::Overrides::from_bits(0),
+    // FABRICATOR
+    sts2_core::Overrides::from_bits(0),
+    // FAKE_MERCHANT_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // FAT_GREMLIN
+    sts2_core::Overrides::from_bits(0),
+    // FLAIL_KNIGHT
+    sts2_core::Overrides::from_bits(0),
+    // FLYCONID
+    sts2_core::Overrides::from_bits(0),
+    // FOGMOG
+    sts2_core::Overrides::from_bits(0),
+    // FOSSIL_STALKER
+    sts2_core::Overrides::from_bits(0),
+    // FROG_KNIGHT
+    sts2_core::Overrides::from_bits(0),
+    // FUZZY_WURM_CRAWLER
+    sts2_core::Overrides::from_bits(0),
+    // GAS_BOMB
+    sts2_core::Overrides::from_bits(0),
+    // GLOBE_HEAD
+    sts2_core::Overrides::from_bits(0),
+    // GREMLIN_MERC
+    sts2_core::Overrides::from_bits(0),
+    // GUARDBOT
+    sts2_core::Overrides::from_bits(0),
+    // HAUNTED_SHIP
+    sts2_core::Overrides::from_bits(0),
+    // HUNTER_KILLER
+    sts2_core::Overrides::from_bits(0),
+    // INFESTED_PRISM
+    sts2_core::Overrides::from_bits(0),
+    // INKLET
+    sts2_core::Overrides::from_bits(0),
+    // KIN_FOLLOWER
+    sts2_core::Overrides::from_bits(0),
+    // KIN_PRIEST
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // KNOWLEDGE_DEMON
+    sts2_core::Overrides::from_bits(0),
+    // LAGAVULIN_MATRIARCH
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::AfterDeath),
+    // LEAF_SLIME_M
+    sts2_core::Overrides::from_bits(0),
+    // LEAF_SLIME_S
+    sts2_core::Overrides::from_bits(0),
+    // LIVING_FOG
+    sts2_core::Overrides::from_bits(0),
+    // LIVING_SHIELD
+    sts2_core::Overrides::from_bits(0),
+    // LOUSE_PROGENITOR
+    sts2_core::Overrides::from_bits(0),
+    // MAGI_KNIGHT
+    sts2_core::Overrides::from_bits(0),
+    // MAWLER
+    sts2_core::Overrides::from_bits(0),
+    // MECHA_KNIGHT
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_ARTIFACT_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_ATTACK_AND_SUMMON_MINION_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_ATTACK_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_INTANGIBLE_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_PLATING_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_REATTACH_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // MULTI_ATTACK_MOVE_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // MYSTERIOUS_KNIGHT
+    sts2_core::Overrides::from_bits(0),
+    // MYTE
+    sts2_core::Overrides::from_bits(0),
+    // NIBBIT
+    sts2_core::Overrides::from_bits(0),
+    // NOISEBOT
+    sts2_core::Overrides::from_bits(0),
+    // ONE_HP_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // OSTY
+    sts2_core::Overrides::from_bits(0),
+    // OVICOPTER
+    sts2_core::Overrides::from_bits(0),
+    // OWL_MAGISTRATE
+    sts2_core::Overrides::from_bits(0),
+    // PAELS_LEGION
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::BeforeCombatStart)
+        .with(sts2_core::ModelHook::ModifyBlockMultiplicative),
+    // PARAFRIGHT
+    sts2_core::Overrides::from_bits(0),
+    // PHANTASMAL_GARDENER
+    sts2_core::Overrides::from_bits(0),
+    // PHROG_PARASITE
+    sts2_core::Overrides::from_bits(0),
+    // PUNCH_CONSTRUCT
+    sts2_core::Overrides::from_bits(0),
+    // QUEEN
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // ROCKET
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeDeath),
+    // SCROLL_OF_BITING
+    sts2_core::Overrides::from_bits(0),
+    // SEAPUNK
+    sts2_core::Overrides::from_bits(0),
+    // SEWER_CLAM
+    sts2_core::Overrides::from_bits(0),
+    // SHRINKER_BEETLE
+    sts2_core::Overrides::from_bits(0),
+    // SINGLE_ATTACK_MOVE_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // SKULKING_COLONY
+    sts2_core::Overrides::from_bits(0),
+    // SLIMED_BERSERKER
+    sts2_core::Overrides::from_bits(0),
+    // SLITHERING_STRANGLER
+    sts2_core::Overrides::from_bits(0),
+    // SLUDGE_SPINNER
+    sts2_core::Overrides::from_bits(0),
+    // SLUMBERING_BEETLE
+    sts2_core::Overrides::from_bits(0),
+    // SNAPPING_JAXFRUIT
+    sts2_core::Overrides::from_bits(0),
+    // SNEAKY_GREMLIN
+    sts2_core::Overrides::from_bits(0),
+    // SOUL_FYSH
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // SOUL_NEXUS
+    sts2_core::Overrides::from_bits(0),
+    // SPECTRAL_KNIGHT
+    sts2_core::Overrides::from_bits(0),
+    // SPINY_TOAD
+    sts2_core::Overrides::from_bits(0),
+    // STABBOT
+    sts2_core::Overrides::from_bits(0),
+    // TEN_HP_MONSTER
+    sts2_core::Overrides::from_bits(0),
+    // TERROR_EEL
+    sts2_core::Overrides::from_bits(0),
+    // TEST_SUBJECT
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // THE_ADVERSARY_MK_ONE
+    sts2_core::Overrides::from_bits(0),
+    // THE_ADVERSARY_MK_THREE
+    sts2_core::Overrides::from_bits(0),
+    // THE_ADVERSARY_MK_TWO
+    sts2_core::Overrides::from_bits(0),
+    // THE_FORGOTTEN
+    sts2_core::Overrides::from_bits(0),
+    // THE_INSATIABLE
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // THE_LOST
+    sts2_core::Overrides::from_bits(0),
+    // THE_OBSCURA
+    sts2_core::Overrides::from_bits(0),
+    // THIEVING_HOPPER
+    sts2_core::Overrides::from_bits(0),
+    // TOADPOLE
+    sts2_core::Overrides::from_bits(0),
+    // TORCH_HEAD_AMALGAM
+    sts2_core::Overrides::from_bits(0),
+    // TOUGH_EGG
+    sts2_core::Overrides::from_bits(0),
+    // TRACKER_RUBY_RAIDER
+    sts2_core::Overrides::from_bits(0),
+    // TUNNELER
+    sts2_core::Overrides::from_bits(0),
+    // TURRET_OPERATOR
+    sts2_core::Overrides::from_bits(0),
+    // TWIG_SLIME_M
+    sts2_core::Overrides::from_bits(0),
+    // TWIG_SLIME_S
+    sts2_core::Overrides::from_bits(0),
+    // TWO_TAILED_RAT
+    sts2_core::Overrides::from_bits(0),
+    // VANTOM
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // VINE_SHAMBLER
+    sts2_core::Overrides::from_bits(0),
+    // WATERFALL_GIANT
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
+    // WRIGGLER
+    sts2_core::Overrides::from_bits(0),
+    // ZAPBOT
+    sts2_core::Overrides::from_bits(0),
+];
 impl sts2_core::MonsterTable for Monster {
     type Act = Act;
 
@@ -1797,6 +2059,10 @@ impl sts2_core::MonsterTable for Monster {
             Self::Wriggler => &[Act::Overgrowth],
             Self::Zapbot => &[Act::Glory],
         }
+    }
+
+    fn overrides(self) -> sts2_core::Overrides {
+        OVERRIDES[self as usize]
     }
 }
 mod glory;

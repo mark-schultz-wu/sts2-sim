@@ -1218,7 +1218,25 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     .unwrap();
     writeln!(out, "        self.data().vars").unwrap();
     writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(
+        out,
+        "    fn overrides(self) -> sts2_core::Overrides {{\n\
+         \x20       OVERRIDES[usize::from(<Self as sts2_core::CardTable>::order(self))]\n\
+         \x20   }}"
+    )
+    .unwrap();
     writeln!(out, "}}").unwrap();
+
+    // Indexed by rank, which `order` is, so one flat table serves every pool.
+    let mut ranked: Vec<(&u16, &&str)> = ranks.iter().map(|(id, rank)| (rank, id)).collect();
+    ranked.sort_unstable();
+    super::emit_overrides(
+        &mut out,
+        "indexed by the card's place in the build's id order.",
+        ranked.into_iter().map(|(_, id)| *id),
+        &super::overrides(&build)?,
+    );
 
     split.finish(
         &out,

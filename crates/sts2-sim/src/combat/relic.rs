@@ -1,108 +1,21 @@
-//! The relics a run carries, as a fight asks them things.
+//! The hooks a relic is asked on its own rather than raised on the fight.
 //!
-//! `RelicManager` walks the belt in panel order and gives every relic the
-//! hook, which is what these do. A relic answers as its own model. A
-//! notification writes the state the run carries for it, and a value hook
-//! reads that state and leaves it.
+//! A relic answers as its own model, and writes the state the run carries for
+//! it. Every hook the fight raises reaches the belt through the walk.
 
-use sts2_core::{EventHook, ModifyHook, Rules};
+use sts2_core::{EventHook, Rules};
 
-use super::live::{Heard, HeardEvent};
+use super::live::HeardEvent;
 use crate::run::HeldRelic;
-
-/// Deliver one notification to every relic, and gather what they ask for.
-///
-/// The effects come back in belt order, which is the order the game applies
-/// them in.
-pub(crate) fn notify<V: Rules>(
-    relics: &mut [HeldRelic<V>],
-    hook: EventHook<V>,
-) -> sts2_core::HookEffects<V> {
-    let mut asked = sts2_core::HookEffects::new();
-    for held in relics.iter_mut() {
-        V::event_hook(HeardEvent::<V>::Relic(&mut held.state), hook, &mut asked);
-    }
-    asked
-}
-
-/// Ask every relic to change one number.
-pub(crate) fn modified<V: Rules>(
-    relics: &mut [HeldRelic<V>],
-    hook: ModifyHook<V>,
-    amount: V::Number,
-) -> V::Number {
-    super::board::hooked::<V>(
-        amount,
-        relics
-            .iter_mut()
-            .map(|held| V::modify_hook(Heard::<V>::Relic(&held.state), hook)),
-    )
-}
-
-/// `AfterCombatEnd`, which every relic gets once the fight is over.
-///
-/// The relics that counted something in the fight forget it here. The belt a
-/// run carries out of a fight is then the belt the game's screens show.
-pub(crate) fn combat_ended<V: Rules>(relics: &mut [HeldRelic<V>]) {
-    asks_for_nothing::<V>(notify::<V>(relics, EventHook::CombatEnd), "as a fight ends");
-}
-
-/// `AfterCardPlayed`, for a card the player has just finished playing.
-pub(crate) fn card_played<V: Rules>(
-    relics: &mut [HeldRelic<V>],
-    card: V::Card,
-) -> sts2_core::HookEffects<V> {
-    notify::<V>(relics, EventHook::CardPlayed { card })
-}
-
-/// `BeforeCombatStart`, once the fight is built and before it opens.
-pub(crate) fn combat_starting<V: Rules>(relics: &mut [HeldRelic<V>]) -> sts2_core::HookEffects<V> {
-    notify::<V>(relics, EventHook::CombatStarting)
-}
 
 /// `AfterObtained`, which `RelicCmd.Obtain` gives the relic it just handed
 /// over and to no other.
 pub(crate) fn obtained<V: Rules>(held: &mut HeldRelic<V>) -> sts2_core::HookEffects<V> {
-    notify::<V>(std::slice::from_mut(held), EventHook::Obtained)
-}
-
-/// `BeforeSideTurnStart` then, once the hand is dealt, `AfterSideTurnStart`.
-///
-/// Only the player's side turn. The relics this build fields act on their
-/// owner's turn, and the simulator has nowhere to put the enemy's yet.
-pub(crate) fn turn_starting<V: Rules>(relics: &mut [HeldRelic<V>], turn: V::Count) {
-    let asked = notify::<V>(
-        relics,
-        EventHook::BeforeSideTurnStart {
-            side: <V::CombatSide as sts2_core::SideKinds>::PLAYER,
-            turn,
-        },
+    let mut asked = sts2_core::HookEffects::new();
+    V::event_hook(
+        HeardEvent::<V>::Relic(&mut held.state),
+        EventHook::Obtained,
+        &mut asked,
     );
-    asks_for_nothing::<V>(asked, "before a turn starts");
-}
-
-/// What a hook nothing acts on came back with, which is nothing.
-///
-/// # Panics
-///
-/// A relic that asked for something here. The caller has no way to carry it
-/// out, and a request dropped in silence is a divergence somewhere else.
-fn asks_for_nothing<V: Rules>(asked: sts2_core::HookEffects<V>, when: &str) {
-    if let Some(effect) = asked.first() {
-        unimplemented!("a relic asking for {effect:?} {when}")
-    }
-}
-
-/// `AfterSideTurnStart`, which is the first hook to see the hand just dealt.
-pub(crate) fn turn_started<V: Rules>(
-    relics: &mut [HeldRelic<V>],
-    turn: V::Count,
-) -> sts2_core::HookEffects<V> {
-    notify::<V>(
-        relics,
-        EventHook::SideTurnStart {
-            side: <V::CombatSide as sts2_core::SideKinds>::PLAYER,
-            turn,
-        },
-    )
+    asked
 }

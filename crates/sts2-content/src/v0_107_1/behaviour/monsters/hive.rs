@@ -214,6 +214,9 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
         Some(PowerAmount::Endless) => unimplemented!("an endless Reattach power"),
         None => unreachable!("a segment reattaching carries the power that reattaches it"),
     };
+    fight.write_power(actor, Power::ReattachPower, |state| {
+        state.set_reviving(false)
+    });
     fight.heal(actor, amount);
 }
 
@@ -268,8 +271,12 @@ fn thievery<F: Fight<V>>(fight: &mut F) {
         &candidates,
         <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
     ) {
-        fight.remove_card(card);
+        // `SwipePower.Steal`, then `PowerCmd.Apply`. A Swipe the fight refuses
+        // takes the card with nobody to give it back.
+        let stolen = fight.remove_card(card);
         fight.apply_to_actor(Power::SwipePower, PowerAmount::Counted(1));
+        let actor = fight.actor();
+        fight.write_power(actor, Power::SwipePower, |state| state.steal(stolen));
     }
     fight.attack_opponents();
 }

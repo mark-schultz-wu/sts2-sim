@@ -1,0 +1,10 @@
+# `BurrowedPower.ShouldClearBlock` keeps its holder's block when its turn
+# starts. The Tunneler bites, then burrows behind 32 block, and still holds it
+# when it next comes up to attack from below.
+#
+# A port that clears every creature's block at its turn start finds it bare.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"TUNNELER_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
