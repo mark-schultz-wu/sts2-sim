@@ -114,7 +114,8 @@ fn temporary_strength(
     amount: PowerAmount<Number>,
     owner: CombatSide,
     hook: sts2_core::EventHook<V>,
-) -> Vec<sts2_core::HookEffect<V>> {
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     use sts2_core::{EventHook, HookEffect};
 
     // `Sign`, which every amount this power moves is multiplied by.
@@ -127,26 +128,26 @@ fn temporary_strength(
             let PowerAmount::Counted(landing) = landing else {
                 unimplemented!("an endless temporary Strength landing")
             };
-            vec![HookEffect::ApplyToOwner(
+            asked.push(HookEffect::ApplyToOwner(
                 Power::StrengthPower,
                 PowerAmount::Counted(signed(landing)),
-            )]
+            ))
         }
         (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side }) if side == owner => {
             // `PowerCmd.Remove(this)` and then the Strength back, which is the
             // order the game hands them over in.
-            vec![
+            asked.extend([
                 HookEffect::Remove,
                 HookEffect::ApplyToOwner(
                     Power::StrengthPower,
                     PowerAmount::Counted(-signed(amount)),
                 ),
-            ]
+            ])
         }
         (PowerAmount::Endless, EventHook::SideTurnEnd { .. }) => {
             unimplemented!("an endless temporary Strength")
         }
-        _ => Vec::new(),
+        _ => {}
     }
 }
 
@@ -329,7 +330,8 @@ pub(crate) fn event_hook(
     owner: CombatSide,
     state: &mut State,
     hook: sts2_core::EventHook<V>,
-) -> Vec<sts2_core::HookEffect<V>> {
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     use super::super::generated::monsters::{IntentKind, MoveId};
     use sts2_core::{EventHook, HookEffect};
 
@@ -339,7 +341,7 @@ pub(crate) fn event_hook(
     // `TemporaryStrengthPower` asks for two things when a turn ends, and the
     // match below spells one. Its subclasses answer there instead.
     if let Power::CrushUnderPower = power {
-        return temporary_strength(false, amount, owner, hook);
+        return temporary_strength(false, amount, owner, hook, asked);
     }
 
     let one: Number = num_traits::one();
@@ -347,7 +349,7 @@ pub(crate) fn event_hook(
     let effect = match (power, amount, hook) {
         (Power::ImbalancedPower, _, EventHook::DamageGiven { fully_blocked: true }) => {
             state.set_off_balance(true);
-            return vec![HookEffect::StunOwner(sts2_core::NextMove {
+            asked.push(HookEffect::StunOwner(Box::new(sts2_core::NextMove {
                 id: MoveId::Stunned,
                 intents: [sts2_core::Intent {
                     kind: IntentKind::Stun,
@@ -355,7 +357,8 @@ pub(crate) fn event_hook(
                 }]
                 .into_iter()
                 .collect(),
-            })];
+            })));
+            return;
         }
         (
             Power::ImbalancedPower,
@@ -465,7 +468,7 @@ pub(crate) fn event_hook(
             Some(HookEffect::EnterMove(MoveId::DeadMove))
         }
         (Power::IllusionPower, _, EventHook::AfterDeath { .. }) => {
-            Some(HookEffect::InstallMove(sts2_core::NextMove {
+            Some(HookEffect::InstallMove(Box::new(sts2_core::NextMove {
                 id: MoveId::ReviveMove,
                 intents: [sts2_core::Intent {
                     kind: IntentKind::Heal,
@@ -473,7 +476,7 @@ pub(crate) fn event_hook(
                 }]
                 .into_iter()
                 .collect(),
-            }))
+            })))
         }
         (
             Power::InfestedPower,
@@ -482,7 +485,7 @@ pub(crate) fn event_hook(
         ) => Some(HookEffect::SummonAfterOwnerDeath {
             monster: Monster::Wriggler,
             count: amount,
-            opening: sts2_core::NextMove {
+            opening: Box::new(sts2_core::NextMove {
                 id: MoveId::SpawnedMove,
                 intents: [sts2_core::Intent {
                     kind: IntentKind::Stun,
@@ -490,7 +493,7 @@ pub(crate) fn event_hook(
                 }]
                 .into_iter()
                 .collect(),
-            },
+            }),
         }),
         (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath { .. }) => {
             unimplemented!("an endless Infested power")
@@ -501,20 +504,22 @@ pub(crate) fn event_hook(
         // is what gives them back.
         (Power::TenderPower, _, EventHook::CardPlayed { .. }) => {
             state.count(one);
-            return vec![
+            asked.extend([
                 HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(-one)),
                 HookEffect::ApplyToOwner(Power::DexterityPower, PowerAmount::Counted(-one)),
-            ];
+            ]);
+            return;
         }
         // `TenderPower.AfterSideTurnEnd` for the side its owner is among the
         // participants of. Everything taken this turn comes back, and the
         // count starts again.
         (Power::TenderPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
             state.clear();
-            return vec![
+            asked.extend([
                 HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(counted)),
                 HookEffect::ApplyToOwner(Power::DexterityPower, PowerAmount::Counted(counted))
-            ];
+            ]);
+            return;
         }
         (Power::TenderPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `SlumberPower.AfterSideTurnEnd` for the side its owner is among. The
@@ -524,10 +529,11 @@ pub(crate) fn event_hook(
             if side == owner =>
         {
             if amount == one {
-                return vec![
+                asked.extend([
                     HookEffect::Decrement,
                     HookEffect::RemoveFromOwner(Power::PlatingPower),
-                ];
+                ]);
+                return;
             }
             Some(HookEffect::Decrement)
         }
@@ -558,10 +564,10 @@ pub(crate) fn event_hook(
             EventHook::DamageReceived { unblocked },
         ) if unblocked >= one => {
             if amount == one {
-                return vec![
+                asked.extend([
                     HookEffect::Decrement,
                     HookEffect::RemoveFromOwner(Power::PlatingPower),
-                    HookEffect::StunOwner(sts2_core::NextMove {
+                    HookEffect::StunOwner(Box::new(sts2_core::NextMove {
                         id: MoveId::Stunned,
                         intents: [sts2_core::Intent {
                             kind: IntentKind::Stun,
@@ -569,8 +575,9 @@ pub(crate) fn event_hook(
                         }]
                         .into_iter()
                         .collect(),
-                    }),
-                ];
+                    })),
+                ]);
+                return;
             }
             Some(HookEffect::Decrement)
         }
@@ -666,5 +673,5 @@ pub(crate) fn event_hook(
         ) => None,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };
-    effect.into_iter().collect()
+    asked.extend(effect);
 }

@@ -10,9 +10,23 @@ use crate::combat::Error;
 ///
 /// Cloning one branches the run. The setup a run drew before play began is
 /// shared by every branch, so a branch copies only what play can change.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Sim<V: Rules> {
     state: State<V>,
+}
+
+/// A search branches with `clone_from`, into a node it already has. A fight
+/// is written into that node without allocating.
+impl<V: Rules> Clone for Sim<V> {
+    fn clone(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.state.clone_from(&source.state);
+    }
 }
 
 impl<V: Rules> Play<V> for Sim<V> {

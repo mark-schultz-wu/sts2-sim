@@ -29,7 +29,6 @@ use super::super::generated::relics::Relic;
 use crate::Field;
 
 pub(crate) type Number = <V as sts2_core::ContentVersion>::Number;
-type Effects = Vec<sts2_core::HookEffect<V>>;
 
 /// One relic's own model, as the run carries it.
 ///
@@ -50,17 +49,21 @@ pub enum State {
 }
 
 /// Deliver a notification to one relic.
-pub(crate) fn event_hook(state: &mut State, hook: EventHook<V>) -> Effects {
+pub(crate) fn event_hook(
+    state: &mut State,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     match state {
-        State::Anchor => anchor::event_hook(hook),
-        State::BoneTea(state) => bone_tea::event_hook(state, hook),
-        State::DivineRight => divine_right::event_hook(hook),
-        State::DollysMirror => dollys_mirror::event_hook(hook),
-        State::GremlinHorn => gremlin_horn::event_hook(hook),
+        State::Anchor => anchor::event_hook(hook, asked),
+        State::BoneTea(state) => bone_tea::event_hook(state, hook, asked),
+        State::DivineRight => divine_right::event_hook(hook, asked),
+        State::DollysMirror => dollys_mirror::event_hook(hook, asked),
+        State::GremlinHorn => gremlin_horn::event_hook(hook, asked),
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
-        State::Permafrost(state) => permafrost::event_hook(state, hook),
+        State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
-        State::SandCastle => sand_castle::event_hook(hook),
+        State::SandCastle => sand_castle::event_hook(hook, asked),
     }
 }
 

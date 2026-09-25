@@ -9,9 +9,8 @@ use super::Number;
 const STARS: Number = 3;
 
 /// `AfterRoomEntered`, which pays the stars on the way into a fight.
-pub(super) fn event_hook(hook: EventHook<V>) -> Vec<HookEffect<V>> {
-    match hook {
-        EventHook::CombatRoomEntered => vec![HookEffect::GainStars(STARS)],
-        _ => Vec::new(),
+pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
+    if let EventHook::CombatRoomEntered = hook {
+        asked.push(HookEffect::GainStars(STARS));
     }
 }

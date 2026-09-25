@@ -1,6 +1,6 @@
 //! `Pocketwatch`: the cards played in a turn, and the draw the next one gets.
 
-use sts2_core::{EventHook, HookEffect, Modify, ModifyHook};
+use sts2_core::{EventHook, Modify, ModifyHook};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::runstate::CombatSide;
@@ -26,7 +26,7 @@ pub struct State {
 /// last turn's before anything is drawn, and `AfterCombatEnd` forgets both.
 /// `AfterSideTurnStart` only refreshes the counter on screen, so nothing here
 /// answers it.
-pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) -> Vec<HookEffect<V>> {
+pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
     match hook {
         EventHook::CardPlayed { .. } => state.played_this_turn += 1,
         EventHook::BeforeSideTurnStart {
@@ -39,7 +39,6 @@ pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) -> Vec<HookEffec
         EventHook::CombatEnd => *state = State::default(),
         _ => {}
     }
-    Vec::new()
 }
 
 /// `ModifyHandDraw`: three more cards for a turn that followed a quiet one.

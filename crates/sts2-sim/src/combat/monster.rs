@@ -5,7 +5,8 @@ use sts2_core::rng::{Choices, GameRng};
 use sts2_core::{CombatId, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
-use super::live::{Fighter, HeldPower, Live, PowerList, Stacked};
+use super::live::{CREATURES, Fighter, HeldPower, Live, PowerList, Stacked};
+use crate::bounded::Bounded;
 use crate::stream::Streams;
 
 /// Roll a monster's health, avoiding healths already rolled in this fight
@@ -32,18 +33,11 @@ fn health<V: Rules>(
     }
 }
 
-/// The enemy side of a fight, as it begins.
-#[derive(Debug)]
-pub(crate) struct Roster<V: Rules> {
-    pub(crate) creatures: Vec<Fighter<V>>,
-    pub(crate) machines: Vec<Machine<V>>,
-}
-
 /// One monster's move graph, and where it stands.
 ///
 /// Beside the fight rather than in it. An observation reports what a monster
 /// does next, not how its graph reached that.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Machine<V: Rules> {
     /// The creature in the fight this graph belongs to.
     pub(crate) creature: CombatId,
@@ -54,6 +48,14 @@ pub(crate) struct Machine<V: Rules> {
     pub(crate) machine: MoveMachine,
 }
 
+impl<V: Rules> Clone for Machine<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for Machine<V> {}
+
 /// Roll health and the first move in encounter order, advancing the two run
 /// streams that own those draws.
 pub(crate) fn initialize<V: Rules>(
@@ -61,7 +63,9 @@ pub(crate) fn initialize<V: Rules>(
     encounter: V::Encounter,
     streams: &mut Streams<V>,
     monsters: &[sts2_core::Spawned<V>],
-) -> Result<Roster<V>, Error> {
+    creatures: &mut Bounded<Fighter<V>, CREATURES>,
+    machines: &mut Bounded<Machine<V>, CREATURES>,
+) -> Result<(), Error> {
     let rngs = streams.combat();
 
     // A fight the encounter builds nobody for is not a fight.
@@ -70,10 +74,11 @@ pub(crate) fn initialize<V: Rules>(
         .and_then(nonmax::NonMaxU8::new)
         .ok_or(Error::CreatureIdOverflow)?;
 
-    let mut creatures = Vec::with_capacity(monsters.len());
-    let mut machines = Vec::with_capacity(monsters.len());
+    // The monsters follow whoever the fight already holds, and a health is
+    // rolled against theirs alone.
+    let first = creatures.len();
     for (index, &sts2_core::Spawned { monster, opens_on }) in monsters.iter().enumerate() {
-        let hp = health::<V>(monster, ascension, &creatures, rngs.niche);
+        let hp = health::<V>(monster, ascension, &creatures[first..], rngs.niche);
 
         let position = u8::try_from(index)
             .ok()
@@ -128,7 +133,7 @@ pub(crate) fn initialize<V: Rules>(
     // before the next one reads. The powers above are applied in the same
     // hook, and none of them reads another creature, so where they sit among
     // these two passes cannot be seen.
-    for at in 0..creatures.len() {
+    for at in first..creatures.len() {
         let Some(ModelId::Monster(monster)) = creatures[at].model else {
             continue;
         };
@@ -149,10 +154,7 @@ pub(crate) fn initialize<V: Rules>(
         creatures[at].hp = health;
     }
 
-    Ok(Roster {
-        creatures,
-        machines,
-    })
+    Ok(())
 }
 
 /// Add a monster during a fight, before the enemy side prepares its next turn.
@@ -267,20 +269,19 @@ mod tests {
         let inklets =
             [Monster::Inklet, Monster::Inklet, Monster::Inklet].map(sts2_core::Spawned::new);
 
-        let roster = initialize::<V0_107_1>(
+        let (mut creatures, mut machines) = (Bounded::new(), Bounded::new());
+        initialize::<V0_107_1>(
             AscensionLevel::None,
             Encounter::SlimesWeak,
             &mut streams,
             &inklets,
+            &mut creatures,
+            &mut machines,
         )
         .unwrap();
 
         assert_eq!(
-            roster
-                .creatures
-                .iter()
-                .map(|c| c.max_hp)
-                .collect::<Vec<_>>(),
+            creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),
             [13, 17, 12]
         );
     }
@@ -323,7 +324,7 @@ mod tests {
         .expect("a performed move can be left");
         assert_eq!(next.id, MoveId::DeadMove);
         assert!(
-            !machine.log.contains(&machine.at),
+            !machine.log.contains(machine.at),
             "`ForceCurrentState` does not write the state into the log"
         );
     }
@@ -351,17 +352,19 @@ mod tests {
         ]
         .map(sts2_core::Spawned::new);
 
-        let roster = initialize::<V0_107_1>(
+        let (mut creatures, mut machines) = (Bounded::new(), Bounded::new());
+        initialize::<V0_107_1>(
             AscensionLevel::None,
             Encounter::DecimillipedeElite,
             &mut streams,
             &segments,
+            &mut creatures,
+            &mut machines,
         )
         .unwrap();
 
         assert_eq!(
-            roster
-                .creatures
+            creatures
                 .iter()
                 .map(|c| (c.hp, c.max_hp))
                 .collect::<Vec<_>>(),
@@ -380,14 +383,16 @@ mod tests {
         ]
         .map(sts2_core::Spawned::new);
 
-        let roster = initialize::<V0_107_1>(
+        let (mut creatures, mut machines) = (Bounded::new(), Bounded::new());
+        initialize::<V0_107_1>(
             AscensionLevel::None,
             Encounter::SlimesWeak,
             &mut streams,
             &monsters,
+            &mut creatures,
+            &mut machines,
         )
         .unwrap();
-        let creatures = roster.creatures;
 
         assert_eq!(
             creatures.iter().map(|c| c.max_hp).collect::<Vec<_>>(),

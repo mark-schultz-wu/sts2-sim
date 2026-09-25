@@ -14,13 +14,16 @@
 use bitfield_struct::bitfield;
 use nonmax::{NonMaxI16, NonMaxU8};
 use num_traits::CheckedAdd;
-use smallvec::SmallVec;
 use sts2_core::{
-    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Rules,
-    SideKinds,
+    CardId, CardIdent, CardNumber, CardTable, CardVars, Combat, CombatId, Creature, Orbs, Pile,
+    Rules, SideKinds,
 };
 
 use super::monster::Machine;
+use crate::bounded::Bounded;
+
+/// The powers that skip their next tick, by the creature holding each.
+pub(super) type Skips<V> = Bounded<(CombatId, <V as sts2_core::ContentVersion>::Power), SKIPS>;
 
 /// How a copy holds one of the numbers it prints.
 ///
@@ -40,16 +43,16 @@ pub(super) type Amount = i16;
 pub(super) type CardVarList = Option<[NonMaxI16; VARS]>;
 
 /// The powers one creature holds.
-///
-/// Inline for the same reason as [`CardVarList`]: every creature in the fight
-/// is cloned with the fight, once per decision.
-pub(crate) type PowerList<V> = SmallVec<[HeldPower<V>; POWERS_INLINE]>;
+pub(crate) type PowerList<V> = Bounded<HeldPower<V>, POWERS>;
 
-/// How many powers a creature holds without reaching the heap.
-///
-/// A monster fields one or two, and a player holds what the fight has put on
-/// them. More than this spills.
-const POWERS_INLINE: usize = 4;
+/// How many powers one creature holds.
+const POWERS: usize = 16;
+
+/// How many creatures a fight holds, summons included.
+pub(crate) const CREATURES: usize = 8;
+
+/// How many powers a fight holds that skip their next tick.
+const SKIPS: usize = 32;
 
 /// How many differences one copy of a card holds.
 ///
@@ -68,7 +71,8 @@ const MODIFIERS: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Asker<V: Rules> {
-    Card(CardInstance<V>),
+    /// The card being played, which stands in the play pile.
+    Card(CardId<V>),
     Potion(V::Potion),
 }
 
@@ -254,19 +258,56 @@ pub(crate) type Heard<'a, V> = sts2_core::Listener<'a, V, CardInstance<V>>;
 /// The same, for a hook that a listener answers by writing on itself.
 pub(crate) type HeardEvent<'a, V> = sts2_core::EventListener<'a, V, CardInstance<V>>;
 
-/// A pile holds copies rather than ids, because a fight writes on a card. Two
-/// copies of one card are two objects. A rule that raises the damage on one
-/// leaves the other where it was.
-#[derive(Debug, PartialEq, Eq)]
+/// One copy of a card: which copy, and the state the fight has left it in.
+///
+/// Two copies of one card are two objects. A rule that raises the damage on
+/// one leaves the other where it was. A pile stores the id and the state
+/// apart, so copies in one state share it. See [`super::cards::Cards`].
+#[derive(Debug)]
 pub(crate) struct CardInstance<V: Rules> {
     /// Which copy this is, for as long as the fight holds it.
     pub(super) id: CardId<V>,
+    pub(super) face: Face<V>,
+}
+
+impl<V: Rules> Clone for CardInstance<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V: Rules> Copy for CardInstance<V> {}
+
+impl<V: Rules> PartialEq for CardInstance<V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.face == other.face
+    }
+}
+
+impl<V: Rules> Eq for CardInstance<V> {}
+
+impl<V: Rules> CardInstance<V> {
+    /// A fresh copy, printing what the table prints.
+    pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {
+        Self {
+            id,
+            face: Face::fresh(ident),
+        }
+    }
+}
+
+/// A card's state, less the id that names a copy in it.
+///
+/// What a fight stores once however many copies share it. See
+/// [`super::cards::Cards`].
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Face<V: Rules> {
     pub(super) ident: CardIdent<V>,
     /// What this copy prints, which starts as the table's and moves.
     ///
     /// Private, because how a copy keeps them is nobody else's business. A
     /// rule asks [`sts2_core::Printed::face`] for one by name, and the fight
-    /// asks [`CardInstance::numbers`] for all of them.
+    /// asks [`Face::numbers`] for all of them.
     vars: CardVarList,
     /// `CardModel.EnergyCost` and `StarCost` for this copy.
     ///
@@ -282,7 +323,7 @@ pub(crate) struct CardInstance<V: Rules> {
     ///
     /// Empty for almost every card, and inline for the rest.
     cost_modifiers: [CostModifier; MODIFIERS],
-    /// How many of [`CardInstance::cost_modifiers`] a card holds.
+    /// How many of [`Face::cost_modifiers`] a card holds.
     modifiers: u8,
     /// `CardModel.AddKeyword`, which writes words the table did not print.
     ///
@@ -298,25 +339,32 @@ pub(crate) struct CardInstance<V: Rules> {
     /// what it writes stays on the copy for the rest of the fight.
     ///
     /// A byte, because a card played more times than that is a fight nobody
-    /// finishes. [`CardInstance::replay`] says so rather than wrapping.
+    /// finishes. [`Face::replay`] says so rather than wrapping.
     replays: i8,
 }
 
-impl<V: Rules> Clone for CardInstance<V> {
+impl<V: Rules> Clone for Face<V> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<V: Rules> Copy for CardInstance<V> {}
+impl<V: Rules> Copy for Face<V> {}
 
-impl<V: Rules> sts2_core::Printed<V> for CardInstance<V> {
-    fn face(&self, key: V::CardVar) -> V::Number {
-        self.number(key).base
+impl<V: Rules> Face<V> {
+    /// The copy `id` names, in this state.
+    pub(super) fn named(self, id: CardId<V>) -> CardInstance<V> {
+        CardInstance { id, face: self }
     }
 }
 
-impl<V: Rules> CardInstance<V> {
+impl<V: Rules> sts2_core::Printed<V> for CardInstance<V> {
+    fn face(&self, key: V::CardVar) -> V::Number {
+        self.face.number(key).base
+    }
+}
+
+impl<V: Rules> Face<V> {
     /// The entry this copy holds for `key`.
     ///
     /// A key the card does not print is a mistake in the port, the way a card
@@ -402,14 +450,13 @@ impl<V: Rules> CardInstance<V> {
         row[at] = moved;
     }
 
-    /// A fresh copy, printing what the table prints.
-    pub(super) fn new(ident: CardIdent<V>, id: CardId<V>) -> Self {
+    /// A fresh copy's state, printing what the table prints.
+    fn fresh(ident: CardIdent<V>) -> Self {
         // Zeroes, because a fresh copy prints what its row prints. A card too
         // wide for the row carries no differences at all, which is what its
         // `None` says.
         let vars = (ident.card.vars().len() <= VARS).then_some([NonMaxI16::ZERO; VARS]);
         let mut card = Self {
-            id,
             ident,
             vars,
             cost: ident.card.cost(),
@@ -543,6 +590,13 @@ impl<V: Rules> CardInstance<V> {
     /// Drop the cost modifiers that do not outlive this turn.
     pub(super) fn turn_ended(&mut self) {
         self.kept(CostModifier::clears_when_turn_ends);
+    }
+
+    /// Whether this copy holds a cost modifier that ends with the turn.
+    pub(super) fn lasts_the_turn(&self) -> bool {
+        self.cost_modifiers[..usize::from(self.modifiers)]
+            .iter()
+            .any(|held| held.clears_when_turn_ends())
     }
 
     /// `GeneratePlayCount`: one play, and one more per replay this copy holds.
@@ -873,6 +927,17 @@ impl<V: Rules> HeldPower<V> {
         }
     }
 
+    /// Whether `hook` reaches this power at all.
+    ///
+    /// A power whose class does not override the hook an event is raised as
+    /// inherits `AbstractModel`'s, which does nothing, so it is not asked. An
+    /// event the dump has no hook for is asked of every power.
+    pub(crate) fn hears(&self, hook: &sts2_core::EventHook<V>) -> bool {
+        hook.model_hook().is_none_or(|model_hook| {
+            sts2_core::PowerTable::overrides(self.power).contains(model_hook)
+        })
+    }
+
     pub(crate) fn event_listener(&mut self, owner: V::CombatSide) -> HeardEvent<'_, V> {
         sts2_core::EventListener::Power {
             power: self.power,
@@ -910,12 +975,11 @@ pub(crate) struct Fighter<V: Rules> {
 
 impl<V: Rules> Clone for Fighter<V> {
     fn clone(&self) -> Self {
-        Self {
-            powers: PowerList::from_slice(&self.powers),
-            ..*self
-        }
+        *self
     }
 }
+
+impl<V: Rules> Copy for Fighter<V> {}
 
 impl<V: Rules> Fighter<V> {
     /// What a report shows of it, which is everything but the models.
@@ -938,7 +1002,7 @@ impl<V: Rules> Fighter<V> {
 }
 
 /// A fight in progress.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct Live<V: Rules> {
     pub(super) character: V::Character,
     /// What the run is being played at, which a card or a move reads for the
@@ -951,28 +1015,77 @@ pub(crate) struct Live<V: Rules> {
     pub(super) round: V::Count,
     /// The encounter this active fight belongs to.
     pub(super) encounter: V::Encounter,
-    pub(super) hand: Vec<CardInstance<V>>,
-    pub(super) draw: Vec<CardInstance<V>>,
-    pub(super) discard: Vec<CardInstance<V>>,
-    pub(super) exhaust: Vec<CardInstance<V>>,
+    pub(super) cards: super::cards::Cards<V>,
     /// Deck cards a combat command removed permanently while this fight ran.
     pub(super) removed_from_deck: Vec<CardIdent<V>>,
-    pub(super) creatures: Vec<Fighter<V>>,
+    pub(super) creatures: Bounded<Fighter<V>, CREATURES>,
     pub(super) orbs: Option<Orbs<V>>,
     /// One per monster in the fight, in the order the encounter fields them.
-    pub(super) machines: Vec<Machine<V>>,
+    pub(super) machines: Bounded<Machine<V>, CREATURES>,
     /// `PowerModel.SkipNextDurationTick`, as the powers holding it.
     ///
     /// A debuff landing on a player-side creature does not count down at the
     /// end of the turn it landed in. The game keeps that on the power
     /// instance. The observation's [`sts2_core::Stack`] is the game's own wire
     /// shape and carries no such field, so the fight keeps it beside them.
-    pub(super) skip_tick: Vec<(CombatId, V::Power)>,
+    pub(super) skip_tick: Skips<V>,
     /// The ids this fight has given out, and the next one it will.
     pub(super) card_ids: CardIds<V>,
     /// A card play waiting on an answer, which is the only thing the fight
     /// will take while it is set.
     pub(super) asking: Option<Asking<V>>,
+}
+
+impl<V: Rules> Clone for Live<V> {
+    fn clone(&self) -> Self {
+        Self {
+            cards: self.cards.clone(),
+            removed_from_deck: self.removed_from_deck.clone(),
+            orbs: self.orbs.clone(),
+            card_ids: self.card_ids.clone(),
+            asking: self.asking.clone(),
+            ..*self
+        }
+    }
+
+    /// Into the fight already here, field by field, so the lists keep what
+    /// they allocated and copy only what `source` holds.
+    fn clone_from(&mut self, source: &Self) {
+        let Live {
+            character,
+            ascension,
+            turn,
+            phase,
+            energy,
+            stars,
+            round,
+            encounter,
+            cards,
+            removed_from_deck,
+            creatures,
+            orbs,
+            machines,
+            skip_tick,
+            card_ids,
+            asking,
+        } = self;
+        *character = source.character;
+        *ascension = source.ascension;
+        *turn = source.turn;
+        *phase = source.phase;
+        *energy = source.energy;
+        *stars = source.stars;
+        *round = source.round;
+        *encounter = source.encounter;
+        cards.clone_from(&source.cards);
+        removed_from_deck.clone_from(&source.removed_from_deck);
+        creatures.copy_from(&source.creatures);
+        orbs.clone_from(&source.orbs);
+        machines.copy_from(&source.machines);
+        skip_tick.copy_from(&source.skip_tick);
+        card_ids.clone_from(&source.card_ids);
+        asking.clone_from(&source.asking);
+    }
 }
 
 impl<V: Rules> Live<V> {
@@ -985,10 +1098,7 @@ impl<V: Rules> Live<V> {
         let asked = self.asking.as_ref()?;
         let (min, max, _) = self.selecting()?;
         let options: Vec<_> = match &asked.question {
-            Asked::Pile { pile, .. } => super::play::pile(self, *pile)
-                .iter()
-                .map(|card| card.ident)
-                .collect(),
+            Asked::Pile { pile, .. } => self.cards.idents(*pile).collect(),
             Asked::Offered { offered, .. } => offered.to_vec(),
         };
         Some(sts2_core::Question::SelectCards {
@@ -1030,7 +1140,7 @@ impl<V: Rules> Live<V> {
                         u32::try_from(count.get()).expect("a selection count fits the wire"),
                     ),
                 };
-                (min, max, super::play::pile(self, *pile).len())
+                (min, max, self.cards.len(*pile))
             }
             Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.len()),
         })
@@ -1090,12 +1200,17 @@ impl<V: Rules> Live<V> {
             stars: self.stars,
             round: self.round,
             encounter: Some(self.encounter),
-            hand: self.hand.iter().map(|card| card.ident).collect(),
-            draw: self.draw.iter().map(|card| card.ident).collect(),
-            discard: self.discard.iter().map(|card| card.ident).collect(),
-            exhaust: self.exhaust.iter().map(|card| card.ident).collect(),
+            hand: self.cards.idents(Pile::Hand).collect(),
+            draw: self.cards.idents(Pile::Draw).collect(),
+            discard: self.cards.idents(Pile::Discard).collect(),
+            exhaust: self.cards.idents(Pile::Exhaust).collect(),
             creatures,
-            legal: super::legal::hand::<V>(&self.hand, &self.creatures, self.energy, self.stars),
+            legal: super::legal::hand::<V>(
+                self.cards.iter(Pile::Hand),
+                &self.creatures,
+                self.energy,
+                self.stars,
+            ),
             orbs: self.orbs.clone(),
         }
     }
@@ -1103,10 +1218,7 @@ impl<V: Rules> Live<V> {
     /// Consume a won fight into the report that remains on its reward screen.
     pub(crate) fn finish(mut self) -> Combat<V> {
         self.phase = <V::PlayerTurnPhase as sts2_core::TurnPhaseKinds>::NONE;
-        self.hand.clear();
-        self.draw.clear();
-        self.discard.clear();
-        self.exhaust.clear();
+        self.cards.clear();
         let player = self
             .creatures
             .iter_mut()
@@ -1193,15 +1305,16 @@ mod tests {
             (CostChange::Relative(-2), Lasting::ThisTurn),
             (CostChange::Absolute(3), Lasting::ThisFight),
         ] {
-            card.modify_cost(CostPool::Energy, change, lasting);
+            card.face.modify_cost(CostPool::Energy, change, lasting);
         }
 
-        card.turn_ended();
+        card.face.turn_ended();
 
         let kept: Vec<CostChange<i8>> = card
+            .face
             .cost_modifiers
             .iter()
-            .take(usize::from(card.modifiers))
+            .take(usize::from(card.face.modifiers))
             .map(|held| held.change())
             .collect();
         assert_eq!(
@@ -1288,6 +1401,6 @@ mod sizes {
             "the move name carries the tag"
         );
         assert_eq!(size_of::<Stacked>(), 2);
-        assert_eq!(size_of::<Fighter<V>>(), 104);
+        assert_eq!(size_of::<Fighter<V>>(), 232);
     }
 }

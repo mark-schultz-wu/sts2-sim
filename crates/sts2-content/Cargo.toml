@@ -11,6 +11,8 @@ sts2-core = { workspace = true }
 num-traits = { workspace = true }
 nonmax = { workspace = true }
 serde = { workspace = true }
+# A hook's answer, which is `sts2_core::HookEffects`.
+smallvec = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

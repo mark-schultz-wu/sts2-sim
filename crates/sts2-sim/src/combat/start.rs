@@ -1,12 +1,14 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CardIdent, CombatId, EventHook, HookEffect, ModelId, ModifyHook, Rules, SideKinds,
+    CardIdent, CombatId, EventHook, HookEffect, ModelId, ModifyHook, Pile, Rules, SideKinds,
     TurnPhaseKinds,
 };
 
+use super::cards::Cards;
 use super::live::{CardIds, CardInstance, Fighter, Live, PowerList};
 use super::{Error, encounter, monster, pile, relic};
+use crate::bounded::Bounded;
 use crate::run::HeldRelic;
 use crate::stream::Streams;
 
@@ -40,15 +42,36 @@ pub(crate) fn enter<V: Rules>(
     entering: &Entering<'_, V>,
     streams: &Streams<V>,
     relics: &mut [HeldRelic<V>],
-) -> Result<(Live<V>, Streams<V>), Error> {
-    let mut streams = streams.clone();
+) -> Result<(Box<Live<V>>, Streams<V>), Error> {
+    let mut streams = *streams;
+    let energy: V::Count = num_traits::cast(V::max_energy(character))
+        .expect("the starting energy fits the build's count type");
 
-    let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter)?;
-    let enemies = monster::initialize::<V>(ascension, encounter, &mut streams, &monsters)?;
+    // Built where it will live, and filled in place.
+    let mut live = Box::new(Live {
+        character,
+        ascension,
+        turn: num_traits::one(),
+        phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
+        energy,
+        stars: num_traits::zero(),
+        round: num_traits::one(),
+        encounter,
+        cards: Cards::with_cards(0),
+        removed_from_deck: Vec::new(),
+        creatures: Bounded::new(),
+        // Absent rather than an empty queue: the subsystem is inert until
+        // something gives the player a slot.
+        orbs: None,
+        machines: Bounded::new(),
+        // Nothing has been applied to anyone yet.
+        skip_tick: Bounded::new(),
+        card_ids: CardIds::new(),
+        asking: None,
+    });
 
     // Id zero, and the enemies from one. `CombatId` counts from the player.
-    let mut creatures = Vec::with_capacity(enemies.creatures.len() + 1);
-    creatures.push(Fighter {
+    live.creatures.push(Fighter {
         id: CombatId::new(nonmax::NonMaxU8::ZERO),
         model: Some(ModelId::Character(character)),
         side: <V::CombatSide as SideKinds>::PLAYER,
@@ -59,22 +82,33 @@ pub(crate) fn enter<V: Rules>(
         powers: PowerList::new(),
         next_move: None,
     });
-    creatures.extend(enemies.creatures);
+    let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter)?;
+    let Live {
+        creatures,
+        machines,
+        ..
+    } = &mut *live;
+    monster::initialize::<V>(
+        ascension,
+        encounter,
+        &mut streams,
+        &monsters,
+        creatures,
+        machines,
+    )?;
 
     // The deck's own cards, each becoming a copy the fight can write on.
-    let mut card_ids = CardIds::<V>::new();
     let deck: Vec<CardInstance<V>> = entering
         .deck
         .iter()
-        .map(|card| CardInstance::new(*card, card_ids.mint()))
+        .map(|card| CardInstance::new(*card, live.card_ids.mint()))
         .collect();
     // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
     // turn the fight is about to begin on. Both run before anything is drawn.
-    let turn: V::Count = num_traits::one();
-    let mut stars: V::Count = num_traits::zero();
+    let turn = live.turn;
     for effect in relic::notify::<V>(relics, EventHook::CombatRoomEntered) {
         match effect {
-            HookEffect::GainStars(gained) => stars = stars + count::<V>(gained),
+            HookEffect::GainStars(gained) => live.stars = live.stars + count::<V>(gained),
             other => unimplemented!("a relic asking for {other:?} as a room opens"),
         }
     }
@@ -83,7 +117,9 @@ pub(crate) fn enter<V: Rules>(
     // and passes no modifier.
     for effect in relic::combat_starting::<V>(relics) {
         match effect {
-            HookEffect::GainBlock(block) => creatures[0].block = creatures[0].block + block,
+            HookEffect::GainBlock(block) => {
+                live.creatures[0].block = live.creatures[0].block + block
+            }
             other => unimplemented!("a relic asking for {other:?} as a fight starts"),
         }
     }
@@ -91,7 +127,7 @@ pub(crate) fn enter<V: Rules>(
     // `BeforeSideTurnStart` for the powers a monster entered with, which is
     // where one that opens the fight behind block gains it.
     super::power::before_turn_start::<V>(
-        &mut creatures,
+        &mut live.creatures,
         <V::CombatSide as SideKinds>::PLAYER,
         turn,
     );
@@ -99,39 +135,10 @@ pub(crate) fn enter<V: Rules>(
     let drawn = hand_size::<V>(relics, turn);
     let piles = pile::shuffle(streams.combat().shuffle, deck).deal_opening(drawn);
 
-    let mut hand = piles.hand().to_vec();
-    upgraded::<V>(&mut hand, relic::turn_started::<V>(relics, turn));
+    live.cards = Cards::dealt(piles.hand(), piles.draw());
+    upgraded::<V>(&mut live.cards, relic::turn_started::<V>(relics, turn));
 
-    let energy: V::Count = num_traits::cast(V::max_energy(character))
-        .expect("the starting energy fits the build's count type");
-
-    Ok((
-        Live {
-            character,
-            ascension,
-            turn: num_traits::one(),
-            phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
-            energy,
-            stars,
-            round: num_traits::one(),
-            encounter,
-            hand,
-            draw: piles.draw().to_vec(),
-            discard: piles.discard().to_vec(),
-            exhaust: piles.exhaust().to_vec(),
-            removed_from_deck: Vec::new(),
-            creatures,
-            // Absent rather than an empty queue: the subsystem is inert until
-            // something gives the player a slot.
-            orbs: None,
-            machines: enemies.machines,
-            // Nothing has been applied to anyone yet.
-            skip_tick: Vec::new(),
-            card_ids,
-            asking: None,
-        },
-        streams,
-    ))
+    Ok((live, streams))
 }
 
 /// How many cards the fight's first hand is drawn to.
@@ -151,14 +158,14 @@ fn count<V: Rules>(amount: V::Number) -> V::Count {
 }
 
 /// Apply what the relics asked for once a hand was dealt to them.
-pub(super) fn upgraded<V: Rules>(hand: &mut [CardInstance<V>], effects: Vec<HookEffect<V>>) {
+pub(super) fn upgraded<V: Rules>(cards: &mut Cards<V>, effects: sts2_core::HookEffects<V>) {
     for effect in effects {
         match effect {
-            HookEffect::UpgradeHand => {
-                for card in hand.iter_mut() {
-                    card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight);
-                }
-            }
+            HookEffect::UpgradeHand => cards.write_every(
+                &[Pile::Hand],
+                |_| true,
+                |card| card.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight),
+            ),
             other => unimplemented!("a relic asking for {other:?} as a turn starts"),
         }
     }

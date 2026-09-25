@@ -138,17 +138,20 @@ impl sts2_core::Hooks for V0_107_1 {
     fn event_hook<P: sts2_core::Printed<Self> + ?Sized>(
         listener: sts2_core::EventListener<'_, Self, P>,
         hook: sts2_core::EventHook<Self>,
-    ) -> Vec<sts2_core::HookEffect<Self>> {
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) {
         match listener {
             sts2_core::EventListener::Power {
                 power,
                 amount,
                 owner,
                 state,
-            } => behaviour::powers::event_hook(power, amount, owner, state, hook),
-            sts2_core::EventListener::Relic(state) => behaviour::relics::event_hook(state, hook),
+            } => behaviour::powers::event_hook(power, amount, owner, state, hook, asked),
+            sts2_core::EventListener::Relic(state) => {
+                behaviour::relics::event_hook(state, hook, asked)
+            }
             sts2_core::EventListener::Card { card, printed } => {
-                behaviour::cards::event_hook(card, printed, hook)
+                behaviour::cards::event_hook(card, printed, hook, asked)
             }
         }
     }
@@ -654,17 +657,17 @@ fn branch<R: sts2_core::rng::GameRng>(
 fn allowed(branch: &generated::monsters::Branch, machine: &sts2_core::MoveMachine) -> bool {
     use generated::monsters::Repeat;
 
-    let recent = |n: usize| machine.log.iter().rev().take(n);
+    let recent = |n: usize| machine.log.recent(n);
     match branch.repeat {
         Repeat::Forever => true,
         // Barred while the last `n` log entries are all this branch.
         Repeat::InARow(n) => {
             let n = usize::from(n.get());
-            machine.log.len() < n || recent(n).any(|&at| at != branch.target)
+            machine.log.len() < n || recent(n).any(|at| at != branch.target)
         }
         // Barred while this branch is anywhere in the last `n`.
-        Repeat::Cooldown(n) => recent(usize::from(n.get())).all(|&at| at != branch.target),
-        Repeat::Once => !machine.log.contains(&branch.target),
+        Repeat::Cooldown(n) => recent(usize::from(n.get())).all(|at| at != branch.target),
+        Repeat::Once => !machine.log.contains(branch.target),
     }
 }
 
@@ -788,10 +791,10 @@ const RESTSITE: &str = include_str!("dumps/restsite.txt");
 
 /// The hook dump, verbatim. Test data, on the same terms as [`CARDS`].
 ///
-/// The one dump with no generated table beside it. It describes the interface
-/// between an engine and the things that react to it. A simulator implements
-/// that rather than looking it up, so there is nothing to generate. It is still
-/// a measurement of this build, and the tests are where it gets pinned.
+/// Mostly the interface between an engine and the things that react to it,
+/// which a simulator implements rather than looks up. Codegen takes one thing
+/// from it: which hooks each power's class overrides, in the power table. The
+/// rest is a measurement of this build, and the tests are where it gets pinned.
 #[cfg(test)]
 const HOOKS: &str = include_str!("dumps/hooks.txt");
 

@@ -32,19 +32,18 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: StatusCard,
     printed: &P,
     hook: EventHook<V>,
-) -> Vec<HookEffect<V>> {
-    match (card, hook) {
-        // `Void.AfterCardDrawn`, which acts on the draw that brought it here
-        // and on no other card's.
-        (
-            StatusCard::Void,
-            EventHook::CardDrawn {
-                card: Cards::Status(StatusCard::Void),
-            },
-        ) => {
-            vec![HookEffect::LoseEnergy(printed.face(CardVar::Energy))]
-        }
-        _ => Vec::new(),
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    // `Void.AfterCardDrawn`, which acts on the draw that brought it here and
+    // on no other card's.
+    if let (
+        StatusCard::Void,
+        EventHook::CardDrawn {
+            card: Cards::Status(StatusCard::Void),
+        },
+    ) = (card, hook)
+    {
+        asked.push(HookEffect::LoseEnergy(printed.face(CardVar::Energy)));
     }
 }
 

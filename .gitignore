@@ -1,6 +1,6 @@
 
-/target/
-/spikes/*/target/
+# Cargo's output, wherever a build or a bench puts it.
+target/
 __pycache__/
 
 # direnv keeps its cache here.

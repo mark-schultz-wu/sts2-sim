@@ -42,6 +42,8 @@ thiserror = "2.0.20"
 
 [profile.release]
 debug = true
-# The rules are generic over the build, so the inlining that matters is inside
-# a crate. Sixteen units cut it up.
+# One unit, so the optimiser sees a whole crate at once, and fat LTO, so it sees
+# across crates. The rules are monomorphised in the simulator, but every table
+# lookup and content hook they call is defined in the build's own crate.
 codegen-units = 1
+lto = "fat"

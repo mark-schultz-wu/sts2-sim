@@ -107,12 +107,12 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
     printed: &P,
     hook: sts2_core::EventHook<V>,
-) -> Vec<sts2_core::HookEffect<V>> {
-    match card {
-        Cards::Status(card) => status::event_hook(card, printed, hook),
-        // A card that overrides no hook answers nothing, which is what
-        // `AbstractModel` does for all but a handful of them.
-        _ => Vec::new(),
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    // A card that overrides no hook answers nothing, which is what
+    // `AbstractModel` does for all but a handful of them.
+    if let Cards::Status(card) = card {
+        status::event_hook(card, printed, hook, asked);
     }
 }
 

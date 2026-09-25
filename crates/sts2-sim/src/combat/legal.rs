@@ -11,22 +11,21 @@
 use crate::legal::{Legal, aimed, belt_index, hand_index, selections};
 use smallvec::{SmallVec, smallvec};
 use sts2_core::{
-    CardIdent, CardTable, CombatId, Cost, Decision, EffectResolution, FlagSet, Held, Playable,
-    PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Targets, Undrinkable,
-    UnplayableReasonKinds,
+    CardIdent, CardTable, CombatId, Cost, Decision, EffectResolution, FlagSet, Held, Pile,
+    Playable, PotionTable, PotionUsage, Preview, Rules, SideKinds, TargetKinds, Targets,
+    Undrinkable, UnplayableReasonKinds,
 };
 
 use super::live::{CardInstance, Fighter, Live};
 
 /// Every card in hand, in hand order, with the reasons each cannot be played.
 pub(super) fn hand<V: Rules>(
-    hand: &[CardInstance<V>],
+    hand: impl ExactSizeIterator<Item = CardInstance<V>>,
     creatures: &[Fighter<V>],
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<Playable<V>> {
-    hand.iter()
-        .map(|card| InHand::new(card, creatures, energy, stars).playable())
+    hand.map(|card| InHand::new(card, creatures, energy, stars).playable())
         .collect()
 }
 
@@ -127,7 +126,7 @@ pub(super) fn targets<V: Rules>(
 /// Everything but the previews is worked out when this is made. The previews
 /// are the dear part, and are worked out when asked for.
 pub(crate) struct InHand<'a, V: Rules> {
-    held: &'a CardInstance<V>,
+    held: CardInstance<V>,
     creatures: &'a [Fighter<V>],
     cost: Cost,
     star_cost: Cost,
@@ -138,14 +137,14 @@ pub(crate) struct InHand<'a, V: Rules> {
 
 impl<'a, V: Rules> InHand<'a, V> {
     pub(super) fn new(
-        held: &'a CardInstance<V>,
+        held: CardInstance<V>,
         creatures: &'a [Fighter<V>],
         energy: V::Count,
         stars: V::Count,
     ) -> Self {
-        let target = target_type::<V>(held.ident, creatures);
-        let (cost, star_cost) = held.costs();
-        let reason = reasons::<V>(held.ident, creatures, cost, star_cost, energy, stars);
+        let target = target_type::<V>(held.face.ident, creatures);
+        let (cost, star_cost) = held.face.costs();
+        let reason = reasons::<V>(held.face.ident, creatures, cost, star_cost, energy, stars);
         Self {
             held,
             creatures,
@@ -159,7 +158,7 @@ impl<'a, V: Rules> InHand<'a, V> {
 
     /// What playing it does, per target it varies by.
     pub(super) fn previews(&self) -> Previews<V> {
-        effect::<V>(self.held, self.creatures, &self.targets)
+        effect::<V>(&self.held, self.creatures, &self.targets)
     }
 
     /// The card as a report lists it.
@@ -171,7 +170,7 @@ impl<'a, V: Rules> InHand<'a, V> {
         let mut effect = Vec::with_capacity(previews.len());
         effect.extend(previews);
         Playable {
-            card: self.held.ident,
+            card: self.held.face.ident,
             cost: self.cost,
             star_cost: self.star_cost,
             target: self.target,
@@ -187,7 +186,7 @@ impl<'a, V: Rules> InHand<'a, V> {
 
 impl<V: Rules> sts2_core::ObservedPlayable<V> for InHand<'_, V> {
     fn card(&self) -> CardIdent<V> {
-        self.held.ident
+        self.held.face.ident
     }
 
     fn cost(&self) -> Cost {
@@ -241,10 +240,10 @@ pub(crate) fn moves<V: Rules>(live: &Live<V>, potions: &[V::Potion], alive: bool
 
     drinks::<V>(potions, Some(live), alive, &mut moves);
 
-    for (at, card) in live.hand.iter().enumerate() {
-        let (cost, star_cost) = card.costs();
+    for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
+        let (cost, star_cost) = card.face.costs();
         let refused = reasons::<V>(
-            card.ident,
+            card.face.ident,
             &live.creatures,
             cost,
             star_cost,
@@ -252,7 +251,7 @@ pub(crate) fn moves<V: Rules>(live: &Live<V>, potions: &[V::Potion], alive: bool
             live.stars,
         );
         if refused.is_none() {
-            let target = target_type::<V>(card.ident, &live.creatures);
+            let target = target_type::<V>(card.face.ident, &live.creatures);
             let targets = targets::<V>(target, &live.creatures, false);
             aimed(hand_index(at), &targets, &mut moves, |index, target| {
                 Decision::PlayCard { index, target }
@@ -416,7 +415,7 @@ fn effect<V: Rules>(
     targets: &[CombatId],
 ) -> Previews<V> {
     let per_target = matches!(
-        Some(target_type::<V>(held.ident, creatures)),
+        Some(target_type::<V>(held.face.ident, creatures)),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
             || t == <V::TargetType as TargetKinds>::ANY_ALLY
             || t == <V::TargetType as TargetKinds>::ANY_PLAYER
@@ -472,7 +471,8 @@ fn previewed<V: Rules>(
     target: Option<CombatId>,
 ) -> sts2_core::Keyed<V::CardVar, V::Number> {
     let dealer = super::board::player::<V>(creatures);
-    held.numbers()
+    held.face
+        .numbers()
         .map(|var| {
             let printed = || super::board::var::<V>(held, var.id, creatures);
             let resolved = match (var.modifier, target) {
@@ -505,7 +505,8 @@ fn numbers<V: Rules>(
     held: &CardInstance<V>,
     creatures: &[Fighter<V>],
 ) -> sts2_core::Keyed<V::CardVar, V::Number> {
-    held.numbers()
+    held.face
+        .numbers()
         .map(|var| (var.id, super::board::var::<V>(held, var.id, creatures)))
         .collect()
 }
@@ -567,7 +568,7 @@ mod tests {
         energy: <V as sts2_core::ContentVersion>::Count,
         stars: <V as sts2_core::ContentVersion>::Count,
     ) -> Playable<V> {
-        let mut plays = super::hand::<V>(hand, &fight(), energy, stars);
+        let mut plays = super::hand::<V>(hand.iter().copied(), &fight(), energy, stars);
         assert_eq!(plays.len(), 1);
         plays.remove(0)
     }
@@ -684,7 +685,7 @@ mod tests {
         let mut creatures = fight();
         creatures[1].alive = false;
 
-        let plays = super::hand::<V>(&[strike], &creatures, 3, 0);
+        let plays = super::hand::<V>([strike].into_iter(), &creatures, 3, 0);
 
         assert!(plays[0].targets.is_empty());
         // Nothing to hit is not a reason the card cannot be played. The game

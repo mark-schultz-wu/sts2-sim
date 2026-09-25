@@ -4,6 +4,7 @@
 //! which for the powers is what this does. A power answers as its own model,
 //! reading the stack its creature carries it as and the fields it saves.
 
+use smallvec::SmallVec;
 use sts2_core::{EventHook, HookEffect, Rules};
 
 use super::live::{Fighter, Live};
@@ -14,7 +15,10 @@ use super::live::{Fighter, Live};
 /// A power that writes on itself does so through the model the listener hands
 /// it, so nothing about that comes back. Everything else comes back in
 /// creature order, which is the order the game asks them in.
-pub(crate) fn notify<V: Rules>(live: &mut Live<V>, hook: EventHook<V>) -> Vec<HookEffect<V>> {
+pub(crate) fn notify<V: Rules>(
+    live: &mut Live<V>,
+    hook: EventHook<V>,
+) -> sts2_core::HookEffects<V> {
     asked_of::<V>(live, None, hook)
 }
 
@@ -27,8 +31,8 @@ pub(crate) fn notify_creature<V: Rules>(
     live: &mut Live<V>,
     creature: sts2_core::CombatId,
     hook: EventHook<V>,
-) -> Vec<HookEffect<V>> {
-    let mut remaining = Vec::new();
+) -> sts2_core::HookEffects<V> {
+    let mut remaining = sts2_core::HookEffects::new();
     for effect in asked_of::<V>(live, Some(creature), hook) {
         match effect {
             HookEffect::RemoveFromOwner(power) => {
@@ -52,7 +56,7 @@ pub(crate) fn notify_creature<V: Rules>(
                 }
                 machine.machine.interpose();
                 if let Some(owner) = live.creatures.iter_mut().find(|owner| owner.id == creature) {
-                    owner.next_move = Some(stunned.into());
+                    owner.next_move = Some((*stunned).into());
                 }
             }
             effect => remaining.push(effect),
@@ -66,9 +70,10 @@ fn asked_of<V: Rules>(
     live: &mut Live<V>,
     only: Option<sts2_core::CombatId>,
     hook: EventHook<V>,
-) -> Vec<HookEffect<V>> {
-    let mut asked = Vec::new();
-    let mut decremented: Vec<(sts2_core::CombatId, V::Power)> = Vec::new();
+) -> sts2_core::HookEffects<V> {
+    let mut asked = sts2_core::HookEffects::new();
+    let mut decremented: SmallVec<[(sts2_core::CombatId, V::Power); 4]> = SmallVec::new();
+    let mut answer = sts2_core::HookEffects::new();
 
     for creature in live
         .creatures
@@ -77,9 +82,10 @@ fn asked_of<V: Rules>(
     {
         let owner = creature.side;
         let id = creature.id;
-        for held in creature.powers.iter_mut() {
+        for held in creature.powers.iter_mut().filter(|held| held.hears(&hook)) {
             let power = held.power;
-            for effect in <V as sts2_core::Hooks>::event_hook(held.event_listener(owner), hook) {
+            <V as sts2_core::Hooks>::event_hook(held.event_listener(owner), hook, &mut answer);
+            for effect in answer.drain(..) {
                 match effect {
                     HookEffect::Decrement => decremented.push((id, power)),
                     effect => asked.push(effect),
@@ -115,14 +121,14 @@ pub(crate) fn before_turn_start<V: Rules>(
     side: V::CombatSide,
     turn: V::Count,
 ) {
+    let mut answer = sts2_core::HookEffects::new();
     for creature in creatures {
         let owner = creature.side;
         let mut gained = <V::Number as num_traits::Zero>::zero();
-        for held in creature.powers.iter_mut() {
-            for effect in <V as sts2_core::Hooks>::event_hook(
-                held.event_listener(owner),
-                EventHook::BeforeSideTurnStart { side, turn },
-            ) {
+        let hook = EventHook::BeforeSideTurnStart { side, turn };
+        for held in creature.powers.iter_mut().filter(|held| held.hears(&hook)) {
+            <V as sts2_core::Hooks>::event_hook(held.event_listener(owner), hook, &mut answer);
+            for effect in answer.drain(..) {
                 match effect {
                     // `ValueProp.Unpowered`, so nothing the creature carries
                     // moves it.
@@ -137,14 +143,14 @@ pub(crate) fn before_turn_start<V: Rules>(
 
 /// `BeforeSideTurnEndEarly`, including Plating before later end effects.
 pub(crate) fn before_turn_end<V: Rules>(creatures: &mut [Fighter<V>], side: V::CombatSide) {
+    let mut answer = sts2_core::HookEffects::new();
     for creature in creatures {
         let owner = creature.side;
         let mut gained = <V::Number as num_traits::Zero>::zero();
-        for held in &mut creature.powers {
-            for effect in <V as sts2_core::Hooks>::event_hook(
-                held.event_listener(owner),
-                EventHook::BeforeSideTurnEndEarly { side },
-            ) {
+        let hook = EventHook::BeforeSideTurnEndEarly { side };
+        for held in creature.powers.iter_mut().filter(|held| held.hears(&hook)) {
+            <V as sts2_core::Hooks>::event_hook(held.event_listener(owner), hook, &mut answer);
+            for effect in answer.drain(..) {
                 match effect {
                     HookEffect::GainBlock(amount) => gained = gained + amount,
                     other => unimplemented!("a power asking for {other:?} before a turn ends"),

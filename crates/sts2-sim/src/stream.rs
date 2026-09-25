@@ -14,10 +14,10 @@
 
 use std::marker::PhantomData;
 
-use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{Position, Positions, Rules, RunStreamKinds};
 
+use crate::bounded::Bounded;
 use crate::rng::MegaRng;
 
 /// The run's twelve streams and the player's three, at the positions they stand.
@@ -27,25 +27,24 @@ use crate::rng::MegaRng;
 /// is what a decision does before it draws.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Streams<V: Rules> {
-    run: SmallVec<[MegaRng; 12]>,
-    player: SmallVec<[MegaRng; 3]>,
+    run: Bounded<MegaRng, RUN_STREAMS>,
+    player: Bounded<MegaRng, PLAYER_STREAMS>,
     version: PhantomData<fn() -> V>,
 }
 
 impl<V: Rules> Clone for Streams<V> {
-    /// Copies the two rows rather than walking them.
-    ///
-    /// `SmallVec` clones a list one item at a time, because its `Clone` cannot
-    /// see that the item is `Copy`. A generator is 48 bytes and there are
-    /// fifteen, and a decision copies them all before it draws.
     fn clone(&self) -> Self {
-        Self {
-            run: SmallVec::from_slice(&self.run),
-            player: SmallVec::from_slice(&self.player),
-            version: PhantomData,
-        }
+        *self
     }
 }
+
+impl<V: Rules> Copy for Streams<V> {}
+
+/// How many run streams a build keeps. Both ported builds keep twelve.
+const RUN_STREAMS: usize = 12;
+
+/// How many streams each player keeps. Both ported builds keep three.
+const PLAYER_STREAMS: usize = 3;
 
 impl<V: Rules> Streams<V> {
     /// Every stream as the run's seed names it, before anything has drawn.
@@ -283,7 +282,7 @@ mod tests {
     fn a_decision_draws_from_a_clone() {
         let streams = Streams::<V0_107_1>::opening(123);
 
-        let mut taken = streams.clone();
+        let mut taken = streams;
         taken.run(RunRngType::Niche).next_u64();
 
         assert_eq!(streams.positions().run[&RunRngType::Niche].counter, 0);

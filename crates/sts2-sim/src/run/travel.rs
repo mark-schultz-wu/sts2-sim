@@ -83,7 +83,7 @@ impl<V: Rules> State<V> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
-                let mut streams = self.streams().clone();
+                let mut streams = *self.streams();
                 let roll = streams
                     .run(V::RunRngType::TREASURE_ROOM_RELICS)
                     .next_double();
@@ -127,7 +127,7 @@ impl<V: Rules> State<V> {
                     crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
                 let state = V::enter_event(event, self, &mut event_rng);
                 let (events_used, _, unknown_odds) = self.event_state();
-                let streams = self.streams().clone();
+                let streams = *self.streams();
                 self.enter_event(
                     to,
                     super::state::EnteredEvent {
@@ -145,7 +145,7 @@ impl<V: Rules> State<V> {
                 unimplemented!("entering {destination:?}");
             }
             let (mut events_used, visited, mut odds) = self.event_state();
-            let mut streams = self.streams().clone();
+            let mut streams = *self.streams();
             let roll = streams.run(V::RunRngType::UNKNOWN_MAP_POINT).next_double() as f32;
             let mut cumulative = 0.0;
             for probability in odds {

@@ -11,11 +11,11 @@ use super::super::super::generated::runstate::CombatSide;
 /// `target.Side != Owner.Creature.Side` is the whole of its rule. A relic's
 /// owner is a player. So this pays for a creature that fell on the other side,
 /// and not for the player holding it.
-pub(super) fn event_hook(hook: EventHook<V>) -> Vec<HookEffect<V>> {
+pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
         EventHook::AfterDeath { side } if side != <CombatSide as sts2_core::SideKinds>::PLAYER => {
-            vec![HookEffect::GainEnergy(1), HookEffect::Draw(1)]
+            asked.extend([HookEffect::GainEnergy(1), HookEffect::Draw(1)])
         }
-        _ => Vec::new(),
+        _ => {}
     }
 }

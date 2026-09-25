@@ -185,10 +185,10 @@ const RESTSITE: &str = include_str!("dumps/restsite.txt");
 
 /// The hook dump, verbatim. Test data, on the same terms as [`CARDS`].
 ///
-/// The one dump with no generated table beside it. It describes the interface
-/// between an engine and the things that react to it. A simulator implements
-/// that rather than looking it up, so there is nothing to generate. It is still
-/// a measurement of this build, and the tests are where it gets pinned.
+/// Mostly the interface between an engine and the things that react to it,
+/// which a simulator implements rather than looks up. Codegen takes one thing
+/// from it: which hooks each power's class overrides, in the power table. The
+/// rest is a measurement of this build, and the tests are where it gets pinned.
 #[cfg(test)]
 const HOOKS: &str = include_str!("dumps/hooks.txt");
 

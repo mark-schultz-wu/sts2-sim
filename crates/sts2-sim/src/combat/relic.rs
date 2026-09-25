@@ -5,7 +5,7 @@
 //! notification writes the state the run carries for it, and a value hook
 //! reads that state and leaves it.
 
-use sts2_core::{EventHook, HookEffect, ModifyHook, Rules};
+use sts2_core::{EventHook, ModifyHook, Rules};
 
 use super::live::{Heard, HeardEvent};
 use crate::run::HeldRelic;
@@ -17,11 +17,12 @@ use crate::run::HeldRelic;
 pub(crate) fn notify<V: Rules>(
     relics: &mut [HeldRelic<V>],
     hook: EventHook<V>,
-) -> Vec<HookEffect<V>> {
-    relics
-        .iter_mut()
-        .flat_map(|held| V::event_hook(HeardEvent::<V>::Relic(&mut held.state), hook))
-        .collect()
+) -> sts2_core::HookEffects<V> {
+    let mut asked = sts2_core::HookEffects::new();
+    for held in relics.iter_mut() {
+        V::event_hook(HeardEvent::<V>::Relic(&mut held.state), hook, &mut asked);
+    }
+    asked
 }
 
 /// Ask every relic to change one number.
@@ -50,18 +51,18 @@ pub(crate) fn combat_ended<V: Rules>(relics: &mut [HeldRelic<V>]) {
 pub(crate) fn card_played<V: Rules>(
     relics: &mut [HeldRelic<V>],
     card: V::Card,
-) -> Vec<HookEffect<V>> {
+) -> sts2_core::HookEffects<V> {
     notify::<V>(relics, EventHook::CardPlayed { card })
 }
 
 /// `BeforeCombatStart`, once the fight is built and before it opens.
-pub(crate) fn combat_starting<V: Rules>(relics: &mut [HeldRelic<V>]) -> Vec<HookEffect<V>> {
+pub(crate) fn combat_starting<V: Rules>(relics: &mut [HeldRelic<V>]) -> sts2_core::HookEffects<V> {
     notify::<V>(relics, EventHook::CombatStarting)
 }
 
 /// `AfterObtained`, which `RelicCmd.Obtain` gives the relic it just handed
 /// over and to no other.
-pub(crate) fn obtained<V: Rules>(held: &mut HeldRelic<V>) -> Vec<HookEffect<V>> {
+pub(crate) fn obtained<V: Rules>(held: &mut HeldRelic<V>) -> sts2_core::HookEffects<V> {
     notify::<V>(std::slice::from_mut(held), EventHook::Obtained)
 }
 
@@ -86,7 +87,7 @@ pub(crate) fn turn_starting<V: Rules>(relics: &mut [HeldRelic<V>], turn: V::Coun
 ///
 /// A relic that asked for something here. The caller has no way to carry it
 /// out, and a request dropped in silence is a divergence somewhere else.
-fn asks_for_nothing<V: Rules>(asked: Vec<HookEffect<V>>, when: &str) {
+fn asks_for_nothing<V: Rules>(asked: sts2_core::HookEffects<V>, when: &str) {
     if let Some(effect) = asked.first() {
         unimplemented!("a relic asking for {effect:?} {when}")
     }
@@ -96,7 +97,7 @@ fn asks_for_nothing<V: Rules>(asked: Vec<HookEffect<V>>, when: &str) {
 pub(crate) fn turn_started<V: Rules>(
     relics: &mut [HeldRelic<V>],
     turn: V::Count,
-) -> Vec<HookEffect<V>> {
+) -> sts2_core::HookEffects<V> {
     notify::<V>(
         relics,
         EventHook::SideTurnStart {
