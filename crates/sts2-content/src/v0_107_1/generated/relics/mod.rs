@@ -1464,7 +1464,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // ALCHEMICAL_COFFER
     sts2_core::Overrides::from_bits(0),
     // AMETHYST_AUBERGINE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingRewards)
+        .with(sts2_core::ModelHook::TryModifyRewards),
     // ANCHOR
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
     // ARCANE_SCROLL
@@ -1510,7 +1512,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // BLACK_BLOOD
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
     // BLACK_STAR
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
     // BLESSED_ANTLER
     sts2_core::Overrides::from_bits(0),
     // BLOOD_SOAKED_ROSE
@@ -1623,7 +1625,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // DREAM_CATCHER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // DRIFTWOOD
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewardsLate),
     // DUSTY_TOME
     sts2_core::Overrides::from_bits(0),
     // ECTOPLASM
@@ -1778,7 +1780,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::AfterDamageReceived)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // LAVA_ROCK
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
     // LEAD_PAPERWEIGHT
     sts2_core::Overrides::from_bits(0),
     // LEAFY_POULTICE
@@ -1973,7 +1975,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // POWER_CELL
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
     // PRAYER_WHEEL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
     // PRECARIOUS_SHEARS
     sts2_core::Overrides::from_bits(0),
     // PRECISE_SCISSORS
@@ -2184,13 +2186,18 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // WHITE_BEAST_STATUE
     sts2_core::Overrides::from_bits(0),
     // WHITE_STAR
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
     // WINGED_BOOTS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterRoomEntered)
+        .with(sts2_core::ModelHook::ShouldAllowFreeTravel),
     // WING_CHARM
     sts2_core::Overrides::from_bits(0),
     // WONGOS_MYSTERY_TICKET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterModifyingRewards)
+        .with(sts2_core::ModelHook::TryModifyRewards),
     // WONGO_CUSTOMER_APPRECIATION_BADGE
     sts2_core::Overrides::from_bits(0),
     // YUMMY_COOKIE

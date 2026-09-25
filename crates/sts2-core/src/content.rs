@@ -542,10 +542,14 @@ pub enum ModelHook {
     AfterRestSiteHeal,
     ModifyRestSiteHealAmount,
     TryModifyRestSiteHealRewards,
+    ShouldAllowFreeTravel,
+    TryModifyRewards,
+    TryModifyRewardsLate,
+    AfterModifyingRewards,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 51] = [
+    pub const ALL: [ModelHook; 55] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -597,6 +601,10 @@ impl ModelHook {
         ModelHook::AfterRestSiteHeal,
         ModelHook::ModifyRestSiteHealAmount,
         ModelHook::TryModifyRestSiteHealRewards,
+        ModelHook::ShouldAllowFreeTravel,
+        ModelHook::TryModifyRewards,
+        ModelHook::TryModifyRewardsLate,
+        ModelHook::AfterModifyingRewards,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -657,6 +665,10 @@ impl ModelHook {
             ModelHook::AfterRestSiteHeal => "AfterRestSiteHeal",
             ModelHook::ModifyRestSiteHealAmount => "ModifyRestSiteHealAmount",
             ModelHook::TryModifyRestSiteHealRewards => "TryModifyRestSiteHealRewards",
+            ModelHook::ShouldAllowFreeTravel => "ShouldAllowFreeTravel",
+            ModelHook::TryModifyRewards => "TryModifyRewards",
+            ModelHook::TryModifyRewardsLate => "TryModifyRewardsLate",
+            ModelHook::AfterModifyingRewards => "AfterModifyingRewards",
         }
     }
 }
@@ -1897,6 +1909,9 @@ pub enum DecisionHook<V: ContentVersion> {
         /// `!Owner.IsDead` for the listener's creature.
         alive: bool,
     },
+    /// `ShouldAllowFreeTravel`: whether the run can go on to any point of
+    /// the next row, rather than only those its point leads on to.
+    ShouldAllowFreeTravel,
 }
 
 impl<V: ContentVersion> DecisionHook<V> {
@@ -1914,6 +1929,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::TakesUnblockedDamage { .. } => ModelHook::ModifyUnblockedDamageTarget,
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
+            DecisionHook::ShouldAllowFreeTravel => ModelHook::ShouldAllowFreeTravel,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
         })
@@ -1923,8 +1939,19 @@ impl<V: ContentVersion> DecisionHook<V> {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
-    /// `AfterRoomEntered`, for a room the run fights in.
-    CombatRoomEntered,
+    /// `AfterRoomEntered`, for a room of this type.
+    RoomEntered {
+        room: V::RoomType,
+        /// Whether the map point entered is one the point before does not
+        /// lead on to, which only free travel reaches.
+        strayed: bool,
+    },
+    /// `TryModifyRewards`, for the rewards a room of this type offers in the
+    /// act at this index, once they are filled in.
+    ModifyRewards {
+        room: V::RoomType,
+        act: usize,
+    },
     /// `BeforeCombatStart`, once the fight is built and before it opens.
     CombatStarting,
     /// `AfterCombatEnd`, for the fight the run has just finished, in a room
@@ -2080,7 +2107,8 @@ impl<V: ContentVersion> EventHook<V> {
     /// it answers one of those, so it is always asked.
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
-            EventHook::CombatRoomEntered => ModelHook::AfterRoomEntered,
+            EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
+            EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
             EventHook::RestSiteHeal => ModelHook::AfterRestSiteHeal,
@@ -2194,6 +2222,9 @@ pub enum HookEffect<V: ContentVersion> {
         act: DeckAct<V>,
         picks: &'static [DeckPick<V>],
     },
+    /// `RelicReward(player)`, this many, into the rewards a hook is
+    /// modifying. Each pulls from the front of the bag at a rolled rarity.
+    AddRelicRewards(usize),
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {

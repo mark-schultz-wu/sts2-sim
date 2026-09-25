@@ -1254,7 +1254,10 @@ impl<V: Rules> State<V> {
     /// order, and what they ask the run for.
     ///
     /// A run with no fight has no other listeners.
-    fn notify_belt(&mut self, hook: sts2_core::EventHook<V>) -> sts2_core::HookEffects<V> {
+    pub(super) fn notify_belt(
+        &mut self,
+        hook: sts2_core::EventHook<V>,
+    ) -> sts2_core::HookEffects<V> {
         let mut asked = sts2_core::HookEffects::new();
         let Some(model_hook) = hook.model_hook() else {
             return asked;
@@ -1276,7 +1279,7 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic on the belt listening to `hook`.
-    fn unheard(&self, hook: sts2_core::ModelHook) {
+    pub(super) fn unheard(&self, hook: sts2_core::ModelHook) {
         if self.player.relics.hear(sts2_core::Overrides::of(hook)) {
             unimplemented!("a relic listening to {} outside a fight", hook.name());
         }
@@ -1351,11 +1354,48 @@ impl<V: Rules> State<V> {
     /// The room is built first. Building one can fail, and a room that cannot
     /// be built leaves the run where it stood.
     pub(super) fn enter(&mut self, at: Location, phase: Phase<V>) {
+        let strayed = self.strays(at);
         self.floor = self.floor + num_traits::one();
         if let Location::MapPoint(to) = at {
             self.visited.push(to);
         }
+        // A fight raised its own as it opened.
+        let room = match &phase {
+            Phase::Event { .. } => Some(<V::RoomType as sts2_core::RoomKinds>::EVENT),
+            Phase::Shop { .. } => Some(<V::RoomType as sts2_core::RoomKinds>::SHOP),
+            Phase::Treasure { .. } => Some(<V::RoomType as sts2_core::RoomKinds>::TREASURE),
+            Phase::RestSite { .. } => Some(<V::RoomType as sts2_core::RoomKinds>::REST_SITE),
+            _ => None,
+        };
         self.phase = phase;
+        if let Some(room) = room {
+            self.room_entered(room, strayed);
+        }
+    }
+
+    /// `AfterRoomEntered` for a room no fight opens in.
+    ///
+    /// # Panics
+    ///
+    /// A relic asking for something the run cannot carry out as it enters.
+    fn room_entered(&mut self, room: V::RoomType, strayed: bool) {
+        let asked = self.notify_belt(sts2_core::EventHook::RoomEntered { room, strayed });
+        if let Some(asked) = self.carry_out(asked) {
+            let pickup = asked.pickup;
+            unimplemented!("entering a room asking for {pickup:?}");
+        }
+    }
+
+    /// Whether going to `at` leaves the map's lines: a point the one the run
+    /// stands on does not lead on to. The first point of an act strays from
+    /// nothing.
+    fn strays(&self, at: Location) -> bool {
+        use sts2_core::ActMap as _;
+
+        let (Location::MapPoint(to), Some(&from)) = (at, self.visited.last()) else {
+            return false;
+        };
+        self.map.at(from).is_ok_and(|from| !from.to.contains(&to))
     }
 
     pub(super) fn enter_event(&mut self, to: Coord, entered: EnteredEvent<V>) {
@@ -1660,6 +1700,7 @@ impl<V: Rules> State<V> {
         &mut self,
         encounter: V::Encounter,
         queue: EncounterQueue,
+        at: Location,
     ) -> Result<CreatedFight<V>, Error> {
         let standing = self.standing();
         let (raw_seed, character, ascension) =
@@ -1672,6 +1713,7 @@ impl<V: Rules> State<V> {
             max_hp: standing.max_hp,
             alive: standing.alive,
             deck: &self.player.deck,
+            strayed: self.strays(at),
         };
         let crate::combat::Entered {
             live,
@@ -1702,7 +1744,7 @@ impl<V: Rules> State<V> {
     /// reaching a chosen fight without hunting for a seed that puts one on the
     /// way. The encounter is named, so the act's own list is not drawn from.
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
-        let fight = self.create_fight(encounter, EncounterQueue::Named)?;
+        let fight = self.create_fight(encounter, EncounterQueue::Named, Location::NoLocation)?;
         Ok(self.enter_fight(fight, Location::NoLocation))
     }
 
@@ -2144,6 +2186,7 @@ impl<V: Rules> State<V> {
         } else {
             moves.extend(
                 self.reachable()
+                    .into_iter()
                     .map(|point| Decision::Travel { to: point.at }),
             );
         }
@@ -2273,28 +2316,62 @@ impl<V: Rules> State<V> {
     /// Beside the report rather than inside it, because deciding whether a
     /// move is legal reads this list and nothing else around it.
     pub(crate) fn travelable(&self) -> Vec<Reachable<V>> {
-        self.reachable().collect()
+        self.reachable().into_vec()
     }
 
     /// [`State::travelable`], lent rather than collected.
-    fn reachable(&self) -> impl ExactSizeIterator<Item = Reachable<V>> + '_ {
+    /// `MapTravel.GetTravelablePointsFrom`: what the point the run stands on
+    /// leads on to, or the whole next row under free travel. An act the run
+    /// has entered no point of opens on its ancient alone.
+    ///
+    /// The boss sits past the grid, so no row holds it, and the last row
+    /// leads on to it alone either way.
+    fn reachable(&self) -> SmallVec<[Reachable<V>; 7]> {
+        use sts2_core::MapPointKinds as _;
+
         let map = &self.map;
-        let from: &[Coord] = match self.visited.last() {
-            Some(&at) => {
-                &map.at(at)
-                    .expect("the run stands on a point of its own map")
-                    .to
-            }
-            None => std::slice::from_ref(
-                &map.ancient()
-                    .expect("a generated act map opens somewhere")
-                    .at,
-            ),
+        let Some(&at) = self.visited.last() else {
+            let ancient = map.ancient().expect("a generated act map opens somewhere");
+            return smallvec::smallvec![Reachable {
+                at: ancient.at,
+                kind: ancient.kind,
+            }];
         };
-        from.iter().map(move |&at| Reachable {
-            at,
-            kind: map.at(at).expect("a map edge leads to a node").kind,
-        })
+        let here = map
+            .at(at)
+            .expect("the run stands on a point of its own map");
+        let row: SmallVec<[Coord; 7]> = match self.free_travel() {
+            true => map
+                .nodes()
+                .iter()
+                .filter(|node| node.at.row == here.at.row + 1 && node.kind != V::MapPointType::BOSS)
+                .map(|node| node.at)
+                .collect(),
+            false => SmallVec::new(),
+        };
+        let to = if row.is_empty() { &here.to } else { &row };
+        to.iter()
+            .map(|&at| Reachable {
+                at,
+                kind: map.at(at).expect("a map edge leads to a node").kind,
+            })
+            .collect()
+    }
+
+    /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt can answer
+    /// yes to.
+    fn free_travel(&self) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldAllowFreeTravel;
+        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldAllowFreeTravel);
+        let mut left = self.player.relics.hearing(hooks);
+        let mut free = false;
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            free |= V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
+                .is_decision_and(|allowed| allowed);
+        }
+        free
     }
 
     /// Derive the comparison snapshot from the run's authoritative state.
@@ -2344,15 +2421,16 @@ impl<V: Rules> State<V> {
     /// `MapLegality.CanProceed`, and the fight it is standing in being over.
     /// A boss room with its combat still running is an ordinary fight, and
     /// leaving one is not a move.
+    /// `MapLegality.CanProceed`: the run stands in a boss room, and its fight
+    /// is over. The room is the fight's, wherever on the map it was fought.
     fn can_proceed(&self) -> bool {
-        let at_boss = self.visited.last().is_some_and(|&at| {
-            self.map
-                .at(at)
-                .expect("the run stands on a point of its own map")
-                .kind
-                == <V::MapPointType as sts2_core::MapPointKinds>::BOSS
-        });
-        at_boss && !self.in_combat()
+        let Phase::Rewards { combat, .. } = &self.phase else {
+            return false;
+        };
+        combat.encounter.is_some_and(|encounter| {
+            <V::Encounter as sts2_core::EncounterTable>::room(encounter)
+                == <V::RoomType as sts2_core::RoomKinds>::BOSS
+        })
     }
 
     /// The relics the run carries, as a report lists them.

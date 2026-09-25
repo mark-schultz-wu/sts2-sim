@@ -11,7 +11,9 @@ const PLATING: Number = 4;
 
 /// `AfterRoomEntered`, which applies Plating to its owner in a combat room.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::CombatRoomEntered = hook {
+    if let EventHook::RoomEntered { room, .. } = hook
+        && super::combat_room(room)
+    {
         asked.push(HookEffect::ApplyToOwner(
             Power::PlatingPower,
             PowerAmount::Counted(PLATING),
