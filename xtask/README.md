@@ -2,7 +2,8 @@
 
 Repo chores with real logic in them. `cargo xtask <command>`.
 
-Two commands.
+Two of its commands build content. `instructions`, `trace`, `allocations` and
+`census` measure the simulator, and their module docs say how.
 
 `dump` runs the game's dump modes and files what each one prints. Most modes
 describe content and land under `crates/sts2-content/src/<version>/dumps/`. Two
