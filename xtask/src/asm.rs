@@ -10,6 +10,20 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
+use crate::error::{self, FileError, ProcessError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Process(#[from] ProcessError),
+    #[error("no function in the replay names '{pattern}'")]
+    NoSymbol { pattern: String },
+    #[error("the profile has no instruction counts; record it again")]
+    NoInstructionCounts,
+}
+
 /// What one function ran, by instruction address.
 #[derive(Default)]
 struct Counts {
@@ -22,25 +36,25 @@ struct Counts {
 /// The function named by `pattern` in `binary`, each instruction beside its
 /// count per step, with the source line it came from wherever that changes.
 /// Instructions that never ran are folded into a count of them.
-pub fn listing(profile: &Path, binary: &Path, pattern: &str, steps: u64) -> Result<String, String> {
+pub fn listing(profile: &Path, binary: &Path, pattern: &str, steps: u64) -> Result<String, Error> {
     let (start, size, name) = symbol(binary, pattern)?;
     let counts = counts(profile, &name)?;
-    let dumped = Command::new("objdump")
-        .args(["-d", "-l", "-C", "--no-show-raw-insn", "--no-addresses"])
-        .arg(format!("--start-address={start:#x}"))
-        .arg(format!("--stop-address={:#x}", start + size))
-        .arg(binary)
-        .output()
-        .map_err(|e| format!("running objdump: {e}"))?;
+    let dumped = error::spawned(
+        Command::new("objdump")
+            .args(["-d", "-l", "-C", "--no-show-raw-insn", "--no-addresses"])
+            .arg(format!("--start-address={start:#x}"))
+            .arg(format!("--stop-address={:#x}", start + size))
+            .arg(binary),
+    )?;
     // `--no-addresses` leaves the address off, so each line is read back
     // against a second dump that keeps it.
-    let addressed = Command::new("objdump")
-        .args(["-d", "-C", "--no-show-raw-insn"])
-        .arg(format!("--start-address={start:#x}"))
-        .arg(format!("--stop-address={:#x}", start + size))
-        .arg(binary)
-        .output()
-        .map_err(|e| format!("running objdump: {e}"))?;
+    let addressed = error::spawned(
+        Command::new("objdump")
+            .args(["-d", "-C", "--no-show-raw-insn"])
+            .arg(format!("--start-address={start:#x}"))
+            .arg(format!("--stop-address={:#x}", start + size))
+            .arg(binary),
+    )?;
     let addresses: Vec<u64> = String::from_utf8_lossy(&addressed.stdout)
         .lines()
         .filter_map(|line| {
@@ -105,12 +119,12 @@ fn shorten(path: &str) -> String {
 
 /// The start, size and full name of the first symbol whose name holds
 /// `pattern`.
-fn symbol(binary: &Path, pattern: &str) -> Result<(u64, u64, String), String> {
-    let output = Command::new("nm")
-        .args(["-C", "-S", "--defined-only"])
-        .arg(binary)
-        .output()
-        .map_err(|e| format!("running nm: {e}"))?;
+fn symbol(binary: &Path, pattern: &str) -> Result<(u64, u64, String), Error> {
+    let output = error::spawned(
+        Command::new("nm")
+            .args(["-C", "-S", "--defined-only"])
+            .arg(binary),
+    )?;
     let mut found: Vec<(u64, u64, String)> = String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter_map(|line| {
@@ -124,10 +138,9 @@ fn symbol(binary: &Path, pattern: &str) -> Result<(u64, u64, String), String> {
         })
         .collect();
     found.sort_by_key(|(_, size, _)| std::cmp::Reverse(*size));
-    found
-        .into_iter()
-        .next()
-        .ok_or_else(|| format!("no function in the replay names '{pattern}'"))
+    found.into_iter().next().ok_or_else(|| Error::NoSymbol {
+        pattern: pattern.to_owned(),
+    })
 }
 
 /// Read one number of a callgrind position, which is absolute, relative to
@@ -149,14 +162,13 @@ fn position(field: &str, last: u64) -> Option<u64> {
 ///
 /// Callgrind's file names each function once and refers to it by number
 /// after that, and gives each position against the last one.
-fn counts(profile: &Path, name: &str) -> Result<Counts, String> {
-    let text = std::fs::read_to_string(profile)
-        .map_err(|e| format!("reading {}: {e}", profile.display()))?;
+fn counts(profile: &Path, name: &str) -> Result<Counts, Error> {
+    let text = error::read(profile)?;
     if !text
         .lines()
         .any(|line| line.starts_with("positions:") && line.contains("instr"))
     {
-        return Err("the profile has no instruction counts; record it again".into());
+        return Err(Error::NoInstructionCounts);
     }
     let mut names: HashMap<String, String> = HashMap::new();
     let mut named = |field: &str| -> String {

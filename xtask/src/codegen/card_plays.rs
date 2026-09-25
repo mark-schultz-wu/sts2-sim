@@ -11,9 +11,38 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::cards::{POOLS, card_path};
 use super::split::Split;
 use super::{Build, Dump, camel, sanitize, version_module};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{what} of {words:?}")]
+    Unread {
+        what: &'static str,
+        words: Vec<String>,
+    },
+    #[error("{at}: {source}")]
+    In { at: String, source: Box<Error> },
+    #[error(transparent)]
+    NotAPool(#[from] super::cards::NotAPool),
+    #[error("card_plays.txt names {0}, which is not a card")]
+    NotACard(String),
+    #[error("card_plays.txt has a {0} row")]
+    UnknownRow(String),
+    #[error("card_plays.txt names {named} cards, and cards.txt {cards}")]
+    Count { named: usize, cards: usize },
+}
 
 /// What the dump says of one card's method.
 #[derive(Default)]
@@ -34,14 +63,14 @@ struct Card {
 }
 
 /// The number an amount names, as a play reads it.
-fn amount(words: &[String]) -> Result<String, String> {
+fn amount(words: &[String]) -> Result<String, Error> {
     match words {
         [kind, key] if kind == "var" => Ok(format!("fight.var(CardVar::{})", sanitize(key))),
-        [kind, n] if kind == "number" => n
-            .parse::<i64>()
-            .map(|n| n.to_string())
-            .map_err(|e| format!("the number {n}: {e}")),
-        _ => Err(format!("an amount of {}", words.join(" "))),
+        [kind, n] if kind == "number" => Ok(DumpError::number::<i64>("a number", n)?.to_string()),
+        _ => Err(Error::Unread {
+            what: "an amount",
+            words: words.to_vec(),
+        }),
     }
 }
 
@@ -49,11 +78,14 @@ fn amount(words: &[String]) -> Result<String, String> {
 ///
 /// Powered is `Move` without `Unpowered`, which `IsPoweredAttack` and
 /// `IsPoweredCardOrMonsterMoveBlock` both ask.
-fn scaling(props: &str) -> Result<&'static str, String> {
+fn scaling(props: &str) -> Result<&'static str, Error> {
     match props {
         "Move" => Ok("Scaling::Dynamic"),
         "Move+Unpowered" | "Unpowered" => Ok("Scaling::Static"),
-        other => Err(format!("the props {other}")),
+        other => Err(Error::Unread {
+            what: "the props",
+            words: vec![other.to_owned()],
+        }),
     }
 }
 
@@ -68,7 +100,7 @@ fn hit(out: &mut String, key: &str, scaling: &str) {
 }
 
 /// The Rust for one command a play runs.
-fn command(out: &mut String, words: &[String]) -> Result<(), String> {
+fn command(out: &mut String, words: &[String]) -> Result<(), Error> {
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
     match &words[..] {
         ["attack", target, key, props, hits @ ..] => {
@@ -87,7 +119,12 @@ fn command(out: &mut String, words: &[String]) -> Result<(), String> {
                     hit(out, key, scaling);
                     writeln!(out, "}}").unwrap();
                 }
-                other => return Err(format!("an attack at {other}")),
+                other => {
+                    return Err(Error::Unread {
+                        what: "an attack at",
+                        words: vec![other.to_string()],
+                    });
+                }
             }
             if !once {
                 writeln!(out, "}}").unwrap();
@@ -113,7 +150,12 @@ fn command(out: &mut String, words: &[String]) -> Result<(), String> {
                     out,
                     "let amount = {amount};\nfor &target in &held {{\nfight.apply_power(target, {power}, amount);\n}}"
                 ),
-                other => return Err(format!("a power on {other}")),
+                other => {
+                    return Err(Error::Unread {
+                        what: "a power on",
+                        words: vec![other.to_string()],
+                    });
+                }
             }
             .unwrap();
         }
@@ -140,20 +182,30 @@ fn command(out: &mut String, words: &[String]) -> Result<(), String> {
             }
             .unwrap();
         }
-        _ => return Err(format!("a play of {}", words.join(" "))),
+        _ => {
+            return Err(Error::Unread {
+                what: "a play",
+                words: words.iter().map(|w| w.to_string()).collect(),
+            });
+        }
     }
     Ok(())
 }
 
 /// The Rust for one change an upgrade makes.
-fn change(words: &[String]) -> Result<String, String> {
+fn change(words: &[String]) -> Result<String, Error> {
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
-    let number = |n: &str| n.parse::<i64>().map_err(|e| format!("the number {n}: {e}"));
+    let number = |n: &str| DumpError::number::<i64>("a number", n);
     Ok(match &words[..] {
         ["raise", key, by] => format!("Change::Raise(CardVar::{}, {})", sanitize(key), number(by)?),
         ["cost", by] => format!("Change::ChangeCost(CostPool::Energy, {})", number(by)?),
         ["keyword", keyword] => format!("Change::AddKeyword(CardKeyword::{})", sanitize(keyword)),
-        _ => return Err(format!("an upgrade of {}", words.join(" "))),
+        _ => {
+            return Err(Error::Unread {
+                what: "an upgrade",
+                words: words.iter().map(|w| w.to_string()).collect(),
+            });
+        }
     })
 }
 
@@ -167,7 +219,7 @@ fn comment(out: &mut String, stmt: &str) {
 }
 
 /// Every card's play and upgrade, one module per pool.
-pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
+pub fn generate(root: &Path, build: &Build) -> Result<(), Error> {
     let dump = Dump::read_any("card_plays.txt")?;
     // No content hash: the dump is read from the assembly, and the game
     // works the hash out at runtime.
@@ -177,10 +229,12 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
         dump.build.assembly_hash,
     ) != (&build.version, &build.commit, build.assembly_hash)
     {
-        return Err(format!(
-            "card_plays.txt was read from {}, but the tables come from {build}",
-            dump.build
-        ));
+        return Err(DumpError::ReadFrom {
+            dump: "card_plays.txt",
+            read: Box::new(dump.build),
+            tables: Box::new(build.clone()),
+        }
+        .into());
     }
 
     let cards_dump = Dump::read("cards.txt")?;
@@ -193,7 +247,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
         let (kind, id) = (row[0].as_str(), &row[1]);
         let (_, card) = cards
             .get_mut(id)
-            .ok_or_else(|| format!("card_plays.txt names {id}, which is not a card"))?;
+            .ok_or_else(|| Error::NotACard(id.clone()))?;
         match kind {
             "card" => named += 1,
             "play" => card.play.rows.push(row[2..].to_vec()),
@@ -201,18 +255,18 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
             "unplayed" => card.play.blocked = Some(row[2..].join(" ")),
             "unupgraded" => card.upgrade.blocked = Some(row[2..].join(" ")),
             "turnend" => card.turn_end = true,
-            other => return Err(format!("card_plays.txt has a {other} row")),
+            other => return Err(Error::UnknownRow(other.to_owned())),
         }
     }
     if named != cards.len() {
-        return Err(format!(
-            "card_plays.txt names {named} cards, and cards.txt {}",
-            cards.len()
-        ));
+        return Err(Error::Count {
+            named,
+            cards: cards.len(),
+        });
     }
 
     // The build's type, `V0_107_1` for the module `v0_107_1`.
-    let version = version_module()?.to_uppercase();
+    let version = version_module().map_err(DumpError::from)?.to_uppercase();
     let mut split = Split::new(root, "card_plays", "card_plays.txt", &dump.build)?;
     for (pool_id, module, enum_name, _) in POOLS {
         // In the order the pool's enum declares them, which is the dump's.
@@ -277,7 +331,10 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                 if row == &["hold", "opponents"] && !read {
                     continue;
                 }
-                command(out, row).map_err(|e| format!("{variant}: {e}"))?;
+                command(out, row).map_err(|source| Error::In {
+                    at: variant.to_string(),
+                    source: Box::new(source),
+                })?;
             }
             writeln!(out, "Played::Done\n}}").unwrap();
         }
@@ -307,7 +364,10 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                 .iter()
                 .map(|row| change(row))
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| format!("{variant}: {e}"))?;
+                .map_err(|source| Error::In {
+                    at: variant.to_string(),
+                    source: Box::new(source),
+                })?;
             writeln!(out, "{variant} => &[{}],", changes.join(", ")).unwrap();
         }
         writeln!(out, "}}\n}}\n").unwrap();
@@ -400,5 +460,6 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                 ],
             ),
         ],
-    )
+    )?;
+    Ok(())
 }

@@ -16,7 +16,8 @@
 use std::collections::HashMap;
 use std::process::Command;
 
-use crate::instructions::{divide_by, workspace};
+use crate::error::{self, FileError, ProcessError};
+use crate::instructions::divide_by;
 
 /// A frame in map generation, which a search inside a fight never runs.
 fn in_map_generation(frame: &str) -> bool {
@@ -29,75 +30,59 @@ fn ours(frame: &str) -> bool {
     frame.contains("(crates/")
 }
 
-pub fn run(args: &[String]) -> Result<String, String> {
-    let mut top = 20;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--top" => {
-                top = args
-                    .next()
-                    .ok_or("--top names a count")?
-                    .parse()
-                    .map_err(|e| format!("--top: {e}"))?;
-            }
-            other => return Err(format!("unexpected argument '{other}'")),
-        }
-    }
+#[derive(clap::Args)]
+pub struct Args {
+    /// How many sites to print.
+    #[arg(long, default_value_t = 20)]
+    top: usize,
+}
 
-    let root = workspace()?;
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Process(#[from] ProcessError),
+    #[error(transparent)]
+    Steps(#[from] crate::instructions::Error),
+    #[error("reading DHAT's output: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("DHAT's output has no {0}")]
+    Missing(&'static str),
+}
+
+pub fn run(args: Args) -> Result<String, Error> {
+    let Args { top } = args;
+
+    let root = crate::workspace();
     let dir = root.join("target/profile");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
-    let built = Command::new("cargo")
-        .args([
-            "build",
-            "-q",
-            "--release",
-            "-p",
-            "sts2-golden",
-            "--example",
-            "replay_sites",
-        ])
-        .current_dir(&root)
-        .status()
-        .map_err(|e| format!("running cargo: {e}"))?;
-    if !built.success() {
-        return Err("the replay did not build".into());
-    }
+    error::create_dir(&dir)?;
+    let binary = error::build_example(&root, "replay_sites")?;
 
     let out = dir.join("allocations.dhat.json");
-    let replayed = Command::new("valgrind")
-        .arg("--tool=dhat")
-        // Each source path from the repository down, so a frame's own file says
-        // whose it is.
-        .arg(format!("--fullpath-after={}/", root.display()))
-        .arg(format!("--dhat-out-file={}", out.display()))
-        .arg(root.join("target/release/examples/replay_sites"))
-        .arg("rules")
-        .current_dir(&root)
-        .output()
-        .map_err(|e| format!("running valgrind, which this needs installed: {e}"))?;
-    if !replayed.status.success() {
-        return Err(format!(
-            "the replay failed under DHAT:\n{}",
-            String::from_utf8_lossy(&replayed.stderr)
-        ));
-    }
+    let replayed = error::output(
+        Command::new("valgrind")
+            .arg("--tool=dhat")
+            // Each source path from the repository down, so a frame's own file says
+            // whose it is.
+            .arg(format!("--fullpath-after={}/", root.display()))
+            .arg(format!("--dhat-out-file={}", out.display()))
+            .arg(&binary)
+            .arg("rules")
+            .current_dir(&root),
+    )?;
     let steps = divide_by(&String::from_utf8_lossy(&replayed.stdout))?;
 
-    let text =
-        std::fs::read_to_string(&out).map_err(|e| format!("reading {}: {e}", out.display()))?;
-    let profile: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("reading DHAT's output: {e}"))?;
+    let profile: serde_json::Value = serde_json::from_str(&error::read(&out)?)?;
     let frames: Vec<&str> = profile["ftbl"]
         .as_array()
-        .ok_or("DHAT's output has no frame table")?
+        .ok_or(Error::Missing("frame table"))?
         .iter()
         .map(|frame| frame.as_str().unwrap_or(""))
         .collect();
     let points = profile["pps"]
         .as_array()
-        .ok_or("DHAT's output has no program points")?;
+        .ok_or(Error::Missing("program points"))?;
 
     // Blocks and bytes by site and the caller of ours outside it.
     let mut sites: HashMap<(String, String), (u64, u64)> = HashMap::new();

@@ -8,46 +8,51 @@
 
 use std::process::Command;
 
-use crate::instructions::workspace;
+#[derive(clap::Args)]
+pub struct Args {
+    /// The relic, by id, such as `NEW_LEAF`.
+    relic: String,
+    /// The character whose Neow is asked.
+    #[arg(long, default_value = "IRONCLAD")]
+    character: String,
+    /// How many seeds to try, from the census's first.
+    #[arg(long, default_value_t = 300)]
+    seeds: u64,
+}
 
-pub fn run(args: &[String]) -> Result<String, String> {
-    let mut relic = None;
-    let mut character = "IRONCLAD".to_string();
-    let mut seeds = 300u64;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--character" => character = args.next().ok_or("--character wants a value")?.clone(),
-            "--seeds" => {
-                seeds = args
-                    .next()
-                    .ok_or("--seeds wants a value")?
-                    .parse()
-                    .map_err(|e| format!("--seeds: {e}"))?;
-            }
-            other if relic.is_none() => relic = Some(other.to_string()),
-            other => return Err(format!("unexpected argument {other}")),
-        }
-    }
-    let relic = relic.ok_or("usage: cargo xtask neow <RELIC> [--character C] [--seeds N]")?;
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Process(#[from] crate::error::ProcessError),
+    #[error("no seed of {seeds} offers {relic} to {character}")]
+    NotOffered {
+        relic: String,
+        character: String,
+        seeds: u64,
+    },
+}
 
-    let output = Command::new("cargo")
-        .current_dir(workspace()?)
-        .args([
-            "run",
-            "-q",
-            "-p",
-            "sts2-golden",
-            "--example",
-            "neow_offers",
-            "--",
-        ])
-        .args([character.as_str(), "0", &seeds.to_string()])
-        .output()
-        .map_err(|e| format!("running neow_offers: {e}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
-    }
+pub fn run(args: Args) -> Result<String, Error> {
+    let Args {
+        relic,
+        character,
+        seeds,
+    } = args;
+
+    let output = crate::error::output(
+        Command::new("cargo")
+            .current_dir(crate::workspace())
+            .args([
+                "run",
+                "-q",
+                "-p",
+                "sts2-golden",
+                "--example",
+                "neow_offers",
+                "--",
+            ])
+            .args([character.as_str(), "0", &seeds.to_string()]),
+    )?;
     let mut found = String::new();
     for line in String::from_utf8_lossy(&output.stdout).lines() {
         let mut words = line.split_whitespace();
@@ -57,7 +62,11 @@ pub fn run(args: &[String]) -> Result<String, String> {
         }
     }
     if found.is_empty() {
-        return Err(format!("no seed of {seeds} offers {relic} to {character}"));
+        return Err(Error::NotOffered {
+            relic,
+            character,
+            seeds,
+        });
     }
     Ok(found)
 }

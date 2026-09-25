@@ -10,10 +10,29 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
+use crate::error::{self, FileError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error(
+        "{0} refuses cards its type allows, which no affliction did when the column was dropped"
+    )]
+    RefusesCards(String),
+    #[error("{0} can be stuck to nothing at all")]
+    Unplaceable(String),
+}
 
 /// The card type the probe reports that the cards domain does not generate.
 const UNMODELLED: &str = "None";
@@ -39,25 +58,27 @@ const FLAGS: [(&str, usize, &str); 3] = [
 /// The column the dump measures and this table does not generate.
 const REFUSES_SOME_CARDS: usize = 5;
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("afflictions.txt")?;
     let build = dump.build.clone();
 
     let afflictions: Vec<&Vec<String>> = dump.of("affliction").collect();
     if afflictions.is_empty() {
-        return Err("the dump declares no afflictions".into());
+        return Err(DumpError::Empty("afflictions").into());
     }
     for row in &afflictions {
         if row.len() != 6 {
-            return Err(format!("{}: {} columns, not 5", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 5,
+            }
+            .into());
         }
         // The column exists in the dump and is not generated, so a build that
         // starts using it fails here rather than losing it silently.
         if row[REFUSES_SOME_CARDS] != "0" {
-            return Err(format!(
-                "{} refuses cards its type allows, which no affliction did when the column was dropped",
-                row[1]
-            ));
+            return Err(Error::RefusesCards(row[1].clone()));
         }
     }
 
@@ -84,7 +105,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_afflictions(&mut out, &afflictions, &types)?;
 
     let path = root.join("afflictions.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     let restricted = afflictions
         .iter()
@@ -98,7 +119,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     Ok(build)
 }
 
-fn emit_flags(out: &mut String) -> Result<(), String> {
+fn emit_flags(out: &mut String) -> Result<(), sets::Error> {
     sets::plain(
         out,
         &sets::Set {
@@ -134,7 +155,7 @@ fn emit_afflictions(
     out: &mut String,
     afflictions: &[&Vec<String>],
     types: &BTreeMap<String, Vec<String>>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every affliction in the build.\n\
@@ -178,7 +199,7 @@ fn emit_afflictions(
         let empty = Vec::new();
         let allowed = types.get(&row[1]).unwrap_or(&empty);
         if allowed.is_empty() {
-            return Err(format!("{} can be stuck to nothing at all", row[1]));
+            return Err(Error::Unplaceable(row[1].clone()));
         }
 
         let set = allowed

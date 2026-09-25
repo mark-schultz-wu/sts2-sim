@@ -18,100 +18,94 @@ mod asm;
 mod census;
 mod codegen;
 mod dump;
+mod error;
 mod instructions;
 mod neow;
 mod plays;
 mod trace;
 
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(
+    name = "cargo xtask",
+    bin_name = "cargo xtask",
+    about = "Repo chores with real logic in them."
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Generate the content tables from the dumps.
+    Codegen,
+    /// Ask the game for its dumps.
+    Dump(dump::Args),
+    /// Count what a replayed step costs, in instructions.
+    Instructions(instructions::Args),
+    /// Name where a replayed step reaches the heap.
+    Allocations(allocations::Args),
+    /// Play runs at random and rank what stops them.
+    Census(census::Args),
+    /// Find the seeds whose Neow offers a relic.
+    Neow(neow::Args),
+    /// Show where a replayed step's instructions go, span by span.
+    Trace(trace::Args),
+}
+
+/// The repository's root, which is where cargo and the profiles live.
+pub(crate) fn workspace() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask sits inside the workspace")
+        .to_path_buf()
+}
+
+/// A command that failed, by the command.
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("codegen failed: {0}")]
+    Codegen(#[from] codegen::Error),
+    #[error("dump failed: {0}")]
+    Dump(#[from] dump::Error),
+    #[error("instructions failed: {0}")]
+    Instructions(#[from] instructions::Error),
+    #[error("allocations failed: {0}")]
+    Allocations(#[from] allocations::Error),
+    #[error("census failed: {0}")]
+    Census(#[from] error::ProcessError),
+    #[error("neow failed: {0}")]
+    Neow(#[from] neow::Error),
+    #[error("trace failed: {0}")]
+    Trace(#[from] trace::Error),
+}
+
+fn run(command: Command) -> Result<String, Error> {
+    Ok(match command {
+        // Both print a line of their own after what they wrote.
+        Command::Codegen => codegen::run()? + "\n",
+        Command::Dump(args) => dump::run(args)? + "\n",
+        Command::Instructions(args) => instructions::run(args)?,
+        Command::Allocations(args) => allocations::run(args)?,
+        Command::Census(args) => census::run(args)?,
+        Command::Neow(args) => neow::run(args)?,
+        Command::Trace(args) => trace::run(args)?,
+    })
+}
+
 fn main() -> ExitCode {
-    match std::env::args().nth(1).as_deref() {
-        Some("codegen") => match codegen::run() {
-            Ok(summary) => {
-                println!("{summary}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("codegen failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        // Every mode when none is named, which is what `just dump` does.
-        Some("dump") => match dump::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(summary) => {
-                println!("{summary}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("dump failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some("instructions") => {
-            match instructions::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-                Ok(report) => {
-                    print!("{report}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("instructions failed: {e}");
-                    ExitCode::FAILURE
-                }
-            }
+    match run(Cli::parse().command) {
+        Ok(report) => {
+            print!("{report}");
+            ExitCode::SUCCESS
         }
-        Some("allocations") => {
-            match allocations::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-                Ok(report) => {
-                    print!("{report}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("allocations failed: {e}");
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Some("census") => match census::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(report) => {
-                print!("{report}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("census failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some("neow") => match neow::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(report) => {
-                print!("{report}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("neow failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some("trace") => match trace::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(report) => {
-                print!("{report}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("trace failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some(other) => {
-            eprintln!(
-                "unknown command '{other}'; try: allocations, census, codegen, dump, instructions, neow, trace"
-            );
-            ExitCode::FAILURE
-        }
-        None => {
-            eprintln!(
-                "usage: cargo xtask <command>\n\ncommands:\n  allocations\n  census\n  codegen\n  dump\n  instructions\n  neow\n  trace"
-            );
+        Err(e) => {
+            eprintln!("{e}");
             ExitCode::FAILURE
         }
     }

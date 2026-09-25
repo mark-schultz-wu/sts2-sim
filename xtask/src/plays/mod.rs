@@ -17,11 +17,83 @@ mod csharp;
 pub mod monsters;
 
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::error::{self, FileError, ProcessError};
+
 use csharp::{Stmt, Tok, spell};
+
+/// What stops a dump read off the assembly.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Process(#[from] ProcessError),
+    #[error("reading {}: {source}", path.display())]
+    Json {
+        path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("{} names no {key}", path.display())]
+    Release { path: PathBuf, key: &'static str },
+    #[error("{} holds {holds}, not {wanted}", game.display())]
+    OtherBuild {
+        game: PathBuf,
+        holds: String,
+        wanted: String,
+    },
+    #[error("{} and {} squash to one name", first.display(), second.display())]
+    Squash { first: PathBuf, second: PathBuf },
+    #[error("{class}: {source}")]
+    Syntax {
+        class: String,
+        #[source]
+        source: csharp::Error,
+    },
+    #[error("no class in the assembly is the {kind} {id}")]
+    NoClass { kind: &'static str, id: String },
+    #[error("a var row with {fields} fields: {row}")]
+    VarRow { fields: usize, row: String },
+    #[error("a move of {0} before the monster")]
+    BeforeMonster(String),
+    #[error("{class} derives from {parent}, which is no monster")]
+    NotAMonster { class: String, parent: String },
+    #[error("{0} declares no parent")]
+    NoParent(String),
+    #[error("HOME is not set, and DOTNET_ROOT is found under it")]
+    NoHome,
+}
+
+impl Error {
+    /// A reader failure, in the class it was reading.
+    fn syntax(class: impl std::fmt::Display) -> impl FnOnce(csharp::Error) -> Error {
+        move |source| Error::Syntax {
+            class: class.to_string(),
+            source,
+        }
+    }
+}
+
+/// Why a play, an upgrade or a move is left for a hand to port.
+///
+/// Written into the dump as its reason, so each reads as the dump says it.
+#[derive(Debug, thiserror::Error)]
+pub enum Blocked {
+    /// The first statement no command matches.
+    #[error("{0}")]
+    Statement(String),
+    #[error(transparent)]
+    Syntax(#[from] csharp::Error),
+    #[error("no MoveState names it")]
+    NoState,
+    #[error("its MoveState performs a lambda")]
+    Lambda,
+    #[error("no method {0}")]
+    NoMethod(String),
+}
 
 /// A name with its case and underscores taken out, which a class and the id
 /// the game derives from it agree on.
@@ -36,34 +108,32 @@ fn squash(name: &str) -> String {
 ///
 /// The game in `game` has to be the build `version` names. The mods refuse a
 /// build they were not built against, and this reads no mod, so it checks.
-fn source(game: &Path, version: &str) -> Result<(Release, PathBuf), String> {
+fn source(game: &Path, version: &str) -> Result<(Release, PathBuf), Error> {
     let release = release(game)?;
     if release.version != version {
-        return Err(format!(
-            "{} holds {}, not {version}",
-            game.display(),
-            release.version
-        ));
+        return Err(Error::OtherBuild {
+            game: game.to_path_buf(),
+            holds: release.version,
+            wanted: version.to_owned(),
+        });
     }
     let source = decompiled(game, &release)?;
     Ok((release, source))
 }
 
 /// Every class in one namespace of the source, by its [`squash`]ed name.
-fn classes(source: &Path, namespace: &str) -> Result<HashMap<String, PathBuf>, String> {
+fn classes(source: &Path, namespace: &str) -> Result<HashMap<String, PathBuf>, Error> {
     let dir = source.join(namespace);
     let mut by_name: HashMap<String, PathBuf> = HashMap::new();
-    for entry in fs::read_dir(&dir).map_err(|e| format!("reading {}: {e}", dir.display()))? {
-        let path = entry.map_err(|e| e.to_string())?.path();
+    for path in error::entries(&dir)? {
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
         if let Some(clash) = by_name.insert(squash(stem), path.clone()) {
-            return Err(format!(
-                "{} and {} squash to one name",
-                clash.display(),
-                path.display()
-            ));
+            return Err(Error::Squash {
+                first: clash,
+                second: path,
+            });
         }
     }
     Ok(by_name)
@@ -85,18 +155,29 @@ struct Release {
     assembly: i64,
 }
 
-fn release(game: &Path) -> Result<Release, String> {
+fn release(game: &Path) -> Result<Release, Error> {
     let path = game.join("release_info.json");
-    let text = fs::read_to_string(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
     let json: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("reading {}: {e}", path.display()))?;
-    let field = |key: &str| json[key].clone();
+        serde_json::from_str(&error::read(&path)?).map_err(|source| Error::Json {
+            path: path.clone(),
+            source,
+        })?;
+    let missing = |key| Error::Release {
+        path: path.clone(),
+        key,
+    };
     Ok(Release {
-        version: field("version").as_str().ok_or("no version")?.to_owned(),
-        commit: field("commit").as_str().ok_or("no commit")?.to_owned(),
-        assembly: field("main_assembly_hash")
+        version: json["version"]
+            .as_str()
+            .ok_or_else(|| missing("version"))?
+            .to_owned(),
+        commit: json["commit"]
+            .as_str()
+            .ok_or_else(|| missing("commit"))?
+            .to_owned(),
+        assembly: json["main_assembly_hash"]
             .as_i64()
-            .ok_or("no assembly hash")?,
+            .ok_or_else(|| missing("main_assembly_hash"))?,
     })
 }
 
@@ -104,7 +185,7 @@ fn release(game: &Path) -> Result<Release, String> {
 ///
 /// `ilspycmd` needs `-r` pointed at Godot's assemblies. Without it, it writes
 /// every async method as raw IL, and `OnPlay` is async.
-fn decompiled(game: &Path, release: &Release) -> Result<PathBuf, String> {
+fn decompiled(game: &Path, release: &Release) -> Result<PathBuf, Error> {
     let out = PathBuf::from("target/decompiled")
         .join(format!("{}-{}", release.version, release.assembly));
     let done = out.join(".done");
@@ -112,27 +193,24 @@ fn decompiled(game: &Path, release: &Release) -> Result<PathBuf, String> {
         return Ok(out);
     }
     let data = game.join("data_sts2_linuxbsd_x86_64");
-    let home = std::env::var("HOME").map_err(|_| "HOME is not set")?;
+    let home = std::env::var("HOME").map_err(|_| Error::NoHome)?;
     let dotnet = std::env::var("DOTNET_ROOT").unwrap_or_else(|_| format!("{home}/.dotnet"));
     let path = std::env::var("PATH").unwrap_or_default();
-    let _ = fs::remove_dir_all(&out);
-    fs::create_dir_all(&out).map_err(|e| format!("creating {}: {e}", out.display()))?;
-    let status = Command::new("ilspycmd")
-        .env("DOTNET_ROOT", &dotnet)
-        // The tool targets an older runtime than the one installed.
-        .env("DOTNET_ROLL_FORWARD", "Major")
-        .env("PATH", format!("{dotnet}:{path}:{dotnet}/tools"))
-        .args(["--disable-updatecheck", "-p", "-r"])
-        .arg(&data)
-        .arg("-o")
-        .arg(&out)
-        .arg(data.join("sts2.dll"))
-        .status()
-        .map_err(|e| format!("running ilspycmd, which this needs installed: {e}"))?;
-    if !status.success() {
-        return Err(format!("ilspycmd exited {status}"));
-    }
-    fs::write(&done, "").map_err(|e| format!("writing {}: {e}", done.display()))?;
+    let _ = std::fs::remove_dir_all(&out);
+    error::create_dir(&out)?;
+    error::status(
+        Command::new("ilspycmd")
+            .env("DOTNET_ROOT", &dotnet)
+            // The tool targets an older runtime than the one installed.
+            .env("DOTNET_ROLL_FORWARD", "Major")
+            .env("PATH", format!("{dotnet}:{path}:{dotnet}/tools"))
+            .args(["--disable-updatecheck", "-p", "-r"])
+            .arg(&data)
+            .arg("-o")
+            .arg(&out)
+            .arg(data.join("sts2.dll")),
+    )?;
+    error::write(&done, "")?;
     Ok(out)
 }
 
@@ -482,7 +560,7 @@ fn presentation(stmt: &Stmt, locals: &mut Locals) -> bool {
 
 /// A method body's statements, less the `return Task.CompletedTask;` that
 /// ends one that is not async. A method that runs off its end does the same.
-fn statements(body: &[Tok]) -> Result<Vec<Stmt>, String> {
+fn statements(body: &[Tok]) -> Result<Vec<Stmt>, csharp::Error> {
     let mut stmts = csharp::statements(body)?;
     if stmts
         .last()

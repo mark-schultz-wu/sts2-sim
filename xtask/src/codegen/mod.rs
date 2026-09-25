@@ -39,9 +39,135 @@ mod split;
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+use crate::error::{self, FileError, ProcessError};
+
+/// What reading a dump or writing a table found wrong, whichever domain it
+/// was for.
+#[derive(Debug, thiserror::Error)]
+pub enum DumpError {
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Version(#[from] VersionError),
+    #[error("{dump} has no `# build` header")]
+    NoHeader { dump: String },
+    #[error("{dump}'s build header is empty")]
+    EmptyHeader { dump: String },
+    #[error("{dump}'s build header names no {key}")]
+    NoHeaderKey { dump: String, key: &'static str },
+    #[error("{dump}'s {key} is not a number: {text}: {source}")]
+    HeaderNumber {
+        dump: String,
+        key: &'static str,
+        text: String,
+        #[source]
+        source: std::num::ParseIntError,
+    },
+    #[error("{dump}'s content hash {hash} does not fit a u32")]
+    ContentHashRange { dump: String, hash: i64 },
+    #[error("{dump}'s build header names no content hash")]
+    NoContentHash { dump: String },
+    #[error("{dump} was dumped from another build than the table it feeds")]
+    OtherBuild { dump: &'static str },
+    #[error("{dump} was read from {read}, but the tables come from {tables}")]
+    ReadFrom {
+        dump: &'static str,
+        read: Box<Build>,
+        tables: Box<Build>,
+    },
+    #[error("{id}: {got} columns, not {want}")]
+    Columns { id: String, got: usize, want: usize },
+    #[error("{at}: {text} is not a number: {source}")]
+    Number {
+        at: String,
+        text: String,
+        #[source]
+        source: std::num::ParseIntError,
+    },
+    #[error("the dump declares no {0}")]
+    Empty(&'static str),
+    #[error("{0} variants is past what even a u16 discriminant holds")]
+    TooManyVariants(usize),
+    #[error(transparent)]
+    Rustfmt(#[from] ProcessError),
+}
+
+impl DumpError {
+    /// A cell read as a number, or the failure that names where it is.
+    fn number<T: std::str::FromStr<Err = std::num::ParseIntError>>(
+        at: impl std::fmt::Display,
+        text: &str,
+    ) -> Result<T, DumpError> {
+        text.parse().map_err(|source| DumpError::Number {
+            at: at.to_string(),
+            text: text.to_owned(),
+            source,
+        })
+    }
+}
+
+/// A build named that has no lock.
+#[derive(Debug, thiserror::Error)]
+#[error("unknown game version '{name}': no {}", lock.display())]
+pub struct VersionError {
+    name: String,
+    lock: PathBuf,
+}
+
+/// Every domain's failure, by the domain.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error("acts: {0}")]
+    Acts(#[from] acts::Error),
+    #[error("afflictions: {0}")]
+    Afflictions(#[from] afflictions::Error),
+    #[error("ascension: {0}")]
+    Ascension(#[from] ascension::Error),
+    #[error("card plays: {0}")]
+    CardPlays(#[from] card_plays::Error),
+    #[error("cards: {0}")]
+    Cards(#[from] cards::Error),
+    #[error("characters: {0}")]
+    Characters(#[from] characters::Error),
+    #[error("enchantments: {0}")]
+    Enchantments(#[from] enchantments::Error),
+    #[error("encounters: {0}")]
+    Encounters(#[from] encounters::Error),
+    #[error("events: {0}")]
+    Events(#[from] events::Error),
+    #[error("modifiers: {0}")]
+    Modifiers(#[from] modifiers::Error),
+    #[error("monster moves: {0}")]
+    MonsterMoves(#[from] monster_moves::Error),
+    #[error("monsters: {0}")]
+    Monsters(#[from] monsters::Error),
+    #[error("orbs: {0}")]
+    Orbs(#[from] orbs::Error),
+    #[error("potions: {0}")]
+    Potions(#[from] potions::Error),
+    #[error("powers: {0}")]
+    Powers(#[from] powers::Error),
+    #[error("relics: {0}")]
+    Relics(#[from] relics::Error),
+    #[error("rest site: {0}")]
+    Restsite(#[from] restsite::Error),
+    #[error("run state: {0}")]
+    Runstate(#[from] runstate::Error),
+    #[error(
+        "{domain}'s dump came from {theirs}, but {first}'s came from {ours}: they are different builds"
+    )]
+    Builds {
+        domain: &'static str,
+        theirs: Box<Build>,
+        first: &'static str,
+        ours: Box<Build>,
+    },
+}
 
 /// The build to read dumps from and generate tables for.
 ///
@@ -50,25 +176,22 @@ use std::process::Command;
 ///
 /// A name with no lock under `mod/games/` is a typo. Catching it here stops a
 /// dump landing in a directory nobody meant to create.
-pub(crate) fn version() -> Result<String, String> {
+pub(crate) fn version() -> Result<String, VersionError> {
     let name = std::env::var("STS2_GAME_VERSION").unwrap_or_else(|_| "v0.107.1".to_string());
     let lock = Path::new("mod/games").join(format!("{name}.lock"));
     if !lock.is_file() {
-        return Err(format!(
-            "unknown game version '{name}': no {}",
-            lock.display()
-        ));
+        return Err(VersionError { name, lock });
     }
     Ok(name)
 }
 
 /// The build as a Rust module name. `v0.107.1` is `v0_107_1`.
-pub(crate) fn version_module() -> Result<String, String> {
+pub(crate) fn version_module() -> Result<String, VersionError> {
     Ok(version()?.replace('.', "_"))
 }
 
 /// Where one build's dumps and generated tables live.
-pub(crate) fn version_dir() -> Result<PathBuf, String> {
+pub(crate) fn version_dir() -> Result<PathBuf, VersionError> {
     Ok(Path::new("crates/sts2-content/src").join(version_module()?))
 }
 
@@ -171,13 +294,11 @@ fn lists(out: &mut String, name: &str, elem_ty: &str, lists: &[String]) {
 /// Layout only: serde goes through the variant rename, so nothing on the wire
 /// or in a dump depends on the number a variant compiles to. The xtask README
 /// says why it is still worth choosing.
-fn repr(variants: usize) -> Result<&'static str, String> {
+fn repr(variants: usize) -> Result<&'static str, DumpError> {
     match variants {
         n if n <= u8::MAX as usize + 1 => Ok("u8"),
         n if n <= u16::MAX as usize + 1 => Ok("u16"),
-        n => Err(format!(
-            "{n} variants is past what even a u16 discriminant holds"
-        )),
+        n => Err(DumpError::TooManyVariants(n)),
     }
 }
 
@@ -186,7 +307,7 @@ fn repr(variants: usize) -> Result<&'static str, String> {
 /// Two hashes, because one is not enough. Both are checked, and the xtask
 /// README says what each one moves on.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Build {
+pub struct Build {
     version: String,
     commit: String,
     assembly_hash: i64,
@@ -220,55 +341,64 @@ struct Dump {
 
 impl Dump {
     /// A dump the game printed, whose header names the content hash.
-    fn read(name: &str) -> Result<Dump, String> {
+    fn read(name: &str) -> Result<Dump, DumpError> {
         let dump = Dump::read_any(name)?;
         match dump.build.content_hash {
             Some(_) => Ok(dump),
-            None => Err(format!("{name}'s build header names no content hash")),
+            None => Err(DumpError::NoContentHash {
+                dump: name.to_owned(),
+            }),
         }
     }
 
     /// A dump whose header need not name the content hash, which is one read
     /// off the decompiled assembly.
-    fn read_any(name: &str) -> Result<Dump, String> {
+    fn read_any(name: &str) -> Result<Dump, DumpError> {
         let path = version_dir()?.join("dumps").join(name);
-        let text =
-            fs::read_to_string(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
+        let text = error::read(&path)?;
+        let dump = || name.to_owned();
 
         let build = text
             .lines()
             .find_map(|l| l.strip_prefix("# build "))
-            .ok_or_else(|| format!("{name} has no `# build` header"))?;
+            .ok_or_else(|| DumpError::NoHeader { dump: dump() })?;
 
         // Keyed rather than positional, so a field added later does not
         // silently shift the meaning of the ones already there.
-        let field = |key: &str| -> Result<String, String> {
+        let field = |key: &'static str| -> Result<String, DumpError> {
             let mut words = build.split_whitespace();
             match key {
                 // The version is the first word, before any key.
                 "" => words
                     .next()
                     .map(String::from)
-                    .ok_or_else(|| format!("{name}'s build header is empty")),
+                    .ok_or_else(|| DumpError::EmptyHeader { dump: dump() }),
                 key => words
                     .position(|w| w == key)
                     .and_then(|at| build.split_whitespace().nth(at + 1))
                     .map(String::from)
-                    .ok_or_else(|| format!("{name}'s build header names no {key}: {build}")),
+                    .ok_or_else(|| DumpError::NoHeaderKey { dump: dump(), key }),
             }
         };
 
-        let number = |key: &str, raw: String| -> Result<i64, String> {
-            raw.parse()
-                .map_err(|e| format!("{name}'s {key} is not a number: {raw}: {e}"))
+        let number = |key: &'static str, text: String| -> Result<i64, DumpError> {
+            text.parse().map_err(|source| DumpError::HeaderNumber {
+                dump: dump(),
+                key,
+                text,
+                source,
+            })
         };
 
         let assembly_hash = number("assembly hash", field("assembly")?)?;
         let content_hash = match field("content") {
-            Ok(raw) => Some(
-                u32::try_from(number("content hash", raw)?)
-                    .map_err(|e| format!("{name}'s content hash does not fit a u32: {e}"))?,
-            ),
+            Ok(raw) => {
+                let hash = number("content hash", raw)?;
+                Some(
+                    u32::try_from(hash)
+                        .map_err(|_| DumpError::ContentHashRange { dump: dump(), hash })?,
+                )
+            }
             Err(_) => None,
         };
 
@@ -298,10 +428,10 @@ impl Dump {
 
 /// The hooks each model's class overrides, by the model's id, from the hook
 /// dump. Only the hooks some [`sts2_core::EventHook`] is raised as.
-fn overrides(build: &Build) -> Result<BTreeMap<String, Vec<sts2_core::ModelHook>>, String> {
+fn overrides(build: &Build) -> Result<BTreeMap<String, Vec<sts2_core::ModelHook>>, DumpError> {
     let hooks = Dump::read("hooks.txt")?;
     if hooks.build != *build {
-        return Err("hooks.txt was dumped from another build than the table it feeds".into());
+        return Err(DumpError::OtherBuild { dump: "hooks.txt" });
     }
     let mut overrides: BTreeMap<String, Vec<sts2_core::ModelHook>> = BTreeMap::new();
     for row in hooks.of("implements") {
@@ -339,10 +469,10 @@ fn emit_overrides<'a>(
     writeln!(out, "];").unwrap();
 }
 
-pub fn run() -> Result<String, String> {
-    let dir = version_dir()?;
+pub fn run() -> Result<String, Error> {
+    let dir = version_dir().map_err(DumpError::from)?;
     let root = dir.join("generated");
-    fs::create_dir_all(&root).map_err(|e| format!("creating {}: {e}", root.display()))?;
+    error::create_dir(&root).map_err(DumpError::from)?;
 
     let builds = [
         acts::generate(&root)?,
@@ -370,11 +500,12 @@ pub fn run() -> Result<String, String> {
     let build = &builds[0];
     for (domain, b) in DOMAINS.iter().zip(&builds) {
         if b != build {
-            return Err(format!(
-                "{domain}'s dump came from {b}, but {}'s came from {build} — \
-                 they are different builds",
-                DOMAINS[0]
-            ));
+            return Err(Error::Builds {
+                domain,
+                theirs: Box::new(b.clone()),
+                first: DOMAINS[0],
+                ours: Box::new(build.clone()),
+            });
         }
     }
 
@@ -394,7 +525,7 @@ pub fn run() -> Result<String, String> {
     writeln!(out, "pub mod card_plays;").unwrap();
     writeln!(out, "pub mod monster_moves;").unwrap();
     let path = root.join("mod.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out).map_err(DumpError::from)?;
 
     // Formatted rather than emitted pre-formatted. `just lint` runs
     // `cargo fmt --all --check` over the whole workspace, generated files
@@ -418,16 +549,12 @@ fn banner(what: &str, source: &str, build: &Build) -> String {
 }
 
 /// Runs rustfmt over everything just written.
-fn format(root: &Path) -> Result<(), String> {
+fn format(root: &Path) -> Result<(), DumpError> {
     let mut files: Vec<String> = Vec::new();
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
 
     while let Some(dir) = stack.pop() {
-        let entries = fs::read_dir(&dir).map_err(|e| format!("reading {}: {e}", dir.display()))?;
-        for entry in entries {
-            let path = entry
-                .map_err(|e| format!("reading {}: {e}", dir.display()))?
-                .path();
+        for path in error::entries(&dir)? {
             if path.is_dir() {
                 stack.push(path);
             } else if path.extension().is_some_and(|e| e == "rs") {
@@ -436,16 +563,11 @@ fn format(root: &Path) -> Result<(), String> {
         }
     }
 
-    let status = Command::new("rustfmt")
-        .arg("--edition")
-        .arg("2024")
-        .args(&files)
-        .status()
-        .map_err(|e| format!("running rustfmt: {e}"))?;
-
-    if !status.success() {
-        return Err(format!("rustfmt failed on the generated files: {status}"));
-    }
-
+    error::status(
+        Command::new("rustfmt")
+            .arg("--edition")
+            .arg("2024")
+            .args(&files),
+    )?;
     Ok(())
 }

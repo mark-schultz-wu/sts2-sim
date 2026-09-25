@@ -6,6 +6,10 @@ publish = false
 
 [dependencies]
 nonmax = { workspace = true }
+# Parsing each command's arguments.
+clap = { workspace = true }
+# Each command's failures, as types.
+thiserror = { workspace = true }
 # Reading the dumps and generating tables from them. Nothing here launches a
 # game: `dump` drives one through a shell, and everything that needs the game as
 # a library lives in `sts2-golden`.

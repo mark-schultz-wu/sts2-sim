@@ -11,8 +11,46 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sets};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{potion} is stocked by both {first} and {second}, which the table has no shape for")]
+    TwoPools {
+        potion: String,
+        first: String,
+        second: String,
+    },
+    #[error("{0} is in no pool at all")]
+    NoPool(String),
+    #[error("{potion}: {field} is computed, which the table cannot spell")]
+    Computed { potion: String, field: &'static str },
+    #[error("{potion} has {usage} usage, which is not generated because nothing should have it")]
+    DroppedUsage { potion: String, usage: String },
+    #[error("{potion}.{flag}: {value} is not a flag")]
+    NotAFlag {
+        potion: String,
+        flag: String,
+        value: String,
+    },
+    #[error("no shared potion pool")]
+    NoSharedPool,
+    #[error("{character} is stocked from {pool}, which has no rows")]
+    EmptyPool { character: String, pool: String },
+    #[error("no playable character to stock a reward for")]
+    NoPlayable,
+}
 
 /// Members the game declares that are not values of the field they name.
 const DROPPED: [(&str, &str, &str); 2] = [
@@ -67,25 +105,29 @@ fn bucket_doc(file: &str) -> String {
     format!("Potions stocked by `{}_POTION_POOL`.", file.to_uppercase())
 }
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("potions.txt")?;
     let build = dump.build.clone();
 
     let potions: Vec<&Vec<String>> = dump.of("potion").collect();
     if potions.is_empty() {
-        return Err("the dump declares no potions".into());
+        return Err(DumpError::Empty("potions").into());
     }
     for row in &potions {
         if row.len() != 7 {
-            return Err(format!("{}: {} columns, not 6", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 6,
+            }
+            .into());
         }
     }
 
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -110,15 +152,16 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             .or_default()
             .push(row[3].clone());
         if let Some(first) = pool_of.insert(row[3].clone(), row[1].clone()) {
-            return Err(format!(
-                "{} is stocked by both {first} and {}, which the table has no shape for",
-                row[3], row[1]
-            ));
+            return Err(Error::TwoPools {
+                potion: row[3].clone(),
+                first,
+                second: row[1].clone(),
+            });
         }
     }
     for row in &potions {
         if !pool_of.contains_key(&row[1]) {
-            return Err(format!("{} is in no pool at all", row[1]));
+            return Err(Error::NoPool(row[1].clone()));
         }
     }
 
@@ -258,14 +301,15 @@ fn emit_shape(out: &mut String) {
     .unwrap();
 }
 
-fn literal(row: &[String]) -> Result<String, String> {
+fn literal(row: &[String]) -> Result<String, Error> {
     let id = &row[1];
 
     let rarity = match row[2].as_str() {
         "dynamic" => {
-            return Err(format!(
-                "{id}: rarity is computed, which Option<PotionRarity> cannot spell"
-            ));
+            return Err(Error::Computed {
+                potion: id.to_owned(),
+                field: "rarity",
+            });
         }
         r if dropped("PotionRarity", r) => "None".to_string(),
         r => format!("Some(PotionRarity::{r})"),
@@ -273,14 +317,16 @@ fn literal(row: &[String]) -> Result<String, String> {
 
     let usage = match row[3].as_str() {
         "dynamic" => {
-            return Err(format!(
-                "{id}: usage is computed, which the table cannot spell"
-            ));
+            return Err(Error::Computed {
+                potion: id.to_owned(),
+                field: "usage",
+            });
         }
         u if dropped("PotionUsage", u) => {
-            return Err(format!(
-                "{id} has {u} usage, which is not generated because nothing should have it"
-            ));
+            return Err(Error::DroppedUsage {
+                potion: id.to_owned(),
+                usage: u.to_owned(),
+            });
         }
         u => format!("PotionUsage::{u}"),
     };
@@ -298,7 +344,13 @@ fn literal(row: &[String]) -> Result<String, String> {
             "1" => yes.push(format!("PotionFlag::{name}")),
             "0" => {}
             "dynamic" => computed.push(format!("PotionFlag::{name}")),
-            other => return Err(format!("{id}.{name}: {other} is not a flag")),
+            other => {
+                return Err(Error::NotAFlag {
+                    potion: id.to_owned(),
+                    flag: name.to_string(),
+                    value: other.to_owned(),
+                });
+            }
         }
     }
 
@@ -359,7 +411,7 @@ fn emit_potions(
     out: &mut String,
     potions: &[&Vec<String>],
     pool_of: &BTreeMap<String, String>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every potion in the build.\n\
@@ -489,11 +541,11 @@ fn emit_rewards(
     out: &mut String,
     stocked: &BTreeMap<String, Vec<String>>,
     potions: &[&Vec<String>],
-) -> Result<(), String> {
+) -> Result<(), Error> {
     let characters = Dump::read("characters.txt")?;
     let shared = stocked
         .get("SHARED_POTION_POOL")
-        .ok_or("no shared potion pool")?;
+        .ok_or(Error::NoSharedPool)?;
 
     let rarity_of: BTreeMap<&str, &str> = potions
         .iter()
@@ -521,9 +573,10 @@ fn emit_rewards(
             continue;
         }
         named += 1;
-        let own = stocked
-            .get(&row[11])
-            .ok_or_else(|| format!("{} is stocked from {}, which has no rows", row[1], row[11]))?;
+        let own = stocked.get(&row[11]).ok_or_else(|| Error::EmptyPool {
+            character: row[1].clone(),
+            pool: row[11].clone(),
+        })?;
         writeln!(out, "        Character::{} => Drafted {{", camel(&row[1])).unwrap();
         for (field, rarity) in [
             ("common", "Common"),
@@ -542,7 +595,7 @@ fn emit_rewards(
         writeln!(out, "        }},").unwrap();
     }
     if named == 0 {
-        return Err("no playable character to stock a reward for".into());
+        return Err(Error::NoPlayable);
     }
     writeln!(
         out,

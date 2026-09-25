@@ -9,22 +9,40 @@
 //! The xtask README says why this is a domain at all.
 
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::{Build, DERIVES, Dump, banner, camel, repr};
+use crate::error::{self, FileError};
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+}
+
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("restsite.txt")?;
     let build = dump.build.clone();
 
     let options: Vec<&Vec<String>> = dump.of("option").collect();
     if options.is_empty() {
-        return Err("the dump declares no rest site options".into());
+        return Err(DumpError::Empty("rest site options").into());
     }
     for row in &options {
         if row.len() != 2 {
-            return Err(format!("{}: {} columns, not 1", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 1,
+            }
+            .into());
         }
     }
 
@@ -71,7 +89,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "}}").unwrap();
 
     let path = root.join("restsite.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     println!("  restsite: {} options", options.len());
 

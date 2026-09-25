@@ -45,8 +45,27 @@ const PUNCTS: [&str; 34] = [
 /// Operators a single character spells, which `PUNCTS` leaves out.
 const SINGLE: [&str; 9] = ["!", "+", "-", "*", "/", "%", "&", "|", "^"];
 
+/// What the reader does not follow in a class's source.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum Error {
+    #[error("unexpected character '{0}'")]
+    Character(char),
+    #[error("{0} opens nothing")]
+    OpensNothing(String),
+    #[error("an unclosed '{0}'")]
+    Unclosed(&'static str),
+    #[error("a branch without braces")]
+    NoBraces,
+    #[error("a statement that closes more than it opens")]
+    OverClosed,
+    #[error("a statement with no end: {0}")]
+    NoEnd(String),
+    #[error("{0} has no block body")]
+    NoBlockBody(String),
+}
+
 /// The tokens of `source`, or the character it stopped at.
-pub fn tokens(source: &str) -> Result<Vec<Tok>, String> {
+pub fn tokens(source: &str) -> Result<Vec<Tok>, Error> {
     let chars: Vec<char> = source.chars().collect();
     let mut out = Vec::new();
     let mut at = 0;
@@ -120,7 +139,7 @@ pub fn tokens(source: &str) -> Result<Vec<Tok>, String> {
                 out.push(Tok::Punct(punct));
                 at += punct.len();
             }
-            None => return Err(format!("unexpected character '{c}'")),
+            None => return Err(Error::Character(c)),
         }
     }
     Ok(out)
@@ -184,12 +203,12 @@ pub fn spell(toks: &[Tok]) -> String {
 }
 
 /// Where the bracket opening at `open` closes.
-fn closing(toks: &[Tok], open: usize) -> Result<usize, String> {
+fn closing(toks: &[Tok], open: usize) -> Result<usize, Error> {
     let (up, down) = match &toks[open] {
         Tok::Punct("(") => ("(", ")"),
         Tok::Punct("{") => ("{", "}"),
         Tok::Punct("[") => ("[", "]"),
-        tok => return Err(format!("{tok:?} opens nothing")),
+        tok => return Err(Error::OpensNothing(format!("{tok:?}"))),
     };
     let mut depth = 0;
     for (at, tok) in toks.iter().enumerate().skip(open) {
@@ -202,11 +221,11 @@ fn closing(toks: &[Tok], open: usize) -> Result<usize, String> {
             }
         }
     }
-    Err(format!("an unclosed '{up}'"))
+    Err(Error::Unclosed(up))
 }
 
 /// The statements of a block's contents.
-pub fn statements(toks: &[Tok]) -> Result<Vec<Stmt>, String> {
+pub fn statements(toks: &[Tok]) -> Result<Vec<Stmt>, Error> {
     let mut out = Vec::new();
     let mut at = 0;
     while at < toks.len() {
@@ -218,16 +237,16 @@ pub fn statements(toks: &[Tok]) -> Result<Vec<Stmt>, String> {
 }
 
 /// A block's statements, from the brace at `open`, and where it ends.
-fn block(toks: &[Tok], open: usize) -> Result<(Vec<Stmt>, usize), String> {
+fn block(toks: &[Tok], open: usize) -> Result<(Vec<Stmt>, usize), Error> {
     if !toks.get(open).is_some_and(|tok| tok.is("{")) {
-        return Err("a branch without braces".into());
+        return Err(Error::NoBraces);
     }
     let close = closing(toks, open)?;
     Ok((statements(&toks[open + 1..close])?, close + 1))
 }
 
 /// The statement starting at `at`, and where the next one starts.
-fn statement(toks: &[Tok], at: usize) -> Result<(Stmt, usize), String> {
+fn statement(toks: &[Tok], at: usize) -> Result<(Stmt, usize), Error> {
     let head = &toks[at];
     if head.is("if") {
         let close = closing(toks, at + 1)?;
@@ -297,16 +316,16 @@ fn statement(toks: &[Tok], at: usize) -> Result<(Stmt, usize), String> {
             _ => {}
         }
         if depth < 0 {
-            return Err("a statement that closes more than it opens".into());
+            return Err(Error::OverClosed);
         }
     }
-    Err(format!("a statement with no end: {}", spell(&toks[at..])))
+    Err(Error::NoEnd(spell(&toks[at..])))
 }
 
 /// The body of the method `name` overrides in a class's source, as tokens.
 ///
 /// `None` when the class does not override it.
-pub fn method(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, String> {
+pub fn method(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, Error> {
     for at in 0..class.len() {
         if !(class[at].is("override") && class.get(at + 1).is_some()) {
             continue;
@@ -320,7 +339,7 @@ pub fn method(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, String> {
         }
         let close = closing(class, open)?;
         if !class.get(close + 1).is_some_and(|tok| tok.is("{")) {
-            return Err(format!("{name} has no block body"));
+            return Err(Error::NoBlockBody(name.to_owned()));
         }
         let end = closing(class, close + 1)?;
         return Ok(Some(class[close + 2..end].to_vec()));
@@ -330,7 +349,7 @@ pub fn method(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, String> {
 
 /// The body of the method `name` a class declares, whatever its modifiers,
 /// as tokens. `None` when the class declares none by that name.
-pub fn body(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, String> {
+pub fn body(class: &[Tok], name: &str) -> Result<Option<Vec<Tok>>, Error> {
     for at in 1..class.len() {
         // `<type> name (`, which a call never is: a call follows `.`, `(`, an
         // operator or `await`.

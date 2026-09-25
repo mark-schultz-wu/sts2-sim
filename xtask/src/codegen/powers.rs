@@ -14,9 +14,44 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::sets;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("no bucket for a power whose kind is {0}")]
+    NoBucket(String),
+    #[error("{power}.{field} is computed, but the column is not a Field; change VALUES")]
+    Computed { power: String, field: String },
+    #[error(
+        "{power}.{field} is {ty}::{raw}, which is dropped and the column has no Option to put it in; change VALUES or DROPPED"
+    )]
+    Dropped {
+        power: String,
+        field: String,
+        ty: String,
+        raw: String,
+    },
+    #[error("the dump has no DIE_FOR_YOU_POWER, which the simulator names")]
+    NoDieForYou,
+    #[error("{power}.{flag}: {value} is not a flag")]
+    NotAFlag {
+        power: String,
+        flag: String,
+        value: String,
+    },
+}
 
 /// Members the game declares that are not values of the field they name.
 ///
@@ -127,12 +162,12 @@ impl Wrap {
 /// compute it are a family rather than a leftover. See the module docs. An
 /// unrecognised cell is an error rather than a fourth bucket. A new
 /// `PowerType` member is a thing to look at and not a thing to file.
-fn bucket(kind: &str) -> Result<&'static str, String> {
+fn bucket(kind: &str) -> Result<&'static str, Error> {
     Ok(match kind {
         "Buff" => "buffs",
         "Debuff" => "debuffs",
         "dynamic" => "temporary",
-        other => return Err(format!("no bucket for a power whose kind is {other}")),
+        other => return Err(Error::NoBucket(other.to_owned())),
     })
 }
 
@@ -203,7 +238,7 @@ fn describe(field: &str) -> &'static str {
     }
 }
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("powers.txt")?;
     let build = dump.build.clone();
 
@@ -211,9 +246,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // member — the same reason the card and monster dumps reflect their own.
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -222,7 +256,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
 
     let powers: Vec<&Vec<String>> = dump.of("power").collect();
     if powers.is_empty() {
-        return Err("the dump declares no powers".into());
+        return Err(DumpError::Empty("powers").into());
     }
 
     // The hooks each power's class overrides.
@@ -329,7 +363,7 @@ fn doc(out: &mut String, name: &str) {
     }
 }
 
-fn emit_shape(out: &mut String) -> Result<(), String> {
+fn emit_shape(out: &mut String) -> Result<(), Error> {
     emit_flags(out)?;
 
     writeln!(
@@ -367,7 +401,7 @@ fn emit_shape(out: &mut String) -> Result<(), String> {
 /// `PowerModel` declares every one of these `virtual`, and two are worked out
 /// from combat state. A second word is what lets `PowerFlags::get` hand back a
 /// `Field<bool>` rather than `false`.
-fn emit_flags(out: &mut String) -> Result<(), String> {
+fn emit_flags(out: &mut String) -> Result<(), sets::Error> {
     sets::computed(
         out,
         &sets::Set {
@@ -396,22 +430,25 @@ fn emit_flags(out: &mut String) -> Result<(), String> {
 /// `dynamic` in a column with no `Field` generates a constant that is not one.
 /// A dropped member in a column with no `Option` names a variant that is gone.
 /// Both errors name the power and the column.
-fn cell(power: &str, field: &str, ty: &str, wrap: Wrap, raw: &str) -> Result<String, String> {
+fn cell(power: &str, field: &str, ty: &str, wrap: Wrap, raw: &str) -> Result<String, Error> {
     if raw == "dynamic" {
         if !wrap.computes() {
-            return Err(format!(
-                "{power}.{field} is computed, but the column is not a Field; change VALUES"
-            ));
+            return Err(Error::Computed {
+                power: power.to_owned(),
+                field: field.to_owned(),
+            });
         }
         return Ok("Field::Computed".into());
     }
 
     if dropped(ty, raw) {
         if !wrap.absent() {
-            return Err(format!(
-                "{power}.{field} is {ty}::{raw}, which is dropped and the column \
-                 has no Option to put it in; change VALUES or DROPPED"
-            ));
+            return Err(Error::Dropped {
+                power: power.to_owned(),
+                field: field.to_owned(),
+                ty: ty.to_owned(),
+                raw: raw.to_owned(),
+            });
         }
         return Ok(match wrap {
             Wrap::FieldOption => "Field::Constant(None)".into(),
@@ -428,7 +465,7 @@ fn cell(power: &str, field: &str, ty: &str, wrap: Wrap, raw: &str) -> Result<Str
     })
 }
 
-fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> {
+fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), Error> {
     writeln!(out, "/// Every power in the build.").unwrap();
     writeln!(
         out,
@@ -526,7 +563,7 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
 
     // The one power the simulator applies by name, as it summons Osty.
     if !powers.iter().any(|row| row[1] == "DIE_FOR_YOU_POWER") {
-        return Err("the dump has no DIE_FOR_YOU_POWER, which the simulator names".into());
+        return Err(Error::NoDieForYou);
     }
     writeln!(
         out,
@@ -538,7 +575,7 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
 }
 
 /// One power's row, as the `const` its bucket file declares.
-fn power_literal(row: &[String]) -> Result<String, String> {
+fn power_literal(row: &[String]) -> Result<String, Error> {
     let mut out = String::new();
     writeln!(out, "PowerData {{").unwrap();
     for (i, (field, ty, wrap)) in VALUES.iter().enumerate() {
@@ -558,7 +595,13 @@ fn power_literal(row: &[String]) -> Result<String, String> {
             "1" => yes.push(format!("PowerFlag::{flag}")),
             "0" => {}
             "dynamic" => computed.push(format!("PowerFlag::{flag}")),
-            other => return Err(format!("{}.{flag}: {other} is not a flag", row[1])),
+            other => {
+                return Err(Error::NotAFlag {
+                    power: row[1].clone(),
+                    flag: flag.to_string(),
+                    value: other.to_owned(),
+                });
+            }
         }
     }
     writeln!(

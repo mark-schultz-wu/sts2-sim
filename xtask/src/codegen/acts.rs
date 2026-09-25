@@ -10,22 +10,48 @@
 //! domain deliberately leaves to the event and encounter dumps.
 
 use std::fmt::Write as _;
-use std::fs;
 use std::path::Path;
 
+use super::DumpError;
 use super::{Build, DERIVES, Dump, banner, camel, repr};
+use crate::error::{self, FileError};
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{act}: boss {order} arrived out of order, after {after}")]
+    BossOrder {
+        act: String,
+        order: usize,
+        after: usize,
+    },
+    #[error("an act reveals {0} bosses, past the {BOSS_CAP} a Bosses can hold")]
+    TooManyBosses(usize),
+}
+
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("acts.txt")?;
     let build = dump.build.clone();
 
     let acts: Vec<&Vec<String>> = dump.of("act").collect();
     if acts.is_empty() {
-        return Err("the dump declares no acts".into());
+        return Err(DumpError::Empty("acts").into());
     }
     for row in &acts {
         if row.len() != 6 {
-            return Err(format!("{}: {} columns, not 5", row[1], row.len() - 1));
+            return Err(DumpError::Columns {
+                id: row[1].clone(),
+                got: row.len() - 1,
+                want: 5,
+            }
+            .into());
         }
     }
 
@@ -33,9 +59,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // because the order is which boss a first run ends against.
     let mut bosses: Vec<(String, Vec<String>)> = Vec::new();
     for row in dump.of("boss") {
-        let order: usize = row[2]
-            .parse()
-            .map_err(|e| format!("{}: boss order {}: {e}", row[1], row[2]))?;
+        let order: usize = DumpError::number(format_args!("{}: boss order", row[1]), &row[2])?;
 
         let entry = match bosses.iter_mut().find(|(id, _)| *id == row[1]) {
             Some(entry) => entry,
@@ -46,20 +70,18 @@ pub fn generate(root: &Path) -> Result<Build, String> {
         };
 
         if entry.1.len() != order {
-            return Err(format!(
-                "{}: boss {order} arrived out of order, after {}",
-                row[1],
-                entry.1.len()
-            ));
+            return Err(Error::BossOrder {
+                act: row[1].clone(),
+                order,
+                after: entry.1.len(),
+            });
         }
         entry.1.push(row[3].clone());
     }
 
     let widest = bosses.iter().map(|(_, b)| b.len()).max().unwrap_or(0);
     if widest > BOSS_CAP {
-        return Err(format!(
-            "an act reveals {widest} bosses, past the {BOSS_CAP} a Bosses can hold"
-        ));
+        return Err(Error::TooManyBosses(widest));
     }
 
     let mut out = banner("Every act's shape and its bosses.", "acts.txt", &build);
@@ -71,7 +93,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_acts(&mut out, &acts, &bosses)?;
 
     let path = root.join("acts.rs");
-    fs::write(&path, &out).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    error::write(&path, &out)?;
 
     println!(
         "  acts: {} ({} a run can visit)",
@@ -124,7 +146,7 @@ fn emit_acts(
     out: &mut String,
     acts: &[&Vec<String>],
     bosses: &[(String, Vec<String>)],
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(
         out,
         "/// Every act in the build, in the order a run visits them.\n\
@@ -162,13 +184,8 @@ fn emit_acts(
     let mut table: Vec<String> = Vec::new();
     for row in acts {
         let id = &row[1];
-        let number = |what: &str, v: &str| {
-            v.parse::<u8>()
-                .map_err(|e| format!("{id}: {what} {v}: {e}"))
-        };
-        let index = row[2]
-            .parse::<i8>()
-            .map_err(|e| format!("{id}: index {}: {e}", row[2]))?;
+        let number = |what: &str, v: &str| DumpError::number::<u8>(format_args!("{id}: {what}"), v);
+        let index: i8 = DumpError::number(format_args!("{id}: index"), &row[2])?;
 
         let list = bosses
             .iter()

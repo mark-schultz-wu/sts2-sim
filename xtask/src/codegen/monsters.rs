@@ -13,9 +13,116 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::Path;
 
+use super::DumpError;
 use super::sets;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sanitize};
+use crate::error::FileError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Dump(#[from] DumpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+    #[error(transparent)]
+    Set(#[from] super::sets::Error),
+    #[error(transparent)]
+    Bridge(#[from] super::bridge::Error),
+    #[error("{at}: {problem}")]
+    At { at: String, problem: Problem },
+    #[error("a monster has {0} states, past what a u8 StateIndex can hold")]
+    TooManyStates(usize),
+    #[error("{0} row before any monster row")]
+    Orphan(String),
+    #[error("{kind} row for {monster} appeared under {under}")]
+    Misplaced {
+        kind: String,
+        monster: String,
+        under: String,
+    },
+    #[error("{kind} row outside its state: {row:?}")]
+    Outside {
+        kind: &'static str,
+        row: Vec<String>,
+    },
+    #[error("the dump reports {kind}: {row:?}")]
+    Reported { kind: String, row: Vec<String> },
+    #[error("ascension changes a monster's graph: {0:?}")]
+    StructureChange(Vec<String>),
+    #[error("scalehp for unknown monster {0}")]
+    UnknownMonster(String),
+    #[error("MoveRepeatType::{0} is new; teach REPEAT_LIMIT what it means")]
+    NewRepeat(String),
+    #[error("{0} is both declared and installed")]
+    DeclaredAndInstalled(String),
+    #[error("{first} and {second} are both {variant}, so one variant would stand for two moves")]
+    SameVariant {
+        first: String,
+        second: String,
+        variant: String,
+    },
+    #[error("the dump has no {0}, which the simulator names")]
+    Unnamed(&'static str),
+}
+
+impl Error {
+    fn at(at: &str, problem: Problem) -> Error {
+        Error::At {
+            at: at.to_owned(),
+            problem,
+        }
+    }
+}
+
+/// What is wrong at one place in a monster's graph.
+#[derive(Debug, thiserror::Error)]
+pub enum Problem {
+    #[error("steps at more than one level: {0:?}")]
+    ManyLevels(Vec<u8>),
+    #[error("`{base}` at ascension 0 but `{value}` at {level}")]
+    Unsteppable {
+        base: String,
+        value: String,
+        level: u8,
+    },
+    #[error("unknown MoveRepeatType")]
+    UnknownRepeat,
+    #[error("{what} {n} is outside 1..={REPEAT_CAP}")]
+    RepeatRange { what: &'static str, n: u8 },
+    #[error("maxTimes {0} on a member that does not read one")]
+    MaxTimes(u8),
+    #[error("telegraphed twice")]
+    TelegraphedTwice,
+    #[error("an attack with no damage or repeats")]
+    EmptyAttack,
+    #[error("a second attacking intent on one move")]
+    SecondAttack,
+    #[error("a status intent with no count")]
+    StatusWithoutCount,
+    #[error("a status intent with damage")]
+    StatusWithDamage,
+    #[error("a second status intent on one move")]
+    SecondStatus,
+    #[error("carries numbers ({count} {damage}) but has no payload; add it to INTENT_PAYLOAD")]
+    Unpayloaded { count: String, damage: String },
+    #[error("no intent {0}")]
+    NoIntent(usize),
+    #[error("no branch {0}")]
+    NoBranch(usize),
+    #[error("two states named {0}")]
+    TwoStates(String),
+    #[error("no state named {0}")]
+    NoState(String),
+    #[error("must perform once, but has no follow-up state")]
+    NoFollowUp,
+    #[error("a branch weight steps with ascension")]
+    SteppedWeight,
+    #[error("computed, which has no table")]
+    Computed,
+    #[error("did not produce a Scaled")]
+    NotScaled,
+}
 
 /// Intents that carry numbers, and which numbers.
 ///
@@ -153,16 +260,12 @@ impl Steps {
     }
 
     /// The `Scaled<T>` literal, or `Field::Computed`.
-    fn literal(&self, where_: &str, ty: &str) -> Result<String, String> {
+    fn literal(&self, where_: &str, ty: &str) -> Result<String, Error> {
         if self.is_dynamic() {
             return Ok("Field::Computed".into());
         }
 
-        let number = |v: &str| {
-            v.parse::<u32>()
-                .map(|n| format!("{n}{ty}"))
-                .map_err(|e| format!("{where_}: {v}: {e}"))
-        };
+        let number = |v: &str| DumpError::number::<u32>(where_, v).map(|n| format!("{n}{ty}"));
 
         // One threshold, because `AscensionHelper.GetValueIfAscension` takes
         // one. A value that moved twice would need a monster nesting two calls,
@@ -173,9 +276,7 @@ impl Steps {
             [(level, v)] => format!("Some(({level}, {}))", number(v)?),
             more => {
                 let levels: Vec<u8> = more.iter().map(|(l, _)| *l).collect();
-                return Err(format!(
-                    "{where_}: steps at more than one level: {levels:?}"
-                ));
+                return Err(Error::at(where_, Problem::ManyLevels(levels)));
             }
         };
 
@@ -194,7 +295,7 @@ fn state_id(state: &State) -> &str {
     }
 }
 
-pub fn generate(root: &Path) -> Result<Build, String> {
+pub fn generate(root: &Path) -> Result<Build, Error> {
     let dump = Dump::read("monsters.txt")?;
     let build = dump.build.clone();
 
@@ -202,9 +303,8 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     // a member — the same reason the card dump reflects its own enums.
     let mut enums: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
     for f in dump.of("enum") {
-        let discriminant = f[2]
-            .parse::<u8>()
-            .map_err(|e| format!("{} {}: discriminant {}: {e}", f[1], f[3], f[2]))?;
+        let discriminant =
+            DumpError::number::<u8>(format_args!("{} {}: discriminant", f[1], f[3]), &f[2])?;
         enums
             .entry(f[1].clone())
             .or_default()
@@ -257,9 +357,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     emit_repeat(&mut out, &enums, &machines)?;
     let largest = machines.values().map(|m| m.states.len()).max().unwrap_or(0);
     if largest > u8::MAX as usize {
-        return Err(format!(
-            "a monster has {largest} states, past what a u8 StateIndex can hold"
-        ));
+        return Err(Error::TooManyStates(largest));
     }
     emit_shape(&mut out, largest);
     emit_moves(&mut out, &machines, &installed(&dump))?;
@@ -353,7 +451,7 @@ fn installed(dump: &Dump) -> BTreeSet<&str> {
 /// Row order carries meaning twice over. States arrive sorted by id, and their
 /// position becomes their index. Branches arrive in the order the game
 /// subtracts their weights.
-fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, String> {
+fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, Error> {
     let mut machines: BTreeMap<String, Machine> = BTreeMap::new();
     let mut current: Option<String> = None;
 
@@ -375,12 +473,13 @@ fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, String> {
             | "unknownstate" => {
                 let monster = current
                     .as_deref()
-                    .ok_or_else(|| format!("{} row before any monster row", row[0]))?;
+                    .ok_or_else(|| Error::Orphan(row[0].clone()))?;
                 if monster != row[1] {
-                    return Err(format!(
-                        "{} row for {} appeared under {monster}",
-                        row[0], row[1]
-                    ));
+                    return Err(Error::Misplaced {
+                        kind: row[0].clone(),
+                        monster: row[1].clone(),
+                        under: monster.to_owned(),
+                    });
                 }
                 let machine = machines.get_mut(monster).expect("just inserted");
 
@@ -405,7 +504,12 @@ fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, String> {
                             count: Steps::new(&row[5]),
                             damage: Steps::new(&row[6]),
                         }),
-                        _ => return Err(format!("intent row outside a move: {row:?}")),
+                        _ => {
+                            return Err(Error::Outside {
+                                kind: "intent",
+                                row: row.clone(),
+                            });
+                        }
                     },
                     "branch" => match machine.states.last_mut() {
                         Some(State::Random { branches, .. }) => branches.push(Branch {
@@ -415,16 +519,31 @@ fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, String> {
                             cooldown: row[7].clone(),
                             weight: Steps::new(&row[8]),
                         }),
-                        _ => return Err(format!("branch row outside a rand: {row:?}")),
+                        _ => {
+                            return Err(Error::Outside {
+                                kind: "branch",
+                                row: row.clone(),
+                            });
+                        }
                     },
                     "condbranch" => match machine.states.last_mut() {
                         Some(State::Conditional { targets, .. }) => targets.push(row[4].clone()),
-                        _ => return Err(format!("condbranch row outside a cond: {row:?}")),
+                        _ => {
+                            return Err(Error::Outside {
+                                kind: "condbranch",
+                                row: row.clone(),
+                            });
+                        }
                     },
                     // The dump reports these rather than staying silent, so
                     // generation stops on them rather than emitting a monster
                     // with a graph nobody built.
-                    other => return Err(format!("{other} for {monster}: {row:?}")),
+                    other => {
+                        return Err(Error::Reported {
+                            kind: other.to_owned(),
+                            row: row.clone(),
+                        });
+                    }
                 }
             }
             _ => {}
@@ -442,17 +561,17 @@ fn machines(dump: &Dump) -> Result<BTreeMap<String, Machine>, String> {
 /// append in order and `Scaled::at` can walk them without sorting. A row that
 /// names a value the base rows never declared means the two halves of the dump
 /// disagree, which is worth stopping for.
-fn scaling(dump: &Dump, machines: &mut BTreeMap<String, Machine>) -> Result<(), String> {
+fn scaling(dump: &Dump, machines: &mut BTreeMap<String, Machine>) -> Result<(), Error> {
     // Ascension changing a monster's *graph* is not something the table models,
     // and the dump reports it rather than flattening it.
     if let Some(row) = dump.of("structurechange").next() {
-        return Err(format!("ascension changes a monster's graph: {row:?}"));
+        return Err(Error::StructureChange(row.clone()));
     }
 
     for row in dump.of("scalehp") {
         let machine = machines
             .get_mut(&row[1])
-            .ok_or_else(|| format!("scalehp for unknown monster {}", row[1]))?;
+            .ok_or_else(|| Error::UnknownMonster(row[1].clone()))?;
         let level = level(&row[2])?;
         machine.min_hp.at.push((level, row[3].clone()));
         machine.max_hp.at.push((level, row[4].clone()));
@@ -477,13 +596,7 @@ fn scaling(dump: &Dump, machines: &mut BTreeMap<String, Machine>) -> Result<(), 
 /// A step is only recorded where the value actually moved, so a column that
 /// matches the base is skipped. The two columns of a `scaleintent` row move
 /// independently.
-fn push(
-    steps: &mut Steps,
-    level: u8,
-    value: &str,
-    what: &str,
-    monster: &str,
-) -> Result<(), String> {
+fn push(steps: &mut Steps, level: u8, value: &str, what: &str, monster: &str) -> Result<(), Error> {
     let current = steps
         .at
         .last()
@@ -492,19 +605,21 @@ fn push(
         return Ok(());
     }
     if steps.is_dynamic() || steps.is_absent() {
-        return Err(format!(
-            "{monster}: {what} is `{}` at ascension 0 but `{value}` at {level}",
-            steps.base
+        return Err(Error::at(
+            &format!("{monster}.{what}"),
+            Problem::Unsteppable {
+                base: steps.base.clone(),
+                value: value.to_owned(),
+                level,
+            },
         ));
     }
     steps.at.push((level, value.to_string()));
     Ok(())
 }
 
-fn level(value: &str) -> Result<u8, String> {
-    value
-        .parse()
-        .map_err(|e| format!("ascension level {value}: {e}"))
+fn level(value: &str) -> Result<u8, DumpError> {
+    DumpError::number("ascension level", value)
 }
 
 fn intent_mut<'a>(
@@ -512,10 +627,8 @@ fn intent_mut<'a>(
     monster: &str,
     state: &str,
     index: &str,
-) -> Result<&'a mut Intent, String> {
-    let i: usize = index
-        .parse()
-        .map_err(|e| format!("{monster}.{state}: intent index {index}: {e}"))?;
+) -> Result<&'a mut Intent, Error> {
+    let i: usize = DumpError::number(format_args!("{monster}.{state}: intent index"), index)?;
 
     machines
         .get_mut(monster)
@@ -525,7 +638,7 @@ fn intent_mut<'a>(
                 _ => None,
             })
         })
-        .ok_or_else(|| format!("no intent {i} on {monster}.{state}"))
+        .ok_or_else(|| Error::at(&format!("{monster}.{state}"), Problem::NoIntent(i)))
 }
 
 fn branch_mut<'a>(
@@ -533,10 +646,8 @@ fn branch_mut<'a>(
     monster: &str,
     state: &str,
     index: &str,
-) -> Result<&'a mut Branch, String> {
-    let i: usize = index
-        .parse()
-        .map_err(|e| format!("{monster}.{state}: branch index {index}: {e}"))?;
+) -> Result<&'a mut Branch, Error> {
+    let i: usize = DumpError::number(format_args!("{monster}.{state}: branch index"), index)?;
 
     machines
         .get_mut(monster)
@@ -546,7 +657,7 @@ fn branch_mut<'a>(
                 _ => None,
             })
         })
-        .ok_or_else(|| format!("no branch {i} on {monster}.{state}"))
+        .ok_or_else(|| Error::at(&format!("{monster}.{state}"), Problem::NoBranch(i)))
 }
 
 /// The intent enum: one variant per `IntentType` member, carrying whatever
@@ -555,13 +666,10 @@ fn branch_mut<'a>(
 /// A variant rather than a type-plus-two-nullable-columns, because "a Buff has
 /// no damage" is a fact about buffs and belongs in the type. The dump spells it
 /// `-`. Here it is absent.
-fn emit_intent(
-    out: &mut String,
-    enums: &BTreeMap<String, Vec<(u8, String)>>,
-) -> Result<(), String> {
+fn emit_intent(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) -> Result<(), Error> {
     let members = enums
         .get("IntentType")
-        .ok_or("the dump declares no IntentType")?;
+        .ok_or(DumpError::Empty("IntentType"))?;
 
     writeln!(
         out,
@@ -675,16 +783,14 @@ fn emit_repeat(
     out: &mut String,
     enums: &BTreeMap<String, Vec<(u8, String)>>,
     machines: &BTreeMap<String, Machine>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     let members = enums
         .get("MoveRepeatType")
-        .ok_or("the dump declares no MoveRepeatType")?;
+        .ok_or(DumpError::Empty("MoveRepeatType"))?;
 
     for (_, m) in members {
         if !REPEAT_LIMIT.iter().any(|(name, _)| name == m) {
-            return Err(format!(
-                "MoveRepeatType::{m} is new; teach REPEAT_LIMIT what it means"
-            ));
+            return Err(Error::NewRepeat(m.clone()));
         }
     }
 
@@ -797,7 +903,7 @@ fn emit_moves(
     out: &mut String,
     machines: &BTreeMap<String, Machine>,
     installed: &BTreeSet<&str>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     let mut names: BTreeSet<&str> = BTreeSet::new();
     for machine in machines.values() {
         for state in &machine.states {
@@ -812,7 +918,7 @@ fn emit_moves(
     // same move twice and one of the two is not what it says it is.
     for id in installed {
         if !names.insert(id) {
-            return Err(format!("{id} is both declared and installed"));
+            return Err(Error::DeclaredAndInstalled(id.to_string()));
         }
     }
 
@@ -821,10 +927,11 @@ fn emit_moves(
     let mut variants: BTreeMap<String, &str> = BTreeMap::new();
     for name in &names {
         if let Some(other) = variants.insert(camel(name), name) {
-            return Err(format!(
-                "{other} and {name} are both {}, so one variant would stand for two moves",
-                camel(name)
-            ));
+            return Err(Error::SameVariant {
+                first: other.to_string(),
+                second: name.to_string(),
+                variant: camel(name),
+            });
         }
     }
 
@@ -860,7 +967,7 @@ fn emit_moves(
     // The one move name the simulator writes itself, for a creature that
     // has not rolled one.
     if !names.iter().any(|name| *name == "UNSET_MOVE") {
-        return Err("the dump reflects no UNSET_MOVE, which the simulator names".into());
+        return Err(Error::Unnamed("UNSET_MOVE"));
     }
     writeln!(
         out,
@@ -1019,7 +1126,7 @@ fn emit_monsters(
     machines: &BTreeMap<String, Machine>,
     act_of: &BTreeMap<String, Vec<String>>,
     overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     writeln!(out, "/// Every monster in the build.").unwrap();
     writeln!(
         out,
@@ -1045,7 +1152,7 @@ fn emit_monsters(
 
     // The one monster the simulator stands up by name, as a pet.
     if !machines.contains_key("OSTY") {
-        return Err("the dump has no OSTY, which the simulator names".into());
+        return Err(Error::Unnamed("OSTY"));
     }
     writeln!(
         out,
@@ -1124,7 +1231,7 @@ fn emit_monsters(
     Ok(())
 }
 
-fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
+fn machine_literal(id: &str, machine: &Machine) -> Result<String, Error> {
     let mut out = String::new();
     let out = &mut out;
     // The dump names states; the table indexes them. Built here so that a name
@@ -1133,15 +1240,18 @@ fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
     let mut index: BTreeMap<&str, usize> = BTreeMap::new();
     for (i, state) in machine.states.iter().enumerate() {
         if index.insert(state_id(state), i).is_some() {
-            return Err(format!("{id}: two states named {}", state_id(state)));
+            return Err(Error::at(
+                id,
+                Problem::TwoStates(state_id(state).to_owned()),
+            ));
         }
     }
 
-    let resolve = |name: &str| -> Result<String, String> {
+    let resolve = |name: &str| -> Result<String, Error> {
         index
             .get(name)
             .map(|i| i.to_string())
-            .ok_or_else(|| format!("{id}: no state named {name}"))
+            .ok_or_else(|| Error::at(id, Problem::NoState(name.to_owned())))
     };
 
     let initial = resolve(&machine.initial)?;
@@ -1169,9 +1279,7 @@ fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
                 let next = match (follow_up.as_str(), must_perform_once) {
                     ("-", false) => "FollowUp::Never".to_string(),
                     ("-", true) => {
-                        return Err(format!(
-                            "{id}.{move_id}: must perform once, but has no follow-up state"
-                        ));
+                        return Err(Error::at(&format!("{id}.{move_id}"), Problem::NoFollowUp));
                     }
                     (name, false) => format!("FollowUp::Next({})", resolve(name)?),
                     (name, true) => format!("FollowUp::OncePerformed({})", resolve(name)?),
@@ -1196,7 +1304,7 @@ fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
                 writeln!(out, "                    State::Random(&[").unwrap();
                 for b in branches {
                     if !b.weight.at.is_empty() {
-                        return Err(format!("{id}: a branch weight steps with ascension"));
+                        return Err(Error::at(id, Problem::SteppedWeight));
                     }
                     let weight = match b.weight.base.as_str() {
                         "dynamic" => "Field::Computed".to_string(),
@@ -1245,34 +1353,26 @@ fn machine_literal(id: &str, machine: &Machine) -> Result<String, String> {
 /// Everything the columns say that the type cannot is an error rather than a
 /// value. A `maxTimes` on a member that does not read one, a missing one on
 /// `CanRepeatXTimes`, or a window past [`REPEAT_CAP`].
-fn repeat_literal(monster: &str, branch: &Branch) -> Result<String, String> {
+fn repeat_literal(monster: &str, branch: &Branch) -> Result<String, Error> {
     let where_ = format!("{monster}.{} -> {}", branch.repeat, branch.target);
 
     let (_, kind) = REPEAT_LIMIT
         .iter()
         .find(|(name, _)| *name == branch.repeat)
-        .ok_or_else(|| format!("{where_}: unknown MoveRepeatType"))?;
+        .ok_or_else(|| Error::at(&where_, Problem::UnknownRepeat))?;
 
-    let count = |what: &str, n: u8| {
+    let count = |what: &'static str, n: u8| {
         if n == 0 || n > REPEAT_CAP {
-            return Err(format!("{where_}: {what} {n} is outside 1..={REPEAT_CAP}"));
+            return Err(Error::at(&where_, Problem::RepeatRange { what, n }));
         }
         Ok(format!("RepeatCount::{}", word(n)))
     };
 
-    let max_times: u8 = branch
-        .max_times
-        .parse()
-        .map_err(|e| format!("{where_}: maxTimes {}: {e}", branch.max_times))?;
-    let cooldown: u8 = branch
-        .cooldown
-        .parse()
-        .map_err(|e| format!("{where_}: cooldown {}: {e}", branch.cooldown))?;
+    let max_times: u8 = DumpError::number(format_args!("{where_}: maxTimes"), &branch.max_times)?;
+    let cooldown: u8 = DumpError::number(format_args!("{where_}: cooldown"), &branch.cooldown)?;
 
     if *kind != Limit::InARow && max_times != 0 {
-        return Err(format!(
-            "{where_}: maxTimes {max_times} on a member that does not read one"
-        ));
+        return Err(Error::at(&where_, Problem::MaxTimes(max_times)));
     }
 
     Ok(match (kind, cooldown) {
@@ -1292,7 +1392,7 @@ fn repeat_literal(monster: &str, branch: &Branch) -> Result<String, String> {
 /// The dump's rows are an ordered list, and this is a set plus two payloads.
 /// Every way the two fail to line up fails generation. A kind twice, a second
 /// attacking intent, or a number on a kind with nowhere to put it.
-fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<String, String> {
+fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<String, Error> {
     let mut kinds: Vec<&str> = Vec::new();
     let mut attack: Option<String> = None;
     let mut cards: Option<String> = None;
@@ -1305,14 +1405,14 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
         // in this build telegraphs one twice, and that is what makes the set
         // lossless rather than lucky.
         if kinds.contains(&kind) {
-            return Err(format!("{where_}: telegraphed twice"));
+            return Err(Error::at(&where_, Problem::TelegraphedTwice));
         }
         kinds.push(kind);
 
         match payload(&intent.kind) {
             Payload::Attack => {
                 if intent.count.is_absent() || intent.damage.is_absent() {
-                    return Err(format!("{where_}: an attack with no damage or repeats"));
+                    return Err(Error::at(&where_, Problem::EmptyAttack));
                 }
                 let literal = format!(
                     "Attack {{ damage: {}, repeats: {} }}",
@@ -1320,19 +1420,19 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
                     intent.count.literal(&where_, "u8")?
                 );
                 if attack.replace(literal).is_some() {
-                    return Err(format!("{where_}: a second attacking intent on one move"));
+                    return Err(Error::at(&where_, Problem::SecondAttack));
                 }
             }
             Payload::Count => {
                 if intent.count.is_absent() {
-                    return Err(format!("{where_}: a status intent with no count"));
+                    return Err(Error::at(&where_, Problem::StatusWithoutCount));
                 }
                 if !intent.damage.is_absent() {
-                    return Err(format!("{where_}: a status intent with damage"));
+                    return Err(Error::at(&where_, Problem::StatusWithDamage));
                 }
                 let literal = intent.count.literal(&where_, "u8")?;
                 if cards.replace(literal).is_some() {
-                    return Err(format!("{where_}: a second status intent on one move"));
+                    return Err(Error::at(&where_, Problem::SecondStatus));
                 }
             }
             Payload::None => {
@@ -1340,10 +1440,12 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
                 // grew one, and dropping it silently is how a table starts
                 // lying.
                 if !intent.count.is_absent() || !intent.damage.is_absent() {
-                    return Err(format!(
-                        "{where_}: carries numbers ({} {}) but has no payload; \
-                         add it to INTENT_PAYLOAD",
-                        intent.count.base, intent.damage.base
+                    return Err(Error::at(
+                        &where_,
+                        Problem::Unpayloaded {
+                            count: intent.count.base.clone(),
+                            damage: intent.damage.base.clone(),
+                        },
                     ));
                 }
             }
@@ -1364,9 +1466,9 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
 }
 
 /// A bare `Scaled<T>`, with no `Field`, for values the game never computes.
-fn scaled(monster: &str, what: &str, steps: &Steps, ty: &str) -> Result<String, String> {
+fn scaled(monster: &str, what: &str, steps: &Steps, ty: &str) -> Result<String, Error> {
     if steps.is_dynamic() {
-        return Err(format!("{monster}: {what} is computed, which has no table"));
+        return Err(Error::at(&format!("{monster}.{what}"), Problem::Computed));
     }
 
     steps
@@ -1374,5 +1476,5 @@ fn scaled(monster: &str, what: &str, steps: &Steps, ty: &str) -> Result<String, 
         .strip_prefix("Field::Constant(")
         .and_then(|s| s.strip_suffix(')'))
         .map(String::from)
-        .ok_or_else(|| format!("{monster}: {what} did not produce a Scaled"))
+        .ok_or_else(|| Error::at(&format!("{monster}.{what}"), Problem::NotScaled))
 }
