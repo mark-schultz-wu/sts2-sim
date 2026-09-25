@@ -3,7 +3,7 @@
 //! A scenario is a handful of steps and what the game answered. There are
 //! many, so the answers are stored as tightly as they read back. One file for
 //! the suite, and one hash per part of an observation that moved since the
-//! step before it.
+//! step before it. The question a parked run asks is one more part.
 //!
 //! Not a directory per scenario. A five-step test does not need five files,
 //! and two hundred of those is a tree nobody reads. This is one file, and
@@ -21,7 +21,11 @@ use sts2_core::{Digest, Section};
 const MAGIC: &[u8; 8] = b"STS2SCN\x00";
 
 /// The layout below. A change here is a re-record, not a migration.
-const VERSION: u16 = 1;
+const VERSION: u16 = 2;
+
+/// The mask bit a step sets when what the run asks moved. The sections take
+/// the low bits, one each.
+const QUESTION: u16 = 1 << 15;
 
 /// Every scenario's answers, by name.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -38,25 +42,40 @@ pub struct Stamp {
     pub content: i64,
 }
 
-/// One step, as the sections that moved and what they moved to.
+/// What one step left the run showing: each section of the observation,
+/// and the question the run is parked on, as [`Digest::of_question`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Seen {
+    pub sections: Vec<(Section, Digest)>,
+    pub question: Digest,
+}
+
+/// One step, as the parts that moved and what they moved to.
 ///
 /// Absent means unchanged from the step before, which is most of it. Better
 /// than four fifths of an observation matches the one before.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Step {
     pub moved: Vec<(Section, Digest)>,
+    /// What the question moved to, when it moved.
+    pub question: Option<Digest>,
 }
 
 impl Step {
-    /// What moved between two observations, in section order.
-    pub fn between(before: Option<&[(Section, Digest)]>, after: &[(Section, Digest)]) -> Step {
+    /// What moved between two steps, sections in section order.
+    pub fn between(before: Option<&Seen>, after: &Seen) -> Step {
         let moved = after
+            .sections
             .iter()
             .enumerate()
-            .filter(|(at, (_, now))| before.is_none_or(|was| was[*at].1 != *now))
+            .filter(|(at, (_, now))| before.is_none_or(|was| was.sections[*at].1 != *now))
             .map(|(_, &pair)| pair)
             .collect();
-        Step { moved }
+        let question = match before {
+            Some(was) if was.question == after.question => None,
+            _ => Some(after.question),
+        };
+        Step { moved, question }
     }
 }
 
@@ -82,9 +101,15 @@ impl Expected {
                 for (section, _) in &step.moved {
                     mask |= 1 << section.number();
                 }
+                if step.question.is_some() {
+                    mask |= QUESTION;
+                }
                 out.extend_from_slice(&mask.to_le_bytes());
                 for (_, digest) in &step.moved {
                     out.extend_from_slice(&digest.to_u64().to_le_bytes());
+                }
+                if let Some(question) = step.question {
+                    out.extend_from_slice(&question.to_u64().to_le_bytes());
                 }
             }
         }
@@ -122,7 +147,11 @@ impl Expected {
                         moved.push((section, Digest::from_u64(read.u64()?)));
                     }
                 }
-                steps.push(Step { moved });
+                let question = match mask & QUESTION {
+                    0 => None,
+                    _ => Some(Digest::from_u64(read.u64()?)),
+                };
+                steps.push(Step { moved, question });
             }
             scenarios.insert(name, steps);
         }
@@ -179,9 +208,11 @@ mod tests {
             vec![
                 Step {
                     moved: Section::ALL.into_iter().map(|s| (s, digest(7))).collect(),
+                    question: Some(digest(5)),
                 },
                 Step {
                     moved: vec![(Section::Creatures, digest(9)), (Section::Legal, digest(3))],
+                    question: None,
                 },
             ],
         );
@@ -213,6 +244,7 @@ mod tests {
                 vec![
                     Step::default(),
                     Step {
+                        question: None,
                         moved: vec![(Section::Creatures, digest(1)), (Section::Legal, digest(2))],
                     },
                 ],

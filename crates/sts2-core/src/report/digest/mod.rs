@@ -99,6 +99,17 @@ impl Digest {
         sink.points(points);
         Digest(sink.finish())
     }
+
+    /// What a parked run asks for and what it offers, or that it asks
+    /// nothing.
+    ///
+    /// The rules alone. Who asked and every text beside an option are for a
+    /// person, so two questions that offer the same things digest the same.
+    pub fn of_question<V: ContentVersion>(question: Option<&crate::Question<V>>) -> Digest {
+        let mut sink = Sink::rules();
+        sink.option(&question, |sink, question| sink.question(question));
+        Digest(sink.finish())
+    }
 }
 
 impl std::fmt::Display for Digest {
@@ -802,6 +813,85 @@ impl Sink {
                 });
             });
         });
+    }
+
+    fn question<V: ContentVersion>(&mut self, question: &crate::Question<V>) {
+        use crate::{Question, RewardKind};
+
+        match question {
+            Question::SelectCards {
+                min,
+                max,
+                asker,
+                options,
+            } => {
+                self.u8(0);
+                self.u32(*min);
+                self.u32(*max);
+                self.prose_option(asker);
+                self.list(options, |sink, option| {
+                    sink.len(option.index);
+                    sink.card(&option.card);
+                    sink.prose_option(&option.text);
+                });
+            }
+            Question::Rewards { skippable, rewards } => {
+                self.u8(1);
+                self.bool(*skippable);
+                self.list(rewards, |sink, detail| {
+                    sink.len(detail.index);
+                    sink.bool(detail.populated);
+                    sink.bool(detail.taken);
+                    let reward_card = |sink: &mut Sink, card: &crate::RewardCard<V>| {
+                        sink.card(&card.card);
+                        sink.prose_option(&card.text);
+                    };
+                    match &detail.reward {
+                        RewardKind::Gold { amount } => {
+                            sink.u8(0);
+                            sink.number(amount);
+                        }
+                        RewardKind::Card { cards } => {
+                            sink.u8(1);
+                            sink.list(cards, reward_card);
+                        }
+                        RewardKind::Relic { relic, rarity } => {
+                            sink.u8(2);
+                            sink.option(relic, |sink, relic| sink.id(relic));
+                            sink.id(rarity);
+                        }
+                        RewardKind::Potion { potion } => {
+                            sink.u8(3);
+                            sink.option(potion, |sink, potion| sink.id(potion));
+                        }
+                        RewardKind::SpecialCard { card } => {
+                            sink.u8(4);
+                            sink.option(card, reward_card);
+                        }
+                        RewardKind::Other { kind } => {
+                            sink.u8(5);
+                            sink.str(kind);
+                        }
+                    }
+                });
+            }
+            Question::Divine {
+                left,
+                width,
+                height,
+                tool,
+                cleared,
+                revealed,
+            } => {
+                self.u8(2);
+                self.u32(*left);
+                self.u8(*width);
+                self.u8(*height);
+                self.id(tool);
+                self.list(cleared, |sink, cell| sink.id(cell));
+                self.list(revealed, |sink, found| sink.id(found));
+            }
+        }
     }
 
     fn carried<V: ContentVersion>(&mut self, carried: &Carried<V>) {

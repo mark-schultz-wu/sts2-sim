@@ -38,5 +38,7 @@ rule that is wrong in a way the run's own numbers do not reach still passes.
 
     a-shrunken-monster-hits-for-less: step 2 differs in creatures
 
-The section is the part of the observation that moved. Nothing of the game's
+The section is the part of the observation that moved. `question` is the
+question a parked run asks: what it offers, and how many it takes. It leaves
+out who asked and every text, which are for a person. Nothing of the game's
 own state is kept, so run the scenario against a game to see both sides.
