@@ -4,10 +4,10 @@ Repo chores with real logic in them. `cargo xtask <command>`.
 
 Two commands.
 
-`dump` runs the game's dump modes and files what each one prints. Sixteen modes
-describe content and land under `crates/sts2-content/src/<version>/dumps/`. The
-seventeenth is rng ground truth, which is not content, and lands in
-`crates/sts2-sim/tests/rng/<version>.txt`.
+`dump` runs the game's dump modes and files what each one prints. Most modes
+describe content and land under `crates/sts2-content/src/<version>/dumps/`. Two
+are ground truth for tests, which is not content, and land beside those tests.
+One mode, `cardplaydump`, launches nothing: it reads the decompiled assembly.
 
 `codegen` turns those dumps into `sts2-content`'s tables, one domain per dump,
 and fails the build if two dumps came from different builds.
@@ -232,6 +232,44 @@ everywhere else.
 One file per pool rather than one for everything. A content patch usually
 touches one character. That reads as a diff to one file, rather than a churn in
 the middle of eight thousand lines.
+
+### Card plays
+
+What a card does when it is played, upgraded, or left in hand at the end of a
+turn. The game writes that as code, so no dump mode can print it. `cardplaydump`
+decompiles the pinned `sts2.dll` with `ilspycmd` and reads the C# instead.
+
+#### A whitelist, and nothing partial
+
+Each statement of `OnPlay` either matches one command exactly, or it stops the
+card. One statement outside the list leaves the whole card to a hand port, and
+the generated arm is `unimplemented!()` under a comment naming that statement.
+The list is short on purpose: attack, block, apply a power, draw, energy, stars
+and forge. Each one maps to the `Fight` method a hand port already calls.
+
+A statement that only animates, plays a sound or waits is left out, because it
+changes nothing a fight holds. It qualifies by what it calls: Godot's node
+classes, `SfxCmd`, `VfxCmd`, `Cmd.Wait` and the character animation pickers.
+It never qualifies by where it stands.
+
+#### Where the game's own list matters
+
+`base.CombatState.HittableEnemies` taken into a local is a snapshot, and the
+generated play takes one where the C# does. Crush Under hits every enemy and
+then weakens the list it took first. An Infested enemy it kills spawns
+Wrigglers, and those were never on that list.
+
+#### What the card overrides beside `OnPlay`
+
+`IsPlayable` and `GetResultPileTypeForCardPlay` change what a play is, and the
+simulator reads neither off a card. A card overriding either keeps no generated
+play. `HasTurnEndInHandEffect` marks a card whose turn end is ported by hand.
+
+#### The hashes
+
+The dump's header names the version, commit and assembly hash from
+`release_info.json`. It has no content hash, which only a running game works
+out. Codegen checks the other three against `cards.txt`.
 
 ### Characters
 

@@ -1,7 +1,8 @@
 //! Runs the game's dump modes and files what they print.
 //! Each mode is one launch of the real game with `STS2_HEADLESS_MODE` set. Each prints its table to stdout, between `[<mode>] begin` and `[<mode>] end` markers.
 //! The mod prints instead of writing files. A mod that writes into the game directory is a worse habit than a caller that extracts. This is that caller.
-//! Fifteen modes describe content. They land beside each other under the version directory, where [`crate::codegen`] reads them. The sixteenth is rng ground truth, which is not content and does not.
+//! Most modes describe content. They land beside each other under the version directory, where [`crate::codegen`] reads them. Two are ground truth for tests, which is not content and lands beside those tests.
+//! One mode launches nothing. `cardplaydump` reads what each card does off the decompiled assembly, which [`crate::plays`] explains.
 //! Nothing here checks that two dumps came from the same build. Codegen refuses to generate from dumps whose content hashes disagree. That catches a half-finished re-dump before it can do damage.
 
 use std::fs;
@@ -16,9 +17,12 @@ enum Destination {
     Content(&'static str),
     /// Somewhere else entirely, named from the repository root.
     At(&'static str),
+    /// Beside the content dumps, read off the decompiled assembly rather than
+    /// printed by the game.
+    Decompiled(&'static str),
 }
 
-use Destination::{At, Content};
+use Destination::{At, Content, Decompiled};
 
 /// Every mode the dump mod answers to. The marker it prints is its own name, so only the destination is worth writing down.
 const DUMPS: &[(&str, Destination)] = &[
@@ -39,6 +43,8 @@ const DUMPS: &[(&str, Destination)] = &[
     ("relicdump", Content("relics.txt")),
     ("restsitedump", Content("restsite.txt")),
     ("runstatedump", Content("runstate.txt")),
+    // After the card and power dumps, whose ids it names.
+    ("cardplaydump", Decompiled("card_plays.txt")),
     ("rngdump", At("crates/sts2-sim/tests/rng/megarandom.txt")),
     ("setupdump", At("crates/sts2-golden/tests/setup.txt")),
 ];
@@ -56,11 +62,21 @@ pub fn run(modes: &[String]) -> Result<String, String> {
     let mut done = Vec::new();
 
     for (mode, destination) in wanted {
-        let log = launch(&game, mode)?;
-        let table = extract(&log, mode)?;
-        let path = match destination {
-            Content(name) => version_dir()?.join("dumps").join(name),
-            At(path) => PathBuf::from(path.replace("{version}", &version_module()?)),
+        let (table, path) = match destination {
+            Decompiled(name) => {
+                let table =
+                    crate::plays::cards(&game, &crate::codegen::version()?, &version_dir()?)?;
+                println!("{mode}: {}", crate::plays::tally(&table));
+                (table, version_dir()?.join("dumps").join(name))
+            }
+            Content(name) => (
+                extract(&launch(&game, mode)?, mode)?,
+                version_dir()?.join("dumps").join(name),
+            ),
+            At(path) => (
+                extract(&launch(&game, mode)?, mode)?,
+                PathBuf::from(path.replace("{version}", &version_module()?)),
+            ),
         };
         fs::write(&path, &table).map_err(|e| format!("writing {}: {e}", path.display()))?;
         println!("{mode} -> {}", path.display());

@@ -1,0 +1,1882 @@
+# card plays
+# build v0.111.0 commit 41cef1ea assembly 1579942752
+# card <id>
+# play <card> attack <chosen|opponents> <damage var> <props> <hits>
+# play <card> block <block var> <props>
+# play <card> hold opponents, which a later `held` reads as they stood
+# play <card> power <chosen|self|opponents|held> <power> <amount>
+# play <card> <draw|energy|stars|forge> <amount>
+# unplayed <card> <what the first statement no command matches is>
+# upgrade <card> raise <var> <by>
+# upgrade <card> cost <by>
+# upgrade <card> keyword <keyword>
+# unupgraded <card> <what the first statement no change matches is>
+# turnend <card>, which acts when a turn ends with it in hand
+# An amount is `var <key>` or `number <n>`.
+card ABRASIVE
+play ABRASIVE power self DEXTERITY_POWER var DexterityPower
+play ABRASIVE power self THORNS_POWER var ThornsPower
+upgrade ABRASIVE raise ThornsPower 2
+card ABUNDANCE
+unplayed ABUNDANCE call CardFactory.GetDistinctForCombat
+upgrade ABUNDANCE cost -1
+card ACCELERANT
+play ACCELERANT power self ACCELERANT_POWER var Accelerant
+upgrade ACCELERANT raise Accelerant 1
+card ACCURACY
+play ACCURACY power self ACCURACY_POWER var AccuracyPower
+upgrade ACCURACY raise AccuracyPower 2
+card ACROBATICS
+unplayed ACROBATICS call CardSelectCmd.FromHandForDiscard
+upgrade ACROBATICS raise Cards 1
+card ADAPTIVE_STRIKE
+unplayed ADAPTIVE_STRIKE call CreateClone
+upgrade ADAPTIVE_STRIKE raise Damage 5
+card ADRENALINE
+unplayed ADRENALINE if
+upgrade ADRENALINE raise Energy 1
+card AFTERIMAGE
+play AFTERIMAGE power self AFTERIMAGE_POWER var AfterimagePower
+upgrade AFTERIMAGE keyword Innate
+card AFTERLIFE
+unplayed AFTERLIFE call OstyCmd.Summon
+upgrade AFTERLIFE raise Summon 3
+card AGGRESSION
+play AGGRESSION power self AGGRESSION_POWER number 1
+upgrade AGGRESSION keyword Innate
+card ALCHEMIZE
+unplayed ALCHEMIZE call PotionCmd.TryToProcure
+upgrade ALCHEMIZE cost -1
+card ALIGNMENT
+play ALIGNMENT energy var Energy
+upgrade ALIGNMENT raise Energy 1
+card ALL_FOR_ONE
+unplayed ALL_FOR_ONE call PileType.Discard.GetPile
+upgrade ALL_FOR_ONE raise Damage 4
+card ANGER
+unplayed ANGER call CreateClone
+upgrade ANGER raise Damage 2
+card ANOINTED
+unplayed ANOINTED call PileType.Hand.GetPile
+upgrade ANOINTED keyword Retain
+card ANTICIPATE
+play ANTICIPATE power self ANTICIPATE_POWER var DexterityPower
+upgrade ANTICIPATE raise DexterityPower 2
+card APOTHEOSIS
+unplayed APOTHEOSIS foreach
+upgrade APOTHEOSIS cost -1
+card APPARITION
+play APPARITION power self INTANGIBLE_POWER var IntangiblePower
+unupgraded APPARITION call RemoveKeyword
+card ARMAMENTS
+unplayed ARMAMENTS if
+card ARSENAL
+play ARSENAL power self ARSENAL_POWER var ArsenalPower
+upgrade ARSENAL keyword Innate
+card ASCENDERS_BANE
+card ASHEN_STRIKE
+unplayed ASHEN_STRIKE call DamageCmd.Attack
+upgrade ASHEN_STRIKE raise ExtraDamage 1
+card ASSASSINATE
+play ASSASSINATE attack chosen Damage Move number 1
+play ASSASSINATE power chosen VULNERABLE_POWER var VulnerablePower
+upgrade ASSASSINATE raise Damage 3
+upgrade ASSASSINATE raise VulnerablePower 1
+card ASTRAL_PULSE
+play ASTRAL_PULSE attack opponents Damage Move number 2
+upgrade ASTRAL_PULSE raise Damage 2
+card AUTOMATION
+play AUTOMATION power self AUTOMATION_POWER var Energy
+upgrade AUTOMATION cost -1
+card BACKFLIP
+play BACKFLIP block Block Move
+play BACKFLIP draw var Cards
+upgrade BACKFLIP raise Block 3
+card BACKSTAB
+play BACKSTAB attack chosen Damage Move number 1
+upgrade BACKSTAB raise Damage 4
+card BAD_LUCK
+turnend BAD_LUCK
+card BALL_LIGHTNING
+unplayed BALL_LIGHTNING call OrbCmd.Channel
+upgrade BALL_LIGHTNING raise Damage 3
+card BANSHEES_CRY
+play BANSHEES_CRY attack opponents Damage Move number 1
+upgrade BANSHEES_CRY cost -2
+card BARRAGE
+unplayed BARRAGE call DamageCmd.Attack
+upgrade BARRAGE raise Damage 2
+card BARRICADE
+play BARRICADE power self BARRICADE_POWER number 1
+upgrade BARRICADE cost -1
+card BASH
+play BASH attack chosen Damage Move number 1
+play BASH power chosen VULNERABLE_POWER var VulnerablePower
+upgrade BASH raise Damage 2
+upgrade BASH raise VulnerablePower 1
+card BATTLE_TRANCE
+play BATTLE_TRANCE draw var Cards
+play BATTLE_TRANCE power self NO_DRAW_POWER number 1
+upgrade BATTLE_TRANCE raise Cards 1
+card BEACON_OF_HOPE
+play BEACON_OF_HOPE power self BEACON_OF_HOPE_POWER number 1
+upgrade BEACON_OF_HOPE keyword Innate
+card BEAM_CELL
+play BEAM_CELL attack chosen Damage Move number 1
+play BEAM_CELL power chosen VULNERABLE_POWER var VulnerablePower
+upgrade BEAM_CELL raise Damage 1
+upgrade BEAM_CELL raise VulnerablePower 1
+card BEAT_DOWN
+unplayed BEAT_DOWN call PileType.Discard.GetPile
+upgrade BEAT_DOWN raise Cards 1
+card BEAT_INTO_SHAPE
+unplayed BEAT_INTO_SHAPE call DamageCmd.Attack
+upgrade BEAT_INTO_SHAPE raise Damage 2
+upgrade BEAT_INTO_SHAPE raise CalculationBase 2
+upgrade BEAT_INTO_SHAPE raise CalculationExtra 2
+card BECKON
+turnend BECKON
+card BEGONE
+unplayed BEGONE call CardSelectCmd.FromHand
+card BELIEVE_IN_YOU
+unplayed BELIEVE_IN_YOU call PlayerCmd.GainEnergy
+upgrade BELIEVE_IN_YOU raise Energy 1
+card BIASED_COGNITION
+play BIASED_COGNITION power self FOCUS_POWER var FocusPower
+play BIASED_COGNITION power self BIASED_COGNITION_POWER var BiasedCognitionPower
+upgrade BIASED_COGNITION raise FocusPower 1
+card BIG_BANG
+play BIG_BANG draw var Cards
+play BIG_BANG stars var Stars
+play BIG_BANG energy var Energy
+play BIG_BANG forge var Forge
+upgrade BIG_BANG keyword Innate
+card BLACK_HOLE
+play BLACK_HOLE power self BLACK_HOLE_POWER var BlackHolePower
+upgrade BLACK_HOLE raise BlackHolePower 1
+card BLADE_DANCE
+unplayed BLADE_DANCE for
+upgrade BLADE_DANCE raise Cards 1
+card BLADE_OF_INK
+unplayed BLADE_OF_INK foreach
+upgrade BLADE_OF_INK raise Cards 1
+card BLADE_SYMPHONY
+unplayed BLADE_SYMPHONY if
+upgrade BLADE_SYMPHONY cost -1
+card BLAZE
+play BLAZE power chosen STRENGTH_POWER var StrengthPower
+upgrade BLAZE raise StrengthPower 2
+card BLIGHT_STRIKE
+unplayed BLIGHT_STRIKE call DamageCmd.Attack
+upgrade BLIGHT_STRIKE raise Damage 2
+card BLOODLETTING
+unplayed BLOODLETTING call CreatureCmd.Damage
+upgrade BLOODLETTING raise Energy 1
+card BLOOD_WALL
+unplayed BLOOD_WALL call CreatureCmd.Damage
+upgrade BLOOD_WALL raise Block 4
+card BLUDGEON
+play BLUDGEON attack chosen Damage Move number 1
+upgrade BLUDGEON raise Damage 10
+card BLUR
+play BLUR block Block Move
+play BLUR power self BLUR_POWER var Blur
+upgrade BLUR raise Block 3
+card BODYGUARD
+unplayed BODYGUARD call OstyCmd.Summon
+upgrade BODYGUARD raise Summon 2
+card BODY_SLAM
+unplayed BODY_SLAM call DamageCmd.Attack
+upgrade BODY_SLAM cost -1
+card BOLAS
+play BOLAS attack chosen Damage Move number 1
+upgrade BOLAS raise Damage 1
+card BOMBARDMENT
+play BOMBARDMENT attack chosen Damage Move number 1
+upgrade BOMBARDMENT raise Damage 6
+card BONE_SHARDS
+unplayed BONE_SHARDS if
+upgrade BONE_SHARDS raise OstyDamage 3
+upgrade BONE_SHARDS raise Block 3
+card BOOST_AWAY
+unplayed BOOST_AWAY call CombatState.CreateCard
+upgrade BOOST_AWAY raise Block 3
+card BOOT_SEQUENCE
+play BOOT_SEQUENCE block Block Move
+upgrade BOOT_SEQUENCE raise Block 3
+card BORROWED_TIME
+play BORROWED_TIME energy var Energy
+play BORROWED_TIME power self BORROWED_TIME_POWER var ExtraCost
+upgrade BORROWED_TIME raise Energy 2
+card BOUNCING_FLASK
+unplayed BOUNCING_FLASK for
+upgrade BOUNCING_FLASK raise Repeat 1
+card BRAND
+unplayed BRAND call CreatureCmd.Damage
+upgrade BRAND raise StrengthPower 1
+card BREAK
+play BREAK attack chosen Damage Move number 1
+play BREAK power chosen VULNERABLE_POWER var VulnerablePower
+upgrade BREAK raise Damage 10
+upgrade BREAK raise VulnerablePower 2
+card BREAKTHROUGH
+unplayed BREAKTHROUGH call CreatureCmd.Damage
+upgrade BREAKTHROUGH raise Damage 4
+card BRIGHTEST_FLAME
+unplayed BRIGHTEST_FLAME call CreatureCmd.LoseMaxHp
+upgrade BRIGHTEST_FLAME raise Energy 1
+upgrade BRIGHTEST_FLAME raise Cards 1
+card BUBBLE_BUBBLE
+unplayed BUBBLE_BUBBLE if
+upgrade BUBBLE_BUBBLE raise PoisonPower 3
+card BUFFER
+play BUFFER power self BUFFER_POWER var BufferPower
+upgrade BUFFER raise BufferPower 1
+card BULK_UP
+unplayed BULK_UP call OrbCmd.RemoveSlots
+upgrade BULK_UP raise StrengthPower 1
+upgrade BULK_UP raise DexterityPower 1
+card BULLET_TIME
+unplayed BULLET_TIME foreach
+upgrade BULLET_TIME cost -1
+card BULLY
+unplayed BULLY call DamageCmd.Attack
+upgrade BULLY raise ExtraDamage 1
+card BULWARK
+play BULWARK block Block Move
+play BULWARK forge var Forge
+upgrade BULWARK raise Block 3
+upgrade BULWARK raise Forge 3
+card BUNDLE_OF_JOY
+unplayed BUNDLE_OF_JOY call CardFactory.GetDistinctForCombat
+upgrade BUNDLE_OF_JOY raise Cards 1
+card BURN
+turnend BURN
+card BURNING_PACT
+unplayed BURNING_PACT call CardSelectCmd.FromHand
+upgrade BURNING_PACT raise Cards 1
+card BURST
+play BURST power self BURST_POWER var Skills
+upgrade BURST raise Skills 1
+card BURY
+play BURY attack chosen Damage Move number 1
+upgrade BURY raise Damage 11
+card BYRDONIS_EGG
+card BYRD_SWOOP
+unplayed BYRD_SWOOP call DamageCmd.Attack
+upgrade BYRD_SWOOP raise Damage 4
+card CACOPHONY
+play CACOPHONY power self CACOPHONY_POWER var Damage
+upgrade CACOPHONY raise Damage 33
+card CALAMITY
+play CALAMITY power self CALAMITY_POWER number 1
+upgrade CALAMITY cost -1
+card CALCIFY
+play CALCIFY power self CALCIFY_POWER var CalcifyPower
+upgrade CALCIFY raise CalcifyPower 2
+card CALCULATED_GAMBLE
+unplayed CALCULATED_GAMBLE call PileType.Hand.GetPile
+upgrade CALCULATED_GAMBLE keyword Retain
+card CALL_OF_THE_VOID
+play CALL_OF_THE_VOID power self CALL_OF_THE_VOID_POWER var Cards
+upgrade CALL_OF_THE_VOID keyword Innate
+card CALTROPS
+play CALTROPS power self THORNS_POWER var ThornsPower
+upgrade CALTROPS raise ThornsPower 2
+card CAPACITOR
+unplayed CAPACITOR call OrbCmd.AddSlots
+upgrade CAPACITOR raise Repeat 1
+card CAPTURE_SPIRIT
+unplayed CAPTURE_SPIRIT call CreatureCmd.Damage
+upgrade CAPTURE_SPIRIT raise Damage 1
+upgrade CAPTURE_SPIRIT raise Cards 1
+card CASCADE
+unplayed CASCADE call ResolveEnergyXValue
+card CATASTROPHE
+unplayed CATASTROPHE for
+upgrade CATASTROPHE raise Cards 1
+card CELESTIAL_MIGHT
+play CELESTIAL_MIGHT attack chosen Damage Move var Repeat
+upgrade CELESTIAL_MIGHT raise Repeat 1
+card CHAOS
+unplayed CHAOS for
+upgrade CHAOS raise Repeat 1
+card CHARGE
+unplayed CHARGE call CardSelectCmd.FromCombatPile
+card CHARGE_BATTERY
+play CHARGE_BATTERY block Block Move
+play CHARGE_BATTERY power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade CHARGE_BATTERY raise Block 3
+card CHILD_OF_THE_STARS
+play CHILD_OF_THE_STARS power self CHILD_OF_THE_STARS_POWER var BlockForStars
+upgrade CHILD_OF_THE_STARS raise BlockForStars 1
+card CHILL
+unplayed CHILL foreach
+unupgraded CHILL call RemoveKeyword
+card CINDER
+unplayed CINDER call PileType.Hand.GetPile
+upgrade CINDER raise Damage 6
+card CLASH
+unplayed CLASH overrides IsPlayable
+upgrade CLASH raise Damage 4
+card CLAW
+unplayed CLAW call Owner.PlayerCombatState.AllCards.OfType
+upgrade CLAW raise Damage 1
+upgrade CLAW raise Increase 1
+card CLEANSE
+unplayed CLEANSE call OstyCmd.Summon
+upgrade CLEANSE raise Summon 2
+card CLOAK_AND_DAGGER
+unplayed CLOAK_AND_DAGGER for
+upgrade CLOAK_AND_DAGGER raise Cards 1
+card CLOAK_OF_STARS
+play CLOAK_OF_STARS block Block Move
+upgrade CLOAK_OF_STARS raise Block 3
+card CLUMSY
+card COLD_SNAP
+unplayed COLD_SNAP call OrbCmd.Channel
+upgrade COLD_SNAP raise Damage 3
+card COLLISION_COURSE
+unplayed COLLISION_COURSE call CardPileCmd.AddGeneratedCardToCombat
+upgrade COLLISION_COURSE raise Damage 4
+card COLOSSUS
+play COLOSSUS block Block Move
+play COLOSSUS power self COLOSSUS_POWER var Colossus
+upgrade COLOSSUS raise Block 3
+card COMET
+play COMET attack chosen Damage Move number 1
+play COMET power chosen WEAK_POWER var WeakPower
+play COMET power chosen VULNERABLE_POWER var VulnerablePower
+upgrade COMET raise Damage 11
+card COMPACT
+unplayed COMPACT call PileType.Hand.GetPile
+upgrade COMPACT raise Block 1
+card COMPILE_DRIVER
+unplayed COMPILE_DRIVER call CardPileCmd.Draw
+upgrade COMPILE_DRIVER raise Damage 3
+card CONCOCT
+play CONCOCT power chosen CONCOCT_POWER var ConcoctPower
+upgrade CONCOCT raise ConcoctPower 1
+card CONFLAGRATION
+play CONFLAGRATION hold opponents
+play CONFLAGRATION attack opponents Damage Move var Repeat
+upgrade CONFLAGRATION raise Repeat 1
+card CONQUEROR
+play CONQUEROR forge var Forge
+play CONQUEROR power chosen CONQUEROR_POWER number 1
+upgrade CONQUEROR raise Forge 2
+card CONSTELLATION
+unplayed CONSTELLATION call CardPileCmd.Draw
+upgrade CONSTELLATION raise Block 3
+card CONSUMING_SHADOW
+unplayed CONSUMING_SHADOW for
+upgrade CONSUMING_SHADOW raise Repeat 1
+card CONVERGENCE
+play CONVERGENCE power self RETAIN_HAND_POWER number 1
+play CONVERGENCE power self ENERGY_NEXT_TURN_POWER var Energy
+play CONVERGENCE power self STAR_NEXT_TURN_POWER var Stars
+upgrade CONVERGENCE raise Stars 1
+card COOLANT
+play COOLANT power self COOLANT_POWER var CoolantPower
+upgrade COOLANT raise CoolantPower 1
+card COOLHEADED
+unplayed COOLHEADED call OrbCmd.Channel
+upgrade COOLHEADED raise Cards 1
+card COORDINATE
+unplayed COORDINATE call PowerCmd.Apply
+upgrade COORDINATE raise StrengthPower 3
+card CORROSIVE_WAVE
+play CORROSIVE_WAVE power self CORROSIVE_WAVE_POWER var CorrosiveWave
+upgrade CORROSIVE_WAVE raise CorrosiveWave 1
+card CORRUPTION
+play CORRUPTION power self CORRUPTION_POWER var Power
+upgrade CORRUPTION cost -1
+card COSMIC_INDIFFERENCE
+unplayed COSMIC_INDIFFERENCE call CardSelectorPrefs
+upgrade COSMIC_INDIFFERENCE raise Block 3
+card COUNTDOWN
+play COUNTDOWN power self COUNTDOWN_POWER var CountdownPower
+upgrade COUNTDOWN raise CountdownPower 3
+card CRASH_LANDING
+unplayed CRASH_LANDING call CardPile.GetCards
+upgrade CRASH_LANDING raise Damage 5
+card CREATIVE_AI
+play CREATIVE_AI power self CREATIVE_AI_POWER var CreativeAi
+upgrade CREATIVE_AI cost -1
+card CRESCENT_SPEAR
+unplayed CRESCENT_SPEAR call DamageCmd.Attack
+upgrade CRESCENT_SPEAR raise ExtraDamage 1
+card CRIMSON_MANTLE
+unplayed CRIMSON_MANTLE call PowerCmd.Apply
+upgrade CRIMSON_MANTLE raise CrimsonMantlePower 3
+card CRUELTY
+play CRUELTY power self CRUELTY_POWER var CrueltyPower
+upgrade CRUELTY raise CrueltyPower 25
+card CRUSH_UNDER
+play CRUSH_UNDER hold opponents
+play CRUSH_UNDER attack opponents Damage Move number 1
+play CRUSH_UNDER power held CRUSH_UNDER_POWER var StrengthLoss
+upgrade CRUSH_UNDER raise Damage 1
+upgrade CRUSH_UNDER raise StrengthLoss 1
+card CURSE_OF_THE_BELL
+card DAGGER_SPRAY
+unplayed DAGGER_SPRAY call DamageCmd.Attack
+upgrade DAGGER_SPRAY raise Damage 2
+card DAGGER_THROW
+unplayed DAGGER_THROW call CardSelectCmd.FromHandForDiscard
+upgrade DAGGER_THROW raise Damage 3
+card DANSE_MACABRE
+play DANSE_MACABRE power self DANSE_MACABRE_POWER var DanseMacabrePower
+upgrade DANSE_MACABRE raise DanseMacabrePower 2
+card DARKNESS
+unplayed DARKNESS call OrbCmd.Channel
+card DARK_EMBRACE
+play DARK_EMBRACE power self DARK_EMBRACE_POWER number 1
+upgrade DARK_EMBRACE cost -1
+card DARK_SHACKLES
+play DARK_SHACKLES power chosen DARK_SHACKLES_POWER var StrengthLoss
+upgrade DARK_SHACKLES raise StrengthLoss 6
+card DASH
+play DASH block Block Move
+play DASH attack chosen Damage Move number 1
+upgrade DASH raise Damage 3
+upgrade DASH raise Block 3
+card DAZED
+card DEADLY_POISON
+play DEADLY_POISON power chosen POISON_POWER var PoisonPower
+upgrade DEADLY_POISON raise PoisonPower 2
+card DEATHBRINGER
+unplayed DEATHBRINGER call PowerCmd.Apply
+upgrade DEATHBRINGER raise DoomPower 5
+card DEATHS_DOOR
+unplayed DEATHS_DOOR for
+upgrade DEATHS_DOOR raise Block 1
+card DEATH_MARCH
+unplayed DEATH_MARCH call DamageCmd.Attack
+upgrade DEATH_MARCH raise CalculationBase 1
+upgrade DEATH_MARCH raise ExtraDamage 2
+card DEBILITATE
+play DEBILITATE attack chosen Damage Move number 1
+play DEBILITATE power chosen DEBILITATE_POWER var DebilitatePower
+upgrade DEBILITATE raise Damage 2
+upgrade DEBILITATE raise DebilitatePower 1
+card DEBRIS
+card DEBT
+turnend DEBT
+card DECAY
+turnend DECAY
+card DECISIONS_DECISIONS
+unplayed DECISIONS_DECISIONS call CardSelectorPrefs
+upgrade DECISIONS_DECISIONS raise Cards 2
+card DEFEND_DEFECT
+play DEFEND_DEFECT block Block Move
+upgrade DEFEND_DEFECT raise Block 3
+card DEFEND_IRONCLAD
+play DEFEND_IRONCLAD block Block Move
+upgrade DEFEND_IRONCLAD raise Block 3
+card DEFEND_NECROBINDER
+play DEFEND_NECROBINDER block Block Move
+upgrade DEFEND_NECROBINDER raise Block 3
+card DEFEND_REGENT
+play DEFEND_REGENT block Block Move
+upgrade DEFEND_REGENT raise Block 3
+card DEFEND_SILENT
+play DEFEND_SILENT block Block Move
+upgrade DEFEND_SILENT raise Block 3
+card DEFILE
+play DEFILE attack chosen Damage Move number 1
+upgrade DEFILE raise Damage 4
+card DEFLECT
+play DEFLECT block Block Move
+upgrade DEFLECT raise Block 3
+card DEFRAGMENT
+play DEFRAGMENT power self FOCUS_POWER var FocusPower
+upgrade DEFRAGMENT raise FocusPower 1
+card DEFY
+play DEFY block Block Move
+play DEFY power chosen WEAK_POWER var WeakPower
+upgrade DEFY raise Block 3
+card DELAY
+play DELAY block Block Move
+play DELAY power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade DELAY raise Block 2
+upgrade DELAY raise Energy 1
+card DEMESNE
+play DEMESNE power self DEMESNE_POWER var Cards
+upgrade DEMESNE cost -1
+card DEMONIC_SHIELD
+unplayed DEMONIC_SHIELD call CreatureCmd.Damage
+unupgraded DEMONIC_SHIELD call RemoveKeyword
+card DEMON_FORM
+play DEMON_FORM power self DEMON_FORM_POWER var StrengthPower
+upgrade DEMON_FORM raise StrengthPower 1
+card DEPRECATED_CARD
+unplayed DEPRECATED_CARD if
+card DEVASTATE
+play DEVASTATE attack chosen Damage Move number 1
+upgrade DEVASTATE raise Damage 10
+card DEVOUR_LIFE
+play DEVOUR_LIFE power self DEVOUR_LIFE_POWER var DevourLifePower
+upgrade DEVOUR_LIFE raise DevourLifePower 1
+card DIRGE
+unplayed DIRGE call ResolveEnergyXValue
+upgrade DIRGE raise Summon 1
+card DISCOVERY
+unplayed DISCOVERY if
+unupgraded DISCOVERY call RemoveKeyword
+card DISINTEGRATION
+card DISMANTLE
+unplayed DISMANTLE call cardPlay.Target.HasPower
+upgrade DISMANTLE raise Damage 2
+card DISTRACTION
+unplayed DISTRACTION call CardFactory.GetDistinctForCombat
+upgrade DISTRACTION cost -1
+card DODGE_AND_ROLL
+unplayed DODGE_AND_ROLL call CreatureCmd.GainBlock
+upgrade DODGE_AND_ROLL raise Block 2
+card DOMINATE
+unplayed DOMINATE call cardPlay.Target.GetPower
+upgrade DOMINATE raise VulnerablePower 1
+card DOUBLE_ENERGY
+unplayed DOUBLE_ENERGY call PlayerCmd.GainEnergy
+upgrade DOUBLE_ENERGY cost -1
+card DOUBT
+turnend DOUBT
+card DOWSING
+card DRAIN_POWER
+unplayed DRAIN_POWER call PileType.Discard.GetPile
+upgrade DRAIN_POWER raise Damage 2
+upgrade DRAIN_POWER raise Cards 1
+card DRAMATIC_ENTRANCE
+play DRAMATIC_ENTRANCE attack opponents Damage Move number 1
+upgrade DRAMATIC_ENTRANCE raise Damage 4
+card DREDGE
+unplayed DREDGE call Math.Min
+upgrade DREDGE keyword Retain
+card DRUM_OF_BATTLE
+play DRUM_OF_BATTLE draw var Cards
+upgrade DRUM_OF_BATTLE raise Energy 1
+card DUALCAST
+unplayed DUALCAST if
+upgrade DUALCAST cost -1
+card DUAL_WIELD
+unplayed DUAL_WIELD call CardSelectCmd.FromHand
+upgrade DUAL_WIELD raise Cards 1
+card DYING_STAR
+unplayed DYING_STAR foreach
+upgrade DYING_STAR raise Damage 2
+upgrade DYING_STAR raise StrengthLoss 2
+card ECHOING_SLASH
+unplayed ECHOING_SLASH call AttackCommand.CreateContextAsync
+upgrade ECHOING_SLASH raise Damage 3
+card ECHO_FORM
+play ECHO_FORM power self ECHO_FORM_POWER var EchoForm
+unupgraded ECHO_FORM call RemoveKeyword
+card EIDOLON
+unplayed EIDOLON call Owner.PlayerCombatState.ExhaustPile.Cards.Where
+upgrade EIDOLON cost -1
+card END_OF_DAYS
+unplayed END_OF_DAYS foreach
+upgrade END_OF_DAYS raise DoomPower 8
+card ENERGY_SURGE
+unplayed ENERGY_SURGE call CombatState.GetTeammatesOf
+upgrade ENERGY_SURGE raise Energy 1
+card ENFEEBLING_TOUCH
+play ENFEEBLING_TOUCH power chosen ENFEEBLING_TOUCH_POWER var StrengthLoss
+upgrade ENFEEBLING_TOUCH raise StrengthLoss 3
+card ENLIGHTENMENT
+unplayed ENLIGHTENMENT foreach
+card ENTHRALLED
+card ENTRENCH
+unplayed ENTRENCH call CreatureCmd.GainBlock
+upgrade ENTRENCH cost -1
+card ENTROPY
+play ENTROPY power self ENTROPY_POWER var Cards
+upgrade ENTROPY keyword Innate
+card ENVENOM
+play ENVENOM power self ENVENOM_POWER var EnvenomPower
+upgrade ENVENOM raise EnvenomPower 1
+card EQUILIBRIUM
+play EQUILIBRIUM block Block Move
+play EQUILIBRIUM power self RETAIN_HAND_POWER var Equilibrium
+upgrade EQUILIBRIUM raise Block 3
+card ERADICATE
+unplayed ERADICATE call DamageCmd.Attack
+upgrade ERADICATE raise Damage 3
+card ESCAPE_PLAN
+unplayed ESCAPE_PLAN call CardPileCmd.Draw
+upgrade ESCAPE_PLAN raise Block 2
+card ETERNAL_ARMOR
+play ETERNAL_ARMOR power self PLATING_POWER var PlatingPower
+upgrade ETERNAL_ARMOR raise PlatingPower 3
+card EVIL_EYE
+unplayed EVIL_EYE for
+upgrade EVIL_EYE raise Block 3
+card EXPECT_A_FIGHT
+unplayed EXPECT_A_FIGHT call CreatureCmd.GainBlock
+upgrade EXPECT_A_FIGHT raise CalculationBase 1
+upgrade EXPECT_A_FIGHT raise CalculationExtra 3
+card EXPERTISE
+unplayed EXPERTISE foreach
+upgrade EXPERTISE raise Cards 1
+card EXPOSE
+unplayed EXPOSE call CreatureCmd.LoseBlock
+upgrade EXPOSE raise Power 1
+card EXTERMINATE
+play EXTERMINATE attack opponents Damage Move var Repeat
+upgrade EXTERMINATE raise Damage 1
+card FADE
+play FADE power chosen FADE_POWER var DexterityPower
+upgrade FADE raise DexterityPower 3
+card FALLING_STAR
+play FALLING_STAR attack chosen Damage Move number 1
+play FALLING_STAR power chosen WEAK_POWER var WeakPower
+play FALLING_STAR power chosen VULNERABLE_POWER var VulnerablePower
+upgrade FALLING_STAR raise Damage 4
+card FAN_OF_KNIVES
+unplayed FAN_OF_KNIVES for
+upgrade FAN_OF_KNIVES raise Shivs 1
+card FASTEN
+play FASTEN power self FASTEN_POWER var ExtraBlock
+upgrade FASTEN raise ExtraBlock 2
+card FEAR
+play FEAR attack chosen Damage Move number 1
+play FEAR power chosen VULNERABLE_POWER var VulnerablePower
+upgrade FEAR raise Damage 1
+upgrade FEAR raise VulnerablePower 1
+card FEED
+unplayed FEED call cardPlay.Target.Powers.All
+upgrade FEED raise Damage 2
+upgrade FEED raise MaxHp 1
+card FEEDING_FRENZY
+unplayed FEEDING_FRENZY call PowerCmd.Apply
+upgrade FEEDING_FRENZY raise StrengthPower 2
+card FEEL_NO_PAIN
+play FEEL_NO_PAIN power self FEEL_NO_PAIN_POWER var Power
+upgrade FEEL_NO_PAIN raise Power 1
+card FERAL
+play FERAL power self FERAL_POWER var FeralPower
+upgrade FERAL cost -1
+card FETCH
+unplayed FETCH if
+upgrade FETCH raise OstyDamage 3
+card FIEND_FIRE
+unplayed FIEND_FIRE call PileType.Hand.GetPile
+upgrade FIEND_FIRE raise Damage 3
+card FIGHT_ME
+play FIGHT_ME attack chosen Damage Move var Repeat
+play FIGHT_ME power self STRENGTH_POWER var StrengthPower
+play FIGHT_ME power chosen STRENGTH_POWER var EnemyStrength
+upgrade FIGHT_ME raise Damage 1
+upgrade FIGHT_ME raise StrengthPower 1
+card FIGHT_THROUGH
+unplayed FIGHT_THROUGH for
+upgrade FIGHT_THROUGH raise Block 4
+card FINESSE
+play FINESSE block Block Move
+play FINESSE draw var Cards
+upgrade FINESSE raise Block 3
+card FINISHER
+unplayed FINISHER call DamageCmd.Attack
+upgrade FINISHER raise Damage 2
+card FISTICUFFS
+unplayed FISTICUFFS call DamageCmd.Attack
+upgrade FISTICUFFS raise Damage 2
+card FLAK_CANNON
+unplayed FLAK_CANNON call GetStatuses
+upgrade FLAK_CANNON raise Damage 3
+card FLAME_BARRIER
+play FLAME_BARRIER block Block Move
+play FLAME_BARRIER power self FLAME_BARRIER_POWER var DamageBack
+upgrade FLAME_BARRIER raise Block 4
+upgrade FLAME_BARRIER raise DamageBack 2
+card FLANKING
+play FLANKING power chosen FLANKING_POWER number 2
+upgrade FLANKING cost -1
+card FLASH_OF_STEEL
+play FLASH_OF_STEEL attack chosen Damage Move number 1
+play FLASH_OF_STEEL draw var Cards
+upgrade FLASH_OF_STEEL raise Damage 3
+card FLATTEN
+unplayed FLATTEN if
+upgrade FLATTEN raise OstyDamage 4
+card FLECHETTES
+unplayed FLECHETTES call DamageCmd.Attack
+upgrade FLECHETTES raise Damage 2
+card FLICK_FLACK
+play FLICK_FLACK attack opponents Damage Move number 1
+upgrade FLICK_FLACK raise Damage 2
+card FOCUSED_STRIKE
+play FOCUSED_STRIKE attack chosen Damage Move number 1
+play FOCUSED_STRIKE power self FOCUSED_STRIKE_POWER var FocusPower
+upgrade FOCUSED_STRIKE raise Damage 2
+upgrade FOCUSED_STRIKE raise FocusPower 1
+card FOLLY
+card FOOTWORK
+play FOOTWORK power self DEXTERITY_POWER var DexterityPower
+upgrade FOOTWORK raise DexterityPower 1
+card FORBIDDEN_GRIMOIRE
+play FORBIDDEN_GRIMOIRE power self FORBIDDEN_GRIMOIRE_POWER number 1
+upgrade FORBIDDEN_GRIMOIRE cost -1
+card FOREGONE_CONCLUSION
+play FOREGONE_CONCLUSION power self FOREGONE_CONCLUSION_POWER var Cards
+upgrade FOREGONE_CONCLUSION raise Cards 1
+card FORGOTTEN_RITUAL
+play FORGOTTEN_RITUAL energy var Energy
+upgrade FORGOTTEN_RITUAL raise Energy 1
+card FRANTIC_ESCAPE
+unplayed FRANTIC_ESCAPE call GetSandpitEnemy
+card FRIENDSHIP
+unplayed FRIENDSHIP call PowerCmd.Apply
+upgrade FRIENDSHIP raise StrengthPower -1
+card FTL
+unplayed FTL if
+upgrade FTL raise Damage 1
+upgrade FTL raise PlayMax 1
+card FUEL
+play FUEL energy var Energy
+upgrade FUEL raise Energy 1
+card FURNACE
+play FURNACE power self FURNACE_POWER var Forge
+upgrade FURNACE raise Forge 2
+card FUSION
+unplayed FUSION call OrbCmd.Channel
+unupgraded FUSION call RemoveKeyword
+card GAMMA_BLAST
+play GAMMA_BLAST attack chosen Damage Move number 1
+play GAMMA_BLAST power chosen WEAK_POWER var WeakPower
+play GAMMA_BLAST power chosen VULNERABLE_POWER var VulnerablePower
+upgrade GAMMA_BLAST raise Damage 5
+card GANG_UP
+unplayed GANG_UP call DamageCmd.Attack
+upgrade GANG_UP raise ExtraDamage 2
+card GATHER_LIGHT
+play GATHER_LIGHT block Block Move
+play GATHER_LIGHT stars var Stars
+upgrade GATHER_LIGHT raise Block 3
+card GENESIS
+play GENESIS power self GENESIS_POWER var StarsPerTurn
+upgrade GENESIS raise StarsPerTurn 1
+card GENETIC_ALGORITHM
+unplayed GENETIC_ALGORITHM call BuffFromPlay
+upgrade GENETIC_ALGORITHM raise Increase 1
+card GIANT_ROCK
+play GIANT_ROCK attack chosen Damage Move number 1
+upgrade GIANT_ROCK raise Damage 4
+card GLACIER
+unplayed GLACIER for
+upgrade GLACIER raise Block 3
+card GLASSWORK
+unplayed GLASSWORK call OrbCmd.Channel
+upgrade GLASSWORK raise Block 3
+card GLIMMER
+unplayed GLIMMER call CardSelectCmd.FromHand
+upgrade GLIMMER raise Cards 1
+card GLIMPSE_BEYOND
+unplayed GLIMPSE_BEYOND call CombatState.GetTeammatesOf
+upgrade GLIMPSE_BEYOND raise Cards 1
+card GLITTERSTREAM
+unplayed GLITTERSTREAM call Hook.ModifyBlock
+upgrade GLITTERSTREAM raise Block 2
+upgrade GLITTERSTREAM raise BlockNextTurn 2
+card GLOW
+play GLOW stars var Stars
+play GLOW draw var Cards
+play GLOW power self DRAW_CARDS_NEXT_TURN_POWER var Cards
+upgrade GLOW raise Stars 1
+card GOLD_AXE
+unplayed GOLD_AXE call DamageCmd.Attack
+upgrade GOLD_AXE keyword Retain
+card GO_FOR_THE_EYES
+unplayed GO_FOR_THE_EYES if
+upgrade GO_FOR_THE_EYES raise Damage 1
+upgrade GO_FOR_THE_EYES raise WeakPower 1
+card GRAND_FINALE
+unplayed GRAND_FINALE overrides IsPlayable
+upgrade GRAND_FINALE raise Damage 15
+card GRAVEBLAST
+unplayed GRAVEBLAST call CardSelectCmd.FromCombatPile
+unupgraded GRAVEBLAST call RemoveKeyword
+card GRAVE_WARDEN
+unplayed GRAVE_WARDEN call CardCmd.PreviewCardPileAdd
+upgrade GRAVE_WARDEN raise Block 3
+card GREED
+card GUARDS
+unplayed GUARDS call CardSelectCmd.FromHand
+card GUIDING_STAR
+play GUIDING_STAR attack chosen Damage Move number 1
+play GUIDING_STAR power self DRAW_CARDS_NEXT_TURN_POWER var Cards
+upgrade GUIDING_STAR raise Damage 1
+upgrade GUIDING_STAR raise Cards 1
+card GUILTY
+card GUNK_UP
+unplayed GUNK_UP call CombatState.CreateCard
+upgrade GUNK_UP raise Damage 1
+card HAILSTORM
+play HAILSTORM power self HAILSTORM_POWER var HailstormPower
+upgrade HAILSTORM raise HailstormPower 2
+card HAMMER_TIME
+play HAMMER_TIME power self HAMMER_TIME_POWER number 1
+upgrade HAMMER_TIME cost -1
+card HAND_OF_GREED
+unplayed HAND_OF_GREED call cardPlay.Target.Powers.All
+upgrade HAND_OF_GREED raise Damage 5
+upgrade HAND_OF_GREED raise Gold 5
+card HAND_TRICK
+unplayed HAND_TRICK call CardSelectCmd.FromHand
+upgrade HAND_TRICK raise Block 3
+card HANG
+unplayed HANG call cardPlay.Target.GetPowerAmount
+upgrade HANG raise Damage 3
+card HAUNT
+play HAUNT power self HAUNT_POWER var HpLoss
+upgrade HAUNT raise HpLoss 2
+card HAVOC
+unplayed HAVOC call CardPileCmd.AutoPlayFromDrawPile
+upgrade HAVOC cost -1
+card HAZE
+unplayed HAZE call SpawnVfx
+upgrade HAZE raise PoisonPower 2
+upgrade HAZE raise WeakPower 1
+card HEADBUTT
+unplayed HEADBUTT call CardSelectCmd.FromCombatPile
+upgrade HEADBUTT raise Damage 3
+card HEAVENLY_DRILL
+unplayed HEAVENLY_DRILL call ResolveEnergyXValue
+upgrade HEAVENLY_DRILL raise Damage 2
+card HEGEMONY
+play HEGEMONY attack chosen Damage Move number 1
+play HEGEMONY power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade HEGEMONY raise Damage 3
+upgrade HEGEMONY raise Energy 1
+card HEIRLOOM_HAMMER
+unplayed HEIRLOOM_HAMMER call CardSelectCmd.FromHand
+upgrade HEIRLOOM_HAMMER raise Damage 5
+card HELIX_DRILL
+unplayed HELIX_DRILL call DamageCmd.Attack
+upgrade HELIX_DRILL raise Damage 2
+card HELLO_WORLD
+play HELLO_WORLD power self HELLO_WORLD_POWER number 1
+upgrade HELLO_WORLD keyword Innate
+card HELLRAISER
+play HELLRAISER power self HELLRAISER_POWER number 1
+upgrade HELLRAISER cost -1
+card HEMOKINESIS
+unplayed HEMOKINESIS call CreatureCmd.Damage
+upgrade HEMOKINESIS raise Damage 5
+card HIBERNATE
+unplayed HIBERNATE call PowerCmd.Apply
+upgrade HIBERNATE raise Repeat 1
+card HIDDEN_CACHE
+play HIDDEN_CACHE stars var Stars
+play HIDDEN_CACHE power self STAR_NEXT_TURN_POWER var StarNextTurnPower
+upgrade HIDDEN_CACHE raise StarNextTurnPower 1
+card HIDDEN_DAGGERS
+unplayed HIDDEN_DAGGERS call CardCmd.Discard
+card HIDDEN_GEM
+unplayed HIDDEN_GEM call PileType.Draw.GetPile
+upgrade HIDDEN_GEM raise Replay 1
+card HIGH_FIVE
+unplayed HIGH_FIVE overrides IsPlayable
+upgrade HIGH_FIVE raise OstyDamage 2
+upgrade HIGH_FIVE raise VulnerablePower 1
+card HOLOGRAM
+unplayed HOLOGRAM call CardSelectCmd.FromCombatPile
+unupgraded HOLOGRAM call RemoveKeyword
+card HOTFIX
+play HOTFIX power self HOTFIX_POWER var FocusPower
+unupgraded HOTFIX call RemoveKeyword
+card HOWL_FROM_BEYOND
+play HOWL_FROM_BEYOND attack opponents Damage Move number 1
+upgrade HOWL_FROM_BEYOND raise Damage 6
+card HUDDLE_UP
+unplayed HUDDLE_UP call CombatState.GetTeammatesOf
+upgrade HUDDLE_UP raise Cards 1
+card HYPERBEAM
+unplayed HYPERBEAM call DamageCmd.Attack
+upgrade HYPERBEAM raise Damage 6
+card ICE_LANCE
+unplayed ICE_LANCE for
+upgrade ICE_LANCE raise Damage 5
+card IGNITION
+unplayed IGNITION call OrbCmd.Channel
+unupgraded IGNITION call RemoveKeyword
+card IMITATION_LEARNING
+unplayed IMITATION_LEARNING call Owner.Creature.Powers.OfType
+upgrade IMITATION_LEARNING raise ImitationLearningPower 1
+card IMPATIENCE
+unplayed IMPATIENCE if
+upgrade IMPATIENCE raise Cards 1
+card IMPERVIOUS
+play IMPERVIOUS block Block Move
+upgrade IMPERVIOUS raise Block 10
+card INFECTION
+turnend INFECTION
+card INFERNAL_BLADE
+unplayed INFERNAL_BLADE call CardFactory.GetDistinctForCombat
+upgrade INFERNAL_BLADE cost -1
+card INFERNO
+unplayed INFERNO call PowerCmd.Apply
+upgrade INFERNO raise InfernoPower 3
+card INFINITE_BLADES
+play INFINITE_BLADES power self INFINITE_BLADES_POWER number 1
+upgrade INFINITE_BLADES keyword Innate
+card INFLAME
+play INFLAME power self STRENGTH_POWER var StrengthPower
+upgrade INFLAME raise StrengthPower 1
+card INJURY
+card INTERCEPT
+play INTERCEPT block Block Move
+play INTERCEPT power chosen COVERED_POWER number 1
+upgrade INTERCEPT raise Block 4
+card INVOKE
+play INVOKE power self SUMMON_NEXT_TURN_POWER var Summon
+play INVOKE power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade INVOKE raise Summon 1
+upgrade INVOKE raise Energy 1
+card IRON_WAVE
+play IRON_WAVE block Block Move
+play IRON_WAVE attack chosen Damage Move number 1
+upgrade IRON_WAVE raise Damage 2
+upgrade IRON_WAVE raise Block 2
+card ITERATION
+play ITERATION power self ITERATION_POWER var IterationPower
+upgrade ITERATION raise IterationPower 1
+card I_AM_INVINCIBLE
+play I_AM_INVINCIBLE block Block Move
+upgrade I_AM_INVINCIBLE raise Block 3
+card JACKPOT
+unplayed JACKPOT call CardFactory.GetForCombat
+upgrade JACKPOT raise Damage 5
+card JACK_OF_ALL_TRADES
+unplayed JACK_OF_ALL_TRADES call CardFactory.GetDistinctForCombat
+upgrade JACK_OF_ALL_TRADES raise Cards 1
+card JUGGERNAUT
+play JUGGERNAUT power self JUGGERNAUT_POWER var JuggernautPower
+upgrade JUGGERNAUT raise JuggernautPower 2
+card JUGGLING
+play JUGGLING power self JUGGLING_POWER number 1
+upgrade JUGGLING keyword Innate
+card KINGLY_KICK
+play KINGLY_KICK attack chosen Damage Move number 1
+upgrade KINGLY_KICK raise Damage 8
+card KINGLY_PUNCH
+play KINGLY_PUNCH attack chosen Damage Move number 1
+upgrade KINGLY_PUNCH raise Damage 2
+upgrade KINGLY_PUNCH raise Increase 2
+card KNIFE_TRAP
+unplayed KNIFE_TRAP call PileType.Exhaust.GetPile
+card KNOCKDOWN
+play KNOCKDOWN attack chosen Damage Move number 1
+play KNOCKDOWN power chosen KNOCKDOWN_POWER var KnockdownPower
+upgrade KNOCKDOWN raise Damage 4
+upgrade KNOCKDOWN raise KnockdownPower 1
+card KNOCKOUT_BLOW
+unplayed KNOCKOUT_BLOW if
+upgrade KNOCKOUT_BLOW raise Damage 8
+card KNOW_THY_PLACE
+play KNOW_THY_PLACE power chosen WEAK_POWER var WeakPower
+play KNOW_THY_PLACE power chosen VULNERABLE_POWER var VulnerablePower
+unupgraded KNOW_THY_PLACE call RemoveKeyword
+card LANTERN_KEY
+card LARGESSE
+unplayed LARGESSE call CardFactory.GetDistinctForCombat
+card LEADING_STRIKE
+unplayed LEADING_STRIKE for
+upgrade LEADING_STRIKE raise Damage 3
+card LEAP
+play LEAP block Block Move
+upgrade LEAP raise Block 3
+card LEGION_OF_BONE
+unplayed LEGION_OF_BONE call CombatState.PlayerCreatures.Where
+upgrade LEGION_OF_BONE raise Summon 2
+card LEG_SWEEP
+play LEG_SWEEP block Block Move
+play LEG_SWEEP power chosen WEAK_POWER var WeakPower
+upgrade LEG_SWEEP raise Block 3
+upgrade LEG_SWEEP raise WeakPower 1
+card LETHALITY
+play LETHALITY power self LETHALITY_POWER var LethalityPower
+upgrade LETHALITY raise LethalityPower 25
+card LIFT
+unplayed LIFT call CreatureCmd.GainBlock
+upgrade LIFT raise Block 5
+card LIGHTNING_ROD
+play LIGHTNING_ROD block Block Move
+play LIGHTNING_ROD power self LIGHTNING_ROD_POWER var LightningRodPower
+upgrade LIGHTNING_ROD raise Block 3
+card LOOP
+play LOOP power self LOOP_POWER var Loop
+upgrade LOOP raise Loop 1
+card LUMINESCE
+play LUMINESCE energy var Energy
+upgrade LUMINESCE raise Energy 1
+card LUNAR_BLAST
+unplayed LUNAR_BLAST call DamageCmd.Attack
+upgrade LUNAR_BLAST raise Damage 1
+card MACHINE_LEARNING
+play MACHINE_LEARNING power self MACHINE_LEARNING_POWER var Cards
+upgrade MACHINE_LEARNING keyword Innate
+card MAD_SCIENCE
+unplayed MAD_SCIENCE switch
+upgrade MAD_SCIENCE keyword Innate
+card MAKE_IT_SO
+play MAKE_IT_SO attack chosen Damage Move number 1
+upgrade MAKE_IT_SO raise Damage 3
+card MALAISE
+unplayed MALAISE call ResolveEnergyXValue
+card MANGLE
+play MANGLE attack chosen Damage Move number 1
+play MANGLE power chosen MANGLE_POWER var StrengthLoss
+upgrade MANGLE raise Damage 6
+upgrade MANGLE raise StrengthLoss 5
+card MANIFEST_AUTHORITY
+unplayed MANIFEST_AUTHORITY call CardFactory.GetDistinctForCombat
+upgrade MANIFEST_AUTHORITY raise Block 1
+card MASTER_OF_STRATEGY
+play MASTER_OF_STRATEGY draw var Cards
+upgrade MASTER_OF_STRATEGY raise Cards 1
+card MASTER_PLANNER
+play MASTER_PLANNER power self MASTER_PLANNER_POWER number 1
+upgrade MASTER_PLANNER cost -1
+card MAUL
+unplayed MAUL call Owner.PlayerCombatState.AllCards.OfType
+upgrade MAUL raise Damage 1
+upgrade MAUL raise Increase 1
+card MAYHEM
+play MAYHEM power self MAYHEM_POWER number 1
+upgrade MAYHEM cost -1
+card MELANCHOLY
+play MELANCHOLY block Block Move
+upgrade MELANCHOLY raise Block 4
+card MEMENTO_MORI
+unplayed MEMENTO_MORI call DamageCmd.Attack
+upgrade MEMENTO_MORI raise CalculationBase 2
+upgrade MEMENTO_MORI raise ExtraDamage 1
+card METAMORPHOSIS
+unplayed METAMORPHOSIS call CardFactory.GetForCombat
+upgrade METAMORPHOSIS raise Cards 2
+card METEOR_SHOWER
+unplayed METEOR_SHOWER call PowerCmd.Apply
+upgrade METEOR_SHOWER raise Damage 7
+card METEOR_STRIKE
+unplayed METEOR_STRIKE for
+upgrade METEOR_STRIKE raise Damage 6
+card MIDNIGHT
+play MIDNIGHT attack chosen Damage Move number 1
+upgrade MIDNIGHT raise Damage 12
+card MIMIC
+unplayed MIMIC call CreatureCmd.GainBlock
+unupgraded MIMIC call RemoveKeyword
+card MIND_BLAST
+unplayed MIND_BLAST call DamageCmd.Attack
+upgrade MIND_BLAST cost -1
+card MIND_ROT
+card MINION_DIVE_BOMB
+play MINION_DIVE_BOMB attack chosen Damage Move number 1
+upgrade MINION_DIVE_BOMB raise Damage 3
+card MINION_SACRIFICE
+play MINION_SACRIFICE block Block Move
+upgrade MINION_SACRIFICE raise Block 3
+card MINION_STRIKE
+play MINION_STRIKE attack chosen Damage Move number 1
+play MINION_STRIKE draw var Cards
+upgrade MINION_STRIKE raise Damage 3
+card MIRAGE
+unplayed MIRAGE call CreatureCmd.GainBlock
+unupgraded MIRAGE call RemoveKeyword
+card MISERY
+unplayed MISERY call select
+upgrade MISERY raise Damage 2
+upgrade MISERY keyword Retain
+card MODDED
+unplayed MODDED call OrbCmd.AddSlots
+upgrade MODDED raise Cards 1
+card MOLTEN_FIST
+unplayed MOLTEN_FIST call cardPlay.Target.GetPowerAmount
+upgrade MOLTEN_FIST raise Damage 4
+card MOMENTUM_STRIKE
+unplayed MOMENTUM_STRIKE call EnergyCost.SetThisCombat
+upgrade MOMENTUM_STRIKE raise Damage 4
+card MONARCHS_GAZE
+play MONARCHS_GAZE power self MONARCHS_GAZE_POWER var StrengthLoss
+upgrade MONARCHS_GAZE cost -1
+card MONOLOGUE
+unplayed MONOLOGUE call PowerCmd.Apply
+upgrade MONOLOGUE keyword Retain
+card MULTI_CAST
+unplayed MULTI_CAST call ResolveEnergyXValue
+card MURDER
+unplayed MURDER call DamageCmd.Attack
+upgrade MURDER cost -1
+card NECRO_MASTERY
+unplayed NECRO_MASTERY call OstyCmd.Summon
+upgrade NECRO_MASTERY raise Summon 3
+card NEGATIVE_PULSE
+unplayed NEGATIVE_PULSE foreach
+upgrade NEGATIVE_PULSE raise Block 1
+upgrade NEGATIVE_PULSE raise DoomPower 4
+card NEOWS_FURY
+unplayed NEOWS_FURY call Math.Min
+upgrade NEOWS_FURY raise Damage 4
+upgrade NEOWS_FURY raise Cards 1
+card NEUROSURGE
+play NEUROSURGE energy var Energy
+play NEUROSURGE draw var Cards
+play NEUROSURGE power self NEUROSURGE_POWER var NeurosurgePower
+upgrade NEUROSURGE raise Energy 1
+card NEUTRALIZE
+play NEUTRALIZE attack chosen Damage Move number 1
+play NEUTRALIZE power chosen WEAK_POWER var WeakPower
+upgrade NEUTRALIZE raise Damage 1
+upgrade NEUTRALIZE raise WeakPower 1
+card NEUTRON_AEGIS
+play NEUTRON_AEGIS power self PLATING_POWER var PlatingPower
+upgrade NEUTRON_AEGIS raise PlatingPower 3
+card NIGHTMARE
+unplayed NIGHTMARE call CardSelectCmd.FromHand
+upgrade NIGHTMARE cost -1
+card NORMALITY
+card NOSTALGIA
+play NOSTALGIA power self NOSTALGIA_POWER number 1
+upgrade NOSTALGIA cost -1
+card NOT_YET
+unplayed NOT_YET call CreatureCmd.Heal
+upgrade NOT_YET raise Heal 3
+card NOXIOUS_FUMES
+play NOXIOUS_FUMES power self NOXIOUS_FUMES_POWER var PoisonPerTurn
+upgrade NOXIOUS_FUMES raise PoisonPerTurn 1
+card NO_ESCAPE
+unplayed NO_ESCAPE call PowerCmd.Apply
+upgrade NO_ESCAPE raise CalculationBase 5
+card NULL
+unplayed NULL call OrbCmd.Channel
+upgrade NULL raise Damage 3
+upgrade NULL raise WeakPower 1
+card OBLIVION
+play OBLIVION power chosen OBLIVION_POWER var DoomPower
+upgrade OBLIVION raise DoomPower 1
+card OFFERING
+unplayed OFFERING call CreatureCmd.Damage
+upgrade OFFERING raise Cards 2
+card OMNISLICE
+unplayed OMNISLICE call AttackCommand.CreateContextAsync
+upgrade OMNISLICE raise Damage 3
+card ONE_FOR_ALL
+unplayed ONE_FOR_ALL foreach
+upgrade ONE_FOR_ALL raise OneForAllPower 1
+card ONE_TWO_PUNCH
+play ONE_TWO_PUNCH power self ONE_TWO_PUNCH_POWER var Attacks
+upgrade ONE_TWO_PUNCH raise Attacks 1
+card ORBIT
+play ORBIT power self ORBIT_POWER var Energy
+upgrade ORBIT cost -1
+card OUTBREAK
+unplayed OUTBREAK foreach
+upgrade OUTBREAK raise PoisonPower 3
+card OUTMANEUVER
+play OUTMANEUVER power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade OUTMANEUVER raise Energy 1
+card OUTRAGE
+unplayed OUTRAGE if
+upgrade OUTRAGE raise Damage 4
+card OVERCLOCK
+unplayed OVERCLOCK call CombatState.CreateCard
+upgrade OVERCLOCK raise Cards 1
+card PACTS_END
+unplayed PACTS_END if
+upgrade PACTS_END raise Damage 6
+card PAGESTORM
+play PAGESTORM power self PAGESTORM_POWER var Cards
+upgrade PAGESTORM cost -1
+card PALE_BLUE_DOT
+play PALE_BLUE_DOT power self PALE_BLUE_DOT_POWER var Cards
+upgrade PALE_BLUE_DOT raise Cards 1
+card PANACHE
+play PANACHE power self PANACHE_POWER var PanacheDamage
+upgrade PANACHE raise PanacheDamage 4
+card PANIC_BUTTON
+play PANIC_BUTTON block Block Move
+play PANIC_BUTTON power self NO_BLOCK_POWER var Turns
+upgrade PANIC_BUTTON raise Block 10
+card PARRY
+play PARRY power self PARRY_POWER var ParryPower
+upgrade PARRY raise ParryPower 4
+card PARSE
+play PARSE draw var Cards
+upgrade PARSE raise Cards 1
+card PARTICLE_WALL
+play PARTICLE_WALL block Block Move
+upgrade PARTICLE_WALL raise Block 3
+card PATTER
+play PATTER block Block Move
+play PATTER power self VIGOR_POWER var VigorPower
+upgrade PATTER raise Block 2
+upgrade PATTER raise VigorPower 1
+card PECK
+play PECK attack chosen Damage Move var Repeat
+upgrade PECK raise Repeat 1
+card PERFECTED_STRIKE
+unplayed PERFECTED_STRIKE call DamageCmd.Attack
+upgrade PERFECTED_STRIKE raise ExtraDamage 1
+card PHANTOM_BLADES
+play PHANTOM_BLADES power self PHANTOM_BLADES_POWER var PhantomBladesPower
+upgrade PHANTOM_BLADES raise PhantomBladesPower 3
+card PHOTON_CUT
+unplayed PHOTON_CUT call CardPileCmd.Add
+upgrade PHOTON_CUT raise Damage 3
+upgrade PHOTON_CUT raise Cards 1
+card PIERCING_WAIL
+unplayed PIERCING_WAIL foreach
+upgrade PIERCING_WAIL raise StrengthLoss 2
+card PILLAGE
+unplayed PILLAGE do
+upgrade PILLAGE raise Damage 3
+card PILLAR_OF_CREATION
+play PILLAR_OF_CREATION power self PILLAR_OF_CREATION_POWER var Block
+upgrade PILLAR_OF_CREATION raise Block 1
+card PINPOINT
+play PINPOINT attack chosen Damage Move number 1
+upgrade PINPOINT raise Damage 4
+card PLOT
+unplayed PLOT call CombatState.GetTeammatesOf
+upgrade PLOT raise Cards 1
+card POISONED_STAB
+play POISONED_STAB attack chosen Damage Move number 1
+play POISONED_STAB power chosen POISON_POWER var PoisonPower
+upgrade POISONED_STAB raise Damage 2
+upgrade POISONED_STAB raise PoisonPower 1
+card POKE
+unplayed POKE if
+upgrade POKE raise OstyDamage 3
+card POMMEL_STRIKE
+play POMMEL_STRIKE attack chosen Damage Move number 1
+play POMMEL_STRIKE draw var Cards
+upgrade POMMEL_STRIKE raise Damage 1
+upgrade POMMEL_STRIKE raise Cards 1
+card POOR_SLEEP
+card POUNCE
+play POUNCE attack chosen Damage Move number 1
+play POUNCE power self FREE_SKILL_POWER number 1
+upgrade POUNCE raise Damage 6
+card PRECISE_CUT
+unplayed PRECISE_CUT call DamageCmd.Attack
+upgrade PRECISE_CUT raise CalculationBase 3
+card PREDATOR
+play PREDATOR attack chosen Damage Move number 1
+play PREDATOR power self DRAW_CARDS_NEXT_TURN_POWER number 2
+upgrade PREDATOR raise Damage 5
+card PREPARED
+unplayed PREPARED call CardPileCmd.Draw
+upgrade PREPARED raise Cards 1
+card PREP_TIME
+play PREP_TIME power self PREP_TIME_POWER var PrepTimePower
+upgrade PREP_TIME raise PrepTimePower 2
+card PRIMAL_FORCE
+unplayed PRIMAL_FORCE call PileType.Hand.GetPile
+card PRODUCTION
+play PRODUCTION energy var Energy
+upgrade PRODUCTION raise Energy 1
+card PROLONG
+unplayed PROLONG call PowerCmd.Apply
+unupgraded PROLONG call RemoveKeyword
+card PROPHESIZE
+play PROPHESIZE draw var Cards
+upgrade PROPHESIZE raise Cards 3
+card PROTECTOR
+unplayed PROTECTOR if
+upgrade PROTECTOR cost -1
+upgrade PROTECTOR raise CalculationBase 5
+card PROWESS
+play PROWESS power self STRENGTH_POWER var StrengthPower
+play PROWESS power self DEXTERITY_POWER var DexterityPower
+upgrade PROWESS raise DexterityPower 1
+upgrade PROWESS raise StrengthPower 1
+card PULL_AGGRO
+unplayed PULL_AGGRO call OstyCmd.Summon
+upgrade PULL_AGGRO raise Summon 1
+upgrade PULL_AGGRO raise Block 2
+card PULL_FROM_BELOW
+unplayed PULL_FROM_BELOW call DamageCmd.Attack
+upgrade PULL_FROM_BELOW raise Damage 2
+card PURITY
+unplayed PURITY foreach
+upgrade PURITY raise Cards 2
+card PUTREFY
+unplayed PUTREFY call PowerCmd.Apply
+upgrade PUTREFY raise Power 1
+card PYRE
+play PYRE power self PYRE_POWER var Energy
+upgrade PYRE raise Energy 1
+card QUADCAST
+unplayed QUADCAST if
+upgrade QUADCAST cost -1
+card QUASAR
+unplayed QUASAR call CardFactory.GetDistinctForCombat
+card RADIATE
+unplayed RADIATE call DamageCmd.Attack
+upgrade RADIATE raise Damage 1
+card RAGE
+play RAGE power self RAGE_POWER var Power
+upgrade RAGE raise Power 2
+card RAINBOW
+unplayed RAINBOW call OrbCmd.Channel
+unupgraded RAINBOW call RemoveKeyword
+card RALLY
+unplayed RALLY call CombatState.GetTeammatesOf
+upgrade RALLY raise Block 5
+card RAMPAGE
+unplayed RAMPAGE statement
+upgrade RAMPAGE raise Increase 5
+card RATTLE
+unplayed RATTLE if
+upgrade RATTLE raise OstyDamage 2
+card REANIMATE
+unplayed REANIMATE call OstyCmd.Summon
+upgrade REANIMATE raise Summon 5
+card REAP
+play REAP attack chosen Damage Move number 1
+upgrade REAP raise Damage 6
+card REAPER_FORM
+play REAPER_FORM power self REAPER_FORM_POWER number 1
+upgrade REAPER_FORM keyword Retain
+card REAVE
+unplayed REAVE call Soul.Create
+upgrade REAVE raise Damage 3
+card REBOOT
+unplayed REBOOT foreach
+upgrade REBOOT raise Cards 2
+card REBOUND
+play REBOUND attack chosen Damage Move number 1
+play REBOUND power self REBOUND_POWER number 1
+upgrade REBOUND raise Damage 3
+card REFINE_BLADE
+play REFINE_BLADE forge var Forge
+play REFINE_BLADE power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade REFINE_BLADE raise Forge 4
+card REFLECT
+play REFLECT block Block Move
+play REFLECT power self REFLECT_POWER number 1
+upgrade REFLECT raise Block 5
+card REFLEX
+play REFLEX draw var Cards
+upgrade REFLEX raise Cards 1
+card REFRACT
+unplayed REFRACT for
+upgrade REFRACT raise Damage 3
+card REGRET
+turnend REGRET
+card RELAX
+play RELAX block Block Move
+play RELAX power self DRAW_CARDS_NEXT_TURN_POWER var Cards
+play RELAX power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade RELAX raise Block 2
+upgrade RELAX raise Cards 1
+upgrade RELAX raise Energy 1
+card REND
+unplayed REND call DamageCmd.Attack
+upgrade REND raise ExtraDamage 3
+upgrade REND raise CalculationBase 2
+card RESONANCE
+unplayed RESONANCE call PowerCmd.Apply
+upgrade RESONANCE raise StrengthPower 1
+card RESTLESSNESS
+unplayed RESTLESSNESS if
+upgrade RESTLESSNESS raise Cards 1
+upgrade RESTLESSNESS raise Energy 1
+card RICOCHET
+unplayed RICOCHET call DamageCmd.Attack
+upgrade RICOCHET raise Repeat 1
+card RIGHT_HAND_HAND
+unplayed RIGHT_HAND_HAND if
+upgrade RIGHT_HAND_HAND raise OstyDamage 2
+card RIP_AND_TEAR
+unplayed RIP_AND_TEAR call DamageCmd.Attack
+upgrade RIP_AND_TEAR raise Damage 2
+card ROCKET_PUNCH
+play ROCKET_PUNCH attack chosen Damage Move number 1
+play ROCKET_PUNCH draw var Cards
+upgrade ROCKET_PUNCH raise Damage 1
+upgrade ROCKET_PUNCH raise Cards 1
+card ROLLING_BOULDER
+play ROLLING_BOULDER power self ROLLING_BOULDER_POWER var RollingBoulderPower
+upgrade ROLLING_BOULDER raise RollingBoulderPower 5
+card ROYALTIES
+play ROYALTIES power self ROYALTIES_POWER var Gold
+upgrade ROYALTIES raise Gold 10
+card ROYAL_GAMBLE
+play ROYAL_GAMBLE stars var Stars
+upgrade ROYAL_GAMBLE keyword Retain
+card RUPTURE
+play RUPTURE power self RUPTURE_POWER var StrengthPower
+upgrade RUPTURE raise StrengthPower 1
+card SACRIFICE
+unplayed SACRIFICE if
+upgrade SACRIFICE cost -1
+card SALVO
+play SALVO attack chosen Damage Move number 1
+play SALVO power self RETAIN_HAND_POWER number 1
+upgrade SALVO raise Damage 4
+card SCAVENGE
+unplayed SCAVENGE call CardSelectCmd.FromHand
+upgrade SCAVENGE raise Energy 1
+card SCOURGE
+play SCOURGE power chosen DOOM_POWER var DoomPower
+play SCOURGE draw var Cards
+upgrade SCOURGE raise DoomPower 3
+upgrade SCOURGE raise Cards 1
+card SCRAPE
+unplayed SCRAPE call CardPileCmd.Draw
+upgrade SCRAPE raise Damage 3
+upgrade SCRAPE raise Cards 1
+card SCRAWL
+unplayed SCRAWL call CardPileCmd.Draw
+upgrade SCRAWL keyword Retain
+card SCULPTING_STRIKE
+unplayed SCULPTING_STRIKE call CardSelectCmd.FromHand
+upgrade SCULPTING_STRIKE raise Damage 3
+card SEANCE
+unplayed SEANCE call CardSelectCmd.FromCombatPile
+upgrade SEANCE cost -1
+card SECOND_WIND
+unplayed SECOND_WIND foreach
+upgrade SECOND_WIND raise Block 2
+card SECRET_TECHNIQUE
+unplayed SECRET_TECHNIQUE call CardSelectCmd.FromCombatPile
+unupgraded SECRET_TECHNIQUE call RemoveKeyword
+card SECRET_WEAPON
+unplayed SECRET_WEAPON call CardSelectCmd.FromCombatPile
+unupgraded SECRET_WEAPON call RemoveKeyword
+card SEEKER_STRIKE
+unplayed SEEKER_STRIKE call PileType.Draw.GetPile
+upgrade SEEKER_STRIKE raise Damage 3
+card SEEKING_EDGE
+play SEEKING_EDGE power self SEEKING_EDGE_POWER number 1
+play SEEKING_EDGE forge var Forge
+upgrade SEEKING_EDGE raise Forge 4
+card SENTRY_MODE
+play SENTRY_MODE power self SENTRY_MODE_POWER var SentryModePower
+upgrade SENTRY_MODE cost -1
+card SERPENT_FORM
+play SERPENT_FORM power self SERPENT_FORM_POWER var SerpentFormPower
+upgrade SERPENT_FORM raise SerpentFormPower 2
+card SETUP_STRIKE
+play SETUP_STRIKE attack chosen Damage Move number 1
+play SETUP_STRIKE power self SETUP_STRIKE_POWER var StrengthPower
+upgrade SETUP_STRIKE raise Damage 2
+upgrade SETUP_STRIKE raise StrengthPower 1
+card SEVEN_STARS
+play SEVEN_STARS attack opponents Damage Move var Repeat
+upgrade SEVEN_STARS cost -1
+card SEVERANCE
+unplayed SEVERANCE call Soul.Create
+upgrade SEVERANCE raise Damage 5
+card SHADOWMELD
+play SHADOWMELD power self SHADOWMELD_POWER var Power
+upgrade SHADOWMELD cost -1
+card SHADOW_SHIELD
+unplayed SHADOW_SHIELD call OrbCmd.Channel
+upgrade SHADOW_SHIELD raise Block 4
+card SHADOW_STEP
+unplayed SHADOW_STEP call CardCmd.Discard
+upgrade SHADOW_STEP cost -1
+card SHAME
+turnend SHAME
+card SHARED_FATE
+unplayed SHARED_FATE call PowerCmd.Apply
+upgrade SHARED_FATE raise EnemyStrengthLoss 1
+card SHATTER
+unplayed SHATTER for
+upgrade SHATTER raise Damage 4
+card SHINING_STRIKE
+play SHINING_STRIKE attack chosen Damage Move number 1
+play SHINING_STRIKE stars var Stars
+upgrade SHINING_STRIKE raise Damage 3
+card SHIV
+unplayed SHIV call DamageCmd.Attack
+upgrade SHIV raise Damage 2
+card SHOCKWAVE
+unplayed SHOCKWAVE foreach
+upgrade SHOCKWAVE raise Power 2
+card SHROUD
+play SHROUD power self SHROUD_POWER var Block
+upgrade SHROUD raise Block 1
+card SHRUG_IT_OFF
+play SHRUG_IT_OFF block Block Move
+play SHRUG_IT_OFF draw var Cards
+upgrade SHRUG_IT_OFF raise Block 3
+card SIC_EM
+unplayed SIC_EM if
+upgrade SIC_EM raise OstyDamage 1
+upgrade SIC_EM raise SicEmPower 1
+card SIDESTEP
+play SIDESTEP power self ENERGY_NEXT_TURN_POWER var Energy
+upgrade SIDESTEP raise Energy 1
+card SIGNAL_BOOST
+play SIGNAL_BOOST power self SIGNAL_BOOST_POWER var SignalBoostPower
+upgrade SIGNAL_BOOST cost -1
+card SKEWER
+unplayed SKEWER call DamageCmd.Attack
+upgrade SKEWER raise Damage 3
+card SKIM
+play SKIM draw var Cards
+upgrade SKIM raise Cards 1
+card SLEIGHT_OF_FLESH
+play SLEIGHT_OF_FLESH power self SLEIGHT_OF_FLESH_POWER var SleightOfFleshPower
+upgrade SLEIGHT_OF_FLESH raise SleightOfFleshPower 4
+card SLICE
+play SLICE attack chosen Damage Move number 1
+upgrade SLICE raise Damage 3
+card SLIMED
+play SLIMED draw var Cards
+card SLOTH
+card SMOKESTACK
+play SMOKESTACK power self SMOKESTACK_POWER var SmokestackPower
+upgrade SMOKESTACK raise SmokestackPower 2
+card SNAKEBITE
+play SNAKEBITE power chosen POISON_POWER var PoisonPower
+upgrade SNAKEBITE raise PoisonPower 3
+card SNAP
+unplayed SNAP if
+upgrade SNAP raise OstyDamage 3
+card SNEAKY
+play SNEAKY power self SNEAKY_POWER var SneakyPower
+upgrade SNEAKY raise SneakyPower 1
+card SOLAR_STRIKE
+play SOLAR_STRIKE attack chosen Damage Move number 1
+play SOLAR_STRIKE stars var Stars
+upgrade SOLAR_STRIKE raise Damage 1
+upgrade SOLAR_STRIKE raise Stars 1
+card SOOT
+card SOUL
+play SOUL draw var Cards
+upgrade SOUL raise Cards 1
+card SOULBOUND
+play SOULBOUND power chosen SOULBOUND_POWER number 1
+upgrade SOULBOUND keyword Innate
+card SOUL_STORM
+unplayed SOUL_STORM call DamageCmd.Attack
+upgrade SOUL_STORM raise ExtraDamage 2
+card SOVEREIGN_BLADE
+unplayed SOVEREIGN_BLADE call DamageCmd.Attack
+upgrade SOVEREIGN_BLADE cost -1
+card SOW
+play SOW attack opponents Damage Move number 1
+upgrade SOW raise Damage 3
+card SPECTRUM_SHIFT
+play SPECTRUM_SHIFT power self SPECTRUM_SHIFT_POWER var Cards
+upgrade SPECTRUM_SHIFT cost -1
+card SPEEDSTER
+play SPEEDSTER power self SPEEDSTER_POWER var SpeedsterPower
+upgrade SPEEDSTER keyword Innate
+card SPINNER
+unplayed SPINNER if
+card SPIRIT_OF_ASH
+play SPIRIT_OF_ASH power self SPIRIT_OF_ASH_POWER var BlockOnExhaust
+upgrade SPIRIT_OF_ASH raise BlockOnExhaust 1
+card SPITE
+unplayed SPITE call LostHpThisTurn
+upgrade SPITE raise Repeat 1
+card SPLASH
+unplayed SPLASH if
+card SPOILS_MAP
+card SPOILS_OF_BATTLE
+play SPOILS_OF_BATTLE forge var Forge
+play SPOILS_OF_BATTLE draw var Cards
+upgrade SPOILS_OF_BATTLE raise Forge 3
+card SPORE_MIND
+card SPUR
+unplayed SPUR call OstyCmd.Summon
+upgrade SPUR raise Summon 2
+upgrade SPUR raise Heal 2
+card SQUASH
+play SQUASH attack chosen Damage Move number 1
+play SQUASH power chosen VULNERABLE_POWER var VulnerablePower
+upgrade SQUASH raise Damage 2
+upgrade SQUASH raise VulnerablePower 1
+card SQUEEZE
+unplayed SQUEEZE if
+upgrade SQUEEZE raise CalculationBase 5
+upgrade SQUEEZE raise ExtraDamage 1
+card STACK
+unplayed STACK call CreatureCmd.GainBlock
+upgrade STACK raise CalculationBase 3
+card STAMPEDE
+play STAMPEDE power self STAMPEDE_POWER var Power
+upgrade STAMPEDE cost -1
+card STARDUST
+unplayed STARDUST call DamageCmd.Attack
+upgrade STARDUST raise Damage 2
+card STOKE
+unplayed STOKE call PileType.Hand.GetPile
+card STOMP
+play STOMP attack opponents Damage Move number 1
+upgrade STOMP raise Damage 3
+card STONE_ARMOR
+play STONE_ARMOR power self PLATING_POWER var PlatingPower
+upgrade STONE_ARMOR raise PlatingPower 2
+card STORM
+play STORM power self STORM_POWER var StormPower
+upgrade STORM raise StormPower 1
+card STORM_OF_STEEL
+unplayed STORM_OF_STEEL call PileType.Hand.GetPile
+card STRANGLE
+play STRANGLE attack chosen Damage Move number 1
+play STRANGLE power chosen STRANGLE_POWER var StranglePower
+upgrade STRANGLE raise Damage 2
+upgrade STRANGLE raise StranglePower 1
+card STRATAGEM
+play STRATAGEM power self STRATAGEM_POWER number 1
+upgrade STRATAGEM cost -1
+card STRIKE_DEFECT
+play STRIKE_DEFECT attack chosen Damage Move number 1
+upgrade STRIKE_DEFECT raise Damage 3
+card STRIKE_IRONCLAD
+play STRIKE_IRONCLAD attack chosen Damage Move number 1
+upgrade STRIKE_IRONCLAD raise Damage 3
+card STRIKE_NECROBINDER
+play STRIKE_NECROBINDER attack chosen Damage Move number 1
+upgrade STRIKE_NECROBINDER raise Damage 3
+card STRIKE_REGENT
+play STRIKE_REGENT attack chosen Damage Move number 1
+upgrade STRIKE_REGENT raise Damage 3
+card STRIKE_SILENT
+play STRIKE_SILENT attack chosen Damage Move number 1
+upgrade STRIKE_SILENT raise Damage 3
+card SUBROUTINE
+play SUBROUTINE power self SUBROUTINE_POWER number 1
+upgrade SUBROUTINE cost -1
+card SUCKER_PUNCH
+play SUCKER_PUNCH attack chosen Damage Move number 1
+play SUCKER_PUNCH power chosen WEAK_POWER var WeakPower
+upgrade SUCKER_PUNCH raise Damage 2
+upgrade SUCKER_PUNCH raise WeakPower 1
+card SUMMON_FORTH
+unplayed SUMMON_FORTH call Owner.PlayerCombatState.AllCards.OfType
+upgrade SUMMON_FORTH raise Forge 3
+card SUNDER
+unplayed SUNDER if
+upgrade SUNDER raise Damage 8
+card SUPERCRITICAL
+play SUPERCRITICAL energy var Energy
+upgrade SUPERCRITICAL raise Energy 2
+card SUPERMASSIVE
+unplayed SUPERMASSIVE call DamageCmd.Attack
+upgrade SUPERMASSIVE raise ExtraDamage 1
+card SUPPRESS
+play SUPPRESS attack chosen Damage Move number 1
+play SUPPRESS power chosen WEAK_POWER var WeakPower
+upgrade SUPPRESS raise Damage 6
+upgrade SUPPRESS raise WeakPower 2
+card SURVIVOR
+unplayed SURVIVOR call CardSelectCmd.FromHandForDiscard
+upgrade SURVIVOR raise Block 3
+card SWEEPING_BEAM
+unplayed SWEEPING_BEAM call DamageCmd.Attack
+upgrade SWEEPING_BEAM raise Damage 3
+card SWEEPING_GAZE
+unplayed SWEEPING_GAZE if
+upgrade SWEEPING_GAZE raise OstyDamage 5
+card SWORD_BOOMERANG
+unplayed SWORD_BOOMERANG call DamageCmd.Attack
+upgrade SWORD_BOOMERANG raise Repeat 1
+card SWORD_SAGE
+play SWORD_SAGE power self SWORD_SAGE_POWER var SwordSagePower
+upgrade SWORD_SAGE cost -1
+card SYNCHRONIZE
+unplayed SYNCHRONIZE call PowerCmd.Apply
+upgrade SYNCHRONIZE raise CalculationExtra 1
+card SYNTHESIS
+play SYNTHESIS attack chosen Damage Move number 1
+play SYNTHESIS power self FREE_POWER_POWER number 1
+upgrade SYNTHESIS raise Damage 6
+card TACTICIAN
+play TACTICIAN energy var Energy
+upgrade TACTICIAN raise Energy 1
+card TAG_TEAM
+play TAG_TEAM attack chosen Damage Move number 1
+play TAG_TEAM power chosen TAG_TEAM_POWER number 1
+upgrade TAG_TEAM raise Damage 4
+card TANK
+play TANK power self TANK_POWER number 1
+upgrade TANK cost -1
+card TAUNT
+play TAUNT block Block Move
+play TAUNT power chosen VULNERABLE_POWER var VulnerablePower
+upgrade TAUNT raise Block 1
+upgrade TAUNT raise VulnerablePower 1
+card TEAR_ASUNDER
+unplayed TEAR_ASUNDER call DamageCmd.Attack
+upgrade TEAR_ASUNDER raise Damage 2
+card TEMPEST
+unplayed TEMPEST call ResolveEnergyXValue
+card TERRAFORMING
+play TERRAFORMING power self VIGOR_POWER var VigorPower
+upgrade TERRAFORMING raise VigorPower 3
+card TESLA_COIL
+unplayed TESLA_COIL call Owner.PlayerCombatState.OrbQueue.Orbs.OfType
+upgrade TESLA_COIL raise Damage 1
+card THE_BALL
+unplayed THE_BALL statement
+upgrade THE_BALL raise Increase 5
+card THE_BOMB
+unplayed THE_BOMB call PowerCmd.Apply
+upgrade THE_BOMB raise BombDamage 10
+card THE_GAMBIT
+play THE_GAMBIT block Block Move
+play THE_GAMBIT power self THE_GAMBIT_POWER number 1
+upgrade THE_GAMBIT raise Block 25
+card THE_HUNT
+unplayed THE_HUNT if
+upgrade THE_HUNT raise Damage 5
+card THE_SCYTHE
+unplayed THE_SCYTHE call BuffFromPlay
+upgrade THE_SCYTHE raise Increase 2
+card THE_SEALED_THRONE
+play THE_SEALED_THRONE power self THE_SEALED_THRONE_POWER number 1
+upgrade THE_SEALED_THRONE cost -1
+card THE_SMITH
+play THE_SMITH forge var Forge
+upgrade THE_SMITH raise Forge 10
+card THINKING_AHEAD
+unplayed THINKING_AHEAD call CardSelectCmd.FromHand
+unupgraded THINKING_AHEAD call RemoveKeyword
+card THRASH
+unplayed THRASH call PileType.Hand.GetPile
+upgrade THRASH raise Damage 2
+card THRUMMING_HATCHET
+play THRUMMING_HATCHET attack chosen Damage Move number 1
+upgrade THRUMMING_HATCHET raise Damage 3
+card THUNDER
+play THUNDER power self THUNDER_POWER var ThunderPower
+upgrade THUNDER raise ThunderPower 3
+card THUNDERCLAP
+unplayed THUNDERCLAP call PowerCmd.Apply
+upgrade THUNDERCLAP raise Damage 3
+card TIMES_UP
+unplayed TIMES_UP call DamageCmd.Attack
+upgrade TIMES_UP keyword Retain
+card TOOLS_OF_THE_TRADE
+play TOOLS_OF_THE_TRADE power self TOOLS_OF_THE_TRADE_POWER number 1
+upgrade TOOLS_OF_THE_TRADE cost -1
+card TORIC_TOUGHNESS
+unplayed TORIC_TOUGHNESS call CreatureCmd.GainBlock
+upgrade TORIC_TOUGHNESS raise Block 2
+card TOXIC
+turnend TOXIC
+card TRACKING
+play TRACKING power self TRACKING_POWER number 50
+upgrade TRACKING cost -1
+card TRANSFIGURE
+unplayed TRANSFIGURE call CardSelectCmd.FromHand
+unupgraded TRANSFIGURE call RemoveKeyword
+card TRASH_TO_TREASURE
+play TRASH_TO_TREASURE power self TRASH_TO_TREASURE_POWER number 1
+upgrade TRASH_TO_TREASURE cost -1
+card TREMBLE
+play TREMBLE power chosen VULNERABLE_POWER var VulnerablePower
+upgrade TREMBLE raise VulnerablePower 1
+card TRUE_GRIT
+unplayed TRUE_GRIT if
+upgrade TRUE_GRIT raise Block 2
+card TURBO
+unplayed TURBO call CombatState.CreateCard
+upgrade TURBO raise Energy 1
+card TUTOR
+unplayed TUTOR call CardSelectCmd.FromCombatPile
+upgrade TUTOR cost -1
+card TWIN_STRIKE
+play TWIN_STRIKE attack chosen Damage Move number 2
+upgrade TWIN_STRIKE raise Damage 2
+card TYRANNY
+play TYRANNY power self TYRANNY_POWER number 1
+upgrade TYRANNY keyword Innate
+card ULTIMATE_DEFEND
+play ULTIMATE_DEFEND block Block Move
+upgrade ULTIMATE_DEFEND raise Block 4
+card ULTIMATE_STRIKE
+play ULTIMATE_STRIKE attack chosen Damage Move number 1
+upgrade ULTIMATE_STRIKE raise Damage 6
+card UNDEATH
+unplayed UNDEATH call CreateClone
+upgrade UNDEATH raise Block 2
+card UNDERWORLD
+play UNDERWORLD power self UNDERWORLD_POWER number 1
+unupgraded UNDERWORLD call RemoveKeyword
+card UNLEASH
+unplayed UNLEASH if
+upgrade UNLEASH raise CalculationBase 3
+card UNMOVABLE
+play UNMOVABLE power self UNMOVABLE_POWER number 1
+upgrade UNMOVABLE cost -1
+card UNRELENTING
+play UNRELENTING attack chosen Damage Move number 1
+play UNRELENTING power self FREE_ATTACK_POWER number 1
+upgrade UNRELENTING raise Damage 6
+card UNTOUCHABLE
+play UNTOUCHABLE block Block Move
+upgrade UNTOUCHABLE raise Block 3
+card UPPERCUT
+unplayed UPPERCUT call PowerCmd.Apply
+upgrade UPPERCUT raise Power 1
+card UPROAR
+unplayed UPROAR call PileType.Draw.GetPile
+upgrade UPROAR raise Damage 2
+card UP_MY_SLEEVE
+unplayed UP_MY_SLEEVE for
+upgrade UP_MY_SLEEVE raise Cards 1
+card VEILPIERCER
+play VEILPIERCER attack chosen Damage Move number 1
+play VEILPIERCER power self VEILPIERCER_POWER number 1
+upgrade VEILPIERCER raise Damage 3
+card VENERATE
+play VENERATE stars var Stars
+upgrade VENERATE raise Stars 1
+card VICIOUS
+play VICIOUS power self VICIOUS_POWER var Cards
+upgrade VICIOUS raise Cards 1
+card VOID
+card VOID_FORM
+unplayed VOID_FORM call PlayerCmd.EndTurn
+unupgraded VOID_FORM call RemoveKeyword
+card VOLLEY
+unplayed VOLLEY call DamageCmd.Attack
+upgrade VOLLEY raise Damage 4
+card VOLTAIC
+unplayed VOLTAIC call Calculate
+unupgraded VOLTAIC call RemoveKeyword
+card WASTE_AWAY
+card WELL_LAID_PLANS
+play WELL_LAID_PLANS power self WELL_LAID_PLANS_POWER number 1
+upgrade WELL_LAID_PLANS cost -1
+card WHIRLWIND
+unplayed WHIRLWIND call ResolveEnergyXValue
+upgrade WHIRLWIND raise Damage 3
+card WHISTLE
+unplayed WHISTLE call CreatureCmd.Stun
+upgrade WHISTLE raise Damage 11
+card WHITE_NOISE
+unplayed WHITE_NOISE call CardFactory.GetDistinctForCombat
+upgrade WHITE_NOISE cost -1
+card WISH
+unplayed WISH call CardSelectCmd.FromCombatPile
+upgrade WISH keyword Retain
+card WISP
+play WISP energy var Energy
+upgrade WISP keyword Retain
+card WITHER
+turnend WITHER
+card WOUND
+card WRAITH_FORM
+play WRAITH_FORM power self INTANGIBLE_POWER var IntangiblePower
+play WRAITH_FORM power self WRAITH_FORM_POWER var WraithFormPower
+upgrade WRAITH_FORM raise IntangiblePower 1
+card WRITHE
+card WROUGHT_IN_WAR
+play WROUGHT_IN_WAR attack chosen Damage Move number 1
+play WROUGHT_IN_WAR forge var Forge
+upgrade WROUGHT_IN_WAR raise Damage 2
+upgrade WROUGHT_IN_WAR raise Forge 2
+card ZAP
+unplayed ZAP call OrbCmd.Channel
+upgrade ZAP cost -1

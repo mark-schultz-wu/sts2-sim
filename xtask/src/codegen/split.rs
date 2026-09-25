@@ -90,15 +90,28 @@ impl Split {
 
 /// The `use` lines a body needs, out of the candidates it was offered.
 ///
-/// Whole identifiers. The body is split on everything that cannot be in one, so
-/// a candidate matches only where it stands alone.
+/// Whole identifiers, so a candidate matches only where it stands alone. One
+/// after `::` is a path's tail: `CardVar::Cards` imports no `Cards`.
 ///
-/// A candidate mentioned only in a comment counts, which is the one way this is
-/// still wrong. No bucket names a type in prose today.
+/// Comments are left out, because a card's is the C# statement that stopped
+/// its generation. No bucket writes `//` inside a string.
 fn uses(body: &str, imports: Imports<'_>) -> String {
-    let named: BTreeSet<&str> = body
-        .split(|c: char| !c.is_alphanumeric() && c != '_')
-        .collect();
+    let mut named: BTreeSet<&str> = BTreeSet::new();
+    for line in body.lines() {
+        let code = line.split_once("//").map_or(line, |(code, _)| code);
+        let mut rest = code;
+        while let Some(start) = rest.find(|c: char| c.is_alphanumeric() || c == '_') {
+            let tail = rest[..start].ends_with("::");
+            let word = &rest[start..];
+            let end = word
+                .find(|c: char| !c.is_alphanumeric() && c != '_')
+                .unwrap_or(word.len());
+            if !tail {
+                named.insert(&word[..end]);
+            }
+            rest = &word[end..];
+        }
+    }
 
     let mut out = String::new();
     for (path, candidates) in imports {
