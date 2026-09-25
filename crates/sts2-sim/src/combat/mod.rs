@@ -15,11 +15,12 @@ mod monster;
 mod observed;
 mod play;
 mod potion;
-mod power;
+mod powers;
 mod relic;
 mod start;
 mod turn;
 pub(crate) use legal::{belt, drinks, moves as legal_moves};
+pub(crate) use listen::HookCounts;
 pub(crate) use live::Live;
 pub(crate) use observed::Fight;
 pub(crate) use play::{answer, apply_power, play, resolve};
@@ -42,7 +43,7 @@ pub(crate) struct Fighting<'a, V: Rules> {
     pub(crate) streams: &'a mut crate::stream::Streams<V>,
     /// The belt. Relics are notified inside the fight and their models save
     /// what they counted.
-    pub(crate) relics: &'a mut [crate::run::HeldRelic<V>],
+    pub(crate) relics: &'a mut crate::run::Belt<V>,
 }
 
 /// How a fight finished.

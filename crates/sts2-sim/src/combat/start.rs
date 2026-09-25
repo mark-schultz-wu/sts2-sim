@@ -7,10 +7,11 @@ use sts2_core::{
 
 use super::cards::Cards;
 use super::listen::Walk;
-use super::live::{CardIds, CardInstance, Fighter, Live, PowerList};
+use super::live::{CardIds, CardInstance, Fighter, Live};
+use super::powers::{PowerStore, Powers as _};
 use super::{Error, encounter, monster, pile};
 use crate::bounded::Bounded;
-use crate::run::HeldRelic;
+use crate::run::Belt;
 use crate::stream::Streams;
 
 /// `CombatManager.baseHandDrawCount`, before a hook moves it.
@@ -35,6 +36,7 @@ pub(crate) struct Entering<'a, V: Rules> {
 /// Takes the run as it stands and gives back the fight and the streams it drew
 /// from, without touching either. Entering a room is one transition, and a
 /// fight that cannot be built must leave the run where it stood.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn enter<V: Rules>(
     raw_seed: u64,
     character: V::Character,
@@ -42,7 +44,7 @@ pub(crate) fn enter<V: Rules>(
     encounter: V::Encounter,
     entering: &Entering<'_, V>,
     streams: &Streams<V>,
-    relics: &mut [HeldRelic<V>],
+    relics: &mut Belt<V>,
 ) -> Result<(Box<Live<V>>, Streams<V>), Error> {
     let mut streams = *streams;
     let energy: V::Count = num_traits::cast(V::max_energy(character))
@@ -61,7 +63,8 @@ pub(crate) fn enter<V: Rules>(
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         returned: Vec::new(),
-        creatures: Bounded::new(),
+        creatures: super::live::Creatures::new(),
+        powers: PowerStore::new(),
         // Absent rather than an empty queue: the subsystem is inert until
         // something gives the player a slot.
         orbs: None,
@@ -81,12 +84,12 @@ pub(crate) fn enter<V: Rules>(
         max_hp: entering.max_hp,
         block: num_traits::zero(),
         alive: entering.alive,
-        powers: PowerList::new(),
         next_move: None,
     });
     let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter)?;
     let Live {
         creatures,
+        powers,
         machines,
         ..
     } = &mut *live;
@@ -96,6 +99,7 @@ pub(crate) fn enter<V: Rules>(
         &mut streams,
         &monsters,
         creatures,
+        powers,
         machines,
     )?;
 
@@ -186,8 +190,7 @@ pub(super) fn hand_size<V: Rules>(fight: Walk<'_, V>, turn: V::Count) -> usize {
             turn,
         },
     ];
-    let answers = super::board::answers::<V>(fight, phases);
-    let drawn = super::board::hooked::<V>(base, answers.into_iter());
+    let drawn = super::board::modified_by::<V>(fight, base, &phases);
     num_traits::cast(drawn).unwrap_or_else(|| unimplemented!("a hand of {drawn:?} cards"))
 }
 

@@ -73,6 +73,7 @@ impl<V: Rules> Sim<V> {
     ///
     /// A search steps through here. Building the observation costs more than
     /// most decisions do, and a search throws every one of them away.
+    #[tracing::instrument(level = "trace", skip_all, fields(decision = name(decision)))]
     pub fn decide(&mut self, decision: &Decision<V>) -> Result<Settled<V>, Error> {
         let pending = self.state.pending();
         if let Some(kind) = pending

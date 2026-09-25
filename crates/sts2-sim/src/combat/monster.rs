@@ -5,7 +5,8 @@ use sts2_core::rng::{Choices, GameRng};
 use sts2_core::{CombatId, ModelId, MoveMachine, Rules, SideKinds};
 
 use super::Error;
-use super::live::{CREATURES, Fighter, HeldPower, Live, PowerList, Stacked};
+use super::live::{CREATURES, Creatures, Fighter, HeldPower, Live, Stacked};
+use super::powers::{PowerStore, Powers as _};
 use crate::bounded::Bounded;
 use crate::stream::Streams;
 
@@ -63,7 +64,8 @@ pub(crate) fn initialize<V: Rules>(
     encounter: V::Encounter,
     streams: &mut Streams<V>,
     monsters: &[sts2_core::Spawned<V>],
-    creatures: &mut Bounded<Fighter<V>, CREATURES>,
+    creatures: &mut Creatures<V>,
+    powers: &mut PowerStore<V>,
     machines: &mut Bounded<Machine<V>, CREATURES>,
 ) -> Result<(), Error> {
     let rngs = streams.combat();
@@ -119,13 +121,13 @@ pub(crate) fn initialize<V: Rules>(
             max_hp: hp,
             block: num_traits::zero(),
             alive: true,
-            powers: V::monster_starting_powers(monster, ascension)
-                .map(|(power, amount)| HeldPower::new(power, Stacked::from(amount), Some(id)))
-                .collect(),
             // A fresh machine stands on no built state, so the walk always
             // names the move a monster opens on.
             next_move: opening.map(Into::into),
         });
+        for (power, amount) in V::monster_starting_powers(monster, ascension) {
+            powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
+        }
     }
 
     // `AfterCreatureAdded`, which runs once every creature the encounter built
@@ -210,7 +212,6 @@ pub(super) fn summon<V: Rules>(
             max_hp: hp,
             block: num_traits::zero(),
             alive: true,
-            powers: PowerList::new(),
             next_move: None,
         },
     );
@@ -269,13 +270,15 @@ mod tests {
         let inklets =
             [Monster::Inklet, Monster::Inklet, Monster::Inklet].map(sts2_core::Spawned::new);
 
-        let (mut creatures, mut machines) = (Bounded::new(), Bounded::new());
+        let (mut creatures, mut powers, mut machines) =
+            (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
             Encounter::SlimesWeak,
             &mut streams,
             &inklets,
             &mut creatures,
+            &mut powers,
             &mut machines,
         )
         .unwrap();
@@ -352,13 +355,15 @@ mod tests {
         ]
         .map(sts2_core::Spawned::new);
 
-        let (mut creatures, mut machines) = (Bounded::new(), Bounded::new());
+        let (mut creatures, mut powers, mut machines) =
+            (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
             Encounter::DecimillipedeElite,
             &mut streams,
             &segments,
             &mut creatures,
+            &mut powers,
             &mut machines,
         )
         .unwrap();
@@ -383,13 +388,15 @@ mod tests {
         ]
         .map(sts2_core::Spawned::new);
 
-        let (mut creatures, mut machines) = (Bounded::new(), Bounded::new());
+        let (mut creatures, mut powers, mut machines) =
+            (Creatures::new(), PowerStore::new(), Bounded::new());
         initialize::<V0_107_1>(
             AscensionLevel::None,
             Encounter::SlimesWeak,
             &mut streams,
             &monsters,
             &mut creatures,
+            &mut powers,
             &mut machines,
         )
         .unwrap();

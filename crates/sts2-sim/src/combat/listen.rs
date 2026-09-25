@@ -10,17 +10,19 @@
 //! `AbstractModel`'s, which does nothing. So the walk skips it, and only the
 //! listeners that override a hook are ever asked it.
 //!
-//! The walk is taken before anyone is asked, which is what the game does. So a
-//! listener added while it runs is not asked, and one removed is skipped.
+//! The game takes the list before anyone is asked. Nothing a listener answers
+//! here adds a listener or takes one away, because every effect is carried out
+//! once all have answered. So a walk asks each listener where it stands.
 
 use smallvec::SmallVec;
 use sts2_core::{
     CardId, CombatId, DecisionHook, EventHook, HookEffect, ModelHook, ModelId, MonsterTable as _,
-    PowerTable as _, RelicTable as _, Rules,
+    Overrides, PowerTable as _, RelicTable as _, Rules,
 };
 
 use super::live::{Heard, HeardEvent, Live};
-use crate::run::HeldRelic;
+use super::powers::Powers as _;
+use crate::run::Belt;
 
 /// One listener, by what names it rather than by a borrow of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,11 +47,72 @@ pub(crate) enum Listener<V: Rules> {
     },
 }
 
+/// How many of a container's listeners override each hook.
+///
+/// A container that holds listeners keeps one, and moves it only where a
+/// listener arrives or leaves. A listener's class fixes which hooks it
+/// overrides, so nothing else moves it.
+///
+/// The set of hooks with a count above zero sits beside the counts, so
+/// whether anyone listens is one test.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HookCounts {
+    counts: [u16; ModelHook::ALL.len()],
+    heard: Overrides,
+}
+
+impl Default for HookCounts {
+    fn default() -> Self {
+        HookCounts {
+            counts: [0; ModelHook::ALL.len()],
+            heard: Overrides::default(),
+        }
+    }
+}
+
+impl HookCounts {
+    /// A listener that overrides `hooks` arrives.
+    pub(crate) fn add(&mut self, hooks: Overrides) {
+        for at in bits(hooks) {
+            self.counts[at] += 1;
+        }
+        self.heard = self.heard.union(hooks);
+    }
+
+    /// A listener that overrides `hooks` leaves.
+    pub(crate) fn remove(&mut self, hooks: Overrides) {
+        for at in bits(hooks) {
+            self.counts[at] -= 1;
+            if self.counts[at] == 0 {
+                self.heard = Overrides::from_bits(self.heard.bits() & !(1 << at));
+            }
+        }
+    }
+
+    /// Whether any listener overrides a hook in `hooks`.
+    pub(crate) fn hears(&self, hooks: Overrides) -> bool {
+        self.heard.intersects(hooks)
+    }
+}
+
+/// Each hook in `hooks`, by its place in [`ModelHook`], and nothing for a
+/// hook the set does not hold.
+fn bits(hooks: Overrides) -> impl Iterator<Item = usize> {
+    let mut left = hooks.bits();
+    std::iter::from_fn(move || {
+        (left != 0).then(|| {
+            let at = left.trailing_zeros() as usize;
+            left &= left - 1;
+            at
+        })
+    })
+}
+
 /// What a walk reads without writing: the fight, and the belt its player
 /// carries.
 pub(crate) struct Walk<'a, V: Rules> {
     pub(crate) live: &'a Live<V>,
-    pub(crate) relics: &'a [HeldRelic<V>],
+    pub(crate) relics: &'a Belt<V>,
 }
 
 impl<V: Rules> Clone for Walk<'_, V> {
@@ -59,63 +122,6 @@ impl<V: Rules> Clone for Walk<'_, V> {
 }
 
 impl<V: Rules> Copy for Walk<'_, V> {}
-
-/// Whether any listener in the fight overrides `hook`.
-///
-/// The walk without the list, which is the answer for most events. Nothing is
-/// built to find out that nobody listens.
-fn heard<V: Rules>(live: &Live<V>, relics: &[HeldRelic<V>], hook: ModelHook) -> bool {
-    live.creatures.iter().any(|creature| {
-        creature
-            .powers
-            .iter()
-            .any(|held| held.power().overrides().contains(hook))
-            || creature
-                .carrier()
-                .monster
-                .is_some_and(|monster| monster.overrides().contains(hook))
-    }) || relics
-        .iter()
-        .any(|held| held.relic.overrides().contains(hook))
-        || live.cards.hears(hook)
-}
-
-/// Every listener that overrides `hook`, in the order the game asks them.
-pub(crate) fn listeners<V: Rules>(
-    live: &Live<V>,
-    relics: &[HeldRelic<V>],
-    hook: ModelHook,
-) -> SmallVec<[Listener<V>; 8]> {
-    let mut listening = SmallVec::new();
-    for creature in live.creatures.iter() {
-        for (at, held) in creature.powers.iter().enumerate() {
-            if held.power().overrides().contains(hook) {
-                listening.push(Listener::Power {
-                    owner: creature.id,
-                    at: at as u8,
-                    power: held.power(),
-                });
-            }
-        }
-        if let Some(monster) = creature.carrier().monster
-            && monster.overrides().contains(hook)
-        {
-            listening.push(Listener::Monster {
-                creature: creature.id,
-                monster,
-            });
-        }
-        if let Some(ModelId::Character(_)) = creature.model {
-            for (slot, held) in relics.iter().enumerate() {
-                if held.relic.overrides().contains(hook) {
-                    listening.push(Listener::Relic { slot: slot as u8 });
-                }
-            }
-            listening.extend(live.cards.listening(hook).map(|id| Listener::Card { id }));
-        }
-    }
-    listening
-}
 
 /// Raise `hook` on every listener in the fight, and gather what they ask for,
 /// in the order they asked.
@@ -127,70 +133,133 @@ pub(crate) fn listeners<V: Rules>(
 ///
 /// A hook that is not one `AbstractModel` declares, which is asked of one
 /// model directly rather than raised.
+#[tracing::instrument(level = "trace", skip_all, fields(hook = hook.model_hook().map_or("", ModelHook::name)))]
+#[inline(always)]
 pub(crate) fn notify<V: Rules>(
     live: &mut Live<V>,
-    relics: &mut [HeldRelic<V>],
+    relics: &mut Belt<V>,
     hook: EventHook<V>,
 ) -> SmallVec<[(Listener<V>, HookEffect<V>); 4]> {
     let model_hook = hook
         .model_hook()
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));
-    let mut asked = SmallVec::new();
-    if !heard::<V>(live, relics, model_hook) {
-        return asked;
+    match Kinds::hearing(live, relics, Overrides::of(model_hook)) {
+        Some(kinds) => raise(live, relics, hook, model_hook, kinds),
+        None => SmallVec::new(),
     }
-    let listening = listeners::<V>(live, relics, model_hook);
+}
+
+/// Which kinds of listener hear a hook, and so which a walk looks through.
+#[derive(Clone, Copy)]
+struct Kinds {
+    powers: bool,
+    monsters: bool,
+    belt: bool,
+    cards: bool,
+}
+
+impl Kinds {
+    /// The kinds that hear one of `hooks`, or nothing when none does.
+    fn hearing<V: Rules>(live: &Live<V>, relics: &Belt<V>, hooks: Overrides) -> Option<Self> {
+        let kinds = Self {
+            powers: live.powers.hear(hooks),
+            monsters: live.creatures.hear(hooks),
+            belt: relics.hear(hooks),
+            cards: live.cards.hears(hooks),
+        };
+        (kinds.powers || kinds.monsters || kinds.belt || kinds.cards).then_some(kinds)
+    }
+}
+
+/// [`notify`] once something hears `hook`.
+#[inline(never)]
+fn raise<V: Rules>(
+    live: &mut Live<V>,
+    relics: &mut Belt<V>,
+    hook: EventHook<V>,
+    model_hook: ModelHook,
+    kinds: Kinds,
+) -> SmallVec<[(Listener<V>, HookEffect<V>); 4]> {
+    let Kinds {
+        powers,
+        monsters,
+        belt,
+        cards,
+    } = kinds;
+    let hooks = Overrides::of(model_hook);
+    let mut asked = SmallVec::new();
     let mut answer = sts2_core::HookEffects::new();
     let mut decremented: SmallVec<[Listener<V>; 4]> = SmallVec::new();
-    for listener in listening {
-        match listener {
-            Listener::Power { owner, at, power } => {
-                let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) else {
-                    continue;
-                };
-                let carrier = creature.carrier();
-                let Some(held) = creature
-                    .powers
-                    .get_mut(usize::from(at))
-                    .filter(|held| held.power() == power)
-                else {
-                    continue;
-                };
-                V::event_hook(held.event_listener(carrier), hook, &mut answer);
-            }
-            Listener::Relic { slot } => {
-                let held = &mut relics[usize::from(slot)];
-                V::event_hook(HeardEvent::<V>::Relic(&mut held.state), hook, &mut answer);
-            }
-            Listener::Monster { creature, monster } => {
-                if !live.creatures.iter().any(|c| c.id == creature) {
-                    continue;
-                }
-                V::event_hook(
-                    HeardEvent::<V>::Monster { monster, creature },
-                    hook,
-                    &mut answer,
-                );
-            }
-            Listener::Card { id } => {
-                let Some(card) = live.cards.named(id) else {
-                    continue;
-                };
-                V::event_hook(
-                    sts2_core::EventListener::Card {
-                        card: card.face.ident.card,
-                        id,
-                        printed: &card,
-                    },
-                    hook,
-                    &mut answer,
-                );
-            }
+    // Every effect but a power's `Decrement` goes back to the caller, beside
+    // the listener that asked for it.
+    // Most listeners answer nothing, and an empty answer is left alone.
+    let mut gather = |listener: Listener<V>, answer: &mut sts2_core::HookEffects<V>| {
+        if answer.is_empty() {
+            return;
         }
         for effect in answer.drain(..) {
             match (listener, effect) {
                 (Listener::Power { .. }, HookEffect::Decrement) => decremented.push(listener),
                 (listener, effect) => asked.push((listener, effect)),
+            }
+        }
+    };
+    for creature in 0..live.creatures.len() {
+        let fighter = live.creatures[creature];
+        let carrier = fighter.carrier();
+        if powers {
+            for (at, held) in live.powers.of_mut(fighter.id).enumerate() {
+                let power = held.power();
+                if power.overrides().contains(model_hook) {
+                    V::event_hook(held.event_listener(carrier), hook, &mut answer);
+                    let listener = Listener::Power {
+                        owner: fighter.id,
+                        at: at as u8,
+                        power,
+                    };
+                    gather(listener, &mut answer);
+                }
+            }
+        }
+        if monsters
+            && let Some(monster) = carrier.monster
+            && monster.overrides().contains(model_hook)
+        {
+            let listener = HeardEvent::<V>::Monster {
+                monster,
+                creature: fighter.id,
+            };
+            V::event_hook(listener, hook, &mut answer);
+            let listener = Listener::Monster {
+                creature: fighter.id,
+                monster,
+            };
+            gather(listener, &mut answer);
+        }
+        let Some(ModelId::Character(_)) = fighter.model else {
+            continue;
+        };
+        if belt {
+            for (slot, held) in relics.iter_mut().enumerate() {
+                if held.relic.overrides().contains(model_hook) {
+                    V::event_hook(HeardEvent::<V>::Relic(&mut held.state), hook, &mut answer);
+                    gather(Listener::Relic { slot: slot as u8 }, &mut answer);
+                }
+            }
+        }
+        if cards {
+            for (id, _) in live.cards.listening(hooks) {
+                let card = live
+                    .cards
+                    .named(id)
+                    .expect("a card the fight lists as listening is in it");
+                let listener = sts2_core::EventListener::Card {
+                    card: card.face.ident.card,
+                    id,
+                    printed: &card,
+                };
+                V::event_hook(listener, hook, &mut answer);
+                gather(Listener::Card { id }, &mut answer);
             }
         }
     }
@@ -201,63 +270,80 @@ pub(crate) fn notify<V: Rules>(
         let Listener::Power { owner, power, .. } = listener else {
             continue;
         };
-        let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) else {
-            continue;
-        };
-        for held in creature.powers.iter_mut() {
+        for held in live.powers.of_mut(owner) {
             if held.power() == power && held.amount.count().is_some() {
                 held.amount = held.amount.ticked();
             }
         }
-        creature.powers.retain(|held| !held.amount.spent());
+        live.powers.retain(owner, |held| !held.amount.spent());
     }
     asked
 }
 
-/// Ask `ask` of every listener that overrides `hook`, in the order the game
-/// asks them.
+/// Ask `ask` of every listener that overrides a hook in `hooks`, in the order
+/// the game asks them, with every hook that listener overrides.
 ///
 /// Nothing a listener answers here writes on the fight, so nothing is taken
-/// before the first is asked.
+/// before the first is asked. One walk serves every hook in `hooks`, which is
+/// how a number's phases are asked together.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn each<V: Rules>(
     fight: Walk<'_, V>,
-    hook: ModelHook,
-    mut ask: impl FnMut(Heard<'_, V>),
+    hooks: Overrides,
+    mut ask: impl FnMut(Heard<'_, V>, Overrides),
 ) {
     let Walk { live, relics } = fight;
-    if !heard::<V>(live, relics, hook) {
+    let Some(Kinds {
+        powers,
+        monsters,
+        belt,
+        cards,
+    }) = Kinds::hearing(live, relics, hooks)
+    else {
         return;
-    }
+    };
     for creature in live.creatures.iter() {
-        for held in creature.powers.iter() {
-            if held.power().overrides().contains(hook) {
-                ask(held.listener(creature.carrier()));
-            }
-        }
-        if let Some(monster) = creature.carrier().monster
-            && monster.overrides().contains(hook)
-        {
-            ask(sts2_core::Listener::Monster {
-                monster,
-                creature: creature.id,
-            });
-        }
-        if let Some(ModelId::Character(_)) = creature.model {
-            for held in relics {
-                if held.relic.overrides().contains(hook) {
-                    ask(Heard::<V>::Relic(&held.state));
+        if powers {
+            for held in live.powers.of(creature.id) {
+                let overrides = held.power().overrides();
+                if overrides.intersects(hooks) {
+                    ask(held.listener(creature.carrier()), overrides);
                 }
             }
-            for id in live.cards.listening(hook) {
+        }
+        if monsters
+            && let Some(monster) = creature.carrier().monster
+            && monster.overrides().intersects(hooks)
+        {
+            let listener = sts2_core::Listener::Monster {
+                monster,
+                creature: creature.id,
+            };
+            ask(listener, monster.overrides());
+        }
+        let Some(ModelId::Character(_)) = creature.model else {
+            continue;
+        };
+        if belt {
+            for held in relics.iter() {
+                let overrides = held.relic.overrides();
+                if overrides.intersects(hooks) {
+                    ask(Heard::<V>::Relic(&held.state), overrides);
+                }
+            }
+        }
+        if cards {
+            for (id, overrides) in live.cards.listening(hooks) {
                 let card = live
                     .cards
                     .named(id)
                     .expect("a card the fight lists as listening is in it");
-                ask(sts2_core::Listener::Card {
+                let listener = sts2_core::Listener::Card {
                     card: card.face.ident.card,
                     id,
                     printed: &card,
-                });
+                };
+                ask(listener, overrides);
             }
         }
     }
@@ -280,7 +366,7 @@ pub(crate) fn any_decides<V: Rules>(
         .model_hook()
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one power, not raised"));
     let mut decided = false;
-    each::<V>(fight, model_hook, |listener| {
+    each::<V>(fight, Overrides::of(model_hook), |listener, _| {
         decided |= V::decide_hook(listener, hook).is_decision_and(|said| said == answer);
     });
     decided
@@ -296,8 +382,32 @@ pub(crate) fn any_decides<V: Rules>(
 ///
 /// A listener asking for something as the fight ends, which nothing here
 /// carries out.
-pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut [HeldRelic<V>]) {
+pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
     if let Some((_, effect)) = notify::<V>(live, relics, EventHook::CombatEnd).first() {
         unimplemented!("a listener asking for {effect:?} as a fight ends")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A hook is heard while any listener overriding it remains, and not once
+    /// the last one leaves.
+    #[test]
+    fn a_hook_is_heard_while_a_listener_of_it_remains() {
+        let both = Overrides::of(ModelHook::AfterDeath).with(ModelHook::AfterCardPlayed);
+        let death = Overrides::of(ModelHook::AfterDeath);
+        let mut counts = HookCounts::default();
+        assert!(!counts.hears(death));
+
+        counts.add(both);
+        counts.add(death);
+        counts.remove(both);
+        assert!(counts.hears(death));
+        assert!(!counts.hears(Overrides::of(ModelHook::AfterCardPlayed)));
+
+        counts.remove(death);
+        assert!(!counts.hears(death.with(ModelHook::AfterCardPlayed)));
     }
 }

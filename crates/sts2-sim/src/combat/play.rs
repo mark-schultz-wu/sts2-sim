@@ -62,15 +62,8 @@ pub(crate) fn resolve<V: Rules>(
 
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
-    let takes = legal::target_type::<V>(card, &live.creatures);
-    let refused = legal::reasons::<V>(
-        card,
-        &live.creatures,
-        cost,
-        star_cost,
-        live.energy,
-        live.stars,
-    );
+    let takes = legal::target_type::<V>(card, live);
+    let refused = legal::reasons::<V>(card, live, cost, star_cost, live.energy, live.stars);
     if let Some(why) = refused {
         return Err(Reason::Unplayable {
             card,
@@ -114,6 +107,7 @@ pub(crate) fn resolve<V: Rules>(
 ///
 /// Scenario construction. The command a card applies a power with, reached
 /// without a card, so the state it leaves is the state a card leaves.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn apply_power<V: Rules>(
     fighting: Fighting<'_, V>,
     at: CombatId,
@@ -134,27 +128,26 @@ pub(crate) fn apply_power<V: Rules>(
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
 
-    live.skip_tick = merged::<V>(&live.skip_tick, skipped);
+    merge::<V>(&mut live.skip_tick, skipped);
     if ended == Some(super::Ended::Won) {
         super::listen::combat_ended::<V>(live, relics);
     }
     ended
 }
 
-/// The skipped ticks a fight already held, and the ones an effect just added.
-pub(super) fn merged<V: Rules>(held: &Skips<V>, added: Vec<(CombatId, V::Power)>) -> Skips<V> {
-    let mut out = *held;
+/// Add the skipped ticks an effect just made to the ones the fight holds.
+pub(super) fn merge<V: Rules>(held: &mut Skips<V>, added: Vec<(CombatId, V::Power)>) {
     for one in added {
-        if !out.contains(&one) {
-            out.push(one);
+        if !held.contains(&one) {
+            held.push(one);
         }
     }
-    out
 }
 
 /// Make a resolved play, on the fight where it stands.
 ///
 /// Whatever the play ended, if it ended the fight.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn play<V: Rules>(
     fighting: Fighting<'_, V>,
     play: Play<V>,
@@ -184,7 +177,7 @@ pub(crate) fn play<V: Rules>(
     let played = V::on_play(card.face.ident.card, &mut board);
     let ended = board.ended;
     let skipped = std::mem::take(&mut board.skipped);
-    live.skip_tick = merged::<V>(&live.skip_tick, skipped);
+    merge::<V>(&mut live.skip_tick, skipped);
 
     carry_on::<V>(
         Fighting {
@@ -208,6 +201,7 @@ pub(crate) fn play<V: Rules>(
 }
 
 /// Resume the card play the fight parked on a selection.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn answer<V: Rules>(
     fighting: Fighting<'_, V>,
     chosen: sts2_core::Picks,
@@ -282,7 +276,7 @@ pub(crate) fn answer<V: Rules>(
     let played = V::resume_play(&mut board, asking.at, taken);
     effect.ended = effect.ended.or(board.ended);
     let skipped = std::mem::take(&mut board.skipped);
-    live.skip_tick = merged::<V>(&live.skip_tick, skipped);
+    merge::<V>(&mut live.skip_tick, skipped);
     carry_on(
         Fighting {
             live,
@@ -300,6 +294,7 @@ pub(crate) fn answer<V: Rules>(
 /// `OnPlay` is a coroutine in the game. A card that has to ask says so and
 /// comes back here with the answer. The first call and each resumption use
 /// this loop.
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) fn carry_on<V: Rules>(
     fighting: Fighting<'_, V>,
     ascension: V::AscensionLevel,
@@ -342,7 +337,7 @@ pub(super) fn carry_on<V: Rules>(
                 played = V::on_play(played_card, &mut board);
                 effect.ended = effect.ended.or(board.ended);
                 let skipped = std::mem::take(&mut board.skipped);
-                next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+                merge::<V>(&mut next.skip_tick, skipped);
                 continue;
             }
             sts2_core::Played::Asking {
@@ -385,7 +380,7 @@ pub(super) fn carry_on<V: Rules>(
         played = V::resume_play(&mut board, at, answer);
         effect.ended = effect.ended.or(board.ended);
         let skipped = std::mem::take(&mut board.skipped);
-        next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+        merge::<V>(&mut next.skip_tick, skipped);
     }
 
     let ended = effect.ended;
@@ -430,7 +425,7 @@ pub(super) fn carry_on<V: Rules>(
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
         hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
         let skipped = std::mem::take(&mut board.skipped);
-        next.skip_tick = merged::<V>(&next.skip_tick, skipped);
+        merge::<V>(&mut next.skip_tick, skipped);
     }
 
     if ended == Some(super::Ended::Won) {

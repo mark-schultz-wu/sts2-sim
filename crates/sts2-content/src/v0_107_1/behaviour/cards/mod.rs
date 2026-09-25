@@ -73,6 +73,7 @@ pub enum Resume {
 }
 
 /// What a card does when it is played.
+#[tracing::instrument(level = "trace", skip_all, fields(card = ?card))]
 pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
     match card {
         Cards::Colorless(card) => colorless::on_play(card, fight),

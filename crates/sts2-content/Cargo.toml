@@ -5,6 +5,7 @@ edition = "2024"
 readme = "README.md"
 
 [dependencies]
+tracing = { workspace = true }
 # The traits these tables implement. See docs/STS2-CORE.md.
 sts2-core = { workspace = true }
 # A ported card reads what it prints, which is a build's own representation.

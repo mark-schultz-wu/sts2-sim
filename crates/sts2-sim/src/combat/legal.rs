@@ -31,15 +31,15 @@ pub(super) fn hand<V: Rules>(
 }
 
 /// What a card names as its target.
-pub(super) fn target_type<V: Rules>(card: CardIdent<V>, creatures: &[Fighter<V>]) -> V::TargetType {
+pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::TargetType {
     if card.affliction.is_some() || card.enchantment.is_some() {
         unimplemented!("what an afflicted or enchanted card prints");
     }
     // One of the four cards that work their target out from the fight, which
     // they do by reading the player's own powers.
-    card.card.target().unwrap_or_else(|| {
-        V::computed_card_target(card.card, &super::board::powers::<V>(creatures))
-    })
+    card.card
+        .target()
+        .unwrap_or_else(|| V::computed_card_target(card.card, &super::board::powers::<V>(live)))
 }
 
 /// Why this card cannot be played, or nothing for one that can.
@@ -49,13 +49,14 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, creatures: &[Fighter<V>]
 /// report.
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
-    creatures: &[Fighter<V>],
+    live: &Live<V>,
     cost: Cost,
     star_cost: Cost,
     energy: V::Count,
     stars: V::Count,
 ) -> Option<V::UnplayableReasons> {
-    let target = target_type::<V>(card, creatures);
+    let creatures = &live.creatures;
+    let target = target_type::<V>(card, live);
     let mut why = None;
     if card.card.unplayable() {
         why = refused::<V>(
@@ -144,9 +145,9 @@ impl<'a, V: Rules> InHand<'a, V> {
         stars: V::Count,
     ) -> Self {
         let creatures = &fight.live.creatures;
-        let target = target_type::<V>(held.face.ident, creatures);
+        let target = target_type::<V>(held.face.ident, fight.live);
         let (cost, star_cost) = held.face.costs();
-        let reason = reasons::<V>(held.face.ident, creatures, cost, star_cost, energy, stars);
+        let reason = reasons::<V>(held.face.ident, fight.live, cost, star_cost, energy, stars);
         Self {
             held,
             fight,
@@ -246,14 +247,14 @@ pub(crate) fn moves<V: Rules>(live: &Live<V>, potions: &[V::Potion], alive: bool
         let (cost, star_cost) = card.face.costs();
         let refused = reasons::<V>(
             card.face.ident,
-            &live.creatures,
+            live,
             cost,
             star_cost,
             live.energy,
             live.stars,
         );
         if refused.is_none() {
-            let target = target_type::<V>(card.face.ident, &live.creatures);
+            let target = target_type::<V>(card.face.ident, live);
             let targets = targets::<V>(target, &live.creatures, false);
             aimed(hand_index(at), &targets, &mut moves, |index, target| {
                 Decision::PlayCard { index, target }
@@ -416,15 +417,14 @@ fn effect<V: Rules>(
     fight: Walk<'_, V>,
     targets: &[CombatId],
 ) -> Previews<V> {
-    let creatures = &fight.live.creatures;
     let per_target = matches!(
-        Some(target_type::<V>(held.face.ident, creatures)),
+        Some(target_type::<V>(held.face.ident, fight.live)),
         Some(t) if t == <V::TargetType as TargetKinds>::ANY_ENEMY
             || t == <V::TargetType as TargetKinds>::ANY_ALLY
             || t == <V::TargetType as TargetKinds>::ANY_PLAYER
     );
 
-    let numbers = numbers::<V>(held, creatures);
+    let numbers = numbers::<V>(held, fight.live);
     // Inline, because the common list is the one entry a card that names no
     // target previews against, and this is built for every card in hand.
     let against: SmallVec<[Option<CombatId>; 4]> = if per_target && !targets.is_empty() {
@@ -478,7 +478,7 @@ fn previewed<V: Rules>(
     held.face
         .numbers()
         .map(|var| {
-            let printed = || super::board::var::<V>(held, var.id, creatures);
+            let printed = || super::board::var::<V>(held, var.id, fight.live);
             let resolved = match (var.modifier, target) {
                 // `UpdateCardPreview` hands the null target to
                 // `Hook.ModifyDamage` rather than skipping it, so a hit
@@ -507,17 +507,17 @@ fn previewed<V: Rules>(
 /// yet: [`previewed`] is these after it has.
 fn numbers<V: Rules>(
     held: &CardInstance<V>,
-    creatures: &[Fighter<V>],
+    live: &Live<V>,
 ) -> sts2_core::Keyed<V::CardVar, V::Number> {
     held.face
         .numbers()
-        .map(|var| (var.id, super::board::var::<V>(held, var.id, creatures)))
+        .map(|var| (var.id, super::board::var::<V>(held, var.id, live)))
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::live::PowerList;
+    use super::super::powers::Powers as _;
     use super::*;
     use sts2_content::v0_107_1::{
         V0_107_1,
@@ -541,11 +541,11 @@ mod tests {
         Live::of(creatures)
     }
 
-    /// `fight` with a belt that carries nothing.
-    fn walk(fight: &Live<V>) -> Walk<'_, V> {
+    /// `fight` with `belt`, which a test leaves empty.
+    fn walk<'a>(fight: &'a Live<V>, belt: &'a crate::run::Belt<V>) -> Walk<'a, V> {
         Walk {
             live: fight,
-            relics: &[],
+            relics: belt,
         }
     }
 
@@ -574,7 +574,6 @@ mod tests {
             max_hp: 10,
             block: 0,
             alive: true,
-            powers: PowerList::new(),
             next_move: None,
         }
     }
@@ -585,20 +584,32 @@ mod tests {
         stars: <V as sts2_core::ContentVersion>::Count,
     ) -> Playable<V> {
         let fight = live(fight());
-        let mut plays = super::hand::<V>(hand.iter().copied(), walk(&fight), energy, stars);
+        let mut plays = super::hand::<V>(
+            hand.iter().copied(),
+            walk(&fight, &crate::run::Belt::new()),
+            energy,
+            stars,
+        );
         assert_eq!(plays.len(), 1);
         plays.remove(0)
     }
 
-    /// A fight where the player carries one power, at one amount.
-    fn fight_with(power: sts2_content::v0_107_1::powers::Power, amount: i32) -> Vec<Fighter<V>> {
-        let mut creatures = fight();
-        creatures[0].powers.push(super::super::live::HeldPower::new(
-            power,
-            crate::combat::live::Stacked::counted(amount),
-            None,
-        ));
-        creatures
+    /// A fight where `carrier` carries one power, at one amount.
+    fn fight_with(
+        carrier: CombatId,
+        power: sts2_content::v0_107_1::powers::Power,
+        amount: i32,
+    ) -> Live<V> {
+        let mut fight = live(fight());
+        fight.powers.push(
+            carrier,
+            super::super::live::HeldPower::new(
+                power,
+                crate::combat::live::Stacked::counted(amount),
+                None,
+            ),
+        );
+        fight
     }
 
     /// `UpdateCardPreview` hands a null target to `Hook.ModifyDamage` rather
@@ -609,15 +620,15 @@ mod tests {
         use sts2_content::v0_107_1::{cards::CardVar, powers::Power};
 
         let strike = card(Cards::Regent(RegentCard::Strike));
-        let fight = live(fight_with(Power::StrengthPower, -2));
-        let creatures = &fight.creatures;
+        let fight = fight_with(at(0), Power::StrengthPower, -2);
         let damage = |targets: &[CombatId]| {
-            effect::<V>(&strike, walk(&fight), targets)[0].vars[&CardVar::Damage]
+            effect::<V>(&strike, walk(&fight, &crate::run::Belt::new()), targets)[0].vars
+                [&CardVar::Damage]
         };
 
         // The same card, previewed at the one enemy and at nobody. Strength
         // belongs to the player, so it lands on both.
-        let printed = super::numbers::<V>(&strike, creatures)[&CardVar::Damage];
+        let printed = super::numbers::<V>(&strike, &fight)[&CardVar::Damage];
         assert_eq!(damage(&[at(1)]), printed - 2);
         assert_eq!(damage(&[]), printed - 2);
     }
@@ -629,19 +640,13 @@ mod tests {
         use sts2_content::v0_107_1::{cards::CardVar, powers::Power};
 
         let strike = card(Cards::Regent(RegentCard::Strike));
-        let mut creatures = fight();
-        creatures[1].powers.push(super::super::live::HeldPower::new(
-            Power::VulnerablePower,
-            crate::combat::live::Stacked::counted(1),
-            None,
-        ));
-        let fight = live(creatures);
-        let creatures = &fight.creatures;
+        let fight = fight_with(at(1), Power::VulnerablePower, 1);
         let damage = |targets: &[CombatId]| {
-            effect::<V>(&strike, walk(&fight), targets)[0].vars[&CardVar::Damage]
+            effect::<V>(&strike, walk(&fight, &crate::run::Belt::new()), targets)[0].vars
+                [&CardVar::Damage]
         };
 
-        let printed = super::numbers::<V>(&strike, creatures)[&CardVar::Damage];
+        let printed = super::numbers::<V>(&strike, &fight)[&CardVar::Damage];
         assert!(damage(&[at(1)]) > printed);
         assert_eq!(damage(&[]), printed);
     }
@@ -708,7 +713,12 @@ mod tests {
         creatures[1].alive = false;
 
         let fight = live(creatures);
-        let plays = super::hand::<V>([strike].into_iter(), walk(&fight), 3, 0);
+        let plays = super::hand::<V>(
+            [strike].into_iter(),
+            walk(&fight, &crate::run::Belt::new()),
+            3,
+            0,
+        );
 
         assert!(plays[0].targets.is_empty());
         // Nothing to hit is not a reason the card cannot be played. The game
