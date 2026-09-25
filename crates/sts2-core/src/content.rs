@@ -1946,10 +1946,10 @@ pub enum EventHook<V: ContentVersion> {
         /// lead on to, which only free travel reaches.
         strayed: bool,
     },
-    /// `TryModifyRewards`, for the rewards a room of this type offers in the
-    /// act at this index, once they are filled in.
+    /// `TryModifyRewards`, for rewards once they are filled in: a room's of
+    /// this type, or a relic's with no room, in the act at this index.
     ModifyRewards {
-        room: V::RoomType,
+        room: Option<V::RoomType>,
         act: usize,
     },
     /// `BeforeCombatStart`, once the fight is built and before it opens.
@@ -2189,6 +2189,17 @@ pub enum Stream<V: ContentVersion> {
     Player(V::PlayerRngType),
 }
 
+/// One reward a relic's own screen offers, as `RewardsCmd.OfferCustom` is
+/// handed it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CustomReward {
+    /// `CardReward` over the character's own pool at `RegularEncounter` odds,
+    /// from `CardCreationSource.Other`, offering this many cards.
+    CharacterCards(usize),
+    /// `PotionReward(player)`, a random potion out of combat.
+    Potion,
+}
+
 /// A deck card a relic names rather than asks for.
 ///
 /// Among the deck's `Basic` cards, the first or the last that carries a tag,
@@ -2225,6 +2236,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RelicReward(player)`, this many, into the rewards a hook is
     /// modifying. Each pulls from the front of the bag at a rolled rarity.
     AddRelicRewards(usize),
+    /// `RewardsCmd.OfferCustom`: a screen of these rewards, filled in in this
+    /// order, which the player takes from or skips.
+    OfferRewards(&'static [CustomReward]),
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {

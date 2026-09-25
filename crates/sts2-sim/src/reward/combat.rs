@@ -80,16 +80,6 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     (offered, rarity)
 }
 
-/// Where a relic reward sits once the set is sorted, which is its
-/// `RewardsSetIndex` of three: after the potion's two and before the cards'
-/// five.
-pub(crate) fn relic_slot<V: Rules>(offered: &[Offer<V>]) -> usize {
-    offered
-        .iter()
-        .position(|offer| matches!(offer, Offer::Card { .. }))
-        .unwrap_or(offered.len())
-}
-
 /// `GoldReward.Populate`, which is one draw over the encounter's own range.
 ///
 /// The room's `GoldProportion` is one for every fight the map deals. An event

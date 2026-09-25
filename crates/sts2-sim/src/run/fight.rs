@@ -157,13 +157,12 @@ impl<V: Rules> State<V> {
                     unimplemented!("a fight's end asking for {pickup:?}");
                 }
                 let mut offered = self.combat_rewards(&combat);
-                let at = offered
-                    .iter()
-                    .position(|offer| matches!(offer, crate::reward::Offer::Card { .. }))
-                    .unwrap_or(offered.len());
-                for card in returned.into_iter().rev() {
-                    offered.insert(at, crate::reward::Offer::SpecialCard { card, taken: false });
-                }
+                offered.extend(
+                    returned
+                        .into_iter()
+                        .map(|card| crate::reward::Offer::SpecialCard { card, taken: false }),
+                );
+                crate::reward::sort(&mut offered);
                 self.won(combat, offered);
             }
         }
@@ -197,41 +196,13 @@ impl<V: Rules> State<V> {
         if let Some(rarity) = rarity {
             // `PullNextRelicFromFront`, which the run's own bookkeeping covers.
             let relic = self.pull_relic(rarity);
-            let at = crate::reward::combat::relic_slot(&offered);
-            offered.insert(
-                at,
-                crate::reward::Offer::Relic {
-                    relic,
-                    taken: false,
-                },
-            );
+            offered.push(crate::reward::Offer::Relic {
+                relic,
+                taken: false,
+            });
         }
-        // `Hook.ModifyRewards`, once the set is filled in. A reward it adds is
-        // filled in after, and the sort by `RewardsSetIndex` puts a relic
-        // after the ones already there.
-        let room = <_ as sts2_core::EncounterTable>::room(encounter);
-        let hook = sts2_core::EventHook::ModifyRewards { room, act };
-        for effect in self.notify_belt(hook) {
-            match effect {
-                sts2_core::HookEffect::AddRelicRewards(count) => {
-                    for _ in 0..count {
-                        let (rng, _) = self.rewarding();
-                        let rarity = crate::reward::relic_rarity::<V, _>(rng);
-                        let relic = self.pull_relic(rarity);
-                        let at = crate::reward::combat::relic_slot(&offered);
-                        offered.insert(
-                            at,
-                            crate::reward::Offer::Relic {
-                                relic,
-                                taken: false,
-                            },
-                        );
-                    }
-                }
-                effect => unimplemented!("a relic modifying a fight's rewards with {effect:?}"),
-            }
-        }
-        self.unheard(sts2_core::ModelHook::TryModifyRewardsLate);
+        let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
+        self.modify_rewards(&mut offered, room);
         offered
     }
 }

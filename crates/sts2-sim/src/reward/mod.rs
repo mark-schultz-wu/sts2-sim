@@ -62,6 +62,23 @@ impl<V: Rules> Offer<V> {
             | Self::Relic { taken, .. } => *taken,
         }
     }
+
+    /// `Reward.RewardsSetIndex`, which a set is sorted by once it is filled
+    /// in. The sort is stable, so rewards of one kind keep their order.
+    pub(crate) fn set_index(&self) -> u8 {
+        match self {
+            Self::Gold { .. } => 1,
+            Self::Potion { .. } => 2,
+            Self::Relic { .. } => 3,
+            Self::SpecialCard { .. } => 4,
+            Self::Card { .. } => 5,
+        }
+    }
+}
+
+/// `RewardsSet`'s sort, once every reward is filled in.
+pub(crate) fn sort<V: Rules>(offered: &mut [Offer<V>]) {
+    offered.sort_by_key(Offer::set_index);
 }
 
 /// The two pity counters a run carries between reward screens.

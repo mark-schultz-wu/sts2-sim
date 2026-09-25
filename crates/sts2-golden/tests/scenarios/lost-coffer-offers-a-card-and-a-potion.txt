@@ -1,0 +1,11 @@
+# `LostCoffer.AfterObtained` offers its own rewards: three cards from the
+# Ironclad's pool at regular odds, then a potion, each rolled off the Rewards
+# stream in that order. The screen sorts the potion first. Taking the card
+# leaves the potion on offer, and taking that ends the screen.
+#
+# A port that rolls the potion first, or offers another pool, shows other
+# rewards. One that closes the screen after the first take asks nothing more.
+{"cmd":"start","seed":"C000000022","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":1}
+{"cmd":"answer","take":[{"index":1,"card":0}]}
+{"cmd":"answer","take":[{"index":0}]}

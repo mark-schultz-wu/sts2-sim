@@ -476,7 +476,7 @@ pub(super) enum Phase<V: Rules> {
 /// `AfterObtained` does not return until the answer does, so the room the
 /// relic was picked up in is what parks on it. A room that cannot park on one
 /// says so rather than answer it itself.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(super) enum Pickup<V: Rules> {
     /// `CardSelectCmd.FromDeckGeneric`, and a clone of what it takes. The card
     /// type the relic's own filter leaves out comes with it.
@@ -489,6 +489,9 @@ pub(super) enum Pickup<V: Rules> {
     /// `FromChooseACardScreen` that can be skipped: one of these into the
     /// deck, or none.
     ChooseCard { offered: SmallVec<[V::Card; 4]> },
+    /// `RewardsCmd.OfferCustom`: a screen to take rewards from until every
+    /// one is taken or the rest are skipped.
+    Rewards { offered: Vec<Offer<V>> },
 }
 
 /// A pickup's question, and the rest of its `AfterObtained`, which runs once
@@ -580,9 +583,13 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => live
                 .selecting()
                 .map(|_| sts2_core::QuestionKind::SelectCards),
-            Phase::Neow { asking, .. } if asking.is_some() => {
-                Some(sts2_core::QuestionKind::SelectCards)
-            }
+            Phase::Neow {
+                asking: Some(asked),
+                ..
+            } => Some(match asked.pickup {
+                Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
+                _ => sts2_core::QuestionKind::SelectCards,
+            }),
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
                 Some(sts2_core::QuestionKind::Rewards)
             }
@@ -1136,6 +1143,9 @@ impl<V: Rules> State<V> {
                     self.damage_owner(amount);
                     continue;
                 }
+                HookEffect::OfferRewards(rewards) => Pickup::Rewards {
+                    offered: self.custom_rewards(rewards),
+                },
                 HookEffect::CloneDeckCard { excluding } => Pickup::CloneDeckCard { excluding },
                 // `CardSelectCmd` takes the whole list without asking when it
                 // holds no more than it must take, and returns nothing from an
@@ -1248,6 +1258,74 @@ impl<V: Rules> State<V> {
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
         self.unheard(ModelHook::TryModifyRestSiteHealRewards);
+    }
+
+    /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`: each
+    /// reward filled in in the order given, the hooks, then the sort.
+    fn custom_rewards(&mut self, rewards: &[sts2_core::CustomReward]) -> Vec<Offer<V>> {
+        use sts2_core::CustomReward;
+
+        let character = self.character();
+        let mut offered: Vec<Offer<V>> = rewards
+            .iter()
+            .map(|reward| {
+                let rng = self.streams.player(V::PlayerRngType::REWARDS);
+                match *reward {
+                    CustomReward::CharacterCards(count) => Offer::Card {
+                        cards: crate::reward::card::regular::<V, _>(
+                            rng,
+                            V::reward_cards(character),
+                            count,
+                        )
+                        .into_iter()
+                        .map(CardIdent::new)
+                        .collect(),
+                        taken: false,
+                    },
+                    CustomReward::Potion => Offer::Potion {
+                        potion: crate::reward::potion::rolled::<V, _>(rng, character),
+                        taken: false,
+                    },
+                }
+            })
+            .collect();
+        self.modify_rewards(&mut offered, None);
+        crate::reward::sort(&mut offered);
+        offered
+    }
+
+    /// `Hook.ModifyRewards`, once a set is filled in. A reward it adds is
+    /// filled in after, and the set's sort puts it among its own kind.
+    ///
+    /// # Panics
+    ///
+    /// A relic modifying rewards some other way, or late.
+    pub(super) fn modify_rewards(
+        &mut self,
+        offered: &mut Vec<Offer<V>>,
+        room: Option<V::RoomType>,
+    ) {
+        let hook = sts2_core::EventHook::ModifyRewards {
+            room,
+            act: self.act(),
+        };
+        for effect in self.notify_belt(hook) {
+            match effect {
+                sts2_core::HookEffect::AddRelicRewards(count) => {
+                    for _ in 0..count {
+                        let (rng, _) = self.rewarding();
+                        let rarity = crate::reward::relic_rarity::<V, _>(rng);
+                        let relic = self.pull_relic(rarity);
+                        offered.push(Offer::Relic {
+                            relic,
+                            taken: false,
+                        });
+                    }
+                }
+                effect => unimplemented!("a relic modifying rewards with {effect:?}"),
+            }
+        }
+        self.unheard(sts2_core::ModelHook::TryModifyRewardsLate);
     }
 
     /// `hook`, raised on each relic on the belt that overrides it, in slot
@@ -1927,6 +2005,33 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A clone, which only a merchant's shelf asks for.
+    /// Take from a pickup's reward screen at Neow. The screen stays up until
+    /// every reward is taken or the rest are skipped, and the pickup then
+    /// goes on.
+    fn take_at_neow(&mut self, answer: &Answer) -> Decided {
+        let Phase::Neow { asking, .. } = &mut self.phase else {
+            unreachable!("the phase was Neow's when this began");
+        };
+        let Some(Asked {
+            pickup: Pickup::Rewards { mut offered },
+            rest,
+        }) = asking.take()
+        else {
+            unreachable!("Neow was parked on a reward screen");
+        };
+        self.take_reward(&mut offered, answer);
+        if offered.iter().any(|offer| !offer.taken()) {
+            return self.park_at_neow(Asked {
+                pickup: Pickup::Rewards { offered },
+                rest,
+            });
+        }
+        match self.carry_out(rest) {
+            Some(next) => self.park_at_neow(next),
+            None => Decided::Resolved,
+        }
+    }
+
     fn park_at_neow(&mut self, asked: Asked<V>) -> Decided {
         if let Pickup::CloneDeckCard { .. } = asked.pickup {
             unimplemented!("{:?} asked for at Neow", asked.pickup);
@@ -1950,6 +2055,17 @@ impl<V: Rules> State<V> {
         }
         if matches!(&self.phase, Phase::Shop { unfinished, .. } if unfinished.is_some()) {
             return self.finish_purchase(answer);
+        }
+        if let Phase::Neow {
+            asking:
+                Some(Asked {
+                    pickup: Pickup::Rewards { .. },
+                    ..
+                }),
+            ..
+        } = &self.phase
+        {
+            return Ok(self.take_at_neow(answer));
         }
         let Phase::Neow { asking, .. } = &mut self.phase else {
             unimplemented!("answering a question inside a fight");
@@ -1992,6 +2108,7 @@ impl<V: Rules> State<V> {
                 self.act_on_deck(act, &taken);
             }
             Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
+            Pickup::Rewards { .. } => unreachable!("a reward screen is answered above"),
         }
         // The rest of the pickup, which can ask again.
         if let Some(next) = self.carry_out(asked.rest) {
@@ -2038,10 +2155,25 @@ impl<V: Rules> State<V> {
     /// reward stays in the set once it is taken, because the indices an answer
     /// names never renumber.
     fn take(&mut self, answer: &Answer) -> Result<Decided, Error> {
+        let Phase::Rewards { offered, .. } = &mut self.phase else {
+            unreachable!("the phase was a reward screen when this began");
+        };
+        let mut offered = std::mem::take(offered);
+        self.take_reward(&mut offered, answer);
+        let Phase::Rewards { offered: back, .. } = &mut self.phase else {
+            unreachable!("taking a fight's reward leaves its screen up");
+        };
+        *back = offered;
+        Ok(self.decided())
+    }
+
+    /// Take one reward off a screen, or skip what is left of it.
+    ///
+    /// # Panics
+    ///
+    /// An answer the screen does not accept, or a potion for a full belt.
+    fn take_reward(&mut self, offered: &mut [Offer<V>], answer: &Answer) {
         if let Answer::Skip = answer {
-            let Phase::Rewards { offered, .. } = &mut self.phase else {
-                unreachable!("the phase was a reward screen when this began");
-            };
             for offer in offered {
                 match offer {
                     Offer::Gold { taken, .. }
@@ -2051,16 +2183,13 @@ impl<V: Rules> State<V> {
                     | Offer::Relic { taken, .. } => *taken = true,
                 }
             }
-            return Ok(Decided::Resolved);
+            return;
         }
         let Answer::Take(take) = *answer else {
             unimplemented!("an answer the reward screen does not accept");
         };
         let slots: usize = num_traits::cast(self.player.potion_slots)
             .expect("the belt has an addressable number of slots");
-        let Phase::Rewards { offered, .. } = &mut self.phase else {
-            unreachable!("the phase was a reward screen when this began");
-        };
         let offer = offered
             .get_mut(take.index())
             .unwrap_or_else(|| unimplemented!("a reward the screen does not offer"));
@@ -2080,11 +2209,14 @@ impl<V: Rules> State<V> {
                 *taken = true;
                 self.procure(potion);
             }
+            // The chosen card leaves the reward, which goes on listing the
+            // cards not chosen.
             (Offer::Card { cards, taken }, TakeReward::Card { card, .. }) => {
-                let chosen = cards
-                    .get(usize::from(card))
-                    .copied()
-                    .unwrap_or_else(|| unimplemented!("a card the reward does not offer"));
+                let at = usize::from(card);
+                if at >= cards.len() {
+                    unimplemented!("a card the reward does not offer");
+                }
+                let chosen = cards.remove(at);
                 *taken = true;
                 self.player.deck_mut().push(chosen);
             }
@@ -2100,8 +2232,6 @@ impl<V: Rules> State<V> {
             }
             _ => unimplemented!("a reward taken as the wrong kind"),
         }
-
-        Ok(self.decided())
     }
 
     /// Where the player stands.
@@ -2208,6 +2338,7 @@ impl<V: Rules> State<V> {
                     selections(*count, *count, self.offered(*act).len(), moves)
                 }
                 Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
+                Pickup::Rewards { offered } => reward_moves(offered, moves),
             },
             Phase::RestSite {
                 upgrading: true, ..
@@ -2223,21 +2354,7 @@ impl<V: Rules> State<V> {
                 selections(1, 1, offered, moves);
             }
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
-                for (index, offer) in offered.iter().enumerate() {
-                    if offer.taken() {
-                        continue;
-                    }
-                    match offer {
-                        Offer::Card { cards, .. } => moves.extend((0..cards.len()).map(|card| {
-                            Decision::Answer(Answer::Take(TakeReward::card(index, card)))
-                        })),
-                        _ => {
-                            moves.push(Decision::Answer(Answer::Take(TakeReward::non_card(index))))
-                        }
-                    }
-                }
-                // Nothing a fight offers disallows skipping. See `asked`.
-                moves.push(Decision::Answer(Answer::Skip));
+                reward_moves(offered, moves)
             }
             _ => return false,
         }
@@ -2464,12 +2581,21 @@ impl<V: Rules> State<V> {
     /// The question the run is parked on, if it is parked.
     fn asking(&self) -> Option<Question<V>> {
         match &self.phase {
+            Phase::Neow {
+                asking:
+                    Some(Asked {
+                        pickup: Pickup::Rewards { offered },
+                        ..
+                    }),
+                ..
+            } => Some(asked::<V>(offered)),
             Phase::Neow { asking, .. } => asking.as_ref().map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
                     Pickup::ChooseCard { offered } => {
                         (0, 1, offered.iter().copied().map(CardIdent::new).collect())
                     }
                     Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
+                    Pickup::Rewards { .. } => unreachable!("a reward screen asks above"),
                     Pickup::FromDeck { act, count } => (
                         u32::try_from(*count).expect("a selection counts in a few cards"),
                         u32::try_from(*count).expect("a selection counts in a few cards"),
@@ -2753,10 +2879,29 @@ fn option_index(at: usize) -> u8 {
     u8::try_from(at).expect("a room offers few enough options to number")
 }
 
+/// Taking each reward still on offer, each card of a card reward on its own,
+/// and skipping the rest.
+fn reward_moves<V: Rules>(offered: &[Offer<V>], moves: &mut Legal<V>) {
+    for (index, offer) in offered.iter().enumerate() {
+        if offer.taken() {
+            continue;
+        }
+        match offer {
+            Offer::Card { cards, .. } => moves.extend(
+                (0..cards.len())
+                    .map(|card| Decision::Answer(Answer::Take(TakeReward::card(index, card)))),
+            ),
+            _ => moves.push(Decision::Answer(Answer::Take(TakeReward::non_card(index)))),
+        }
+    }
+    // Nothing a fight or a ported relic offers disallows skipping. See `asked`.
+    moves.push(Decision::Answer(Answer::Skip));
+}
+
 fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
     Question::Rewards {
         // `RewardsSet` disallows skipping only where something says so, and
-        // nothing a fight offers does.
+        // nothing a fight or a ported relic offers does.
         skippable: true,
         rewards: offered
             .iter()
