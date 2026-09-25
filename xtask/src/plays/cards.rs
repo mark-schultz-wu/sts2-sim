@@ -64,6 +64,8 @@ struct Build {
     vars: HashMap<String, HashMap<String, (String, bool)>>,
     /// Power ids, by the name of the class that is each one.
     powers: HashMap<String, String>,
+    /// Orb ids, by the name of the class that is each one.
+    orbs: HashMap<String, String>,
 }
 
 /// One card's class, and what the rest of its source says that a command
@@ -97,6 +99,7 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, S
          # play <card> hold opponents, which a later `held` reads as they stood\n\
          # play <card> power <chosen|self|opponents|held> <power> <amount>\n\
          # play <card> <draw|energy|stars|forge> <amount>\n\
+         # play <card> channel <orb>\n\
          # unplayed <card> <the first statement no command matches>\n\
          # upgrade <card> raise <var> <by>\n\
          # upgrade <card> cost <by>\n\
@@ -219,19 +222,22 @@ impl Build {
                 .insert(key.to_owned(), (class.to_owned(), printed));
         }
 
-        let powers_txt = fs::read_to_string(version_dir.join("dumps/powers.txt"))
-            .map_err(|e| format!("reading powers.txt: {e}"))?;
-        let powers = powers_txt
-            .lines()
-            .filter_map(|line| line.strip_prefix("power "))
-            .filter_map(|row| row.split_whitespace().next())
-            .map(|id| (squash(id), id.to_owned()))
-            .collect();
+        let ids = |dump: &str, kind: &str| -> Result<HashMap<String, String>, String> {
+            let text = fs::read_to_string(version_dir.join("dumps").join(dump))
+                .map_err(|e| format!("reading {dump}: {e}"))?;
+            Ok(text
+                .lines()
+                .filter_map(|line| line.strip_prefix(kind))
+                .filter_map(|row| row.split_whitespace().next())
+                .map(|id| (squash(id), id.to_owned()))
+                .collect())
+        };
 
         Ok(Build {
             properties,
             vars,
-            powers,
+            powers: ids("powers.txt", "power ")?,
+            orbs: ids("orbs.txt", "orb ")?,
         })
     }
 }
@@ -435,6 +441,18 @@ fn game(card: &Card, stmt: &Stmt, locals: &Locals) -> Option<String> {
                 return None;
             }
             Some(format!("power {} {id} {amount}", target.name()))
+        }
+        (_, 1) if root.starts_with("OrbCmd.Channel<") && root.ends_with('>') => {
+            let class = &root["OrbCmd.Channel<".len()..root.len() - 1];
+            let orb = card.build.orbs.get(&squash(class))?;
+            match &first[..] {
+                [context, owner]
+                    if spell(context) == "choiceContext" && spell(owner) == "base.Owner" =>
+                {
+                    Some(format!("channel {orb}"))
+                }
+                _ => None,
+            }
         }
         ("CardPileCmd.Draw", 1) => match &first[..] {
             [context, amount, owner]

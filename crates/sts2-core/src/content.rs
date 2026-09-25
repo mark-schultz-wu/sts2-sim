@@ -518,10 +518,14 @@ pub enum ModelHook {
     AfterBlockBroken,
     AfterCombatVictory,
     AfterPlayerTurnStart,
+    AfterOrbChanneled,
+    AfterOrbEvoked,
+    ModifyOrbValue,
+    AfterModifyingOrbPassiveTriggerCount,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 36] = [
+    pub const ALL: [ModelHook; 40] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -558,6 +562,10 @@ impl ModelHook {
         ModelHook::AfterBlockBroken,
         ModelHook::AfterCombatVictory,
         ModelHook::AfterPlayerTurnStart,
+        ModelHook::AfterOrbChanneled,
+        ModelHook::AfterOrbEvoked,
+        ModelHook::ModifyOrbValue,
+        ModelHook::AfterModifyingOrbPassiveTriggerCount,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -601,6 +609,12 @@ impl ModelHook {
             ModelHook::AfterBlockBroken => "AfterBlockBroken",
             ModelHook::AfterCombatVictory => "AfterCombatVictory",
             ModelHook::AfterPlayerTurnStart => "AfterPlayerTurnStart",
+            ModelHook::AfterOrbChanneled => "AfterOrbChanneled",
+            ModelHook::AfterOrbEvoked => "AfterOrbEvoked",
+            ModelHook::ModifyOrbValue => "ModifyOrbValue",
+            ModelHook::AfterModifyingOrbPassiveTriggerCount => {
+                "AfterModifyingOrbPassiveTriggerCount"
+            }
         }
     }
 }
@@ -1304,6 +1318,31 @@ pub trait Fight<V: ContentVersion> {
     /// Every pile, the exhaust pile included, and one copy is created in hand
     /// when the fight holds none outside exhaust.
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number);
+
+    /// `OrbCmd.Channel`: the orb joins the end of the player's queue.
+    ///
+    /// A player with no slots of their own gains one first. A full queue
+    /// evokes its first orb to make room.
+    fn channel(&mut self, _orb: V::Orb) {
+        unimplemented!("channelling an orb")
+    }
+
+    /// `OrbCmd.EvokeNext`: the first orb in the queue does what it does on
+    /// leaving, and leaves when `dequeue` says so. Nothing, with no orb.
+    fn evoke_next(&mut self, _dequeue: bool) {
+        unimplemented!("evoking an orb")
+    }
+
+    /// How many orbs the player holds, which is `OrbQueue.Orbs.Count`.
+    fn orbs_held(&self) -> usize {
+        unimplemented!("counting orbs")
+    }
+
+    /// One of the enemies that can be hit, drawn off `CombatTargets` by
+    /// `NextItem`. Nothing when none can.
+    fn random_opponent(&mut self) -> Option<crate::CombatId> {
+        unimplemented!("a random target")
+    }
 
     /// `PowerCmd.Apply<P>(Owner.Creature, ...)`, on whoever is acting.
     ///
@@ -2015,6 +2054,8 @@ pub enum HookEffect<V: ContentVersion> {
     GainStars(V::Number),
     /// `CreatureCmd.Heal` on the listener's owner.
     Heal(V::Number),
+    /// `OrbCmd.Channel` for the listener's owner.
+    Channel(V::Orb),
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
@@ -2896,6 +2937,21 @@ pub trait Rules: Hooks {
 
     /// The energy a character's turn begins with, before a relic moves it.
     fn max_energy(character: Self::Character) -> u8;
+
+    /// `BaseOrbSlotCount`: the orb slots a fight opens with.
+    fn orb_slots(character: Self::Character) -> u8;
+
+    /// An orb as it joins the queue, with the numbers it shows there.
+    fn channelled(orb: Self::Orb) -> crate::Channelled<Self>;
+
+    /// `OrbModel.BeforeTurnEndOrbTrigger`, once for each trigger.
+    fn orb_turn_end<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+
+    /// `OrbModel.AfterTurnStartOrbTrigger`, once for each trigger.
+    fn orb_turn_start<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+
+    /// `OrbModel.Evoke`: what the orb does as it leaves.
+    fn orb_evoke<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
 
     /// Neow's event id, which the opening room reports.
     fn neow_event() -> Self::Event;

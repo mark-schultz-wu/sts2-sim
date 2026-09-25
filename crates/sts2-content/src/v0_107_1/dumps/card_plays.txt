@@ -6,6 +6,7 @@
 # play <card> hold opponents, which a later `held` reads as they stood
 # play <card> power <chosen|self|opponents|held> <power> <amount>
 # play <card> <draw|energy|stars|forge> <amount>
+# play <card> channel <orb>
 # unplayed <card> <what the first statement no command matches is>
 # upgrade <card> raise <var> <by>
 # upgrade <card> cost <by>
@@ -95,7 +96,8 @@ upgrade BACKSTAB raise Damage 4
 card BAD_LUCK
 turnend BAD_LUCK
 card BALL_LIGHTNING
-unplayed BALL_LIGHTNING call OrbCmd.Channel
+play BALL_LIGHTNING attack chosen Damage Move number 1
+play BALL_LIGHTNING channel LIGHTNING_ORB
 upgrade BALL_LIGHTNING raise Damage 3
 card BANSHEES_CRY
 play BANSHEES_CRY attack opponents Damage Move number 1
@@ -322,7 +324,8 @@ play CLOAK_OF_STARS block Block Move
 upgrade CLOAK_OF_STARS raise Block 3
 card CLUMSY
 card COLD_SNAP
-unplayed COLD_SNAP call OrbCmd.Channel
+play COLD_SNAP attack chosen Damage Move number 1
+play COLD_SNAP channel FROST_ORB
 upgrade COLD_SNAP raise Damage 3
 card COLLISION_COURSE
 unplayed COLLISION_COURSE call CardPileCmd.AddGeneratedCardToCombat
@@ -362,7 +365,8 @@ card COOLANT
 play COOLANT power self COOLANT_POWER var CoolantPower
 upgrade COOLANT raise CoolantPower 1
 card COOLHEADED
-unplayed COOLHEADED call OrbCmd.Channel
+play COOLHEADED channel FROST_ORB
+play COOLHEADED draw var Cards
 upgrade COOLHEADED raise Cards 1
 card COORDINATE
 unplayed COORDINATE call PowerCmd.Apply
@@ -411,7 +415,7 @@ card DANSE_MACABRE
 play DANSE_MACABRE power self DANSE_MACABRE_POWER var DanseMacabrePower
 upgrade DANSE_MACABRE raise DanseMacabrePower 2
 card DARKNESS
-unplayed DARKNESS call OrbCmd.Channel
+unplayed DARKNESS call Owner.PlayerCombatState.OrbQueue.Orbs.Where
 card DARK_EMBRACE
 play DARK_EMBRACE power self DARK_EMBRACE_POWER number 1
 upgrade DARK_EMBRACE cost -1
@@ -719,7 +723,7 @@ card FURNACE
 play FURNACE power self FURNACE_POWER var Forge
 upgrade FURNACE raise Forge 2
 card FUSION
-unplayed FUSION call OrbCmd.Channel
+play FUSION channel PLASMA_ORB
 unupgraded FUSION call RemoveKeyword
 card GAMMA_BLAST
 play GAMMA_BLAST attack chosen Damage Move number 1
@@ -746,7 +750,8 @@ card GLACIER
 unplayed GLACIER for
 upgrade GLACIER raise Block 3
 card GLASSWORK
-unplayed GLASSWORK call OrbCmd.Channel
+play GLASSWORK block Block Move
+play GLASSWORK channel GLASS_ORB
 upgrade GLASSWORK raise Block 3
 card GLIMMER
 unplayed GLIMMER call CardSelectCmd.FromHand
@@ -1121,7 +1126,9 @@ card NO_ESCAPE
 unplayed NO_ESCAPE call PowerCmd.Apply
 upgrade NO_ESCAPE raise CalculationBase 5
 card NULL
-unplayed NULL call OrbCmd.Channel
+play NULL attack chosen Damage Move number 1
+play NULL power chosen WEAK_POWER var WeakPower
+play NULL channel DARK_ORB
 upgrade NULL raise Damage 3
 upgrade NULL raise WeakPower 1
 card OBLIVION
@@ -1282,7 +1289,9 @@ card RAGE
 play RAGE power self RAGE_POWER var Power
 upgrade RAGE raise Power 2
 card RAINBOW
-unplayed RAINBOW call OrbCmd.Channel
+play RAINBOW channel LIGHTNING_ORB
+play RAINBOW channel FROST_ORB
+play RAINBOW channel DARK_ORB
 unupgraded RAINBOW call RemoveKeyword
 card RALLY
 unplayed RALLY call CombatState.GetTeammatesOf
@@ -1440,7 +1449,8 @@ card SHADOWMELD
 play SHADOWMELD power self SHADOWMELD_POWER var Power
 upgrade SHADOWMELD cost -1
 card SHADOW_SHIELD
-unplayed SHADOW_SHIELD call OrbCmd.Channel
+play SHADOW_SHIELD block Block Move
+play SHADOW_SHIELD channel DARK_ORB
 upgrade SHADOW_SHIELD raise Block 4
 card SHADOW_STEP
 unplayed SHADOW_STEP call CardCmd.Discard
@@ -1828,5 +1838,5 @@ play WROUGHT_IN_WAR forge var Forge
 upgrade WROUGHT_IN_WAR raise Damage 2
 upgrade WROUGHT_IN_WAR raise Forge 2
 card ZAP
-unplayed ZAP call OrbCmd.Channel
+play ZAP channel LIGHTNING_ORB
 upgrade ZAP cost -1

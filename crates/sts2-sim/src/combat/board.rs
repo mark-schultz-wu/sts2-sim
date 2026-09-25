@@ -1169,6 +1169,100 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.land(self.actor, power, amount, Some(self.actor));
     }
 
+    /// `OrbCmd.Channel`, which does nothing once the fight is ending.
+    ///
+    /// # Panics
+    ///
+    /// A listener to `AfterOrbChanneled`.
+    fn channel(&mut self, orb: V::Orb) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let base = V::orb_slots(self.live.character);
+        let orbs = self.live.orbs.get_or_insert_with(|| sts2_core::Orbs {
+            capacity: V::Count::zero(),
+            queue: Vec::new(),
+        });
+        // `AddSlots(player, 1)`, for a player with no slots of their own.
+        if base == 0 && orbs.capacity == V::Count::zero() {
+            orbs.capacity = num_traits::one();
+        }
+        let full = num_traits::cast::<_, usize>(orbs.capacity)
+            .is_some_and(|capacity| orbs.queue.len() >= capacity);
+        if full {
+            self.evoke_next(true);
+        }
+        // `TryEnqueue`, which refuses an orb with no slot to go in.
+        let Some(orbs) = self.live.orbs.as_mut() else {
+            return;
+        };
+        if orbs.capacity == V::Count::zero() {
+            return;
+        }
+        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::ModifyOrbValue) {
+            unimplemented!("a listener to an orb's value");
+        }
+        let Some(orbs) = self.live.orbs.as_mut() else {
+            return;
+        };
+        orbs.queue.push(V::channelled(orb));
+        if super::listen::heard::<V>(
+            self.live,
+            self.relics,
+            sts2_core::ModelHook::AfterOrbChanneled,
+        ) {
+            unimplemented!("a listener to an orb channelled");
+        }
+    }
+
+    /// `OrbCmd.EvokeNext`, which does nothing once the fight is ending.
+    ///
+    /// # Panics
+    ///
+    /// A listener to `AfterOrbEvoked`.
+    fn evoke_next(&mut self, dequeue: bool) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let Some(orb) = self.live.orbs.as_mut().and_then(|orbs| {
+            (!orbs.queue.is_empty()).then(|| match dequeue {
+                true => orbs.queue.remove(0),
+                false => orbs.queue[0],
+            })
+        }) else {
+            return;
+        };
+        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::ModifyOrbValue) {
+            unimplemented!("a listener to an orb's value");
+        }
+        V::orb_evoke(&orb, self);
+        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::AfterOrbEvoked) {
+            unimplemented!("a listener to an orb evoked");
+        }
+    }
+
+    fn orbs_held(&self) -> usize {
+        self.live.orbs.as_ref().map_or(0, |orbs| orbs.queue.len())
+    }
+
+    /// `IsHittable`: alive, and no listener refusing a hit on it.
+    fn random_opponent(&mut self) -> Option<CombatId> {
+        use sts2_core::rng::GameRng as _;
+
+        let hittable: SmallVec<[CombatId; 8]> = self
+            .opponents()
+            .into_iter()
+            .filter(|&creature| {
+                !super::listen::any_decides::<V>(
+                    self.walk(),
+                    sts2_core::DecisionHook::ShouldAllowHitting { creature },
+                    false,
+                )
+            })
+            .collect();
+        self.rngs.targets.choose(&hittable).ok().copied()
+    }
+
     /// `CreatureCmd.Heal`, which is `HealInternal` and the revival it reports.
     ///
     /// `SetCurrentHpInternal` caps at the maximum, and a creature whose health

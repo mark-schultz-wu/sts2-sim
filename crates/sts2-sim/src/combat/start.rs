@@ -76,7 +76,16 @@ pub(crate) fn enter<V: Rules>(
         powers: PowerStore::new(),
         // Absent rather than an empty queue: the subsystem is inert until
         // something gives the player a slot.
-        orbs: None,
+        // `PlayerCombatState` opens on `BaseOrbSlotCount` empty slots. Absent
+        // rather than empty for a character with none: the subsystem is inert
+        // until something gives the player a slot.
+        orbs: match V::orb_slots(character) {
+            0 => None,
+            slots => Some(sts2_core::Orbs {
+                capacity: num_traits::cast(slots).expect("a slot count fits the build's count"),
+                queue: Vec::new(),
+            }),
+        },
         machines: Bounded::new(),
         // Nothing has been applied to anyone yet.
         skip_tick: Bounded::new(),
@@ -158,7 +167,9 @@ pub(crate) fn enter<V: Rules>(
     // behind block gains it.
     super::turn::before_side_turn_start::<V>(
         &mut live,
+        streams.combat(),
         relics,
+        ascension,
         <V::CombatSide as SideKinds>::PLAYER,
         turn,
     );
@@ -194,11 +205,22 @@ pub(crate) fn enter<V: Rules>(
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
     );
+    // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
+    let ended = super::turn::orb_triggers::<V>(
+        &mut live,
+        streams.combat(),
+        relics,
+        ascension,
+        super::turn::OrbMoment::TurnStart,
+    );
+    if ended == Some(super::Ended::Won) {
+        super::listen::combat_ended::<V>(&mut live, relics);
+    }
 
     Ok(Entered {
         live,
         streams,
-        ended: None,
+        ended,
     })
 }
 

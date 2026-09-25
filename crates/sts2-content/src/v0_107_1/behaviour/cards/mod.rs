@@ -21,6 +21,7 @@ use super::super::generated::cards::{CardVar, Cards};
 /// What the run holds a card's numbers as.
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
+mod defect;
 mod regent;
 mod status;
 mod token;
@@ -93,7 +94,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Silent(card) => card_plays::silent::on_play(card, fight),
         Cards::Regent(card) => regent::on_play(card, fight),
         Cards::Necrobinder(card) => card_plays::necrobinder::on_play(card, fight),
-        Cards::Defect(card) => card_plays::defect::on_play(card, fight),
+        Cards::Defect(card) => defect::on_play(card, fight),
         Cards::Colorless(card) => card_plays::colorless::on_play(card, fight),
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
         Cards::Event(card) => card_plays::event::on_play(card, fight),

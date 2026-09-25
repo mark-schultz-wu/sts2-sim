@@ -1563,7 +1563,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // FOCUS_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyOrbValue),
     // FORBIDDEN_GRIMOIRE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
     // FOREGONE_CONCLUSION_POWER
@@ -2038,7 +2038,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // THORNS_POWER
     sts2_core::Overrides::from_bits(0),
     // THUNDER_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterOrbEvoked),
     // TOOLS_OF_THE_TRADE_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart)

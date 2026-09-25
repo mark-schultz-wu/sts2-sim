@@ -1,0 +1,7 @@
+# `CrackedCore.BeforeSideTurnStart` channels one Lightning before the Defect's
+# first turn, into the three slots the Defect opens every fight with.
+#
+# A port that never channels shows an empty queue, and one that opens no
+# slots shows none at all.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}

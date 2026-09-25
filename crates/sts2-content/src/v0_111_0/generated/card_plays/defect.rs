@@ -4,6 +4,7 @@
 //! Source: `dumps/card_plays.txt`, build v0.111.0 (41cef1ea), assembly 1579942752.
 
 use super::super::cards::{CardKeyword, CardVar, DefectCard};
+use super::super::orbs::Orb;
 use super::super::powers::Power;
 use sts2_core::{Amount, Change, CostPool, Effect, Fight, Played, PowerAmount, Scaling};
 
@@ -18,8 +19,18 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::AdaptiveStrike => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Discard.GetPile`
         DefectCard::AllForOne => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::BallLightning => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::BallLightning => {
+            let target = fight.target();
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+            fight.channel(Orb::LightningOrb);
+            Played::Done
+        }
         // `call DamageCmd.Attack`
         DefectCard::Barrage => unimplemented!("what {card:?} does when it is played"),
         DefectCard::BeamCell => {
@@ -90,8 +101,18 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Chill => unimplemented!("what {card:?} does when it is played"),
         // `call Owner.PlayerCombatState.AllCards.OfType`
         DefectCard::Claw => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::ColdSnap => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::ColdSnap => {
+            let target = fight.target();
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+            fight.channel(Orb::FrostOrb);
+            Played::Done
+        }
         // `call PileType.Hand.GetPile`
         DefectCard::Compact => unimplemented!("what {card:?} does when it is played"),
         // `call CardPileCmd.Draw`
@@ -105,8 +126,11 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
             );
             Played::Done
         }
-        // `call OrbCmd.Channel`
-        DefectCard::Coolheaded => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::Coolheaded => {
+            fight.channel(Orb::FrostOrb);
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Done
+        }
         DefectCard::CreativeAi => {
             fight.apply_to_actor(
                 Power::CreativeAiPower,
@@ -114,7 +138,7 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
             );
             Played::Done
         }
-        // `call OrbCmd.Channel`
+        // `call Owner.PlayerCombatState.OrbQueue.Orbs.Where`
         DefectCard::Darkness => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Defend => {
             let block = fight.resolve(Effect::GainBlock {
@@ -173,14 +197,24 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         }
         // `if`
         DefectCard::Ftl => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::Fusion => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::Fusion => {
+            fight.channel(Orb::PlasmaOrb);
+            Played::Done
+        }
         // `call BuffFromPlay`
         DefectCard::GeneticAlgorithm => unimplemented!("what {card:?} does when it is played"),
         // `for`
         DefectCard::Glacier => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::Glasswork => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::Glasswork => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            fight.channel(Orb::GlassOrb);
+            Played::Done
+        }
         // `if`
         DefectCard::GoForTheEyes => unimplemented!("what {card:?} does when it is played"),
         // `call CombatState.CreateCard`
@@ -264,16 +298,35 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::MomentumStrike => unimplemented!("what {card:?} does when it is played"),
         // `call ResolveEnergyXValue`
         DefectCard::MultiCast => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::Null => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::Null => {
+            let target = fight.target();
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+            fight.apply_power(
+                target,
+                Power::WeakPower,
+                PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+            );
+            fight.channel(Orb::DarkOrb);
+            Played::Done
+        }
         // `foreach`
         DefectCard::OneForAll => unimplemented!("what {card:?} does when it is played"),
         // `call CombatState.CreateCard`
         DefectCard::Overclock => unimplemented!("what {card:?} does when it is played"),
         // `if`
         DefectCard::Quadcast => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::Rainbow => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::Rainbow => {
+            fight.channel(Orb::LightningOrb);
+            fight.channel(Orb::FrostOrb);
+            fight.channel(Orb::DarkOrb);
+            Played::Done
+        }
         // `foreach`
         DefectCard::Reboot => unimplemented!("what {card:?} does when it is played"),
         // `for`
@@ -294,8 +347,16 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Scavenge => unimplemented!("what {card:?} does when it is played"),
         // `call CardPileCmd.Draw`
         DefectCard::Scrape => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::ShadowShield => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::ShadowShield => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            fight.channel(Orb::DarkOrb);
+            Played::Done
+        }
         // `for`
         DefectCard::Shatter => unimplemented!("what {card:?} does when it is played"),
         DefectCard::SignalBoost => {
@@ -385,8 +446,10 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Voltaic => unimplemented!("what {card:?} does when it is played"),
         // `call CardFactory.GetDistinctForCombat`
         DefectCard::WhiteNoise => unimplemented!("what {card:?} does when it is played"),
-        // `call OrbCmd.Channel`
-        DefectCard::Zap => unimplemented!("what {card:?} does when it is played"),
+        DefectCard::Zap => {
+            fight.channel(Orb::LightningOrb);
+            Played::Done
+        }
     }
 }
 

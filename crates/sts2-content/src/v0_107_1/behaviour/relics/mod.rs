@@ -15,6 +15,7 @@ mod anchor;
 mod arcane_scroll;
 mod bone_tea;
 mod burning_blood;
+mod cracked_core;
 mod cursed_pearl;
 mod divine_right;
 mod dollys_mirror;
@@ -54,6 +55,7 @@ pub enum State {
     ArcaneScroll,
     BoneTea(bone_tea::State),
     BurningBlood,
+    CrackedCore,
     CursedPearl,
     DivineRight,
     DollysMirror,
@@ -85,6 +87,7 @@ pub(crate) fn event_hook(
         State::ArcaneScroll => arcane_scroll::event_hook(hook, asked),
         State::BoneTea(state) => bone_tea::event_hook(state, hook, asked),
         State::BurningBlood => burning_blood::event_hook(hook, asked),
+        State::CrackedCore => cracked_core::event_hook(hook, asked),
         State::CursedPearl => cursed_pearl::event_hook(hook, asked),
         State::DivineRight => divine_right::event_hook(hook, asked),
         State::DollysMirror => dollys_mirror::event_hook(hook, asked),
@@ -123,6 +126,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::ArcaneScroll
         | State::BoneTea(_)
         | State::BurningBlood
+        | State::CrackedCore
         | State::CursedPearl
         | State::DivineRight
         | State::DollysMirror
@@ -154,6 +158,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::ArcaneScroll => State::ArcaneScroll,
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
             Relic::BurningBlood => State::BurningBlood,
+            Relic::CrackedCore => State::CrackedCore,
             Relic::CursedPearl => State::CursedPearl,
             Relic::DivineRight => State::DivineRight,
             Relic::DollysMirror => State::DollysMirror,

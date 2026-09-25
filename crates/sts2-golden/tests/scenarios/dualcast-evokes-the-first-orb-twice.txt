@@ -1,0 +1,8 @@
+# `Dualcast` evokes the first orb where it stands, then again as it leaves.
+# Cracked Core's Lightning deals eight twice, each to its own random enemy,
+# and the queue is empty after.
+#
+# A port that evokes once, or dequeues on the first, deals eight once.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":1}

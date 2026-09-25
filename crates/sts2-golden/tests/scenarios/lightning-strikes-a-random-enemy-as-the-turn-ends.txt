@@ -1,0 +1,8 @@
+# `LightningOrb.BeforeTurnEndOrbTrigger` deals its passive three to one enemy
+# that can be hit, drawn off `CombatTargets`, before the hand is flushed.
+#
+# A port that draws the target off another stream hits another slime, and
+# one that skips the passive leaves all three whole.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}

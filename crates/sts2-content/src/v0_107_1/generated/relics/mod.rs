@@ -1706,7 +1706,8 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // GOLDEN_PEARL
     sts2_core::Overrides::from_bits(0),
     // GOLD_PLATED_CABLES
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingOrbPassiveTriggerCount),
     // GORGET
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // GREMLIN_HORN
@@ -1728,7 +1729,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // ICE_CREAM
     sts2_core::Overrides::from_bits(0),
     // INFUSED_CORE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::ModifyOrbValue),
     // INTIMIDATING_HELMET
     sts2_core::Overrides::from_bits(0),
     // IRON_CLUB
@@ -1817,6 +1820,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // METRONOME
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterOrbChanneled)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // MINIATURE_CANNON
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),

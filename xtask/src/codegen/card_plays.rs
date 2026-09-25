@@ -117,6 +117,7 @@ fn command(out: &mut String, words: &[String]) -> Result<(), String> {
             }
             .unwrap();
         }
+        ["channel", orb] => writeln!(out, "fight.channel(Orb::{});", camel(orb)).unwrap(),
         // `HittableEnemies`, taken now for a command further on.
         ["hold", "opponents"] => writeln!(out, "let held = fight.opponents();").unwrap(),
         [what @ ("draw" | "energy" | "stars" | "forge"), rest @ ..] => {
@@ -379,6 +380,7 @@ pub fn generate(root: &Path, build: &Build) -> Result<(), String> {
                     "TokenCard",
                 ],
             ),
+            ("super::super::orbs", &["Orb"]),
             ("super::super::powers", &["Power"]),
             (
                 "sts2_core",
