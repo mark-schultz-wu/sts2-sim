@@ -1233,7 +1233,7 @@ pub(super) static ROWS: [CardData; 88] = [
                 id: CardVar::CalculatedDamage,
                 base: 10,
                 calculated: true,
-                modifier: Some(CardNumberModifier::Damage),
+                modifier: Some(CardNumberModifier::OstyDamage),
             },
             sts2_core::CardNumber {
                 id: CardVar::CalculationBase,
@@ -1741,7 +1741,7 @@ pub(super) static ROWS: [CardData; 88] = [
                 id: CardVar::CalculatedDamage,
                 base: 25,
                 calculated: true,
-                modifier: Some(CardNumberModifier::Damage),
+                modifier: Some(CardNumberModifier::OstyDamage),
             },
             sts2_core::CardNumber {
                 id: CardVar::CalculationBase,
@@ -1867,7 +1867,7 @@ pub(super) static ROWS: [CardData; 88] = [
                 id: CardVar::CalculatedDamage,
                 base: 6,
                 calculated: true,
-                modifier: Some(CardNumberModifier::Damage),
+                modifier: Some(CardNumberModifier::OstyDamage),
             },
             sts2_core::CardNumber {
                 id: CardVar::CalculationBase,

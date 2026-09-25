@@ -1128,6 +1128,10 @@ impl MoveId {
     ];
 }
 
+impl sts2_core::MoveKinds for MoveId {
+    const UNSET: MoveId = MoveId::UnsetMove;
+}
+
 /// Every monster in the build.
 ///
 /// Flat rather than nested by act. Card ids are pool-scoped — `Strike`
@@ -1393,6 +1397,10 @@ pub enum Monster {
     Wriggler,
     #[serde(rename = "ZAPBOT")]
     Zapbot,
+}
+
+impl sts2_core::MonsterKinds for Monster {
+    const OSTY: Monster = Monster::Osty;
 }
 
 impl sts2_core::Table for Monster {

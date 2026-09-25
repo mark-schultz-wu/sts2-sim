@@ -16,7 +16,7 @@ use sts2_core::{CardVars, Fight, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
-use super::super::generated::cards::{CardVar, Cards};
+use super::super::generated::cards::{CardVar, Cards, NecrobinderCard};
 
 /// What the run holds a card's numbers as.
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
@@ -72,11 +72,17 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
     key: CardVar,
     printed: &P,
-    powers: &[sts2_core::Stack<V0_107_1>],
+    owner: sts2_core::CardOwner<'_, V0_107_1>,
 ) -> Number {
-    match card {
-        Cards::Token(card) => token::calculated(card, key, printed, powers),
-        card => unimplemented!("the {} {card:?} works out", key.name()),
+    match (card, key) {
+        (Cards::Token(card), key) => token::calculated(card, key, printed, owner.powers),
+        // `Unleash`: a base, and one more for each point of health a living
+        // Osty has.
+        (Cards::Necrobinder(NecrobinderCard::Unleash), CardVar::CalculatedDamage) => {
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::ExtraDamage) * owner.osty.map_or(0, Number::from)
+        }
+        (card, key) => unimplemented!("the {} {card:?} works out", key.name()),
     }
 }
 

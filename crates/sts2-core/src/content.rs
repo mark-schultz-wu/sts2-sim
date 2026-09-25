@@ -419,7 +419,8 @@ pub struct CardNumber<K, N> {
 pub enum CardNumberModifier {
     /// `Hook.ModifyDamage`, against the creature the card is pointed at.
     Damage,
-    /// The same, for the owner's Osty rather than the owner.
+    /// The same, for the owner's Osty rather than the owner. An
+    /// `OstyDamageVar`, or a `CalculatedDamageVar` built `FromOsty`.
     OstyDamage,
     /// `Hook.ModifyBlock`, for the creature about to gain it.
     Block,
@@ -434,6 +435,9 @@ pub enum CardNumberModifier {
 ///
 /// `Ord`, because a preview keys its numbers by one of these.
 pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
+    /// `CalculatedVar.GetBaseVar`, the base a calculated number adds to.
+    const CALCULATION_BASE: Self;
+
     /// Every key, once each.
     const ALL: &'static [Self];
 
@@ -522,10 +526,16 @@ pub enum ModelHook {
     AfterOrbEvoked,
     ModifyOrbValue,
     AfterModifyingOrbPassiveTriggerCount,
+    AfterEnergyResetLate,
+    ModifyUnblockedDamageTarget,
+    AfterOstyRevived,
+    AfterCreatureAddedToCombat,
+    ModifySummonAmount,
+    AfterSummon,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 40] = [
+    pub const ALL: [ModelHook; 46] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -566,6 +576,12 @@ impl ModelHook {
         ModelHook::AfterOrbEvoked,
         ModelHook::ModifyOrbValue,
         ModelHook::AfterModifyingOrbPassiveTriggerCount,
+        ModelHook::AfterEnergyResetLate,
+        ModelHook::ModifyUnblockedDamageTarget,
+        ModelHook::AfterOstyRevived,
+        ModelHook::AfterCreatureAddedToCombat,
+        ModelHook::ModifySummonAmount,
+        ModelHook::AfterSummon,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -615,6 +631,12 @@ impl ModelHook {
             ModelHook::AfterModifyingOrbPassiveTriggerCount => {
                 "AfterModifyingOrbPassiveTriggerCount"
             }
+            ModelHook::AfterEnergyResetLate => "AfterEnergyResetLate",
+            ModelHook::ModifyUnblockedDamageTarget => "ModifyUnblockedDamageTarget",
+            ModelHook::AfterOstyRevived => "AfterOstyRevived",
+            ModelHook::AfterCreatureAddedToCombat => "AfterCreatureAddedToCombat",
+            ModelHook::ModifySummonAmount => "ModifySummonAmount",
+            ModelHook::AfterSummon => "AfterSummon",
         }
     }
 }
@@ -829,6 +851,25 @@ pub trait RoomKinds: std::fmt::Debug + Copy + Eq + 'static {
 ///
 /// The same bridge as [`MapPointKinds`]. The game's enum has a third member, its
 /// C# zero, which no creature in a fight is on.
+/// The move names the simulator writes itself.
+/// The monster the simulator names itself.
+pub trait MonsterKinds: std::fmt::Debug + Copy + Eq + 'static {
+    /// `Osty`, the pet `OstyCmd.Summon` stands up.
+    const OSTY: Self;
+}
+
+/// The power the simulator names itself.
+pub trait PowerKinds: std::fmt::Debug + Copy + Eq + 'static {
+    /// `DieForYouPower`, which every Osty is summoned with.
+    const DIE_FOR_YOU: Self;
+}
+
+pub trait MoveKinds: std::fmt::Debug + Copy + Eq + 'static {
+    /// `UNSET_MOVE`, which a creature that has not rolled a move reports. A
+    /// pet never rolls one.
+    const UNSET: Self;
+}
+
 pub trait SideKinds: std::fmt::Debug + Copy + Eq + 'static {
     const PLAYER: Self;
     const ENEMY: Self;
@@ -1076,6 +1117,10 @@ pub trait CreatureView<V: ContentVersion> {
 
     fn max_hp(&self) -> V::Health;
 
+    /// `PetOwner`: the player a pet stands beside. Nothing for a player or a
+    /// monster.
+    fn owner(&self) -> Option<crate::CombatId>;
+
     /// `Creature.GetPower<T>()?.Amount`, and `None` for one without it.
     ///
     /// Both of the questions the game asks a power from outside: whether the
@@ -1125,13 +1170,18 @@ pub trait Fight<V: ContentVersion> {
 
     /// The creatures across from whoever is acting, in command order.
     ///
+    /// Pets are left out. A monster's move reaches `PlayerCreatures`, which
+    /// is the players alone, and no pet stands against the player.
+    ///
     /// `GetOpponentsOf`. A command snapshots this list before its first
     /// effect lands. Each effect still resolves immediately before it lands,
     /// because an earlier one can change the listeners the next one reaches.
     fn opponents(&self) -> Opponents {
         let side = self.side();
         self.creatures()
-            .filter(|creature| creature.side() != side && creature.alive())
+            .filter(|creature| {
+                creature.side() != side && creature.alive() && creature.owner().is_none()
+            })
             .map(|creature| creature.id())
             .collect()
     }
@@ -1318,6 +1368,18 @@ pub trait Fight<V: ContentVersion> {
     /// Every pile, the exhaust pile included, and one copy is created in hand
     /// when the fight holds none outside exhaust.
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number);
+
+    /// `OstyCmd.Summon`: the player's Osty gains `amount` maximum health, or
+    /// stands up at that much, alive or anew.
+    fn summon_osty(&mut self, _amount: V::Number) {
+        unimplemented!("summoning Osty")
+    }
+
+    /// The player's Osty, while it stands. `Osty.CheckMissingWithAnim` is the
+    /// question of whether this is nothing.
+    fn osty(&self) -> Option<crate::CombatId> {
+        unimplemented!("finding Osty")
+    }
 
     /// `OrbCmd.Channel`: the orb joins the end of the player's queue.
     ///
@@ -1755,7 +1817,11 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldStopCombatFromEnding,
     /// `ShouldAllowHitting`, about `creature`. A creature no listener lets be
     /// hit is not hittable, and cannot receive powers.
-    ShouldAllowHitting { creature: crate::CombatId },
+    ShouldAllowHitting {
+        creature: crate::CombatId,
+        /// `IsAlive` for that creature, which a listener can read.
+        alive: bool,
+    },
     /// `PowerModel.ShouldPowerBeRemovedAfterOwnerDeath`, asked of a power
     /// about itself as its owner dies.
     ShouldRemoveSelfAfterOwnerDeath,
@@ -1767,6 +1833,21 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldRemovePowerOnDeath {
         creature: crate::CombatId,
         power: V::Power,
+    },
+    /// `ModifyUnblockedDamageTarget`, about damage past `target`'s block. A
+    /// listener that answers yes takes it on the creature carrying it.
+    ///
+    /// Asked of each listener in turn, with what its own creature is: the
+    /// player it is a pet of, and whether it still stands. A power's override
+    /// reads both off `Owner`.
+    TakesUnblockedDamage {
+        target: crate::CombatId,
+        /// `IsPoweredAttack`, which is `Scaling::Dynamic`.
+        powered: bool,
+        /// `Owner.PetOwner.Creature` of the listener's creature.
+        pet_of: Option<crate::CombatId>,
+        /// `!Owner.IsDead` for the listener's creature.
+        alive: bool,
     },
 }
 
@@ -1782,6 +1863,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             }
             DecisionHook::ShouldRemovePowerOnDeath { .. } => ModelHook::ShouldPowerBeRemovedOnDeath,
             DecisionHook::ShouldClearBlock { .. } => ModelHook::ShouldClearBlock,
+            DecisionHook::TakesUnblockedDamage { .. } => ModelHook::ModifyUnblockedDamageTarget,
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
             DecisionHook::ShouldCountForCombatEnd
@@ -1802,6 +1884,12 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won.
     CombatVictory,
+    /// `AfterEnergyResetLate`, straight after `AfterEnergyReset`.
+    EnergyResetLate {
+        player: crate::CombatId,
+        /// `PlayerCombatState.TurnNumber`.
+        turn: V::Count,
+    },
     /// `AfterPlayerTurnStart`, once the player has drawn and before the side
     /// turn starts.
     PlayerTurnStart {
@@ -1942,6 +2030,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatEnd => ModelHook::AfterCombatEnd,
             EventHook::CombatVictory => ModelHook::AfterCombatVictory,
             EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
+            EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
             EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
@@ -2056,6 +2145,8 @@ pub enum HookEffect<V: ContentVersion> {
     Heal(V::Number),
     /// `OrbCmd.Channel` for the listener's owner.
     Channel(V::Orb),
+    /// `OstyCmd.Summon` for the listener's owner.
+    Summon(V::Number),
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
@@ -2177,6 +2268,15 @@ pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
 
     /// Which power this is the model of.
     fn power(&self) -> V::Power;
+}
+
+/// What a card reads off its owner's side of the fight.
+#[derive(Debug, Clone, Copy)]
+pub struct CardOwner<'a, V: ContentVersion> {
+    /// The player's own powers.
+    pub powers: &'a [crate::Stack<V>],
+    /// `Owner.Osty.CurrentHp`, while Osty is alive.
+    pub osty: Option<V::Health>,
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -2756,6 +2856,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + serde::Serialize
         + serde::de::DeserializeOwned
         + MonsterTable<Act = Self::Act>
+        + MonsterKinds
         + 'static;
 
     /// A Defect orb.
@@ -2785,6 +2886,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + serde::Serialize
         + serde::de::DeserializeOwned
         + PowerTable
+        + PowerKinds
         + 'static;
 
     /// A permanent passive.
@@ -2877,6 +2979,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
+        + MoveKinds
         + 'static;
     /// One of the things a rest site can offer.
     ///
@@ -3169,7 +3272,7 @@ pub trait Rules: Hooks {
         card: Self::Card,
         key: Self::CardVar,
         printed: &P,
-        powers: &[crate::Stack<Self>],
+        owner: CardOwner<'_, Self>,
     ) -> Self::Number;
 
     /// What one of a monster's moves does, which is its `onPerform`.

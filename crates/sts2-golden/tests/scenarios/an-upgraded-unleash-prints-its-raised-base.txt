@@ -1,0 +1,10 @@
+# Upgrading `Unleash` raises its `CalculationBase` by three, and
+# `RecalculateForUpgradeOrEnchant` copies that onto the calculated damage's
+# own base. Blessing of the Forge upgrades the hand, Unleash with it.
+#
+# The damage then prints nine as its base and previews ten. A port that
+# leaves the base where the table put it reports six beside the ten.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","potion":"BLESSING_OF_THE_FORGE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}

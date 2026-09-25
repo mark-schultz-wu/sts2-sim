@@ -350,7 +350,7 @@ pub(crate) fn decide_hook(
         // `ShouldCreatureBeRemovedFromCombatAfterDeath`, which keeps its own
         // holder and no other.
         (
-            Power::IllusionPower | Power::ReattachPower,
+            Power::IllusionPower | Power::ReattachPower | Power::DieForYouPower,
             DecisionHook::ShouldRemoveCreatureAfterDeath { creature },
         ) => HookResponse::Decision(creature != held.holder),
         // `OwnerIsSecondaryEnemy`.
@@ -361,7 +361,7 @@ pub(crate) fn decide_hook(
         // in the fight keeps itself, or the creature would come back without
         // whatever brought it back.
         (
-            Power::ReattachPower | Power::MinionPower,
+            Power::ReattachPower | Power::MinionPower | Power::DieForYouPower,
             DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
         ) => HookResponse::Decision(false),
         // `IllusionPower.ShouldPowerBeRemovedOnDeath`, which reads the power
@@ -379,8 +379,24 @@ pub(crate) fn decide_hook(
         // `ShouldAllowHitting`, which refuses its own holder while it revives.
         (
             Power::IllusionPower | Power::ReattachPower,
-            DecisionHook::ShouldAllowHitting { creature },
+            DecisionHook::ShouldAllowHitting { creature, .. },
         ) => HookResponse::Decision(creature != held.holder || !state.reviving()),
+        // `DieForYouPower.ShouldAllowHitting`, which refuses any creature that
+        // is dead, whoever holds it.
+        (Power::DieForYouPower, DecisionHook::ShouldAllowHitting { alive, .. }) => {
+            HookResponse::Decision(alive)
+        }
+        // `ModifyUnblockedDamageTarget`, which takes a powered attack on the
+        // pet's owner onto the pet while it lives.
+        (
+            Power::DieForYouPower,
+            DecisionHook::TakesUnblockedDamage {
+                target,
+                powered,
+                pet_of,
+                alive,
+            },
+        ) => HookResponse::Decision(pet_of == Some(target) && alive && powered),
         // `BurrowedPower.ShouldClearBlock`, which keeps its own holder's.
         (Power::BurrowedPower, DecisionHook::ShouldClearBlock { creature }) => {
             HookResponse::Decision(creature != held.holder)

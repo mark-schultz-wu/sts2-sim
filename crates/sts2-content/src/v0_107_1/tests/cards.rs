@@ -264,7 +264,9 @@ fn every_printed_number_matches_the_dump() {
             // name. This is the same reading, from the other side.
             match row[5] {
                 "DamageVar" | "CalculatedDamageVar" => Some(CardNumberModifier::Damage),
-                "OstyDamageVar" => Some(CardNumberModifier::OstyDamage),
+                "OstyDamageVar" | "CalculatedDamageVar+FromOsty" => {
+                    Some(CardNumberModifier::OstyDamage)
+                }
                 "BlockVar" | "CalculatedBlockVar" => Some(CardNumberModifier::Block),
                 _ => None,
             },

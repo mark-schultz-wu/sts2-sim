@@ -103,6 +103,7 @@ pub(crate) fn enter<V: Rules>(
         block: num_traits::zero(),
         alive: entering.alive,
         next_move: None,
+        owner: None,
     });
     let monsters = encounter::opening::<V>(raw_seed, entering.floor, encounter)?;
     let Live {
@@ -160,6 +161,15 @@ pub(crate) fn enter<V: Rules>(
                     creature.block = creature.block + block;
                 }
             }
+            (_, HookEffect::Summon(amount)) => {
+                super::board::summon_osty::<V>(
+                    &mut live,
+                    streams.combat(),
+                    relics,
+                    ascension,
+                    amount,
+                );
+            }
             (_, other) => unimplemented!("a listener asking for {other:?} as a fight starts"),
         }
     }
@@ -173,6 +183,10 @@ pub(crate) fn enter<V: Rules>(
         <V::CombatSide as SideKinds>::PLAYER,
         turn,
     );
+    // `SetupPlayerTurn` resets the energy, which the fight opened on already,
+    // and raises the hooks that follow.
+    super::turn::energy_reset::<V>(&mut live, relics);
+    super::turn::energy_reset_late::<V>(&mut live, streams.combat(), relics, ascension);
 
     let drawn = hand_size::<V>(
         Walk {

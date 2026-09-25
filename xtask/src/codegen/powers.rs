@@ -524,6 +524,16 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), String> 
     )
     .unwrap();
 
+    // The one power the simulator applies by name, as it summons Osty.
+    if !powers.iter().any(|row| row[1] == "DIE_FOR_YOU_POWER") {
+        return Err("the dump has no DIE_FOR_YOU_POWER, which the simulator names".into());
+    }
+    writeln!(
+        out,
+        "\nimpl sts2_core::PowerKinds for Power {{\n    const DIE_FOR_YOU: Power = Power::DieForYouPower;\n}}"
+    )
+    .unwrap();
+
     Ok(())
 }
 

@@ -100,6 +100,7 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, S
          # play <card> power <chosen|self|opponents|held> <power> <amount>\n\
          # play <card> <draw|energy|stars|forge> <amount>\n\
          # play <card> channel <orb>\n\
+         # play <card> summon <amount>, which is Osty for the player\n\
          # unplayed <card> <the first statement no command matches>\n\
          # upgrade <card> raise <var> <by>\n\
          # upgrade <card> cost <by>\n\
@@ -454,6 +455,16 @@ fn game(card: &Card, stmt: &Stmt, locals: &Locals) -> Option<String> {
                 _ => None,
             }
         }
+        ("OstyCmd.Summon", 1) => match &first[..] {
+            [context, owner, amount, this]
+                if spell(context) == "choiceContext"
+                    && spell(owner) == "base.Owner"
+                    && spell(this) == "this" =>
+            {
+                Some(format!("summon {}", card.number(amount)?))
+            }
+            _ => None,
+        },
         ("CardPileCmd.Draw", 1) => match &first[..] {
             [context, amount, owner]
                 if spell(context) == "choiceContext" && spell(owner) == "base.Owner" =>
