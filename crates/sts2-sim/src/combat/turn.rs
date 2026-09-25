@@ -110,6 +110,15 @@ pub(crate) fn end<V: Rules>(
     );
     let drawn = hand_size::<V>(listen::Walk { live: next, relics }, next.turn);
     draw(next, streams.combat(), relics, ascension, drawn);
+    // A relic's damage here can end the fight, and a fight ended in
+    // `SetupPlayerTurn` starts no side turn after it.
+    if let Some(ended) = player_turn_started::<V>(next, streams.combat(), relics, ascension) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
     side_turn_started::<V>(
         next,
         streams.combat(),
@@ -221,6 +230,50 @@ fn before_turn_end<V: Rules>(
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
     }
+}
+
+/// `Hook.AfterPlayerTurnStart`, raised on every listener once the player has
+/// drawn, and how the fight ended if what it asked ended it.
+///
+/// # Panics
+///
+/// A listener asking for something no player turn start carries out.
+#[tracing::instrument(level = "trace", skip_all)]
+pub(super) fn player_turn_started<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+) -> Option<super::Ended> {
+    let player = live.player().id;
+    let hook = sts2_core::EventHook::PlayerTurnStart { player };
+    let mut ended = None;
+    for (_, effect) in listen::notify::<V>(live, relics, hook) {
+        match effect {
+            // `CreatureCmd.Damage` over `HittableEnemies`, from the player.
+            sts2_core::HookEffect::DamageOpponents(amount) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                for target in sts2_core::Fight::opponents(&board) {
+                    let hit = sts2_core::Fight::resolve(
+                        &board,
+                        sts2_core::Effect::Attack {
+                            dealer: player,
+                            target,
+                            damage: sts2_core::Amount::Number(amount),
+                            scaling: sts2_core::Scaling::Static,
+                        },
+                    );
+                    sts2_core::Fight::apply(&mut board, hit);
+                }
+                ended = ended.or(board.ended);
+            }
+            effect => {
+                unimplemented!("a listener asking for {effect:?} as the player's turn starts")
+            }
+        }
+    }
+    ended
 }
 
 /// `AfterSideTurnStart`, raised on every listener once the side has drawn.

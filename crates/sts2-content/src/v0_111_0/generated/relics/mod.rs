@@ -1499,7 +1499,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BEAUTIFUL_BRACELET
     sts2_core::Overrides::from_bits(0),
     // BELLOWS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // BELT_BUCKLE
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
@@ -1528,7 +1528,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BONE_FLUTE
     sts2_core::Overrides::from_bits(0),
     // BONE_TEA
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // BOOKMARK
     sts2_core::Overrides::from_bits(0),
     // BOOK_OF_FIVE_RINGS
@@ -1581,7 +1581,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // CHEMICAL_X
     sts2_core::Overrides::from_bits(0),
     // CHOICES_PARADOX
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // CHOSEN_CHEESE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
     // CIRCLET
@@ -1641,7 +1641,8 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // EMOTION_CHIP
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
-        .with(sts2_core::ModelHook::AfterDamageReceived),
+        .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // EMPTY_CAGE
     sts2_core::Overrides::from_bits(0),
     // ETERNAL_FEATHER
@@ -1673,7 +1674,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // FENCING_MANUAL
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // FESTIVE_POPPER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // FIDDLE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
     // FISHING_ROD
@@ -1693,7 +1694,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // GALACTIC_DUST
     sts2_core::Overrides::from_bits(0),
     // GAMBLING_CHIP
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // GAME_PIECE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // GHOST_SEED
@@ -1820,7 +1821,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // MEMBERSHIP_CARD
     sts2_core::Overrides::from_bits(0),
     // MERCURY_HOURGLASS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // METRONOME
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
@@ -1836,7 +1837,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // MOLTEN_EGG
     sts2_core::Overrides::from_bits(0),
     // MR_STRUGGLES
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // MUMMIFIED_HAND
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // MUSIC_BOX
@@ -2017,7 +2018,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // ROYAL_POISON
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // ROYAL_STAMP
     sts2_core::Overrides::from_bits(0),
     // RUINED_HELMET
@@ -2113,7 +2114,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // TINY_MAILBOX
     sts2_core::Overrides::from_bits(0),
     // TOASTY_MITTENS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // TOOLBOX
     sts2_core::Overrides::from_bits(0),
     // TOUCH_OF_OROBAS
@@ -2162,7 +2163,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // VERY_HOT_COCOA
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // VEXING_PUZZLEBOX
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // VITRUVIAN_MINION
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative)

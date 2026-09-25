@@ -18,8 +18,10 @@ mod cursed_pearl;
 mod divine_right;
 mod dollys_mirror;
 mod golden_pearl;
+mod gorget;
 mod gremlin_horn;
 mod lead_paperweight;
+mod mercury_hourglass;
 mod neows_torment;
 mod permafrost;
 mod pocketwatch;
@@ -49,8 +51,10 @@ pub enum State {
     DivineRight,
     DollysMirror,
     GoldenPearl,
+    Gorget,
     GremlinHorn,
     LeadPaperweight,
+    MercuryHourglass,
     NeowsTorment,
     Permafrost(permafrost::State),
     Pocketwatch(pocketwatch::State),
@@ -72,8 +76,10 @@ pub(crate) fn event_hook(
         State::DivineRight => divine_right::event_hook(hook, asked),
         State::DollysMirror => dollys_mirror::event_hook(hook, asked),
         State::GoldenPearl => golden_pearl::event_hook(hook, asked),
+        State::Gorget => gorget::event_hook(hook, asked),
         State::GremlinHorn => gremlin_horn::event_hook(hook, asked),
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
+        State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
@@ -102,8 +108,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DivineRight
         | State::DollysMirror
         | State::GoldenPearl
+        | State::Gorget
         | State::GremlinHorn
         | State::LeadPaperweight
+        | State::MercuryHourglass
         | State::NeowsTorment
         | State::Permafrost(_)
         | State::SandCastle => unimplemented!("what {state:?} does for {hook:?}"),
@@ -125,8 +133,10 @@ impl sts2_core::RelicModel<V> for State {
             Relic::DivineRight => State::DivineRight,
             Relic::DollysMirror => State::DollysMirror,
             Relic::GoldenPearl => State::GoldenPearl,
+            Relic::Gorget => State::Gorget,
             Relic::GremlinHorn => State::GremlinHorn,
             Relic::LeadPaperweight => State::LeadPaperweight,
+            Relic::MercuryHourglass => State::MercuryHourglass,
             Relic::NeowsTorment => State::NeowsTorment,
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),

@@ -5,6 +5,7 @@ use sts2_core::{
     TurnPhaseKinds,
 };
 
+use super::board::Board;
 use super::cards::Cards;
 use super::listen::Walk;
 use super::live::{CardIds, CardInstance, Fighter, Live};
@@ -31,6 +32,14 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) deck: &'a [CardIdent<V>],
 }
 
+/// A fight as it opens, with the streams it drew from.
+pub(crate) struct Entered<V: Rules> {
+    pub(crate) live: Box<Live<V>>,
+    pub(crate) streams: Streams<V>,
+    /// How the fight ended before the player took a turn in it, if it did.
+    pub(crate) ended: Option<super::Ended>,
+}
+
 /// The fight this run opens on the encounter it just travelled into.
 ///
 /// Takes the run as it stands and gives back the fight and the streams it drew
@@ -45,7 +54,7 @@ pub(crate) fn enter<V: Rules>(
     entering: &Entering<'_, V>,
     streams: &Streams<V>,
     relics: &mut Belt<V>,
-) -> Result<(Box<Live<V>>, Streams<V>), Error> {
+) -> Result<Entered<V>, Error> {
     let mut streams = *streams;
     let energy: V::Count = num_traits::cast(V::max_energy(character))
         .expect("the starting energy fits the build's count type");
@@ -115,6 +124,12 @@ pub(crate) fn enter<V: Rules>(
     for (_, effect) in super::listen::notify::<V>(&mut live, relics, EventHook::CombatRoomEntered) {
         match effect {
             HookEffect::GainStars(gained) => live.stars = live.stars + count::<V>(gained),
+            // `PowerCmd.Apply` on the relic's owner, which is the player.
+            HookEffect::ApplyToOwner(power, amount) => {
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::apply_to_actor(&mut board, power, amount);
+            }
             other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }
     }
@@ -158,6 +173,20 @@ pub(crate) fn enter<V: Rules>(
     let piles = pile::shuffle(streams.combat().shuffle, deck).deal_opening(drawn);
 
     live.cards = Cards::dealt(piles.hand(), piles.draw());
+    // `SetupPlayerTurn` ends on `AfterPlayerTurnStart`, which can end the
+    // fight before the player takes a turn in it.
+    if let Some(ended) =
+        super::turn::player_turn_started::<V>(&mut live, streams.combat(), relics, ascension)
+    {
+        if ended == super::Ended::Won {
+            super::listen::combat_ended::<V>(&mut live, relics);
+        }
+        return Ok(Entered {
+            live,
+            streams,
+            ended: Some(ended),
+        });
+    }
     super::turn::side_turn_started::<V>(
         &mut live,
         streams.combat(),
@@ -166,7 +195,11 @@ pub(crate) fn enter<V: Rules>(
         <V::CombatSide as SideKinds>::PLAYER,
     );
 
-    Ok((live, streams))
+    Ok(Entered {
+        live,
+        streams,
+        ended: None,
+    })
 }
 
 /// How many cards a turn's hand is drawn to.

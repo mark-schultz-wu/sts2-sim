@@ -6,7 +6,8 @@
 //!
 //! Every decision is a legal move, picked by a generator seeded from the seed,
 //! so a run repeats exactly. Ending the turn is picked one time in ten while
-//! anything else is legal, because uniform play dies too early to count much.
+//! anything else is legal. The run carries 25 Gorgets and a Mercury
+//! Hourglass, so random play reaches content instead of dying early.
 //! `--avoid` takes one move out of one step, by its place in the legal list.
 //!
 //! It prints `at <act> <floor>` as the floor changes, and `step <n> <move>
@@ -17,10 +18,14 @@
 use std::io::Write as _;
 
 use sts2_content::v0_107_1::V0_107_1;
-use sts2_core::{Decision, Observed as _, Play as _, Seed, Start};
+use sts2_content::v0_107_1::relics::Relic;
+use sts2_core::{Decision, Gift, Observed as _, Play as _, Seed, Setup, Start};
 use sts2_sim::Sim;
 
 type V = V0_107_1;
+
+/// The relics every run is granted before it starts, and how many of each.
+const CARRIED: [(Relic, usize); 2] = [(Relic::Gorget, 25), (Relic::MercuryHourglass, 1)];
 
 /// Decisions a run takes before this gives up on it.
 const STEPS: usize = 20_000;
@@ -75,6 +80,14 @@ fn main() {
             .fold(0, |at, b| at.wrapping_mul(31) ^ u64::from(b)),
     );
     let mut sim = Sim::<V>::begin((), &start).expect("a run to begin");
+    for (relic, count) in CARRIED {
+        for _ in 0..count {
+            let granted = sim.construct(&Setup::Grant(Gift::Relic(relic)));
+            if let Err(refused) = granted.expect("a relic to be granted") {
+                panic!("the run refused {relic:?}: {refused:?}");
+            }
+        }
+    }
     let mut out = std::io::stdout().lock();
     let mut last = None;
 

@@ -134,7 +134,7 @@ impl<V: Rules> State<V> {
     /// decision began. A decision that won the fight goes on to the rewards,
     /// which is `CombatManager.EndCombat` calling `RewardsCmd.Offer`.
     #[tracing::instrument(level = "trace", skip_all)]
-    fn settle(&mut self, ended: Option<combat::Ended>, since: usize) -> Decided {
+    pub(super) fn settle(&mut self, ended: Option<combat::Ended>, since: usize) -> Decided {
         self.lose_cards(since);
         match ended {
             None => {}
