@@ -22,7 +22,7 @@ pub(super) fn event_hook(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     if let EventHook::ModifyRewards {
-        room: RoomType::Boss,
+        room: Some(RoomType::Boss),
         act: 0,
     } = hook
         && !state.triggered

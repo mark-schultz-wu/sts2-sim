@@ -38,16 +38,16 @@ pub use play::recording;
 pub use content::{
     ActTable, Amount, AscensionKinds, CHOICES, CardKind, CardNumber, CardNumberModifier, CardOwner,
     CardRarityKinds, CardTable, CardTagKinds, CardVars, Change, CharacterTable, ContentError,
-    ContentVersion, Cost, CostPool, CreatureView, DecisionHook, DeckAct, DeckPick, Drafted, Effect,
-    EffectResolution, EncounterRoster, EncounterTable, EventHook, EventPower, EventTable, Fight,
-    Fixed, FlagSet, HookEffect, HookEffects, Hooks, KeywordKinds, Lasting, Layout, Listener,
-    MapPointKinds, ModelHook, Modify, ModifyHook, MonsterKinds, MonsterSpawn, MonsterTable,
-    MoveKinds, MoveLog, MoveMachine, MovePinned, Overrides, Picked, Played, PlayerStreamKinds,
-    PotionTable, PotionUsage, PowerAmount, PowerKinds, PowerModel, PowerTable, Printed,
-    RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Replaying, RestKinds, Rests, RewardRarity,
-    RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd,
-    Spawned, Stream, StreamKinds, Table, Taken, TargetKinds, Temporary, TurnPhaseKinds,
-    UnplayableReasonKinds, Version,
+    ContentVersion, Cost, CostPool, CreatureView, CustomReward, DecisionHook, DeckAct, DeckPick,
+    Drafted, Effect, EffectResolution, EncounterRoster, EncounterTable, EventHook, EventPower,
+    EventTable, Fight, Fixed, FlagSet, HookEffect, HookEffects, Hooks, KeywordKinds, Lasting,
+    Layout, Listener, MapPointKinds, ModelHook, Modify, ModifyHook, MonsterKinds, MonsterSpawn,
+    MonsterTable, MoveKinds, MoveLog, MoveMachine, MovePinned, Overrides, Picked, Played,
+    PlayerStreamKinds, PotionTable, PotionUsage, PowerAmount, PowerKinds, PowerModel, PowerTable,
+    Printed, RarityKinds, RelicModel, RelicPoolKinds, RelicTable, Replaying, RestKinds, Rests,
+    RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds,
+    SideTurnEnd, Spawned, Stream, StreamKinds, Table, Taken, TargetKinds, Temporary,
+    TurnPhaseKinds, UnplayableReasonKinds, Version,
 };
 pub use event::{EventBehavior, EventContext, EventFlow, EventView};
 pub use hook_response::HookResponse;

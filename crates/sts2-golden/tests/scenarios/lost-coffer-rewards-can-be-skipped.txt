@@ -1,0 +1,7 @@
+# A relic's own reward screen can be skipped, as a fight's can, and skipping
+# ends it with nothing taken.
+#
+# A port that refuses the skip, or keeps asking after it, parks elsewhere.
+{"cmd":"start","seed":"C000000022","character":"IRONCLAD","ascension":"None"}
+{"cmd":"choose_option","index":1}
+{"cmd":"answer","skip":true}
