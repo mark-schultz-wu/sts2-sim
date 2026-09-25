@@ -16,3 +16,5 @@ sts2-core = { workspace = true }
 # Drawing `trace`'s folded stacks as a flamegraph. Nothing here uses the
 # command-line half.
 inferno = { version = "0.12", default-features = false }
+# Reading the heap profile `allocations` has DHAT write.
+serde_json = { workspace = true }

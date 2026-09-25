@@ -1104,7 +1104,7 @@ pub trait Fight<V: ContentVersion> {
     /// `GetOpponentsOf`. A command snapshots this list before its first
     /// effect lands. Each effect still resolves immediately before it lands,
     /// because an earlier one can change the listeners the next one reaches.
-    fn opponents(&self) -> Vec<crate::CombatId> {
+    fn opponents(&self) -> Opponents {
         let side = self.side();
         self.creatures()
             .filter(|creature| creature.side() != side && creature.alive())
@@ -1476,14 +1476,18 @@ pub enum Selection {
 /// unchecked slice. The simulator constructs this at the boundary where it
 /// handles either a player's answer or a selection taken without asking.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SelectedCards<V: ContentVersion>(Box<[crate::CardAt<V>]>);
+pub struct SelectedCards<V: ContentVersion>(Picked<V>);
+
+/// The cards a selection names, before or after it is checked.
+///
+/// Inline to ten, which is what a hand holds. A selection has no bound of its
+/// own: the game writes "any number" as a count, and one taken without asking
+/// takes a pile whole. So a longer one reaches the heap.
+pub type Picked<V> = smallvec::SmallVec<[crate::CardAt<V>; 10]>;
 
 impl Selection {
     /// Validate a player's answer to this selection.
-    pub fn validate_answer<V: ContentVersion>(
-        self,
-        cards: Box<[crate::CardAt<V>]>,
-    ) -> Option<SelectedCards<V>> {
+    pub fn validate_answer<V: ContentVersion>(self, cards: Picked<V>) -> Option<SelectedCards<V>> {
         let allowed = match self {
             Self::Exactly(count) => cards.len() == count.get(),
             Self::UpTo(count) => cards.len() <= count.get(),
@@ -1497,7 +1501,7 @@ impl Selection {
     /// requested count. An up-to selection always asks, including for none.
     pub fn validate_automatic<V: ContentVersion>(
         self,
-        cards: Box<[crate::CardAt<V>]>,
+        cards: Picked<V>,
     ) -> Option<SelectedCards<V>> {
         match self {
             Self::Exactly(count) if cards.len() <= count.get() => Some(SelectedCards(cards)),
@@ -1920,11 +1924,16 @@ pub enum Replaying<V: ContentVersion> {
 /// the whole fight.
 pub type HookEffects<V> = smallvec::SmallVec<[HookEffect<V>; HOOK_EFFECTS]>;
 
+/// The creatures a command takes as its targets, in command order.
+///
+/// Inline to eight, which no encounter's side outnumbers.
+pub type Opponents = smallvec::SmallVec<[crate::CombatId; 8]>;
+
 /// How many effects a notification's answers hold before they reach the heap.
 pub const HOOK_EFFECTS: usize = 4;
 
 /// One command requested by a content model in response to an event hook.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HookEffect<V: ContentVersion> {
     /// `CardSelectCmd.FromDeckGeneric`, and a clone of what it took.
     ///
@@ -1990,17 +1999,17 @@ pub enum HookEffect<V: ContentVersion> {
     /// the states a power builds rather than names.
     EnterMove(V::MoveId),
     ///
-    /// Boxed, as are the other two moves below. A move is the widest thing an
-    /// effect carries, and every answer to every hook is as wide as its widest
-    /// effect.
-    InstallMove(Box<crate::NextMove<V>>),
+    /// A power builds the same state every time. So this and the two moves
+    /// below point at one the build keeps. A move is the widest thing an
+    /// effect names, and an effect stays as narrow as a pointer.
+    InstallMove(&'static crate::NextMove<V>),
     /// `CreatureCmd.Stun` on the owner: a stunned turn in place of the move
     /// it advertised.
     ///
     /// `then` is `nextMoveId`, as the index of that state in the owner's
     /// graph. Nothing is the state the stun interrupted.
     StunOwner {
-        stun: Box<crate::NextMove<V>>,
+        stun: &'static crate::NextMove<V>,
         then: Option<u8>,
     },
     /// `CreatureCmd.LoseBlock` on the owner, for all of it.
@@ -2014,7 +2023,7 @@ pub enum HookEffect<V: ContentVersion> {
     SummonAfterOwnerDeath {
         monster: V::Monster,
         count: V::Number,
-        opening: Box<crate::NextMove<V>>,
+        opening: &'static crate::NextMove<V>,
     },
 }
 
@@ -2122,39 +2131,27 @@ impl<V: Hooks, P: Printed<V> + ?Sized> Clone for Listener<'_, V, P> {
 
 impl<V: Hooks, P: Printed<V> + ?Sized> Copy for Listener<'_, V, P> {}
 
-pub enum EventListener<'a, V: Hooks, P: Printed<V> + ?Sized> {
-    Power {
-        power: V::Power,
-        amount: PowerAmount<V::Number>,
-        owner: V::CombatSide,
-        /// The creature carrying it, which a hook naming a creature compares
-        /// with.
-        holder: crate::CombatId,
-        /// `PowerModel.Applier`, the creature whose command put it on.
-        applier: Option<crate::CombatId>,
-        /// `Owner.Monster`, which is nothing for a power on the player.
-        monster: Option<V::Monster>,
-        state: &'a mut V::PowerState,
-    },
-    Relic(&'a mut V::RelicState),
-    /// A monster's own model, which the fight asks after the powers on its
-    /// creature.
-    Monster {
-        monster: V::Monster,
-        creature: crate::CombatId,
-    },
-    Card {
-        card: V::Card,
-        /// Which copy this is, which a hook naming a card compares with.
-        id: crate::CardId<V>,
-        printed: &'a P,
-    },
+/// A power as an event hook reaches it.
+pub struct EventPower<'a, V: Hooks> {
+    pub power: V::Power,
+    pub amount: PowerAmount<V::Number>,
+    pub owner: V::CombatSide,
+    /// The creature carrying it, which a hook naming a creature compares with.
+    pub holder: crate::CombatId,
+    /// `PowerModel.Applier`, the creature whose command put it on.
+    pub applier: Option<crate::CombatId>,
+    /// `Owner.Monster`, which is nothing for a power on the player.
+    pub monster: Option<V::Monster>,
+    pub state: &'a mut V::PowerState,
 }
 
 /// The build-specific behavior behind the game's hook dispatcher.
 ///
 /// The enums begin with only the hook shapes the simulator can execute. They
 /// grow as behavior reaches another hook, without widening this trait.
+///
+/// An event hook has an answer for each kind of listener. A walk knows which
+/// kind it is asking, so each has a method of its own.
 pub trait Hooks: ContentVersion {
     /// What one relic's own model saves, which the run carries for it.
     type RelicState: RelicModel<Self>;
@@ -2172,14 +2169,39 @@ pub trait Hooks: ContentVersion {
         hook: DecisionHook<Self>,
     ) -> crate::HookResponse<bool>;
 
-    /// What `listener` asks for when `hook` reaches it, pushed onto `asked`
-    /// in the order it asks.
+    /// What a power asks for when `hook` reaches it, pushed onto `asked` in
+    /// the order it asks. The other kinds of listener have their own below.
     ///
     /// Onto a list the caller owns, because a hook reaches every listener in
     /// the fight and most answer nothing. An answer of nothing then costs
     /// nothing.
-    fn event_hook<P: Printed<Self> + ?Sized>(
-        listener: EventListener<'_, Self, P>,
+    fn power_event_hook(
+        power: EventPower<'_, Self>,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
+
+    /// [`Hooks::power_event_hook`] for a relic, by what its model saves.
+    fn relic_event_hook(
+        state: &mut Self::RelicState,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
+
+    /// [`Hooks::power_event_hook`] for a monster's own model, on `creature`.
+    fn monster_event_hook(
+        monster: Self::Monster,
+        creature: crate::CombatId,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
+
+    /// [`Hooks::power_event_hook`] for the copy `id` of `card`, printed as
+    /// `printed`.
+    fn card_event_hook<P: Printed<Self> + ?Sized>(
+        card: Self::Card,
+        id: crate::CardId<Self>,
+        printed: &P,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

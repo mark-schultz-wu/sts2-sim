@@ -256,9 +256,6 @@ impl std::fmt::Debug for CostModifier {
 /// type once rather than at every call. See [`sts2_core::Printed`].
 pub(crate) type Heard<'a, V> = sts2_core::Listener<'a, V, CardInstance<V>>;
 
-/// The same, for a hook that a listener answers by writing on itself.
-pub(crate) type HeardEvent<'a, V> = sts2_core::EventListener<'a, V, CardInstance<V>>;
-
 /// One copy of a card: which copy, and the state the fight has left it in.
 ///
 /// Two copies of one card are two objects. A rule that raises the damage on
@@ -371,8 +368,9 @@ impl<V: Rules> Face<V> {
     /// A key the card does not print is a mistake in the port, the way a card
     /// asking for a number no card prints is.
     pub(super) fn number(&self, key: V::CardVar) -> CardNumber<V::CardVar, V::Number> {
-        let at = self.at(key);
-        self.printed(&self.ident.card.vars()[at], self.moved(at))
+        let vars = self.ident.card.vars();
+        let at = Self::at(vars, key);
+        self.printed(&vars[at], self.moved(at))
     }
 
     /// How far this copy has moved the number its row holds at `at`.
@@ -393,15 +391,15 @@ impl<V: Rules> Face<V> {
             .map(|(at, named)| self.printed(named, self.moved(at)))
     }
 
-    /// Where in the card's own row `key` sits.
+    /// Where in the card's own row, `vars`, `key` sits.
     ///
     /// A key the card does not print is a mistake in the port, the way a card
     /// asking for a number no card prints is.
-    fn at(&self, key: V::CardVar) -> usize {
-        self.ident
-            .card
-            .vars()
-            .iter()
+    fn at(
+        vars: &[CardNumber<V::CardVar, <V::Card as sts2_core::CardTable>::Number>],
+        key: V::CardVar,
+    ) -> usize {
+        vars.iter()
             .position(|named| named.id == key)
             .unwrap_or_else(|| unimplemented!("the {} this card does not print", key.name()))
     }
@@ -437,7 +435,7 @@ impl<V: Rules> Face<V> {
     /// thing that raises one repeatedly, and arriving here takes two thousand
     /// smiths in one fight.
     pub(super) fn raise(&mut self, key: V::CardVar, by: V::Number) {
-        let at = self.at(key);
+        let at = Self::at(self.ident.card.vars(), key);
         let by: Amount = num_traits::NumCast::from(by)
             .unwrap_or_else(|| unimplemented!("the {} raised by {by:?}", key.name()));
         let row = self.vars.as_mut().unwrap_or_else(|| {
@@ -609,9 +607,10 @@ impl<V: Rules> Face<V> {
         num_traits::NumCast::from(self.replays + 1).expect("a play count fits a game number")
     }
 
-    /// Drop the cost modifiers that do not outlive being played.
-    pub(super) fn was_played(&mut self) {
-        self.kept(CostModifier::clears_when_played);
+    /// Drop the cost modifiers that do not outlive being played, and say
+    /// whether there were any.
+    pub(super) fn was_played(&mut self) -> bool {
+        self.kept(CostModifier::clears_when_played)
     }
 
     /// Hand this copy one more play of its own, which is `BaseReplayCount`.
@@ -631,8 +630,9 @@ impl<V: Rules> Face<V> {
     /// Drop the cost modifiers `clears` names, and close the gaps they leave.
     ///
     /// In order, because a modifier that sets the cost overrides every one
-    /// written before it. Compacted, because an empty slot ends the row.
-    fn kept(&mut self, clears: fn(CostModifier) -> bool) {
+    /// written before it. Compacted, because an empty slot ends the row. The
+    /// answer is whether it dropped any.
+    fn kept(&mut self, clears: fn(CostModifier) -> bool) -> bool {
         let mut to = 0;
         for at in 0..usize::from(self.modifiers) {
             let held = self.cost_modifiers[at];
@@ -641,7 +641,9 @@ impl<V: Rules> Face<V> {
                 to += 1;
             }
         }
+        let dropped = usize::from(self.modifiers) != to;
         self.modifiers = to as u8;
+        dropped
     }
 
     fn upgrade(&mut self) {
@@ -801,11 +803,11 @@ impl<V: Rules> Telegraphed<V> {
     }
 }
 
-impl<V: Rules> From<sts2_core::NextMove<V>> for Telegraphed<V> {
+impl<V: Rules> From<&sts2_core::NextMove<V>> for Telegraphed<V> {
     /// # Panics
     ///
     /// A move drawing more intents than [`INTENTS`].
-    fn from(next: sts2_core::NextMove<V>) -> Self {
+    fn from(next: &sts2_core::NextMove<V>) -> Self {
         let drawn = next.intents.len();
         if drawn > INTENTS {
             unimplemented!("a move drawing {drawn} intents");
@@ -960,8 +962,8 @@ impl<V: Rules> HeldPower<V> {
         }
     }
 
-    pub(crate) fn event_listener(&mut self, carrier: Carrier<V>) -> HeardEvent<'_, V> {
-        sts2_core::EventListener::Power {
+    pub(crate) fn event_power(&mut self, carrier: Carrier<V>) -> sts2_core::EventPower<'_, V> {
+        sts2_core::EventPower {
             power: self.power(),
             amount: self.amount.amount(),
             owner: carrier.side,
@@ -1353,8 +1355,8 @@ impl<V: Rules> Live<V> {
         let carrier = creature.carrier();
         let mut held = self.powers.remove(owner, at);
         let mut asked = sts2_core::HookEffects::new();
-        V::event_hook(
-            held.event_listener(carrier),
+        V::power_event_hook(
+            held.event_power(carrier),
             sts2_core::EventHook::Removed,
             &mut asked,
         );

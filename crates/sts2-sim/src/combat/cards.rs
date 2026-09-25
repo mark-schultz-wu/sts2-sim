@@ -21,7 +21,7 @@ use super::piles::{Card, Piles, Place};
 use crate::rng::MegaRng;
 
 /// What stores the order of a fight's piles.
-pub(crate) type PileStore = super::piles::VecPiles;
+pub(crate) type PileStore = super::piles::FlatPiles;
 
 /// Every card a fight holds, and the five piles they stand in.
 #[derive(Debug)]
@@ -97,7 +97,9 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// which no two cards share. The rest of it is compared only on a match.
     pub(super) fn dealt(hand: &[CardInstance<V>], draw: &[CardInstance<V>]) -> Self {
         let mut cards = Self::with_cards(hand.len() + draw.len());
-        let mut orders: Vec<u16> = Vec::with_capacity(hand.len() + draw.len());
+        // One for each identity the deck holds, which is inline for a deck of
+        // fewer than sixty-four different cards.
+        let mut orders: SmallVec<[u16; 64]> = SmallVec::new();
         for (pile, dealt) in [(Place::Hand, hand), (Place::Draw, draw)] {
             for card in dealt {
                 let order = card.face.ident.card.order();
@@ -238,15 +240,16 @@ impl<V: Rules, P: Piles> Cards<V, P> {
 
     /// Move the copy at `at` in `from` to the end of `to`.
     pub(crate) fn move_to(&mut self, from: Pile, at: usize, to: Pile) {
-        let card = self.piles.remove_at(from.into(), at);
-        self.piles.push_back(to.into(), card);
+        self.piles.move_to(from.into(), at, to.into());
     }
 
     /// `CardPileCmd.Draw`'s own step: the card at the front of the draw pile
     /// goes to the hand.
     pub(crate) fn draw(&mut self) -> Option<CardInstance<V>> {
-        let card = self.piles.pop_front(Place::Draw)?;
-        self.piles.push_back(Place::Hand, card);
+        if self.piles.len(Place::Draw) == 0 {
+            return None;
+        }
+        let card = self.piles.move_to(Place::Draw, 0, Place::Hand);
         Some(self.card(card))
     }
 
@@ -265,8 +268,7 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// `AddDuringManualCardPlay`: the card at `at` in hand goes to the play
     /// pile, and stays there while its effect runs.
     pub(crate) fn play(&mut self, at: usize) -> CardInstance<V> {
-        let card = self.piles.remove_at(Place::Hand, at);
-        self.piles.push_back(Place::Play, card);
+        let card = self.piles.move_to(Place::Hand, at, Place::Play);
         self.card(card)
     }
 
@@ -281,10 +283,18 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         if self.piles.place(card) != Some(Place::Play) {
             unimplemented!("a card leaving play that was not in play");
         }
-        self.piles.remove(card);
+        let at = self
+            .piles
+            .position(Place::Play, card)
+            .expect("a card stands where its place says");
         match to {
-            Some(to) => self.piles.push_back(to.into(), card),
-            None => self.counts.remove(self.overrides(card)),
+            Some(to) => {
+                self.piles.move_to(Place::Play, at, to.into());
+            }
+            None => {
+                self.piles.remove_at(Place::Play, at);
+                self.counts.remove(self.overrides(card));
+            }
         }
     }
 
@@ -293,7 +303,11 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// # Panics
     ///
     /// A card that is not being played.
-    pub(crate) fn write_in_play(&mut self, id: CardId<V>, write: impl FnOnce(&mut Face<V>)) {
+    pub(crate) fn write_in_play(
+        &mut self,
+        id: CardId<V>,
+        write: impl FnOnce(&mut Face<V>) -> bool,
+    ) {
         let card = number(id);
         if self.piles.place(card) != Some(Place::Play) {
             unimplemented!("a card written in play that was not in play");
@@ -302,7 +316,12 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     }
 
     /// Write on the copy at `at` in `pile`.
-    pub(crate) fn write(&mut self, pile: Pile, at: usize, write: impl FnOnce(&mut Face<V>)) {
+    pub(crate) fn write(
+        &mut self,
+        pile: Pile,
+        at: usize,
+        write: impl FnOnce(&mut Face<V>) -> bool,
+    ) {
         let card = self
             .piles
             .get(pile.into(), at)
@@ -310,10 +329,16 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.write_card(card, write);
     }
 
-    fn write_card(&mut self, card: Card, write: impl FnOnce(&mut Face<V>)) {
+    /// Write on the copy numbered `card`, and keep the state it ends in.
+    ///
+    /// `write` says whether it changed anything. A write that did not leaves
+    /// the copy in the state it was in, with nothing to compare.
+    fn write_card(&mut self, card: Card, write: impl FnOnce(&mut Face<V>) -> bool) {
         let was = self.states[usize::from(card)];
         let mut face = self.faces[usize::from(was)];
-        write(&mut face);
+        if !write(&mut face) {
+            return;
+        }
         let now = self.restate(was, face);
         self.set_state(card, now);
     }

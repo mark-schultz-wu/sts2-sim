@@ -141,7 +141,10 @@ pub struct Node<V: ContentVersion> {
     pub at: Coord,
     pub kind: V::MapPointType,
     /// `Children` verbatim, which is what the game draws its lines from.
-    pub to: Vec<Coord>,
+    ///
+    /// Inline, because a row holds seven nodes at most, and the first node
+    /// leads on to every node of the first row.
+    pub to: smallvec::SmallVec<[Coord; 7]>,
 }
 
 /// Where every random stream stands.

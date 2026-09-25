@@ -1,22 +1,22 @@
 //! What one replayed step costs, in instructions, under callgrind.
 //!
-//! An instruction count is exact and repeatable, so two builds compare
-//! without the noise a timer carries. It says nothing about caches or branch
-//! prediction, which is what the criterion benches are for.
+//! A count is exact and repeatable, so two builds compare without a timer's
+//! noise. Caches and branch prediction are the criterion benches' business.
 //!
-//! The replay is `sts2-golden`'s `replay_sites` example, stepping through the
-//! rules alone. Nothing inside map generation is counted: callgrind stops
-//! counting as the builder is entered and starts again as it returns. Every
-//! run generates its maps once, and a search inside a fight never does. So
-//! every figure here, a caller's inclusive one among them, leaves it out.
+//! The replay is `sts2-golden`'s `replay_sites`, through the rules alone.
+//! Map generation is left out: every run makes its maps once, and a search
+//! inside a fight never does.
 //!
-//! Each profile is kept under `target/profile/<label>.callgrind`, so a later
-//! run can be held against it with `--vs`. `--top` lists the simulator's
-//! costliest functions, or, beside `--vs`, the ones that moved most.
+//! A profile is kept under `target/profile/<label>.callgrind`. `--vs` holds
+//! it against an earlier one, and `--top` lists the costliest functions.
+//! `--callers` lists what calls a function, and `--asm` lists a function's
+//! code with what each instruction ran.
 //!
 //! ```text
 //! cargo xtask instructions before
 //! cargo xtask instructions after --vs before --top 10
+//! cargo xtask instructions after --callers malloc.c:malloc
+//! cargo xtask instructions after --asm listen::raise
 //! ```
 
 use std::collections::BTreeMap;
@@ -46,10 +46,16 @@ pub fn run(args: &[String]) -> Result<String, String> {
     let mut label = None;
     let mut vs = None;
     let mut top = 0;
+    let mut callers = None;
+    let mut asm = None;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--vs" => vs = Some(args.next().ok_or("--vs names a label")?.clone()),
+            "--asm" => asm = Some(args.next().ok_or("--asm names a function")?.clone()),
+            "--callers" => {
+                callers = Some(args.next().ok_or("--callers names a pattern")?.clone());
+            }
             "--top" => {
                 top = args
                     .next()
@@ -92,6 +98,8 @@ pub fn run(args: &[String]) -> Result<String, String> {
         // comes after it.
         .arg(format!("--toggle-collect={MAP}"))
         .arg("--collect-atstart=yes")
+        // A count per instruction as well as per line, which `--asm` reads.
+        .arg("--dump-instr=yes")
         .arg(format!("--callgrind-out-file={}", out.display()))
         .arg(root.join("target/release/examples/replay_sites"))
         .arg("rules")
@@ -114,6 +122,13 @@ pub fn run(args: &[String]) -> Result<String, String> {
         millions(current.total),
         current.per_step(),
     );
+    if let Some(pattern) = &callers {
+        report.push_str(&callers_of(&out, pattern, current.steps)?);
+    }
+    if let Some(pattern) = &asm {
+        let binary = root.join("target/release/examples/replay_sites");
+        report.push_str(&crate::asm::listing(&out, &binary, pattern, current.steps)?);
+    }
     let Some(vs) = vs else {
         if top > 0 {
             report.push_str(&format!("the {top} costliest of ours, inclusive:\n"));
@@ -165,7 +180,7 @@ pub fn run(args: &[String]) -> Result<String, String> {
 }
 
 /// The repository's root, which is where cargo and the profiles live.
-fn workspace() -> Result<PathBuf, String> {
+pub(crate) fn workspace() -> Result<PathBuf, String> {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .map(Path::to_path_buf)
@@ -181,7 +196,7 @@ fn steps_path(dir: &Path, label: &str) -> PathBuf {
 }
 
 /// The step count the replay prints, as `divide by <n>`.
-fn divide_by(stdout: &str) -> Result<u64, String> {
+pub(crate) fn divide_by(stdout: &str) -> Result<u64, String> {
     stdout
         .split("divide by ")
         .nth(1)
@@ -271,6 +286,60 @@ fn function(line: &str) -> Option<String> {
         _ => name,
     };
     Some(name.to_owned())
+}
+
+/// Each function whose name holds `pattern`, what it runs itself, and each
+/// caller with the part of it that caller runs, per step. Callers under a
+/// hundredth of the function are left out.
+fn callers_of(file: &Path, pattern: &str, steps: u64) -> Result<String, String> {
+    let output = Command::new("callgrind_annotate")
+        .arg("--tree=caller")
+        .arg("--inclusive=yes")
+        .arg("--threshold=100")
+        .arg(file)
+        .output()
+        .map_err(|e| format!("running callgrind_annotate: {e}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+    }
+    let per_step = |cost: u64| cost as f64 / steps as f64;
+    let mut report = String::new();
+    // A block is the function's callers, one line each, then the function.
+    for block in String::from_utf8_lossy(&output.stdout).split("\n\n") {
+        let lines: Vec<&str> = block.lines().collect();
+        let Some(own) = lines.iter().find(|line| line.contains("*  ")) else {
+            continue;
+        };
+        let (Some(total), Some(name)) = (count(own), function(own)) else {
+            continue;
+        };
+        // The file as well as the name, so a pattern can name the allocator's
+        // `malloc.c:malloc` apart from everything else called `malloc`.
+        if !own.contains(pattern) || total == 0 {
+            continue;
+        }
+        report.push_str(&format!("{:>9.1}  {name}\n", per_step(total)));
+        let mut from: Vec<(u64, String, String)> = lines
+            .iter()
+            .filter(|line| line.contains(" < "))
+            .filter_map(|line| {
+                let cost = count(line)?;
+                let calls = line
+                    .rsplit_once(" (")
+                    .map(|(_, calls)| calls.split_once(')').map_or(calls, |(n, _)| n))
+                    .filter(|calls| calls.ends_with('x'))
+                    .unwrap_or("")
+                    .to_owned();
+                Some((cost, function(line)?, calls))
+            })
+            .filter(|(cost, ..)| *cost * 100 >= total)
+            .collect();
+        from.sort_by_key(|caller| std::cmp::Reverse(caller.0));
+        for (cost, caller, calls) in from {
+            report.push_str(&format!("{:>9.1}    < {caller} {calls}\n", per_step(cost)));
+        }
+    }
+    Ok(report)
 }
 
 /// A count in millions, as a person reads one.

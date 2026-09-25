@@ -1,16 +1,19 @@
 //! Repo chores with real logic in them. `cargo xtask <command>`.
 //!
-//! Four commands. `codegen` turns the dumps in
+//! Five commands. `codegen` turns the dumps in
 //! `sts2-content/src/<version>/dumps/` into that crate's tables, one domain per
 //! dump, and fails the build if two dumps came from different builds. `dump`
 //! asks the game for those dumps. `instructions` counts what a replayed step
-//! costs, and `trace` shows where it goes, span by span.
+//! costs, and `trace` shows where it goes, span by span. `allocations` names
+//! where it reaches the heap.
 //!
 //! The generated tree is committed rather than produced by a `build.rs`, so that
 //! a content change reads as a diff. The whole point of this project is noticing
 //! when the game and the simulator disagree. "Which 40 cards did that patch
 //! touch" is worth being able to see.
 
+mod allocations;
+mod asm;
 mod codegen;
 mod dump;
 mod instructions;
@@ -53,6 +56,18 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Some("allocations") => {
+            match allocations::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
+                Ok(report) => {
+                    print!("{report}");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("allocations failed: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         Some("trace") => match trace::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
             Ok(report) => {
                 print!("{report}");
@@ -64,7 +79,9 @@ fn main() -> ExitCode {
             }
         },
         Some(other) => {
-            eprintln!("unknown command '{other}'; try: codegen, dump, instructions, trace");
+            eprintln!(
+                "unknown command '{other}'; try: allocations, codegen, dump, instructions, trace"
+            );
             ExitCode::FAILURE
         }
         None => {

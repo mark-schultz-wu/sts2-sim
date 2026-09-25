@@ -8,11 +8,13 @@
 //! because ported behaviour put it there. So an unported power reaching here
 //! is a gap in the port, and not a state a run can reach.
 
+use std::sync::LazyLock;
+
 use sts2_core::{Modify, ModifyHook, PowerAmount, PowerModel as _};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{Cards, TokenCard};
-use super::super::generated::monsters::Monster;
+use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
@@ -132,21 +134,33 @@ impl State {
 
 /// `CreatureCmd.Stun`'s own state, which advertises a stunned turn.
 fn stunned(then: Option<u8>) -> sts2_core::HookEffect<V> {
-    use super::super::generated::monsters::{IntentKind, MoveId};
-
     sts2_core::HookEffect::StunOwner {
-        stun: Box::new(sts2_core::NextMove {
-            id: MoveId::Stunned,
-            intents: [sts2_core::Intent {
-                kind: IntentKind::Stun,
-                attack: None,
-            }]
-            .into_iter()
-            .collect(),
-        }),
+        stun: &STUNNED,
         then,
     }
 }
+
+/// A state a power builds: one move, drawing one intent with no number.
+fn built(id: MoveId, kind: IntentKind) -> sts2_core::NextMove<V> {
+    sts2_core::NextMove {
+        id,
+        intents: [sts2_core::Intent { kind, attack: None }]
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// `Creature.Stun`'s state.
+static STUNNED: LazyLock<sts2_core::NextMove<V>> =
+    LazyLock::new(|| built(MoveId::Stunned, IntentKind::Stun));
+
+/// `IllusionPower`'s revive, a heal.
+static REVIVE: LazyLock<sts2_core::NextMove<V>> =
+    LazyLock::new(|| built(MoveId::ReviveMove, IntentKind::Heal));
+
+/// The stunned turn a Wriggler that `InfestedPower` spawns opens on.
+static SPAWNED: LazyLock<sts2_core::NextMove<V>> =
+    LazyLock::new(|| built(MoveId::SpawnedMove, IntentKind::Stun));
 
 /// `VulnerablePower`'s `DamageIncrease`.
 const DAMAGE_INCREASE: f64 = 1.5;
@@ -407,7 +421,6 @@ pub(crate) fn event_hook(
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
-    use super::super::generated::monsters::{IntentKind, MoveId};
     use sts2_core::{EventHook, HookEffect};
 
     debug_assert_eq!(state.power(), power);
@@ -557,15 +570,7 @@ pub(crate) fn event_hook(
         }
         (Power::IllusionPower, _, EventHook::AfterDeath { creature, .. }) if creature == holder => {
             state.set_reviving(true);
-            Some(HookEffect::InstallMove(Box::new(sts2_core::NextMove {
-                id: MoveId::ReviveMove,
-                intents: [sts2_core::Intent {
-                    kind: IntentKind::Heal,
-                    attack: None,
-                }]
-                .into_iter()
-                .collect(),
-            })))
+            Some(HookEffect::InstallMove(&REVIVE))
         }
         (
             Power::InfestedPower,
@@ -574,15 +579,7 @@ pub(crate) fn event_hook(
         ) if creature == holder => Some(HookEffect::SummonAfterOwnerDeath {
             monster: Monster::Wriggler,
             count: amount,
-            opening: Box::new(sts2_core::NextMove {
-                id: MoveId::SpawnedMove,
-                intents: [sts2_core::Intent {
-                    kind: IntentKind::Stun,
-                    attack: None,
-                }]
-                .into_iter()
-                .collect(),
-            }),
+            opening: &SPAWNED,
         }),
         (Power::InfestedPower, PowerAmount::Endless, EventHook::AfterDeath { creature, .. })
             if creature == holder =>

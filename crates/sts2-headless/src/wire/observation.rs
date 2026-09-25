@@ -649,7 +649,7 @@ impl<V: sts2_content_wire::WireContentVersion> WireMap<V> {
                     Ok(Node {
                         at: ident(&format!("map.points[{i}].at"), &p.at, ident::coord)?,
                         kind: p.kind,
-                        to: coords(&format!("map.points[{i}].to"), &p.to)?,
+                        to: coords(&format!("map.points[{i}].to"), &p.to)?.into(),
                     })
                 })
                 .collect::<Result<_, Error>>()?,
@@ -1159,7 +1159,7 @@ mod tests {
         assert_eq!(obs.deck.len(), 2);
         assert_eq!(obs.deck[1].upgrade, 1);
         assert_eq!(obs.map.at, Some(Coord::new(3, 11)));
-        assert_eq!(obs.map.points[0].to, [Coord::new(2, 10)]);
+        assert_eq!(obs.map.points[0].to.as_slice(), [Coord::new(2, 10)]);
         assert!(obs.room.is_none() && obs.combat.is_none());
     }
 

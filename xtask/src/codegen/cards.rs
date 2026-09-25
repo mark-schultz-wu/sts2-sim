@@ -545,7 +545,7 @@ pub fn generate(root: &Path) -> Result<Build, String> {
             write!(row, "    }}").unwrap();
             table.push(row);
         }
-        super::rows(out, "CardData", &table);
+        super::shared_rows(out, "pub(super) ", "CardData", &table);
     }
 
     // The shared half: the field enums, the data shape, and the outer enum.
@@ -781,16 +781,27 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     writeln!(out, "impl sts2_core::Table for Cards {{").unwrap();
     writeln!(out, "    type Data = CardData;\n").unwrap();
     writeln!(out, "    fn data(self) -> &'static CardData {{").unwrap();
-    writeln!(out, "        match self {{").unwrap();
-    for (_, _, enum_name, _) in POOLS {
+    writeln!(
+        out,
+        "        // The pool's table and the place in it. Every arm has the same\n\
+         \x20       // shape, so the match is a lookup by pool, and one index follows."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        let (rows, at): (&'static [CardData], usize) = match self {{"
+    )
+    .unwrap();
+    for (_, module, enum_name, _) in POOLS {
         writeln!(
             out,
-            "            Cards::{}(c) => c.data(),",
+            "            Cards::{}(c) => (&{module}::ROWS, c as usize),",
             enum_name.trim_end_matches("Card")
         )
         .unwrap();
     }
-    writeln!(out, "        }}").unwrap();
+    writeln!(out, "        }};").unwrap();
+    writeln!(out, "        &rows[at]").unwrap();
     writeln!(out, "    }}\n").unwrap();
 
     writeln!(out, "    /// Every card in the build, pools flattened.").unwrap();

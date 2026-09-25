@@ -128,13 +128,19 @@ fn camel(id: &str) -> String {
 /// No variant carries an explicit discriminant. So a value numbers itself by
 /// where it is declared, and that is the order the rows are written in.
 fn rows(out: &mut String, data_ty: &str, rows: &[String]) {
+    shared_rows(out, "", data_ty, rows);
+}
+
+/// [`rows`], with the table itself seen as far as `vis` says. An outer enum
+/// over several tables reads each one directly.
+fn shared_rows(out: &mut String, vis: &str, data_ty: &str, rows: &[String]) {
     writeln!(
         out,
         "/// Every row, in the order the enum declares its variants, which is\n\
          /// the index a value casts to."
     )
     .unwrap();
-    writeln!(out, "static ROWS: [{data_ty}; {}] = [", rows.len()).unwrap();
+    writeln!(out, "{vis}static ROWS: [{data_ty}; {}] = [", rows.len()).unwrap();
     for row in rows {
         writeln!(out, "    {row},").unwrap();
     }

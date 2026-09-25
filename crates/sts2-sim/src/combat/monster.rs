@@ -1,6 +1,7 @@
 //! Creating the enemy creatures that begin a combat.
 
 use crate::rng::MegaRng;
+use smallvec::SmallVec;
 use sts2_core::rng::{Choices, GameRng};
 use sts2_core::{CombatId, ModelId, MoveMachine, Rules, SideKinds};
 
@@ -25,8 +26,11 @@ fn health<V: Rules>(
             Some(ModelId::Monster(_)) => Some(creature.max_hp),
             _ => None,
         });
-    let used: Vec<V::Health> = used.collect();
-    let available: Vec<V::Health> = range.values().filter(|hp| !used.contains(hp)).collect();
+    let used: SmallVec<[V::Health; CREATURES]> = used.collect();
+    // No monster in either build rolls in a range wider than eleven, so this
+    // stays inline.
+    let available: SmallVec<[V::Health; 16]> =
+        range.values().filter(|hp| !used.contains(hp)).collect();
     if let Ok(choices) = Choices::try_new(&available) {
         *niche.choose_from(choices)
     } else {
@@ -123,7 +127,7 @@ pub(crate) fn initialize<V: Rules>(
             alive: true,
             // A fresh machine stands on no built state, so the walk always
             // names the move a monster opens on.
-            next_move: opening.map(Into::into),
+            next_move: opening.as_ref().map(Into::into),
         });
         for (power, amount) in V::monster_starting_powers(monster, ascension) {
             powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
