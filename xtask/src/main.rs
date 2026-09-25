@@ -25,93 +25,55 @@ mod trace;
 
 use std::process::ExitCode;
 
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(
+    name = "cargo xtask",
+    bin_name = "cargo xtask",
+    about = "Repo chores with real logic in them."
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Generate the content tables from the dumps.
+    Codegen,
+    /// Ask the game for its dumps.
+    Dump(dump::Args),
+    /// Count what a replayed step costs, in instructions.
+    Instructions(instructions::Args),
+    /// Name where a replayed step reaches the heap.
+    Allocations(allocations::Args),
+    /// Play runs at random and rank what stops them.
+    Census(census::Args),
+    /// Find the seeds whose Neow offers a relic.
+    Neow(neow::Args),
+    /// Show where a replayed step's instructions go, span by span.
+    Trace(trace::Args),
+}
+
 fn main() -> ExitCode {
-    match std::env::args().nth(1).as_deref() {
-        Some("codegen") => match codegen::run() {
-            Ok(summary) => {
-                println!("{summary}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("codegen failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        // Every mode when none is named, which is what `just dump` does.
-        Some("dump") => match dump::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(summary) => {
-                println!("{summary}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("dump failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some("instructions") => {
-            match instructions::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-                Ok(report) => {
-                    print!("{report}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("instructions failed: {e}");
-                    ExitCode::FAILURE
-                }
-            }
+    let (name, done) = match Cli::parse().command {
+        // Both print a line of their own after what they wrote.
+        Command::Codegen => ("codegen", codegen::run().map(|summary| summary + "\n")),
+        Command::Dump(args) => ("dump", dump::run(args).map(|summary| summary + "\n")),
+        Command::Instructions(args) => ("instructions", instructions::run(args)),
+        Command::Allocations(args) => ("allocations", allocations::run(args)),
+        Command::Census(args) => ("census", census::run(args)),
+        Command::Neow(args) => ("neow", neow::run(args)),
+        Command::Trace(args) => ("trace", trace::run(args)),
+    };
+    match done {
+        Ok(report) => {
+            print!("{report}");
+            ExitCode::SUCCESS
         }
-        Some("allocations") => {
-            match allocations::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-                Ok(report) => {
-                    print!("{report}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("allocations failed: {e}");
-                    ExitCode::FAILURE
-                }
-            }
-        }
-        Some("census") => match census::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(report) => {
-                print!("{report}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("census failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some("neow") => match neow::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(report) => {
-                print!("{report}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("neow failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some("trace") => match trace::run(&std::env::args().skip(2).collect::<Vec<_>>()) {
-            Ok(report) => {
-                print!("{report}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("trace failed: {e}");
-                ExitCode::FAILURE
-            }
-        },
-        Some(other) => {
-            eprintln!(
-                "unknown command '{other}'; try: allocations, census, codegen, dump, instructions, neow, trace"
-            );
-            ExitCode::FAILURE
-        }
-        None => {
-            eprintln!(
-                "usage: cargo xtask <command>\n\ncommands:\n  allocations\n  census\n  codegen\n  dump\n  instructions\n  neow\n  trace"
-            );
+        Err(e) => {
+            eprintln!("{name} failed: {e}");
             ExitCode::FAILURE
         }
     }

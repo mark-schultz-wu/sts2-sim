@@ -98,28 +98,25 @@ struct Attempt {
     stopped_in: Option<(usize, usize, usize)>,
 }
 
-pub fn run(args: &[String]) -> Result<String, String> {
-    let mut runs = 100;
-    let mut top = 20;
-    let mut characters: Vec<String> = Vec::new();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = |name: &str| {
-            args.next()
-                .ok_or_else(|| format!("{name} names a value"))
-                .cloned()
-        };
-        match arg.as_str() {
-            "--runs" => {
-                runs = value("--runs")?
-                    .parse()
-                    .map_err(|e| format!("--runs: {e}"))?
-            }
-            "--top" => top = value("--top")?.parse().map_err(|e| format!("--top: {e}"))?,
-            "--character" => characters.push(value("--character")?),
-            other => return Err(format!("unexpected argument '{other}'")),
-        }
-    }
+#[derive(clap::Args)]
+pub struct Args {
+    /// Seeds to play for each character.
+    #[arg(long, default_value_t = 100)]
+    runs: usize,
+    /// How many of each ranking to print.
+    #[arg(long, default_value_t = 20)]
+    top: usize,
+    /// A character to play, by id. Every playable one when none is named.
+    #[arg(long = "character")]
+    characters: Vec<String>,
+}
+
+pub fn run(args: Args) -> Result<String, String> {
+    let Args {
+        runs,
+        top,
+        mut characters,
+    } = args;
     if characters.is_empty() {
         characters = CHARACTERS.iter().map(|c| c.to_string()).collect();
     }

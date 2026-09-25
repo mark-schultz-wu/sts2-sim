@@ -69,8 +69,15 @@ const DUMPS: &[(&str, Destination)] = &[
     ("setupdump", At("crates/sts2-golden/tests/setup.txt")),
 ];
 
+#[derive(clap::Args)]
+pub struct Args {
+    /// The modes to dump, such as `carddump`. Every one when none is named.
+    modes: Vec<String>,
+}
+
 /// Run every mode named, or all of them when none is.
-pub fn run(modes: &[String]) -> Result<String, String> {
+pub fn run(args: Args) -> Result<String, String> {
+    let modes = args.modes;
     let game = std::env::var("STS2_GAME_DIR").map_err(|_| {
         "STS2_GAME_DIR is not set. The repo .envrc exports it: run `direnv allow` in the repo \
          root, or set it by hand"
@@ -78,7 +85,7 @@ pub fn run(modes: &[String]) -> Result<String, String> {
     })?;
     let game = PathBuf::from(game);
 
-    let wanted = select(modes)?;
+    let wanted = select(&modes)?;
     let mut done = Vec::new();
 
     for (mode, destination) in wanted {

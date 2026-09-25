@@ -44,34 +44,37 @@ impl Profile {
     }
 }
 
-pub fn run(args: &[String]) -> Result<String, String> {
-    let mut label = None;
-    let mut vs = None;
-    let mut top = 0;
-    let mut callers = None;
-    let mut asm = None;
-    let mut map = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--vs" => vs = Some(args.next().ok_or("--vs names a label")?.clone()),
-            "--asm" => asm = Some(args.next().ok_or("--asm names a function")?.clone()),
-            "--map" => map = true,
-            "--callers" => {
-                callers = Some(args.next().ok_or("--callers names a pattern")?.clone());
-            }
-            "--top" => {
-                top = args
-                    .next()
-                    .ok_or("--top names a count")?
-                    .parse()
-                    .map_err(|e| format!("--top: {e}"))?;
-            }
-            other if label.is_none() && !other.starts_with("--") => label = Some(other.to_owned()),
-            other => return Err(format!("unexpected argument '{other}'")),
-        }
-    }
-    let label = label.unwrap_or_else(|| "current".to_owned());
+#[derive(clap::Args)]
+pub struct Args {
+    /// What to call the profile.
+    #[arg(default_value = "current")]
+    label: String,
+    /// Another profile's label, to compare this one against.
+    #[arg(long)]
+    vs: Option<String>,
+    /// How many functions to list, costliest first.
+    #[arg(long, default_value_t = 0)]
+    top: usize,
+    /// The functions that call these, and what each call costs.
+    #[arg(long)]
+    callers: Option<String>,
+    /// A function to list the instructions of.
+    #[arg(long)]
+    asm: Option<String>,
+    /// Map generation alone, rather than everything else.
+    #[arg(long)]
+    map: bool,
+}
+
+pub fn run(args: Args) -> Result<String, String> {
+    let Args {
+        label,
+        vs,
+        top,
+        callers,
+        asm,
+        map,
+    } = args;
 
     let root = workspace()?;
     let dir = root.join("target/profile");

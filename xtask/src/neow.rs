@@ -10,26 +10,24 @@ use std::process::Command;
 
 use crate::instructions::workspace;
 
-pub fn run(args: &[String]) -> Result<String, String> {
-    let mut relic = None;
-    let mut character = "IRONCLAD".to_string();
-    let mut seeds = 300u64;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--character" => character = args.next().ok_or("--character wants a value")?.clone(),
-            "--seeds" => {
-                seeds = args
-                    .next()
-                    .ok_or("--seeds wants a value")?
-                    .parse()
-                    .map_err(|e| format!("--seeds: {e}"))?;
-            }
-            other if relic.is_none() => relic = Some(other.to_string()),
-            other => return Err(format!("unexpected argument {other}")),
-        }
-    }
-    let relic = relic.ok_or("usage: cargo xtask neow <RELIC> [--character C] [--seeds N]")?;
+#[derive(clap::Args)]
+pub struct Args {
+    /// The relic, by id, such as `NEW_LEAF`.
+    relic: String,
+    /// The character whose Neow is asked.
+    #[arg(long, default_value = "IRONCLAD")]
+    character: String,
+    /// How many seeds to try, from the census's first.
+    #[arg(long, default_value_t = 300)]
+    seeds: u64,
+}
+
+pub fn run(args: Args) -> Result<String, String> {
+    let Args {
+        relic,
+        character,
+        seeds,
+    } = args;
 
     let output = Command::new("cargo")
         .current_dir(workspace()?)

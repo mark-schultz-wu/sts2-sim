@@ -34,82 +34,83 @@ const REPLAY: &str = "sts2_trace::replay";
 /// Where `show --map` starts when no root is named: each map built.
 const MAP: &str = "act_map";
 
-pub fn run(args: &[String]) -> Result<String, String> {
-    let (command, rest) = args
-        .split_first()
-        .ok_or("usage: cargo xtask trace <record|show|svg> <label> ...")?;
-    let dir = workspace()?.join("target/profile");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
-    let mut options = Options::parse(rest)?;
-    let mut label = options.label.take().unwrap_or_else(|| "current".to_owned());
-    // The map's stacks sit in a file of their own beside the rest.
-    if options.map {
-        label = format!("{label}.map");
-        options.vs = options.vs.map(|vs| format!("{vs}.map"));
-    }
-    match command.as_str() {
-        "record" => record(&dir, &label),
-        "show" => show(&dir, &label, &options),
-        "svg" => svg(&dir, &label, options.map),
-        other => Err(format!(
-            "unknown trace command '{other}'; try: record, show, svg"
-        )),
-    }
+#[derive(clap::Args)]
+pub struct Args {
+    #[command(subcommand)]
+    command: Trace,
 }
 
-/// What `show` and `record` take beside the label.
-#[derive(Default)]
-struct Options {
-    label: Option<String>,
-    root: Option<String>,
-    depth: Option<usize>,
-    min: Option<f64>,
-    vs: Option<String>,
-    callers: Option<String>,
-    /// Map generation rather than everything else.
+#[derive(clap::Subcommand)]
+enum Trace {
+    /// Build `sts2-trace`, replay the recorded run under it, and keep what it
+    /// folded.
+    Record {
+        /// What to call the profile.
+        #[arg(default_value = "current")]
+        label: String,
+    },
+    /// A recorded profile as a tree, in instructions per step.
+    Show(Show),
+    /// A recorded profile as a flamegraph, next to its folded file.
+    Svg(Stacks),
+}
+
+/// Which recorded stacks to read.
+#[derive(clap::Args)]
+struct Stacks {
+    /// The profile's label.
+    #[arg(default_value = "current")]
+    label: String,
+    /// Map generation, per map built, rather than everything else.
+    #[arg(long)]
     map: bool,
 }
 
-impl Options {
-    fn parse(args: &[String]) -> Result<Self, String> {
-        let mut options = Options::default();
-        let mut args = args.iter();
-        let value = |flag: &str, args: &mut std::slice::Iter<'_, String>| {
-            args.next()
-                .cloned()
-                .ok_or_else(|| format!("{flag} takes a value"))
-        };
-        while let Some(arg) = args.next() {
-            match arg.as_str() {
-                "--root" => options.root = Some(value("--root", &mut args)?),
-                "--depth" => options.depth = Some(parse(&value("--depth", &mut args)?, "--depth")?),
-                "--min" => options.min = Some(parse(&value("--min", &mut args)?, "--min")?),
-                "--vs" => options.vs = Some(value("--vs", &mut args)?),
-                "--callers" => options.callers = Some(value("--callers", &mut args)?),
-                "--map" => options.map = true,
-                other if options.label.is_none() && !other.starts_with("--") => {
-                    options.label = Some(other.to_owned())
-                }
-                other => return Err(format!("unexpected argument '{other}'")),
+/// What `show` takes beside the stacks it reads.
+#[derive(clap::Args)]
+struct Show {
+    #[command(flatten)]
+    stacks: Stacks,
+    /// The span the tree starts at.
+    #[arg(long)]
+    root: Option<String>,
+    /// How many frames deep the tree goes.
+    #[arg(long, default_value_t = 4)]
+    depth: usize,
+    /// The share of the root, in per cent, a frame needs to be listed.
+    #[arg(long, default_value_t = 1.0)]
+    min: f64,
+    /// Another profile's label, to show this one against.
+    #[arg(long)]
+    vs: Option<String>,
+    /// The spans that call these, rather than what they call.
+    #[arg(long)]
+    callers: Option<String>,
+}
+
+pub fn run(args: Args) -> Result<String, String> {
+    let dir = crate::instructions::workspace()?.join("target/profile");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    match args.command {
+        Trace::Record { label } => record(&dir, &label),
+        Trace::Show(mut show_args) => {
+            let label = stacked(&show_args.stacks);
+            // The map's stacks sit in a file of their own beside the rest.
+            if show_args.stacks.map {
+                show_args.vs = show_args.vs.map(|vs| format!("{vs}.map"));
             }
+            show(&dir, &label, &show_args)
         }
-        Ok(options)
+        Trace::Svg(stacks) => svg(&dir, &stacked(&stacks), stacks.map),
     }
 }
 
-fn parse<T: std::str::FromStr>(text: &str, flag: &str) -> Result<T, String>
-where
-    T::Err: std::fmt::Display,
-{
-    text.parse().map_err(|e| format!("{flag}: {e}"))
-}
-
-/// The repository's root, which is where cargo and the profiles live.
-fn workspace() -> Result<PathBuf, String> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| "xtask sits inside the workspace".into())
+/// The label of the file that holds these stacks.
+fn stacked(stacks: &Stacks) -> String {
+    match stacks.map {
+        true => format!("{}.map", stacks.label),
+        false => stacks.label.clone(),
+    }
 }
 
 fn folded_path(dir: &Path, label: &str) -> PathBuf {
@@ -118,7 +119,7 @@ fn folded_path(dir: &Path, label: &str) -> PathBuf {
 
 /// Build `sts2-trace`, run it, and keep what it folded.
 fn record(dir: &Path, label: &str) -> Result<String, String> {
-    let root = workspace()?;
+    let root = crate::instructions::workspace()?;
     let built = Command::new("cargo")
         .args(["build", "-q", "--profile", "profiling", "-p", "sts2-trace"])
         .current_dir(&root)
@@ -240,16 +241,15 @@ fn read(dir: &Path, label: &str, callers: Option<&str>) -> Result<(Node, f64), S
 }
 
 /// The tree under the root `options` names, one frame a line.
-fn show(dir: &Path, label: &str, options: &Options) -> Result<String, String> {
-    let depth = options.depth.unwrap_or(4);
-    let min = options.min.unwrap_or(1.0);
+fn show(dir: &Path, label: &str, options: &Show) -> Result<String, String> {
+    let (depth, min) = (options.depth, options.min);
     let focus = |label: &str| -> Result<(Node, f64), String> {
         if let Some(pattern) = &options.callers {
             return read(dir, label, Some(pattern));
         }
         let (all, worth) = read(dir, label, None)?;
         let mut zoomed = Node::default();
-        let start = match options.map {
+        let start = match options.stacks.map {
             true => MAP,
             false => REPLAY,
         };
@@ -261,10 +261,10 @@ fn show(dir: &Path, label: &str, options: &Options) -> Result<String, String> {
     let root = match (&options.callers, &options.root) {
         (Some(pattern), _) => format!("what calls {pattern}"),
         (None, Some(pattern)) => pattern.clone(),
-        (None, None) if options.map => "map generation".to_owned(),
+        (None, None) if options.stacks.map => "map generation".to_owned(),
         (None, None) => "the replay".to_owned(),
     };
-    let per = match options.map {
+    let per = match options.stacks.map {
         true => "map",
         false => "step",
     };

@@ -29,21 +29,15 @@ fn ours(frame: &str) -> bool {
     frame.contains("(crates/")
 }
 
-pub fn run(args: &[String]) -> Result<String, String> {
-    let mut top = 20;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--top" => {
-                top = args
-                    .next()
-                    .ok_or("--top names a count")?
-                    .parse()
-                    .map_err(|e| format!("--top: {e}"))?;
-            }
-            other => return Err(format!("unexpected argument '{other}'")),
-        }
-    }
+#[derive(clap::Args)]
+pub struct Args {
+    /// How many sites to print.
+    #[arg(long, default_value_t = 20)]
+    top: usize,
+}
+
+pub fn run(args: Args) -> Result<String, String> {
+    let Args { top } = args;
 
     let root = workspace()?;
     let dir = root.join("target/profile");
