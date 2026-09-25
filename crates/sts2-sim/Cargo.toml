@@ -19,3 +19,5 @@ thiserror = { workspace = true }
 sts2-core = { workspace = true, features = ["fixture"] }
 # A unit test drives a rule, and a rule is written against one build's tables.
 sts2-content = { workspace = true }
+# `map_bench`'s arguments.
+clap = { workspace = true }

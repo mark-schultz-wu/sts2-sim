@@ -14,12 +14,13 @@
 //! cargo run --example scenario
 //! ```
 
-use anyhow::bail;
+use std::process::ExitCode;
 
+use clap::Parser;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::ContentVersion;
 use sts2_core::Seed;
-use sts2_core::{Applied, Construct, Decision, Gift, Play, Setup, Start, Step};
+use sts2_core::{Applied, Construct, Decision, Gift, Play, Refusal, Setup, Start, Step};
 use sts2_headless::{Config, Oracle};
 
 type V = V0_107_1;
@@ -28,15 +29,34 @@ type Character = <V as ContentVersion>::Character;
 type Encounter = <V as ContentVersion>::Encounter;
 type Relic = <V as ContentVersion>::Relic;
 
+/// Construct a scenario against the game, printing each state it reaches.
+#[derive(Parser)]
+struct Cli {}
+
+/// Why the scenario stopped.
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("set STS2_GAME_DIR — the repo's .envrc exports it, run `direnv allow`")]
+    NoGameDir,
+    #[error(transparent)]
+    Seed(#[from] sts2_core::seed::Error),
+    #[error(transparent)]
+    Game(#[from] sts2_headless::Error),
+    #[error("{step:?} was refused: {refusal}")]
+    Refused { step: Step<V>, refusal: Refusal<V> },
+    #[error("expected the game to refuse an unknown encounter")]
+    NotRefused,
+}
+
 /// Sends one command, prints what came back, and stops at the first refusal.
 ///
 /// The two layers are the point: the outer `?` is "did the exchange happen",
 /// the inner match is "did the game accept it". Without the second, a refused
 /// command reads as success and every command after it runs against a state the
 /// caller is not expecting.
-fn step(game: &mut Oracle<V>, command: impl Into<Step<V>>) -> anyhow::Result<Applied<V>> {
-    let command = command.into();
-    match game.step(&command)? {
+fn step(game: &mut Oracle<V>, command: impl Into<Step<V>>) -> Result<Applied<V>, Error> {
+    let step = command.into();
+    match game.step(&step)? {
         Ok(applied) => {
             // Printed from the reply the oracle kept, because the rule line at
             // the top of each step is the protocol's envelope and `Applied` does
@@ -46,13 +66,23 @@ fn step(game: &mut Oracle<V>, command: impl Into<Step<V>>) -> anyhow::Result<App
             println!("{view}\n");
             Ok(applied)
         }
-        Err(refusal) => bail!("{command:?} was refused: {refusal}"),
+        Err(refusal) => Err(Error::Refused { step, refusal }),
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    let dir = sts2_headless::game_dir_from_env()
-        .expect("set STS2_GAME_DIR — the repo's .envrc exports it, run `direnv allow`");
+fn main() -> ExitCode {
+    let Cli {} = Cli::parse();
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Error> {
+    let dir = sts2_headless::game_dir_from_env().ok_or(Error::NoGameDir)?;
     // 1. A fresh run, seeded explicitly. Starting one is how a game is
     //    reached at all: nothing plays without a run behind it.
     let mut game = Oracle::begin(
@@ -85,7 +115,7 @@ fn main() -> anyhow::Result<()> {
     //    typed API deliberately, which is what `send_raw` is for.
     let wrong = serde_json::json!({"cmd": "fight", "encounter": "NO_SUCH_ENCOUNTER"});
     match game.send_raw(&wrong)? {
-        Ok(_) => bail!("expected the game to refuse an unknown encounter"),
+        Ok(_) => return Err(Error::NotRefused),
         Err(refusal) => println!("refused, as it should be: {refusal}\n"),
     }
 

@@ -43,32 +43,60 @@ pub fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-/// Every run, by name, in a fixed order so a failure reads the same twice.
 pub mod scenario;
 pub mod suite;
 
-pub fn every_run() -> Vec<String> {
+/// What reading the recorded runs found wrong.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("reading {}: {source}", path.display())]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("no runs in {}", .0.display())]
+    NoRuns(PathBuf),
+    #[error("reading {}: {source}", path.display())]
+    Recording {
+        path: PathBuf,
+        #[source]
+        source: sts2_headless::recording::Error,
+    },
+}
+
+/// Every run, by name, in a fixed order so a failure reads the same twice.
+pub fn every_run() -> Result<Vec<String>, Error> {
     let dir = golden_dir();
-    let mut names: Vec<String> = std::fs::read_dir(&dir)
-        .unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().is_dir())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .collect();
+    let io = |source| Error::Io {
+        path: dir.clone(),
+        source,
+    };
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(io)? {
+        let entry = entry.map_err(io)?;
+        if entry.path().is_dir() {
+            names.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
     names.sort();
-    assert!(!names.is_empty(), "no runs in {}", dir.display());
-    names
+    if names.is_empty() {
+        return Err(Error::NoRuns(dir));
+    }
+    Ok(names)
 }
 
 /// One run's recording, as the steps that made it.
 pub fn recording<V: sts2_content_wire::WireContentVersion>(
     run: &str,
-) -> sts2_core::recording::Recording<V> {
+) -> Result<sts2_core::recording::Recording<V>, Error> {
     let path = golden_dir().join(run).join("run.jsonl");
-    let file =
-        std::fs::File::open(&path).unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
+    let file = std::fs::File::open(&path).map_err(|source| Error::Io {
+        path: path.clone(),
+        source,
+    })?;
     sts2_headless::recording::read::<V>(std::io::BufReader::new(file))
-        .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+        .map_err(|source| Error::Recording { path, source })
 }
 
 /// A game that cannot be launched, which is the only kind a test wants.

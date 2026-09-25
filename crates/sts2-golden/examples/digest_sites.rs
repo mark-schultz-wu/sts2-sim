@@ -11,6 +11,9 @@
 //! ./tools/dhat-sites.py dhat.json --divide-by <REPLAYS × steps>
 //! ```
 
+use std::process::ExitCode;
+
+use clap::Parser;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::{Digested, Play, Step};
 use sts2_golden::bench::reached;
@@ -23,12 +26,32 @@ type V = V0_107_1;
 /// error.
 const DIGESTS: usize = 200;
 
-fn main() {
-    let name = every_run()
-        .into_iter()
-        .next()
-        .expect("a recorded run to replay");
-    let recorded = recording::<V>(&name);
+/// Digest every position of the first recorded run, over and over.
+#[derive(Parser)]
+struct Cli {}
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    Golden(#[from] sts2_golden::Error),
+    #[error("starting the run: {0}")]
+    Begin(#[source] sts2_sim::Error),
+}
+
+fn main() -> ExitCode {
+    let Cli {} = Cli::parse();
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Error> {
+    let name = every_run()?.swap_remove(0);
+    let recorded = recording::<V>(&name)?;
     let start = recorded.start().clone();
     let steps: Vec<Step<V>> = recorded.steps().to_vec();
     let supported = reached::<V, Sim<V>>(&start, &steps);
@@ -37,11 +60,12 @@ fn main() {
         "{name}: {DIGESTS} digests at each of {supported} steps, divide by {}",
         DIGESTS * supported
     );
-    let mut sim = Sim::<V>::begin((), &start).expect("a recording starts a run");
+    let mut sim = Sim::<V>::begin((), &start).map_err(Error::Begin)?;
     for step in &steps[..supported] {
         let _ = sim.advance(step);
         for _ in 0..DIGESTS {
             std::hint::black_box(sim.observed().rules_digest());
         }
     }
+    Ok(())
 }

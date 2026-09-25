@@ -19,9 +19,10 @@
 //! belongs to, and how an answer is printed. [`sts2_cli::control`] performs the
 //! commands, against anything that plays the game.
 
-use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::time::Duration;
 use sts2_cli::cli::{Play, StartArgs};
 use sts2_cli::control::{self, Outcome};
@@ -205,6 +206,25 @@ enum DaemonCommand {
     },
 }
 
+/// Why an invocation did not do what it asked.
+#[derive(Debug, thiserror::Error)]
+enum Error<V: sts2_content_wire::WireContentVersion> {
+    #[error(transparent)]
+    Cli(#[from] sts2_cli::cli::Error),
+    #[error(transparent)]
+    Control(#[from] control::Error<V>),
+    #[error(transparent)]
+    Oracle(#[from] oracle::Error),
+    #[error(transparent)]
+    Tui(#[from] tui::Error),
+    #[error("starting the run: {0}")]
+    Start(sts2_headless::Error),
+    #[error("--steps 0 stops before the first step, which replays nothing")]
+    NoSteps,
+}
+
+type Result<T, V> = std::result::Result<T, Error<V>>;
+
 /// One invocation, grouped by what it addresses.
 ///
 /// Starting creates a run. A [`control::Command`] addresses one that exists.
@@ -297,7 +317,7 @@ fn grouped(top: Top) -> Command {
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let version = cli
@@ -309,13 +329,27 @@ fn main() -> Result<()> {
     // One arm per build `sts2-content` compiles. Everything below is generic
     // over it, so this is the only place that names one.
     match version.as_str() {
-        "v0.107.1" => drive::<sts2_content::v0_107_1::V0_107_1>(cli),
-        "v0.111.0" => drive::<sts2_content::v0_111_0::V0_111_0>(cli),
-        other => bail!("no tables for game version {other:?}; try v0.107.1 or v0.111.0"),
+        "v0.107.1" => exit(drive::<sts2_content::v0_107_1::V0_107_1>(cli)),
+        "v0.111.0" => exit(drive::<sts2_content::v0_111_0::V0_111_0>(cli)),
+        other => {
+            eprintln!("no tables for game version {other:?}; try v0.107.1 or v0.111.0");
+            ExitCode::FAILURE
+        }
     }
 }
 
-fn drive<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
+/// The exit status for how a command went, with the error on stderr.
+fn exit(done: std::result::Result<(), impl Display>) -> ExitCode {
+    match done {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn drive<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), V> {
     let show = Show { rng: cli.rng };
     let held: Host<V> = Held::new(serving);
 
@@ -327,7 +361,7 @@ fn drive<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
         Command::Held(Machinery::Serve {
             detach,
             idle_timeout,
-        }) => held.serve(detach, Duration::from_secs(idle_timeout)),
+        }) => Ok(held.serve(detach, Duration::from_secs(idle_timeout))?),
 
         Command::Held(Machinery::Record { file }) => said(held.record(file)?),
         Command::Held(Machinery::Status) => said(held.status()?),
@@ -354,7 +388,7 @@ fn start<V: sts2_content_wire::WireContentVersion>(
     held: &Host<V>,
     args: &StartArgs,
     show: Show,
-) -> Result<()> {
+) -> Result<(), V> {
     // Read before anything is brought up, so a mistyped seed or character
     // leaves behind neither a daemon nor an empty recording.
     let opening = args.start::<V>()?;
@@ -370,7 +404,7 @@ fn start<V: sts2_content_wire::WireContentVersion>(
     // Starting is not a step, so it does not go through `perform`. It is what
     // makes the thing `perform` sends to, and the daemon refuses a second one
     // while it is holding a run.
-    let mut game = Game::<V>::begin((), &opening).context("starting the run")?;
+    let mut game = Game::<V>::begin((), &opening).map_err(Error::Start)?;
     let outcome = Outcome::Seen {
         snapshot: Box::new(control::look(&mut game)?),
         decided: None,
@@ -384,7 +418,7 @@ fn start<V: sts2_content_wire::WireContentVersion>(
 /// which is one line and says what it does. Bringing the game up on a bare
 /// `sts2` means twenty seconds of nothing, followed by a screen with no run in
 /// it. It also gives the player no way to say which seed they wanted.
-fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>, show: Show) -> Result<()> {
+fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>, show: Show) -> Result<(), V> {
     // The daemon comes up. The *game* does not, so a bare `sts2` opens on the
     // setup screen straight away and the game boots while the player is picking
     // a character.
@@ -409,7 +443,7 @@ fn play<V: sts2_content_wire::WireContentVersion>(held: &Host<V>, show: Show) ->
             let game = match attached.take() {
                 Some(game) => game,
                 None => match screen.collect(terminal)? {
-                    Some(start) => Game::<V>::begin((), &start).context("starting the run")?,
+                    Some(start) => Game::<V>::begin((), &start).map_err(Error::Start)?,
                     None => return Ok(()),
                 },
             };
@@ -434,7 +468,7 @@ struct Show {
 }
 
 /// Prints a whole answer that is words rather than a state.
-fn said(words: String) -> Result<()> {
+fn said<V: sts2_content_wire::WireContentVersion>(words: String) -> Result<(), V> {
     println!("{words}");
     Ok(())
 }
@@ -448,7 +482,7 @@ fn report<V: sts2_content_wire::WireContentVersion>(
     game: &Game<V>,
     outcome: Outcome<V>,
     show: Show,
-) -> Result<()> {
+) -> Result<(), V> {
     if let Some(warning) = game.warned() {
         eprintln!("(warning: {warning})");
     }
@@ -469,8 +503,11 @@ fn report<V: sts2_content_wire::WireContentVersion>(
 ///
 /// The subcommand is spelled the way [`Top`] groups it. It is a command line
 /// like any other, and a test below parses it rather than trusting it.
-fn serving(idle: Duration, version: &str) -> Result<std::process::Command> {
-    let exe = std::env::current_exe().context("finding this binary")?;
+fn serving(
+    idle: Duration,
+    version: &str,
+) -> std::result::Result<std::process::Command, oracle::Error> {
+    let exe = std::env::current_exe().map_err(oracle::Error::Exe)?;
     let mut command = std::process::Command::new(exe);
     command
         .args(["daemon", "serve"])
@@ -504,7 +541,7 @@ fn replay<V: sts2_content_wire::WireContentVersion>(
     stop_after: Option<usize>,
     record: Option<PathBuf>,
     show: Show,
-) -> Result<()> {
+) -> Result<(), V> {
     let recording = oracle::recorded::<V>(file)?;
     let steps = match stop_after {
         Some(n) if n < recording.len() => &recording.steps()[..n],
@@ -512,7 +549,7 @@ fn replay<V: sts2_content_wire::WireContentVersion>(
     };
 
     if steps.is_empty() {
-        bail!("--steps 0 stops before the first step, which replays nothing");
+        return Err(Error::NoSteps);
     }
 
     let mut game = held.empty()?;

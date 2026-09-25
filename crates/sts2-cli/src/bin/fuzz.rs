@@ -8,15 +8,15 @@
 //! reaching interesting states. The fuzzer owns its game process and never
 //! evicts a run from the interactive daemon.
 
-use anyhow::{Context, Result, bail};
 use clap::Parser;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
-use sts2_cli::cli::moves;
+use std::process::ExitCode;
+use sts2_cli::cli::{id, moves};
 use sts2_cli::coverage::Coverage;
 use sts2_core::Seed;
-use sts2_core::{Construct, Gift, Play, Setup, Snapshot, Start, Step};
+use sts2_core::{Construct, Decision, Gift, Play, Refusal, Setup, Snapshot, Start, Step};
 use sts2_headless::{Config, Oracle, recording};
 
 #[derive(Debug, Parser)]
@@ -66,7 +66,56 @@ struct Cli {
     game_output: bool,
 }
 
-fn main() -> Result<()> {
+/// Why a fuzz run stopped short of an ending.
+#[derive(Debug, thiserror::Error)]
+enum Error<V: sts2_content_wire::WireContentVersion> {
+    #[error(transparent)]
+    Seed(#[from] sts2_core::seed::Error),
+    #[error(transparent)]
+    Cli(#[from] sts2_cli::cli::Error),
+    #[error("reading the clock: {0}")]
+    Clock(#[from] std::time::SystemTimeError),
+    #[error("{what} {}: {source}", path.display())]
+    Io {
+        what: &'static str,
+        path: PathBuf,
+        source: io::Error,
+    },
+    #[error("serialising coverage: {0}")]
+    Coverage(#[from] serde_json::Error),
+    #[error("set STS2_GAME_DIR to the game directory (`just fuzz` does this)")]
+    NoGameDir,
+    #[error("launching the game: {0}")]
+    Launch(sts2_headless::Error),
+    #[error(transparent)]
+    Sent(#[from] Sent<V>),
+    #[error("nothing is legal and the run is not over, after {taken} move(s); {}", path.display())]
+    NothingLegal { taken: usize, path: PathBuf },
+    #[error("replay {}: move {taken}: {chosen:?}: {source}", path.display())]
+    Move {
+        path: PathBuf,
+        taken: usize,
+        chosen: Decision<V>,
+        source: Sent<V>,
+    },
+}
+
+/// Why a move sent is a finding.
+#[derive(Debug, thiserror::Error)]
+enum Sent<V: sts2_content_wire::WireContentVersion> {
+    #[error("writing the recording: {0}")]
+    Tape(#[from] io::Error),
+    #[error("the game stopped answering: {0}")]
+    Silent(#[from] sts2_headless::Error),
+    /// Not "the move was wrong". The move came out of the legal set, so a
+    /// refusal means that set and the game disagree, which is the bug.
+    #[error("the game refused a move it offered: {0}")]
+    Refused(Refusal<V>),
+    #[error("the game logged {} error(s): {}", .0.len(), .0.join(" · "))]
+    Logged(Vec<String>),
+}
+
+fn main() -> ExitCode {
     let cli = Cli::parse();
 
     // One arm per build `sts2-content` compiles. The whole fuzzer is generic
@@ -79,26 +128,44 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| "v0.107.1".to_string());
 
     match version.as_str() {
-        "v0.107.1" => fuzz::<sts2_content::v0_107_1::V0_107_1>(cli),
-        "v0.111.0" => fuzz::<sts2_content::v0_111_0::V0_111_0>(cli),
-        other => bail!("no tables for game version {other:?}; try v0.107.1 or v0.111.0"),
+        "v0.107.1" => exit(fuzz::<sts2_content::v0_107_1::V0_107_1>(cli)),
+        "v0.111.0" => exit(fuzz::<sts2_content::v0_111_0::V0_111_0>(cli)),
+        other => {
+            eprintln!("no tables for game version {other:?}; try v0.107.1 or v0.111.0");
+            ExitCode::FAILURE
+        }
     }
 }
 
-fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
+/// The exit status for how a run went, with the error on stderr.
+fn exit(fuzzed: Result<(), impl std::fmt::Display>) -> ExitCode {
+    match fuzzed {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<(), Error<V>> {
     let seed = match &cli.seed {
-        Some(typed) => Seed::fold(typed).map_err(|e| anyhow::anyhow!("{e}"))?,
+        Some(typed) => Seed::fold(typed)?,
         None => made_up_seed()?,
     };
-    let character: V::Character = id("a character", &cli.character)?;
-    let relic: V::Relic = id("a relic", &cli.relic)?;
-    let ascension: V::AscensionLevel = id("an ascension level", &cli.ascension)?;
+    let character: V::Character = id("character", &cli.character)?;
+    let relic: V::Relic = id("relic", &cli.relic)?;
+    let ascension: V::AscensionLevel = id("ascension level", &cli.ascension)?;
 
     let path = match cli.record.clone() {
         Some(path) => path,
         None => {
             let dir = sts2_cli::runs::runs_dir();
-            std::fs::create_dir_all(&dir).with_context(|| format!("making {}", dir.display()))?;
+            std::fs::create_dir_all(&dir).map_err(|source| Error::Io {
+                what: "making",
+                path: dir.clone(),
+                source,
+            })?;
             dir.join(format!(
                 "fuzz-{}-{}.jsonl",
                 seed.as_str(),
@@ -107,14 +174,15 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
         }
     };
 
-    let mut tape = BufWriter::new(
-        File::create(&path).with_context(|| format!("creating {}", path.display()))?,
-    );
-    recording::open::<V>(&mut tape)?;
+    let mut tape = BufWriter::new(File::create(&path).map_err(|source| Error::Io {
+        what: "creating",
+        path: path.clone(),
+        source,
+    })?);
+    recording::open::<V>(&mut tape).map_err(Sent::Tape)?;
     println!("seed {} · recording to {}", seed.as_str(), path.display());
 
-    let dir = sts2_headless::game_dir_from_env()
-        .context("set STS2_GAME_DIR to the game directory (`just fuzz` does this)")?;
+    let dir = sts2_headless::game_dir_from_env().ok_or(Error::NoGameDir)?;
     let mut config = Config::new(dir);
     config.inherit_game_output = cli.game_output;
     let start = Start {
@@ -125,7 +193,7 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
     };
     // The run is begun with the game, because a simulator or an oracle without
     // one is not something to fuzz.
-    let mut game = Oracle::<V>::begin(config, &start).context("launching the game")?;
+    let mut game = Oracle::<V>::begin(config, &start).map_err(Error::Launch)?;
 
     // The seed decides the run. This decides which of the legal moves gets
     // taken. Derived from it so a session is reproducible from its name alone,
@@ -141,8 +209,8 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
     cover.started::<V>(character);
 
     // The start is the recording's first line, and it happened above.
-    recording::began(&mut tape, &start)?;
-    let mut seen = game.observe().context("the game stopped answering")?;
+    recording::began(&mut tape, &start).map_err(Sent::Tape)?;
+    let mut seen = game.observe().map_err(Sent::Silent)?;
     cover.saw(&seen);
 
     for _ in 0..cli.stack {
@@ -163,10 +231,7 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
         let legal = moves::legal::<V>(&seen);
         if legal.is_empty() {
             keep(&path, &cover)?;
-            bail!(
-                "nothing is legal and the run is not over, after {taken} move(s); {}",
-                path.display()
-            );
+            return Err(Error::NothingLegal { taken, path });
         }
 
         let chosen = legal[dice.below(legal.len())];
@@ -176,8 +241,7 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
 
         seen = match send(&mut game, &mut tape, &chosen.into()) {
             Ok(seen) => seen,
-            Err(e) => {
-                let e = e.context(format!("move {taken}: {chosen:?}"));
+            Err(source) => {
                 keep(&path, &cover)?;
                 // Beside the recording rather than only on the terminal. A
                 // finding is a game exception with its whole stack in it, and
@@ -194,11 +258,16 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
                 note(
                     &path,
                     &format!(
-                        "{e:#}\n\nthe state it was chosen in:\n{:#?}",
+                        "move {taken}: {chosen:?}: {source}\n\nthe state it was chosen in:\n{:#?}",
                         seen.observation
                     ),
                 );
-                return Err(e).with_context(|| format!("replay {}", path.display()));
+                return Err(Error::Move {
+                    path,
+                    taken,
+                    chosen,
+                    source,
+                });
             }
         };
 
@@ -218,10 +287,17 @@ fn fuzz<V: sts2_content_wire::WireContentVersion>(cli: Cli) -> Result<()> {
 /// Every exit writes it, a finding included. A run that stopped on a bug still
 /// covered everything it walked through on the way. That is most of what a
 /// batch is measuring.
-fn keep(recording: &Path, cover: &Coverage) -> Result<()> {
+fn keep<V: sts2_content_wire::WireContentVersion>(
+    recording: &Path,
+    cover: &Coverage,
+) -> Result<(), Error<V>> {
     let path = recording.with_extension("coverage.json");
-    let json = serde_json::to_string(cover).context("serialising coverage")?;
-    std::fs::write(&path, json).with_context(|| format!("writing {}", path.display()))
+    let json = serde_json::to_string(cover)?;
+    std::fs::write(&path, json).map_err(|source| Error::Io {
+        what: "writing",
+        path,
+        source,
+    })
 }
 
 /// Writes the move down, sends it, and treats a refusal or a logged error as a
@@ -234,7 +310,7 @@ fn send<V: sts2_content_wire::WireContentVersion>(
     game: &mut Oracle<V>,
     tape: &mut BufWriter<File>,
     step: &Step<V>,
-) -> Result<Snapshot<V>> {
+) -> Result<Snapshot<V>, Sent<V>> {
     recording::append(&mut *tape, step)?;
 
     // `Construct::step` reads the state on the way through, so every state a
@@ -242,20 +318,11 @@ fn send<V: sts2_content_wire::WireContentVersion>(
     // load: a key the mod adds, a category with no type, an intent shape nobody
     // wrote a test for — thousands of states an afternoon, each one refused
     // rather than half-read.
-    let seen = match game.step(step).context("the game stopped answering")? {
-        Ok(applied) => applied.snapshot(),
-        // Not "the move was wrong": the move came out of the legal set, so a
-        // refusal means that set and the game disagree, which is the bug.
-        Err(refusal) => bail!("the game refused a move it offered: {refusal}"),
-    };
+    let seen = game.step(step)?.map_err(Sent::Refused)?.snapshot();
 
     let errors = game.logged();
     if !errors.is_empty() {
-        bail!(
-            "the game logged {} error(s): {}",
-            errors.len(),
-            errors.join(" · ")
-        );
+        return Err(Sent::Logged(errors.to_vec()));
     }
 
     Ok(seen)
@@ -298,17 +365,10 @@ fn where_it_is<V: sts2_content_wire::WireContentVersion>(snapshot: &Snapshot<V>)
     )
 }
 
-/// Parses an id from the game's own spelling of it.
-fn id<T: serde::de::DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
-    sts2_cli::id::parse(spelling)
-        .with_context(|| format!("{spelling:?} is not {what} this build has"))
-}
-
 /// A seed nobody chose, from the clock.
-fn made_up_seed() -> Result<Seed> {
+fn made_up_seed<V: sts2_content_wire::WireContentVersion>() -> Result<Seed, Error<V>> {
     let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .context("reading the clock")?
+        .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos() as u64;
 
     let mut dice = Dice::from(now);
@@ -322,7 +382,7 @@ fn made_up_seed() -> Result<Seed> {
         })
         .collect();
 
-    Seed::new(&typed).map_err(|e| anyhow::anyhow!("{e}"))
+    Ok(Seed::new(&typed)?)
 }
 
 /// Which of the legal moves to take.

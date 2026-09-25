@@ -10,7 +10,7 @@
 //!
 //! [`App`]: super::app::App
 
-use anyhow::{Context, Result};
+use super::Error;
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use sts2_core::Start;
@@ -153,15 +153,18 @@ impl<V: sts2_content_wire::WireContentVersion> Screen<V> {
     /// `None` when they left. Blocked on rather than polled, the way the run
     /// screen is. A player picking a character sends nothing, and nothing is
     /// what happens.
-    pub fn collect(&mut self, terminal: &mut DefaultTerminal) -> Result<Option<Start<V>>> {
+    pub fn collect(&mut self, terminal: &mut DefaultTerminal) -> Result<Option<Start<V>>, Error> {
         loop {
             terminal
                 .draw(|frame| {
                     start::draw::<V>(frame, frame.area(), &self.roster, &self.setting_up);
                 })
-                .context("drawing the setup screen")?;
+                .map_err(|source| Error::Draw {
+                    screen: "setup screen",
+                    source,
+                })?;
 
-            let Event::Key(key) = event::read().context("reading a key")? else {
+            let Event::Key(key) = event::read().map_err(Error::Key)? else {
                 continue;
             };
             if key.kind != KeyEventKind::Press {

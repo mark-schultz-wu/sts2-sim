@@ -53,6 +53,10 @@ enum Ending {
         message: String,
         at: String,
     },
+    /// An error the runner returned, by the message on its last line.
+    Failed {
+        message: String,
+    },
     Won,
     Lost,
     /// The run took every decision it was given.
@@ -167,7 +171,9 @@ fn one(binary: &std::path::Path, seed: &str, character: &str) -> Run {
     loop {
         let attempt = attempt(binary, seed, character, &avoid);
         let (step, exhausted) = match (&attempt.ending, attempt.stopped_in) {
-            (Ending::Panicked { .. }, Some((step, at, moves))) if avoid.len() < RETRIES => {
+            (Ending::Panicked { .. } | Ending::Failed { .. }, Some((step, at, moves)))
+                if avoid.len() < RETRIES =>
+            {
                 avoid.push((step, at));
                 let left = (0..moves)
                     .filter(|at| !avoid.contains(&(step, *at)))
@@ -248,7 +254,9 @@ fn attempt(
         (Some(0), "over lost") => Ending::Lost,
         (Some(0), "capped") => Ending::Capped,
         (Some(124 | 137), _) => Ending::Stuck,
-        _ => panicked(&stderr).unwrap_or(Ending::Broken(Broken::Exited(output.status.code()))),
+        _ => panicked(&stderr)
+            .or_else(|| failed(&stderr))
+            .unwrap_or(Ending::Broken(Broken::Exited(output.status.code()))),
     };
     Attempt {
         ending,
@@ -274,18 +282,27 @@ fn panicked(stderr: &str) -> Option<Ending> {
     })
 }
 
+/// The error the runner names on its last line of stderr, as `error: <what>`.
+fn failed(stderr: &str) -> Option<Ending> {
+    let message = stderr.lines().last()?.strip_prefix("error: ")?;
+    Some(Ending::Failed {
+        message: message.to_owned(),
+    })
+}
+
 /// The census as a table: how the runs stopped, then the panics by count.
 fn report(runs: &[Run], top: usize) -> String {
     let total = runs.len();
     let count = |wanted: fn(&Ending) -> bool| runs.iter().filter(|run| wanted(&run.ending)).count();
     let mut out = format!(
-        "{total} runs: {} won, {} lost, {} capped, {} stuck, {} broken, {} panicked\n",
+        "{total} runs: {} won, {} lost, {} capped, {} stuck, {} broken, {} panicked, {} failed\n",
         count(|e| *e == Ending::Won),
         count(|e| *e == Ending::Lost),
         count(|e| *e == Ending::Capped),
         count(|e| *e == Ending::Stuck),
         count(|e| matches!(e, Ending::Broken(_))),
         count(|e| matches!(e, Ending::Panicked { .. })),
+        count(|e| matches!(e, Ending::Failed { .. })),
     );
 
     // How far runs got, by character, as the floors they stood on last.
@@ -317,6 +334,7 @@ fn report(runs: &[Run], top: usize) -> String {
         for ending in run.stoppers() {
             let (message, at) = match ending {
                 Ending::Panicked { message, at } => (Cow::Borrowed(message.as_str()), at.as_str()),
+                Ending::Failed { message } => (Cow::Borrowed(message.as_str()), ""),
                 Ending::Broken(why) => (Cow::Owned(why.to_string()), ""),
                 _ => continue,
             };
@@ -353,11 +371,21 @@ fn report(runs: &[Run], top: usize) -> String {
     let stopped = runs
         .iter()
         .flat_map(|run| run.stoppers().into_iter().map(move |ending| (ending, run)));
-    table(&mut out, "panics that stopped a run", stopped, top);
+    table(
+        &mut out,
+        "panics and errors that stopped a run",
+        stopped,
+        top,
+    );
     let avoided = runs
         .iter()
         .flat_map(|run| run.stepped_round().map(move |ending| (ending, run)));
-    table(&mut out, "panics a run stepped round", avoided, top);
+    table(
+        &mut out,
+        "panics and errors a run stepped round",
+        avoided,
+        top,
+    );
     out
 }
 
@@ -374,6 +402,7 @@ fn table<'a>(
     for (ending, run) in endings {
         let (message, at) = match ending {
             Ending::Panicked { message, at } => (Cow::Borrowed(message.as_str()), at.as_str()),
+            Ending::Failed { message } => (Cow::Borrowed(message.as_str()), ""),
             Ending::Broken(why) => (Cow::Owned(why.to_string()), ""),
             _ => continue,
         };

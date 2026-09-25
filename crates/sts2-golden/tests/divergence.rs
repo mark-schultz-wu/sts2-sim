@@ -41,6 +41,7 @@ struct Golden<V: sts2_content_wire::WireContentVersion> {
 /// Every run to replay, in a fixed order so a failure reads the same twice.
 fn every_run<V: sts2_content_wire::WireContentVersion>() -> Vec<Golden<V>> {
     sts2_golden::every_run()
+        .expect("the recorded runs are readable")
         .iter()
         .map(|name| golden(name))
         .collect()
@@ -55,7 +56,7 @@ fn golden<V: sts2_content_wire::WireContentVersion>(name: &str) -> Golden<V> {
         .parse()
         .unwrap_or_else(|e| panic!("{name}: BASELINE is a step count: {e}"));
 
-    let recorded = recording::<V>(name);
+    let recorded = recording::<V>(name).expect("a recorded run reads");
     Golden {
         name: name.to_string(),
         start: recorded.start().clone(),

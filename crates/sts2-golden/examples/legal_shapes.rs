@@ -4,6 +4,9 @@
 //! each carries three heap lists. A fixed cap needs a measurement, so this
 //! replays every recording and prints what the lists reach.
 
+use std::process::ExitCode;
+
+use clap::Parser;
 use std::collections::BTreeMap;
 
 use sts2_content::v0_107_1::V0_107_1;
@@ -14,7 +17,47 @@ use sts2_sim::Sim;
 
 type V = V0_107_1;
 
-fn main() {
+/// How long each of a report's lists gets, across the recorded runs.
+#[derive(Parser)]
+struct Cli {}
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    Golden(#[from] sts2_golden::Error),
+    #[error("{run}: starting the run: {source}")]
+    Begin {
+        run: String,
+        #[source]
+        source: sts2_sim::Error,
+    },
+    #[error("{run}: step {at}: {source}")]
+    Step {
+        run: String,
+        at: usize,
+        #[source]
+        source: sts2_sim::Error,
+    },
+    #[error("{run}: step {at} refused: {refusal}")]
+    Refused {
+        run: String,
+        at: usize,
+        refusal: sts2_core::Refusal<V>,
+    },
+}
+
+fn main() -> ExitCode {
+    let Cli {} = Cli::parse();
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Error> {
     let mut targets: BTreeMap<usize, usize> = BTreeMap::new();
     let mut effect: BTreeMap<usize, usize> = BTreeMap::new();
     let mut reasons: BTreeMap<u32, usize> = BTreeMap::new();
@@ -22,14 +65,28 @@ fn main() {
     let mut hand: BTreeMap<usize, usize> = BTreeMap::new();
     let mut belt: BTreeMap<usize, usize> = BTreeMap::new();
 
-    for name in every_run() {
-        let recorded = recording::<V>(&name);
+    for name in every_run()? {
+        let recorded = recording::<V>(&name)?;
         let start = recorded.start().clone();
         let steps: Vec<Step<V>> = recorded.steps().to_vec();
         let supported = reached::<V, Sim<V>>(&start, &steps);
-        let mut playing = Sim::<V>::begin((), &start).expect("a run to begin");
-        for step in &steps[..supported] {
-            let seen = playing.step(step).expect("a step to apply").expect("legal");
+        let mut playing = Sim::<V>::begin((), &start).map_err(|source| Error::Begin {
+            run: name.clone(),
+            source,
+        })?;
+        for (at, step) in steps[..supported].iter().enumerate() {
+            let seen = playing
+                .step(step)
+                .map_err(|source| Error::Step {
+                    run: name.clone(),
+                    at,
+                    source,
+                })?
+                .map_err(|refusal| Error::Refused {
+                    run: name.clone(),
+                    at,
+                    refusal,
+                })?;
             for held in &seen.observation.potions {
                 *belt.entry(held.targets.len()).or_default() += 1;
             }
@@ -73,4 +130,5 @@ fn main() {
         .map(|(len, hits)| format!("{len}:{}%", hits * 100 / total.max(1)))
         .collect();
     println!("{:22} {}", "reasons per card", line.join("  "));
+    Ok(())
 }

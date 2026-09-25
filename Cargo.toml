@@ -16,7 +16,6 @@ members = [
 # is chosen once. Before this, `thiserror` was "2.0.20" in one crate and "2" in
 # another. That resolved to the same version, with two places to change it.
 [workspace.dependencies]
-anyhow = "1.0.104"
 clap = { version = "4", features = ["derive"] }
 indexmap = "2"
 # The transcendentals the gaussian draws need, compiled in rather than taken

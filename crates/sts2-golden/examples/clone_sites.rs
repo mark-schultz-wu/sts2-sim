@@ -13,6 +13,9 @@
 //! The position is the recording's last `PlayCard`, which is the one the
 //! `decision` bench reports and the one a search spends its time in.
 
+use std::process::ExitCode;
+
+use clap::Parser;
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_core::Step;
 use sts2_golden::bench::{kind, reached, upto};
@@ -28,22 +31,43 @@ type V = V0_107_1;
 /// the setup is a rounding error in the profile.
 const BRANCHES: usize = 50_000;
 
-fn main() {
-    let name = every_run()
-        .into_iter()
-        .next()
-        .expect("a recorded run to branch");
-    let recorded = recording::<V>(&name);
+/// Clone one position of the first recorded run, over and over.
+#[derive(Parser)]
+struct Cli {}
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    Golden(#[from] sts2_golden::Error),
+    #[error("{0} plays no card the simulator reaches")]
+    NoCardPlayed(String),
+}
+
+fn main() -> ExitCode {
+    let Cli {} = Cli::parse();
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Error> {
+    let name = every_run()?.swap_remove(0);
+    let recorded = recording::<V>(&name)?;
     let start = recorded.start().clone();
     let steps: Vec<Step<V>> = recorded.steps().to_vec();
     let supported = reached::<V, Sim<V>>(&start, &steps);
     let at = (0..supported)
         .rfind(|&at| kind(&steps[at]) == "PlayCard")
-        .expect("the recording plays a card");
+        .ok_or_else(|| Error::NoCardPlayed(name.clone()))?;
 
     let base: Sim<V> = upto(&start, &steps, at);
     println!("{name} @{at}, {BRANCHES} branches");
     for _ in 0..BRANCHES {
         std::hint::black_box(base.clone());
     }
+    Ok(())
 }

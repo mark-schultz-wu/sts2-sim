@@ -8,13 +8,59 @@
 pub mod choose;
 pub mod moves;
 
-use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use sts2_core::Seed;
 use sts2_core::{
     Answer as GameAnswer, Coord, Decision, Gift, Picks, Setup, Start, Step, TakeReward, Tool,
 };
+
+/// A command line that names nothing the game has, or asks what it cannot.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{spelling:?} is not {article} {what} this build has")]
+    NoSuch {
+        what: &'static str,
+        article: &'static str,
+        spelling: String,
+        source: serde::de::value::Error,
+    },
+    #[error("that is not a seed: {0}")]
+    Seed(#[from] sts2_core::seed::Error),
+    #[error("{0} is no creature in a fight")]
+    NoCreature(u32),
+    #[error("{0} is no card in a hand")]
+    NoCard(u8),
+    #[error("{0} is no potion in a belt")]
+    NoPotion(u8),
+    #[error("no reward screen offers {0}")]
+    NoReward(usize),
+    #[error("no room offers option {0}")]
+    NoOption(usize),
+    #[error("as a card selection: {0}")]
+    Unpickable(#[from] sts2_core::Unpickable),
+    #[error("making {}: {source}", path.display())]
+    MakingDir {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("{stem} already has 999 recordings in {}", dir.display())]
+    NoFreeName { stem: String, dir: PathBuf },
+    #[error("grant needs a --card, a --relic or a --potion")]
+    NothingGranted,
+    #[error("nothing is waiting to be chosen. `sts2 show observe` shows where the run is")]
+    NothingWaiting,
+    #[error("{0} is a plain index; `N.M` is only for a card reward")]
+    Dotted(&'static str),
+    #[error("a reward screen takes one reward per answer, and asks again")]
+    OneReward,
+    #[error("a divination names a cell and a tool: `sts2 act answer divine X Y [--big]`")]
+    Divination,
+    #[error("a room option is taken one at a time, but {0} were given")]
+    OneOption(usize),
+    #[error("a shop entry is bought one at a time, but {0} were given")]
+    OneEntry(usize),
+}
 
 /// An ascension level by the game's own name for it, such as `None`.
 ///
@@ -23,19 +69,23 @@ use sts2_core::{
 /// and there is no way to spell "the lowest one" except by naming it.
 pub fn ascension<V: sts2_content_wire::WireContentVersion>(
     spelling: &str,
-) -> Result<V::AscensionLevel> {
+) -> Result<V::AscensionLevel, Error> {
     id("ascension level", spelling)
 }
 
 /// Parses an id from the game's own spelling of it.
-fn id<T: serde::de::DeserializeOwned>(what: &str, spelling: &str) -> Result<T> {
+pub fn id<T: serde::de::DeserializeOwned>(what: &'static str, spelling: &str) -> Result<T, Error> {
     let article = match what.starts_with(['a', 'e', 'i', 'o', 'u']) {
         true => "an",
         false => "a",
     };
 
-    crate::id::parse(spelling)
-        .with_context(|| format!("{spelling:?} is not {article} {what} this build has"))
+    crate::id::parse(spelling).map_err(|source| Error::NoSuch {
+        what,
+        article,
+        spelling: spelling.to_owned(),
+        source,
+    })
 }
 
 #[derive(Debug, Args)]
@@ -68,28 +118,28 @@ pub struct StartArgs {
 }
 
 /// A creature id as a person types one.
-fn combat_id(id: u32) -> anyhow::Result<sts2_core::CombatId> {
+fn combat_id(id: u32) -> Result<sts2_core::CombatId, Error> {
     u8::try_from(id)
         .ok()
         .and_then(|id| sts2_core::CombatId::try_new(id).ok())
-        .with_context(|| format!("{id} is no creature in a fight"))
+        .ok_or(Error::NoCreature(id))
 }
 
 /// A place in the hand as a person types one.
-fn hand_index(index: u8) -> anyhow::Result<sts2_core::HandIndex> {
-    sts2_core::HandIndex::try_new(index).with_context(|| format!("{index} is no card in a hand"))
+fn hand_index(index: u8) -> Result<sts2_core::HandIndex, Error> {
+    sts2_core::HandIndex::try_new(index).map_err(|_| Error::NoCard(index))
 }
 
 /// A slot in the belt as a person types one.
-fn belt_index(index: u8) -> anyhow::Result<sts2_core::BeltIndex> {
-    sts2_core::BeltIndex::try_new(index).with_context(|| format!("{index} is no potion in a belt"))
+fn belt_index(index: u8) -> Result<sts2_core::BeltIndex, Error> {
+    sts2_core::BeltIndex::try_new(index).map_err(|_| Error::NoPotion(index))
 }
 
 impl StartArgs {
     /// The typed run this command line asks to start.
-    pub fn start<V: sts2_content_wire::WireContentVersion>(&self) -> Result<Start<V>> {
+    pub fn start<V: sts2_content_wire::WireContentVersion>(&self) -> Result<Start<V>, Error> {
         Ok(Start {
-            seed: Seed::fold(&self.seed).context("that is not a seed")?,
+            seed: Seed::fold(&self.seed)?,
             character: id("character", &self.character)?,
             ascension: match &self.ascension {
                 Some(level) => id("ascension level", level)?,
@@ -99,7 +149,7 @@ impl StartArgs {
                 .modifiers
                 .iter()
                 .map(|modifier| id("modifier", modifier))
-                .collect::<Result<_>>()?,
+                .collect::<Result<_, _>>()?,
         })
     }
 
@@ -109,7 +159,7 @@ impl StartArgs {
     /// afterwards. It can expose a divergence, an interface problem, or a seed
     /// worth replaying. An unrecorded run cannot be shown to anybody. Each file
     /// is only a few kilobytes.
-    pub fn recording(&self) -> Result<Option<std::path::PathBuf>> {
+    pub fn recording(&self) -> Result<Option<PathBuf>, Error> {
         if self.no_record {
             return Ok(None);
         }
@@ -118,7 +168,10 @@ impl StartArgs {
         }
 
         let dir = crate::runs::runs_dir();
-        std::fs::create_dir_all(&dir).with_context(|| format!("making {}", dir.display()))?;
+        std::fs::create_dir_all(&dir).map_err(|source| Error::MakingDir {
+            path: dir.clone(),
+            source,
+        })?;
         free_name(&dir, &self.seed, &self.character).map(Some)
     }
 }
@@ -131,7 +184,7 @@ impl StartArgs {
 ///
 /// A repeated seed and character gets a number. Overwriting the first attempt
 /// discards the run being compared.
-fn free_name(dir: &Path, seed: &str, character: &str) -> Result<std::path::PathBuf> {
+fn free_name(dir: &Path, seed: &str, character: &str) -> Result<PathBuf, Error> {
     let folded = Seed::fold(seed).map_or_else(|_| seed.to_uppercase(), |s| s.as_str().to_string());
     let stem = format!("{folded}-{}", character.to_uppercase());
 
@@ -143,7 +196,10 @@ fn free_name(dir: &Path, seed: &str, character: &str) -> Result<std::path::PathB
     (2..1000)
         .map(|n| dir.join(format!("{stem}-{n}.jsonl")))
         .find(|path| !path.exists())
-        .with_context(|| format!("{stem} already has 999 recordings in {}", dir.display()))
+        .ok_or_else(|| Error::NoFreeName {
+            stem,
+            dir: dir.to_path_buf(),
+        })
 }
 
 /// One reward being taken: which reward, and which card inside it.
@@ -167,9 +223,8 @@ impl Taking {
     }
 
     /// The reward this names, or why no reward screen offers it.
-    pub(crate) fn take(&self) -> Result<TakeReward> {
-        let position =
-            |at: usize| u8::try_from(at).with_context(|| format!("no reward screen offers {at}"));
+    pub(crate) fn take(&self) -> Result<TakeReward, Error> {
+        let position = |at: usize| u8::try_from(at).map_err(|_| Error::NoReward(at));
         Ok(match self.card {
             Some(card) => TakeReward::Card {
                 index: position(self.reward)?,
@@ -306,7 +361,7 @@ pub enum Play {
 
 impl Play {
     /// The step this asks for.
-    pub fn step<V: sts2_content_wire::WireContentVersion>(&self) -> Result<Step<V>> {
+    pub fn step<V: sts2_content_wire::WireContentVersion>(&self) -> Result<Step<V>, Error> {
         Ok(match self {
             Play::Fight { encounter } => Setup::Fight {
                 encounter: id("encounter", encounter)?,
@@ -339,9 +394,7 @@ impl Play {
             Play::ChooseOption { index } => Decision::ChooseOption { index: *index }.into(),
             Play::Buy { index } => Decision::Buy { index: *index }.into(),
             Play::Answer(answering) => Decision::Answer(match answering {
-                Answering::Cards { cards } => GameAnswer::Cards(
-                    Picks::try_from(cards.as_slice()).context("as a card selection")?,
-                ),
+                Answering::Cards { cards } => GameAnswer::Cards(Picks::try_from(cards.as_slice())?),
                 Answering::Skip => GameAnswer::Skip,
                 Answering::Take { reward } => GameAnswer::Take(reward.take()?),
                 Answering::Divine { x, y, big } => GameAnswer::Divine {
@@ -361,9 +414,7 @@ impl Play {
                 (.., Some(potion)) => Gift::Potion(id("potion", potion)?),
                 // clap holds this off: `card` is required unless one of the
                 // others is present, and all three conflict.
-                (None, None, None) => {
-                    anyhow::bail!("grant needs a --card, a --relic or a --potion")
-                }
+                (None, None, None) => return Err(Error::NothingGranted),
             })
             .into(),
         })

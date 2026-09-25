@@ -7,6 +7,8 @@ use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
+use clap::Parser;
+
 use sts2_content::v0_107_1::V0_107_1;
 use sts2_content::v0_107_1::ascension::AscensionLevel;
 use sts2_core::Rules as _;
@@ -56,11 +58,16 @@ fn generate(seed: u64) -> ActMap<V> {
     ActMap::generate(&mut rng, layout, AscensionLevel::SwarmingElites).unwrap()
 }
 
+/// Time map generation, then count what it allocates.
+#[derive(Parser)]
+struct Cli {
+    /// Maps to generate for each measure.
+    #[arg(default_value_t = 20_000)]
+    iterations: u32,
+}
+
 fn main() {
-    let iterations = std::env::args()
-        .nth(1)
-        .map(|value| value.parse().expect("iteration count must be an integer"))
-        .unwrap_or(20_000u32);
+    let Cli { iterations } = Cli::parse();
 
     for seed in 0..iterations.min(25) as u64 {
         black_box(generate(seed));

@@ -8,8 +8,7 @@
 //! implementation, and printing. Pointing it at a second implementation copies
 //! no orchestration, because the orchestration is here and generic.
 
-use anyhow::{Context, Result};
-use sts2_core::{Answered, Applied, Construct, Decided, Play, Snapshot, Step};
+use sts2_core::{Answered, Applied, Construct, Decided, Play, Refusal, Snapshot, Step};
 
 use crate::cli::{Taking, choose};
 
@@ -52,11 +51,41 @@ pub enum Outcome<V: sts2_content_wire::WireContentVersion> {
 
 /// A fault an implementation reports, which is not a refusal.
 ///
-/// Every function here carries it into `anyhow`, so a caller names the
+/// Every function here boxes it into [`Error`], so a caller names the
 /// implementation once and never again.
 pub trait Fault: std::error::Error + Send + Sync + 'static {}
 
 impl<E: std::error::Error + Send + Sync + 'static> Fault for E {}
+
+/// Why a command did not happen.
+#[derive(Debug, thiserror::Error)]
+pub enum Error<V: sts2_content_wire::WireContentVersion> {
+    #[error(transparent)]
+    Cli(#[from] crate::cli::Error),
+    #[error("this observation carried no map")]
+    NoMap,
+    #[error("asking the game where it is: {0}")]
+    Looking(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    Sent(#[from] Sent<V>),
+    #[error("step {at} of {total}: {source}")]
+    Replay {
+        at: usize,
+        total: usize,
+        source: Sent<V>,
+    },
+}
+
+/// Why a step sent did not move the run.
+#[derive(Debug, thiserror::Error)]
+pub enum Sent<V: sts2_content_wire::WireContentVersion> {
+    #[error(transparent)]
+    Fault(Box<dyn std::error::Error + Send + Sync>),
+    /// Worded here rather than through `Display`: `sts2-core` carries the
+    /// refusal as data and does not name a card, which is this crate's job.
+    #[error("{}", crate::render::refusal::refusal(.0))]
+    Refused(Refusal<V>),
+}
 
 /// Performs one command, and reports what to print.
 ///
@@ -64,7 +93,7 @@ impl<E: std::error::Error + Send + Sync + 'static> Fault for E {}
 ///
 /// A refusal, a fault, or a command the state does not accept. The run stands
 /// where it stood in the first two cases.
-pub fn perform<V, G>(game: &mut G, command: &Command) -> Result<Outcome<V>>
+pub fn perform<V, G>(game: &mut G, command: &Command) -> Result<Outcome<V>, Error<V>>
 where
     V: sts2_content_wire::WireContentVersion,
     G: Construct<V>,
@@ -73,8 +102,7 @@ where
     match command {
         Command::Map => {
             let seen = look(game)?;
-            let drawn = crate::render::map::drawn(&seen.observation.map)
-                .context("this observation carried no map")?;
+            let drawn = crate::render::map::drawn(&seen.observation.map).ok_or(Error::NoMap)?;
             Ok(Outcome::Said(drawn))
         }
 
@@ -117,13 +145,14 @@ where
 /// # Errors
 ///
 /// A refusal, or a fault. See [`accepted`] for why a refusal is one here.
-pub fn send<V, G>(game: &mut G, step: &Step<V>) -> Result<(Decided, Snapshot<V>)>
+pub fn send<V, G>(game: &mut G, step: &Step<V>) -> Result<(Decided, Snapshot<V>), Sent<V>>
 where
     V: sts2_content_wire::WireContentVersion,
     G: Construct<V>,
     G::Error: Fault,
 {
-    Ok(accepted(game.step(step)?)?.split())
+    let answered = game.step(step).map_err(|e| Sent::Fault(Box::new(e)))?;
+    Ok(accepted(answered)?.split())
 }
 
 /// Asks where the run is standing, without moving it.
@@ -135,13 +164,13 @@ where
 /// # Errors
 ///
 /// A fault. Observing decides nothing, so there is nothing to refuse.
-pub fn look<V, G>(game: &mut G) -> Result<Snapshot<V>>
+pub fn look<V, G>(game: &mut G) -> Result<Snapshot<V>, Error<V>>
 where
     V: sts2_content_wire::WireContentVersion,
     G: Play<V>,
     G::Error: Fault,
 {
-    game.observe().context("asking the game where it is")
+    game.observe().map_err(|e| Error::Looking(Box::new(e)))
 }
 
 /// A refusal, turned into an error.
@@ -154,13 +183,11 @@ where
 ///
 /// # Errors
 ///
-/// The refusal, worded by this crate.
+/// The refusal, worded by this crate when it is displayed.
 pub fn accepted<V: sts2_content_wire::WireContentVersion>(
     answered: Answered<V>,
-) -> Result<Applied<V>> {
-    // Worded here rather than through `Display`: `sts2-core` carries the
-    // refusal as data and does not name a card, which is this crate's job.
-    answered.map_err(|refused| anyhow::anyhow!("{}", crate::render::refusal::refusal(&refused)))
+) -> Result<Applied<V>, Sent<V>> {
+    answered.map_err(Sent::Refused)
 }
 
 /// Folds a recording's steps into a game with nothing in it.
@@ -172,7 +199,10 @@ pub fn accepted<V: sts2_content_wire::WireContentVersion>(
 ///
 /// The step that broke, named by its position, so a divergence points at the
 /// move rather than at whatever came after.
-pub fn replay<V, G>(game: &mut G, steps: &[Step<V>]) -> Result<Option<(Decided, Snapshot<V>)>>
+pub fn replay<V, G>(
+    game: &mut G,
+    steps: &[Step<V>],
+) -> Result<Option<(Decided, Snapshot<V>)>, Error<V>>
 where
     V: sts2_content_wire::WireContentVersion,
     G: Construct<V>,
@@ -186,7 +216,11 @@ where
         // Line-buffered output would hold the counter until the newline below,
         // so a long replay would show nothing until it had finished.
         let _ = std::io::Write::flush(&mut std::io::stderr());
-        last = Some(send(game, step).with_context(|| format!("step {} of {total}", at + 1))?);
+        last = Some(send(game, step).map_err(|source| Error::Replay {
+            at: at + 1,
+            total,
+            source,
+        })?);
     }
     if total > 0 {
         eprintln!();
@@ -274,7 +308,7 @@ mod tests {
 
         assert!(outcome.is_err());
         assert_eq!(sent.count(), 2, "the third step went out anyway");
-        assert!(format!("{:#}", outcome.unwrap_err()).contains("step 2 of 3"));
+        assert!(outcome.unwrap_err().to_string().contains("step 2 of 3"));
     }
 
     /// Every step in a whole recording lands, in order.

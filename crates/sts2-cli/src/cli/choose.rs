@@ -8,8 +8,7 @@
 //! `observe`, and `quit`. Explicit commands remain available to scripts that
 //! need a wrong state to fail rather than choose whatever is present.
 
-use super::Taking;
-use anyhow::{Result, bail};
+use super::{Error, Taking};
 use sts2_core::{Answer as GameAnswer, Decision, Picks, Question, Room, Snapshot};
 
 /// What the game is currently waiting to be told.
@@ -75,7 +74,7 @@ pub(crate) fn buyable<V: sts2_content_wire::WireContentVersion>(room: &Room<V>) 
 /// Reads one reply and says which mechanism a choice goes through.
 pub fn awaiting<V: sts2_content_wire::WireContentVersion>(
     standing: &Snapshot<V>,
-) -> Result<Awaiting> {
+) -> Result<Awaiting, Error> {
     if let Some(question) = &standing.asking {
         return Ok(match question {
             Question::SelectCards { .. } => Awaiting::Cards,
@@ -95,7 +94,7 @@ pub fn awaiting<V: sts2_content_wire::WireContentVersion>(
         return Ok(Awaiting::ShopEntry);
     }
 
-    bail!("nothing is waiting to be chosen. `sts2 show observe` shows where the run is")
+    Err(Error::NothingWaiting)
 }
 
 /// The command that takes those indices, given what the game is waiting for.
@@ -107,12 +106,12 @@ pub fn awaiting<V: sts2_content_wire::WireContentVersion>(
 pub fn command<V: sts2_content_wire::WireContentVersion>(
     awaiting: &Awaiting,
     indices: &[Taking],
-) -> Result<Decision<V>> {
-    let flat = |what: &str| -> Result<Vec<usize>> {
+) -> Result<Decision<V>, Error> {
+    let flat = |what: &'static str| -> Result<Vec<usize>, Error> {
         indices
             .iter()
             .map(|t| match t.card() {
-                Some(_) => bail!("{what} is a plain index; `N.M` is only for a card reward"),
+                Some(_) => Err(Error::Dotted(what)),
                 None => Ok(t.reward()),
             })
             .collect()
@@ -124,37 +123,29 @@ pub fn command<V: sts2_content_wire::WireContentVersion>(
         )?)),
         Awaiting::Rewards => match indices {
             [one] => Decision::Answer(GameAnswer::Take(one.take()?)),
-            _ => bail!("a reward screen takes one reward per answer, and asks again"),
+            _ => return Err(Error::OneReward),
         },
         // A cell is a pair and a tool, which no list of indices spells. Said
         // rather than guessed: taking the first two numbers as `x` and `y` would
         // make `choose 3 4` a divination with a tool nobody named.
-        Awaiting::Divine => {
-            bail!("a divination names a cell and a tool: `sts2 act answer divine X Y [--big]`")
-        }
+        Awaiting::Divine => return Err(Error::Divination),
         Awaiting::RoomOption => match flat("a room option")?.as_slice() {
             [index] => Decision::ChooseOption {
-                index: u8::try_from(*index)?,
+                index: u8::try_from(*index).map_err(|_| Error::NoOption(*index))?,
             },
             // A room takes one option and then stops being a room with options,
             // so more than one is a misunderstanding worth naming rather than
             // silently taking the first.
-            _ => bail!(
-                "a room option is taken one at a time, but {} were given",
-                indices.len()
-            ),
+            _ => return Err(Error::OneOption(indices.len())),
         },
         // One at a time for the same reason, and a sharper one: buying changes
         // what you can afford, so a second index chosen before the first was
         // paid for is a decision made against stale gold.
         Awaiting::ShopEntry => match flat("a shop entry")?.as_slice() {
             [index] => Decision::Buy {
-                index: u8::try_from(*index)?,
+                index: u8::try_from(*index).map_err(|_| Error::NoOption(*index))?,
             },
-            _ => bail!(
-                "a shop entry is bought one at a time, but {} were given",
-                indices.len()
-            ),
+            _ => return Err(Error::OneEntry(indices.len())),
         },
     })
 }

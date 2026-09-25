@@ -26,11 +26,29 @@ mod shots;
 mod state;
 mod theme;
 
-use anyhow::Result;
 use ratatui::DefaultTerminal;
 use sts2_core::Play;
 
 pub use app::Ended;
+
+/// Why the screen closed on anything but the player leaving.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("drawing the {screen}: {source}")]
+    Draw {
+        screen: &'static str,
+        source: std::io::Error,
+    },
+    #[error("reading a key: {0}")]
+    Key(std::io::Error),
+    #[error("asking the game where it is: {0}")]
+    Looking(Box<dyn std::error::Error + Send + Sync>),
+    #[error("sending {said}: {source}")]
+    Sending {
+        said: String,
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
 pub use state::Options;
 
 /// Draws a run and reads keys, until the player leaves or the run goes away.
@@ -38,7 +56,11 @@ pub use state::Options;
 /// A window onto a run that has already started. What run that is, and what to
 /// do once this returns, belong to the caller: this draws one and reports how
 /// it ended.
-pub fn play<V, G>(terminal: &mut DefaultTerminal, game: G, options: Options) -> Result<app::Ended>
+pub fn play<V, G>(
+    terminal: &mut DefaultTerminal,
+    game: G,
+    options: Options,
+) -> Result<app::Ended, Error>
 where
     V: sts2_content_wire::WireContentVersion,
     G: Play<V>,

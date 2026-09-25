@@ -1,0 +1,53 @@
+# `UnknownMapPointOdds.Roll` draws once off the UnknownMapPoint stream and
+# walks the monster, treasure and shop odds in turn. This seed draws under
+# the monster's tenth, so its first unknown room is a fight off the act's own
+# list of normal encounters. Forty Mercury Hourglasses end each fight as it
+# opens.
+#
+# A port that rolls nothing but events, or deals another encounter, enters
+# another room.
+{"cmd":"start","seed":"C000000006","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"travel","col":0,"row":1}
+{"cmd":"answer","skip":true}
+{"cmd":"travel","col":0,"row":2}

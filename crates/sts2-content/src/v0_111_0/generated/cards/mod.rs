@@ -4086,7 +4086,7 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // KNOW_THY_PLACE
     sts2_core::Overrides::from_bits(0),
     // LANTERN_KEY
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
     // LARGESSE
     sts2_core::Overrides::from_bits(0),
     // LEADING_STRIKE
