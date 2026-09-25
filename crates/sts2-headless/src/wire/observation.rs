@@ -86,7 +86,7 @@ pub fn observation<V: sts2_content_wire::WireContentVersion>(
 
 /// One event option's localisation key, split into the parts it names.
 ///
-/// `NEOW.pages.INITIAL.options.NEOWS_TALISMAN`. The room already names the
+/// `DENSE_VEGETATION.pages.REST.options.FIGHT`. The room already names the
 /// event, so the first segment is held to it rather than read again. The two
 /// disagreeing is the game saying two things at once.
 fn option_key<V: sts2_content_wire::WireContentVersion>(
@@ -109,19 +109,20 @@ fn option_key<V: sts2_content_wire::WireContentVersion>(
     let shape = || {
         at(
             path,
-            Why::Disagree("an option key is not `<event>.pages.INITIAL.options.<option>`"),
+            Why::Disagree("an option key is not `<event>.pages.<page>.options.<option>`"),
         )
     };
-    let rest = text
+    let (page, rest) = text
         .strip_prefix(&named_event)
-        .and_then(|rest| rest.strip_prefix(".pages.INITIAL.options."))
+        .and_then(|rest| rest.strip_prefix(".pages."))
+        .and_then(|rest| rest.split_once(".options."))
         .ok_or_else(shape)?;
-    if rest.is_empty() || rest.contains('.') {
+    if page.is_empty() || page.contains('.') || rest.is_empty() || rest.contains('.') {
         return Err(shape());
     }
     Ok(EventOptionKey {
         event,
-        option: V::event_option(event, rest, named(rest))
+        option: V::event_option(event, page, rest, named(rest))
             .unwrap_or_else(|| unimplemented!("event option {text}")),
     })
 }
@@ -1429,7 +1430,7 @@ mod tests {
         for bad in [
             "NEOW",
             "NEOW.options.LEAVE",
-            "NEOW.pages.SECOND.options.LEAVE",
+            "NEOW.pages..options.LEAVE",
             "NEOW.pages.INITIAL.options.",
             "NEOW.pages.INITIAL.options.A.B",
         ] {

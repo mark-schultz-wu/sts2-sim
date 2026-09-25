@@ -158,13 +158,18 @@ impl<V: Rules> State<V> {
                 let fight = self.create_fight(encounter, EncounterQueue::Normal, at)?;
                 return Ok(self.enter_fight(fight, at));
             }
+            // `RoomSet.EnsureNextEventIsValid`, which passes over an event
+            // that is not allowed or was seen already. The one it stops at
+            // is counted as its room is entered.
             let events = self.event_candidates();
             let event = (0..events.len())
                 .find_map(|_| {
                     let candidate = events[events_used % events.len()];
+                    if V::event_allowed(candidate, self) && !visited.contains(&candidate) {
+                        return Some(candidate);
+                    }
                     events_used += 1;
-                    (V::event_allowed(candidate, self) && !visited.contains(&candidate))
-                        .then_some(candidate)
+                    None
                 })
                 .unwrap_or_else(|| unimplemented!("an exhausted event queue"));
             let mut event_rng =

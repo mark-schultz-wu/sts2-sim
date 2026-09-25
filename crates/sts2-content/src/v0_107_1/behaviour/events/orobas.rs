@@ -6,7 +6,7 @@
 
 use sts2_core::rng::{GameRng, Span};
 use sts2_core::{
-    EventBehavior, EventContext, EventFlow, EventOption, EventOptionKey, EventView,
+    EventBehavior, EventOption, EventOptionKey, EventView, HookEffect, HookEffects,
     RelicTable as _, Room,
 };
 
@@ -60,7 +60,8 @@ const TRANSCENDS: [Cards; 5] = [
 #[derive(Debug, Clone)]
 pub struct State {
     offered: Vec<Relic>,
-    finished: bool,
+    /// The option taken.
+    chosen: Option<u8>,
 }
 
 pub struct Orobas;
@@ -99,7 +100,7 @@ impl EventBehavior<V> for Orobas {
             .into_iter()
             .flatten()
             .collect(),
-            finished: false,
+            chosen: None,
         }
     }
 
@@ -118,32 +119,29 @@ impl EventBehavior<V> for Orobas {
                 text: None,
                 locked: false,
                 proceed: false,
-                chosen: false,
+                chosen: state.chosen == Some(index as u8),
                 relic: Some(relic),
             })
             .collect();
         Room::Event {
             event: Event::Orobas,
-            finished: state.finished,
+            finished: false,
             title: None,
             text: None,
-            options: if state.finished { Vec::new() } else { options },
+            options,
         }
     }
 
-    fn choose<R: GameRng, C: EventContext<V>>(
+    fn choose<R: GameRng>(
         &self,
         state: &mut State,
         option: u8,
-        run: &mut C,
+        _run: &impl EventView<V>,
         _rng: &mut R,
-    ) -> EventFlow<V> {
-        let Some(&relic) = state.offered.get(usize::from(option)) else {
-            return EventFlow::Stay;
-        };
-        run.obtain_relic(relic);
-        state.finished = true;
-        EventFlow::Finished
+    ) -> HookEffects<V> {
+        let relic = state.offered[usize::from(option)];
+        state.chosen = Some(option);
+        smallvec::smallvec![HookEffect::ObtainRelic(relic), HookEffect::FinishEvent]
     }
 }
 

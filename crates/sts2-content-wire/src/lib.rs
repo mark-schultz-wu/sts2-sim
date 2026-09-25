@@ -1,14 +1,48 @@
 //! Boundary vocabulary between generated content ids and the game's wire keys.
 
-use sts2_core::ContentVersion;
+use sts2_core::{ContentVersion, EventOptionKinds as _};
 
 pub trait WireContentVersion: ContentVersion {
+    /// The option a key names: `<event>.pages.<page>.options.<name>`.
+    ///
+    /// An ancient's keys name the relic it offers, which the room reports
+    /// beside the key.
     fn event_option(
         event: Self::Event,
+        page: &str,
         name: &str,
         relic: Option<Self::Relic>,
     ) -> Option<Self::EventOptionId>;
-    fn event_option_name(option: Self::EventOptionId, locked: bool) -> Option<&'static str>;
+    /// The page and the name a key spells for an option its page names, and
+    /// `None` for a relic.
+    fn event_option_spelled(
+        option: Self::EventOptionId,
+        locked: bool,
+    ) -> Option<(&'static str, &'static str)>;
+}
+
+/// An option's key as the game spells it, put back together from its parts.
+///
+/// # Panics
+///
+/// An id no key spells, which the generated ids and the relics cover.
+pub fn option_key<V: WireContentVersion>(option: &sts2_core::EventOption<V>) -> String {
+    let (page, name) = V::event_option_spelled(option.key.option, option.locked)
+        .map(|(page, name)| (page, name.to_owned()))
+        .or_else(|| {
+            let relic = option.key.option.relic()?;
+            Some(("INITIAL", spelled(&relic)))
+        })
+        .expect("every option has a key the game spells");
+    format!("{}.pages.{page}.options.{name}", spelled(&option.key.event))
+}
+
+/// A generated id, by the serde rename the game spells it with.
+fn spelled<T: serde::Serialize>(id: &T) -> String {
+    match serde_json::to_value(id) {
+        Ok(serde_json::Value::String(name)) => name,
+        _ => unreachable!("a generated id serializes as its name"),
+    }
 }
 
 macro_rules! wire_options {
@@ -16,52 +50,25 @@ macro_rules! wire_options {
         impl WireContentVersion for sts2_content::$module::$version {
             fn event_option(
                 event: Self::Event,
+                page: &str,
                 name: &str,
                 relic: Option<Self::Relic>,
             ) -> Option<Self::EventOptionId> {
-                use sts2_content::$module::events::Event;
-                use sts2_content::$module::{
-                    ByrdonisNestOption as B, EventOptionId as Id, TeaMasterOption as T,
-                    WellspringOption as W,
-                };
-                match (event, name.strip_suffix("_LOCKED").unwrap_or(name)) {
-                    (Event::ByrdonisNest, "EAT") => Some(Id::ByrdonisNest(B::Eat)),
-                    (Event::ByrdonisNest, "LEAVE") => Some(Id::ByrdonisNest(B::Leave)),
-                    (Event::Wellspring, "DRINK") => Some(Id::Wellspring(W::Drink)),
-                    (Event::Wellspring, "FILL") => Some(Id::Wellspring(W::Fill)),
-                    (Event::Wellspring, "LEAVE") => Some(Id::Wellspring(W::Leave)),
-                    (Event::Wellspring, "PRAY") => Some(Id::Wellspring(W::Pray)),
-                    (Event::TeaMaster, "BONE_TEA") => Some(Id::TeaMaster(T::BoneTea)),
-                    (Event::TeaMaster, "EMBER_TEA") => Some(Id::TeaMaster(T::EmberTea)),
-                    (Event::TeaMaster, "TEA_OF_DISCOURTESY") => {
-                        Some(Id::TeaMaster(T::TeaOfDiscourtesy))
-                    }
-                    _ => relic.map(Id::Relic),
-                }
+                use sts2_content::$module::EventOptionId as Id;
+                use sts2_content::$module::events::EventOption;
+                EventOption::from_key(event, page, name)
+                    .map(Id::Said)
+                    .or(relic.map(Id::Relic))
             }
 
-            fn event_option_name(
+            fn event_option_spelled(
                 option: Self::EventOptionId,
                 locked: bool,
-            ) -> Option<&'static str> {
-                use sts2_content::$module::{
-                    ByrdonisNestOption as B, EventOptionId as Id, TeaMasterOption as T,
-                    WellspringOption as W,
-                };
-                match (option, locked) {
-                    (Id::ByrdonisNest(B::Eat), _) => Some("EAT"),
-                    (Id::ByrdonisNest(B::Leave), _) => Some("LEAVE"),
-                    (Id::Wellspring(W::Drink), _) => Some("DRINK"),
-                    (Id::Wellspring(W::Fill), _) => Some("FILL"),
-                    (Id::Wellspring(W::Leave), _) => Some("LEAVE"),
-                    (Id::Wellspring(W::Pray), _) => Some("PRAY"),
-                    (Id::TeaMaster(T::BoneTea), false) => Some("BONE_TEA"),
-                    (Id::TeaMaster(T::BoneTea), true) => Some("BONE_TEA_LOCKED"),
-                    (Id::TeaMaster(T::EmberTea), false) => Some("EMBER_TEA"),
-                    (Id::TeaMaster(T::EmberTea), true) => Some("EMBER_TEA_LOCKED"),
-                    (Id::TeaMaster(T::TeaOfDiscourtesy), false) => Some("TEA_OF_DISCOURTESY"),
-                    (Id::TeaMaster(T::TeaOfDiscourtesy), true) => Some("TEA_OF_DISCOURTESY_LOCKED"),
-                    (Id::Relic(_), _) => None,
+            ) -> Option<(&'static str, &'static str)> {
+                use sts2_content::$module::EventOptionId as Id;
+                match option {
+                    Id::Said(option) => Some(option.spelled(locked)),
+                    Id::Relic(_) => None,
                 }
             }
         }

@@ -456,10 +456,11 @@ fn decides<V: Rules>(
 /// `AfterCombatEnd`, then `AfterCombatVictory`, raised on every listener
 /// once the fight is won.
 ///
-/// The listeners that counted something in the fight forget it at the first,
-/// and what the first asks is the run's to carry out. The fight keeps it for
-/// the run. A heal at the second lands on the player, whom a won fight leaves
-/// alive.
+/// The listeners that counted something in the fight forget it at the first.
+/// A Max HP gain there lands on the player's creature. The fight keeps the
+/// rest of what it asks for the run to carry out.
+///
+/// A heal at the second lands on the player, whom a won fight leaves alive.
 ///
 /// # Panics
 ///
@@ -468,28 +469,43 @@ fn decides<V: Rules>(
 pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
     // What a listener asks of the run, which carries it out as it leaves.
     let room = live.room();
-    let ended = notify::<V>(live, relics, EventHook::CombatEnd { room });
-    live.leaving
-        .extend(ended.into_iter().map(|(_, effect)| effect));
+    for (_, effect) in notify::<V>(live, relics, EventHook::CombatEnd { room }) {
+        match effect {
+            // `CreatureCmd.GainMaxHp` on the player's creature, which the
+            // fight still holds: the maximum grows, and the health with it.
+            HookEffect::GainMaxHp(amount) => {
+                let gained = health::<V>(amount);
+                let player = player_of(live);
+                player.max_hp = player.max_hp + gained;
+                player.hp = player.hp + gained;
+            }
+            effect => live.leaving.push(effect),
+        }
+    }
     for (_, effect) in notify::<V>(live, relics, EventHook::CombatVictory) {
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
             HookEffect::Heal(amount) => {
-                let player = live
-                    .creatures
-                    .iter_mut()
-                    .find(|creature| {
-                        creature.side == <V::CombatSide as sts2_core::SideKinds>::PLAYER
-                    })
-                    .expect("a fight has the player in it");
-                let healed: V::Health = num_traits::cast(amount).unwrap_or_else(|| {
-                    unimplemented!("healing by {amount:?}, which is not a health")
-                });
+                let healed = health::<V>(amount);
+                let player = player_of(live);
                 player.hp = (player.hp + healed).min(player.max_hp);
             }
             effect => unimplemented!("a listener asking for {effect:?} as a fight is won"),
         }
     }
+}
+
+/// The player's creature, which a fight always holds.
+fn player_of<V: Rules>(live: &mut Live<V>) -> &mut super::live::Fighter<V> {
+    live.creatures
+        .iter_mut()
+        .find(|creature| creature.side == <V::CombatSide as sts2_core::SideKinds>::PLAYER)
+        .expect("a fight has the player in it")
+}
+
+/// A game number as a creature's health.
+fn health<V: Rules>(amount: V::Number) -> V::Health {
+    num_traits::cast(amount).unwrap_or_else(|| unimplemented!("{amount:?}, which is not a health"))
 }
 
 #[cfg(test)]

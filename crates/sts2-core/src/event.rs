@@ -1,7 +1,7 @@
 //! The lifecycle shared by event implementations.
 
 use crate::rng::GameRng;
-use crate::{ContentVersion, Question, RewardKind, Room};
+use crate::{ContentVersion, Room};
 
 /// The read-only run facts event behavior can inspect.
 pub trait EventView<V: ContentVersion> {
@@ -27,26 +27,6 @@ pub trait EventView<V: ContentVersion> {
     fn relics_left(&self) -> bool;
 }
 
-/// The run operations an event is allowed to perform.
-///
-/// Keeping this surface narrow prevents content behavior from depending on a
-/// simulator's storage model.
-pub trait EventContext<V: ContentVersion> {
-    fn gold(&self) -> V::Number;
-    fn spend_gold(&mut self, amount: V::Number) -> bool;
-    fn obtain_relic(&mut self, relic: V::Relic);
-}
-
-/// Where an event choice leaves the run.
-#[derive(Debug, Clone)]
-pub enum EventFlow<V: ContentVersion> {
-    Stay,
-    Finished,
-    Ask(Question<V>),
-    Rewards(Vec<RewardKind<V>>),
-    StartCombat(V::Encounter),
-}
-
 /// One event's eligibility, state, observation, and choices.
 pub trait EventBehavior<V: ContentVersion> {
     type State: Clone + std::fmt::Debug;
@@ -55,13 +35,18 @@ pub trait EventBehavior<V: ContentVersion> {
 
     fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> Self::State;
 
+    /// The page as it stands. Whether the event has finished is the run's,
+    /// which [`HookEffect::FinishEvent`](crate::HookEffect::FinishEvent)
+    /// sets, and a finished room offers nothing.
     fn observe(&self, state: &Self::State, run: &impl EventView<V>) -> Room<V>;
 
-    fn choose<R: GameRng, C: EventContext<V>>(
+    /// Take `option`. The state turns its page or marks the choice. What the
+    /// option does to the run comes back, in the order the game does it.
+    fn choose<R: GameRng>(
         &self,
         state: &mut Self::State,
         option: u8,
-        run: &mut C,
+        run: &impl EventView<V>,
         rng: &mut R,
-    ) -> EventFlow<V>;
+    ) -> crate::HookEffects<V>;
 }

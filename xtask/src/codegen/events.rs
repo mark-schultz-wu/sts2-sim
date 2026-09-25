@@ -47,6 +47,10 @@ pub enum Error {
     },
     #[error("Neow's {0} is not one option")]
     NotOneOption(String),
+    #[error("{0} names an event the dump does not list")]
+    NoSuchEvent(String),
+    #[error("two options are both spelled {0}")]
+    SameName(String),
 }
 
 /// The yes-or-no columns, in the order they become bits.
@@ -233,6 +237,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     emit_lists(&mut out, "ancients_of", "an act's own ancients", &ancients);
     emit_shared(&mut out, &shared);
     emit_neow(&mut out, &neow)?;
+    emit_options(&mut out, &dump, &events)?;
 
     let mut split = Split::new(root, "events", "events.txt", &build)?;
     for row in &events {
@@ -694,4 +699,156 @@ fn emit_relics(out: &mut String, name: &str, relics: &[String]) {
         writeln!(out, "    Relic::{},", camel(id)).unwrap();
     }
     writeln!(out, "];\n").unwrap();
+}
+
+/// One option a page names: the event, the page, and the option's own name.
+struct Option_ {
+    event: String,
+    page: String,
+    name: String,
+    /// Whether the table holds a `_LOCKED` twin, which a locked option shows.
+    locked: bool,
+}
+
+impl Option_ {
+    /// The variant, named for the event and the option, with the page
+    /// between the two when it is not the first.
+    fn variant(&self) -> String {
+        match self.page.as_str() {
+            "INITIAL" => format!("{}{}", camel(&self.event), camel(&self.name)),
+            page => format!("{}{}{}", camel(&self.event), camel(page), camel(&self.name)),
+        }
+    }
+}
+
+/// Every option a page names, one variant each, with its wire spelling.
+///
+/// A locked option is not an option of its own. The table spells it with
+/// `_LOCKED` on the end, and the variant says whether that twin exists.
+fn emit_options(out: &mut String, dump: &Dump, events: &[&Vec<String>]) -> Result<(), Error> {
+    let mut options: Vec<Option_> = Vec::new();
+    for row in dump.of("option") {
+        if row.len() != 4 {
+            return Err(DumpError::Columns {
+                id: format!("option {}", row[1]),
+                got: row.len() - 1,
+                want: 3,
+            }
+            .into());
+        }
+        if !events.iter().any(|event| event[1] == row[1]) {
+            return Err(Error::NoSuchEvent(row[1].clone()));
+        }
+        let (name, locked) = match row[3].strip_suffix("_LOCKED") {
+            Some(name) => (name, true),
+            None => (row[3].as_str(), false),
+        };
+        let same = |o: &&mut Option_| o.event == row[1] && o.page == row[2] && o.name == name;
+        match options.iter_mut().find(same) {
+            Some(option) => option.locked |= locked,
+            None => options.push(Option_ {
+                event: row[1].clone(),
+                page: row[2].clone(),
+                name: name.to_owned(),
+                locked,
+            }),
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for option in &options {
+        if !seen.insert(option.variant()) {
+            return Err(Error::SameName(option.variant()));
+        }
+    }
+
+    writeln!(
+        out,
+        "/// Every option an event's pages name, by its localisation key.\n\
+         ///\n\
+         /// `<event>.pages.<page>.options.<name>`. A locked option shows the\n\
+         /// same key with `_LOCKED` on the end, and is this option still."
+    )
+    .unwrap();
+    writeln!(out, "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]").unwrap();
+    writeln!(out, "#[repr({})]", repr(options.len())?).unwrap();
+    writeln!(out, "pub enum EventOption {{").unwrap();
+    for option in &options {
+        writeln!(out, "    {},", option.variant()).unwrap();
+    }
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(out, "impl EventOption {{").unwrap();
+    writeln!(out, "    pub const ALL: &'static [Self] = &[").unwrap();
+    for option in &options {
+        writeln!(out, "        Self::{},", option.variant()).unwrap();
+    }
+    writeln!(out, "    ];\n").unwrap();
+    writeln!(out, "    /// The event whose page names this option.").unwrap();
+    writeln!(out, "    pub fn event(self) -> Event {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for option in &options {
+        writeln!(
+            out,
+            "            Self::{} => Event::{},",
+            option.variant(),
+            camel(&option.event)
+        )
+        .unwrap();
+    }
+    writeln!(out, "        }}\n    }}\n").unwrap();
+    writeln!(
+        out,
+        "    /// The page and the name, as the key spells them. A locked option\n\
+         \x20   /// has `_LOCKED` on its name, where the table holds that twin."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    pub fn spelled(self, locked: bool) -> (&'static str, &'static str) {{"
+    )
+    .unwrap();
+    writeln!(out, "        match (self, locked) {{").unwrap();
+    for option in &options {
+        let variant = option.variant();
+        if option.locked {
+            writeln!(
+                out,
+                "            (Self::{variant}, true) => ({:?}, \"{}_LOCKED\"),",
+                option.page, option.name
+            )
+            .unwrap();
+        }
+        writeln!(
+            out,
+            "            (Self::{variant}, _) => ({:?}, {:?}),",
+            option.page, option.name
+        )
+        .unwrap();
+    }
+    writeln!(out, "        }}\n    }}\n").unwrap();
+    writeln!(
+        out,
+        "    /// The option a key names, with any `_LOCKED` taken off its name."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    pub fn from_key(event: Event, page: &str, name: &str) -> Option<Self> {{"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        let name = name.strip_suffix(\"_LOCKED\").unwrap_or(name);"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        Self::ALL.iter().copied().find(|option| {{\n\
+         \x20           option.event() == event && option.spelled(false) == (page, name)\n\
+         \x20       }})"
+    )
+    .unwrap();
+    writeln!(out, "    }}\n}}\n").unwrap();
+    println!("  events: {} options", options.len());
+    Ok(())
 }

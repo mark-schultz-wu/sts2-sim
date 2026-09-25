@@ -98,6 +98,7 @@ impl<V: Rules> Streams<V> {
         match stream {
             sts2_core::Stream::Run(kind) => self.run(kind),
             sts2_core::Stream::Player(kind) => self.player(kind),
+            sts2_core::Stream::Event => unreachable!("an event's stream is its room's"),
         }
     }
 

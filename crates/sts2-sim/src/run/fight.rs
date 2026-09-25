@@ -190,6 +190,7 @@ impl<V: Rules> State<V> {
             room if room == <_ as sts2_core::RoomKinds>::BOSS => crate::reward::combat::Room::Boss,
             _ => crate::reward::combat::Room::Monster,
         };
+        self.card_reward_unheard();
         let (rng, odds) = self.rewarding();
         let (mut offered, rarity) =
             crate::reward::combat::won::<V, _>(rng, odds, ascension, character, gold, act, room);

@@ -27,7 +27,7 @@ mod rest_site;
 
 pub use behaviour::events::State as EventState;
 pub use behaviour::relics::State as RelicState;
-pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
+pub use event_options::EventOptionId;
 pub use generated::*;
 
 use sts2_core::Version;
@@ -602,12 +602,12 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::observe(state, run)
     }
 
-    fn choose_event<R: sts2_core::rng::GameRng, C: sts2_core::EventContext<Self>>(
+    fn choose_event<R: sts2_core::rng::GameRng>(
         state: &mut Self::EventState,
         option: u8,
-        run: &mut C,
+        run: &impl sts2_core::EventView<Self>,
         rng: &mut R,
-    ) -> sts2_core::EventFlow<Self> {
+    ) -> sts2_core::HookEffects<Self> {
         behaviour::events::choose(state, option, run, rng)
     }
 

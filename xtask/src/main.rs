@@ -1,12 +1,9 @@
-//! Repo chores with real logic in them. `cargo xtask <command>`.
+//! Repo chores with real logic in them. `cargo xtask <command>`, and
+//! `cargo xtask help` lists the commands.
 //!
-//! Eight commands. `codegen` turns the dumps in
-//! `sts2-content/src/<version>/dumps/` into that crate's tables, one domain per
-//! dump, and fails the build if two dumps came from different builds. `dump`
-//! asks the game for those dumps. `instructions` counts what a replayed step
-//! costs, and `trace` shows where it goes, span by span. `allocations` names
-//! where it reaches the heap. `census` ranks what stops random runs. `neow` and
-//! `unknown` find seeds for a scenario: a Neow relic, or an unknown room's.
+//! `codegen` turns the dumps in `sts2-content/src/<version>/dumps/` into that
+//! crate's tables, one domain per dump. It fails the build if two dumps came
+//! from different builds.
 //!
 //! The generated tree is committed rather than produced by a `build.rs`, so that
 //! a content change reads as a diff. The whole point of this project is noticing
@@ -22,6 +19,7 @@ mod error;
 mod instructions;
 mod neow;
 mod plays;
+mod scenario_diff;
 mod trace;
 mod unknown;
 
@@ -59,6 +57,8 @@ enum Command {
     Trace(trace::Args),
     /// Find the seeds whose first unknown room rolls a given room.
     Unknown(unknown::Args),
+    /// Show where a scenario's simulator and game part.
+    ScenarioDiff(scenario_diff::Args),
 }
 
 /// The repository's root, which is where cargo and the profiles live.
@@ -88,6 +88,8 @@ enum Error {
     Trace(#[from] trace::Error),
     #[error("unknown failed: {0}")]
     Unknown(error::ProcessError),
+    #[error("scenario-diff failed: {0}")]
+    ScenarioDiff(error::ProcessError),
 }
 
 fn run(command: Command) -> Result<String, Error> {
@@ -101,6 +103,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Neow(args) => neow::run(args)?,
         Command::Trace(args) => trace::run(args)?,
         Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
+        Command::ScenarioDiff(args) => scenario_diff::run(args).map_err(Error::ScenarioDiff)?,
     })
 }
 

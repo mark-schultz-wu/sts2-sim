@@ -354,9 +354,9 @@ mod tests {
 
         let in_a_room = moves(json!({
             "potions": belt,
-            "room": {"type": "Event", "id": "WELLSPRING",
+            "room": {"type": "Event", "id": "WELCOME_TO_WONGOS",
                      "options": [{"index": 0,
-                                  "key": "WELLSPRING.pages.INITIAL.options.DRINK"}]}
+                                  "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.BARGAIN_BIN"}]}
         }));
         assert!(in_a_room.contains(&drink), "{in_a_room:?}");
         assert!(in_a_room.contains(&Decision::ChooseOption { index: 0 }));
@@ -382,9 +382,9 @@ mod tests {
     fn navigation_is_the_numbered_subset_of_legal_play() {
         let applied = fixture::applied(json!({
             "potions": [{"id": "ASHWATER", "usable": true, "reason": null, "targets": []}],
-            "room": {"type": "Event", "id": "WELLSPRING",
+            "room": {"type": "Event", "id": "WELCOME_TO_WONGOS",
                      "options": [{"index": 6,
-                                  "key": "WELLSPRING.pages.INITIAL.options.DRINK"}]}
+                                  "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.BARGAIN_BIN"}]}
         }));
 
         assert_eq!(
@@ -433,12 +433,12 @@ mod tests {
     #[test]
     fn an_unfinished_room_hides_the_map() {
         let option = |index: u8, chosen: bool, locked: bool| {
-            json!({"index": index, "key": "WELLSPRING.pages.INITIAL.options.LEAVE",
+            json!({"index": index, "key": "WELCOME_TO_WONGOS.pages.INITIAL.options.LEAVE",
                    "title": null, "text": null,
                    "locked": locked, "proceed": false, "chosen": chosen, "relic": null})
         };
         let state = json!({
-            "room": {"type": "Event", "id": "WELLSPRING", "finished": false,
+            "room": {"type": "Event", "id": "WELCOME_TO_WONGOS", "finished": false,
                      "title": null, "text": null,
                      "options": [option(0, false, false),
                                  option(1, true, false),

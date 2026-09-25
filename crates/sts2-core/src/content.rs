@@ -548,10 +548,13 @@ pub enum ModelHook {
     AfterModifyingRewards,
     ModifyUnknownMapPointRoomTypes,
     ModifyOddsIncreaseForUnrolledRoomType,
+    ModifyCardRewardUpgradeOdds,
+    TryModifyCardRewardOptions,
+    TryModifyCardRewardOptionsLate,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 57] = [
+    pub const ALL: [ModelHook; 60] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -609,6 +612,9 @@ impl ModelHook {
         ModelHook::AfterModifyingRewards,
         ModelHook::ModifyUnknownMapPointRoomTypes,
         ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
+        ModelHook::ModifyCardRewardUpgradeOdds,
+        ModelHook::TryModifyCardRewardOptions,
+        ModelHook::TryModifyCardRewardOptionsLate,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -677,6 +683,9 @@ impl ModelHook {
             ModelHook::ModifyOddsIncreaseForUnrolledRoomType => {
                 "ModifyOddsIncreaseForUnrolledRoomType"
             }
+            ModelHook::ModifyCardRewardUpgradeOdds => "ModifyCardRewardUpgradeOdds",
+            ModelHook::TryModifyCardRewardOptions => "TryModifyCardRewardOptions",
+            ModelHook::TryModifyCardRewardOptionsLate => "TryModifyCardRewardOptionsLate",
         }
     }
 }
@@ -2190,11 +2199,14 @@ pub enum DeckAct<V: ContentVersion> {
     Transform(Stream<V>),
 }
 
-/// One stream to draw from: one of the run's, or one of the player's.
+/// One stream to draw from: one of the run's, one of the player's, or the
+/// event's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stream<V: ContentVersion> {
     Run(V::RunRngType),
     Player(V::PlayerRngType),
+    /// `EventModel.Rng`, which the event the run stands in seeds for itself.
+    Event,
 }
 
 /// One reward a relic's own screen offers, as `RewardsCmd.OfferCustom` is
@@ -2266,11 +2278,14 @@ pub enum HookEffect<V: ContentVersion> {
     AddUniformCard {
         rarity: crate::RewardRarity,
     },
-    /// `count` such cards, and `FromChooseACardScreen`, which takes one of
-    /// them or none into the deck.
-    ChooseUniformCard {
+    /// `count` such cards, and a screen that takes between `min` and `max`
+    /// of them into the deck, in the order picked. `FromChooseACardScreen`
+    /// takes one or none, and `FromSimpleGridForRewards` its own count.
+    ChooseUniformCards {
         count: usize,
         rarity: crate::RewardRarity,
+        min: usize,
+        max: usize,
     },
     /// `PlayerCmd.GainMaxPotionCount`.
     GainPotionSlots(usize),
@@ -2298,6 +2313,13 @@ pub enum HookEffect<V: ContentVersion> {
     DamageOpponents(V::Number),
     /// `PlayerCmd.GainGold`, which a run carries out between rooms.
     GainGold(V::Number),
+    /// `PlayerCmd.LoseGold`, which stops at none.
+    LoseGold(V::Number),
+    /// `RelicCmd.Obtain`, and whatever the relic's pickup asks.
+    ObtainRelic(V::Relic),
+    /// `EventModel.SetEventFinished`, the last thing an option that ends its
+    /// event does. The room then offers nothing, and the run goes on.
+    FinishEvent,
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
     /// `PlayerCmd.GainEnergy`.
@@ -3476,12 +3498,12 @@ pub trait Rules: Hooks {
         run: &impl crate::EventView<Self>,
     ) -> crate::Room<Self>;
 
-    fn choose_event<R: crate::rng::GameRng, C: crate::EventContext<Self>>(
+    fn choose_event<R: crate::rng::GameRng>(
         state: &mut Self::EventState,
         option: u8,
-        run: &mut C,
+        run: &impl crate::EventView<Self>,
         rng: &mut R,
-    ) -> crate::EventFlow<Self>;
+    ) -> crate::HookEffects<Self>;
 
     /// The curses Neow offers, in the game's own order.
     fn neow_curses() -> &'static [Self::Relic];

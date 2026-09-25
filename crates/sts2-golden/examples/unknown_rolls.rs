@@ -5,11 +5,14 @@
 //! ```
 //!
 //! Seeds are the census's, `C` and nine digits. Each prints the seed and the
-//! first draw of the `UnknownMapPoint` stream. Then comes a path to each
-//! unknown point of the act's first three rows that a run can reach first. A
-//! path is its points from the first row, joined by `>`. The draw is read off a copy of the stream, so the
-//! run it came from is not moved. After a `|` come the first act's events in
-//! the order its unknown rooms pull them, drawn the way a run opens.
+//! first draw of the `UnknownMapPoint` stream. The draw is read off a copy of
+//! the stream, so the run it came from is not moved. Then comes a path to each unknown point
+//! of the act's first three rows that a run can reach first. A path is its
+//! points from the first row, joined by `>`.
+//!
+//! After a `|` come the first act's events in the order its unknown rooms pull
+//! them, drawn the way a run opens. Neow's room marks one visit against the
+//! queue, so the list starts one past its front.
 
 use std::process::ExitCode;
 
@@ -142,9 +145,9 @@ fn run(cli: Cli) -> Result<(), Error> {
         let mut up_front =
             sts2_core::rng::named::<V, MegaRng>(stream_seed::<V>(&start.seed), "up_front");
         let opening = Opening::<V>::draw(&mut up_front, character, &acts);
-        let events: Vec<String> = opening.acts[0]
-            .1
-            .events
+        let mut queue = opening.acts[0].1.events.clone();
+        queue.rotate_left(1);
+        let events: Vec<String> = queue
             .iter()
             .map(|event| match serde_json::to_value(event) {
                 Ok(serde_json::Value::String(id)) => id,

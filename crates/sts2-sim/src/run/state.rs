@@ -59,6 +59,10 @@ pub(crate) struct State<V: Rules> {
     /// Elite encounters have their own dealt list and position. Entering one
     /// must not consume the next normal encounter.
     elite_fights: usize,
+    /// `RoomSet.eventsVisited`: where this act's event queue stands.
+    ///
+    /// Every event room the run enters marks one, an ancient's included, and
+    /// so does every event the queue passes over as not allowed.
     events_used: usize,
     /// Shared until one is written. A run walks into a handful of events over
     /// four acts, and no decision inside a fight touches the list.
@@ -436,6 +440,11 @@ pub(super) enum Phase<V: Rules> {
     Event {
         state: V::EventState,
         rng: MegaRng,
+        /// What an option's effects asked, which the room parks on.
+        asking: Option<Asked<V>>,
+        /// `EventModel.IsFinished`, which the option that ends the event
+        /// sets last.
+        finished: bool,
     },
     Treasure {
         relic: V::Relic,
@@ -486,9 +495,14 @@ pub(super) enum Pickup<V: Rules> {
         act: sts2_core::DeckAct<V>,
         count: usize,
     },
-    /// `FromChooseACardScreen` that can be skipped: one of these into the
-    /// deck, or none.
-    ChooseCard { offered: SmallVec<[V::Card; 4]> },
+    /// Cards made for the run to take into its deck, between `min` and
+    /// `max` of them. `FromChooseACardScreen` takes one or none, and
+    /// `FromSimpleGridForRewards` its own count exactly.
+    Cards {
+        offered: Vec<CardIdent<V>>,
+        min: usize,
+        max: usize,
+    },
     /// `RewardsCmd.OfferCustom`: a screen to take rewards from until every
     /// one is taken or the rest are skipped.
     Rewards { offered: Vec<Offer<V>> },
@@ -587,6 +601,22 @@ impl<V: Rules> Phase<V> {
             | Phase::Event { .. } => false,
         }
     }
+
+    /// The question a pickup or an event option parked the room on.
+    fn asking(&self) -> Option<&Asked<V>> {
+        match self {
+            Phase::Neow { asking, .. } | Phase::Event { asking, .. } => asking.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Where the rooms that park keep what they are parked on.
+    fn asking_mut(&mut self) -> Option<&mut Option<Asked<V>>> {
+        match self {
+            Phase::Neow { asking, .. } | Phase::Event { asking, .. } => Some(asking),
+            _ => None,
+        }
+    }
 }
 
 impl<V: Rules> State<V> {
@@ -597,13 +627,12 @@ impl<V: Rules> State<V> {
             Phase::Combat(live) => live
                 .selecting()
                 .map(|_| sts2_core::QuestionKind::SelectCards),
-            Phase::Neow {
-                asking: Some(asked),
-                ..
-            } => Some(match asked.pickup {
-                Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
-                _ => sts2_core::QuestionKind::SelectCards,
-            }),
+            Phase::Neow { .. } | Phase::Event { .. } => {
+                self.phase.asking().map(|asked| match asked.pickup {
+                    Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
+                    _ => sts2_core::QuestionKind::SelectCards,
+                })
+            }
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
                 Some(sts2_core::QuestionKind::Rewards)
             }
@@ -704,7 +733,8 @@ impl<V: Rules> State<V> {
             },
             normal_fights: 0,
             elite_fights: 0,
-            events_used: 0,
+            // A run opens in Neow's room, which is an event room.
+            events_used: 1,
             visited_events: Arc::new(Vec::new()),
             unknown_odds: UNKNOWN_ODDS,
             odds: Odds::default(),
@@ -834,13 +864,18 @@ impl<V: Rules> State<V> {
             // order the cards were taken. The originals leave the deck, and
             // the replacements join its end in the originals' deck order.
             sts2_core::DeckAct::Transform(stream) => {
+                let rng = match (stream, &mut self.phase) {
+                    (sts2_core::Stream::Event, Phase::Event { rng, .. }) => rng,
+                    (sts2_core::Stream::Event, _) => {
+                        unreachable!("an event's stream outside its room")
+                    }
+                    (stream, _) => self.streams.of(stream),
+                };
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
                     .map(|&at| {
                         let options = V::transform_options(self.player.deck[at].card);
-                        let card = *self
-                            .streams
-                            .of(stream)
+                        let card = *rng
                             .choose(&options)
                             .unwrap_or_else(|_| unimplemented!("a transform with no option"));
                         (at, CardIdent::new(card))
@@ -1041,6 +1076,7 @@ impl<V: Rules> State<V> {
         // own list.
         self.normal_fights = 0;
         self.elite_fights = 0;
+        self.events_used = 0;
         self.phase = Phase::Map;
         Ok(Decided::Resolved)
     }
@@ -1083,6 +1119,27 @@ impl<V: Rules> State<V> {
                     self.player.gold = self.player.gold + amount;
                     continue;
                 }
+                HookEffect::FinishEvent => {
+                    let Phase::Event { finished, .. } = &mut self.phase else {
+                        unreachable!("only an event's option finishes it")
+                    };
+                    *finished = true;
+                    continue;
+                }
+                HookEffect::LoseGold(amount) => {
+                    let left = self.player.gold - amount;
+                    self.player.gold = left.max(num_traits::zero());
+                    continue;
+                }
+                // The relic's own pickup asks first, and the effects after
+                // it wait behind what it asked.
+                HookEffect::ObtainRelic(relic) => match self.obtain(relic) {
+                    None => continue,
+                    Some(mut asked) => {
+                        asked.rest.extend(effects);
+                        return Some(asked);
+                    }
+                },
                 HookEffect::AddToDeck(card) => {
                     self.player.deck_mut().push(CardIdent::new(card));
                     continue;
@@ -1173,8 +1230,19 @@ impl<V: Rules> State<V> {
                     }
                     Pickup::FromDeck { act, count }
                 }
-                HookEffect::ChooseUniformCard { count, rarity } => Pickup::ChooseCard {
-                    offered: self.uniform_cards(count, rarity).into_iter().collect(),
+                HookEffect::ChooseUniformCards {
+                    count,
+                    rarity,
+                    min,
+                    max,
+                } => Pickup::Cards {
+                    offered: self
+                        .uniform_cards(count, rarity)
+                        .into_iter()
+                        .map(CardIdent::new)
+                        .collect(),
+                    min,
+                    max,
                 },
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
             };
@@ -1280,6 +1348,12 @@ impl<V: Rules> State<V> {
         use sts2_core::CustomReward;
 
         let character = self.character();
+        if rewards
+            .iter()
+            .any(|reward| matches!(reward, CustomReward::CharacterCards(_)))
+        {
+            self.card_reward_unheard();
+        }
         let mut offered: Vec<Offer<V>> = rewards
             .iter()
             .map(|reward| {
@@ -1384,24 +1458,49 @@ impl<V: Rules> State<V> {
     /// rarity, less what this call drew already. `NoUpgradeRoll` rolls
     /// nothing else.
     fn uniform_cards(&mut self, count: usize, rarity: sts2_core::RewardRarity) -> Vec<V::Card> {
-        use sts2_core::rng::GameRng as _;
-
-        let pool = V::reward_cards(self.character()).at(rarity);
+        self.card_reward_unheard();
         let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
         for _ in 0..count {
-            let left: Vec<V::Card> = pool
-                .iter()
-                .copied()
-                .filter(|card| !drawn.contains(card))
-                .collect();
-            let card = *self
-                .streams
-                .player(V::PlayerRngType::REWARDS)
-                .choose(&left)
-                .unwrap_or_else(|_| unimplemented!("a reward pool with no {rarity:?} card left"));
+            let card = self.uniform_card(rarity, &drawn);
             drawn.push(card);
         }
         drawn
+    }
+
+    /// One `NextItem` over the character's reward pool at `rarity`, less
+    /// what the same call drew already.
+    fn uniform_card(&mut self, rarity: sts2_core::RewardRarity, drawn: &[V::Card]) -> V::Card {
+        use sts2_core::rng::GameRng as _;
+
+        let pool = V::reward_cards(self.character()).at(rarity);
+        let left: Vec<V::Card> = pool
+            .iter()
+            .copied()
+            .filter(|card| !drawn.contains(card))
+            .collect();
+        *self
+            .streams
+            .player(V::PlayerRngType::REWARDS)
+            .choose(&left)
+            .unwrap_or_else(|_| unimplemented!("a reward pool with no {rarity:?} card left"))
+    }
+
+    /// `CardFactory.CreateForReward`'s hooks: the upgrade odds, and the two
+    /// passes over the cards it made.
+    ///
+    /// # Panics
+    ///
+    /// A relic listening to one of them.
+    pub(super) fn card_reward_unheard(&self) {
+        use sts2_core::ModelHook;
+
+        for hook in [
+            ModelHook::ModifyCardRewardUpgradeOdds,
+            ModelHook::TryModifyCardRewardOptions,
+            ModelHook::TryModifyCardRewardOptionsLate,
+        ] {
+            self.unheard(hook);
+        }
     }
 
     /// Pick a relic up where nothing can park on what its pickup asks.
@@ -1450,6 +1549,11 @@ impl<V: Rules> State<V> {
         self.floor = self.floor + num_traits::one();
         if let Location::MapPoint(to) = at {
             self.visited.push(to);
+        }
+        // `ActModel.MarkRoomVisited`, which counts an event room against
+        // the act's queue.
+        if let Phase::Event { .. } = phase {
+            self.events_used += 1;
         }
         // A fight raised its own as it opened.
         let room = match &phase {
@@ -1503,7 +1607,15 @@ impl<V: Rules> State<V> {
         self.events_used = events_used;
         self.unknown_odds = unknown_odds;
         Arc::make_mut(&mut self.visited_events).push(event);
-        self.enter(Location::MapPoint(to), Phase::Event { state, rng });
+        self.enter(
+            Location::MapPoint(to),
+            Phase::Event {
+                state,
+                rng,
+                asking: None,
+                finished: false,
+            },
+        );
     }
 
     /// Enter a treasure room after resolving its relic and stream counter.
@@ -2005,11 +2117,7 @@ impl<V: Rules> State<V> {
             // confirmed, because `CardSelectorPrefs` makes it cancelable.
             return Ok(Decided::Abandoned);
         }
-        if matches!(self.phase, Phase::Event { .. }) {
-            let room = match &self.phase {
-                Phase::Event { state, .. } => V::observe_event(state, self),
-                _ => unreachable!(),
-            };
+        if let Some(room) = self.event_room() {
             let option = match room {
                 Room::Event { options, .. } => options.get(index as usize).cloned(),
                 _ => None,
@@ -2021,17 +2129,23 @@ impl<V: Rules> State<V> {
             // The choice acts on the whole run, so the room is taken out of
             // the run for as long as it is acting and put back after. A relic
             // an event hands over is taken the way any other is.
-            let Phase::Event { mut state, mut rng } =
-                std::mem::replace(&mut self.phase, Phase::Map)
+            let Phase::Event {
+                mut state, mut rng, ..
+            } = std::mem::replace(&mut self.phase, Phase::Map)
             else {
                 unreachable!()
             };
-            let flow = V::choose_event(&mut state, index, self, &mut rng);
-            self.phase = Phase::Event { state, rng };
-            match flow {
-                sts2_core::EventFlow::Finished => return Ok(Decided::Resolved),
-                _ => unimplemented!("an event choice that does not finish"),
-            }
+            let effects = V::choose_event(&mut state, index, self, &mut rng);
+            self.phase = Phase::Event {
+                state,
+                rng,
+                asking: None,
+                finished: false,
+            };
+            return Ok(match self.carry_out(effects) {
+                None => Decided::Resolved,
+                Some(asked) => self.park(asked),
+            });
         }
         let Phase::Neow {
             options, chosen, ..
@@ -2048,7 +2162,7 @@ impl<V: Rules> State<V> {
             // asks, which Neow's screen parks on.
             return Ok(match self.obtain(option) {
                 None => Decided::Resolved,
-                Some(asked) => self.park_at_neow(asked),
+                Some(asked) => self.park(asked),
             });
         }
 
@@ -2058,57 +2172,60 @@ impl<V: Rules> State<V> {
         self.player
             .relics
             .push(HeldRelic::new(V::lead_paperweight()));
+        self.card_reward_unheard();
         let offered = crate::reward::card::regular::<V, _>(
             self.streams.player(V::PlayerRngType::REWARDS),
             V::colorless_cards(),
             2,
-        )
-        .into_iter()
-        .collect();
-        Ok(self.park_at_neow(Asked {
-            pickup: Pickup::ChooseCard { offered },
+        );
+        Ok(self.park(Asked {
+            pickup: Pickup::Cards {
+                offered: offered.into_iter().map(CardIdent::new).collect(),
+                min: 0,
+                max: 1,
+            },
             rest: SmallVec::new(),
         }))
     }
 
-    /// Park Neow's screen on what a pickup asks.
-    ///
-    /// # Panics
-    ///
-    /// A clone, which only a merchant's shelf asks for.
-    /// Take from a pickup's reward screen at Neow. The screen stays up until
-    /// every reward is taken or the rest are skipped, and the pickup then
-    /// goes on.
-    fn take_at_neow(&mut self, answer: &Answer) -> Decided {
-        let Phase::Neow { asking, .. } = &mut self.phase else {
-            unreachable!("the phase was Neow's when this began");
+    /// Take from a reward screen a room is parked on. The screen stays up
+    /// until every reward is taken or the rest are skipped, and what asked
+    /// for it then goes on.
+    fn take_parked(&mut self, answer: &Answer) -> Decided {
+        let Some(asking) = self.phase.asking_mut() else {
+            unreachable!("the room was parked when this began");
         };
         let Some(Asked {
             pickup: Pickup::Rewards { mut offered },
             rest,
         }) = asking.take()
         else {
-            unreachable!("Neow was parked on a reward screen");
+            unreachable!("the room was parked on a reward screen");
         };
         self.take_reward(&mut offered, answer);
         if offered.iter().any(|offer| !offer.taken()) {
-            return self.park_at_neow(Asked {
+            return self.park(Asked {
                 pickup: Pickup::Rewards { offered },
                 rest,
             });
         }
         match self.carry_out(rest) {
-            Some(next) => self.park_at_neow(next),
+            Some(next) => self.park(next),
             None => Decided::Resolved,
         }
     }
 
-    fn park_at_neow(&mut self, asked: Asked<V>) -> Decided {
+    /// Park the room on what a pickup or an event option asks.
+    ///
+    /// # Panics
+    ///
+    /// A clone, which only a merchant's shelf asks for.
+    fn park(&mut self, asked: Asked<V>) -> Decided {
         if let Pickup::CloneDeckCard { .. } = asked.pickup {
-            unimplemented!("{:?} asked for at Neow", asked.pickup);
+            unimplemented!("{:?} asked for outside a shop", asked.pickup);
         }
-        let Phase::Neow { asking, .. } = &mut self.phase else {
-            unreachable!("a pickup this run parks is Neow's")
+        let Some(asking) = self.phase.asking_mut() else {
+            unreachable!("only Neow and an event park on what they ask")
         };
         *asking = Some(asked);
         Decided::Abandoned
@@ -2127,18 +2244,14 @@ impl<V: Rules> State<V> {
         if matches!(&self.phase, Phase::Shop { unfinished, .. } if unfinished.is_some()) {
             return self.finish_purchase(answer);
         }
-        if let Phase::Neow {
-            asking:
-                Some(Asked {
-                    pickup: Pickup::Rewards { .. },
-                    ..
-                }),
+        if let Some(Asked {
+            pickup: Pickup::Rewards { .. },
             ..
-        } = &self.phase
+        }) = self.phase.asking()
         {
-            return Ok(self.take_at_neow(answer));
+            return Ok(self.take_parked(answer));
         }
-        let Phase::Neow { asking, .. } = &mut self.phase else {
+        let Some(asking) = self.phase.asking_mut() else {
             unimplemented!("answering a question inside a fight");
         };
         let Answer::Cards(picks) = answer else {
@@ -2148,13 +2261,13 @@ impl<V: Rules> State<V> {
             .take()
             .unwrap_or_else(|| unimplemented!("an answer to a question nobody asked"));
         match asked.pickup {
-            Pickup::ChooseCard { offered } => {
-                if picks.len() > 1 {
-                    unimplemented!("a card selection of more than one");
+            Pickup::Cards { offered, min, max } => {
+                if picks.len() < min || picks.len() > max {
+                    unimplemented!("a card selection of other than {min} to {max} cards");
                 }
                 let chosen: Option<Vec<_>> = picks
                     .iter()
-                    .map(|index| offered.get(index).copied().map(CardIdent::new))
+                    .map(|index| offered.get(index).copied())
                     .collect();
                 let Some(chosen) = chosen else {
                     unimplemented!("a card selection naming a card that was not offered");
@@ -2178,12 +2291,12 @@ impl<V: Rules> State<V> {
                 }
                 self.act_on_deck(act, &taken);
             }
-            Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
+            Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
             Pickup::Rewards { .. } => unreachable!("a reward screen is answered above"),
         }
         // The rest of the pickup, which can ask again.
         if let Some(next) = self.carry_out(asked.rest) {
-            return Ok(self.park_at_neow(next));
+            return Ok(self.park(next));
         }
         Ok(Decided::Resolved)
     }
@@ -2400,17 +2513,21 @@ impl<V: Rules> State<V> {
     /// sizes and its rewards alone.
     fn answers(&self, moves: &mut Legal<V>) -> bool {
         match &self.phase {
-            Phase::Neow {
-                asking: Some(asked),
-                ..
-            } => match &asked.pickup {
-                Pickup::ChooseCard { offered } => selections(0, 1, offered.len(), moves),
-                Pickup::FromDeck { act, count } => {
-                    selections(*count, *count, self.offered(*act).len(), moves)
+            Phase::Neow { .. } | Phase::Event { .. } if self.phase.asking().is_some() => {
+                let Some(asked) = self.phase.asking() else {
+                    unreachable!("the guard found it parked")
+                };
+                match &asked.pickup {
+                    Pickup::Cards { offered, min, max } => {
+                        selections(*min, *max, offered.len(), moves)
+                    }
+                    Pickup::FromDeck { act, count } => {
+                        selections(*count, *count, self.offered(*act).len(), moves)
+                    }
+                    Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
+                    Pickup::Rewards { offered } => reward_moves(offered, moves),
                 }
-                Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
-                Pickup::Rewards { offered } => reward_moves(offered, moves),
-            },
+            }
             Phase::RestSite {
                 upgrading: true, ..
             } => selections(1, 1, self.upgradable().count(), moves),
@@ -2450,8 +2567,8 @@ impl<V: Rules> State<V> {
             ),
             // An event's options are the content's to spell, so its room is
             // built. That is the room alone, and only in an event.
-            Phase::Event { state, .. } => {
-                if let Room::Event { options, .. } = V::observe_event(state, self) {
+            Phase::Event { .. } => {
+                if let Some(Room::Event { options, .. }) = self.event_room() {
                     moves.extend(
                         options
                             .iter()
@@ -2652,21 +2769,15 @@ impl<V: Rules> State<V> {
     /// The question the run is parked on, if it is parked.
     fn asking(&self) -> Option<Question<V>> {
         match &self.phase {
-            Phase::Neow {
-                asking:
-                    Some(Asked {
-                        pickup: Pickup::Rewards { offered },
-                        ..
-                    }),
-                ..
-            } => Some(asked::<V>(offered)),
-            Phase::Neow { asking, .. } => asking.as_ref().map(|asking| {
+            Phase::Neow { .. } | Phase::Event { .. } => self.phase.asking().map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
-                    Pickup::ChooseCard { offered } => {
-                        (0, 1, offered.iter().copied().map(CardIdent::new).collect())
-                    }
-                    Pickup::CloneDeckCard { .. } => unreachable!("Neow parks on no clone"),
-                    Pickup::Rewards { .. } => unreachable!("a reward screen asks above"),
+                    Pickup::Rewards { offered } => return asked::<V>(offered),
+                    Pickup::Cards { offered, min, max } => (
+                        u32::try_from(*min).expect("a selection counts in a few cards"),
+                        u32::try_from(*max).expect("a selection counts in a few cards"),
+                        offered.clone(),
+                    ),
+                    Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
                     Pickup::FromDeck { act, count } => (
                         u32::try_from(*count).expect("a selection counts in a few cards"),
                         u32::try_from(*count).expect("a selection counts in a few cards"),
@@ -2745,8 +2856,31 @@ impl<V: Rules> State<V> {
                 })
             }
             // An act opens on its map, which is no room and asks nothing.
-            Phase::Map | Phase::Lost { .. } | Phase::Event { .. } | Phase::Treasure { .. } => None,
+            Phase::Map | Phase::Lost { .. } | Phase::Treasure { .. } => None,
         }
+    }
+
+    /// The event the run stands in, as its page shows it. A finished one
+    /// offers nothing.
+    fn event_room(&self) -> Option<Room<V>> {
+        let Phase::Event {
+            state, finished, ..
+        } = &self.phase
+        else {
+            return None;
+        };
+        let mut room = V::observe_event(state, self);
+        if let Room::Event {
+            finished: shown,
+            options,
+            ..
+        } = &mut room
+            && *finished
+        {
+            *shown = true;
+            options.clear();
+        }
+        Some(room)
     }
 
     /// The room the run is standing in, as its report shows it.
@@ -2788,7 +2922,7 @@ impl<V: Rules> State<V> {
                     options: if finished { Vec::new() } else { options },
                 })
             }
-            Phase::Event { state, .. } => Some(V::observe_event(state, self)),
+            Phase::Event { .. } => self.event_room(),
             Phase::Treasure { relic, finished } => {
                 let options = if *finished {
                     Vec::new()
@@ -2914,42 +3048,6 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
             .opening
             .player_relics
             .has_left(&self.dealt_relics)
-    }
-}
-
-impl<V: Rules> sts2_core::EventContext<V> for State<V> {
-    fn gold(&self) -> V::Number {
-        self.player.gold
-    }
-
-    fn spend_gold(&mut self, amount: V::Number) -> bool {
-        if self.player.gold < amount {
-            return false;
-        }
-        self.player.gold = self.player.gold - amount;
-        true
-    }
-
-    fn obtain_relic(&mut self, relic: V::Relic) {
-        self.obtain_here(relic);
-    }
-}
-
-impl<V: Rules> sts2_core::EventContext<V> for Player<V> {
-    fn gold(&self) -> V::Number {
-        self.gold
-    }
-
-    fn spend_gold(&mut self, amount: V::Number) -> bool {
-        if self.gold < amount {
-            return false;
-        }
-        self.gold = self.gold - amount;
-        true
-    }
-
-    fn obtain_relic(&mut self, relic: V::Relic) {
-        self.relics.push(HeldRelic::new(relic));
     }
 }
 

@@ -27,7 +27,7 @@ mod generated;
 mod keywords;
 mod rest_site;
 
-pub use event_options::{ByrdonisNestOption, EventOptionId, TeaMasterOption, WellspringOption};
+pub use event_options::EventOptionId;
 pub use generated::*;
 
 use sts2_core::Version;
