@@ -3323,6 +3323,10 @@ impl sts2_core::CardTable for Cards {
         self.data().keywords.contains(CardKeyword::Innate)
     }
 
+    fn eternal(self) -> bool {
+        self.data().keywords.contains(CardKeyword::Eternal)
+    }
+
     fn retains(self) -> bool {
         self.data().keywords.contains(CardKeyword::Retain)
     }

@@ -1181,6 +1181,14 @@ pub fn generate(root: &Path) -> Result<Build, String> {
     .unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out).unwrap();
+    writeln!(out, "    fn eternal(self) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "        self.data().keywords.contains(CardKeyword::Eternal)"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
     writeln!(out, "    fn retains(self) -> bool {{").unwrap();
     writeln!(
         out,
