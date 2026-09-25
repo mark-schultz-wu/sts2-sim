@@ -502,6 +502,20 @@ pub(super) struct Asked<V: Rules> {
     pub(super) rest: SmallVec<[sts2_core::HookEffect<V>; 4]>,
 }
 
+/// What an unknown room rolls besides an event, in the order
+/// `UnknownMapPointOdds` walks its odds. The elite's odds are negative, so it
+/// never rolls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum UnknownRoom {
+    Monster,
+    Treasure,
+    Shop,
+}
+
+/// `UnknownMapPointOdds`'s base odds for each, in [`UnknownRoom`]'s order,
+/// which is also what each rises by when another room rolls.
+const UNKNOWN_BASE: [f32; 3] = [0.1, 0.02, 0.03];
+
 /// A fight built and not yet entered.
 ///
 /// Built first because building can fail, and a fight that cannot be built
@@ -1748,6 +1762,63 @@ impl<V: Rules> State<V> {
         // A fight its opening ended goes straight on, the way one a decision
         // ended does.
         self.settle(ended, 0)
+    }
+
+    /// `UnknownMapPointOdds.Roll`: a room other than an event, or nothing for
+    /// an event.
+    ///
+    /// A shop is barred when the point the run leaves held one, or when every
+    /// point after `to` is a shop, which is `BuildRoomTypeBlacklist`. The room
+    /// rolled goes back to its base odds, and every other room not barred
+    /// rises by its base.
+    ///
+    /// The odds are the run's own, and move here.
+    ///
+    /// # Panics
+    ///
+    /// A relic changing which rooms can roll, or how far the odds rise.
+    pub(super) fn roll_unknown_room(
+        &mut self,
+        to: Coord,
+        streams: &mut Streams<V>,
+    ) -> Option<UnknownRoom> {
+        use sts2_core::rng::GameRng as _;
+        use sts2_core::{ActMap as _, MapPointKinds as _};
+
+        self.unheard(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes);
+        self.unheard(sts2_core::ModelHook::ModifyOddsIncreaseForUnrolledRoomType);
+        let node = |at| self.map.at(at).expect("a map edge leads to a node");
+        let after = &node(to).to;
+        let all_shops = !after.is_empty()
+            && after
+                .iter()
+                .all(|&at| node(at).kind == V::MapPointType::SHOP);
+        // The room the run leaves is the one it still stands in.
+        let in_shop = matches!(self.phase, Phase::Shop { .. });
+        let barred = [false, false, in_shop || all_shops];
+        let odds = &mut self.unknown_odds;
+        let rooms = [
+            UnknownRoom::Monster,
+            UnknownRoom::Treasure,
+            UnknownRoom::Shop,
+        ];
+        let roll = streams.run(V::RunRngType::UNKNOWN_MAP_POINT).next_double() as f32;
+        let mut cumulative = 0.0;
+        let rolled = (0..rooms.len()).find(|&at| {
+            if barred[at] {
+                return false;
+            }
+            cumulative += odds[at];
+            roll <= cumulative
+        });
+        for at in 0..rooms.len() {
+            if Some(at) == rolled {
+                odds[at] = UNKNOWN_BASE[at];
+            } else if !barred[at] {
+                odds[at] += UNKNOWN_BASE[at];
+            }
+        }
+        rolled.map(|at| rooms[at])
     }
 
     /// Take back the streams a rule drew from.

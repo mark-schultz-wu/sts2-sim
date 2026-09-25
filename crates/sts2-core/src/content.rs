@@ -546,10 +546,12 @@ pub enum ModelHook {
     TryModifyRewards,
     TryModifyRewardsLate,
     AfterModifyingRewards,
+    ModifyUnknownMapPointRoomTypes,
+    ModifyOddsIncreaseForUnrolledRoomType,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 55] = [
+    pub const ALL: [ModelHook; 57] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -605,6 +607,8 @@ impl ModelHook {
         ModelHook::TryModifyRewards,
         ModelHook::TryModifyRewardsLate,
         ModelHook::AfterModifyingRewards,
+        ModelHook::ModifyUnknownMapPointRoomTypes,
+        ModelHook::ModifyOddsIncreaseForUnrolledRoomType,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -669,6 +673,10 @@ impl ModelHook {
             ModelHook::TryModifyRewards => "TryModifyRewards",
             ModelHook::TryModifyRewardsLate => "TryModifyRewardsLate",
             ModelHook::AfterModifyingRewards => "AfterModifyingRewards",
+            ModelHook::ModifyUnknownMapPointRoomTypes => "ModifyUnknownMapPointRoomTypes",
+            ModelHook::ModifyOddsIncreaseForUnrolledRoomType => {
+                "ModifyOddsIncreaseForUnrolledRoomType"
+            }
         }
     }
 }

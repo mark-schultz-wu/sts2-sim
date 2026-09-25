@@ -19,6 +19,12 @@ impl MegaRng {
     pub fn words(&self) -> [u64; 4] {
         self.s
     }
+
+    /// A generator standing where these words and this count leave it, which
+    /// is how the game restores a saved stream.
+    pub fn from_words(words: [u64; 4], counter: i32) -> MegaRng {
+        MegaRng { s: words, counter }
+    }
 }
 
 impl GameRng for MegaRng {

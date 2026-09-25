@@ -1716,7 +1716,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // GNARLED_HAMMER
     sts2_core::Overrides::from_bits(0),
     // GOLDEN_COMPASS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
     // GOLDEN_PEARL
     sts2_core::Overrides::from_bits(0),
     // GOLD_PLATED_CABLES
@@ -1761,7 +1761,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // JUZU_BRACELET
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes),
     // KALEIDOSCOPE
     sts2_core::Overrides::from_bits(0),
     // KIFUDA

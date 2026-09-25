@@ -1,12 +1,12 @@
 //! Repo chores with real logic in them. `cargo xtask <command>`.
 //!
-//! Seven commands. `codegen` turns the dumps in
+//! Eight commands. `codegen` turns the dumps in
 //! `sts2-content/src/<version>/dumps/` into that crate's tables, one domain per
 //! dump, and fails the build if two dumps came from different builds. `dump`
 //! asks the game for those dumps. `instructions` counts what a replayed step
 //! costs, and `trace` shows where it goes, span by span. `allocations` names
-//! where it reaches the heap. `census` ranks what stops random runs, and
-//! `neow` finds the seeds whose Neow offers a relic.
+//! where it reaches the heap. `census` ranks what stops random runs. `neow` and
+//! `unknown` find seeds for a scenario: a Neow relic, or an unknown room's.
 //!
 //! The generated tree is committed rather than produced by a `build.rs`, so that
 //! a content change reads as a diff. The whole point of this project is noticing
@@ -23,6 +23,7 @@ mod instructions;
 mod neow;
 mod plays;
 mod trace;
+mod unknown;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -56,6 +57,8 @@ enum Command {
     Neow(neow::Args),
     /// Show where a replayed step's instructions go, span by span.
     Trace(trace::Args),
+    /// Find the seeds whose first unknown room rolls a given room.
+    Unknown(unknown::Args),
 }
 
 /// The repository's root, which is where cargo and the profiles live.
@@ -83,6 +86,8 @@ enum Error {
     Neow(#[from] neow::Error),
     #[error("trace failed: {0}")]
     Trace(#[from] trace::Error),
+    #[error("unknown failed: {0}")]
+    Unknown(error::ProcessError),
 }
 
 fn run(command: Command) -> Result<String, Error> {
@@ -95,6 +100,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Census(args) => census::run(args)?,
         Command::Neow(args) => neow::run(args)?,
         Command::Trace(args) => trace::run(args)?,
+        Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
     })
 }
 

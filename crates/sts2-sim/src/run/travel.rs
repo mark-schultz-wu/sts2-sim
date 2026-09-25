@@ -1,10 +1,9 @@
 //! Moving to a map point, and entering what waits there.
 
-use sts2_core::rng::GameRng;
 use sts2_core::{AscensionKinds, Coord, Decided, MapPointKinds, Reason, Rules, RunStreamKinds};
 
 use super::State;
-use super::state::{EncounterQueue, Location};
+use super::state::{EncounterQueue, Location, UnknownRoom};
 
 /// What waits at a reachable map point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +25,15 @@ pub(crate) struct Move<V: Rules> {
 }
 
 impl<V: Rules> State<V> {
+    /// A treasure room at `to`: `TreasureRoomRelicSynchronizer` rolls
+    /// `RollRarity` off its own stream.
+    fn treasure(&mut self, to: Coord, mut streams: crate::stream::Streams<V>) {
+        let rarity =
+            crate::reward::relic_rarity::<V, _>(streams.run(V::RunRngType::TREASURE_ROOM_RELICS));
+        let relic = self.next_shared_relic(rarity);
+        self.enter_treasure(to, relic, streams);
+    }
+
     /// Validate a move and resolve what it will enter, without changing state.
     ///
     /// Keeping this read-only makes travel transactional. Entering a room can
@@ -80,14 +88,7 @@ impl<V: Rules> State<V> {
         let Move { to, destination } = moving;
         if let Destination::Other(kind) = destination {
             if kind == V::MapPointType::TREASURE {
-                let mut streams = *self.streams();
-                // `TreasureRoomRelicSynchronizer`, which rolls `RollRarity`
-                // off its own stream.
-                let rarity = crate::reward::relic_rarity::<V, _>(
-                    streams.run(V::RunRngType::TREASURE_ROOM_RELICS),
-                );
-                let relic = self.next_shared_relic(rarity);
-                self.enter_treasure(to, relic, streams);
+                self.treasure(to, *self.streams());
                 return Ok(Decided::Resolved);
             }
             if kind == V::MapPointType::REST_SITE {
@@ -136,18 +137,26 @@ impl<V: Rules> State<V> {
             if kind != V::MapPointType::UNKNOWN {
                 unimplemented!("entering {destination:?}");
             }
-            let (mut events_used, visited, mut odds) = self.event_state();
             let mut streams = *self.streams();
-            let roll = streams.run(V::RunRngType::UNKNOWN_MAP_POINT).next_double() as f32;
-            let mut cumulative = 0.0;
-            for probability in odds {
-                cumulative += probability;
-                if roll <= cumulative {
-                    unimplemented!("a non-event unknown room");
+            let rolled = self.roll_unknown_room(to, &mut streams);
+            let (mut events_used, visited, odds) = self.event_state();
+            if let Some(room) = rolled {
+                if room == UnknownRoom::Treasure {
+                    self.treasure(to, streams);
+                    return Ok(Decided::Resolved);
                 }
-            }
-            for (probability, increase) in odds.iter_mut().zip([0.1, 0.02, 0.03]) {
-                *probability += increase;
+                self.drew(streams);
+                if room == UnknownRoom::Shop {
+                    let shop = self.stocked_shop();
+                    self.enter(Location::MapPoint(to), shop);
+                    return Ok(Decided::Resolved);
+                }
+                let encounter = self
+                    .normal_encounter(self.act())
+                    .expect("an act rolled the fights its monster rooms deal");
+                let at = Location::MapPoint(to);
+                let fight = self.create_fight(encounter, EncounterQueue::Normal, at)?;
+                return Ok(self.enter_fight(fight, at));
             }
             let events = self.event_candidates();
             let event = (0..events.len())
