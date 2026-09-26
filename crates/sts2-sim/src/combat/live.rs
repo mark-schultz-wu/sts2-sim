@@ -374,6 +374,9 @@ pub(crate) struct Face<V: Rules> {
     /// A byte, because a card played more times than that is a fight nobody
     /// finishes. [`Face::replay`] says so rather than wrapping.
     replays: i8,
+    /// `EnchantmentModel.Status`, which the enchantment's own `OnPlay` reads
+    /// and sets. A fight starts every copy's at `Normal`.
+    enchantment_status: sts2_core::EnchantmentStatus,
 }
 
 impl<V: Rules> Clone for Face<V> {
@@ -499,6 +502,7 @@ impl<V: Rules> Face<V> {
             modifiers: 0,
             added_keywords: sts2_core::FlagSet::from_members(&[]),
             replays: 0,
+            enchantment_status: sts2_core::EnchantmentStatus::Normal,
         };
         if card.ident.upgrade != 0 {
             assert_eq!(card.ident.upgrade, 1, "only first upgrades are ported");
@@ -669,13 +673,32 @@ impl<V: Rules> Face<V> {
             .any(|held| held.clears_when_turn_ends())
     }
 
-    /// `GeneratePlayCount`: one play, and one more per replay this copy holds.
-    ///
-    /// `Hook.ModifyCardPlayCount` and an enchantment's `EnchantPlayCount` both
-    /// move this in the game. Neither is ported, and each is a hook this reads
-    /// rather than a number to store.
+    /// `GetEnchantedReplayCount` and one: the replays this copy holds, through
+    /// its enchantment's `EnchantPlayCount`, and the play itself.
+    /// `Hook.ModifyCardPlayCount` runs over this where the play is made.
     pub(super) fn play_count(&self) -> V::Number {
-        num_traits::NumCast::from(self.replays + 1).expect("a play count fits a game number")
+        let replays: V::Number =
+            num_traits::NumCast::from(self.replays).expect("a replay count fits a game number");
+        let replays = match self.ident.enchantment {
+            Some(enchanted) => super::board::enchanted_by::<V>(
+                enchanted,
+                sts2_core::EnchantHook::PlayCount,
+                replays,
+            ),
+            None => replays,
+        };
+        replays + num_traits::one()
+    }
+
+    /// This copy's `EnchantmentModel.Status`.
+    pub(super) fn enchantment_status(&self) -> sts2_core::EnchantmentStatus {
+        self.enchantment_status
+    }
+
+    /// Set this copy's `EnchantmentModel.Status`, and say whether that changed
+    /// it.
+    pub(super) fn set_enchantment_status(&mut self, status: sts2_core::EnchantmentStatus) -> bool {
+        std::mem::replace(&mut self.enchantment_status, status) != status
     }
 
     /// Drop the cost modifiers that do not outlive being played, and say

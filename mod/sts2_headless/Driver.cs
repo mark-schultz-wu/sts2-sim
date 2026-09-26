@@ -495,6 +495,33 @@ public static class Driver
         return null;
     }
 
+    /// <summary>Enchants the card at a hand index.</summary>
+    /// <remarks>
+    /// Through <c>EnchantConsoleCmd</c>, which is <c>CardCmd.Enchant</c> on the
+    /// fight's copy. <c>CardCmd.Enchant</c> throws on a card the enchantment
+    /// does not take, and that comes back as the console's refusal.
+    /// </remarks>
+    public static string? Enchant(RunState state, string enchantment, int amount, int index)
+    {
+        Stage = "enchanting";
+        try
+        {
+            CmdResult result = new EnchantConsoleCmd().Process(
+                state.Players[0],
+                new[]
+                {
+                    enchantment,
+                    amount.ToString(CultureInfo.InvariantCulture),
+                    index.ToString(CultureInfo.InvariantCulture),
+                });
+            return result.success ? null : result.msg;
+        }
+        catch (InvalidOperationException e)
+        {
+            return e.Message;
+        }
+    }
+
     /// <summary>Jumps the run to a named event, off the map.</summary>
     /// <remarks>
     /// The same shape as <see cref="EnterFight"/>, and through the game's own

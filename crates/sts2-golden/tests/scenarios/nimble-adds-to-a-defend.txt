@@ -1,0 +1,7 @@
+# `EnchantConsoleCmd` puts Nimble at two on a Defend in the opening hand.
+# Nimble adds its amount to the block its card gives, so that Defend prints
+# seven and the Ironclad gains seven. The other two Defends still print five.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"enchant","enchantment":"NIMBLE","amount":2,"index":2}
+{"cmd":"play_card","index":2}

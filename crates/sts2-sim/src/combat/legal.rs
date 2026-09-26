@@ -32,8 +32,8 @@ pub(super) fn hand<V: Rules>(
 
 /// What a card names as its target.
 pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::TargetType {
-    if card.affliction.is_some() || card.enchantment.is_some() {
-        unimplemented!("what an afflicted or enchanted card prints");
+    if card.affliction.is_some() {
+        unimplemented!("what an afflicted card prints");
     }
     // One of the four cards that work their target out from the fight, which
     // they do by reading the player's own powers.

@@ -219,6 +219,13 @@ pub(crate) fn enter<V: Rules>(
     // card's hooks and history in turn.
     let order: Vec<_> = piles.hand().iter().chain(piles.draw()).copied().collect();
     live.cards = Cards::dealt(&[], &order);
+    // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
+    // cards move. The same cards are in the draw pile here, and no listener
+    // answers it.
+    let hook = sts2_core::EventHook::ShuffleOrder { initial: true };
+    if let Some((listener, effect)) = super::listen::notify::<V>(&mut live, relics, hook).first() {
+        unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
+    }
     super::board::draw(
         &mut live,
         streams.combat(),

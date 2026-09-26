@@ -8,13 +8,14 @@
 //! build's fights hold no power, relic or card that hooks any of them yet. A
 //! command that needs one stops the run where it stands.
 
+use crate::rng::MegaRng;
 use num_traits::{Saturating as _, Zero};
 use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardId, CardIdent, CardNumberModifier, CardTable as _, CardVars, CombatId,
-    Effect, EffectResolution, Fight, HookEffect, Modify, ModifyHook, Pile, PowerAmount, Rules,
-    RunStreamKinds, Scaling, SideKinds, Stack,
+    Effect, EffectResolution, EnchantHook, Fight, HookEffect, Modify, ModifyHook, Pile,
+    PowerAmount, Rules, RunStreamKinds, Scaling, SideKinds, Stack,
 };
 
 use super::listen::{Listener, Walk};
@@ -1002,6 +1003,12 @@ pub(crate) fn modified<V: Rules>(
     card: Option<&CardInstance<V>>,
     damage: V::Number,
 ) -> V::Number {
+    // The card's enchantment has its say first, and only when a card deals
+    // the hit.
+    let damage = match card.and_then(|held| held.face.ident.enchantment) {
+        Some(enchanted) => enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive, damage),
+        None => damage,
+    };
     let card = card.map(|held| (held.id, held.face.ident.card));
     let phases = [
         ModifyHook::DamageAdditive {
@@ -1013,6 +1020,24 @@ pub(crate) fn modified<V: Rules>(
         ModifyHook::DamageCap { target, dealer },
     ];
     modified_by::<V>(fight, damage, &phases)
+}
+
+/// `amount` after an enchantment's `hook`, which the game asks before any
+/// listener.
+///
+/// # Panics
+///
+/// An enchantment that does more to the number than add to it.
+pub(super) fn enchanted_by<V: Rules>(
+    enchanted: sts2_core::Enchanted<V>,
+    hook: EnchantHook,
+    amount: V::Number,
+) -> V::Number {
+    match <V as sts2_core::Hooks>::enchant_modify(enchanted, hook) {
+        Modify::Nothing => amount,
+        Modify::Added(more) => amount + more,
+        answer => unimplemented!("an enchantment answering {hook:?} with {answer:?}"),
+    }
 }
 
 /// One of an orb's numbers after every listener has had its say, which is
@@ -1074,6 +1099,12 @@ pub(crate) fn resolve<V: Rules>(
             scaling,
         } => {
             let amount = carried::<V>(playing, fight.live, amount);
+            // `Hook.ModifyBlock` asks the played card's enchantment whatever
+            // the block's props, since `GainBlock` always runs it.
+            let amount = match playing.and_then(|held| held.face.ident.enchantment) {
+                Some(enchanted) => enchanted_by::<V>(enchanted, EnchantHook::BlockAdditive, amount),
+                None => amount,
+            };
             Resolved::GainBlock {
                 recipient,
                 // `ModifyBlockAdditive` pays a card's block or a monster
@@ -1945,6 +1976,27 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 }
 
+/// `CardPileCmd.Shuffle`: the discard pile shuffled into the draw pile, then
+/// `ModifyShuffleOrder` over the result.
+pub(super) fn shuffle<V: Rules>(live: &mut Live<V>, rng: &mut MegaRng, relics: &mut Belt<V>) {
+    live.cards.reshuffle(rng);
+    let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
+    for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            (Listener::Card { id }, HookEffect::ToTopOfDrawPile) => {
+                let at = live
+                    .cards
+                    .find(Pile::Draw, id)
+                    .expect("a card moved in a shuffle was shuffled");
+                live.cards.move_to_top(Pile::Draw, at);
+            }
+            (listener, effect) => {
+                unimplemented!("{listener:?} asking for {effect:?} over a shuffle")
+            }
+        }
+    }
+}
+
 /// `CardPileCmd.Draw`, which shuffles the discard pile back in when the draw
 /// pile runs dry.
 ///
@@ -1962,7 +2014,7 @@ pub(super) fn draw<V: Rules>(
             if live.cards.is_empty(Pile::Discard) {
                 return;
             }
-            live.cards.reshuffle(rngs.shuffle);
+            shuffle::<V>(live, rngs.shuffle, relics);
         }
         let drawn = live
             .cards
@@ -1992,6 +2044,25 @@ pub(super) fn draw<V: Rules>(
                 // Written on the card that asked, wherever it stands.
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     live.modify_self(id, change, lasting)
+                }
+                // Only while the card is still in hand, which the
+                // enchantment checks before it draws.
+                (Listener::Card { id }, HookEffect::RandomSelfCost { below }) => {
+                    if live.cards.find(Pile::Hand, id).is_some() {
+                        let bound = sts2_core::rng::Bound::try_new(
+                            num_traits::NumCast::from(below)
+                                .expect("a cost bound fits the game's RNG integer"),
+                        )
+                        .expect("a random cost has somewhere to land");
+                        let cost = rngs.energy_costs.next_int(bound);
+                        let cost = num_traits::NumCast::from(cost)
+                            .expect("an energy cost fits a game number");
+                        live.modify_self(
+                            id,
+                            sts2_core::Change::SetCost(sts2_core::CostPool::Energy, cost),
+                            sts2_core::Lasting::ThisFight,
+                        );
+                    }
                 }
                 (_, effect) => rest.push(effect),
             }

@@ -1,0 +1,7 @@
+# `EnchantConsoleCmd` puts Spiral on the opening hand's Strike. Spiral's
+# `EnchantPlayCount` adds one to the card's replays, so the one play deals its
+# six twice and the Nibbit goes from forty-three to thirty-one.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"enchant","enchantment":"SPIRAL","amount":1,"index":0}
+{"cmd":"play_card","index":0,"target":1}

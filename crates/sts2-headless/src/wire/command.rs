@@ -55,6 +55,12 @@ pub enum Command<V: sts2_content_wire::WireContentVersion> {
         amount: i32,
         target: sts2_core::CombatId,
     },
+    /// `EnchantConsoleCmd` on the card at `index` in hand.
+    Enchant {
+        enchantment: V::Enchantment,
+        amount: u8,
+        index: sts2_core::HandIndex,
+    },
     /// `type` is a Rust keyword, so this is the one field a derive has to
     /// rename. The generated id says `"Shop"`, which is the game enum's actual
     /// name. A hand-written `"SHOP"` used to work only because the mod parses
@@ -150,6 +156,15 @@ impl<V: sts2_content_wire::WireContentVersion> From<&Setup<V>> for Command<V> {
                 },
                 target: *at,
             },
+            Setup::Enchant {
+                enchantment,
+                amount,
+                index,
+            } => Self::Enchant {
+                enchantment: *enchantment,
+                amount: *amount,
+                index: *index,
+            },
             Setup::Grant(gift) => Self::Grant(gift.into()),
         }
     }
@@ -225,6 +240,16 @@ impl<V: sts2_content_wire::WireContentVersion> Command<V> {
                         ))
                     }
                 },
+            }
+            .into(),
+            Self::Enchant {
+                enchantment,
+                amount,
+                index,
+            } => Setup::Enchant {
+                enchantment,
+                amount,
+                index,
             }
             .into(),
             Self::Grant(gift) => Setup::Grant(gift.into_domain()).into(),

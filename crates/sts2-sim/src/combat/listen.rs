@@ -16,8 +16,8 @@
 
 use smallvec::SmallVec;
 use sts2_core::{
-    CardId, CombatId, DecisionHook, EventHook, HookEffect, ModelHook, ModelId, MonsterTable as _,
-    Overrides, PowerTable as _, RelicTable as _, Rules,
+    CardId, CardTable as _, CombatId, DecisionHook, EventHook, HookEffect, ModelHook, ModelId,
+    MonsterTable as _, Overrides, PowerTable as _, RelicTable as _, Rules,
 };
 
 use super::live::{Heard, Live};
@@ -304,7 +304,19 @@ fn raise<V: Rules>(
                     .cards
                     .named(id)
                     .expect("a card the fight lists as listening is in it");
-                V::card_event_hook(card.face.ident.card, id, &card, hook, &mut answer);
+                // The card's own override, then its enchantment's, which is
+                // the order the combat state lists them in.
+                if card.face.ident.card.overrides().contains(model_hook) {
+                    V::card_event_hook(card.face.ident.card, id, &card, hook, &mut answer);
+                }
+                if let Some(enchanted) = card.face.ident.enchantment
+                    && <V::Enchantment as sts2_core::EnchantmentTable>::overrides(
+                        enchanted.enchantment,
+                    )
+                    .contains(model_hook)
+                {
+                    V::enchantment_event_hook(enchanted, id, hook, &mut answer);
+                }
                 take(
                     &mut asked,
                     &mut decremented,
@@ -413,6 +425,16 @@ pub(crate) fn each<V: Rules>(
                     .cards
                     .named(id)
                     .expect("a card the fight lists as listening is in it");
+                // An enchantment is asked only the hooks `raise` raises, so
+                // what the card hears here is its own.
+                if let Some(enchanted) = card.face.ident.enchantment
+                    && <V::Enchantment as sts2_core::EnchantmentTable>::overrides(
+                        enchanted.enchantment,
+                    )
+                    .intersects(hooks)
+                {
+                    unimplemented!("what {enchanted:?} answers when asked {hooks:?}");
+                }
                 let listener = sts2_core::Listener::Card {
                     card: card.face.ident.card,
                     id,

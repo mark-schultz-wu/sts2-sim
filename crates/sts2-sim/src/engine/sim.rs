@@ -119,6 +119,11 @@ impl<V: Rules> Sim<V> {
             Setup::Power { at, power, amount } => {
                 self.state.apply_power(*at, *power, *amount).map(Ok)
             }
+            Setup::Enchant {
+                enchantment,
+                amount,
+                index,
+            } => self.state.enchant(*enchantment, *amount, *index),
             Setup::Event { event } => unimplemented!("jumping to {event:?}"),
         }
     }
