@@ -71,7 +71,7 @@ pub(crate) fn enter<V: Rules>(
         stars: num_traits::zero(),
         round: num_traits::one(),
         side: <V::CombatSide as SideKinds>::PLAYER,
-        plays: super::live::PlayHistory::new(),
+        history: super::live::CombatHistory::new(),
         encounter,
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
@@ -214,7 +214,18 @@ pub(crate) fn enter<V: Rules>(
     );
     let piles = pile::shuffle(streams.combat().shuffle, deck).deal_opening(drawn);
 
-    live.cards = Cards::dealt(piles.hand(), piles.draw());
+    // The whole deck into the draw pile in the order the deal left it, then
+    // the hand drawn off its top, which is `CardPileCmd.Draw` raising each
+    // card's hooks and history in turn.
+    let order: Vec<_> = piles.hand().iter().chain(piles.draw()).copied().collect();
+    live.cards = Cards::dealt(&[], &order);
+    super::board::draw(
+        &mut live,
+        streams.combat(),
+        relics,
+        ascension,
+        piles.hand().len(),
+    );
     // `SetupPlayerTurn` ends on `AfterPlayerTurnStart`, which can end the
     // fight before the player takes a turn in it.
     let hook = sts2_core::EventHook::PlayerTurnStart { player };

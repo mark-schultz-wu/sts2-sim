@@ -1396,7 +1396,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // BORROWED_TIME_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
     // BUFFER_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
+        .with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
     // BURROWED_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterBlockBroken)
@@ -1447,7 +1449,8 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterCardDrawn)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // CORRUPTION_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
     // COUNTDOWN_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // COVERED_POWER
@@ -1556,7 +1559,10 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // FEEL_NO_PAIN_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
     // FERAL_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
     // FLAME_BARRIER_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterDamageReceived)
@@ -1679,6 +1685,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // INTANGIBLE_POWER
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::ModifyDamageCap)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOsty),
@@ -1786,7 +1793,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // NIGHTMARE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // NOSTALGIA_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
     // NOXIOUS_FUMES_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // NO_BLOCK_POWER
@@ -1877,7 +1886,10 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::ShouldAllowHitting)
         .with(sts2_core::ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath),
     // REBOUND_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
     // REFLECT_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterDamageReceived)

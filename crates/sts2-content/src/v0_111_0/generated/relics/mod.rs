@@ -1496,6 +1496,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BEATING_REMNANT
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterDamageReceived)
+        .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOsty),
     // BEAUTIFUL_BRACELET
@@ -2131,7 +2132,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // THE_ABACUS
     sts2_core::Overrides::from_bits(0),
     // THE_BOOT
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
+        .with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
     // THE_COURIER
     sts2_core::Overrides::from_bits(0),
     // THROWING_AXE
@@ -2159,7 +2162,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // TRI_BOOMERANG
     sts2_core::Overrides::from_bits(0),
     // TUNGSTEN_ROD
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHpLostAfterOsty),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
+        .with(sts2_core::ModelHook::ModifyHpLostAfterOsty),
     // TUNING_FORK
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // TWISTED_FUNNEL

@@ -278,7 +278,12 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// # Panics
     ///
     /// A card that is not being played.
-    pub(crate) fn leave_play(&mut self, id: CardId<V>, to: Option<Pile>) {
+    pub(crate) fn leave_play(
+        &mut self,
+        id: CardId<V>,
+        to: Option<Pile>,
+        position: sts2_core::PilePosition,
+    ) {
         let card = number(id);
         if self.piles.place(card) != Some(Place::Play) {
             unimplemented!("a card leaving play that was not in play");
@@ -290,6 +295,10 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         match to {
             Some(to) => {
                 self.piles.move_to(Place::Play, at, to.into());
+                // `CardPilePosition.Top` is the front, where a draw takes from.
+                if position == sts2_core::PilePosition::Top {
+                    self.piles.arrange(to.into(), |cards| cards.rotate_right(1));
+                }
             }
             None => {
                 self.piles.remove_at(Place::Play, at);

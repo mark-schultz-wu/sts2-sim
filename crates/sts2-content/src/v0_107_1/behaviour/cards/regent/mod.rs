@@ -25,14 +25,16 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
 }
 
 /// Deliver a notification to one Regent card in the fight.
-pub(super) fn event_hook(
+pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: RegentCard,
     id: sts2_core::CardId<V>,
+    printed: &P,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match card {
         RegentCard::KinglyKick => uncommon::kingly_kick(id, hook, asked),
+        RegentCard::KinglyPunch => uncommon::kingly_punch(id, printed, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

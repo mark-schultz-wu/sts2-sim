@@ -1075,7 +1075,11 @@ fn move_performed<V: Rules>(live: &mut Live<V>, creature: CombatId, move_id: V::
         return;
     };
     for held in live.powers.of_mut(creature) {
-        <V as sts2_core::Hooks>::power_event_hook(held.event_power(carrier), hook, &mut asked);
+        <V as sts2_core::Hooks>::power_event_hook(
+            held.event_power(carrier, live.history.view()),
+            hook,
+            &mut asked,
+        );
     }
     if let Some(effect) = asked.first() {
         unimplemented!("a power asking for {effect:?} after a monster move")
@@ -1101,7 +1105,7 @@ fn roll_moves<V: Rules>(
                 .expect("a retained move machine has its creature");
             let powers = live.powers.of(creature.id).map(|power| {
                 // Through the field, because the machine is borrowed.
-                power.listener(creature.carrier(), live.plays.history())
+                power.listener(creature.carrier(), live.history.view())
             });
             V::roll_monster_move(
                 held.monster,

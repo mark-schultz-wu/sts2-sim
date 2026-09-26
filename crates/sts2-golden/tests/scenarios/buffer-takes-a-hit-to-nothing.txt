@@ -1,0 +1,9 @@
+# `BufferPower.ModifyHpLostAfterOstyLate` takes what a hit would take off its
+# holder to nothing, and `AfterModifyingHpLostAfterOsty` spends one of its
+# stack on it. The twig slime's tackle costs the player nothing, and the next
+# tackle lands.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"BUFFER_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

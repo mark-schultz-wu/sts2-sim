@@ -13,7 +13,7 @@ use smallvec::SmallVec;
 use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
 use super::board::Board;
-use super::live::{Asked, Asker, Live, Plays, Resuming, Skips, Then};
+use super::live::{Asked, Asker, CardPlay, Live, Plays, Resuming, Skips, Then};
 use super::powers::Powers as _;
 use super::{Error, Fighting, hook, legal};
 
@@ -168,7 +168,9 @@ pub(crate) fn play<V: Rules>(
     // the hand, while its own effect runs.
     let card = live.cards.play(play.index);
     let ascension = live.ascension;
+    let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V>(live, streams, relics, &card);
+    live.history.start(card.face.ident.card, play.energy);
     let mut board = Board::for_card(
         live,
         streams.combat(),
@@ -195,12 +197,101 @@ pub(crate) fn play<V: Rules>(
                 done: num_traits::zero(),
                 count,
             },
-            asker: Asker::Card(card.id),
+            asker: Asker::Card(CardPlay {
+                id: card.id,
+                energy: play.energy,
+                pile,
+                position,
+            }),
             target: play.target,
             ended,
         },
         played,
     )
+}
+
+/// `GetResultPileTypeForCardPlay`, run through
+/// `ModifyCardPlayResultPileTypeAndPosition`, then
+/// `AfterModifyingCardPlayResultPileOrPosition` for each listener that changed
+/// it.
+///
+/// A power card leaves the fight rather than going to a pile, and a card that
+/// exhausts goes to the exhaust pile. Anything else is discarded.
+///
+/// # Panics
+///
+/// A card whose type the fight works out, or a listener other than a power
+/// changing the pile.
+fn result_pile<V: Rules>(
+    live: &mut Live<V>,
+    relics: &mut crate::run::Belt<V>,
+    card: &super::live::CardInstance<V>,
+    energy: V::Count,
+) -> (Option<sts2_core::Pile>, sts2_core::PilePosition) {
+    let played = card.face.ident.card;
+    let pile = match played
+        .power()
+        .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
+    {
+        true => None,
+        false if played.exhausts() => Some(sts2_core::Pile::Exhaust),
+        false => Some(sts2_core::Pile::Discard),
+    };
+    let player = live.player().id;
+    let mut result = (pile, sts2_core::PilePosition::Bottom);
+    let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
+    super::listen::each::<V>(
+        super::listen::Walk { live, relics },
+        sts2_core::Overrides::of(sts2_core::ModelHook::ModifyCardPlayResultPileTypeAndPosition),
+        |listener, _| {
+            let hook = sts2_core::ResultPile {
+                player,
+                card: played,
+                energy,
+                pile: result.0,
+                position: result.1,
+            };
+            let sts2_core::HookResponse::Decision(next) = V::result_pile(listener, hook) else {
+                return;
+            };
+            if next != result {
+                match listener {
+                    sts2_core::Listener::Power { holder, power, .. } => {
+                        modifiers.push((holder, power))
+                    }
+                    _ => unimplemented!("a listener other than a power moving a played card"),
+                }
+            }
+            result = next;
+        },
+    );
+    for (holder, power) in modifiers {
+        let Some(carrier) = live
+            .creatures
+            .iter()
+            .find(|c| c.id == holder)
+            .map(|c| c.carrier())
+        else {
+            continue;
+        };
+        let Some(held) = live
+            .powers
+            .of_mut(holder)
+            .find(|held| held.power() == power)
+        else {
+            continue;
+        };
+        let mut asked = sts2_core::HookEffects::new();
+        <V as sts2_core::Hooks>::power_event_hook(
+            held.event_power(carrier, live.history.view()),
+            sts2_core::EventHook::ResultPileModified { card: played },
+            &mut asked,
+        );
+        if let Some(effect) = asked.first() {
+            unimplemented!("a power asking for {effect:?} after moving a played card")
+        }
+    }
+    result
 }
 
 /// `GeneratePlayCount`: the copy's own plays, run through
@@ -260,7 +351,7 @@ fn play_count<V: Rules>(
         };
         let mut asked = sts2_core::HookEffects::new();
         <V as sts2_core::Hooks>::power_event_hook(
-            held.event_power(carrier),
+            held.event_power(carrier, live.history.view()),
             sts2_core::EventHook::PlayCountModified {
                 card: card.face.ident.card,
             },
@@ -359,7 +450,7 @@ pub(crate) fn answer<V: Rules>(
         }
     };
     let playing = match &effect.asker {
-        Asker::Card(card) => Some(*card),
+        Asker::Card(card) => Some(card.id),
         Asker::Potion(_) => None,
     };
     let ascension = live.ascension;
@@ -410,10 +501,10 @@ pub(super) fn carry_on<V: Rules>(
             // replays runs its own effect again, from the top.
             sts2_core::Played::Done => {
                 effect.plays.done = effect.plays.done + num_traits::one();
-                let Asker::Card(card) = &effect.asker else {
+                let Asker::Card(play) = effect.asker else {
                     break;
                 };
-                let card = *card;
+                let card = play.id;
                 let played_card = next
                     .cards
                     .named(card)
@@ -435,6 +526,7 @@ pub(super) fn carry_on<V: Rules>(
                 if effect.plays.done >= effect.plays.count {
                     break;
                 }
+                next.history.start(played_card, play.energy);
                 let mut board = Board::for_card(
                     next,
                     streams.combat(),
@@ -474,7 +566,7 @@ pub(super) fn carry_on<V: Rules>(
         };
 
         let playing = match &effect.asker {
-            Asker::Card(card) => Some(*card),
+            Asker::Card(card) => Some(card.id),
             Asker::Potion(_) => None,
         };
         let mut board = Board::for_card(
@@ -492,7 +584,7 @@ pub(super) fn carry_on<V: Rules>(
     }
 
     let ended = effect.ended;
-    let Asker::Card(card) = effect.asker else {
+    let Asker::Card(play) = effect.asker else {
         if ended == Some(super::Ended::Won) {
             super::listen::combat_ended::<V>(next, relics);
         }
@@ -500,30 +592,23 @@ pub(super) fn carry_on<V: Rules>(
     };
 
     next.cards
-        .write_in_play(card, super::live::Face::was_played);
+        .write_in_play(play.id, super::live::Face::was_played);
 
-    let card_played = next
-        .cards
-        .named(card)
-        .unwrap_or_else(|| unimplemented!("a card that left play before its play ended"))
-        .face
-        .ident
-        .card;
-    // `GetResultPileTypeForCardPlay`, once the effect is over.
-    let to = match card_played
-        .power()
-        .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
-    {
-        // A power card leaves the fight rather than going to a pile.
-        true => None,
-        false if card_played.exhausts() => Some(sts2_core::Pile::Exhaust),
-        false => Some(sts2_core::Pile::Discard),
+    // Where the result pile said, worked out before the first play. A full
+    // hand sends the card to the discard pile instead.
+    let to = match play.pile {
+        Some(sts2_core::Pile::Hand)
+            if next.cards.len(sts2_core::Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND =>
+        {
+            Some(sts2_core::Pile::Discard)
+        }
+        pile => pile,
     };
     // `CardCmd.Exhaust` for a card that exhausts as it is played.
     if to == Some(sts2_core::Pile::Exhaust) {
         super::turn::unheard::<V>(next, relics, sts2_core::ModelHook::AfterCardExhausted);
     }
-    next.cards.leave_play(card, to);
+    next.cards.leave_play(play.id, to, play.position);
 
     if ended == Some(super::Ended::Won) {
         super::listen::combat_ended::<V>(next, relics);
@@ -543,7 +628,7 @@ fn finished<V: Rules>(fighting: Fighting<'_, V>, ascension: V::AscensionLevel, c
         streams,
         relics,
     } = fighting;
-    next.plays.finish(card);
+    next.history.finish(card);
     let asked = super::listen::notify::<V>(next, relics, sts2_core::EventHook::CardPlayed { card });
     if !asked.is_empty() {
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
