@@ -1,0 +1,10 @@
+# `KinglyKick.AfterCardDrawn` takes one off its own cost for the rest of the
+# fight each time it is drawn. A Kingly Kick drawn in a later turn's hand
+# costs three.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

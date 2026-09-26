@@ -1,0 +1,7 @@
+# `StarNextTurnPower.AfterEnergyReset` gains its stack of stars as the next
+# turn's energy resets, then goes. The turn after gains none.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"STAR_NEXT_TURN_POWER","amount":3,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

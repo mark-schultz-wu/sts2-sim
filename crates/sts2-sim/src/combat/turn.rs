@@ -735,6 +735,16 @@ pub(super) fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut crate::run
                 live.energy = live.energy + gained;
                 live.remove_power(owner, power);
             }
+            // `PlayerCmd.GainStars`.
+            (_, sts2_core::HookEffect::GainStars(amount)) => {
+                let gained: V::Count = num_traits::cast(amount)
+                    .unwrap_or_else(|| unimplemented!("gaining {amount:?} stars"));
+                live.stars = live.stars + gained;
+            }
+            // `PowerCmd.Remove(this)`.
+            (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Remove) => {
+                live.remove_power(owner, power)
+            }
             (_, effect) => unimplemented!("a listener asking for {effect:?} as energy resets"),
         }
     }

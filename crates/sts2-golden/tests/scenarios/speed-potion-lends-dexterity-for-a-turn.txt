@@ -1,0 +1,8 @@
+# `SpeedPotion` applies `SpeedPotionPower`, which lends five Dexterity and
+# takes it back as the player's turn ends. A Defend drawn after the potion
+# gains ten, and the next turn's gains five.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","potion":"SPEED_POTION"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}

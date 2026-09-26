@@ -145,6 +145,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     match card {
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
         Cards::Necrobinder(card) => necrobinder::event_hook(card, hook, asked),
+        Cards::Regent(card) => regent::event_hook(card, id, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

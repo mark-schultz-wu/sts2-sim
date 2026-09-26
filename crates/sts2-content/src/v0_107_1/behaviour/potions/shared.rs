@@ -13,6 +13,9 @@ use super::Number;
 /// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
 const DEXTERITY: Number = 2;
 
+/// `SpeedPotion`'s `PowerVar<DexterityPower>(5)`, lent until the turn ends.
+const SPEED: Number = 5;
+
 /// `VulnerablePotion`'s `PowerVar<VulnerablePower>(3)`.
 const VULNERABLE: Number = 3;
 
@@ -31,6 +34,11 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         // `AnyPlayer`, which a run with one player points at that player.
         Potion::DexterityPotion => {
             fight.apply_to_actor(Power::DexterityPower, PowerAmount::Counted(DEXTERITY));
+            Played::Done
+        }
+        // `AnyPlayer`, and `SpeedPotionPower` lends the Dexterity.
+        Potion::SpeedPotion => {
+            fight.apply_to_actor(Power::SpeedPotionPower, PowerAmount::Counted(SPEED));
             Played::Done
         }
         Potion::VulnerablePotion => {
