@@ -1,0 +1,14 @@
+# `ForegoneConclusionPower.BeforeHandDraw` stops the next turn's setup on a
+# pick of two cards from the draw pile, which go to hand before the draw.
+#
+# `FromCombatPile` offers the draw pile sorted by rarity and then by id. So
+# the two Defends come first, and the Astral Pulses after them, although
+# their id sorts ahead.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"ASTRAL_PULSE"}
+{"cmd":"grant","card":"ASTRAL_PULSE"}
+{"cmd":"grant","card":"ASTRAL_PULSE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"FOREGONE_CONCLUSION_POWER","amount":2,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0,1]}

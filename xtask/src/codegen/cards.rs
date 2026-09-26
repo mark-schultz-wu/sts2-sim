@@ -94,6 +94,9 @@ pub(super) const POOLS: [(&str, &str, &str, Option<&str>); 12] = [
     ("DEPRECATED_CARD_POOL", "deprecated", "DeprecatedCard", None),
 ];
 
+/// The reflected enums a rule sorts by, the way `orderby c.Rarity` does.
+const ORDERED: [&str; 1] = ["CardRarity"];
+
 /// The enums here the simulator names members of.
 const BRIDGES: [Bridge; 3] = [
     Bridge {
@@ -669,7 +672,21 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         for (_, member, why) in DROPPED.iter().filter(|&&(e, _, _)| e == name) {
             writeln!(out, "// `{name}::{member}` is not generated: {why}").unwrap();
         }
-        writeln!(out, "{DERIVES}").unwrap();
+        if ORDERED.contains(&name.as_str()) {
+            // Declared in the order of its values, so the derived order is
+            // the game's.
+            assert!(
+                members.windows(2).all(|pair| pair[0].0 < pair[1].0),
+                "{name} is reflected out of the order of its values"
+            );
+            writeln!(
+                out,
+                "#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]"
+            )
+            .unwrap();
+        } else {
+            writeln!(out, "{DERIVES}").unwrap();
+        }
         writeln!(out, "#[repr(u8)]").unwrap();
         writeln!(out, "pub enum {name} {{").unwrap();
         for (discriminant, m) in members {
@@ -1338,6 +1355,14 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(
         out,
         "        self.data().keywords.contains(CardKeyword::Retain)"
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn sly(self) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "        self.data().keywords.contains(CardKeyword::Sly)"
     )
     .unwrap();
     writeln!(out, "    }}").unwrap();

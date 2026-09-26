@@ -217,9 +217,21 @@ pub(crate) fn enter<V: Rules>(
     live.cards = Cards::dealt(piles.hand(), piles.draw());
     // `SetupPlayerTurn` ends on `AfterPlayerTurnStart`, which can end the
     // fight before the player takes a turn in it.
-    if let Some(ended) =
-        super::turn::player_turn_started::<V>(&mut live, streams.combat(), relics, ascension)
-    {
+    let hook = sts2_core::EventHook::PlayerTurnStart { player };
+    let asked = super::listen::notify::<V>(&mut live, relics, hook);
+    let ended = match super::turn::carry_setup(
+        &mut live,
+        streams.combat(),
+        relics,
+        ascension,
+        super::live::Setup::PlayerTurnStart(asked),
+    ) {
+        super::turn::Carried::Done(ended) => ended,
+        super::turn::Carried::Parked(_) => {
+            unimplemented!("a choice as the fight opens")
+        }
+    };
+    if let Some(ended) = ended {
         if ended == super::Ended::Won {
             super::listen::combat_ended::<V>(&mut live, relics);
         }

@@ -1796,6 +1796,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let Some(at) = self.live.cards.find(Pile::Hand, playing) else {
             return;
         };
+        // `CardCmd.Discard`, whose hook nothing ported answers.
+        self.unheard(sts2_core::ModelHook::AfterCardDiscarded);
         self.live.cards.move_to(Pile::Hand, at, Pile::Discard);
     }
 

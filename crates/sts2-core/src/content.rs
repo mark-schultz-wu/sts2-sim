@@ -290,6 +290,9 @@ pub trait CardTable: Table {
     /// Whether an unplayed copy stays in hand when the turn ends.
     fn retains(self) -> bool;
 
+    /// Whether the table prints `Sly`, which plays a discarded copy.
+    fn sly(self) -> bool;
+
     /// Whether it carries `Eternal`, which keeps it in the deck: no removal
     /// takes it, and no transform takes it from the deck.
     fn eternal(self) -> bool;
@@ -561,10 +564,12 @@ pub enum ModelHook {
     BeforeAttack,
     AfterAttack,
     BeforeHandDraw,
+    AfterCardExhausted,
+    AfterCardDiscarded,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 67] = [
+    pub const ALL: [ModelHook; 69] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -632,6 +637,8 @@ impl ModelHook {
         ModelHook::BeforeAttack,
         ModelHook::AfterAttack,
         ModelHook::BeforeHandDraw,
+        ModelHook::AfterCardExhausted,
+        ModelHook::AfterCardDiscarded,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -710,6 +717,8 @@ impl ModelHook {
             ModelHook::BeforeAttack => "BeforeAttack",
             ModelHook::AfterAttack => "AfterAttack",
             ModelHook::BeforeHandDraw => "BeforeHandDraw",
+            ModelHook::AfterCardExhausted => "AfterCardExhausted",
+            ModelHook::AfterCardDiscarded => "AfterCardDiscarded",
         }
     }
 }
@@ -920,14 +929,12 @@ pub trait RoomKinds: std::fmt::Debug + Copy + Eq + 'static {
     const REST_SITE: Self;
 }
 
-/// The sides of a fight, as consts a rule can name.
-///
-/// The same bridge as [`MapPointKinds`]. The game's enum has a third member, its
-/// C# zero, which no creature in a fight is on.
-/// The move names the simulator writes itself.
 /// What `CardRarity` names, as consts a rule can name. All ten, so a build
 /// that adds one stops codegen.
-pub trait CardRarityKinds: std::fmt::Debug + Copy + Eq + 'static {
+///
+/// Ordered by the game's own values, which a selection from the draw pile
+/// sorts its cards by.
+pub trait CardRarityKinds: std::fmt::Debug + Copy + Eq + Ord + 'static {
     const BASIC: Self;
     const COMMON: Self;
     const UNCOMMON: Self;
@@ -962,12 +969,17 @@ pub trait PowerKinds: std::fmt::Debug + Copy + Eq + 'static {
     const DIE_FOR_YOU: Self;
 }
 
+/// The move names the simulator writes itself.
 pub trait MoveKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// `UNSET_MOVE`, which a creature that has not rolled a move reports. A
     /// pet never rolls one.
     const UNSET: Self;
 }
 
+/// The sides of a fight, as consts a rule can name.
+///
+/// The same bridge as [`MapPointKinds`]. The game's enum has a third member, its
+/// C# zero, which no creature in a fight is on.
 pub trait SideKinds: std::fmt::Debug + Copy + Eq + 'static {
     const PLAYER: Self;
     const ENEMY: Self;
@@ -1047,6 +1059,8 @@ pub trait KeywordKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static
     const INNATE: Self;
     /// Stays in hand as the turn ends, which a power writes onto Shivs.
     const RETAIN: Self;
+    /// Plays itself once discarded.
+    const SLY: Self;
 }
 
 /// The things a rest site can offer, as consts a rule can name.
@@ -2377,6 +2391,17 @@ pub enum CustomReward {
     ColorlessCards(usize),
 }
 
+/// What happens to each card a [`HookEffect::SelectFromPile`] takes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PileAct {
+    /// `CardCmd.Exhaust`, one card at a time.
+    Exhaust,
+    /// `CardCmd.Discard` over all of them.
+    Discard,
+    /// `CardPileCmd.Add(cards, PileType.Hand)`.
+    IntoHand,
+}
+
 /// How [`HookEffect::ChooseCards`] draws each card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CardDraw {
@@ -2511,6 +2536,16 @@ pub enum HookEffect<V: ContentVersion> {
     LoseEnergy(V::Number),
     /// `CardPileCmd.Draw` for the player.
     Draw(V::Number),
+    /// `CardSelectCmd.FromHand` or `FromCombatPile`: the player picks `count`
+    /// cards of the pile, and `act` is what happens to them.
+    SelectFromPile {
+        pile: crate::Pile,
+        count: V::Number,
+        act: PileAct,
+    },
+    /// `CardPileCmd.ShuffleIfNecessary`: the discard pile shuffled into an
+    /// empty draw pile.
+    ShuffleIfNecessary,
     /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
     /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
     GenerateInHand {

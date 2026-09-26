@@ -24,6 +24,10 @@ use super::live::{Heard, Live};
 use super::powers::Powers as _;
 use crate::run::Belt;
 
+/// What the listeners a hook reached asked for, in the order they asked, each
+/// beside the listener that asked it.
+pub(crate) type Answers<V> = SmallVec<[(Listener<V>, HookEffect<V>); 4]>;
+
 /// One listener, by what names it rather than by a borrow of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Listener<V: Rules> {
@@ -139,7 +143,7 @@ pub(crate) fn notify<V: Rules>(
     live: &mut Live<V>,
     relics: &mut Belt<V>,
     hook: EventHook<V>,
-) -> SmallVec<[(Listener<V>, HookEffect<V>); 4]> {
+) -> Answers<V> {
     let model_hook = hook
         .model_hook()
         .unwrap_or_else(|| unreachable!("{hook:?} is asked of one model, not raised"));

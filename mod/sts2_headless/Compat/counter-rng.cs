@@ -13,6 +13,16 @@ namespace Sts2Headless;
 /// </remarks>
 internal static class GameApi
 {
+    /// <summary>Whether <see cref="ScreenPathSelections"/> applies, which mirrors this family's <c>CardSelectCmd</c>.</summary>
+    internal const bool AsksThroughTheScreen = true;
+
+    /// <summary><c>SignalPlayerChoiceBegun</c>, which this family takes the options alone for.</summary>
+    internal static System.Threading.Tasks.Task SignalChoiceBegun(
+        MegaCrit.Sts2.Core.GameActions.Multiplayer.PlayerChoiceContext context,
+        Player player,
+        MegaCrit.Sts2.Core.Entities.Multiplayer.PlayerChoiceOptions options)
+        => context.SignalPlayerChoiceBegun(options);
+
     internal static bool CanUseOrRemovePotions(Player player) => player.CanRemovePotions;
 
     internal static IReadOnlyDictionary<RunRngType, RngPosition> RunRngCounters(RunState state)

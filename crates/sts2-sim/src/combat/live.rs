@@ -109,11 +109,33 @@ pub(super) enum Asked<V: Rules> {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct Asking<V: Rules> {
-    pub(super) effect: Resuming<V>,
-    pub(super) at: V::Resume,
+    pub(super) then: Then<V>,
     pub(super) question: Asked<V>,
+}
+
+/// What an answer resumes.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum Then<V: Rules> {
+    /// A card's or a potion's own effect, which `V::resume_play` picks up.
+    Play { effect: Resuming<V>, at: V::Resume },
+    /// `SetupPlayerTurn`, which a hook parked on its selection. `act` is what
+    /// happens to the cards picked, and `stage` is the rest of the setup.
+    Setup {
+        act: sts2_core::PileAct,
+        stage: Setup<V>,
+    },
+}
+
+/// Where `SetupPlayerTurn` stands, with what the hook it stopped in has still
+/// to carry out.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum Setup<V: Rules> {
+    /// Inside `BeforeHandDraw`, before the hand is drawn.
+    BeforeHandDraw(super::listen::Answers<V>),
+    /// Inside `AfterPlayerTurnStart`, the last of the setup.
+    PlayerTurnStart(super::listen::Answers<V>),
 }
 
 /// Mints the ids a fight names its cards by.
@@ -547,8 +569,8 @@ impl<V: Rules> Face<V> {
     /// `Keywords.Contains(Innate)` for this copy.
     ///
     /// The union of what the table prints and what has been written on. Asked
-    /// of Innate and Retain alone, because those are the keywords something
-    /// in a fight both writes and reads. The rest are read off the table.
+    /// of Innate, Retain and Sly alone, because those are the keywords
+    /// something in a fight both writes and reads. The rest are read off the table.
     pub(super) fn innate(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
@@ -556,6 +578,18 @@ impl<V: Rules> Face<V> {
             || sts2_core::FlagSet::contains(
                 self.added_keywords,
                 <V::CardKeyword as KeywordKinds<V>>::INNATE,
+            )
+    }
+
+    /// `IsSlyThisTurn` for this copy, the keyword the way [`Face::innate`]
+    /// reads Innate. Nothing ported makes a card Sly for one turn.
+    pub(super) fn sly(&self) -> bool {
+        use sts2_core::{CardTable as _, KeywordKinds};
+
+        self.ident.card.sly()
+            || sts2_core::FlagSet::contains(
+                self.added_keywords,
+                <V::CardKeyword as KeywordKinds<V>>::SLY,
             )
     }
 
@@ -1393,12 +1427,46 @@ impl<V: Rules> Live<V> {
         &self.leaving
     }
 
+    /// Where each card a selection from `pile` offers stands in it, in the
+    /// order the selector is handed them.
+    ///
+    /// `FromCombatPile` sorts the draw pile by rarity and then by id, a
+    /// stable sort. Any other pile is handed over as it lies.
+    pub(crate) fn offered(&self, pile: sts2_core::Pile) -> smallvec::SmallVec<[usize; 16]> {
+        use sts2_core::CardTable as _;
+
+        let mut offered: smallvec::SmallVec<[usize; 16]> = (0..self.cards.len(pile)).collect();
+        if pile == sts2_core::Pile::Draw {
+            offered.sort_by_key(|&at| {
+                let card = self
+                    .cards
+                    .get(pile, at)
+                    .expect("a card stands at each place in its pile")
+                    .face
+                    .ident
+                    .card;
+                (card.rarity(), card.order())
+            });
+        }
+        offered
+    }
+
     /// The card-selection question on which this fight is parked.
     pub(crate) fn question(&self) -> Option<sts2_core::Question<V>> {
         let asked = self.asking.as_ref()?;
         let (min, max, _) = self.selecting()?;
         let options: Vec<_> = match &asked.question {
-            Asked::Pile { pile, .. } => self.cards.idents(*pile).collect(),
+            Asked::Pile { pile, .. } => self
+                .offered(*pile)
+                .into_iter()
+                .map(|at| {
+                    self.cards
+                        .get(*pile, at)
+                        .expect("an offered card stands in its pile")
+                        .face
+                        .ident
+                })
+                .collect(),
             Asked::Offered { offered, .. } => offered.to_vec(),
         };
         Some(sts2_core::Question::SelectCards {
