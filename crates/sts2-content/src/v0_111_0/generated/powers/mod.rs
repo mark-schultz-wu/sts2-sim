@@ -1523,7 +1523,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // DANSE_MACABRE_POWER
     sts2_core::Overrides::from_bits(0),
     // DARK_EMBRACE_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardExhausted)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // DARK_SHACKLES_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
@@ -1594,7 +1596,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // FEEL_NO_PAIN_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
     // FERAL_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // FLAME_BARRIER_POWER

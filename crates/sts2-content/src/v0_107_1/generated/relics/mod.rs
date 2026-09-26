@@ -1556,6 +1556,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
     // BURNING_STICKS
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardExhausted)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // BYRDPIP
@@ -1575,7 +1576,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // CHANDELIER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // CHARONS_ASHES
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
     // CHEMICAL_X
     sts2_core::Overrides::from_bits(0),
     // CHOICES_PARADOX
@@ -1680,7 +1681,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // FISHING_ROD
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
     // FORGOTTEN_SOUL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
     // FRAGRANT_MUSHROOM
     sts2_core::Overrides::from_bits(0),
     // FRESNEL_LENS
@@ -1754,6 +1755,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     sts2_core::Overrides::from_bits(0),
     // JOSS_PAPER
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardExhausted)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // JUZU_BRACELET
@@ -2126,7 +2128,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // TINGSHA
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDiscarded),
     // TINY_MAILBOX
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // TOASTY_MITTENS
@@ -2136,7 +2138,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // TOUCH_OF_OROBAS
     sts2_core::Overrides::from_bits(0),
     // TOUGH_BANDAGES
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDiscarded),
     // TOXIC_EGG
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // TOY_BOX

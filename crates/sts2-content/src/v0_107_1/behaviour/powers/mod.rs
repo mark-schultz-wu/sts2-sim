@@ -396,10 +396,9 @@ pub(crate) fn modify_hook(
         {
             unimplemented!("an endless Dexterity")
         }
-        // `MachineLearningPower.ModifyHandDraw`: its stack more cards for its
-        // owner.
+        // `ModifyHandDraw`: its stack more cards for its owner.
         (
-            Power::MachineLearningPower,
+            Power::MachineLearningPower | Power::TyrannyPower | Power::ToolsOfTheTradePower,
             PowerAmount::Counted(amount),
             ModifyHook::HandDraw { player, .. },
         ) if player == holder => Modify::Added(amount),
@@ -413,7 +412,10 @@ pub(crate) fn modify_hook(
             Modify::Added(amount)
         }
         (
-            Power::MachineLearningPower | Power::DrawCardsNextTurnPower,
+            Power::MachineLearningPower
+            | Power::DrawCardsNextTurnPower
+            | Power::TyrannyPower
+            | Power::ToolsOfTheTradePower,
             PowerAmount::Endless,
             ModifyHook::HandDraw { .. },
         ) => unimplemented!("an endless {power:?}"),
@@ -434,7 +436,10 @@ pub(crate) fn modify_hook(
         | (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { .. })
         | (Power::DexterityPower, _, ModifyHook::BlockAdditive { .. })
         | (
-            Power::MachineLearningPower | Power::DrawCardsNextTurnPower,
+            Power::MachineLearningPower
+            | Power::DrawCardsNextTurnPower
+            | Power::TyrannyPower
+            | Power::ToolsOfTheTradePower,
             _,
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
@@ -936,6 +941,61 @@ pub(crate) fn event_hook(
             .bound()
             .filter(|bound| bound.command == command)
             .map(|bound| HookEffect::ModifyAmount(-bound.amount)),
+        // `TyrannyPower.AfterPlayerTurnStart`: its owner picks its stack of
+        // cards from hand, and each is exhausted.
+        (
+            Power::TyrannyPower,
+            PowerAmount::Counted(amount),
+            EventHook::PlayerTurnStart { player },
+        ) if player == holder => Some(HookEffect::SelectFromPile {
+            pile: sts2_core::Pile::Hand,
+            count: amount,
+            act: sts2_core::PileAct::Exhaust,
+        }),
+        // `ToolsOfTheTradePower.AfterPlayerTurnStart`: the same, discarded.
+        (
+            Power::ToolsOfTheTradePower,
+            PowerAmount::Counted(amount),
+            EventHook::PlayerTurnStart { player },
+        ) if player == holder => Some(HookEffect::SelectFromPile {
+            pile: sts2_core::Pile::Hand,
+            count: amount,
+            act: sts2_core::PileAct::Discard,
+        }),
+        (
+            Power::TyrannyPower | Power::ToolsOfTheTradePower,
+            PowerAmount::Endless,
+            EventHook::PlayerTurnStart { player },
+        ) if player == holder => unimplemented!("an endless {power:?}"),
+        (
+            Power::TyrannyPower | Power::ToolsOfTheTradePower,
+            _,
+            EventHook::PlayerTurnStart { .. },
+        ) => None,
+        // `ForegoneConclusionPower.BeforeHandDraw`: its owner picks its stack
+        // of cards from the draw pile into hand, and the power goes.
+        (
+            Power::ForegoneConclusionPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => {
+            asked.extend([
+                HookEffect::ShuffleIfNecessary,
+                HookEffect::SelectFromPile {
+                    pile: sts2_core::Pile::Draw,
+                    count: amount,
+                    act: sts2_core::PileAct::IntoHand,
+                },
+                HookEffect::Remove,
+            ]);
+            return;
+        }
+        (
+            Power::ForegoneConclusionPower,
+            PowerAmount::Endless,
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => unimplemented!("an endless Foregone Conclusion"),
+        (Power::ForegoneConclusionPower, _, EventHook::BeforeHandDraw { .. }) => None,
         // `InfiniteBladesPower.BeforeHandDraw`: its stack of Shivs into its
         // owner's hand, before the hand is drawn.
         (

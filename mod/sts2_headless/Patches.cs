@@ -1,7 +1,20 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.CardSelection;
+using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Multiplayer;
+using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.GameActions;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
@@ -265,5 +278,140 @@ internal static class DivineWithoutAScreen
         Divination.Ask(grid);
         __result = null;
         return false;
+    }
+}
+
+/// <summary>
+/// Asks the combat selections the way the game's own screen does, so a
+/// question paused in a hook lets the game go on around it.
+/// </summary>
+/// <remarks>
+/// <c>CardSelectCmd</c> has two ways to ask. With a selector installed it
+/// awaits the selector and nothing else. With none it reserves a choice id,
+/// calls <c>SignalPlayerChoiceBegun</c>, shows its screen, syncs the choice and
+/// calls <c>SignalPlayerChoiceEnded</c>. The signal is not bookkeeping. In a
+/// hook's context it turns the rest of the hook into an action that waits for
+/// the play phase, so <c>StartTurn</c> goes on to <c>AfterSideTurnStart</c> and
+/// the orbs before the player is asked. The selector branch skips it, and the
+/// turn start then waits for the answer, which a player at the screen never
+/// sees.
+///
+/// So these take the screen's branch, with our parked question where the
+/// screen would be. Everything before it is the game's own code: the early
+/// returns, the filter, and the sort a draw pile gets.
+/// </remarks>
+[HarmonyPatch(typeof(CardSelectCmd))]
+internal static class ScreenPathSelections
+{
+    [HarmonyPrepare]
+    private static bool Prepare() => GameApi.AsksThroughTheScreen;
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromHand))]
+    private static bool FromHand(
+        PlayerChoiceContext context,
+        Player player,
+        CardSelectorPrefs prefs,
+        Func<CardModel, bool>? filter,
+        ref Task<IEnumerable<CardModel>> __result)
+    {
+        __result = FromHandAsked(context, player, prefs, filter);
+        return false;
+    }
+
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(CardSelectCmd.FromCombatPile),
+        typeof(PlayerChoiceContext), typeof(CardPile), typeof(Player), typeof(CardSelectorPrefs),
+        typeof(Func<CardModel, bool>))]
+    private static bool FromCombatPile(
+        PlayerChoiceContext context,
+        CardPile pile,
+        Player player,
+        CardSelectorPrefs prefs,
+        Func<CardModel, bool> filter,
+        ref Task<IEnumerable<CardModel>> __result)
+    {
+        __result = FromCombatPileAsked(context, pile, player, prefs, filter);
+        return false;
+    }
+
+    private static async Task<IEnumerable<CardModel>> FromHandAsked(
+        PlayerChoiceContext context, Player player, CardSelectorPrefs prefs, Func<CardModel, bool>? filter)
+    {
+        if (CombatManager.Instance.IsOverOrEnding)
+        {
+            return Array.Empty<CardModel>();
+        }
+        List<CardModel> list = PileType.Hand.GetPile(player).Cards.Where(filter ?? (_ => true)).ToList();
+        IEnumerable<CardModel> result;
+        if (list.Count == 0 || (!prefs.RequireManualConfirmation && list.Count <= prefs.MinSelect))
+        {
+            result = list;
+        }
+        else
+        {
+            result = await AskAsTheScreenDoes(
+                context, player, PlayerChoiceOptions.CancelPlayCardActions, list, prefs);
+        }
+        LogChoice(player, result);
+        return result;
+    }
+
+    private static async Task<IEnumerable<CardModel>> FromCombatPileAsked(
+        PlayerChoiceContext context, CardPile pile, Player player, CardSelectorPrefs prefs,
+        Func<CardModel, bool> filter)
+    {
+        if (CombatManager.Instance.IsEnding)
+        {
+            return Array.Empty<CardModel>();
+        }
+        if (!pile.IsCombatPile)
+        {
+            throw new InvalidOperationException("Cannot perform on a non combat pile");
+        }
+        List<CardModel> list = pile.Cards.Where(filter).ToList();
+        if (list.Count == 0)
+        {
+            return Array.Empty<CardModel>();
+        }
+        IEnumerable<CardModel> result;
+        if (!prefs.RequireManualConfirmation && list.Count <= prefs.MinSelect)
+        {
+            result = list;
+        }
+        else
+        {
+            // The order the selector branch hands a draw pile over in, which
+            // keeps the pile's own order hidden.
+            if (pile.Type == PileType.Draw)
+            {
+                list = list.OrderBy(c => c.Rarity).ThenBy(c => c.Id).ToList();
+            }
+            result = await AskAsTheScreenDoes(context, player, PlayerChoiceOptions.None, list, prefs);
+        }
+        LogChoice(player, result);
+        return result;
+    }
+
+    /// <summary>The screen branch, with the question parked where the screen would be.</summary>
+    private static async Task<IEnumerable<CardModel>> AskAsTheScreenDoes(
+        PlayerChoiceContext context, Player player, PlayerChoiceOptions options,
+        List<CardModel> offered, CardSelectorPrefs prefs)
+    {
+        uint choiceId = RunManager.Instance.PlayerChoiceSynchronizer.ReserveChoiceId(player);
+        await GameApi.SignalChoiceBegun(context, player, options);
+        List<CardModel> result = (await CardSelection.Ask(offered, prefs.MinSelect, prefs.MaxSelect,
+            RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.ToString())).ToList();
+        RunManager.Instance.PlayerChoiceSynchronizer.SyncLocalChoice(
+            player, choiceId, PlayerChoiceResult.FromMutableCombatCards(result));
+        await context.SignalPlayerChoiceEnded();
+        return result;
+    }
+
+    /// <summary><c>CardSelectCmd.LogChoice</c>, which is private.</summary>
+    private static void LogChoice(Player player, IEnumerable<CardModel?> cards)
+    {
+        string value = string.Join(",", cards.OfType<CardModel>().Select(c => c.Id.Entry));
+        Log.Info($"Player {player.NetId} chose cards [{value}]");
     }
 }

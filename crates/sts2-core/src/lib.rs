@@ -43,12 +43,12 @@ pub use content::{
     EncounterTable, EventHook, EventPower, EventTable, Fight, Fixed, FlagSet, History, HookEffect,
     HookEffects, Hooks, KeywordKinds, Lasting, Layout, Listener, MapPointKinds, ModelHook, Modify,
     ModifyHook, MonsterKinds, MonsterSpawn, MonsterTable, MoveKinds, MoveLog, MoveMachine,
-    MovePinned, Opponents, Overrides, Picked, PlayFinished, Played, PlayerStreamKinds, PotionTable,
-    PotionUsage, PowerAmount, PowerKinds, PowerModel, PowerTable, Printed, RarityKinds, RelicModel,
-    RelicPoolKinds, RelicTable, RestKinds, Rests, RewardRarity, RoomKinds, Rules, RunStreamKinds,
-    Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned, Stream, StreamKinds, Table,
-    Taken, TargetKinds, Temporary, TurnPhaseKinds, TurnPlays, UnplayableReasonKinds, Version,
-    Writing,
+    MovePinned, Opponents, Overrides, Picked, PileAct, PlayFinished, Played, PlayerStreamKinds,
+    PotionTable, PotionUsage, PowerAmount, PowerKinds, PowerModel, PowerTable, Printed,
+    RarityKinds, RelicModel, RelicPoolKinds, RelicTable, RestKinds, Rests, RewardRarity, RoomKinds,
+    Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned,
+    Stream, StreamKinds, Table, Taken, TargetKinds, Temporary, TurnPhaseKinds, TurnPlays,
+    UnplayableReasonKinds, Version, Writing,
 };
 pub use event::{EventBehavior, EventView};
 pub use hook_response::HookResponse;

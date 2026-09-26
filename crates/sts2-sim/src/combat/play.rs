@@ -12,7 +12,7 @@
 use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
 use super::board::Board;
-use super::live::{Asked, Asker, Live, Plays, Resuming, Skips};
+use super::live::{Asked, Asker, Live, Plays, Resuming, Skips, Then};
 use super::{Error, Fighting, hook, legal};
 
 /// A play the fight allows, resolved but not yet made.
@@ -221,14 +221,18 @@ pub(crate) fn answer<V: Rules>(
                 pile: from,
                 selection,
             } => {
+                // An answer names a card by where it was offered, which is
+                // not always where it lies.
+                let offered = live.offered(*from);
                 let cards: Option<sts2_core::Picked<V>> = chosen
                     .iter()
                     .map(|index| {
-                        live.cards.get(*from, index).map(|card| {
-                            let index = num_traits::NumCast::from(index).unwrap_or_else(|| {
+                        let at = *offered.get(index)?;
+                        live.cards.get(*from, at).map(|card| {
+                            let at = num_traits::NumCast::from(at).unwrap_or_else(|| {
                                 unimplemented!("a pile deeper than a fight can number")
                             });
-                            sts2_core::CardAt::new(card.id, *from, index)
+                            sts2_core::CardAt::new(card.id, *from, at)
                         })
                     })
                     .collect();
@@ -256,7 +260,24 @@ pub(crate) fn answer<V: Rules>(
             }
         };
 
-    let mut effect = asking.effect;
+    let (mut effect, at) = match asking.then {
+        Then::Play { effect, at } => (effect, at),
+        Then::Setup { act, stage } => {
+            let sts2_core::Taken::Selected(picked) = taken else {
+                unreachable!("a turn's setup asks for cards of a pile")
+            };
+            return super::turn::resume_setup::<V>(
+                Fighting {
+                    live,
+                    streams,
+                    relics,
+                },
+                act,
+                picked,
+                stage,
+            );
+        }
+    };
     let playing = match &effect.asker {
         Asker::Card(card) => Some(*card),
         Asker::Potion(_) => None,
@@ -270,7 +291,7 @@ pub(crate) fn answer<V: Rules>(
         effect.target,
         playing,
     );
-    let played = V::resume_play(&mut board, asking.at, taken);
+    let played = V::resume_play(&mut board, at, taken);
     effect.ended = effect.ended.or(board.ended);
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
@@ -366,8 +387,7 @@ pub(super) fn carry_on<V: Rules>(
         let Some(answer) = answer else {
             let ended = effect.ended;
             next.asking = Some(super::live::Asking {
-                effect,
-                at,
+                then: Then::Play { effect, at },
                 question,
             });
             return Ok(ended);
@@ -419,6 +439,10 @@ pub(super) fn carry_on<V: Rules>(
         false if card_played.exhausts() => Some(sts2_core::Pile::Exhaust),
         false => Some(sts2_core::Pile::Discard),
     };
+    // `CardCmd.Exhaust` for a card that exhausts as it is played.
+    if to == Some(sts2_core::Pile::Exhaust) {
+        super::turn::unheard::<V>(next, relics, sts2_core::ModelHook::AfterCardExhausted);
+    }
     next.cards.leave_play(card, to);
 
     if ended == Some(super::Ended::Won) {
@@ -454,7 +478,7 @@ fn finished<V: Rules>(fighting: Fighting<'_, V>, ascension: V::AscensionLevel, c
 ///
 /// `FromHand`: an empty pile selects nothing, and a pile no larger than an
 /// exact selection is taken whole. Anything else the player answers.
-fn taken<V: Rules>(
+pub(super) fn taken<V: Rules>(
     live: &Live<V>,
     from: sts2_core::Pile,
     selection: sts2_core::Selection,

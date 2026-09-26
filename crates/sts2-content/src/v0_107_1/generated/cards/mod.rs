@@ -48,7 +48,7 @@ pub enum CardKeyword {
 }
 
 // `CardRarity::None` is not generated: no card has it and `CardRarityExtensions.ToLocString` throws on it. Every real use is an absent answer — `CardFactory` returns it when no rarity was selected, `GetNextHighestRarityWithWrapping` when there is no next one — which is `Option<CardRarity>` here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum CardRarity {
     Basic = 1,
@@ -3380,6 +3380,10 @@ impl sts2_core::CardTable for Cards {
         self.data().keywords.contains(CardKeyword::Retain)
     }
 
+    fn sly(self) -> bool {
+        self.data().keywords.contains(CardKeyword::Sly)
+    }
+
     fn tagged(self, tag: CardTag) -> bool {
         self.data().tags.contains(tag)
     }
@@ -3761,7 +3765,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // DREDGE
     sts2_core::Overrides::from_bits(0),
     // DRUM_OF_BATTLE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
     // DUALCAST
     sts2_core::Overrides::from_bits(0),
     // DUAL_WIELD

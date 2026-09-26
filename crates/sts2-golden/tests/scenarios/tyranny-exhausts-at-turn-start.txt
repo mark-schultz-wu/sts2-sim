@@ -1,0 +1,8 @@
+# `TyrannyPower` draws one more card for the next turn, and once it is drawn
+# stops the setup on a pick of one card from hand. The Strike picked is
+# exhausted.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"TYRANNY_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}
