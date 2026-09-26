@@ -1438,7 +1438,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // BORROWED_TIME_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
     // BUFFER_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
+        .with(sts2_core::ModelHook::ModifyHpLostAfterOstyLate),
     // BURROWED_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterBlockBroken)
@@ -1737,6 +1739,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // INTANGIBLE_POWER
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::ModifyDamageCap)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOsty),

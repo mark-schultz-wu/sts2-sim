@@ -195,6 +195,7 @@ impl sts2_core::Hooks for V0_107_1 {
             monster,
             on_turn_start,
             state,
+            history,
         } = power;
         let held = behaviour::powers::Held {
             owner,
@@ -203,7 +204,25 @@ impl sts2_core::Hooks for V0_107_1 {
             monster,
             on_turn_start,
         };
-        behaviour::powers::event_hook(power, amount, held, state, hook, asked)
+        behaviour::powers::event_hook(power, amount, held, state, history, hook, asked)
+    }
+
+    fn result_pile<P: sts2_core::Printed<Self> + ?Sized>(
+        listener: sts2_core::Listener<'_, Self, P>,
+        hook: sts2_core::ResultPile<Self>,
+    ) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
+        match listener {
+            sts2_core::Listener::Power {
+                power,
+                amount,
+                holder,
+                state,
+                ..
+            } => behaviour::powers::result_pile(power, amount, holder, state, hook),
+            // The fight asks only a listener whose class overrides the hook,
+            // and no relic, monster or card this build ports does.
+            _ => unimplemented!("a listener other than a power moving a played card"),
+        }
     }
 
     fn relic_event_hook(

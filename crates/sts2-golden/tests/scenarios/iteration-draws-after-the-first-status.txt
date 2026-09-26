@@ -1,0 +1,9 @@
+# `IterationPower.AfterCardDrawn` draws its stack more when its owner draws
+# the turn's first Status card. The draw is in the fight's history before the
+# hook runs, so the first Status is a count of one. The Slimed drawn on the
+# third turn brings one more card.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"ITERATION_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

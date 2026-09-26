@@ -1,0 +1,10 @@
+# `KinglyPunch.AfterCardDrawn` raises its own damage by its `Increase` each
+# time it is drawn, the opening hand's draw included. Each Kingly Punch
+# there hits for twelve rather than eight.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"KINGLY_PUNCH"}
+{"cmd":"grant","card":"KINGLY_PUNCH"}
+{"cmd":"grant","card":"KINGLY_PUNCH"}
+{"cmd":"grant","card":"KINGLY_PUNCH"}
+{"cmd":"grant","card":"KINGLY_PUNCH"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}

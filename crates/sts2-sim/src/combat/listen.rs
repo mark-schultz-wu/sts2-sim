@@ -254,7 +254,11 @@ fn raise<V: Rules>(
             for (at, held) in live.powers.of_mut(id).enumerate() {
                 let power = held.power();
                 if power.overrides().contains(model_hook) {
-                    V::power_event_hook(held.event_power(carrier), hook, &mut answer);
+                    V::power_event_hook(
+                        held.event_power(carrier, live.history.view()),
+                        hook,
+                        &mut answer,
+                    );
                     let listener = Listener::Power {
                         owner: id,
                         at: at as u8,

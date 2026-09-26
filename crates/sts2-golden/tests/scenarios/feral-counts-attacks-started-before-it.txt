@@ -1,0 +1,10 @@
+# `FeralPower.AfterApplied` counts the zero-cost attacks its owner started
+# this turn, from the fight's history, before it landed. A Shiv played first
+# uses up the one it has, so the second Shiv exhausts too.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":4,"target":2}
+{"cmd":"power","power":"FERAL_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":5,"target":2}

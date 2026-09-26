@@ -568,10 +568,13 @@ pub enum ModelHook {
     AfterCardDiscarded,
     ModifyCardPlayCount,
     AfterModifyingCardPlayCount,
+    AfterModifyingHpLostAfterOsty,
+    ModifyCardPlayResultPileTypeAndPosition,
+    AfterModifyingCardPlayResultPileOrPosition,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 71] = [
+    pub const ALL: [ModelHook; 74] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -643,6 +646,9 @@ impl ModelHook {
         ModelHook::AfterCardDiscarded,
         ModelHook::ModifyCardPlayCount,
         ModelHook::AfterModifyingCardPlayCount,
+        ModelHook::AfterModifyingHpLostAfterOsty,
+        ModelHook::ModifyCardPlayResultPileTypeAndPosition,
+        ModelHook::AfterModifyingCardPlayResultPileOrPosition,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -725,6 +731,13 @@ impl ModelHook {
             ModelHook::AfterCardDiscarded => "AfterCardDiscarded",
             ModelHook::ModifyCardPlayCount => "ModifyCardPlayCount",
             ModelHook::AfterModifyingCardPlayCount => "AfterModifyingCardPlayCount",
+            ModelHook::AfterModifyingHpLostAfterOsty => "AfterModifyingHpLostAfterOsty",
+            ModelHook::ModifyCardPlayResultPileTypeAndPosition => {
+                "ModifyCardPlayResultPileTypeAndPosition"
+            }
+            ModelHook::AfterModifyingCardPlayResultPileOrPosition => {
+                "AfterModifyingCardPlayResultPileOrPosition"
+            }
         }
     }
 }
@@ -2235,6 +2248,14 @@ pub enum EventHook<V: ContentVersion> {
     PlayCountModified {
         card: V::Card,
     },
+    /// `AfterModifyingHpLostAfterOsty`, asked of each listener that changed
+    /// what a hit takes off, once that is worked out.
+    HpLostModified,
+    /// `AfterModifyingCardPlayResultPileOrPosition`, asked of each listener
+    /// that changed where a played card goes, once that is worked out.
+    ResultPileModified {
+        card: V::Card,
+    },
     /// `Hook.AfterAttack`, once the command's last hit has landed.
     AfterAttack {
         command: AttackId,
@@ -2282,6 +2303,10 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BeforeAttack { .. } => ModelHook::BeforeAttack,
             EventHook::AfterAttack { .. } => ModelHook::AfterAttack,
             EventHook::PlayCountModified { .. } => ModelHook::AfterModifyingCardPlayCount,
+            EventHook::HpLostModified => ModelHook::AfterModifyingHpLostAfterOsty,
+            EventHook::ResultPileModified { .. } => {
+                ModelHook::AfterModifyingCardPlayResultPileOrPosition
+            }
             EventHook::Obtained
             | EventHook::Removed
             | EventHook::Applied
@@ -2307,47 +2332,84 @@ pub enum Writing<V: ContentVersion> {
     EveryTagged(V::CardTag),
 }
 
+/// One `CardPlayStartedEntry` in `CombatManager.History`: a card's play that
+/// began, and the energy it cost. A card with replays starts once for each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlayStarted<V: ContentVersion> {
+    pub card: V::Card,
+    /// `CardPlay.Resources.EnergyValue`.
+    pub energy: V::Count,
+}
+
 /// One `CardPlayFinishedEntry` in `CombatManager.History`: a card's play
-/// that ran to its end.
-///
-/// A card with replays finishes once for each. The turn it finished in is
-/// the [`TurnPlays`] holding it, or the turn the fight stands in.
+/// that ran to its end. A card with replays finishes once for each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayFinished<V: ContentVersion> {
     pub card: V::Card,
 }
 
-/// The plays that finished in one turn now over, and the turns before it.
+/// One entry in `CombatManager.History`, of the kinds a listener reads.
+///
+/// One list of every kind, as the game keeps it, so copying a turn copies
+/// one list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HistoryEntry<V: ContentVersion> {
+    Started(PlayStarted<V>),
+    Finished(PlayFinished<V>),
+    /// A `CardDrawnEntry`, by the card drawn.
+    Drawn(V::Card),
+}
+
+/// The entries of one turn now over, and the turns before it.
 ///
 /// Each turn is written once, as the sides switch, and never again. Every
 /// copy of a fight shares the same chain, so copying one costs a pointer
-/// however long the fight has run. A turn in which nothing finished has no
-/// node.
+/// however long the fight has run. A turn with no entries has no node.
 #[derive(Debug)]
-pub struct TurnPlays<V: ContentVersion> {
+pub struct TurnHistory<V: ContentVersion> {
     /// `RoundNumber` of that turn.
     pub round: V::Count,
     /// `CurrentSide` of that turn.
     pub side: V::CombatSide,
-    /// Its finished plays, oldest first.
-    pub finished: Box<[PlayFinished<V>]>,
-    /// The turn with plays before this one.
-    pub before: Option<std::sync::Arc<TurnPlays<V>>>,
+    /// Its entries, oldest first. The player's alone, because a fight here
+    /// has one player.
+    pub entries: Box<[HistoryEntry<V>]>,
+    /// The turn with entries before this one.
+    pub before: Option<std::sync::Arc<TurnHistory<V>>>,
 }
 
 /// `CombatManager.History`, as far as a listener reads it.
 #[derive(Debug, Clone, Copy)]
 pub struct History<'a, V: ContentVersion> {
-    /// The plays that finished in the turn the fight stands in, oldest first.
-    pub this_turn: &'a [PlayFinished<V>],
-    /// The turns before it that had plays, latest first.
-    pub before: Option<&'a TurnPlays<V>>,
+    /// The turn the fight stands in, oldest first.
+    pub this_turn: &'a [HistoryEntry<V>],
+    /// The turns before it that had entries, latest first.
+    pub before: Option<&'a TurnHistory<V>>,
 }
 
 impl<V: ContentVersion> History<'_, V> {
     /// `CardPlaysFinished` where `HappenedThisTurn`.
     pub fn finished_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
-        self.this_turn.iter().map(|entry| entry.card)
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::Finished(finished) => Some(finished.card),
+            _ => None,
+        })
+    }
+
+    /// `CardPlaysStarted` where `HappenedThisTurn`.
+    pub fn started_this_turn(&self) -> impl Iterator<Item = PlayStarted<V>> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::Started(started) => Some(*started),
+            _ => None,
+        })
+    }
+
+    /// Each `CardDrawnEntry` where `HappenedThisTurn`, by the card drawn.
+    pub fn drawn_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::Drawn(card) => Some(*card),
+            _ => None,
+        })
     }
 }
 
@@ -2371,6 +2433,27 @@ pub const HOOK_EFFECTS: usize = 4;
 /// command it bound to when that command ends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttackId(pub u32);
+
+/// `CardPilePosition`: which end of a pile a card goes to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PilePosition {
+    Top,
+    Bottom,
+}
+
+/// A card about to leave play, as `ModifyCardPlayResultPileTypeAndPosition`
+/// hands it over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResultPile<V: ContentVersion> {
+    /// The card's owner.
+    pub player: crate::CombatId,
+    pub card: V::Card,
+    /// `ResourceInfo.EnergyValue`, what the play cost.
+    pub energy: V::Count,
+    /// Where it goes so far. Nothing for a card that leaves the fight.
+    pub pile: Option<crate::Pile>,
+    pub position: PilePosition,
+}
 
 /// What a selection from the deck does to each card it takes.
 ///
@@ -2838,6 +2921,8 @@ pub struct EventPower<'a, V: Hooks> {
     /// `PowerModel.AmountOnTurnStart`.
     pub on_turn_start: PowerAmount<V::Number>,
     pub state: &'a mut V::PowerState,
+    /// What the fight has done so far.
+    pub history: History<'a, V>,
 }
 
 /// The build-specific behavior behind the game's hook dispatcher.
@@ -2863,6 +2948,13 @@ pub trait Hooks: ContentVersion {
         listener: Listener<'_, Self, P>,
         hook: DecisionHook<Self>,
     ) -> crate::HookResponse<bool>;
+
+    /// `ModifyCardPlayResultPileTypeAndPosition`: where a played card goes
+    /// once its play is over, given where it goes so far.
+    fn result_pile<P: Printed<Self> + ?Sized>(
+        listener: Listener<'_, Self, P>,
+        hook: ResultPile<Self>,
+    ) -> crate::HookResponse<(Option<crate::Pile>, PilePosition)>;
 
     /// What a power asks for when `hook` reaches it, pushed onto `asked` in
     /// the order it asks. The other kinds of listener have their own below.

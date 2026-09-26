@@ -284,7 +284,7 @@ impl<'a, V: Rules> Board<'a, V> {
         };
         let mut asked = sts2_core::HookEffects::new();
         <V as sts2_core::Hooks>::power_event_hook(
-            held.event_power(carrier),
+            held.event_power(carrier, self.live.history.view()),
             sts2_core::EventHook::Applied,
             &mut asked,
         );
@@ -367,6 +367,7 @@ impl<'a, V: Rules> Board<'a, V> {
             monster: carrier.monster,
             on_turn_start: sts2_core::PowerAmount::Counted(num_traits::zero()),
             state: &mut state,
+            history: self.live.history.view(),
         };
         let mut asked = sts2_core::HookEffects::new();
         <V as sts2_core::Hooks>::power_event_hook(
@@ -744,6 +745,84 @@ impl<'a, V: Rules> Board<'a, V> {
             }
         }
         own
+    }
+
+    /// `ModifyHpLost` in the phases after a hit found who takes it, then
+    /// `AfterModifyingHpLostAfterOsty` for each listener that changed it.
+    ///
+    /// Only a listener to the second needs to know who changed the first. So
+    /// the phases are asked again one listener at a time, and only when one
+    /// listens. `Hook.ModifyHpLost` counts a listener as changing the number
+    /// when its whole part moves.
+    fn hp_lost_after_osty(&mut self, target: CombatId, amount: V::Number) -> V::Number {
+        let lost = after_osty::<V>(self.walk(), target, amount);
+        if !super::listen::heard::<V>(
+            self.live,
+            self.relics,
+            sts2_core::ModelHook::AfterModifyingHpLostAfterOsty,
+        ) {
+            return lost;
+        }
+        let float = |number: V::Number| -> f64 {
+            num_traits::cast(number).expect("a number a fight works out fits a float")
+        };
+        let mut number = float(amount);
+        let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
+        for phase in [
+            ModifyHook::HpLostAfterOsty { target },
+            ModifyHook::HpLostAfterOstyLate { target },
+        ] {
+            super::listen::each::<V>(
+                self.walk(),
+                sts2_core::Overrides::of(phase.model_hook()),
+                |listener, _| {
+                    let before = number;
+                    number = match <V as sts2_core::Hooks>::modify_hook(listener, phase) {
+                        Modify::Nothing => number,
+                        Modify::Added(more) => number + float(more),
+                        Modify::Scaled(by) => number * by,
+                        Modify::AtMost(most) => number.min(float(most)),
+                    };
+                    if before.trunc() != number.trunc() {
+                        match listener {
+                            sts2_core::Listener::Power { holder, power, .. } => {
+                                modifiers.push((holder, power))
+                            }
+                            _ => unimplemented!(
+                                "a listener other than a power changing what a hit takes"
+                            ),
+                        }
+                    }
+                },
+            );
+        }
+        for (holder, power) in modifiers {
+            let Some(at) = self.at(holder) else { continue };
+            let carrier = self.live.creatures[at].carrier();
+            let Some(held) = self
+                .live
+                .powers
+                .of_mut(holder)
+                .find(|held| held.power() == power)
+            else {
+                continue;
+            };
+            let mut asked = sts2_core::HookEffects::new();
+            <V as sts2_core::Hooks>::power_event_hook(
+                held.event_power(carrier, self.live.history.view()),
+                sts2_core::EventHook::HpLostModified,
+                &mut asked,
+            );
+            for effect in asked {
+                match effect {
+                    HookEffect::Decrement => {
+                        self.modify_amount(holder, power, -num_traits::one::<V::Number>())
+                    }
+                    effect => unimplemented!("a power asking for {effect:?} after a hit's loss"),
+                }
+            }
+        }
+        lost
     }
 
     /// Carry out what the powers asked for after a hit or a broken block,
@@ -1302,7 +1381,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 );
                 let taker =
                     super::listen::unblocked_damage_target::<V>(self.walk(), target, powered);
-                let unblocked = after_osty::<V>(self.walk(), taker, before);
+                let unblocked = self.hp_lost_after_osty(taker, before);
                 // `WasBlockBroken` and `WasFullyBlocked`, as the command works
                 // them out, on the creature the hit was aimed at. A hit a hook
                 // takes to nothing is fully blocked by whatever block it met.
@@ -1316,7 +1395,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 let (lost, overkill, killed) = self.lose_hp(taker, unblocked);
                 results.push((taker, lost, killed));
                 if taker != target {
-                    let rest = after_osty::<V>(self.walk(), target, overkill);
+                    let rest = self.hp_lost_after_osty(target, overkill);
                     let (lost, _, killed) = match rest > zero {
                         true => self.lose_hp(target, rest),
                         false => (zero, zero, false),
@@ -1849,6 +1928,9 @@ pub(super) fn draw<V: Rules>(
             .cards
             .draw()
             .expect("a draw pile just checked for cards");
+        // `History.CardDrawn`, before the hook, so a listener counts this
+        // draw among the turn's.
+        live.history.draw(drawn.face.ident.card);
         // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
         // than once for the whole draw. So a card that spends the pool as it
         // arrives has spent it before the next card is taken.

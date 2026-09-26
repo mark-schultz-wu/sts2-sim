@@ -48,6 +48,10 @@ pub enum State {
     Vigor {
         bound: Option<Bound>,
     },
+    /// `FeralPower`'s `zeroCostAttacksPlayed`.
+    Feral {
+        played: Number,
+    },
 }
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
@@ -70,6 +74,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::ReattachPower => Self::Reattach { reviving: false },
             Power::SwipePower => Self::Swipe { stolen: None },
             Power::VigorPower => Self::Vigor { bound: None },
+            Power::FeralPower => Self::Feral { played: 0 },
             power => Self::Stateless(power),
         }
     }
@@ -84,6 +89,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Reattach { .. } => Power::ReattachPower,
             Self::Swipe { .. } => Power::SwipePower,
             Self::Vigor { .. } => Power::VigorPower,
+            Self::Feral { .. } => Power::FeralPower,
         }
     }
 
@@ -162,6 +168,22 @@ impl State {
             self,
             Self::Illusion { reviving: true } | Self::Reattach { reviving: true }
         )
+    }
+
+    /// `FeralPower`'s count of the turn's zero-cost attacks it sent back.
+    fn feral_played(&self) -> Number {
+        match self {
+            Self::Feral { played } => *played,
+            state => unreachable!("Feral's count for {:?}", state.power()),
+        }
+    }
+
+    /// `FeralPower.SetZeroCostAttacksPlayed`.
+    fn set_feral_played(&mut self, to: Number) {
+        match self {
+            Self::Feral { played } => *played = to,
+            state => unreachable!("Feral's count for {:?}", state.power()),
+        }
     }
 
     /// The command `VigorPower` is bound to, once it is.
@@ -409,6 +431,11 @@ pub(crate) fn modify_hook(
             Modify::Added(one)
         }
         (Power::OneTwoPunchPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
+        // `BufferPower.ModifyHpLostAfterOstyLate`: its holder loses nothing.
+        (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target }) if target == holder => {
+            Modify::AtMost(num_traits::zero())
+        }
+        (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { .. }) => Modify::Nothing,
         // `FocusPower.ModifyOrbValue`: its stack onto each number its owner's
         // orbs show, and no lower than nothing.
         (Power::FocusPower, PowerAmount::Counted(amount), ModifyHook::OrbValue { player, .. })
@@ -490,6 +517,48 @@ pub(crate) fn modify_hook(
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
+    }
+}
+
+/// Whether a card's type is `Status`.
+fn status(card: Cards) -> bool {
+    <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Status)
+}
+
+/// Whether a card's type is `Attack`.
+fn attack(card: Cards) -> bool {
+    <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack)
+}
+
+/// Answer `ModifyCardPlayResultPileTypeAndPosition` for one power.
+pub(crate) fn result_pile(
+    power: Power,
+    amount: PowerAmount<Number>,
+    holder: sts2_core::CombatId,
+    state: &State,
+    hook: sts2_core::ResultPile<V>,
+) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
+    use sts2_core::HookResponse;
+
+    let unchanged = HookResponse::Decision((hook.pile, hook.position));
+    match (power, amount) {
+        // `FeralPower`: a zero-cost attack its owner plays goes back to the
+        // top of the hand, up to its stack of them each turn.
+        (Power::FeralPower, PowerAmount::Counted(amount)) => {
+            match hook.player == holder
+                && attack(hook.card)
+                && hook.energy == 0
+                && state.feral_played() < amount
+            {
+                true => HookResponse::Decision((
+                    Some(sts2_core::Pile::Hand),
+                    sts2_core::PilePosition::Top,
+                )),
+                false => unchanged,
+            }
+        }
+        (Power::FeralPower, PowerAmount::Endless) => unimplemented!("an endless Feral"),
+        (power, _) => unimplemented!("where {power:?} sends a played card"),
     }
 }
 
@@ -601,6 +670,7 @@ pub(crate) fn event_hook(
     amount: PowerAmount<Number>,
     held: Held,
     state: &mut State,
+    history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -1037,6 +1107,50 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Aggression")
         }
         (Power::AggressionPower, _, EventHook::BeforeSideTurnStart { .. }) => None,
+        // `BufferPower.AfterModifyingHpLostAfterOsty`: one spent on each hit it
+        // took to nothing.
+        (Power::BufferPower, _, EventHook::HpLostModified) => Some(HookEffect::Decrement),
+        // `IterationPower.AfterCardDrawn`: the first Status card its owner
+        // draws in a turn draws its stack more. The draw is in the history
+        // before the hook, so the first is a count of one. A fight here has
+        // one player, so every draw is its owner's.
+        (Power::IterationPower, PowerAmount::Counted(amount), EventHook::CardDrawn { card, .. })
+            if status(card) =>
+        {
+            match history.drawn_this_turn().filter(|drawn| status(*drawn)).count() <= 1 {
+                true => Some(HookEffect::Draw(amount)),
+                false => None,
+            }
+        }
+        (Power::IterationPower, PowerAmount::Endless, EventHook::CardDrawn { card, .. })
+            if status(card) =>
+        {
+            unimplemented!("an endless Iteration")
+        }
+        (Power::IterationPower, _, EventHook::CardDrawn { .. }) => None,
+        // `FeralPower.AfterApplied`: the zero-cost attacks its owner started
+        // this turn count against it from the start.
+        (Power::FeralPower, _, EventHook::Applied) => {
+            let played = history
+                .started_this_turn()
+                .filter(|started| started.energy == 0 && attack(started.card))
+                .count();
+            state.set_feral_played(num_traits::cast(played).expect("a turn's plays fit a number"));
+            None
+        }
+        // `FeralPower.AfterModifyingCardPlayResultPileOrPosition` counts the
+        // one it sent back, and `AfterSideTurnStart` for its owner's side
+        // forgets the count.
+        (Power::FeralPower, _, EventHook::ResultPileModified { .. }) => {
+            state.set_feral_played(state.feral_played() + one);
+            None
+        }
+        (Power::FeralPower, _, EventHook::SideTurnStart { side, .. }) => {
+            if side == owner {
+                state.set_feral_played(0);
+            }
+            None
+        }
         // `CoolantPower.AfterSideTurnStart`: its stack of block for each kind
         // of orb its owner holds.
         (Power::CoolantPower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })

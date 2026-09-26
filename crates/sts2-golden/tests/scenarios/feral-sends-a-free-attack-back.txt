@@ -1,0 +1,10 @@
+# `FeralPower.ModifyCardPlayResultPileTypeAndPosition` sends a zero-cost
+# attack its owner plays to the top of the hand, once a turn per stack. The
+# first Shiv comes back rather than exhausting. The second time, it exhausts.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"FERAL_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":4,"target":2}
+{"cmd":"play_card","index":0,"target":2}

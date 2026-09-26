@@ -1,0 +1,9 @@
+# The opening hand is drawn, so a card that answers `AfterCardDrawn` hears
+# its own draw on the first turn too. Kingly Kick costs three there.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
