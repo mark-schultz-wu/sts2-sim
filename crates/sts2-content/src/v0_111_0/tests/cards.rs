@@ -86,6 +86,7 @@ fn the_generated_table_matches_the_dump() {
             row[12].split(',').map(String::from).collect()
         };
         assert_eq!(tags, expected, "{}: tags", row[1]);
+        assert_eq!(d.gains_block, row[13] == "1", "{}: gains_block", row[1]);
 
         checked += 1;
     }
@@ -110,7 +111,7 @@ fn every_card_is_present_and_well_formed() {
     assert_eq!(cards.len(), 596, "the build has 596 cards");
 
     for row in &cards {
-        assert_eq!(row.len(), 13, "a card row has thirteen fields: {row:?}");
+        assert_eq!(row.len(), 14, "a card row has fourteen fields: {row:?}");
         assert_eq!(row[0], "card");
     }
 }

@@ -158,6 +158,8 @@ struct Card {
     max_upgrade: String,
     keywords: Vec<String>,
     tags: Vec<String>,
+    /// `GainsBlock`.
+    gains_block: bool,
     /// Name, printed value, whether the game recomputes it in a fight, and
     /// the `DynamicVar` subclass it is.
     vars: Vec<(String, String, bool, String)>,
@@ -430,6 +432,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
             } else {
                 f[12].split(',').map(String::from).collect()
             },
+            gains_block: f[13] == "1",
             vars: Vec::new(),
         })
         .collect();
@@ -629,6 +632,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
             writeln!(row, "        max_upgrade: {},", card.max_upgrade).unwrap();
             writeln!(row, "        keywords: KeywordSet::new(&[{keywords}]),").unwrap();
             writeln!(row, "        tags: TagSet::new(&[{tags}]),").unwrap();
+            writeln!(row, "        gains_block: {},", card.gains_block).unwrap();
             write!(row, "    }}").unwrap();
             table.push(row);
         }
@@ -883,6 +887,12 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out, "    pub keywords: KeywordSet,").unwrap();
     writeln!(out, "    /// `CanonicalTags`, which no card computes.").unwrap();
     writeln!(out, "    pub tags: TagSet,").unwrap();
+    writeln!(
+        out,
+        "    /// `GainsBlock`, which a card overrides to say so."
+    )
+    .unwrap();
+    writeln!(out, "    pub gains_block: bool,").unwrap();
     writeln!(out, "}}\n").unwrap();
 
     // Untagged, so it round-trips as the flat id the wire already uses: the
@@ -1286,6 +1296,10 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         "        self.data().keywords.contains(CardKeyword::Unplayable)"
     )
     .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "    fn gains_block(self) -> bool {{").unwrap();
+    writeln!(out, "        self.data().gains_block").unwrap();
     writeln!(out, "    }}").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "    fn exhausts(self) -> bool {{").unwrap();

@@ -500,7 +500,10 @@ impl Sink {
         self.id(card);
         self.u8(*upgrade);
         self.option(affliction, |sink, a| sink.id(a));
-        self.option(enchantment, |sink, e| sink.id(e));
+        self.option(enchantment, |sink, e| {
+            sink.id(&e.enchantment);
+            sink.u8(e.amount);
+        });
     }
 
     fn model<V: ContentVersion>(&mut self, model: &ModelId<V>) {

@@ -59,8 +59,15 @@ pub fn ident<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> S
     if let Some(affliction) = &card.affliction {
         out.push_str(&format!(" ({})", names::pretty(&spelling(affliction))));
     }
-    if let Some(enchantment) = &card.enchantment {
-        out.push_str(&format!(" ({})", names::pretty(&spelling(enchantment))));
+    if let Some(sts2_core::Enchanted {
+        enchantment,
+        amount,
+    }) = &card.enchantment
+    {
+        out.push_str(&format!(
+            " ({} {amount})",
+            names::pretty(&spelling(enchantment))
+        ));
     }
     out
 }

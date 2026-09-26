@@ -1129,7 +1129,7 @@ mod tests {
                          "text": "Deal 20 damage.", "usable": false,
                          "reason": "OutOfCombat", "targets": []}],
             "potionSlots": 3,
-            "deck": ["STRIKE_IRONCLAD", "BASH+1/SMOG*ADROIT"],
+            "deck": ["STRIKE_IRONCLAD", "BASH+1/SMOG*ADROIT:1"],
             "inCombat": false,
             "map": {
                 "at": "3,11",

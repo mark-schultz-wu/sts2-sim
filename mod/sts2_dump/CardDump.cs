@@ -59,7 +59,7 @@ public static class CardDump
         // Stamped, so regenerating against a different build fails visibly
         // rather than quietly replacing the table.
         output.Append(Stamp.Header("card"));
-        output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords> <tags>\n");
+        output.Append("# card <id> <pool> <type> <rarity> <target> <cost> <costsX> <starCost> <starCostsX> <maxUpgrade> <keywords> <tags> <gainsBlock>\n");
         output.Append("# var <card> <name> <base> <calculated> <class>\n");
         output.Append("# pool <pool> <index> <card>\n");
         output.Append("# combatpool <pool> <index> <card>\n");
@@ -173,6 +173,9 @@ public static class CardDump
                 card.MaxUpgradeLevel.ToString(CultureInfo.InvariantCulture),
                 keywordList,
                 tagList,
+                // `GainsBlock`, which a card overrides to say so. Nimble
+                // enchants no card without it.
+                card.GainsBlock ? "1" : "0",
             }));
             output.Append('\n');
 

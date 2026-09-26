@@ -838,8 +838,13 @@ impl<V: Rules> State<V> {
                     !card.card.eternal() && card.card.rarity() == sts2_core::CardRarityKinds::BASIC
                 })
                 .collect(),
-            sts2_core::DeckAct::Enchant(enchantment) => deck
-                .filter(|(_, card)| V::can_enchant(enchantment, card))
+            sts2_core::DeckAct::Enchant {
+                enchantment, kind, ..
+            } => deck
+                .filter(|(_, card)| {
+                    kind.is_none_or(|kind| V::card_kind(card.card) == Some(kind))
+                        && V::can_enchant(enchantment, card)
+                })
                 .collect(),
         }
     }
@@ -905,9 +910,13 @@ impl<V: Rules> State<V> {
                     .deck_mut()
                     .extend(gone.iter().map(|_| CardIdent::new(into)));
             }
-            sts2_core::DeckAct::Enchant(enchantment) => {
+            sts2_core::DeckAct::Enchant {
+                enchantment,
+                amount,
+                ..
+            } => {
                 for &at in taken {
-                    V::enchant(enchantment, &mut self.player.deck_mut()[at]);
+                    V::enchant(enchantment, amount, &mut self.player.deck_mut()[at]);
                 }
             }
         }

@@ -42,4 +42,5 @@ pub(super) static ROWS: [CardData; 1] = [CardData {
     max_upgrade: 0,
     keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
     tags: TagSet::new(&[]),
+    gains_block: false,
 }];

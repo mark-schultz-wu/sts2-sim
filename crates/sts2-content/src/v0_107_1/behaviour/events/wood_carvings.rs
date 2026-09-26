@@ -62,7 +62,11 @@ impl EventBehavior<V> for WoodCarvings {
         state.chosen = NonMaxU8::new(option);
         let act = match option {
             0 => DeckAct::TransformBasicInto(Cards::Event(EventCard::Peck)),
-            1 => DeckAct::Enchant(Enchantment::Slither),
+            1 => DeckAct::Enchant {
+                enchantment: Enchantment::Slither,
+                amount: 1,
+                kind: None,
+            },
             _ => DeckAct::TransformBasicInto(Cards::Event(EventCard::ToricToughness)),
         };
         smallvec::smallvec![

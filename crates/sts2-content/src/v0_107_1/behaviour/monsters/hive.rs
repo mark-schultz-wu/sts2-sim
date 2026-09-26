@@ -225,7 +225,8 @@ fn thievery<F: Fight<V>>(fight: &mut F) {
                 .copied()
                 .filter(|&card| {
                     let ident = fight.card_ident(card);
-                    let imbued = ident.enchantment == Some(Enchantment::Imbued);
+                    let imbued = ident.enchantment.map(|enchanted| enchanted.enchantment)
+                        == Some(Enchantment::Imbued);
                     let priority_accepts_imbued = rarities == [CardRarity::Ancient];
                     (imbued == priority_accepts_imbued)
                         && (rarities.contains(&ident.card.rarity()) || imbued)

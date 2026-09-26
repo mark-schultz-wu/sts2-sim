@@ -256,7 +256,7 @@ public static class Observation
         }
         if (card.Enchantment != null)
         {
-            s += "*" + card.Enchantment.Id.Entry;
+            s += "*" + card.Enchantment.Id.Entry + ":" + card.Enchantment.Amount;
         }
         return s;
     }
