@@ -25,6 +25,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// The characters a census plays when none is named.
 const CHARACTERS: [&str; 5] = ["IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT"];
 
+/// The acts a run passes through to win.
+const ACTS: u32 = 3;
+
 /// Seconds a run gets before it counts as stuck.
 const TIMEOUT: &str = "120";
 
@@ -323,6 +326,24 @@ fn report(runs: &[Run], top: usize) -> String {
                 floors[0],
                 floors[floors.len() / 2],
                 floors.last().copied().unwrap_or(0)
+            ),
+        );
+    }
+
+    // How many runs cleared each act: stood in a later one, or won.
+    out.push_str("acts cleared, of every run\n");
+    for act in 0..ACTS {
+        let cleared = runs
+            .iter()
+            .filter(|run| run.reached.0 > act || run.ending == Ending::Won)
+            .count();
+        writeln(
+            &mut out,
+            format!(
+                "  act {:<8} {cleared:>5}/{:<5} {:>3}%",
+                act + 1,
+                runs.len(),
+                100 * cleared / runs.len().max(1)
             ),
         );
     }
