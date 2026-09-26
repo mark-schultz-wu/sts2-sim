@@ -231,7 +231,7 @@ fn sanitize(name: &str) -> &str {
 }
 
 /// Ids are `SCREAMING_SNAKE`, and variants are `CamelCase`.
-fn camel(id: &str) -> String {
+pub(crate) fn camel(id: &str) -> String {
     id.split('_')
         .map(|part| {
             let mut chars = part.chars();

@@ -14,6 +14,7 @@ mod allocations;
 mod asm;
 mod census;
 mod codegen;
+mod coverage;
 mod dump;
 mod error;
 mod instructions;
@@ -51,6 +52,8 @@ enum Command {
     Allocations(allocations::Args),
     /// Play runs at random and rank what stops them.
     Census(census::Args),
+    /// Count how much of each act's content has code.
+    Coverage,
     /// Find the seeds whose Neow offers a relic.
     Neow(neow::Args),
     /// Show where a replayed step's instructions go, span by span.
@@ -82,6 +85,8 @@ enum Error {
     Allocations(#[from] allocations::Error),
     #[error("census failed: {0}")]
     Census(#[from] error::ProcessError),
+    #[error("coverage failed: {0}")]
+    Coverage(#[from] coverage::Error),
     #[error("neow failed: {0}")]
     Neow(#[from] neow::Error),
     #[error("trace failed: {0}")]
@@ -100,6 +105,7 @@ fn run(command: Command) -> Result<String, Error> {
         Command::Instructions(args) => instructions::run(args)?,
         Command::Allocations(args) => allocations::run(args)?,
         Command::Census(args) => census::run(args)?,
+        Command::Coverage => coverage::run()?,
         Command::Neow(args) => neow::run(args)?,
         Command::Trace(args) => trace::run(args)?,
         Command::Unknown(args) => unknown::run(args).map_err(Error::Unknown)?,
