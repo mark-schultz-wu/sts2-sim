@@ -102,6 +102,11 @@ impl<P> Cached<P> {
         cached
     }
 
+    /// The game behind the transcript, for the next one to ask.
+    pub fn into_inner(self) -> Option<P> {
+        self.inner
+    }
+
     /// How many commands the transcript answers.
     pub fn len(&self) -> usize {
         self.entries.len()

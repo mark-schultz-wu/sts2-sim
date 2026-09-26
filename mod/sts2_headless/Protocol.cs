@@ -129,10 +129,12 @@ internal static class Protocol
             GameErrors.Drain();
 
             // While the game is stopped mid-action, the only things that make
-            // sense are answering it, looking at it, and leaving. Anything else
-            // would advance a client that has not noticed the game is waiting,
-            // and the pending must survive the refusal.
-            if (Pending.Current != null && cmd is not ("answer" or "observe" or "quit"))
+            // sense are answering it, looking at it, starting over, and
+            // leaving. Anything else would advance a client that has not
+            // noticed the game is waiting, and the pending must survive the
+            // refusal. A start abandons the run, and Restart cancels what it
+            // was waiting on.
+            if (Pending.Current != null && cmd is not ("answer" or "observe" or "start" or "quit"))
             {
                 await Error(cmd, Refusals.Pending(Pending.Current.Kind));
                 return false;

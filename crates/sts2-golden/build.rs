@@ -37,8 +37,11 @@ fn main() {
     std::fs::create_dir_all(&cache).expect("the cache directory is creatable");
     println!("cargo::rustc-env=STS2_ORACLE_CACHE={}", cache.display());
 
+    // One game answers every miss. `start` restarts the run in place, so a
+    // launch is paid once rather than once for each recording.
+    let mut game = None;
     for (name, recording) in every_recording() {
-        if let Err(why) = ensure(&name, &recording, &cache) {
+        if let Err(why) = ensure(&name, &recording, &cache, &mut game) {
             // A warning and not a failure. Somebody without the game vendored
             // still builds and still runs everything that does not need it.
             println!("cargo::warning=no oracle transcript for {name}: {why}");
@@ -115,7 +118,12 @@ fn runs() -> Vec<PathBuf> {
 /// The build needs no part of it. A recording carries the build it was taken
 /// on, and `recording::read` refuses one that does not describe the tables. So
 /// one recording cannot be answered by two builds.
-fn ensure(name: &str, recording: &str, cache: &Path) -> Result<(), String> {
+fn ensure(
+    name: &str,
+    recording: &str,
+    cache: &Path,
+    game: &mut Option<Oracle<V>>,
+) -> Result<(), String> {
     let bytes = recording.as_bytes();
     let key = format!("{:016x} {MOD_IDENTITY}", fnv1a(bytes));
 
@@ -130,7 +138,7 @@ fn ensure(name: &str, recording: &str, cache: &Path) -> Result<(), String> {
     let recorded = recording::read::<V>(std::io::Cursor::new(bytes))
         .map_err(|e| format!("reading the recording for {name}: {e}"))?;
 
-    let game = game_dir_from_env().ok_or("STS2_GAME_DIR is unset; see .envrc")?;
+    let dir = game_dir_from_env().ok_or("STS2_GAME_DIR is unset; see .envrc")?;
     println!(
         "cargo::warning=asking the game for {name} ({} steps)",
         recorded.len()
@@ -144,7 +152,12 @@ fn ensure(name: &str, recording: &str, cache: &Path) -> Result<(), String> {
     // The start goes first and is not a step. `Play::begin` takes it, so
     // `steps()` does not carry it, and a game driven from `steps()` alone
     // plays whatever character it launched in.
-    let oracle = Oracle::<V>::launch(Config::new(game)).map_err(|e| format!("launching: {e}"))?;
+    // Taken, and put back only once the recording is filled. A game that
+    // failed partway is dropped, and the next miss launches a fresh one.
+    let oracle = match game.take() {
+        Some(oracle) => oracle,
+        None => Oracle::<V>::launch(Config::new(dir)).map_err(|e| format!("launching: {e}"))?,
+    };
     let mut cached = Cached::begin(
         FromTranscript {
             path: transcript.clone(),
@@ -156,6 +169,7 @@ fn ensure(name: &str, recording: &str, cache: &Path) -> Result<(), String> {
     cached
         .fill(recorded.steps())
         .map_err(|e| format!("replaying {name}: {e}"))?;
+    *game = cached.into_inner();
 
     std::fs::write(&stamped, key).map_err(|e| format!("writing {}: {e}", stamped.display()))?;
     Ok(())
