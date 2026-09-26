@@ -1,0 +1,9 @@
+# `PagestormPower.AfterCardDrawn` draws its stack more for each Ethereal card
+# its owner draws. Each Clumsy drawn brings one more card.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"CLUMSY"}
+{"cmd":"grant","card":"CLUMSY"}
+{"cmd":"grant","card":"CLUMSY"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"PAGESTORM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

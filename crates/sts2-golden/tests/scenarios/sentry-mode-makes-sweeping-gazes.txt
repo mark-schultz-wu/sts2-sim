@@ -1,0 +1,6 @@
+# `SentryModePower.BeforeHandDraw` puts its stack of Sweeping Gazes into hand
+# before the draw.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"SENTRY_MODE_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

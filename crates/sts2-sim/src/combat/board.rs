@@ -739,6 +739,9 @@ impl<'a, V: Rules> Board<'a, V> {
                     self.live.remove_power(owner, power)
                 }
                 (Listener::Power { owner, .. }, effect) if owner == creature => own.push(effect),
+                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    self.live.modify_self(id, change, lasting)
+                }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} over another's death")
                 }
@@ -1977,6 +1980,7 @@ pub(super) fn draw<V: Rules>(
             sts2_core::EventHook::CardDrawn {
                 card: drawn.face.ident.card,
                 id: drawn.id,
+                ethereal: drawn.face.ethereal(),
             },
         );
         if asked.is_empty() {
@@ -1987,16 +1991,7 @@ pub(super) fn draw<V: Rules>(
             match (listener, effect) {
                 // Written on the card that asked, wherever it stands.
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
-                    let (pile, at) = [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust]
-                        .into_iter()
-                        .find_map(|pile| live.cards.find(pile, id).map(|at| (pile, at)))
-                        .unwrap_or_else(|| {
-                            unimplemented!("a card writing on itself out of every pile")
-                        });
-                    live.cards.write(pile, at, |held| {
-                        held.modify(change, lasting);
-                        true
-                    });
+                    live.modify_self(id, change, lasting)
                 }
                 (_, effect) => rest.push(effect),
             }

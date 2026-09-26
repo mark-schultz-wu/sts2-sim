@@ -1,0 +1,11 @@
+# `Melancholy.AfterDeath` takes one off its own cost for the rest of the
+# fight whenever a creature dies. Osty, at one hit point, dies taking the twig
+# slime's tackle, and Doom kills the slime as the enemy turn ends. Two deaths
+# leave each Melancholy costing one.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"MELANCHOLY"}
+{"cmd":"grant","card":"MELANCHOLY"}
+{"cmd":"grant","card":"MELANCHOLY"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"DOOM_POWER","amount":10,"target":1}
+{"cmd":"end_turn"}

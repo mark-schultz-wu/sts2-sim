@@ -1,0 +1,6 @@
+# `SummonNextTurnPower.AfterPlayerTurnStart` summons Osty for its stack once
+# a turn has begun with it there, then goes.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"SUMMON_NEXT_TURN_POWER","amount":5,"target":0}
+{"cmd":"end_turn"}

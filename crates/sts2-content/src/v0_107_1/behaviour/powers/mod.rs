@@ -1258,9 +1258,10 @@ pub(crate) fn event_hook(
             Power::CreativeAiPower,
             PowerAmount::Counted(amount),
             EventHook::BeforeHandDraw { player },
-        ) if player == holder => Some(HookEffect::GenerateOfKind {
-            kind: sts2_core::CardKind::Power,
+        ) if player == holder => Some(HookEffect::GenerateFromPool {
+            filter: sts2_core::PoolFilter::OfKind(sts2_core::CardKind::Power),
             count: amount,
+            keyword: None,
         }),
         (Power::CreativeAiPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player })
             if player == holder =>
@@ -1268,6 +1269,55 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Creative AI")
         }
         (Power::CreativeAiPower, _, EventHook::BeforeHandDraw { .. }) => None,
+        // `CallOfTheVoidPower.BeforeHandDraw`: its stack of cards from the
+        // character's pool, none of them Basic or Ancient, each made Ethereal.
+        (
+            Power::CallOfTheVoidPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => Some(HookEffect::GenerateFromPool {
+            filter: sts2_core::PoolFilter::NotBasicOrAncient,
+            count: amount,
+            keyword: Some(CardKeyword::Ethereal),
+        }),
+        // `SentryModePower.BeforeHandDraw`: its stack of Sweeping Gazes.
+        (
+            Power::SentryModePower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => Some(HookEffect::GenerateInHand {
+            card: Cards::Token(TokenCard::SweepingGaze),
+            count: amount,
+        }),
+        (
+            Power::CallOfTheVoidPower | Power::SentryModePower,
+            PowerAmount::Endless,
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => unimplemented!("an endless {power:?}"),
+        (Power::CallOfTheVoidPower | Power::SentryModePower, _, EventHook::BeforeHandDraw { .. }) => {
+            None
+        }
+        // `PagestormPower.AfterCardDrawn`: an Ethereal card its owner draws
+        // draws its stack more. A fight here has one player, so every draw is
+        // its owner's.
+        (Power::PagestormPower, PowerAmount::Counted(amount), EventHook::CardDrawn { ethereal: true, .. }) => {
+            Some(HookEffect::Draw(amount))
+        }
+        (Power::PagestormPower, PowerAmount::Endless, EventHook::CardDrawn { ethereal: true, .. }) => {
+            unimplemented!("an endless Pagestorm")
+        }
+        (Power::PagestormPower, _, EventHook::CardDrawn { .. }) => None,
+        // `SummonNextTurnPower.AfterPlayerTurnStart`: once the stack was there
+        // as the turn began, Osty is summoned for it, and the power goes.
+        (
+            Power::SummonNextTurnPower,
+            PowerAmount::Counted(amount),
+            EventHook::PlayerTurnStart { player },
+        ) if player == holder && held.on_turn_start != PowerAmount::Counted(0) => {
+            asked.extend([HookEffect::Summon(amount), HookEffect::Remove]);
+            return;
+        }
+        (Power::SummonNextTurnPower, _, EventHook::PlayerTurnStart { .. }) => None,
         // `GenesisPower.AfterEnergyReset`: its stack of stars, every turn.
         (Power::GenesisPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player })
             if player == holder =>

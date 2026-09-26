@@ -144,7 +144,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     // The fight asks only a card whose class overrides the hook.
     match card {
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
-        Cards::Necrobinder(card) => necrobinder::event_hook(card, hook, asked),
+        Cards::Necrobinder(card) => necrobinder::event_hook(card, printed, hook, asked),
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }

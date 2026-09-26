@@ -6,7 +6,7 @@
 
 use crate::rng::MegaRng;
 use smallvec::SmallVec;
-use sts2_core::{CardTable, CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
+use sts2_core::{CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
 use super::board::{Board, draw};
 use super::listen::{self, Listener};
@@ -225,11 +225,10 @@ fn turn_end<V: Rules>(
         return Some(ended);
     }
     let held: SmallVec<[_; MAX_CARDS_IN_HAND]> = live.cards.iter(Pile::Hand).collect();
-    let ethereal: SmallVec<[usize; MAX_CARDS_IN_HAND]> = live
-        .cards
-        .idents(Pile::Hand)
+    let ethereal: SmallVec<[usize; MAX_CARDS_IN_HAND]> = held
+        .iter()
         .enumerate()
-        .filter(|(_, held)| held.card.ethereal())
+        .filter(|(_, held)| held.face.ethereal())
         .map(|(at, _)| at)
         .collect();
     for at in ethereal.into_iter().rev() {
@@ -237,7 +236,7 @@ fn turn_end<V: Rules>(
         unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardExhausted);
         live.cards.move_to(Pile::Hand, at, Pile::Exhaust);
     }
-    for card in held.iter().filter(|card| !card.face.ident.card.ethereal()) {
+    for card in held.iter().filter(|card| !card.face.ethereal()) {
         let mut board = Board::for_card(
             live,
             rngs.reborrow(),
@@ -548,41 +547,20 @@ pub(super) fn carry_setup<V: Rules>(
                                 count,
                             );
                         }
-                        sts2_core::HookEffect::GenerateOfKind { kind, count } => {
-                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
-                                unimplemented!("making {count:?} cards of one kind")
-                            });
-                            for _ in 0..count {
-                                // `GetDistinctForCombat` over the pool afresh
-                                // each time, in the pool's own order.
-                                let mut cards: Vec<V::Card> = V::combat_cards(live.character)
-                                    .iter()
-                                    .copied()
-                                    .filter(|card| V::card_kind(*card) == Some(kind))
-                                    .collect();
-                                let mut board = Board::for_card(
-                                    live,
-                                    rngs.reborrow(),
-                                    relics,
-                                    ascension,
-                                    None,
-                                    None,
-                                );
-                                // `FirstOrDefault`: an empty pool gives nothing.
-                                let Ok([card]) = sts2_core::Fight::generate_cards::<1>(
-                                    &mut board,
-                                    &mut cards,
-                                    <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION,
-                                ) else {
-                                    continue;
-                                };
-                                sts2_core::Fight::add_generated_cards(
-                                    &mut board,
-                                    card,
-                                    Pile::Hand,
-                                    1,
-                                );
-                            }
+                        sts2_core::HookEffect::GenerateFromPool {
+                            filter,
+                            count,
+                            keyword,
+                        } => {
+                            generate_from_pool::<V>(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                filter,
+                                count,
+                                keyword,
+                            );
                         }
                         sts2_core::HookEffect::ShuffleIfNecessary => {
                             if live.cards.is_empty(Pile::Draw) {
@@ -621,7 +599,7 @@ pub(super) fn carry_setup<V: Rules>(
             Setup::PlayerTurnStart(mut rest) => {
                 let mut ended = None;
                 while !rest.is_empty() {
-                    let (_, effect) = rest.remove(0);
+                    let (listener, effect) = rest.remove(0);
                     match effect {
                         // `CreatureCmd.Damage` over `HittableEnemies`, from
                         // the player.
@@ -658,6 +636,23 @@ pub(super) fn carry_setup<V: Rules>(
                                     question,
                                 });
                             }
+                        }
+                        // `OstyCmd.Summon` for the listener's owner.
+                        sts2_core::HookEffect::Summon(amount) => {
+                            super::board::summon_osty::<V>(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                amount,
+                            );
+                        }
+                        // `PowerCmd.Remove(this)`.
+                        sts2_core::HookEffect::Remove => {
+                            let Listener::Power { owner, power, .. } = listener else {
+                                unimplemented!("{listener:?} removing itself as the turn starts")
+                            };
+                            live.remove_power(owner, power);
                         }
                         // `OrbCmd.Passive` on whichever orb is first each
                         // time, which returns once the fight is ending.
@@ -696,6 +691,59 @@ pub(super) fn carry_setup<V: Rules>(
                 return Carried::Done(ended);
             }
         };
+    }
+}
+
+/// `count` cards of the character's combat pool that `filter` keeps, each
+/// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`
+/// from the pool afresh, in the pool's own order. An empty pool gives
+/// nothing. Each takes `keyword` where one is named, and goes into hand.
+fn generate_from_pool<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    filter: sts2_core::PoolFilter,
+    count: V::Number,
+    keyword: Option<V::CardKeyword>,
+) {
+    use sts2_core::CardTable as _;
+
+    let count: usize = num_traits::cast(count)
+        .unwrap_or_else(|| unimplemented!("making {count:?} cards from a pool"));
+    let keeps = |card: V::Card| match filter {
+        sts2_core::PoolFilter::OfKind(kind) => V::card_kind(card) == Some(kind),
+        sts2_core::PoolFilter::NotBasicOrAncient => {
+            let rarity = card.rarity();
+            rarity != <<V::Card as sts2_core::CardTable>::Rarity as sts2_core::CardRarityKinds>::BASIC
+                && rarity
+                    != <<V::Card as sts2_core::CardTable>::Rarity as sts2_core::CardRarityKinds>::ANCIENT
+        }
+    };
+    for _ in 0..count {
+        let mut cards: Vec<V::Card> = V::combat_cards(live.character)
+            .iter()
+            .copied()
+            .filter(|card| keeps(*card))
+            .collect();
+        let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+        let Ok([card]) = sts2_core::Fight::generate_cards::<1>(
+            &mut board,
+            &mut cards,
+            <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION,
+        ) else {
+            return;
+        };
+        for at in sts2_core::Fight::add_generated_cards(&mut board, card, Pile::Hand, 1) {
+            if let Some(keyword) = keyword {
+                sts2_core::Fight::modify_card(
+                    &mut board,
+                    at,
+                    sts2_core::Change::AddKeyword(keyword),
+                    sts2_core::Lasting::ThisFight,
+                );
+            }
+        }
     }
 }
 

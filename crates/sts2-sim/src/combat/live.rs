@@ -594,6 +594,18 @@ impl<V: Rules> Face<V> {
             )
     }
 
+    /// `Keywords.Contains(Ethereal)` for this copy, the way [`Face::innate`]
+    /// reads Innate.
+    pub(super) fn ethereal(&self) -> bool {
+        use sts2_core::{CardTable as _, KeywordKinds};
+
+        self.ident.card.ethereal()
+            || sts2_core::FlagSet::contains(
+                self.added_keywords,
+                <V::CardKeyword as KeywordKinds<V>>::ETHEREAL,
+            )
+    }
+
     /// `IsSlyThisTurn` for this copy, the keyword the way [`Face::innate`]
     /// reads Innate. Nothing ported makes a card Sly for one turn.
     pub(super) fn sly(&self) -> bool {
@@ -1596,6 +1608,32 @@ impl<V: Rules> Live<V> {
             held.evoke = super::board::orb_value::<V>(walk(), held.orb, held.evoke);
         }
         Some(std::borrow::Cow::Owned(reported))
+    }
+
+    /// A change a card writes on itself, wherever in the fight it stands.
+    ///
+    /// # Panics
+    ///
+    /// A card no combat pile holds.
+    pub(super) fn modify_self(
+        &mut self,
+        id: CardId<V>,
+        change: sts2_core::Change<V>,
+        lasting: sts2_core::Lasting,
+    ) {
+        let (pile, at) = [
+            sts2_core::Pile::Hand,
+            sts2_core::Pile::Draw,
+            sts2_core::Pile::Discard,
+            sts2_core::Pile::Exhaust,
+        ]
+        .into_iter()
+        .find_map(|pile| self.cards.find(pile, id).map(|at| (pile, at)))
+        .unwrap_or_else(|| unimplemented!("a card writing on itself out of every pile"));
+        self.cards.write(pile, at, |held| {
+            held.modify(change, lasting);
+            true
+        });
     }
 
     /// `CombatManager.History`, as a listener reads it.
