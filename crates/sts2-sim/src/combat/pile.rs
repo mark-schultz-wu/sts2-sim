@@ -37,25 +37,13 @@ pub(super) const MAX_CARDS_IN_HAND: usize = 10;
 impl<V: sts2_core::Rules> Shuffled<super::live::CardInstance<V>> {
     /// The same, for the one turn the innate cards are put on top first.
     ///
-    /// `SetupPlayerTurn` on turn one. The sinking enchantments go to the
-    /// bottom, then every innate card is moved to the top one at a time. The
-    /// last of them in pile order ends up first. The hand is then drawn to at
+    /// `SetupPlayerTurn` on turn one. Each innate card moves to the top in
+    /// pile order, so the last of them ends up first. The hand is drawn to at
     /// least their number, and at most a full hand.
     ///
-    /// # Panics
-    ///
-    /// An enchanted card, whose sink the port has not reached.
+    /// The game sinks an enchanted card whose `ShouldStartAtBottomOfDrawPile`
+    /// says so first. `Rules::enchant` puts no such enchantment on a card.
     pub fn deal_opening(mut self, hand_size: usize) -> Dealt<super::live::CardInstance<V>> {
-        if let Some(card) = self
-            .cards
-            .iter()
-            .find(|card| card.face.ident.enchantment.is_some())
-        {
-            unimplemented!(
-                "where {:?} starts the fight, which its enchantment decides",
-                card.face.ident
-            );
-        }
         let mut innate = 0;
         // `MoveToTopInternal` per card, in pile order. Each goes in front of
         // the last, which is what reverses them. The cards behind the one

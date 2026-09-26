@@ -40,6 +40,17 @@ pub enum Setup<V: ContentVersion> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
     },
+    /// Enchants the card at `index` in hand.
+    ///
+    /// `EnchantConsoleCmd`, which is `CardCmd.Enchant` on the fight's copy
+    /// alone. The deck keeps its card as it was.
+    ///
+    /// A fight has to be on, and the card has to take the enchantment.
+    Enchant {
+        enchantment: V::Enchantment,
+        amount: u8,
+        index: crate::HandIndex,
+    },
 }
 
 /// What a [`Setup::Grant`] puts into the run.

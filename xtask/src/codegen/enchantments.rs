@@ -101,6 +101,18 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     emit_flags(&mut out)?;
     emit_shape(&mut out);
     emit_enchantments(&mut out, &enchantments, &types)?;
+    let overrides = super::overrides(&build)?;
+    super::emit_overrides(
+        &mut out,
+        "indexed by the enchantment's discriminant.",
+        enchantments.iter().map(|row| row[1].as_str()),
+        &overrides,
+    );
+    writeln!(
+        out,
+        "\nimpl sts2_core::EnchantmentTable for Enchantment {{\n    fn overrides(self) -> sts2_core::Overrides {{\n        OVERRIDES[self as usize]\n    }}\n}}"
+    )
+    .unwrap();
 
     let path = root.join("enchantments.rs");
     error::write(&path, &out)?;

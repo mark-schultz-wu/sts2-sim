@@ -137,6 +137,41 @@ pub(crate) fn apply_power<V: Rules>(
     ended
 }
 
+/// Enchant the copy at `index` in hand, which is `EnchantConsoleCmd`.
+///
+/// Scenario construction. `CardCmd.Enchant` on the fight's copy, so the deck
+/// keeps its card as it was.
+///
+/// # Panics
+///
+/// A card the enchantment does not take, which the game throws on.
+pub(crate) fn enchant<V: Rules>(
+    fighting: Fighting<'_, V>,
+    enchantment: V::Enchantment,
+    amount: u8,
+    index: sts2_core::HandIndex,
+) -> Result<(), sts2_core::Reason<V>> {
+    let live = fighting.live;
+    let count = live.cards.len(sts2_core::Pile::Hand);
+    let at = usize::from(index.get());
+    let Some(card) = live.cards.get(sts2_core::Pile::Hand, at) else {
+        return Err(sts2_core::Reason::OutOfRange {
+            index: i64::from(index.get()),
+            count,
+        });
+    };
+    let mut ident = card.face.ident;
+    if !V::can_enchant(enchantment, &ident) {
+        unimplemented!("{enchantment:?} put on {ident:?}, which it does not take");
+    }
+    V::enchant(enchantment, amount, &mut ident);
+    live.cards.write(sts2_core::Pile::Hand, at, |face| {
+        face.ident = ident;
+        true
+    });
+    Ok(())
+}
+
 /// Add the skipped ticks an effect just made to the ones the fight holds.
 pub(super) fn merge<V: Rules>(held: &mut Skips<V>, added: Vec<(CombatId, V::Power)>) {
     for one in added {
@@ -505,15 +540,33 @@ pub(super) fn carry_on<V: Rules>(
                     break;
                 };
                 let card = play.id;
-                let played_card = next
+                let face = next
                     .cards
                     .named(card)
                     .unwrap_or_else(|| {
                         unimplemented!("a card that left play before its play ended")
                     })
-                    .face
-                    .ident
-                    .card;
+                    .face;
+                let played_card = face.ident.card;
+                // `EnchantmentModel.OnPlay`, after the card's own and before
+                // the play is finished.
+                if let Some(enchanted) = face.ident.enchantment {
+                    let mut status = face.enchantment_status();
+                    let mut board = Board::for_card(
+                        next,
+                        streams.combat(),
+                        relics,
+                        ascension,
+                        effect.target,
+                        Some(card),
+                    );
+                    V::enchantment_on_play(enchanted, &mut status, &mut board);
+                    effect.ended = effect.ended.or(board.ended);
+                    let skipped = std::mem::take(&mut board.skipped);
+                    merge::<V>(&mut next.skip_tick, skipped);
+                    next.cards
+                        .write_in_play(card, |face| face.set_enchantment_status(status));
+                }
                 finished::<V>(
                     Fighting {
                         live: &mut *next,

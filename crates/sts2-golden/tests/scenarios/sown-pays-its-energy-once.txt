@@ -1,0 +1,13 @@
+# `EnchantConsoleCmd` puts Sown at one on a Defend in the opening hand. Sown's
+# `OnPlay` gains its amount of energy while its status is `Normal`, then
+# disables itself. So the first play of that Defend leaves the Ironclad on
+# three energy. The same Defend comes back in the turn-four hand after the
+# turn-three shuffle, and playing it again leaves two.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"enchant","enchantment":"SOWN","amount":1,"index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":3}

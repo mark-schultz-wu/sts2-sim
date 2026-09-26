@@ -524,6 +524,7 @@ pub enum ModelHook {
     ModifyHpLostAfterOstyLate,
     ModifyHandDraw,
     ModifyHandDrawLate,
+    ModifyShuffleOrder,
     ShouldCreatureBeRemovedFromCombatAfterDeath,
     ShouldPowerBeRemovedOnDeath,
     ShouldClearBlock,
@@ -577,7 +578,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 77] = [
+    pub const ALL: [ModelHook; 78] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -605,6 +606,7 @@ impl ModelHook {
         ModelHook::ModifyHpLostAfterOstyLate,
         ModelHook::ModifyHandDraw,
         ModelHook::ModifyHandDrawLate,
+        ModelHook::ModifyShuffleOrder,
         ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath,
         ModelHook::ShouldPowerBeRemovedOnDeath,
         ModelHook::ShouldClearBlock,
@@ -687,6 +689,7 @@ impl ModelHook {
             ModelHook::ModifyHpLostAfterOstyLate => "ModifyHpLostAfterOstyLate",
             ModelHook::ModifyHandDraw => "ModifyHandDraw",
             ModelHook::ModifyHandDrawLate => "ModifyHandDrawLate",
+            ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
             ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath => {
                 "ShouldCreatureBeRemovedFromCombatAfterDeath"
             }
@@ -786,6 +789,35 @@ impl Overrides {
     pub const fn union(self, other: Self) -> Self {
         Overrides(self.0 | other.0)
     }
+}
+
+/// What a table says about an enchantment, beyond its row.
+pub trait EnchantmentTable: Copy {
+    /// The hooks this enchantment's class overrides, as the hook dump
+    /// measured them. A card carrying it hears them too. See
+    /// [`PowerTable::overrides`].
+    fn overrides(self) -> Overrides;
+}
+
+/// `EnchantmentStatus`: whether an enchantment still acts, which its own
+/// `OnPlay` reads and sets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum EnchantmentStatus {
+    #[default]
+    Normal,
+    Disabled,
+}
+
+/// A number an enchantment works out for the card it is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnchantHook {
+    /// `EnchantDamageAdditive`, for a powered hit the card deals. An
+    /// unpowered hit asks no listener, the card's enchantment included.
+    DamageAdditive,
+    /// `EnchantBlockAdditive`, for block the card gives.
+    BlockAdditive,
+    /// `EnchantPlayCount`, over how many times the card's play runs.
+    PlayCount,
 }
 
 /// What a table says about a relic, beyond its row.
@@ -2070,6 +2102,11 @@ impl<V: ContentVersion> DecisionHook<V> {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    /// `ModifyShuffleOrder`, over the draw pile just shuffled. `initial` is
+    /// the shuffle a fight opens on.
+    ShuffleOrder {
+        initial: bool,
+    },
     /// `AfterRoomEntered`, for a room of this type.
     RoomEntered {
         room: V::RoomType,
@@ -2306,6 +2343,7 @@ impl<V: ContentVersion> EventHook<V> {
     /// it answers one of those, so it is always asked.
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
+            EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
@@ -2710,6 +2748,14 @@ pub enum HookEffect<V: ContentVersion> {
         count: V::Number,
         keyword: Option<V::CardKeyword>,
     },
+    /// The card that asked, moved to the top of the draw pile it was
+    /// shuffled into.
+    ToTopOfDrawPile,
+    /// `Card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
+    /// `CombatEnergyCosts`, on the card whose enchantment asked. Slither's.
+    RandomSelfCost {
+        below: u8,
+    },
     /// One change written on the card that asked, as its own
     /// `EnergyCost.AddThisCombat` or kin write it.
     ModifySelf {
@@ -3014,6 +3060,22 @@ pub trait Hooks: ContentVersion {
         listener: Listener<'_, Self, P>,
         hook: DecisionHook<Self>,
     ) -> crate::HookResponse<bool>;
+
+    /// `EnchantDamageAdditive` and its kin, answered by the enchantment on a
+    /// card. [`Modify::Nothing`] for one whose class does not override the
+    /// hook.
+    fn enchant_modify(enchanted: crate::Enchanted<Self>, hook: EnchantHook)
+    -> Modify<Self::Number>;
+
+    /// What an enchantment asks for when `hook` reaches the card `id` it is
+    /// on, pushed onto `asked`. Asked only of an enchantment whose class
+    /// overrides the hook.
+    fn enchantment_event_hook(
+        enchanted: crate::Enchanted<Self>,
+        id: crate::CardId<Self>,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
 
     /// `ModifyCardPlayResultPileTypeAndPosition`: where a played card goes
     /// once its play is over, given where it goes so far.
@@ -3455,6 +3517,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
+        + EnchantmentTable
         + 'static;
 
     /// What starts a fight.
@@ -3697,6 +3760,15 @@ pub trait Rules: Hooks {
 
     /// `OrbModel.Evoke`: what the orb does as it leaves.
     fn orb_evoke<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+
+    /// `EnchantmentModel.OnPlay`, after each play of the card it is on.
+    /// `status` is this copy's `EnchantmentModel.Status`, which the
+    /// enchantment reads, and sets when it disables itself.
+    fn enchantment_on_play<F: Fight<Self>>(
+        enchanted: crate::Enchanted<Self>,
+        status: &mut EnchantmentStatus,
+        fight: &mut F,
+    );
 
     /// `OrbModel.Passive` with no target named, which `OrbCmd.Passive` runs.
     fn orb_passive<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);

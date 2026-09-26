@@ -294,3 +294,61 @@ impl Enchantment {
         }
     }
 }
+
+/// The hooks each class overrides, from `hooks.txt`, indexed by the enchantment's discriminant.
+static OVERRIDES: [sts2_core::Overrides; 24] = [
+    // ADROIT
+    sts2_core::Overrides::from_bits(0),
+    // CLONE
+    sts2_core::Overrides::from_bits(0),
+    // CORRUPTED
+    sts2_core::Overrides::from_bits(0),
+    // DEPRECATED_ENCHANTMENT
+    sts2_core::Overrides::from_bits(0),
+    // GLAM
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // GOOPY
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+    // IMBUED
+    sts2_core::Overrides::from_bits(0),
+    // INKY
+    sts2_core::Overrides::from_bits(0),
+    // INSTINCT
+    sts2_core::Overrides::from_bits(0),
+    // MOCK_FREE_ENCHANTMENT
+    sts2_core::Overrides::from_bits(0),
+    // MOMENTUM
+    sts2_core::Overrides::from_bits(0),
+    // NIMBLE
+    sts2_core::Overrides::from_bits(0),
+    // PERFECT_FIT
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyShuffleOrder),
+    // ROYALLY_APPROVED
+    sts2_core::Overrides::from_bits(0),
+    // SHARP
+    sts2_core::Overrides::from_bits(0),
+    // SLITHER
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
+    // SLUMBERING_ESSENCE
+    sts2_core::Overrides::from_bits(0),
+    // SOULS_POWER
+    sts2_core::Overrides::from_bits(0),
+    // SOWN
+    sts2_core::Overrides::from_bits(0),
+    // SPIRAL
+    sts2_core::Overrides::from_bits(0),
+    // STEADY
+    sts2_core::Overrides::from_bits(0),
+    // SWIFT
+    sts2_core::Overrides::from_bits(0),
+    // TEZCATARAS_EMBER
+    sts2_core::Overrides::from_bits(0),
+    // VIGOROUS
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
+];
+
+impl sts2_core::EnchantmentTable for Enchantment {
+    fn overrides(self) -> sts2_core::Overrides {
+        OVERRIDES[self as usize]
+    }
+}

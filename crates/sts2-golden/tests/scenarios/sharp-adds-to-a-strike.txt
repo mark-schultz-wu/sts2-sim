@@ -1,0 +1,11 @@
+# `EnchantConsoleCmd` puts Sharp at three on the opening hand's Strike. Sharp
+# adds its amount to a powered hit its card deals, and `Hook.ModifyDamage` asks
+# it before any listener. So the Strike prints nine, and after Bash makes the
+# Nibbit vulnerable it deals thirteen, which is nine and a half again. A port
+# that adds the three after Vulnerable deals twelve, and one that never adds
+# it deals nine.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"enchant","enchantment":"SHARP","amount":3,"index":0}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":0,"target":1}

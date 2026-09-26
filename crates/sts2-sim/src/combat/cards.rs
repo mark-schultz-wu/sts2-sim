@@ -349,6 +349,12 @@ impl<V: Rules, P: Piles> Cards<V, P> {
             return;
         }
         let now = self.restate(was, face);
+        // A write that changes what the copy is, such as an enchantment put
+        // on it, changes what it hears.
+        if self.heard[usize::from(was)] != self.heard[usize::from(now)] {
+            self.counts.remove(self.heard[usize::from(was)]);
+            self.counts.add(self.heard[usize::from(now)]);
+        }
         self.set_state(card, now);
     }
 
@@ -432,6 +438,13 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         });
     }
 
+    /// The copy at `at` in `pile` moved to its top, the rest keeping their
+    /// order behind it.
+    pub(crate) fn move_to_top(&mut self, pile: Pile, at: usize) {
+        self.piles
+            .arrange(pile.into(), |cards| cards[..=at].rotate_right(1));
+    }
+
     /// Every pile emptied, which is how a fight the player lost leaves them.
     pub(crate) fn clear(&mut self) {
         self.piles.clear();
@@ -473,7 +486,15 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// Store a new state, with the hooks its card overrides.
     fn store_face(&mut self, face: Face<V>) {
         self.faces.push(face);
-        self.heard.push(face.ident.card.overrides());
+        // A card hears what its enchantment's class overrides as well.
+        let enchantment = face
+            .ident
+            .enchantment
+            .map_or_else(sts2_core::Overrides::default, |on| {
+                <V::Enchantment as sts2_core::EnchantmentTable>::overrides(on.enchantment)
+            });
+        self.heard
+            .push(face.ident.card.overrides().union(enchantment));
     }
 
     /// The hooks the card at number `card` overrides.

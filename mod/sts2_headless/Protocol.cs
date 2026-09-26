@@ -83,7 +83,7 @@ internal static class Protocol
             // content change invalidates them. The game uses this exact value
             // to refuse a replay recorded against different content.
             ["contentHash"] = ModelIdSerializationCache.Hash,
-            ["commands"] = new[] { "start", "fight", "event", "power", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
+            ["commands"] = new[] { "start", "fight", "event", "power", "enchant", "travel", "play_card", "end_turn", "use_potion", "answer", "grant", "enter_room", "choose_option", "buy", "proceed", "observe", "quit" },
         });
 
         while (true)
@@ -176,6 +176,10 @@ internal static class Protocol
 
                 case "power":
                     await Power(req);
+                    return false;
+
+                case "enchant":
+                    await Enchant(req);
                     return false;
 
                 case "enter_room":
@@ -372,6 +376,45 @@ internal static class Protocol
 
         bool resolved = await Driver.WaitForDecisionPoint();
         await Observe(req, "event", resolved);
+    }
+
+    /// <summary>Enchants the card at a hand index in the fight.</summary>
+    /// <remarks>
+    /// Scenario construction, like <see cref="Power"/>. Refused by the console
+    /// command, which knows the enchantments and which cards each takes.
+    /// </remarks>
+    private static async Task Enchant(JsonElement req)
+    {
+        string? enchantment = Str(req, "enchantment");
+        if (enchantment == null)
+        {
+            await Error("enchant", Refusals.Malformed("enchant requires an 'enchantment' entry name"));
+            return;
+        }
+
+        if (!req.TryGetProperty("amount", out JsonElement amountEl)
+            || !amountEl.TryGetInt32(out int amount))
+        {
+            await Error("enchant", Refusals.Malformed("enchant requires an integer 'amount'"));
+            return;
+        }
+
+        if (!req.TryGetProperty("index", out JsonElement indexEl)
+            || !indexEl.TryGetInt32(out int index))
+        {
+            await Error("enchant", Refusals.Malformed("enchant requires a hand 'index'"));
+            return;
+        }
+
+        string? refused = Driver.Enchant(_state, enchantment, amount, index);
+        if (refused != null)
+        {
+            await Error("enchant", Refusals.Console(refused));
+            return;
+        }
+
+        bool resolved = await Driver.WaitForDecisionPoint();
+        await Observe(req, "enchant", resolved);
     }
 
     /// <summary>Puts a power on a creature in the fight.</summary>

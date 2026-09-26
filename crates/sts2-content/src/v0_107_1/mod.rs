@@ -242,6 +242,22 @@ impl sts2_core::Hooks for V0_107_1 {
         behaviour::monsters::event_hook(monster, hook)
     }
 
+    fn enchant_modify(
+        enchanted: sts2_core::Enchanted<Self>,
+        hook: sts2_core::EnchantHook,
+    ) -> sts2_core::Modify<Self::Number> {
+        behaviour::enchantments::modify(enchanted, hook)
+    }
+
+    fn enchantment_event_hook(
+        enchanted: sts2_core::Enchanted<Self>,
+        id: sts2_core::CardId<Self>,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) {
+        behaviour::enchantments::event_hook(enchanted, id, hook, asked);
+    }
+
     fn card_event_hook<P: sts2_core::Printed<Self> + ?Sized>(
         card: Self::Card,
         id: sts2_core::CardId<Self>,
@@ -300,6 +316,14 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn orb_turn_start<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
         behaviour::orbs::turn_start(orb, fight);
+    }
+
+    fn enchantment_on_play<F: sts2_core::Fight<Self>>(
+        enchanted: sts2_core::Enchanted<Self>,
+        status: &mut sts2_core::EnchantmentStatus,
+        fight: &mut F,
+    ) {
+        behaviour::enchantments::on_play(enchanted, status, fight);
     }
 
     fn orb_evoke<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {

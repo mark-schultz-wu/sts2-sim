@@ -1,6 +1,9 @@
-//! Which cards an enchantment takes.
+//! Which cards an enchantment takes, and what it does on them in a fight.
 
-use sts2_core::{CardIdent, CardKind, CardTable as _, Cost, Enchanted, Rules as _};
+use sts2_core::{
+    CardId, CardIdent, CardKind, CardTable as _, Cost, EnchantHook, Enchanted, EnchantmentStatus,
+    EventHook, Fight, HookEffect, HookEffects, Modify, Rules as _,
+};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{CardRarity, CardTag};
@@ -54,5 +57,83 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
             });
         }
         _ => unimplemented!("what enchanting a card with {enchantment:?} does to it"),
+    }
+}
+
+/// An enchantment's `EnchantDamageAdditive`, `EnchantBlockAdditive` or
+/// `EnchantPlayCount`, over the card it is on.
+pub(crate) fn modify(enchanted: Enchanted<V>, hook: EnchantHook) -> Modify<i32> {
+    let amount = i32::from(enchanted.amount);
+    match (enchanted.enchantment, hook) {
+        (Enchantment::Sharp, EnchantHook::DamageAdditive) => Modify::Added(amount),
+        (Enchantment::Nimble, EnchantHook::BlockAdditive) => Modify::Added(amount),
+        // Its `Times`, which it prints as one.
+        (Enchantment::Spiral, EnchantHook::PlayCount) => Modify::Added(1),
+        (
+            Enchantment::Nimble
+            | Enchantment::PerfectFit
+            | Enchantment::Sharp
+            | Enchantment::Slither
+            | Enchantment::Sown
+            | Enchantment::Spiral
+            | Enchantment::Swift,
+            _,
+        ) => Modify::Nothing,
+        (enchantment, hook) => unimplemented!("what {enchantment:?} does for {hook:?}"),
+    }
+}
+
+/// What an enchantment asks for when `hook` reaches the card `id` it is on.
+/// The fight asks only an enchantment whose class overrides the hook.
+pub(crate) fn event_hook(
+    enchanted: Enchanted<V>,
+    id: CardId<V>,
+    hook: EventHook<V>,
+    asked: &mut HookEffects<V>,
+) {
+    match (enchanted.enchantment, hook) {
+        // `CombatEnergyCosts.NextInt(4)` for its own card, which the fight
+        // draws only while that card is in hand.
+        (Enchantment::Slither, EventHook::CardDrawn { id: drawn, .. }) => {
+            if drawn == id {
+                asked.push(HookEffect::RandomSelfCost { below: 4 });
+            }
+        }
+        // To the top of a shuffle, but not the one a fight opens on.
+        (Enchantment::PerfectFit, EventHook::ShuffleOrder { initial }) => {
+            if !initial {
+                asked.push(HookEffect::ToTopOfDrawPile);
+            }
+        }
+        (enchantment, hook) => unimplemented!("what {enchantment:?} does for {hook:?}"),
+    }
+}
+
+/// `EnchantmentModel.OnPlay`, after each play of the card it is on.
+pub(crate) fn on_play<F: Fight<V>>(
+    enchanted: Enchanted<V>,
+    status: &mut EnchantmentStatus,
+    fight: &mut F,
+) {
+    let amount = i32::from(enchanted.amount);
+    match enchanted.enchantment {
+        Enchantment::Sown => {
+            if *status == EnchantmentStatus::Normal {
+                fight.modify_energy(amount);
+                *status = EnchantmentStatus::Disabled;
+            }
+        }
+        Enchantment::Swift => {
+            if *status == EnchantmentStatus::Normal {
+                fight.draw(amount);
+                *status = EnchantmentStatus::Disabled;
+            }
+        }
+        Enchantment::Nimble
+        | Enchantment::PerfectFit
+        | Enchantment::Sharp
+        | Enchantment::Slither
+        | Enchantment::Spiral => {}
+        enchantment => unimplemented!("what {enchantment:?} does when its card is played"),
     }
 }

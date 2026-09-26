@@ -2173,6 +2173,25 @@ impl<V: Rules> State<V> {
         Ok(Decided::Resolved)
     }
 
+    /// Enchant the fight's copy of the card at `index` in hand, which is
+    /// `EnchantConsoleCmd`.
+    pub(crate) fn enchant(
+        &mut self,
+        enchantment: V::Enchantment,
+        amount: u8,
+        index: sts2_core::HandIndex,
+    ) -> Result<super::Settled<V>, Error> {
+        let Some(fighting) = self.fighting() else {
+            unimplemented!("an enchantment put on a card outside a fight");
+        };
+        Ok(crate::combat::enchant(fighting, enchantment, amount, index)
+            .map(|()| Decided::Resolved)
+            .map_err(|reason| sts2_core::Refusal {
+                what: "enchant".into(),
+                reason,
+            }))
+    }
+
     /// Put a card, a relic or a potion straight into the run.
     ///
     /// `Driver.GrantCard`, `RelicCmd.Obtain` and `PotionCmd.TryToProcure`,

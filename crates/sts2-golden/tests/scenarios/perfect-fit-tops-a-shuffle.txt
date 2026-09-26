@@ -1,0 +1,9 @@
+# `EnchantConsoleCmd` puts Perfect Fit on the opening hand's Bash. Perfect
+# Fit's `ModifyShuffleOrder` moves its card to the top of every shuffle but the
+# one a fight opens on. The draw pile runs dry after turn two, and so the Bash
+# is the first card of the turn-three hand.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"enchant","enchantment":"PERFECT_FIT","amount":1,"index":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
