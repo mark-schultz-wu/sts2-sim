@@ -388,7 +388,7 @@ pub use sts2_content_wire::option_key;
 
 /// A card identity, the way the observation spells one.
 ///
-/// `BASH+1/SMOG*ADROIT`: the card, then what it is carrying. A person reading a
+/// `BASH+1/SMOG*ADROIT:1`: the card, then what it is carrying. A person reading a
 /// selection beside a deck listing sees the same card written the same way in
 /// both.
 pub fn ident<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> String {
@@ -400,9 +400,14 @@ pub fn ident<V: sts2_content_wire::WireContentVersion>(card: &CardIdent<V>) -> S
         out.push('/');
         out.push_str(&spelling(affliction));
     }
-    if let Some(enchantment) = &card.enchantment {
+    if let Some(sts2_core::Enchanted {
+        enchantment,
+        amount,
+    }) = &card.enchantment
+    {
         out.push('*');
         out.push_str(&spelling(enchantment));
+        out.push_str(&format!(":{amount}"));
     }
     out
 }

@@ -771,6 +771,8 @@ pub struct CardData {
     pub keywords: KeywordSet,
     /// `CanonicalTags`, which no card computes.
     pub tags: TagSet,
+    /// `GainsBlock`, which a card overrides to say so.
+    pub gains_block: bool,
 }
 
 /// Every card, grouped by the pool it belongs to.
@@ -3391,6 +3393,10 @@ impl sts2_core::CardTable for Cards {
 
     fn unplayable(self) -> bool {
         self.data().keywords.contains(CardKeyword::Unplayable)
+    }
+
+    fn gains_block(self) -> bool {
+        self.data().gains_block
     }
 
     fn exhausts(self) -> bool {

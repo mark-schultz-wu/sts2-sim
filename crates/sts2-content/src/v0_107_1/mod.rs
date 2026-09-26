@@ -424,8 +424,8 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::enchantments::can_enchant(enchantment, card)
     }
 
-    fn enchant(enchantment: Self::Enchantment, card: &mut sts2_core::CardIdent<Self>) {
-        behaviour::enchantments::enchant(enchantment, card);
+    fn enchant(enchantment: Self::Enchantment, amount: u8, card: &mut sts2_core::CardIdent<Self>) {
+        behaviour::enchantments::enchant(enchantment, amount, card);
     }
 
     fn encounter_gold(

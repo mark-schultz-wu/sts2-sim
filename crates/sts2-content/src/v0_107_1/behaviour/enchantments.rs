@@ -1,6 +1,6 @@
 //! Which cards an enchantment takes.
 
-use sts2_core::{CardIdent, CardKind, CardTable as _, Cost, Rules as _};
+use sts2_core::{CardIdent, CardKind, CardTable as _, Cost, Enchanted, Rules as _};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{CardRarity, CardTag};
@@ -25,24 +25,33 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::SoulsPower => base && card.card.exhausts(),
         // Its own check adds an X cost to the base's refusals.
         Enchantment::Slither => base && card.card.cost() != Cost::X,
-        Enchantment::Sown => base,
+        Enchantment::Sown | Enchantment::Swift => base,
+        // `CanEnchantCardType`, which takes an attack alone.
+        Enchantment::Sharp => base && V::card_kind(card.card) == Some(CardKind::Attack),
+        Enchantment::Nimble => base && card.card.gains_block(),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
     }
 }
 
-/// `CardCmd.Enchant` with an amount of one, and the enchantment's `OnEnchant`.
+/// `CardCmd.Enchant` by `amount`, and the enchantment's `OnEnchant`.
 ///
 /// # Panics
 ///
 /// An enchantment whose `OnEnchant` changes the card, which this port has
 /// not reached.
-pub(crate) fn enchant(enchantment: Enchantment, card: &mut CardIdent<V>) {
+pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent<V>) {
     match enchantment {
-        Enchantment::PerfectFit
+        Enchantment::Nimble
+        | Enchantment::PerfectFit
+        | Enchantment::Sharp
         | Enchantment::Slither
         | Enchantment::Sown
-        | Enchantment::Spiral => {
-            card.enchantment = Some(enchantment);
+        | Enchantment::Spiral
+        | Enchantment::Swift => {
+            card.enchantment = Some(Enchanted {
+                enchantment,
+                amount,
+            });
         }
         _ => unimplemented!("what enchanting a card with {enchantment:?} does to it"),
     }

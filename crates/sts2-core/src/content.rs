@@ -280,6 +280,9 @@ pub trait CardTable: Table {
     /// Whether it carries the keyword that exhausts a played copy.
     fn exhausts(self) -> bool;
 
+    /// `GainsBlock`, which a card that gives block overrides.
+    fn gains_block(self) -> bool;
+
     /// Whether it carries the keyword that exhausts it from hand at the end
     /// of a turn.
     fn ethereal(self) -> bool;
@@ -2221,9 +2224,14 @@ pub enum DeckAct<V: ContentVersion> {
     /// `FromDeckGeneric` over the deck's basic cards that can be transformed,
     /// then `CardCmd.TransformTo` this card.
     TransformBasicInto(V::Card),
-    /// `FromDeckForEnchantment` over the cards the enchantment takes, in deck
-    /// order, then `CardCmd.Enchant` with an amount of one.
-    Enchant(V::Enchantment),
+    /// `FromDeckForEnchantment` over the cards the enchantment takes, of one
+    /// type where `kind` names it, in deck order. Then `CardCmd.Enchant` by
+    /// `amount`.
+    Enchant {
+        enchantment: V::Enchantment,
+        amount: u8,
+        kind: Option<CardKind>,
+    },
 }
 
 /// One stream to draw from: one of the run's, one of the player's, or the
@@ -3371,9 +3379,9 @@ pub trait Rules: Hooks {
     /// `EnchantmentModel.CanEnchant`, for a card in the deck.
     fn can_enchant(enchantment: Self::Enchantment, card: &crate::CardIdent<Self>) -> bool;
 
-    /// `CardCmd.Enchant` with an amount of one on a card that takes it, which
-    /// is the enchantment's own `OnEnchant` as well.
-    fn enchant(enchantment: Self::Enchantment, card: &mut crate::CardIdent<Self>);
+    /// `CardCmd.Enchant` by `amount` on a card that takes it, which is the
+    /// enchantment's own `OnEnchant` as well.
+    fn enchant(enchantment: Self::Enchantment, amount: u8, card: &mut crate::CardIdent<Self>);
 
     /// The potions a reward draws from, split by rarity.
     ///

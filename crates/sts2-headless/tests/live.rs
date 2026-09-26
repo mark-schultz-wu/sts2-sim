@@ -1224,7 +1224,10 @@ fn an_enchantment_travels_in_a_card_identity() {
     // The whole point: it parses, and into the enchantment the relic applies.
     let ident = sts2_headless::card_ident::<V>(enchanted[0])
         .unwrap_or_else(|e| panic!("{}: {e}", enchanted[0]));
-    assert_eq!(ident.enchantment, Some(Enchantment::RoyallyApproved));
+    assert_eq!(
+        ident.enchantment.map(|enchanted| enchanted.enchantment),
+        Some(Enchantment::RoyallyApproved)
+    );
     assert_eq!(ident.affliction, None);
     assert_eq!(ident.upgrade, 0);
 

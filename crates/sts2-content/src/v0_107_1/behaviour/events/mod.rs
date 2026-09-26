@@ -9,6 +9,7 @@ mod morphic_grove;
 mod orobas;
 mod room_full_of_cheese;
 mod sapphire_seed;
+mod self_help_book;
 mod sunken_statue;
 mod tablet_of_truth;
 mod tea_master;
@@ -43,6 +44,7 @@ pub enum State {
     Orobas(orobas::State),
     RoomFullOfCheese(room_full_of_cheese::State),
     SapphireSeed(sapphire_seed::State),
+    SelfHelpBook(self_help_book::State),
     SunkenStatue(sunken_statue::State),
     TabletOfTruth(tablet_of_truth::State),
     TeaMaster(tea_master::State),
@@ -96,6 +98,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
     let removable = |card: &sts2_core::CardIdent<V>| !card.card.eternal();
     let basic = |card: &sts2_core::CardIdent<V>| card.card.rarity() == CardRarity::Basic;
     match event {
+        Event::SelfHelpBook => self_help_book::SelfHelpBook.allowed(run),
         Event::JungleMazeAdventure => jungle_maze_adventure::JungleMazeAdventure.allowed(run),
         Event::TabletOfTruth => tablet_of_truth::TabletOfTruth.allowed(run),
         Event::DenseVegetation => dense_vegetation::DenseVegetation.allowed(run),
@@ -189,6 +192,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::RoomFullOfCheese(room_full_of_cheese::RoomFullOfCheese.enter(run, rng))
         }
         Event::SapphireSeed => State::SapphireSeed(sapphire_seed::SapphireSeed.enter(run, rng)),
+        Event::SelfHelpBook => State::SelfHelpBook(self_help_book::SelfHelpBook.enter(run, rng)),
         Event::SunkenStatue => State::SunkenStatue(sunken_statue::SunkenStatue.enter(run, rng)),
         Event::TabletOfTruth => {
             State::TabletOfTruth(tablet_of_truth::TabletOfTruth.enter(run, rng))
@@ -220,6 +224,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::Orobas(state) => orobas::Orobas.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.observe(state, run),
+        State::SelfHelpBook(state) => self_help_book::SelfHelpBook.observe(state, run),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
@@ -255,6 +260,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             room_full_of_cheese::RoomFullOfCheese.choose(state, option, run, rng)
         }
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.choose(state, option, run, rng),
+        State::SelfHelpBook(state) => self_help_book::SelfHelpBook.choose(state, option, run, rng),
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
         State::TabletOfTruth(state) => {
             tablet_of_truth::TabletOfTruth.choose(state, option, run, rng)

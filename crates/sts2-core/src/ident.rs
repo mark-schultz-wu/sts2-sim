@@ -72,7 +72,16 @@ pub struct CardIdent<V: ContentVersion> {
     /// Independent of the affliction. A card can carry both, and the game keeps
     /// them in two fields. So this is a second option rather than one sum over
     /// the two.
-    pub enchantment: Option<V::Enchantment>,
+    pub enchantment: Option<Enchanted<V>>,
+}
+
+/// An enchantment on a card, and how much of it, which is
+/// `EnchantmentModel.Amount`. Sharp at two adds two damage where Sharp at one
+/// adds one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Enchanted<V: ContentVersion> {
+    pub enchantment: V::Enchantment,
+    pub amount: u8,
 }
 
 /// Which card instance a fight is talking about.

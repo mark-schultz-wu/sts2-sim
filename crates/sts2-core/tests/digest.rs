@@ -523,7 +523,16 @@ fn mutations() -> Vec<Nudge> {
             o.deck[0].affliction = Some(Affliction::Bound);
         }),
         ("deck: enchanted", |o| {
-            o.deck[0].enchantment = Some(Enchantment::Adroit);
+            o.deck[0].enchantment = Some(sts2_core::Enchanted {
+                enchantment: Enchantment::Adroit,
+                amount: 1,
+            });
+        }),
+        ("deck: enchanted more", |o| {
+            o.deck[0].enchantment = Some(sts2_core::Enchanted {
+                enchantment: Enchantment::Adroit,
+                amount: 2,
+            });
         }),
         ("in_combat", |o| o.in_combat = false),
         ("map.at", |o| o.map.at = Some(Coord::new(4, 11))),

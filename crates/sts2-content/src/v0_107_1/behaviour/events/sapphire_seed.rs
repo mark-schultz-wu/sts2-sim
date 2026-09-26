@@ -62,7 +62,11 @@ impl EventBehavior<V> for SapphireSeed {
             ],
             _ => smallvec::smallvec![
                 HookEffect::SelectFromDeck {
-                    act: DeckAct::Enchant(Enchantment::Sown),
+                    act: DeckAct::Enchant {
+                        enchantment: Enchantment::Sown,
+                        amount: 1,
+                        kind: None,
+                    },
                     count: 1,
                 },
                 HookEffect::FinishEvent,

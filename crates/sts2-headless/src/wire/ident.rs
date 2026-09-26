@@ -1,7 +1,7 @@
 //! Unpacking the three things the oracle packs into one string each.
 //!
 //! `sts2_core` owns [`Coord`], [`CardIdent`] and [`ModelId`] and carries no
-//! `serde`. So this is where `"3,11"`, `"STRIKE_IRONCLAD+1/SMOG*ADROIT"` and
+//! `serde`. So this is where `"3,11"`, `"STRIKE_IRONCLAD+1/SMOG*ADROIT:1"` and
 //! `"MONSTER/BYRDPIP"` live, on the same rule the rest of this module follows.
 //!
 //! Every one of these refuses input the oracle never sends. The crate README
@@ -51,7 +51,7 @@ pub fn coord(text: &str) -> Result<Coord, Error> {
 }
 
 /// A card's identity: `CARD`, and then each of `+2`, `/AFFLICTION` and
-/// `*ENCHANTMENT` that the card has, in that order.
+/// `*ENCHANTMENT:AMOUNT` that the card has, in that order.
 ///
 /// Each part is present only when `Observation.Ident` writes it. A literal `+0`
 /// is refused rather than read as unupgraded, because the oracle produces
@@ -63,7 +63,24 @@ pub fn card_ident<V: sts2_content_wire::WireContentVersion>(
     text: &str,
 ) -> Result<CardIdent<V>, Error> {
     let (head, enchantment) = match text.split_once('*') {
-        Some((head, name)) => (head, Some(entry(text, "enchantment", name)?)),
+        Some((head, enchanted)) => {
+            let (name, amount) = enchanted.split_once(':').ok_or_else(|| Error::Shape {
+                text: text.to_string(),
+                want: "a card identity — an enchantment carries its `:AMOUNT`",
+            })?;
+            let amount = amount.parse().map_err(|_| Error::Number {
+                text: text.to_string(),
+                part: "enchantment amount",
+            })?;
+            let enchantment = entry(text, "enchantment", name)?;
+            (
+                head,
+                Some(sts2_core::Enchanted {
+                    enchantment,
+                    amount,
+                }),
+            )
+        }
         None => (text, None),
     };
 
@@ -214,17 +231,25 @@ mod tests {
     fn a_card_identity_carries_the_upgrade_the_affliction_and_the_enchantment() {
         let card: Card = id("STRIKE_IRONCLAD");
         let smog: Affliction = id("SMOG");
-        let adroit: Enchantment = id("ADROIT");
+        let adroit = sts2_core::Enchanted::<V> {
+            enchantment: id::<Enchantment>("ADROIT"),
+            amount: 2,
+        };
 
         let cases = [
             ("STRIKE_IRONCLAD", 0, None, None),
             ("STRIKE_IRONCLAD+1", 1, None, None),
             ("STRIKE_IRONCLAD/SMOG", 0, Some(smog), None),
-            ("STRIKE_IRONCLAD*ADROIT", 0, None, Some(adroit)),
+            ("STRIKE_IRONCLAD*ADROIT:2", 0, None, Some(adroit)),
             ("STRIKE_IRONCLAD+2/SMOG", 2, Some(smog), None),
-            ("STRIKE_IRONCLAD+2*ADROIT", 2, None, Some(adroit)),
-            ("STRIKE_IRONCLAD/SMOG*ADROIT", 0, Some(smog), Some(adroit)),
-            ("STRIKE_IRONCLAD+2/SMOG*ADROIT", 2, Some(smog), Some(adroit)),
+            ("STRIKE_IRONCLAD+2*ADROIT:2", 2, None, Some(adroit)),
+            ("STRIKE_IRONCLAD/SMOG*ADROIT:2", 0, Some(smog), Some(adroit)),
+            (
+                "STRIKE_IRONCLAD+2/SMOG*ADROIT:2",
+                2,
+                Some(smog),
+                Some(adroit),
+            ),
         ];
 
         for (text, upgrade, affliction, enchantment) in cases {
@@ -294,7 +319,7 @@ mod tests {
         ));
 
         assert!(matches!(
-            card_ident::<V>("STRIKE_IRONCLAD*NOT_AN_ENCHANTMENT"),
+            card_ident::<V>("STRIKE_IRONCLAD*NOT_AN_ENCHANTMENT:1"),
             Err(Error::Entry {
                 kind: "enchantment",
                 ..
@@ -307,7 +332,10 @@ mod tests {
         // The order is fixed. `Observation.Ident` appends the affliction and
         // then the enchantment, so the reverse is not a card identity written
         // another way — it is a string nothing produces.
-        assert!(card_ident::<V>("STRIKE_IRONCLAD*ADROIT/SMOG").is_err());
+        assert!(card_ident::<V>("STRIKE_IRONCLAD*ADROIT:1/SMOG").is_err());
+
+        // An enchantment always says how much of it the card carries.
+        assert!(card_ident::<V>("STRIKE_IRONCLAD*ADROIT").is_err());
     }
 
     /// Every category [`ContentVersion`] has a type for, once each.
