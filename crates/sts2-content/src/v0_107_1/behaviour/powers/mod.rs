@@ -86,6 +86,30 @@ impl sts2_core::PowerModel<V> for State {
             Self::Vigor { .. } => Power::VigorPower,
         }
     }
+
+    fn debuff(&self) -> bool {
+        use sts2_core::PowerTable as _;
+
+        let power = self.power();
+        match lends(power) {
+            // `TemporaryStrengthPower.Type`, which is a debuff when it lends
+            // a negative amount.
+            Some((_, positive)) => !positive,
+            None => power
+                .debuff()
+                .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff")),
+        }
+    }
+}
+
+/// What a temporary power lends, and `IsPositive`, for the family that lends
+/// Strength or Dexterity and takes it back.
+fn lends(power: Power) -> Option<(Power, bool)> {
+    match power {
+        Power::CrushUnderPower => Some((Power::StrengthPower, false)),
+        Power::SpeedPotionPower => Some((Power::DexterityPower, true)),
+        _ => None,
+    }
 }
 
 impl State {
@@ -204,16 +228,18 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 /// one, and truncates to the same whole number.
 const SLOW_PER_CARD: f64 = 0.1;
 
-/// `TemporaryStrengthPower`, which is Strength that gives itself back.
+/// `TemporaryStrengthPower` and `TemporaryDexterityPower`, which lend `lent`
+/// and take it back.
 ///
-/// `BeforeApplied` lands the Strength, signed by `IsPositive`, before this
+/// `BeforeApplied` lands the lent power, signed by `IsPositive`, before this
 /// power attaches. `AfterSideTurnEnd` for its owner's own side takes this
-/// power off and hands the same Strength back.
+/// power off and hands the same amount back.
 ///
 /// `positive` is `IsPositive`. Crush Under's is false, so it lands negative
 /// Strength and returns it.
-fn temporary_strength(
+fn temporary(
     power: Power,
+    lent: Power,
     positive: bool,
     amount: PowerAmount<Number>,
     held: Held,
@@ -230,26 +256,23 @@ fn temporary_strength(
     match (amount, hook) {
         (_, EventHook::BeforeApplied { landing }) => {
             let PowerAmount::Counted(landing) = landing else {
-                unimplemented!("an endless temporary Strength landing")
+                unimplemented!("an endless temporary {lent:?} landing")
             };
             asked.push(HookEffect::ApplyToOwner(
-                Power::StrengthPower,
+                lent,
                 PowerAmount::Counted(signed(landing)),
             ))
         }
         (PowerAmount::Counted(amount), EventHook::SideTurnEnd { side }) if side == held.owner => {
-            // `PowerCmd.Remove(this)` and then the Strength back, which is the
+            // `PowerCmd.Remove(this)` and then the lent amount back, which is the
             // order the game hands them over in.
             asked.extend([
                 HookEffect::Remove,
-                HookEffect::ApplyToOwner(
-                    Power::StrengthPower,
-                    PowerAmount::Counted(-signed(amount)),
-                ),
+                HookEffect::ApplyToOwner(lent, PowerAmount::Counted(-signed(amount))),
             ])
         }
         (PowerAmount::Endless, EventHook::SideTurnEnd { .. }) => {
-            unimplemented!("an endless temporary Strength")
+            unimplemented!("an endless temporary {lent:?}")
         }
         (_, EventHook::SideTurnEnd { .. }) => {}
         // `AfterPowerAmountChanged` on its own instance. The instance being
@@ -263,12 +286,12 @@ fn temporary_strength(
                 delta,
             },
         ) if creature == held.holder && changed == power && delta != total => {
-            unimplemented!("a temporary Strength stacked onto its own instance")
+            unimplemented!("a temporary {lent:?} stacked onto its own instance")
         }
         (_, EventHook::PowerAmountChanged { .. }) => {}
         // Asked of every power, and not ones this class overrides.
         (_, EventHook::MonsterMovePerformed { .. } | EventHook::Removed | EventHook::Applied) => {}
-        (_, hook) => unimplemented!("what a temporary Strength does for {hook:?}"),
+        (_, hook) => unimplemented!("what a temporary {lent:?} does for {hook:?}"),
     }
 }
 
@@ -580,10 +603,10 @@ pub(crate) fn event_hook(
         ..
     } = held;
 
-    // `TemporaryStrengthPower` asks for two things when a turn ends, and the
-    // match below spells one. Its subclasses answer there instead.
-    if let Power::CrushUnderPower = power {
-        return temporary_strength(power, false, amount, held, hook, asked);
+    // A temporary power asks for two things when a turn ends, and the match
+    // below spells one. Its subclasses answer there instead.
+    if let Some((lent, positive)) = lends(power) {
+        return temporary(power, lent, positive, amount, held, hook, asked);
     }
 
     let one: Number = num_traits::one();
@@ -1001,6 +1024,27 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Aggression")
         }
         (Power::AggressionPower, _, EventHook::BeforeSideTurnStart { .. }) => None,
+        // `GenesisPower.AfterEnergyReset`: its stack of stars, every turn.
+        (Power::GenesisPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player })
+            if player == holder =>
+        {
+            Some(HookEffect::GainStars(amount))
+        }
+        // `StarNextTurnPower.AfterEnergyReset`: its stars once, then it goes.
+        (
+            Power::StarNextTurnPower,
+            PowerAmount::Counted(amount),
+            EventHook::EnergyReset { player },
+        ) if player == holder => {
+            asked.extend([HookEffect::GainStars(amount), HookEffect::Remove]);
+            return;
+        }
+        (
+            Power::GenesisPower | Power::StarNextTurnPower,
+            PowerAmount::Endless,
+            EventHook::EnergyReset { player },
+        ) if player == holder => unimplemented!("an endless {power:?}"),
+        (Power::GenesisPower | Power::StarNextTurnPower, _, EventHook::EnergyReset { .. }) => None,
         // `TyrannyPower.AfterPlayerTurnStart`: its owner picks its stack of
         // cards from hand, and each is exhausted.
         (

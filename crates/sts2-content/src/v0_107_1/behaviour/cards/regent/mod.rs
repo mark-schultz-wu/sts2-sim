@@ -7,6 +7,7 @@ use super::super::super::generated::cards::RegentCard;
 use super::V;
 
 mod common;
+mod uncommon;
 
 /// Where a Regent card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,6 +21,19 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Glitterstream => common::glitterstream(fight),
         RegentCard::Begone => common::begone(),
         card => card_plays::regent::on_play(card, fight),
+    }
+}
+
+/// Deliver a notification to one Regent card in the fight.
+pub(super) fn event_hook(
+    card: RegentCard,
+    id: sts2_core::CardId<V>,
+    hook: sts2_core::EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    match card {
+        RegentCard::KinglyKick => uncommon::kingly_kick(id, hook, asked),
+        card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }
 

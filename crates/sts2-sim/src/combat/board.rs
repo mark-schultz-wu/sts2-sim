@@ -13,8 +13,8 @@ use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{
     Amount, CardAt, CardId, CardIdent, CardNumberModifier, CardTable as _, CardVars, CombatId,
-    Effect, EffectResolution, Fight, HookEffect, Modify, ModifyHook, Pile, PowerAmount, PowerTable,
-    Rules, RunStreamKinds, Scaling, SideKinds, Stack,
+    Effect, EffectResolution, Fight, HookEffect, Modify, ModifyHook, Pile, PowerAmount, Rules,
+    RunStreamKinds, Scaling, SideKinds, Stack,
 };
 
 use super::listen::{Listener, Walk};
@@ -391,12 +391,7 @@ impl<'a, V: Rules> Board<'a, V> {
         // landing on the player. A power that works its own type out is never
         // asked on the way onto a monster.
         let on_player = self.live.creatures[at].side == <V::CombatSide as SideKinds>::PLAYER;
-        let debuff = || {
-            power
-                .debuff()
-                .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff"))
-        };
-        if on_player && debuff() {
+        if on_player && <V::PowerState as sts2_core::PowerModel<V>>::debuff(&state) {
             let id = self.live.creatures[at].id;
             if !self.skipped.contains(&(id, power)) {
                 self.skipped.push((id, power));
@@ -1863,6 +1858,25 @@ pub(super) fn draw<V: Rules>(
         if asked.is_empty() {
             continue;
         }
+        let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // Written on the card that asked, wherever it stands.
+                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    let (pile, at) = [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust]
+                        .into_iter()
+                        .find_map(|pile| live.cards.find(pile, id).map(|at| (pile, at)))
+                        .unwrap_or_else(|| {
+                            unimplemented!("a card writing on itself out of every pile")
+                        });
+                    live.cards.write(pile, at, |held| {
+                        held.modify(change, lasting);
+                        true
+                    });
+                }
+                (_, effect) => rest.push(effect),
+            }
+        }
         let mut board = Board::for_card(
             live,
             rngs.reborrow(),
@@ -1871,7 +1885,7 @@ pub(super) fn draw<V: Rules>(
             None,
             Some(drawn.id),
         );
-        super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+        super::hook::apply::<V, _>(&mut board, rest);
     }
 }
 

@@ -2536,6 +2536,12 @@ pub enum HookEffect<V: ContentVersion> {
         target: crate::CombatId,
         amount: V::Number,
     },
+    /// One change written on the card that asked, as its own
+    /// `EnergyCost.AddThisCombat` or kin write it.
+    ModifySelf {
+        change: Change<V>,
+        lasting: Lasting,
+    },
     /// `AggressionPower.BeforeSideTurnStart`: the attacks in the discard pile,
     /// shuffled off `CombatCardSelection`, and the first `count` of them into
     /// hand, each upgraded.
@@ -2702,6 +2708,14 @@ pub trait PowerModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
 
     /// Which power this is the model of.
     fn power(&self) -> V::Power;
+
+    /// Whether `PowerModel.Type` is `Debuff`, which a power whose table cell
+    /// is computed works out for itself.
+    ///
+    /// # Panics
+    ///
+    /// A computed type nobody has ported.
+    fn debuff(&self) -> bool;
 }
 
 /// What a card reads off its owner's side of the fight.
