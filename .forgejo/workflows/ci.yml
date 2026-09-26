@@ -151,12 +151,17 @@ jobs:
   # A recording belongs to one game build: its indices mean whatever that
   # build dealt. This job owns the complete pinned installation and replays the
   # recording into it once. The tests then read the cached answers.
+  #
+  # The answers outlive the job in the `sts2-oracle` volume, which the runner
+  # mounts into every job it starts. So a job asks the game only for the
+  # recordings no earlier job answered.
   golden:
     runs-on: sts2
     timeout-minutes: 45
     env:
       STS2_GAME_VERSION: v0.107.1
       STS2_GAME_DIR: /opt/sts2/share/sts2/games/v0.107.1
+      STS2_ORACLE_STORE: /var/cache/sts2-oracle
     steps:
       - name: Check out the repository
         env:
@@ -173,8 +178,21 @@ jobs:
       - name: Build and install the mods
         run: ./mod/deploy.sh
 
+      # Without the volume the store is a directory inside the container, and
+      # every job records every transcript again.
+      - name: Check the oracle store is mounted
+        run: grep -q " $STS2_ORACLE_STORE " /proc/mounts
+
       - name: Replay the golden runs
         run: cargo test -p sts2-golden -- --nocapture
+
+      # A hit moves a transcript's time, so what is still in use stays. A
+      # partial file is a job that died while storing.
+      - name: Prune the oracle store
+        run: |
+          set -euo pipefail
+          find "$STS2_ORACLE_STORE" -name '*.jsonl' -mtime +30 -print -delete
+          find "$STS2_ORACLE_STORE" -name '*.partial' -mmin +60 -print -delete
 
       - name: Check the mod inside the game
         run: |
