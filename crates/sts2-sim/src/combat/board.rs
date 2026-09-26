@@ -993,20 +993,22 @@ fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number)
 /// `dealer` is the creature swinging and `target` the one it hits. Each
 /// listener reads whether either is its own.
 ///
-/// The target is absent for a hit previewed against nobody.
-/// `Hook.ModifyDamage` takes a null target and runs anyway. Only the
-/// listeners reading the target sit that one out.
+/// The target is absent for a hit previewed against nobody, and the hook
+/// runs anyway. `powered` is `IsPoweredAttack`, which each listener reads.
 pub(crate) fn modified<V: Rules>(
     fight: Walk<'_, V>,
     dealer: CombatId,
     target: Option<CombatId>,
     card: Option<&CardInstance<V>>,
     damage: V::Number,
+    powered: bool,
 ) -> V::Number {
     // The card's enchantment has its say first, and only when a card deals
     // the hit.
     let damage = match card.and_then(|held| held.face.ident.enchantment) {
-        Some(enchanted) => enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive, damage),
+        Some(enchanted) => {
+            enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive { powered }, damage)
+        }
         None => damage,
     };
     let card = card.map(|held| (held.id, held.face.ident.card));
@@ -1015,9 +1017,19 @@ pub(crate) fn modified<V: Rules>(
             target,
             dealer,
             card,
+            powered,
         },
-        ModifyHook::DamageMultiplicative { target, dealer },
-        ModifyHook::DamageCap { target, dealer },
+        ModifyHook::DamageMultiplicative {
+            target,
+            dealer,
+            card,
+            powered,
+        },
+        ModifyHook::DamageCap {
+            target,
+            dealer,
+            powered,
+        },
     ];
     modified_by::<V>(fight, damage, &phases)
 }
@@ -1051,14 +1063,22 @@ pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Numb
 /// is `Hook.ModifyBlock`.
 ///
 /// The same hook whether the block is previewed or gained, as damage's is.
+/// `powered` is `IsPoweredCardOrMonsterMoveBlock`.
 pub(super) fn blocked<V: Rules>(
     fight: Walk<'_, V>,
     recipient: CombatId,
     amount: V::Number,
+    powered: bool,
 ) -> V::Number {
     let phases = [
-        ModifyHook::BlockAdditive { target: recipient },
-        ModifyHook::BlockMultiplicative { target: recipient },
+        ModifyHook::BlockAdditive {
+            target: recipient,
+            powered,
+        },
+        ModifyHook::BlockMultiplicative {
+            target: recipient,
+            powered,
+        },
     ];
     modified_by::<V>(fight, amount, &phases)
 }
@@ -1087,10 +1107,8 @@ pub(crate) fn resolve<V: Rules>(
             powered: scaling == Scaling::Dynamic,
             damage: {
                 let damage = carried::<V>(playing, fight.live, damage);
-                match scaling {
-                    Scaling::Dynamic => modified::<V>(fight, dealer, Some(target), playing, damage),
-                    Scaling::Static => damage,
-                }
+                let powered = scaling == Scaling::Dynamic;
+                modified::<V>(fight, dealer, Some(target), playing, damage, powered)
             },
         },
         Effect::GainBlock {
@@ -1107,13 +1125,9 @@ pub(crate) fn resolve<V: Rules>(
             };
             Resolved::GainBlock {
                 recipient,
-                // `ModifyBlockAdditive` pays a card's block or a monster
-                // move's, and nothing else. A relic's block is asked of no
-                // listener this build fields.
-                amount: match scaling {
-                    Scaling::Dynamic => blocked::<V>(fight, recipient, amount),
-                    Scaling::Static => amount,
-                },
+                // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A
+                // card's block and a monster move's are the powered ones.
+                amount: blocked::<V>(fight, recipient, amount, scaling == Scaling::Dynamic),
             }
         }
     };
@@ -1367,7 +1381,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             sts2_core::EventHook::BeforeAttack {
                 command,
                 attacker: self.actor,
-                source: self.playing,
+                source: self.playing.map(|id| {
+                    let card = self
+                        .live
+                        .cards
+                        .named(id)
+                        .expect("the card making an attack is in the fight");
+                    (id, card.face.ident.card)
+                }),
                 powered: scaling == Scaling::Dynamic,
             },
         );

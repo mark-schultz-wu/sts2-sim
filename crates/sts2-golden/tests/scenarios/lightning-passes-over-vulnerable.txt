@@ -1,0 +1,7 @@
+# A Lightning orb's passive is an unpowered hit. `Hook.ModifyDamage` asks
+# Vulnerable anyway, and Vulnerable reads the props and passes it over. So the
+# vulnerable Nibbit loses three at the turn's end, where a Strike prints nine.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"VULNERABLE_POWER","amount":3,"target":1}
+{"cmd":"end_turn"}

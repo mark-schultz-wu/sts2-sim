@@ -195,7 +195,10 @@ pub(crate) fn enter<V: Rules>(
     );
     // `SetupPlayerTurn` resets the energy, which the fight opened on already,
     // and raises the hooks that follow.
-    super::turn::energy_reset::<V>(&mut live, relics);
+    if let Some(ended) = super::turn::energy_reset::<V>(&mut live, &mut streams, relics, ascension)
+    {
+        unimplemented!("a fight that ends {ended:?} as its first energy resets");
+    }
     super::turn::energy_reset_late::<V>(&mut live, streams.combat(), relics, ascension);
     // `BeforeHandDraw`. The opening hand is dealt below rather than drawn onto
     // what is already there, so nothing may be made in hand here.

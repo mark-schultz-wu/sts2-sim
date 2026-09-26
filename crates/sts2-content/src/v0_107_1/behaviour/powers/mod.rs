@@ -15,6 +15,7 @@ use sts2_core::{CardTable as _, Modify, ModifyHook, PowerAmount, PowerModel as _
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{CardKeyword, CardTag, Cards, TokenCard};
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
+use super::super::generated::orbs::Orb;
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
@@ -52,6 +53,11 @@ pub enum State {
     Feral {
         played: Number,
     },
+    /// `GigantificationPower`'s `commandToModify`: the command, and the card
+    /// that made it.
+    Gigantification {
+        bound: Option<(sts2_core::AttackId, sts2_core::CardId<V>)>,
+    },
 }
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
@@ -75,6 +81,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::SwipePower => Self::Swipe { stolen: None },
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
+            Power::GigantificationPower => Self::Gigantification { bound: None },
             power => Self::Stateless(power),
         }
     }
@@ -90,6 +97,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Swipe { .. } => Power::SwipePower,
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
+            Self::Gigantification { .. } => Power::GigantificationPower,
         }
     }
 
@@ -194,6 +202,15 @@ impl State {
         }
     }
 
+    /// The command `GigantificationPower` is bound to, and the card that made
+    /// it.
+    fn giant(&self) -> Option<(sts2_core::AttackId, sts2_core::CardId<V>)> {
+        match self {
+            Self::Gigantification { bound } => *bound,
+            state => unreachable!("gigantification state for {:?}", state.power()),
+        }
+    }
+
     /// `SwipePower.Steal`, which remembers the card taken.
     pub(crate) fn steal(&mut self, card: sts2_core::CardIdent<V>) {
         let Self::Swipe { stolen } = self else {
@@ -238,6 +255,9 @@ const DAMAGE_INCREASE: f64 = 1.5;
 
 /// `WeakPower`'s `DamageDecrease`.
 const DAMAGE_DECREASE: f64 = 0.75;
+
+/// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
+const GIGANTIFIED: f64 = 3.0;
 
 /// `ShrinkPower`'s own `DamageDecrease`, which the power stores as the
 /// percentage taken off rather than as what is left.
@@ -341,34 +361,77 @@ pub(crate) fn modify_hook(
     match (power, amount, hook) {
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
         // since its owner's turn began and takes a tenth more for each.
-        (Power::SlowPower, _, ModifyHook::DamageMultiplicative { target, .. })
-            if target == Some(holder) =>
-        {
-            Modify::Scaled(1.0 + SLOW_PER_CARD * f64::from(counted))
-        }
-        (Power::VulnerablePower, _, ModifyHook::DamageMultiplicative { target, .. })
-            if target == Some(holder) =>
-        {
-            Modify::Scaled(DAMAGE_INCREASE)
-        }
-        (Power::WeakPower, _, ModifyHook::DamageMultiplicative { dealer, .. })
-            if dealer == holder =>
-        {
-            Modify::Scaled(DAMAGE_DECREASE)
-        }
-        (Power::ShrinkPower, _, ModifyHook::DamageMultiplicative { dealer, .. })
-            if dealer == holder =>
-        {
-            Modify::Scaled(SHRUNK)
+        (
+            Power::SlowPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(1.0 + SLOW_PER_CARD * f64::from(counted)),
+        (
+            Power::VulnerablePower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(DAMAGE_INCREASE),
+        (
+            Power::WeakPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if dealer == holder => Modify::Scaled(DAMAGE_DECREASE),
+        (
+            Power::ShrinkPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if dealer == holder => Modify::Scaled(SHRUNK),
+        // `GigantificationPower.ModifyDamageMultiplicative`: a powered hit
+        // from a card its owner played, before it binds or from the card it
+        // bound to. It reads the card's owner and not the dealer, so Osty's
+        // hit from a card counts. A fight here has one player, whose cards
+        // are all its holder's.
+        (
+            Power::GigantificationPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                card: Some((id, _)),
+                powered: true,
+                ..
+            },
+        ) if state.giant().is_none_or(|(_, source)| source == id) => Modify::Scaled(GIGANTIFIED),
+        (Power::GigantificationPower, _, ModifyHook::DamageMultiplicative { .. }) => {
+            Modify::Nothing
         }
         (
             Power::StrengthPower,
             PowerAmount::Counted(amount),
-            ModifyHook::DamageAdditive { dealer, .. },
+            ModifyHook::DamageAdditive {
+                dealer,
+                powered: true,
+                ..
+            },
         ) if dealer == holder => Modify::Added(amount),
-        (Power::StrengthPower, PowerAmount::Endless, ModifyHook::DamageAdditive { dealer, .. })
-            if dealer == holder =>
-        {
+        (
+            Power::StrengthPower,
+            PowerAmount::Endless,
+            ModifyHook::DamageAdditive {
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if dealer == holder => {
             unimplemented!("an endless Strength")
         }
         // `VigorPower.ModifyDamageAdditive`. Once bound, it pays the card
@@ -378,7 +441,12 @@ pub(crate) fn modify_hook(
         (
             Power::VigorPower,
             PowerAmount::Counted(amount),
-            ModifyHook::DamageAdditive { dealer, card, .. },
+            ModifyHook::DamageAdditive {
+                dealer,
+                card,
+                powered: true,
+                ..
+            },
         ) if dealer == holder => {
             let other = |bound: Bound| card.is_some_and(|(id, _)| Some(id) != bound.source);
             match state.bound().is_some_and(other) {
@@ -393,6 +461,7 @@ pub(crate) fn modify_hook(
             ModifyHook::DamageAdditive {
                 dealer,
                 card: Some((_, card)),
+                powered: true,
                 ..
             },
         ) if dealer == holder && card.tagged(CardTag::Shiv) => Modify::Added(amount),
@@ -406,6 +475,7 @@ pub(crate) fn modify_hook(
             ModifyHook::DamageAdditive {
                 dealer,
                 card: Some((_, card)),
+                powered: true,
                 ..
             },
         ) if dealer == holder
@@ -419,7 +489,11 @@ pub(crate) fn modify_hook(
         (
             Power::VigorPower | Power::AccuracyPower | Power::PhantomBladesPower,
             PowerAmount::Endless,
-            ModifyHook::DamageAdditive { dealer, .. },
+            ModifyHook::DamageAdditive {
+                dealer,
+                powered: true,
+                ..
+            },
         ) if dealer == holder => unimplemented!("an endless {power:?}"),
         // `OneTwoPunchPower.ModifyCardPlayCount`: one more play of an attack
         // its owner plays.
@@ -455,18 +529,26 @@ pub(crate) fn modify_hook(
         (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { target }) if target == holder => {
             Modify::AtMost(one)
         }
-        // `DexterityPower.ModifyBlockAdditive` pays block from a card its
-        // owner plays, or block its owner gains otherwise. A fight here has
-        // one player, whose cards give the player block, so both are the
-        // block its holder is gaining.
+        // `DexterityPower.ModifyBlockAdditive` pays powered block from a card
+        // its owner plays, or powered block its owner gains otherwise. A
+        // fight here has one player, whose cards give the player block, so
+        // both are the block its holder is gaining.
         (
             Power::DexterityPower,
             PowerAmount::Counted(amount),
-            ModifyHook::BlockAdditive { target },
+            ModifyHook::BlockAdditive {
+                target,
+                powered: true,
+            },
         ) if target == holder => Modify::Added(amount),
-        (Power::DexterityPower, PowerAmount::Endless, ModifyHook::BlockAdditive { target })
-            if target == holder =>
-        {
+        (
+            Power::DexterityPower,
+            PowerAmount::Endless,
+            ModifyHook::BlockAdditive {
+                target,
+                powered: true,
+            },
+        ) if target == holder => {
             unimplemented!("an endless Dexterity")
         }
         // `ModifyHandDraw`: its stack more cards for its owner.
@@ -1041,7 +1123,7 @@ pub(crate) fn event_hook(
             *state = State::Vigor {
                 bound: Some(Bound {
                     command,
-                    source,
+                    source: source.map(|(id, _)| id),
                     amount,
                 }),
             };
@@ -1053,6 +1135,40 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Vigor")
         }
         (Power::VigorPower, _, EventHook::BeforeAttack { .. }) => None,
+        // `GigantificationPower.BeforeAttack`: binds to the first powered
+        // attack an Attack card of its owner's makes, and keeps that one.
+        (
+            Power::GigantificationPower,
+            PowerAmount::Counted(_),
+            EventHook::BeforeAttack {
+                command,
+                source: Some((id, card)),
+                powered: true,
+                ..
+            },
+        ) if state.giant().is_none()
+            && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack) =>
+        {
+            *state = State::Gigantification {
+                bound: Some((command, id)),
+            };
+            None
+        }
+        (Power::GigantificationPower, PowerAmount::Endless, EventHook::BeforeAttack { .. }) => {
+            unimplemented!("an endless Gigantification")
+        }
+        (Power::GigantificationPower, _, EventHook::BeforeAttack { .. }) => None,
+        // `GigantificationPower.AfterAttack`: once the command it bound is
+        // over, it lets go and takes one off its stack.
+        (Power::GigantificationPower, _, EventHook::AfterAttack { command, .. }) => {
+            match state.giant() {
+                Some((bound, _)) if bound == command => {
+                    *state = State::Gigantification { bound: None };
+                    Some(HookEffect::Decrement)
+                }
+                _ => None,
+            }
+        }
         // `VigorPower.AfterAttack`: what it held as the command began comes
         // off once that command is over.
         (Power::VigorPower, _, EventHook::AfterAttack { command, .. }) => state
@@ -1119,7 +1235,7 @@ pub(crate) fn event_hook(
             if side == owner =>
         {
             Some(HookEffect::DamageOpponentsHolding {
-                orb: super::super::generated::orbs::Orb::FrostOrb,
+                orb: Orb::FrostOrb,
                 amount,
             })
         }
@@ -1324,6 +1440,22 @@ pub(crate) fn event_hook(
         {
             Some(HookEffect::GainStars(amount))
         }
+        // `LightningRodPower.AfterEnergyReset`: a Lightning orb for its owner,
+        // then one off the stack.
+        (
+            Power::LightningRodPower,
+            PowerAmount::Counted(_),
+            EventHook::EnergyReset { player },
+        ) if player == holder => {
+            asked.extend([HookEffect::Channel(Orb::LightningOrb), HookEffect::Decrement]);
+            return;
+        }
+        (Power::LightningRodPower, PowerAmount::Endless, EventHook::EnergyReset { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless LightningRodPower")
+        }
+        (Power::LightningRodPower, _, EventHook::EnergyReset { .. }) => None,
         // `StarNextTurnPower.AfterEnergyReset`: its stars once, then it goes.
         (
             Power::StarNextTurnPower,

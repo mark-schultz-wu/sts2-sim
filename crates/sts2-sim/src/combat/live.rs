@@ -1606,6 +1606,8 @@ impl<V: Rules> Live<V> {
                         Some(player.id),
                         None,
                         attack.damage,
+                        // A move's attack is powered.
+                        true,
                     );
                 }
             }

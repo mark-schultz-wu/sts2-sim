@@ -65,7 +65,10 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
 pub(crate) fn modify(enchanted: Enchanted<V>, hook: EnchantHook) -> Modify<i32> {
     let amount = i32::from(enchanted.amount);
     match (enchanted.enchantment, hook) {
-        (Enchantment::Sharp, EnchantHook::DamageAdditive) => Modify::Added(amount),
+        // Sharp's own check: a powered attack, and nothing for any other hit.
+        (Enchantment::Sharp, EnchantHook::DamageAdditive { powered: true }) => {
+            Modify::Added(amount)
+        }
         (Enchantment::Nimble, EnchantHook::BlockAdditive) => Modify::Added(amount),
         // Its `Times`, which it prints as one.
         (Enchantment::Spiral, EnchantHook::PlayCount) => Modify::Added(1),

@@ -1,0 +1,12 @@
+# `LightningRodPower.AfterEnergyReset` channels a Lightning orb for its owner,
+# then takes one off its stack. Cracked Core opens the fight on one Lightning,
+# so turns two and three fill the three slots. On turn four the channel evokes
+# the oldest orb to make room, after the energy reset. The Nibbit goes from
+# thirty-four to twenty-two: three passives of three into its five block, then
+# the evoke's eight. The stack reads four, three, then two.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"LIGHTNING_ROD_POWER","amount":5,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -1,7 +1,8 @@
 //! The potions every character's pool draws from.
 
 use sts2_core::{
-    Change, CostPool, Fight, Lasting, Pile, Played, PowerAmount, RunStreamKinds as _, Table as _,
+    Amount, Change, CostPool, Effect, Fight, Lasting, Pile, Played, PowerAmount,
+    RunStreamKinds as _, Scaling, Table as _,
 };
 
 use super::super::super::V0_107_1 as V;
@@ -10,9 +11,13 @@ use super::super::super::generated::potions::Potion;
 use super::super::super::generated::powers::Power;
 use super::Number;
 
+/// `BlockPotion`'s `BlockVar(12, ValueProp.Unpowered)`.
+const BLOCK: Number = 12;
 /// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
 const DEXTERITY: Number = 2;
 
+/// `GigantificationPotion`'s `PowerVar<GigantificationPower>(1)`.
+const GIGANTIFICATION: Number = 1;
 /// `SpeedPotion`'s `PowerVar<DexterityPower>(5)`, lent until the turn ends.
 const SPEED: Number = 5;
 
@@ -35,6 +40,25 @@ pub enum Resume {
 /// A potion of this pool nobody has ported.
 pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
     match potion {
+        // `AnyPlayer`, and `CreatureCmd.GainBlock` with no card play. The
+        // block is unpowered, which no block listener this build fields reads.
+        Potion::BlockPotion => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(BLOCK),
+                scaling: Scaling::Static,
+            });
+            fight.apply(block);
+            Played::Done
+        }
+        // `AnyPlayer` again.
+        Potion::GigantificationPotion => {
+            fight.apply_to_actor(
+                Power::GigantificationPower,
+                PowerAmount::Counted(GIGANTIFICATION),
+            );
+            Played::Done
+        }
         // `AnyPlayer`, which a run with one player points at that player.
         Potion::DexterityPotion => {
             fight.apply_to_actor(Power::DexterityPower, PowerAmount::Counted(DEXTERITY));
