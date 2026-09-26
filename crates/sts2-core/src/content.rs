@@ -525,6 +525,11 @@ pub enum ModelHook {
     ModifyHandDraw,
     ModifyHandDrawLate,
     ModifyShuffleOrder,
+    ShouldDraw,
+    AfterPreventingDraw,
+    AfterCardDrawnEarly,
+    ShouldPlay,
+    BeforeCardAutoPlayed,
     ShouldCreatureBeRemovedFromCombatAfterDeath,
     ShouldPowerBeRemovedOnDeath,
     ShouldClearBlock,
@@ -578,7 +583,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 78] = [
+    pub const ALL: [ModelHook; 83] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -607,6 +612,11 @@ impl ModelHook {
         ModelHook::ModifyHandDraw,
         ModelHook::ModifyHandDrawLate,
         ModelHook::ModifyShuffleOrder,
+        ModelHook::ShouldDraw,
+        ModelHook::AfterPreventingDraw,
+        ModelHook::AfterCardDrawnEarly,
+        ModelHook::ShouldPlay,
+        ModelHook::BeforeCardAutoPlayed,
         ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath,
         ModelHook::ShouldPowerBeRemovedOnDeath,
         ModelHook::ShouldClearBlock,
@@ -690,6 +700,11 @@ impl ModelHook {
             ModelHook::ModifyHandDraw => "ModifyHandDraw",
             ModelHook::ModifyHandDrawLate => "ModifyHandDrawLate",
             ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
+            ModelHook::ShouldDraw => "ShouldDraw",
+            ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
+            ModelHook::AfterCardDrawnEarly => "AfterCardDrawnEarly",
+            ModelHook::ShouldPlay => "ShouldPlay",
+            ModelHook::BeforeCardAutoPlayed => "BeforeCardAutoPlayed",
             ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath => {
                 "ShouldCreatureBeRemovedFromCombatAfterDeath"
             }
@@ -1305,6 +1320,16 @@ pub trait CreatureView<V: ContentVersion> {
     /// Both of the questions the game asks a power from outside: whether the
     /// creature carries it, and the stack it carries it at.
     fn power(&self, power: V::Power) -> Option<PowerAmount<V::Number>>;
+}
+
+/// The powers the creatures in a fight carry, as a hook reads them.
+///
+/// `Creature.GetPower<T>()` on a creature a listener does not own, which is
+/// how a power asks about a dealer or a target. A narrowing like
+/// [`CreatureView`], and just as small.
+pub trait PowerView<V: ContentVersion> {
+    /// The stack `creature` carries `power` at, or `None` without it.
+    fn power(&self, creature: crate::CombatId, power: V::Power) -> Option<PowerAmount<V::Number>>;
 }
 
 /// The fight, as a card's own behaviour reaches it.
@@ -2049,6 +2074,13 @@ pub enum DecisionHook<V: ContentVersion> {
     ShouldFlush { player: crate::CombatId },
     /// `ShouldStopCombatFromEnding`, which any listener can answer yes to.
     ShouldStopCombatFromEnding,
+    /// `ShouldDraw`, once for each `CardPileCmd.Draw`. A draw any listener
+    /// answers no to draws nothing. `hand_draw` is `fromHandDraw`, which the
+    /// turn's own draw is.
+    ShouldDraw {
+        player: crate::CombatId,
+        hand_draw: bool,
+    },
     /// `ShouldAllowHitting`, about `creature`. A creature no listener lets be
     /// hit is not hittable, and cannot receive powers.
     ShouldAllowHitting {
@@ -2105,6 +2137,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
             DecisionHook::ShouldAllowFreeTravel => ModelHook::ShouldAllowFreeTravel,
+            DecisionHook::ShouldDraw { .. } => ModelHook::ShouldDraw,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
         })
@@ -2204,6 +2237,14 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterCardDrawn`, carrying the card that has just reached the hand.
     ///
+    /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
+    /// listener before the one [`EventHook::CardDrawn`] names.
+    CardDrawnEarly {
+        card: V::Card,
+        id: crate::CardId<V>,
+        /// `fromHandDraw`.
+        hand_draw: bool,
+    },
     /// Raised once per card, inside the draw loop, on every listener. A card
     /// answering for its own draw compares `id` with its own, which is what
     /// every card that answers this hook does.
@@ -2369,6 +2410,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
             EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
             EventHook::CardDrawn { .. } => ModelHook::AfterCardDrawn,
+            EventHook::CardDrawnEarly { .. } => ModelHook::AfterCardDrawnEarly,
             EventHook::BeforeSideTurnStart { .. } => ModelHook::BeforeSideTurnStart,
             EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
@@ -2763,6 +2805,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// The card that asked, moved to the top of the draw pile it was
     /// shuffled into.
     ToTopOfDrawPile,
+    /// `CardCmd.AutoPlay` of this copy, with no target named: the card plays
+    /// for free, and one that targets an enemy picks it off `CombatTargets`.
+    AutoPlay(crate::CardId<V>),
     /// `Card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
     /// `CombatEnergyCosts`, on the card whose enchantment asked. Slither's.
     RandomSelfCost {
@@ -3006,6 +3051,9 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// What the fight has done so far, which a power reads rather than
         /// counts for itself.
         history: History<'a, V>,
+        /// Every creature's powers, for a power that asks about a creature
+        /// other than its own.
+        powers: &'a dyn PowerView<V>,
     },
     Relic(&'a V::RelicState),
     /// A monster's own model, which the fight asks after the powers on its

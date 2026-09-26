@@ -1682,7 +1682,10 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // FESTIVE_POPPER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // FIDDLE
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDrawLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterPreventingDraw)
+        .with(sts2_core::ModelHook::ModifyHandDrawLate)
+        .with(sts2_core::ModelHook::ShouldDraw),
     // FISHING_ROD
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
     // FORGOTTEN_SOUL
@@ -2190,7 +2193,8 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterRoomEntered)
-        .with(sts2_core::ModelHook::BeforeSideTurnStart),
+        .with(sts2_core::ModelHook::BeforeSideTurnStart)
+        .with(sts2_core::ModelHook::ShouldPlay),
     // VENERABLE_TEA_SET
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterEnergyReset)

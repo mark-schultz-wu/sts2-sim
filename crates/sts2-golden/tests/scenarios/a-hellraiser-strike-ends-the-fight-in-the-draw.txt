@@ -1,0 +1,11 @@
+# Bash and a Strike leave a vulnerable Nibbit on twenty-two. On turn two,
+# Hellraiser auto-plays the Strikes as the hand is drawn, at nine each, and the
+# third kills it. The fight ends inside `SetupPlayerTurn`, with the draw
+# unfinished.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"HELLRAISER_POWER","amount":1,"target":0}
+{"cmd":"power","power":"VULNERABLE_POWER","amount":3,"target":1}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}

@@ -229,13 +229,16 @@ pub(crate) fn enter<V: Rules>(
     if let Some((listener, effect)) = super::listen::notify::<V>(&mut live, relics, hook).first() {
         unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
     }
-    super::board::draw(
+    if let Some(ended) = super::board::draw(
         &mut live,
         streams.combat(),
         relics,
         ascension,
         piles.hand().len(),
-    );
+        true,
+    ) {
+        unimplemented!("a fight that ends {ended:?} as its opening hand is drawn");
+    }
     // `SetupPlayerTurn` ends on `AfterPlayerTurnStart`, which can end the
     // fight before the player takes a turn in it.
     let hook = sts2_core::EventHook::PlayerTurnStart { player };

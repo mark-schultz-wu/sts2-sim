@@ -4,9 +4,10 @@
 //! So this reports a set, rather than the first refusal.
 //!
 //! Two of the game's six rules are not decided here. `BlockedByHook` is what
-//! every listener in the fight says. `BlockedByCardLogic` is the card's own
-//! `IsPlayable` override. Nothing raises either one yet: this fight has no
-//! powers, no relic that listens, and no card that overrides it.
+//! every listener in the fight says through `Hook.ShouldPlay`, which no
+//! ported model answers, so a fight where one listens stops by name.
+//! `BlockedByCardLogic` is the card's own `IsPlayable` override, which no
+//! ported card has.
 
 use crate::legal::{Legal, aimed, belt_index, hand_index, selections};
 use smallvec::{SmallVec, smallvec};
@@ -26,6 +27,8 @@ pub(super) fn hand<V: Rules>(
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<Playable<V>> {
+    // `CardModel.CanPlay` asks `Hook.ShouldPlay` of every card.
+    super::turn::unheard::<V>(fight.live, fight.relics, sts2_core::ModelHook::ShouldPlay);
     hand.map(|card| InHand::new(card, fight, energy, stars).playable())
         .collect()
 }
@@ -178,8 +181,8 @@ impl<'a, V: Rules> InHand<'a, V> {
             star_cost: self.star_cost,
             target: self.target,
             reason: self.reason,
-            // `BlockedByHook` is the only reason that names one, and nothing
-            // in a fight raises it yet.
+            // `BlockedByHook` is the only reason that names one, and no
+            // ported model answers `ShouldPlay`.
             preventer: None,
             effect,
             targets: self.targets.clone(),

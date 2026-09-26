@@ -513,7 +513,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 && creature.alive
                 && !self.live.powers.of(creature.id).any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
-                        held.listener(creature.carrier(), self.live.history()),
+                        held.listener(creature.carrier(), self.live.history(), &self.live.powers),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
                     )
                     .is_decision_and(|counts| !counts)
@@ -685,7 +685,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .of(id)
             .map(|subject| {
                 let itself = <V as sts2_core::Hooks>::decide_hook(
-                    subject.listener(carrier, self.live.history()),
+                    subject.listener(carrier, self.live.history(), &self.live.powers),
                     sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
                 )
                 .is_decision_and(|remove| !remove);
@@ -1592,14 +1592,19 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn draw(&mut self, count: V::Number) {
+        // `IsOverOrEnding` draws nothing.
+        if self.ended.is_some() {
+            return;
+        }
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
-        draw(
+        self.ended = draw(
             self.live,
             self.rngs.reborrow(),
             self.relics,
             self.ascension,
             count,
+            false,
         );
     }
 
@@ -2022,18 +2027,37 @@ pub(super) fn shuffle<V: Rules>(live: &mut Live<V>, rng: &mut MegaRng, relics: &
 /// pile runs dry.
 ///
 /// A fight with every card in hand draws short rather than manufacture one.
+/// `hand_draw` is `fromHandDraw`, which the turn's own draw is. How the fight
+/// ended, if a card auto-played as it was drawn ended it, which stops the
+/// draw.
 #[tracing::instrument(level = "trace", skip_all)]
+#[must_use = "a card auto-played as it is drawn can end the fight"]
 pub(super) fn draw<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
     count: usize,
-) {
+    hand_draw: bool,
+) -> Option<super::Ended> {
+    // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
+    // when a listener stops it.
+    let player = live.player().id;
+    let hook = sts2_core::DecisionHook::ShouldDraw { player, hand_draw };
+    if super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
+        super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::AfterPreventingDraw);
+        return None;
+    }
+    let mut ended = None;
     for _ in 0..count {
+        // `IsOverOrEnding`, and `CardPile.MaxCardsInHand`: a full hand stops
+        // the draw.
+        if ended.is_some() || live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND {
+            return ended;
+        }
         if live.cards.is_empty(Pile::Draw) {
             if live.cards.is_empty(Pile::Discard) {
-                return;
+                return ended;
             }
             shuffle::<V>(live, rngs.shuffle, relics);
         }
@@ -2044,6 +2068,23 @@ pub(super) fn draw<V: Rules>(
         // `History.CardDrawn`, before the hook, so a listener counts this
         // draw among the turn's.
         live.history.draw(drawn.face.ident.card);
+        // `Hook.AfterCardDrawn` makes its early pass over every listener first.
+        let hook = sts2_core::EventHook::CardDrawnEarly {
+            card: drawn.face.ident.card,
+            id: drawn.id,
+            hand_draw,
+        };
+        for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
+            match effect {
+                // `IsOverOrEnding` stops an auto-play before it starts.
+                HookEffect::AutoPlay(card) => {
+                    if ended.is_none() {
+                        ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, card);
+                    }
+                }
+                effect => unimplemented!("{listener:?} asking for {effect:?} as a card is drawn"),
+            }
+        }
         // `Hook.AfterCardDrawn`, raised for each card inside the loop rather
         // than once for the whole draw. So a card that spends the pool as it
         // arrives has spent it before the next card is taken.
@@ -2097,7 +2138,9 @@ pub(super) fn draw<V: Rules>(
             Some(drawn.id),
         );
         super::hook::apply::<V, _>(&mut board, rest);
+        ended = ended.or(board.ended);
     }
+    ended
 }
 
 #[cfg(test)]

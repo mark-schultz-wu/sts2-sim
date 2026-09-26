@@ -1,0 +1,8 @@
+# `CardPileCmd.Draw` stops at `CardPile.MaxCardsInHand`, which is ten. Ring of
+# the Snake opens the Silent's fight on seven cards. A Swift Defend at five
+# leaves six in hand and asks for five, and only four come. One card stays in
+# the draw pile.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"enchant","enchantment":"SWIFT","amount":5,"index":0}
+{"cmd":"play_card","index":0}

@@ -804,6 +804,18 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
     }
 }
 
+impl<V: Rules> sts2_core::PowerView<V> for PowerStore<V> {
+    fn power(
+        &self,
+        creature: CombatId,
+        power: V::Power,
+    ) -> Option<sts2_core::PowerAmount<V::Number>> {
+        self.of(creature)
+            .find(|held| held.power() == power)
+            .map(|held| held.amount.amount())
+    }
+}
+
 /// How much of a power a creature carries, as the fight holds one.
 ///
 /// [`sts2_core::PowerAmount`] narrowed. The count is an [`Amount`] and the
@@ -1075,6 +1087,7 @@ impl<V: Rules> HeldPower<V> {
         &'a self,
         carrier: Carrier<V>,
         history: sts2_core::History<'a, V>,
+        powers: &'a PowerStore<V>,
     ) -> Heard<'a, V> {
         sts2_core::Listener::Power {
             power: self.power(),
@@ -1086,6 +1099,7 @@ impl<V: Rules> HeldPower<V> {
             on_turn_start: self.on_turn_start.amount(),
             state: &self.state,
             history,
+            powers,
         }
     }
 

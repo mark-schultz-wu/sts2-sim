@@ -3840,7 +3840,7 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // ENLIGHTENMENT
     sts2_core::Overrides::from_bits(0),
     // ENTHRALLED
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldPlay),
     // ENTRENCH
     sts2_core::Overrides::from_bits(0),
     // ENTROPY
@@ -4188,7 +4188,7 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // NIGHTMARE
     sts2_core::Overrides::from_bits(0),
     // NORMALITY
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldPlay),
     // NOSTALGIA
     sts2_core::Overrides::from_bits(0),
     // NOT_YET
