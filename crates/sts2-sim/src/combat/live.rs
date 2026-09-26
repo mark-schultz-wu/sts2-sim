@@ -547,8 +547,8 @@ impl<V: Rules> Face<V> {
     /// `Keywords.Contains(Innate)` for this copy.
     ///
     /// The union of what the table prints and what has been written on. Asked
-    /// of Innate alone, because that is the one keyword something in a fight
-    /// both writes and reads. The rest are read off the table.
+    /// of Innate and Retain alone, because those are the keywords something
+    /// in a fight both writes and reads. The rest are read off the table.
     pub(super) fn innate(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
@@ -556,6 +556,18 @@ impl<V: Rules> Face<V> {
             || sts2_core::FlagSet::contains(
                 self.added_keywords,
                 <V::CardKeyword as KeywordKinds<V>>::INNATE,
+            )
+    }
+
+    /// `Keywords.Contains(Retain)` for this copy, the way [`Face::innate`]
+    /// reads Innate.
+    pub(super) fn retains(&self) -> bool {
+        use sts2_core::{CardTable as _, KeywordKinds};
+
+        self.ident.card.retains()
+            || sts2_core::FlagSet::contains(
+                self.added_keywords,
+                <V::CardKeyword as KeywordKinds<V>>::RETAIN,
             )
     }
 
@@ -977,7 +989,11 @@ impl<V: Rules> HeldPower<V> {
     ///
     /// A power is held by a creature and does not know which, so the caller
     /// that found it says.
-    pub(crate) fn listener(&self, carrier: Carrier<V>) -> Heard<'_, V> {
+    pub(crate) fn listener<'a>(
+        &'a self,
+        carrier: Carrier<V>,
+        history: sts2_core::History<'a, V>,
+    ) -> Heard<'a, V> {
         sts2_core::Listener::Power {
             power: self.power(),
             amount: self.amount.amount(),
@@ -987,6 +1003,7 @@ impl<V: Rules> HeldPower<V> {
             monster: carrier.monster,
             on_turn_start: self.on_turn_start.amount(),
             state: &self.state,
+            history,
         }
     }
 
@@ -1182,6 +1199,10 @@ pub(crate) struct Live<V: Rules> {
     pub(super) energy: V::Count,
     pub(super) stars: V::Count,
     pub(super) round: V::Count,
+    /// `ICombatState.CurrentSide`: whose turn it is.
+    pub(super) side: V::CombatSide,
+    /// `CombatManager.History`'s finished plays.
+    pub(super) plays: PlayHistory<V>,
     /// The encounter this active fight belongs to.
     pub(super) encounter: V::Encounter,
     pub(super) cards: super::cards::Cards<V>,
@@ -1216,12 +1237,85 @@ pub(crate) struct Live<V: Rules> {
     pub(super) asking: Option<Asking<V>>,
 }
 
+/// How many plays one turn holds before its list reaches the heap.
+const PLAYS_INLINE: usize = 16;
+
+/// `CombatManager.History`'s finished plays: the turn the fight stands in,
+/// and the turns before it.
+///
+/// A turn is frozen into the shared chain as the sides switch. Copying a
+/// fight copies this turn's few plays and one pointer.
+pub(crate) struct PlayHistory<V: Rules> {
+    this_turn: smallvec::SmallVec<[sts2_core::PlayFinished<V>; PLAYS_INLINE]>,
+    before: Option<std::sync::Arc<sts2_core::TurnPlays<V>>>,
+}
+
+impl<V: Rules> PlayHistory<V> {
+    pub(super) fn new() -> Self {
+        PlayHistory {
+            this_turn: smallvec::SmallVec::new(),
+            before: None,
+        }
+    }
+
+    /// `History.CardPlayFinished`, in the turn the fight stands in.
+    pub(super) fn finish(&mut self, card: V::Card) {
+        self.this_turn.push(sts2_core::PlayFinished { card });
+    }
+
+    /// The turn at `round` on `side` is over. Its plays join the chain,
+    /// unless it had none.
+    fn end_turn(&mut self, round: V::Count, side: V::CombatSide) {
+        if self.this_turn.is_empty() {
+            return;
+        }
+        let turn = sts2_core::TurnPlays {
+            round,
+            side,
+            finished: self.this_turn.drain(..).collect(),
+            before: self.before.take(),
+        };
+        self.before = Some(std::sync::Arc::new(turn));
+    }
+
+    pub(super) fn history(&self) -> sts2_core::History<'_, V> {
+        sts2_core::History {
+            this_turn: &self.this_turn,
+            before: self.before.as_deref(),
+        }
+    }
+}
+
+impl<V: Rules> std::fmt::Debug for PlayHistory<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlayHistory")
+            .field("this_turn", &self.this_turn)
+            .field("before", &self.before)
+            .finish()
+    }
+}
+
+impl<V: Rules> Clone for PlayHistory<V> {
+    fn clone(&self) -> Self {
+        PlayHistory {
+            this_turn: self.this_turn.clone(),
+            before: self.before.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.this_turn.clone_from(&source.this_turn);
+        self.before.clone_from(&source.before);
+    }
+}
+
 impl<V: Rules> Clone for Live<V> {
     fn clone(&self) -> Self {
         Self {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
             returned: self.returned.clone(),
+            plays: self.plays.clone(),
             leaving: self.leaving.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
@@ -1242,6 +1336,8 @@ impl<V: Rules> Clone for Live<V> {
             energy,
             stars,
             round,
+            side,
+            plays,
             encounter,
             cards,
             removed_from_deck,
@@ -1263,6 +1359,8 @@ impl<V: Rules> Clone for Live<V> {
         *energy = source.energy;
         *stars = source.stars;
         *round = source.round;
+        *side = source.side;
+        plays.clone_from(&source.plays);
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
@@ -1380,6 +1478,18 @@ impl<V: Rules> Live<V> {
     }
 
     /// The player, which every fight has one of.
+    /// `CombatManager.History`, as a listener reads it.
+    pub(crate) fn history(&self) -> sts2_core::History<'_, V> {
+        self.plays.history()
+    }
+
+    /// `SwitchSides`: the turn now over joins the history, and `side` takes
+    /// its turn.
+    pub(super) fn switch_side(&mut self, side: V::CombatSide) {
+        self.plays.end_turn(self.round, self.side);
+        self.side = side;
+    }
+
     /// `CurrentRoom.RoomType`, which is the encounter's.
     pub(crate) fn room(&self) -> V::RoomType {
         <V::Encounter as sts2_core::EncounterTable>::room(self.encounter)
@@ -1641,8 +1751,10 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
         creatures: impl IntoIterator<Item = Fighter<sts2_content::v0_107_1::V0_107_1>>,
     ) -> Self {
         use sts2_content::v0_107_1::{
-            ascension::AscensionLevel, characters::Character, encounters::Encounter,
-            runstate::PlayerTurnPhase,
+            ascension::AscensionLevel,
+            characters::Character,
+            encounters::Encounter,
+            runstate::{CombatSide, PlayerTurnPhase},
         };
 
         Live {
@@ -1653,6 +1765,8 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             energy: 3,
             stars: 0,
             round: 1,
+            side: CombatSide::Player,
+            plays: PlayHistory::new(),
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),

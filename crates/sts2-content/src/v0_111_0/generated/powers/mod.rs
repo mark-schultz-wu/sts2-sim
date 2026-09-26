@@ -1452,7 +1452,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // CALCIFY_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
     // CALL_OF_THE_VOID_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // CHAINS_OF_BINDING_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
     // CHILD_OF_THE_STARS_POWER
@@ -1503,7 +1503,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // CRAB_RAGE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDeath),
     // CREATIVE_AI_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // CRIMSON_MANTLE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // CRUELTY_POWER
@@ -1622,7 +1622,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // FORBIDDEN_GRIMOIRE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
     // FOREGONE_CONCLUSION_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // FRAIL_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
@@ -1681,7 +1681,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // HELLO_WORLD_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // HELLRAISER_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
@@ -1724,7 +1724,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterDeath)
         .with(sts2_core::ModelHook::ShouldStopCombatFromEnding),
     // INFINITE_BLADES_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // INTANGIBLE_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
@@ -1794,7 +1794,8 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // MOCK_PHASE_OBSERVER_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterPlayerTurnStart)
-        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::BeforeHandDraw),
     // MOCK_PREVENT_DEATH_POWER
     sts2_core::Overrides::from_bits(0),
     // MOCK_RECORD_CARD_CHANGED_PILES_POWER
@@ -1833,7 +1834,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // NEUROSURGE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // NIGHTMARE_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // NOSTALGIA_POWER
     sts2_core::Overrides::from_bits(0),
     // NOXIOUS_FUMES_POWER
@@ -1964,7 +1965,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // SELF_FORMING_CLAY_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
     // SENTRY_MODE_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // SERPENT_FORM_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // SETUP_STRIKE_POWER
@@ -2031,7 +2032,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // SOULBOUND_POWER
     sts2_core::Overrides::from_bits(0),
     // SPECTRUM_SHIFT_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // SPEEDSTER_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
     // SPEED_POTION_POWER

@@ -70,6 +70,8 @@ pub(crate) fn enter<V: Rules>(
         energy,
         stars: num_traits::zero(),
         round: num_traits::one(),
+        side: <V::CombatSide as SideKinds>::PLAYER,
+        plays: super::live::PlayHistory::new(),
         encounter,
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
@@ -195,6 +197,13 @@ pub(crate) fn enter<V: Rules>(
     // and raises the hooks that follow.
     super::turn::energy_reset::<V>(&mut live, relics);
     super::turn::energy_reset_late::<V>(&mut live, streams.combat(), relics, ascension);
+    // `BeforeHandDraw`. The opening hand is dealt below rather than drawn onto
+    // what is already there, so nothing may be made in hand here.
+    let player = live.player().id;
+    let hook = sts2_core::EventHook::BeforeHandDraw { player };
+    if let Some((listener, effect)) = super::listen::notify::<V>(&mut live, relics, hook).first() {
+        unimplemented!("{listener:?} asking for {effect:?} before the opening hand")
+    }
 
     let drawn = hand_size::<V>(
         Walk {

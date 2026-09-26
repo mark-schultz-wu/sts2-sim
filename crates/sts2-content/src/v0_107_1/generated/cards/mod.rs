@@ -3531,7 +3531,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // BODY_SLAM
     sts2_core::Overrides::from_bits(0),
     // BOLAS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // BOMBARDMENT
     sts2_core::Overrides::from_bits(0),
     // BONE_SHARDS
@@ -4497,7 +4497,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // THRASH
     sts2_core::Overrides::from_bits(0),
     // THRUMMING_HATCHET
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // THUNDER
     sts2_core::Overrides::from_bits(0),
     // THUNDERCLAP
