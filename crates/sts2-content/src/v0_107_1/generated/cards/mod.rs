@@ -3847,7 +3847,9 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // FLASH_OF_STEEL
     sts2_core::Overrides::from_bits(0),
     // FLATTEN
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardEnteredCombat),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterAttack)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat),
     // FLECHETTES
     sts2_core::Overrides::from_bits(0),
     // FLICK_FLACK

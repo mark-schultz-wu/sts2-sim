@@ -1,0 +1,9 @@
+# A monster's move is an attack command too. Five Vigor on the small twig
+# slime make its tackle hit for nine, and the next tackle hits for four.
+#
+# A port that raises no attack hooks around a move leaves the Vigor on.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"VIGOR_POWER","amount":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -19,15 +19,17 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
             Played::Done
         }
         NecrobinderCard::BansheesCry => {
-            for target in fight.opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
             Played::Done
         }
         // `call DamageCmd.Attack`
@@ -48,13 +50,15 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         NecrobinderCard::Bury => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         NecrobinderCard::Calcify => {
@@ -106,13 +110,15 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::DeathMarch => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Debilitate => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::DebilitatePower,
@@ -131,13 +137,15 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         NecrobinderCard::Defile => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         NecrobinderCard::Defy => {
@@ -205,13 +213,15 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Eradicate => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Fear => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
@@ -341,13 +351,15 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         NecrobinderCard::Reap => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         NecrobinderCard::ReaperForm => {
@@ -406,15 +418,17 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         // `call DamageCmd.Attack`
         NecrobinderCard::SoulStorm => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Sow => {
-            for target in fight.opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
             Played::Done
         }
         NecrobinderCard::SpiritOfAsh => {
@@ -430,13 +444,15 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Squeeze => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Strike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         // `call BuffFromPlay`
@@ -451,13 +467,15 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         NecrobinderCard::Unleash => unimplemented!("what {card:?} does when it is played"),
         NecrobinderCard::Veilpiercer => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(Power::VeilpiercerPower, PowerAmount::Counted(1));
             Played::Done
         }

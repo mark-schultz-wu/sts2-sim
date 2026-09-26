@@ -20,13 +20,15 @@ pub fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> {
         }
         TokenCard::GiantRock => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         TokenCard::Luminesce => {
@@ -36,13 +38,15 @@ pub fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> {
         TokenCard::MindRot => Played::Done,
         TokenCard::MinionDiveBomb => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         TokenCard::MinionSacrifice => {
@@ -56,13 +60,15 @@ pub fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> {
         }
         TokenCard::MinionStrike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }

@@ -1520,7 +1520,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // BLOOD_VIAL
     sts2_core::Overrides::from_bits(0),
     // BONE_FLUTE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterAttack),
     // BONE_TEA
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // BOOKMARK

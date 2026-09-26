@@ -1,6 +1,6 @@
 //! The cards a fight makes, which no deck holds.
 
-use sts2_core::{Amount, CardVars, Effect, Fight, Played, Scaling};
+use sts2_core::{Amount, CardVars, CreatureView as _, Effect, Fight, Opponents, Played, Scaling};
 
 use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardVar, TargetType, TokenCard};
@@ -48,6 +48,11 @@ pub(super) fn computed_target(card: TokenCard, powers: &[sts2_core::Stack<V>]) -
                 false => TargetType::AnyEnemy,
             }
         }
+        // `Shiv.TargetType`: the same, under Fan of Knives.
+        TokenCard::Shiv => match powers.iter().any(|h| h.power == Power::FanOfKnivesPower) {
+            true => TargetType::AllEnemies,
+            false => TargetType::AnyEnemy,
+        },
         card => unimplemented!("what {card:?} points at"),
     }
 }
@@ -55,24 +60,60 @@ pub(super) fn computed_target(card: TokenCard, powers: &[sts2_core::Stack<V>]) -
 pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> {
     match card {
         TokenCard::SovereignBlade => sovereign_blade(fight),
+        TokenCard::Shiv => shiv(fight),
         card => card_plays::token::on_play(card, fight),
     }
 }
 
-/// `SovereignBlade`. Deal its damage, as many times as it repeats.
+/// The creatures a card's attack hits: every opponent while the player
+/// holds `power`, and otherwise the one the card was pointed at.
+///
+/// `TargetingAllOpponents` takes the list again for each hit.
+fn targets<F: Fight<V>>(fight: &F, power: Power) -> Opponents {
+    let actor = fight.actor();
+    let widened = fight
+        .creatures()
+        .any(|creature| creature.id() == actor && creature.power(power).is_some());
+    match widened {
+        true => fight.opponents(),
+        false => [fight.target()].into_iter().collect(),
+    }
+}
+
+/// `Shiv`. Deal its damage once, to every opponent under Fan of Knives.
+fn shiv<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.attack(Scaling::Dynamic, |fight| {
+        for target in targets(fight, Power::FanOfKnivesPower) {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+    Played::Done
+}
+
+/// `SovereignBlade`. Deal its damage, as many times as it repeats, to every
+/// opponent under Seeking Edge.
 ///
 /// The damage is this copy's own. A forge raises it, and the card that was
 /// forged twice hits for more than the one beside it.
 fn sovereign_blade<F: Fight<V>>(fight: &mut F) -> Played<V> {
-    let target = fight.target();
-    for _ in 0..fight.var(CardVar::Repeat) {
-        let attack = fight.resolve(Effect::Attack {
-            dealer: fight.actor(),
-            target,
-            damage: Amount::Var(CardVar::Damage),
-            scaling: Scaling::Dynamic,
-        });
-        fight.apply(attack);
-    }
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..fight.var(CardVar::Repeat) {
+            for target in targets(fight, Power::SeekingEdgePower) {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            }
+        }
+    });
     Played::Done
 }

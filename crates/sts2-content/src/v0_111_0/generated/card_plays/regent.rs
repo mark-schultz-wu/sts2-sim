@@ -26,17 +26,19 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             Played::Done
         }
         RegentCard::AstralPulse => {
-            for _ in 0..2 {
-                for target in fight.opponents() {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..2 {
+                    for target in fight.opponents() {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
                 }
-            }
+            });
             Played::Done
         }
         // `call DamageCmd.Attack`
@@ -63,13 +65,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         }
         RegentCard::Bombardment => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         RegentCard::Bulwark => {
@@ -90,15 +94,17 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::BundleOfJoy => unimplemented!("what {card:?} does when it is played"),
         RegentCard::CelestialMight => {
             let target = fight.target();
-            for _ in 0..fight.var(CardVar::Repeat) {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
             Played::Done
         }
         // `call CardSelectCmd.FromCombatPile`
@@ -123,13 +129,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::CollisionCourse => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Comet => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::WeakPower,
@@ -174,15 +182,17 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::CrescentSpear => unimplemented!("what {card:?} does when it is played"),
         RegentCard::CrushUnder => {
             let held = fight.opponents();
-            for target in fight.opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
             let amount = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
             for &target in &held {
                 fight.apply_power(target, Power::CrushUnderPower, amount);
@@ -202,26 +212,30 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         }
         RegentCard::Devastate => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         // `foreach`
         RegentCard::DyingStar => unimplemented!("what {card:?} does when it is played"),
         RegentCard::FallingStar => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::WeakPower,
@@ -250,13 +264,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         }
         RegentCard::GammaBlast => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::WeakPower,
@@ -303,13 +319,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::Guards => unimplemented!("what {card:?} does when it is played"),
         RegentCard::GuidingStar => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(
                 Power::DrawCardsNextTurnPower,
                 PowerAmount::Counted(fight.var(CardVar::Cards)),
@@ -324,13 +342,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::HeavenlyDrill => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Hegemony => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(
                 Power::EnergyNextTurnPower,
                 PowerAmount::Counted(fight.var(CardVar::Energy)),
@@ -358,24 +378,28 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         }
         RegentCard::KinglyKick => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         RegentCard::KinglyPunch => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         // `if`
@@ -400,13 +424,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::LunarBlast => unimplemented!("what {card:?} does when it is played"),
         RegentCard::MakeItSo => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         // `call CardFactory.GetDistinctForCombat`
@@ -536,40 +562,46 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
             Played::Done
         }
         RegentCard::SevenStars => {
-            for _ in 0..fight.var(CardVar::Repeat) {
-                for target in fight.opponents() {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    for target in fight.opponents() {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
                 }
-            }
+            });
             Played::Done
         }
         RegentCard::ShiningStrike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.gain_stars(fight.var(CardVar::Stars));
             Played::Done
         }
         RegentCard::SolarStrike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.gain_stars(fight.var(CardVar::Stars));
             Played::Done
         }
@@ -593,13 +625,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::Stardust => unimplemented!("what {card:?} does when it is played"),
         RegentCard::Strike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         // `statement`
@@ -646,13 +680,15 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::VoidForm => unimplemented!("what {card:?} does when it is played"),
         RegentCard::WroughtInWar => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.forge(
                 Cards::Token(TokenCard::SovereignBlade),
                 CardVar::Damage,

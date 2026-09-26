@@ -47,17 +47,19 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         // `call CreatureCmd.GainBlock`
         EventCard::Entrench => unimplemented!("what {card:?} does when it is played"),
         EventCard::Exterminate => {
-            for _ in 0..fight.var(CardVar::Repeat) {
-                for target in fight.opponents() {
-                    let attack = fight.resolve(Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: Amount::Var(CardVar::Damage),
-                        scaling: Scaling::Dynamic,
-                    });
-                    fight.apply(attack);
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    for target in fight.opponents() {
+                        let attack = fight.resolve(Effect::Attack {
+                            dealer: fight.actor(),
+                            target,
+                            damage: Amount::Var(CardVar::Damage),
+                            scaling: Scaling::Dynamic,
+                        });
+                        fight.apply(attack);
+                    }
                 }
-            }
+            });
             Played::Done
         }
         // `call PowerCmd.Apply`
@@ -83,7 +85,22 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         }
         EventCard::Peck => {
             let target = fight.target();
-            for _ in 0..fight.var(CardVar::Repeat) {
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
+            Played::Done
+        }
+        EventCard::Rebound => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
                 let attack = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),
                     target,
@@ -91,18 +108,7 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
                     scaling: Scaling::Dynamic,
                 });
                 fight.apply(attack);
-            }
-            Played::Done
-        }
-        EventCard::Rebound => {
-            let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
             });
-            fight.apply(attack);
             fight.apply_to_actor(Power::ReboundPower, PowerAmount::Counted(1));
             Played::Done
         }
@@ -127,13 +133,15 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
         EventCard::RipAndTear => unimplemented!("what {card:?} does when it is played"),
         EventCard::Squash => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::VulnerablePower,

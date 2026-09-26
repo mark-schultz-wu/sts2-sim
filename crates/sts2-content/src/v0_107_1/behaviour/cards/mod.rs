@@ -22,6 +22,7 @@ use super::super::generated::cards::{CardVar, Cards, NecrobinderCard};
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
 mod defect;
+mod necrobinder;
 mod regent;
 mod status;
 mod token;
@@ -143,6 +144,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     // The fight asks only a card whose class overrides the hook.
     match card {
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
+        Cards::Necrobinder(card) => necrobinder::event_hook(card, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

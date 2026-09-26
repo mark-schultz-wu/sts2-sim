@@ -59,13 +59,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         }
         SilentCard::Assassinate => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
@@ -85,13 +87,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         }
         SilentCard::Backstab => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         // `for`
@@ -147,13 +151,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
                 scaling: Scaling::Dynamic,
             });
             fight.apply(block);
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         SilentCard::DeadlyPoison => {
@@ -212,15 +218,17 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         // `call DamageCmd.Attack`
         SilentCard::Flechettes => unimplemented!("what {card:?} does when it is played"),
         SilentCard::FlickFlack => {
-            for target in fight.opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
             Played::Done
         }
         SilentCard::Footwork => {
@@ -275,13 +283,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Murder => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Neutralize => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::WeakPower,
@@ -316,24 +326,28 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::PiercingWail => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Pinpoint => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         SilentCard::PoisonedStab => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::PoisonPower,
@@ -343,13 +357,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         }
         SilentCard::Pounce => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(Power::FreeSkillPower, PowerAmount::Counted(1));
             Played::Done
         }
@@ -357,13 +373,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::PreciseCut => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Predator => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(Power::DrawCardsNextTurnPower, PowerAmount::Counted(2));
             Played::Done
         }
@@ -397,13 +415,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::Skewer => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Slice => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         SilentCard::Snakebite => {
@@ -433,13 +453,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         SilentCard::StormOfSteel => unimplemented!("what {card:?} does when it is played"),
         SilentCard::Strangle => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::StranglePower,
@@ -449,24 +471,28 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         }
         SilentCard::Strike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         SilentCard::SuckerPunch => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::WeakPower,
@@ -476,13 +502,15 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
         }
         SilentCard::Suppress => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::WeakPower,

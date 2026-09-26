@@ -1645,7 +1645,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // GENESIS_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
     // GIGANTIFICATION_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageMultiplicative),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterAttack)
+        .with(sts2_core::ModelHook::BeforeAttack)
+        .with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // GRAVITY_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
@@ -1680,7 +1683,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // HELLO_WORLD_POWER
     sts2_core::Overrides::from_bits(0),
     // HELLRAISER_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::BeforeAttack),
     // HEX_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardEnteredCombat)
@@ -1774,7 +1779,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // MOCK_FREE_CARDS_POWER
     sts2_core::Overrides::from_bits(0),
     // MOCK_GAIN_BLOCK_ON_ATTACK_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterAttack),
     // MOCK_GATED_TURN_START_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // MOCK_INVINCIBLE_ON_DEATH_POWER
@@ -1855,6 +1860,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
     // PAINFUL_STABS_POWER
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterAttack)
         .with(sts2_core::ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath),
     // PALE_BLUE_DOT_POWER
     sts2_core::Overrides::from_bits(0)
@@ -1991,7 +1997,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // SIGNAL_BOOST_POWER
     sts2_core::Overrides::from_bits(0),
     // SKITTISH_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterAttack)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // SLEIGHT_OF_FLESH_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
     // SLIPPERY_POWER
@@ -2060,7 +2068,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // SUBROUTINE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // SUCK_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterAttack),
     // SUMMON_NEXT_TURN_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // SURPRISE_POWER
@@ -2138,7 +2146,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // VICIOUS_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPowerAmountChanged),
     // VIGOR_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterAttack)
+        .with(sts2_core::ModelHook::BeforeAttack)
+        .with(sts2_core::ModelHook::ModifyDamageAdditive),
     // VITAL_SPARK_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardEnteredCombat)

@@ -1,0 +1,12 @@
+# `AccuracyPower` adds its stack to a Shiv its owner plays, and to nothing
+# else. Four Accuracy make the Shiv hit the medium slime for eight, and the
+# Strike after it hits for its own six.
+#
+# A port that pays every attack shows the Strike at ten.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"ACCURACY_POWER","amount":4,"target":0}
+{"cmd":"play_card","index":4,"target":2}
+{"cmd":"play_card","index":2,"target":2}

@@ -10,10 +10,10 @@
 
 use std::sync::LazyLock;
 
-use sts2_core::{Modify, ModifyHook, PowerAmount, PowerModel as _};
+use sts2_core::{CardTable as _, Modify, ModifyHook, PowerAmount, PowerModel as _};
 
 use super::super::V0_107_1 as V;
-use super::super::generated::cards::{Cards, TokenCard};
+use super::super::generated::cards::{CardTag, Cards, TokenCard};
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
@@ -43,6 +43,21 @@ pub enum State {
     Swipe {
         stolen: Option<sts2_core::CardIdent<V>>,
     },
+    /// `VigorPower`'s `commandToModify`, which stays bound once the command
+    /// is over.
+    Vigor {
+        bound: Option<Bound>,
+    },
+}
+
+/// The attack command `VigorPower` bound to, and what it held as that began.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bound {
+    command: sts2_core::AttackId,
+    /// The command's `ModelSource`: the card, or nothing for a monster's.
+    source: Option<sts2_core::CardId<V>>,
+    /// `amountWhenAttackStarted`.
+    amount: Number,
 }
 
 impl sts2_core::PowerModel<V> for State {
@@ -54,6 +69,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::IllusionPower => Self::Illusion { reviving: false },
             Power::ReattachPower => Self::Reattach { reviving: false },
             Power::SwipePower => Self::Swipe { stolen: None },
+            Power::VigorPower => Self::Vigor { bound: None },
             power => Self::Stateless(power),
         }
     }
@@ -67,6 +83,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Illusion { .. } => Power::IllusionPower,
             Self::Reattach { .. } => Power::ReattachPower,
             Self::Swipe { .. } => Power::SwipePower,
+            Self::Vigor { .. } => Power::VigorPower,
         }
     }
 }
@@ -121,6 +138,14 @@ impl State {
             self,
             Self::Illusion { reviving: true } | Self::Reattach { reviving: true }
         )
+    }
+
+    /// The command `VigorPower` is bound to, once it is.
+    fn bound(&self) -> Option<Bound> {
+        match self {
+            Self::Vigor { bound } => *bound,
+            state => unreachable!("bound state for {:?}", state.power()),
+        }
     }
 
     /// `SwipePower.Steal`, which remembers the card taken.
@@ -300,6 +325,36 @@ pub(crate) fn modify_hook(
         {
             unimplemented!("an endless Strength")
         }
+        // `VigorPower.ModifyDamageAdditive`. Once bound, it pays the card
+        // that started the command and no other card. A hit from no card
+        // is paid either way. The command it bound was its own owner's, so
+        // the attacker it names is this dealer.
+        (
+            Power::VigorPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageAdditive { dealer, card, .. },
+        ) if dealer == holder => {
+            let other = |bound: Bound| card.is_some_and(|(id, _)| Some(id) != bound.source);
+            match state.bound().is_some_and(other) {
+                true => Modify::Nothing,
+                false => Modify::Added(amount),
+            }
+        }
+        // `AccuracyPower.ModifyDamageAdditive`, for a Shiv its owner plays.
+        (
+            Power::AccuracyPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageAdditive {
+                dealer,
+                card: Some((_, card)),
+                ..
+            },
+        ) if dealer == holder && card.tagged(CardTag::Shiv) => Modify::Added(amount),
+        (
+            Power::VigorPower | Power::AccuracyPower,
+            PowerAmount::Endless,
+            ModifyHook::DamageAdditive { dealer, .. },
+        ) if dealer == holder => unimplemented!("an endless {power:?}"),
         // `SlipperyPower.ModifyHpLostAfterOsty`, which hands back one however
         // much its owner was about to lose. A hit that the block took whole
         // loses nothing, and this leaves that where it is.
@@ -347,7 +402,11 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::DamageMultiplicative { .. },
         )
-        | (Power::StrengthPower, _, ModifyHook::DamageAdditive { .. })
+        | (
+            Power::StrengthPower | Power::VigorPower | Power::AccuracyPower,
+            _,
+            ModifyHook::DamageAdditive { .. },
+        )
         | (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { .. })
         | (Power::DexterityPower, _, ModifyHook::BlockAdditive { .. })
         | (
@@ -820,6 +879,39 @@ pub(crate) fn event_hook(
         // `IllusionPower.AfterCombatEnd` plays the dead owner's animation,
         // which is all it does.
         (Power::IllusionPower, _, EventHook::CombatEnd { .. }) => None,
+        // `VigorPower.BeforeAttack`, which binds to the first powered attack
+        // its owner makes and keeps that one.
+        (
+            Power::VigorPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeAttack {
+                command,
+                attacker,
+                source,
+                powered: true,
+            },
+        ) if attacker == holder && state.bound().is_none() => {
+            *state = State::Vigor {
+                bound: Some(Bound {
+                    command,
+                    source,
+                    amount,
+                }),
+            };
+            None
+        }
+        (Power::VigorPower, PowerAmount::Endless, EventHook::BeforeAttack { attacker, .. })
+            if attacker == holder =>
+        {
+            unimplemented!("an endless Vigor")
+        }
+        (Power::VigorPower, _, EventHook::BeforeAttack { .. }) => None,
+        // `VigorPower.AfterAttack`: what it held as the command began comes
+        // off once that command is over.
+        (Power::VigorPower, _, EventHook::AfterAttack { command, .. }) => state
+            .bound()
+            .filter(|bound| bound.command == command)
+            .map(|bound| HookEffect::ModifyAmount(-bound.amount)),
         // `RoyaltiesPower.AfterCombatEnd`: a gold reward of its stack.
         (Power::RoyaltiesPower, PowerAmount::Counted(amount), EventHook::CombatEnd { .. }) => {
             Some(HookEffect::AddGoldReward(amount))

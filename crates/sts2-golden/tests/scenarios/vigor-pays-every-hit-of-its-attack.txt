@@ -1,0 +1,10 @@
+# `VigorPower` binds to one attack command rather than one hit. Twin Strike
+# is one command that hits twice, and both hits carry the Vigor.
+#
+# A port that spends the Vigor on the first hit shows the second at five.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"VIGOR_POWER","amount":3,"target":0}
+{"cmd":"play_card","index":4,"target":2}
