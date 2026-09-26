@@ -62,7 +62,7 @@ pub(crate) fn end<V: Rules>(
     // back only for a turn the player is taking. So the phase a fight ending
     // here reports is the one the enemy turn ran under.
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
-    next.side = <V::CombatSide as SideKinds>::ENEMY;
+    next.switch_side(<V::CombatSide as SideKinds>::ENEMY);
     clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::ENEMY);
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
@@ -98,9 +98,9 @@ pub(crate) fn end<V: Rules>(
 
     // `SwitchSides` back. The round and the turn both count up, because this
     // is not an extra turn.
+    next.switch_side(<V::CombatSide as SideKinds>::PLAYER);
     next.round = next.round + num_traits::one();
     next.turn = next.turn + num_traits::one();
-    next.side = <V::CombatSide as SideKinds>::PLAYER;
 
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
@@ -786,13 +786,8 @@ fn roll_moves<V: Rules>(
                 .find(|creature| creature.id == held.creature)
                 .expect("a retained move machine has its creature");
             let powers = live.powers.of(creature.id).map(|power| {
-                // Field by field, because the machine is borrowed.
-                let history = sts2_core::History {
-                    finished: &live.finished,
-                    round: live.round,
-                    side: live.side,
-                };
-                power.listener(creature.carrier(), history)
+                // Through the field, because the machine is borrowed.
+                power.listener(creature.carrier(), live.plays.history())
             });
             V::roll_monster_move(
                 held.monster,

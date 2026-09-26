@@ -71,7 +71,7 @@ pub(crate) fn enter<V: Rules>(
         stars: num_traits::zero(),
         round: num_traits::one(),
         side: <V::CombatSide as SideKinds>::PLAYER,
-        finished: Vec::new(),
+        plays: super::live::PlayHistory::new(),
         encounter,
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),

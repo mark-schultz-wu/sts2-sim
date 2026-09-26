@@ -1201,8 +1201,8 @@ pub(crate) struct Live<V: Rules> {
     pub(super) round: V::Count,
     /// `ICombatState.CurrentSide`: whose turn it is.
     pub(super) side: V::CombatSide,
-    /// `CombatManager.History`'s finished plays, oldest first.
-    pub(super) finished: Vec<sts2_core::PlayFinished<V>>,
+    /// `CombatManager.History`'s finished plays.
+    pub(super) plays: PlayHistory<V>,
     /// The encounter this active fight belongs to.
     pub(super) encounter: V::Encounter,
     pub(super) cards: super::cards::Cards<V>,
@@ -1237,8 +1237,77 @@ pub(crate) struct Live<V: Rules> {
     pub(super) asking: Option<Asking<V>>,
 }
 
-/// How many finished plays a copied fight has room for before its log grows.
-const PLAYS_AHEAD: usize = 8;
+/// How many plays one turn holds before its list reaches the heap.
+const PLAYS_INLINE: usize = 16;
+
+/// `CombatManager.History`'s finished plays: the turn the fight stands in,
+/// and the turns before it.
+///
+/// A turn is frozen into the shared chain as the sides switch. Copying a
+/// fight copies this turn's few plays and one pointer.
+pub(crate) struct PlayHistory<V: Rules> {
+    this_turn: smallvec::SmallVec<[sts2_core::PlayFinished<V>; PLAYS_INLINE]>,
+    before: Option<std::sync::Arc<sts2_core::TurnPlays<V>>>,
+}
+
+impl<V: Rules> PlayHistory<V> {
+    pub(super) fn new() -> Self {
+        PlayHistory {
+            this_turn: smallvec::SmallVec::new(),
+            before: None,
+        }
+    }
+
+    /// `History.CardPlayFinished`, in the turn the fight stands in.
+    pub(super) fn finish(&mut self, card: V::Card) {
+        self.this_turn.push(sts2_core::PlayFinished { card });
+    }
+
+    /// The turn at `round` on `side` is over. Its plays join the chain,
+    /// unless it had none.
+    fn end_turn(&mut self, round: V::Count, side: V::CombatSide) {
+        if self.this_turn.is_empty() {
+            return;
+        }
+        let turn = sts2_core::TurnPlays {
+            round,
+            side,
+            finished: self.this_turn.drain(..).collect(),
+            before: self.before.take(),
+        };
+        self.before = Some(std::sync::Arc::new(turn));
+    }
+
+    pub(super) fn history(&self) -> sts2_core::History<'_, V> {
+        sts2_core::History {
+            this_turn: &self.this_turn,
+            before: self.before.as_deref(),
+        }
+    }
+}
+
+impl<V: Rules> std::fmt::Debug for PlayHistory<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlayHistory")
+            .field("this_turn", &self.this_turn)
+            .field("before", &self.before)
+            .finish()
+    }
+}
+
+impl<V: Rules> Clone for PlayHistory<V> {
+    fn clone(&self) -> Self {
+        PlayHistory {
+            this_turn: self.this_turn.clone(),
+            before: self.before.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.this_turn.clone_from(&source.this_turn);
+        self.before.clone_from(&source.before);
+    }
+}
 
 impl<V: Rules> Clone for Live<V> {
     fn clone(&self) -> Self {
@@ -1246,13 +1315,7 @@ impl<V: Rules> Clone for Live<V> {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
             returned: self.returned.clone(),
-            finished: {
-                // Room for the plays a copy goes on to make, so the first
-                // does not reallocate a log copied to its length.
-                let mut finished = Vec::with_capacity(self.finished.len() + PLAYS_AHEAD);
-                finished.extend_from_slice(&self.finished);
-                finished
-            },
+            plays: self.plays.clone(),
             leaving: self.leaving.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
@@ -1274,7 +1337,7 @@ impl<V: Rules> Clone for Live<V> {
             stars,
             round,
             side,
-            finished,
+            plays,
             encounter,
             cards,
             removed_from_deck,
@@ -1297,7 +1360,7 @@ impl<V: Rules> Clone for Live<V> {
         *stars = source.stars;
         *round = source.round;
         *side = source.side;
-        finished.clone_from(&source.finished);
+        plays.clone_from(&source.plays);
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
@@ -1415,13 +1478,16 @@ impl<V: Rules> Live<V> {
     }
 
     /// The player, which every fight has one of.
-    /// `CombatManager.History`, and where the fight stands now.
+    /// `CombatManager.History`, as a listener reads it.
     pub(crate) fn history(&self) -> sts2_core::History<'_, V> {
-        sts2_core::History {
-            finished: &self.finished,
-            round: self.round,
-            side: self.side,
-        }
+        self.plays.history()
+    }
+
+    /// `SwitchSides`: the turn now over joins the history, and `side` takes
+    /// its turn.
+    pub(super) fn switch_side(&mut self, side: V::CombatSide) {
+        self.plays.end_turn(self.round, self.side);
+        self.side = side;
     }
 
     /// `CurrentRoom.RoomType`, which is the encounter's.
@@ -1700,7 +1766,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             stars: 0,
             round: 1,
             side: CombatSide::Player,
-            finished: Vec::new(),
+            plays: PlayHistory::new(),
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),

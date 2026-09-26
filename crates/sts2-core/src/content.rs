@@ -2258,38 +2258,46 @@ pub enum Writing<V: ContentVersion> {
 }
 
 /// One `CardPlayFinishedEntry` in `CombatManager.History`: a card's play
-/// that ran to its end, and when.
+/// that ran to its end.
 ///
-/// A card with replays finishes once for each.
+/// A card with replays finishes once for each. The turn it finished in is
+/// the [`TurnPlays`] holding it, or the turn the fight stands in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayFinished<V: ContentVersion> {
     pub card: V::Card,
-    /// `RoundNumber` as the play finished.
-    pub round: V::Count,
-    /// `CurrentSide` as the play finished.
-    pub side: V::CombatSide,
 }
 
-/// `CombatManager.History`, as far as a listener reads it, and where the
-/// fight stands now.
+/// The plays that finished in one turn now over, and the turns before it.
+///
+/// Each turn is written once, as the sides switch, and never again. Every
+/// copy of a fight shares the same chain, so copying one costs a pointer
+/// however long the fight has run. A turn in which nothing finished has no
+/// node.
+#[derive(Debug)]
+pub struct TurnPlays<V: ContentVersion> {
+    /// `RoundNumber` of that turn.
+    pub round: V::Count,
+    /// `CurrentSide` of that turn.
+    pub side: V::CombatSide,
+    /// Its finished plays, oldest first.
+    pub finished: Box<[PlayFinished<V>]>,
+    /// The turn with plays before this one.
+    pub before: Option<std::sync::Arc<TurnPlays<V>>>,
+}
+
+/// `CombatManager.History`, as far as a listener reads it.
 #[derive(Debug, Clone, Copy)]
 pub struct History<'a, V: ContentVersion> {
-    /// Every play that finished this fight, oldest first.
-    pub finished: &'a [PlayFinished<V>],
-    /// `ICombatState.RoundNumber`.
-    pub round: V::Count,
-    /// `ICombatState.CurrentSide`.
-    pub side: V::CombatSide,
+    /// The plays that finished in the turn the fight stands in, oldest first.
+    pub this_turn: &'a [PlayFinished<V>],
+    /// The turns before it that had plays, latest first.
+    pub before: Option<&'a TurnPlays<V>>,
 }
 
 impl<V: ContentVersion> History<'_, V> {
-    /// `CardPlaysFinished` where `HappenedThisTurn`: the same round, on the
-    /// same side's turn.
+    /// `CardPlaysFinished` where `HappenedThisTurn`.
     pub fn finished_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
-        self.finished
-            .iter()
-            .filter(|entry| entry.round == self.round && entry.side == self.side)
-            .map(|entry| entry.card)
+        self.this_turn.iter().map(|entry| entry.card)
     }
 }
 

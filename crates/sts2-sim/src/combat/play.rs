@@ -439,11 +439,7 @@ fn finished<V: Rules>(fighting: Fighting<'_, V>, ascension: V::AscensionLevel, c
         streams,
         relics,
     } = fighting;
-    next.finished.push(sts2_core::PlayFinished {
-        card,
-        round: next.round,
-        side: next.side,
-    });
+    next.plays.finish(card);
     let asked = super::listen::notify::<V>(next, relics, sts2_core::EventHook::CardPlayed { card });
     if !asked.is_empty() {
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
