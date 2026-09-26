@@ -567,7 +567,7 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), Error> {
     }
     writeln!(
         out,
-        "\nimpl sts2_core::PowerKinds for Power {{\n    const DIE_FOR_YOU: Power = Power::DieForYouPower;\n}}"
+        "\nimpl sts2_core::PowerKinds for Power {{\n    const DIE_FOR_YOU: Power = Power::DieForYouPower;\n    const DOOM: Power = Power::DoomPower;\n}}"
     )
     .unwrap();
 

@@ -34,6 +34,21 @@ pub(crate) fn end<V: Rules>(
     } = fighting;
     let mut skipping = std::mem::take(&mut next.skip_tick);
 
+    // `EndPlayerTurnPhaseOne`: the turn-end hooks, and the win check they can
+    // end the fight for, come before the orbs and the hand.
+    if let Some(ended) = before_turn_end::<V>(
+        next,
+        streams.combat(),
+        relics,
+        ascension,
+        <V::CombatSide as SideKinds>::PLAYER,
+    ) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
     // `DoTurnEnd` returns once the fight is over, and a fight an orb ended
     // ends the turn with it.
     if let Some(ended) = turn_end(next, streams.combat(), relics, ascension) {
@@ -43,7 +58,6 @@ pub(crate) fn end<V: Rules>(
         }
         return Ok(Some(ended));
     }
-    before_turn_end::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
     flush_hand(next, relics);
     end_of_turn_cleanup(next);
     // `AfterSideTurnEnd` for the side that just ended.
@@ -86,7 +100,19 @@ pub(crate) fn end<V: Rules>(
         }
         return Ok(Some(ended));
     }
-    before_turn_end::<V>(next, relics, <V::CombatSide as SideKinds>::ENEMY);
+    if let Some(ended) = before_turn_end::<V>(
+        next,
+        streams.combat(),
+        relics,
+        ascension,
+        <V::CombatSide as SideKinds>::ENEMY,
+    ) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
 
     let asked = tick_powers::<V>(
         next,
@@ -377,9 +403,16 @@ fn attacks_from_discard<V: Rules>(live: &mut Live<V>, rngs: CombatRngs<'_>, coun
 #[tracing::instrument(level = "trace", skip_all)]
 fn before_turn_end<V: Rules>(
     live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
     side: V::CombatSide,
-) {
+) -> Option<super::Ended> {
+    unheard::<V>(
+        live,
+        relics,
+        sts2_core::ModelHook::BeforeSideTurnEndVeryEarly,
+    );
     let hook = sts2_core::EventHook::BeforeSideTurnEndEarly { side };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
@@ -391,6 +424,80 @@ fn before_turn_end<V: Rules>(
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
     }
+    let hook = sts2_core::EventHook::BeforeSideTurnEnd { side };
+    let mut ended = None;
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            (Listener::Power { owner, .. }, sts2_core::HookEffect::DoomKill) => {
+                // `IsOverOrEnding`, and the owner dead already.
+                if ended.is_some() {
+                    continue;
+                }
+                let doomed = doomed::<V>(live, side);
+                // Only the first doomed creature's own Doom kills, and it
+                // kills them all.
+                if doomed.first() != Some(&owner) {
+                    continue;
+                }
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                board.doom_kill(&doomed);
+                ended = board.ended;
+            }
+            (
+                Listener::Power { owner, .. },
+                sts2_core::HookEffect::DamageOpponentsHolding { orb, amount },
+            ) => {
+                let holding = live
+                    .orbs
+                    .iter()
+                    .flat_map(|orbs| &orbs.queue)
+                    .any(|held| held.orb == orb);
+                if !holding || ended.is_some() {
+                    continue;
+                }
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                for target in sts2_core::Fight::opponents(&board) {
+                    let hit = sts2_core::Fight::resolve(
+                        &board,
+                        sts2_core::Effect::Attack {
+                            dealer: owner,
+                            target,
+                            damage: sts2_core::Amount::Number(amount),
+                            scaling: sts2_core::Scaling::Static,
+                        },
+                    );
+                    sts2_core::Fight::apply(&mut board, hit);
+                }
+                ended = board.ended;
+            }
+            (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
+        }
+    }
+    ended
+}
+
+/// `DoomPower.GetDoomedCreatures` over the creatures standing on `side`: each
+/// whose hit points are no more than its Doom, in fight order.
+fn doomed<V: Rules>(live: &Live<V>, side: V::CombatSide) -> SmallVec<[CombatId; CREATURES]> {
+    let doom = <V::Power as sts2_core::PowerKinds>::DOOM;
+    live.creatures
+        .iter()
+        .filter(|creature| creature.side == side && creature.alive)
+        .filter(|creature| {
+            live.powers
+                .of(creature.id)
+                .find(|held| held.power() == doom)
+                .and_then(|held| held.amount.count())
+                .is_some_and(|amount| {
+                    let hp: super::live::Amount = num_traits::cast(creature.hp)
+                        .expect("a creature's hit points fit a power's amount");
+                    hp <= amount
+                })
+        })
+        .map(|creature| creature.id)
+        .collect()
 }
 
 /// What part of `SetupPlayerTurn` came to: the end of it, and how the fight
@@ -732,6 +839,27 @@ pub(super) fn side_turn_started<V: Rules>(
                     unimplemented!("{listener:?} removing itself as a side turn starts")
                 };
                 live.remove_power(owner, power);
+            }
+            // `PowerCmd.Apply<P>(Owner, amount, Owner)`.
+            sts2_core::HookEffect::ApplyToOwner(power, amount) => {
+                let Listener::Power { owner, .. } = listener else {
+                    unimplemented!("{listener:?} applying a power to its owner")
+                };
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                board.land(owner, power, amount, Some(owner));
+            }
+            // `NextItem` over `HittableEnemies` off `CombatTargets`, then
+            // `PowerCmd.Apply<P>` from the listener's owner.
+            sts2_core::HookEffect::ApplyToRandomOpponent { power, amount } => {
+                let Listener::Power { owner, .. } = listener else {
+                    unimplemented!("{listener:?} applying a power to a random enemy")
+                };
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                if let Some(target) = sts2_core::Fight::random_opponent(&mut board) {
+                    board.land(target, power, amount, Some(owner));
+                }
             }
             sts2_core::HookEffect::UpgradeHand => live.cards.write_every(
                 &[sts2_core::Pile::Hand],

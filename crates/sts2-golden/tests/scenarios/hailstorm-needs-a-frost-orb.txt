@@ -1,0 +1,7 @@
+# `HailstormPower.BeforeSideTurnEnd` deals its stack to every enemy while its
+# owner holds a Frost orb. Cracked Core's Lightning is no Frost, so the turn
+# ends with the slimes hit by the Lightning alone.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"HAILSTORM_POWER","amount":6,"target":0}
+{"cmd":"end_turn"}

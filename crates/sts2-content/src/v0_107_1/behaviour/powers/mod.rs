@@ -701,6 +701,7 @@ pub(crate) fn event_hook(
             EventHook::DamageGiven {
                 dealer,
                 fully_blocked: true,
+                ..
             },
         ) if dealer == holder => {
             state.set_off_balance(true);
@@ -1107,6 +1108,80 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Aggression")
         }
         (Power::AggressionPower, _, EventHook::BeforeSideTurnStart { .. }) => None,
+        // `DoomPower.BeforeSideTurnEnd`, for its owner's own side.
+        (Power::DoomPower, _, EventHook::BeforeSideTurnEnd { side }) => match side == owner {
+            true => Some(HookEffect::DoomKill),
+            false => None,
+        },
+        // `HailstormPower.BeforeSideTurnEnd`: its stack of damage to every enemy
+        // while its owner holds a Frost orb.
+        (Power::HailstormPower, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::DamageOpponentsHolding {
+                orb: super::super::generated::orbs::Orb::FrostOrb,
+                amount,
+            })
+        }
+        (Power::HailstormPower, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Hailstorm")
+        }
+        (Power::HailstormPower, _, EventHook::BeforeSideTurnEnd { .. }) => None,
+        // `NeurosurgePower.AfterSideTurnStart`: its stack of Doom on its own
+        // owner, each of its owner's turns.
+        (Power::NeurosurgePower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            Some(HookEffect::ApplyToOwner(
+                Power::DoomPower,
+                PowerAmount::Counted(amount),
+            ))
+        }
+        // `CountdownPower.AfterSideTurnStart`: its stack of Doom on one enemy
+        // that can be hit.
+        (Power::CountdownPower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            Some(HookEffect::ApplyToRandomOpponent {
+                power: Power::DoomPower,
+                amount: PowerAmount::Counted(amount),
+            })
+        }
+        (
+            Power::NeurosurgePower | Power::CountdownPower,
+            PowerAmount::Endless,
+            EventHook::SideTurnStart { side, .. },
+        ) if side == owner => unimplemented!("an endless {power:?}"),
+        (Power::NeurosurgePower | Power::CountdownPower, _, EventHook::SideTurnStart { .. }) => {
+            None
+        }
+        // `ReaperFormPower.AfterDamageGiven`: a powered hit from its owner, or
+        // from its owner's pet, puts Doom on what it hit, its stack for each
+        // point the hit dealt.
+        (
+            Power::ReaperFormPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageGiven {
+                dealer,
+                pet_of,
+                target,
+                total,
+                powered: true,
+                ..
+            },
+        ) if (dealer == holder || pet_of == Some(holder)) && total > 0 => {
+            Some(HookEffect::ApplyPower {
+                target,
+                power: Power::DoomPower,
+                amount: PowerAmount::Counted(total * amount),
+            })
+        }
+        (Power::ReaperFormPower, PowerAmount::Endless, EventHook::DamageGiven { .. }) => {
+            unimplemented!("an endless Reaper Form")
+        }
+        (Power::ReaperFormPower, _, EventHook::DamageGiven { .. }) => None,
         // `BufferPower.AfterModifyingHpLostAfterOsty`: one spent on each hit it
         // took to nothing.
         (Power::BufferPower, _, EventHook::HpLostModified) => Some(HookEffect::Decrement),

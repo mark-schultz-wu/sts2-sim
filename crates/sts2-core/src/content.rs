@@ -571,10 +571,13 @@ pub enum ModelHook {
     AfterModifyingHpLostAfterOsty,
     ModifyCardPlayResultPileTypeAndPosition,
     AfterModifyingCardPlayResultPileOrPosition,
+    BeforeSideTurnEndVeryEarly,
+    BeforeSideTurnEnd,
+    AfterDiedToDoom,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 74] = [
+    pub const ALL: [ModelHook; 77] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -649,6 +652,9 @@ impl ModelHook {
         ModelHook::AfterModifyingHpLostAfterOsty,
         ModelHook::ModifyCardPlayResultPileTypeAndPosition,
         ModelHook::AfterModifyingCardPlayResultPileOrPosition,
+        ModelHook::BeforeSideTurnEndVeryEarly,
+        ModelHook::BeforeSideTurnEnd,
+        ModelHook::AfterDiedToDoom,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -738,6 +744,9 @@ impl ModelHook {
             ModelHook::AfterModifyingCardPlayResultPileOrPosition => {
                 "AfterModifyingCardPlayResultPileOrPosition"
             }
+            ModelHook::BeforeSideTurnEndVeryEarly => "BeforeSideTurnEndVeryEarly",
+            ModelHook::BeforeSideTurnEnd => "BeforeSideTurnEnd",
+            ModelHook::AfterDiedToDoom => "AfterDiedToDoom",
         }
     }
 }
@@ -986,6 +995,8 @@ pub trait MonsterKinds: std::fmt::Debug + Copy + Eq + 'static {
 pub trait PowerKinds: std::fmt::Debug + Copy + Eq + 'static {
     /// `DieForYouPower`, which every Osty is summoned with.
     const DIE_FOR_YOU: Self;
+    /// `DoomPower`, whose holders die together as their side's turn ends.
+    const DOOM: Self;
 }
 
 /// The move names the simulator writes itself.
@@ -2124,6 +2135,15 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
         dealer: crate::CombatId,
+        /// `Dealer.PetOwner.Creature`, for a pet's hit.
+        pet_of: Option<crate::CombatId>,
+        /// The creature this result is for.
+        target: crate::CombatId,
+        /// `DamageResult.TotalDamage`: what its block took and what its hit
+        /// points lost.
+        total: V::Number,
+        /// `IsPoweredAttack`.
+        powered: bool,
         fully_blocked: bool,
     },
     /// `MonsterMoveState.OnPerform`, after the move's behavior runs.
@@ -2161,6 +2181,10 @@ pub enum EventHook<V: ContentVersion> {
         room: V::RoomType,
     },
     BeforeSideTurnEndEarly {
+        side: V::CombatSide,
+    },
+    /// `BeforeSideTurnEnd`, the last of the three before a side's turn ends.
+    BeforeSideTurnEnd {
         side: V::CombatSide,
     },
     SideTurnEnd {
@@ -2292,6 +2316,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BeforeSideTurnStart { .. } => ModelHook::BeforeSideTurnStart,
             EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
+            EventHook::BeforeSideTurnEnd { .. } => ModelHook::BeforeSideTurnEnd,
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
             EventHook::EnergyReset { .. } => ModelHook::AfterEnergyReset,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
@@ -2625,6 +2650,30 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
+    /// `PowerCmd.Apply<P>(target, amount, Owner)`, onto a creature the
+    /// listener names.
+    ApplyPower {
+        target: crate::CombatId,
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+    },
+    /// `PowerCmd.Apply<P>` onto one enemy that can be hit, drawn by
+    /// `NextItem` off `CombatTargets`, from the listener's owner. Nothing
+    /// with no such enemy.
+    ApplyToRandomOpponent {
+        power: V::Power,
+        amount: PowerAmount<V::Number>,
+    },
+    /// `DoomPower.BeforeSideTurnEnd`, once the owner's hit points are no more
+    /// than its Doom. `DoomKill` takes every doomed creature on its side, at
+    /// the first one's asking.
+    DoomKill,
+    /// `CreatureCmd.Damage` on every enemy that can be hit, from the
+    /// listener's owner, unpowered, while the owner holds an `orb`.
+    DamageOpponentsHolding {
+        orb: V::Orb,
+        amount: V::Number,
+    },
     /// `CreatureCmd.Damage` on one creature, unpowered, from the listener's
     /// owner.
     Damage {

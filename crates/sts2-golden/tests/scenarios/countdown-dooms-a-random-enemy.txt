@@ -1,0 +1,7 @@
+# `CountdownPower.AfterSideTurnStart` puts its stack of Doom on one enemy
+# that can be hit, drawn off `CombatTargets`, each time its owner's side
+# starts a turn.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"COUNTDOWN_POWER","amount":5,"target":0}
+{"cmd":"end_turn"}

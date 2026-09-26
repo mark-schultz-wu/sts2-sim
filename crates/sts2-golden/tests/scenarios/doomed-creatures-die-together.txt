@@ -1,0 +1,8 @@
+# `DoomKill` takes every doomed creature on the side at once, at the first
+# one's Doom. Both small slimes carry enough Doom to die, and both are gone
+# after the enemy turn.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"DOOM_POWER","amount":10,"target":1}
+{"cmd":"power","power":"DOOM_POWER","amount":12,"target":3}
+{"cmd":"end_turn"}

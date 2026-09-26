@@ -1,0 +1,9 @@
+# `DoomPower.BeforeSideTurnEnd` kills its owner when its hit points are no
+# more than its Doom, as its own side's turn ends. Ten Doom on the eight-hit
+# point twig slime kill it once the enemy turn is over. Ten on the twelve-hit
+# point leaf slime leave it standing.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"DOOM_POWER","amount":10,"target":1}
+{"cmd":"power","power":"DOOM_POWER","amount":10,"target":3}
+{"cmd":"end_turn"}

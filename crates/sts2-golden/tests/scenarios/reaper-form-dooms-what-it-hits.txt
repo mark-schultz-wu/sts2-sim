@@ -1,0 +1,7 @@
+# `ReaperFormPower.AfterDamageGiven` puts Doom on what its owner's powered
+# attack hit, its stack for each point dealt. A Strike's six puts six Doom on
+# the medium slime.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"REAPER_FORM_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":0,"target":2}
