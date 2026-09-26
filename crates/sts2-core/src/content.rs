@@ -566,10 +566,12 @@ pub enum ModelHook {
     BeforeHandDraw,
     AfterCardExhausted,
     AfterCardDiscarded,
+    ModifyCardPlayCount,
+    AfterModifyingCardPlayCount,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 69] = [
+    pub const ALL: [ModelHook; 71] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -639,6 +641,8 @@ impl ModelHook {
         ModelHook::BeforeHandDraw,
         ModelHook::AfterCardExhausted,
         ModelHook::AfterCardDiscarded,
+        ModelHook::ModifyCardPlayCount,
+        ModelHook::AfterModifyingCardPlayCount,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -719,6 +723,8 @@ impl ModelHook {
             ModelHook::BeforeHandDraw => "BeforeHandDraw",
             ModelHook::AfterCardExhausted => "AfterCardExhausted",
             ModelHook::AfterCardDiscarded => "AfterCardDiscarded",
+            ModelHook::ModifyCardPlayCount => "ModifyCardPlayCount",
+            ModelHook::AfterModifyingCardPlayCount => "AfterModifyingCardPlayCount",
         }
     }
 }
@@ -1916,6 +1922,12 @@ pub enum ModifyHook<V: ContentVersion> {
         turn: V::Count,
         room: V::RoomType,
     },
+    /// `ModifyCardPlayCount`: how many times a card `player` plays runs its
+    /// effect.
+    CardPlayCount {
+        player: crate::CombatId,
+        card: V::Card,
+    },
 }
 
 impl<V: ContentVersion> ModifyHook<V> {
@@ -1933,6 +1945,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HpLostAfterOstyLate { .. } => ModelHook::ModifyHpLostAfterOstyLate,
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
+            ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
         }
     }
 }
@@ -2077,6 +2090,11 @@ pub enum EventHook<V: ContentVersion> {
     DamageReceived {
         target: crate::CombatId,
         unblocked: V::Number,
+        /// The creature that dealt it, which is nothing for damage from
+        /// nobody.
+        dealer: Option<crate::CombatId>,
+        /// `IsPoweredAttack`.
+        powered: bool,
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
@@ -2200,6 +2218,11 @@ pub enum EventHook<V: ContentVersion> {
         /// `DamageProps.IsPoweredAttack()`.
         powered: bool,
     },
+    /// `AfterModifyingCardPlayCount`, asked of each listener that changed a
+    /// card's play count, once the count is worked out.
+    PlayCountModified {
+        card: V::Card,
+    },
     /// `Hook.AfterAttack`, once the command's last hit has landed.
     AfterAttack {
         command: AttackId,
@@ -2246,6 +2269,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardEnteredCombat { .. } => ModelHook::AfterCardEnteredCombat,
             EventHook::BeforeAttack { .. } => ModelHook::BeforeAttack,
             EventHook::AfterAttack { .. } => ModelHook::AfterAttack,
+            EventHook::PlayCountModified { .. } => ModelHook::AfterModifyingCardPlayCount,
             EventHook::Obtained
             | EventHook::Removed
             | EventHook::Applied
@@ -2506,6 +2530,16 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
+    /// `CreatureCmd.Damage` on one creature, unpowered, from the listener's
+    /// owner.
+    Damage {
+        target: crate::CombatId,
+        amount: V::Number,
+    },
+    /// `AggressionPower.BeforeSideTurnStart`: the attacks in the discard pile,
+    /// shuffled off `CombatCardSelection`, and the first `count` of them into
+    /// hand, each upgraded.
+    AttacksFromDiscard(V::Number),
     /// `PlayerCmd.GainGold`, which a run carries out between rooms.
     GainGold(V::Number),
     /// `CombatRoom.AddExtraReward` with a `GoldReward` of this much, which

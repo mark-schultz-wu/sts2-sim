@@ -1444,7 +1444,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterBlockBroken)
         .with(sts2_core::ModelHook::ShouldClearBlock),
     // BURST_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // CACOPHONY_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
     // CALAMITY_POWER
@@ -1560,7 +1563,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // DUPLICATION_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // DYING_STAR_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
@@ -1568,7 +1574,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // ECHO_FORM_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
-        .with(sts2_core::ModelHook::BeforeSideTurnStart),
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        .with(sts2_core::ModelHook::BeforeSideTurnStart)
+        .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // ENERGY_NEXT_TURN_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterEnergyReset),
     // ENFEEBLING_TOUCH_POWER
@@ -1856,7 +1864,10 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // ONE_FOR_ALL_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
     // ONE_TWO_PUNCH_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // ORBIT_POWER
     sts2_core::Overrides::from_bits(0),
     // PAGESTORM_POWER
@@ -1998,7 +2009,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterDamageGiven)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // SIGNAL_BOOST_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // SKITTISH_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterAttack)
@@ -2093,7 +2106,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
         .with(sts2_core::ModelHook::AfterSideTurnEnd),
     // TAG_TEAM_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // TAINTED_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)

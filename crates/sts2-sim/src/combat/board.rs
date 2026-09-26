@@ -73,6 +73,8 @@ pub struct ResolvedEffect<V: Rules> {
 
 enum Resolved<V: Rules> {
     Attack {
+        /// The creature swinging, which is not always the one acting.
+        dealer: CombatId,
         target: CombatId,
         damage: V::Number,
         /// `IsPoweredAttack`, which is what a redirect of the damage asks.
@@ -295,7 +297,7 @@ impl<'a, V: Rules> Board<'a, V> {
     /// A counted power whose stack reaches zero is gone. Temporary Strength
     /// returns exactly what it took, and a zero instance left behind shows a
     /// creature carrying Strength.
-    fn modify_amount(&mut self, id: CombatId, power: V::Power, offset: V::Number) {
+    pub(super) fn modify_amount(&mut self, id: CombatId, power: V::Power, offset: V::Number) {
         let Some(held) = self
             .live
             .powers
@@ -758,6 +760,20 @@ impl<'a, V: Rules> Board<'a, V> {
             };
             match effect {
                 HookEffect::RemoveFromOwner(power) => self.live.remove_power(owner, power),
+                // `CreatureCmd.Damage`, unpowered, from the power's owner.
+                HookEffect::Damage { target, amount } => {
+                    let hit = resolve::<V>(
+                        self.walk(),
+                        None,
+                        Effect::Attack {
+                            dealer: owner,
+                            target,
+                            damage: Amount::Number(amount),
+                            scaling: Scaling::Static,
+                        },
+                    );
+                    self.apply(hit);
+                }
                 // `Creature.Stun` builds a state and hands it to
                 // `SetMoveImmediate`, so it is held to the same guard: a
                 // monster advertising a move it has to perform is not stunned
@@ -931,6 +947,7 @@ pub(crate) fn resolve<V: Rules>(
             damage,
             scaling,
         } => Resolved::Attack {
+            dealer,
             target,
             powered: scaling == Scaling::Dynamic,
             damage: {
@@ -1243,6 +1260,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn apply(&mut self, effect: Self::ResolvedEffect) {
         match effect.effect {
             Resolved::Attack {
+                dealer,
                 target,
                 damage,
                 powered,
@@ -1317,7 +1335,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                         self.live,
                         self.relics,
                         sts2_core::EventHook::DamageGiven {
-                            dealer: self.actor,
+                            dealer,
                             fully_blocked: aimed && fully_blocked,
                         },
                     );
@@ -1333,6 +1351,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                                 sts2_core::EventHook::DamageReceived {
                                     target: receiver,
                                     unblocked: lost,
+                                    dealer: Some(dealer),
+                                    powered,
                                 },
                             );
                             self.after_hit(asked);

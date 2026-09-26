@@ -9,10 +9,12 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
+use smallvec::SmallVec;
 use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
 use super::board::Board;
 use super::live::{Asked, Asker, Live, Plays, Resuming, Skips, Then};
+use super::powers::Powers as _;
 use super::{Error, Fighting, hook, legal};
 
 /// A play the fight allows, resolved but not yet made.
@@ -166,6 +168,7 @@ pub(crate) fn play<V: Rules>(
     // the hand, while its own effect runs.
     let card = live.cards.play(play.index);
     let ascension = live.ascension;
+    let count = play_count::<V>(live, streams, relics, &card);
     let mut board = Board::for_card(
         live,
         streams.combat(),
@@ -190,7 +193,7 @@ pub(crate) fn play<V: Rules>(
             // `GeneratePlayCount`, worked out once and before the first play.
             plays: Plays {
                 done: num_traits::zero(),
-                count: card.face.play_count(),
+                count,
             },
             asker: Asker::Card(card.id),
             target: play.target,
@@ -198,6 +201,83 @@ pub(crate) fn play<V: Rules>(
         },
         played,
     )
+}
+
+/// `GeneratePlayCount`: the copy's own plays, run through
+/// `ModifyCardPlayCount`, then `AfterModifyingCardPlayCount` for each listener
+/// that changed the count.
+///
+/// # Panics
+///
+/// A listener other than a power changing the count, or one that does
+/// something other than add plays.
+fn play_count<V: Rules>(
+    live: &mut Live<V>,
+    streams: &mut crate::stream::Streams<V>,
+    relics: &mut crate::run::Belt<V>,
+    card: &super::live::CardInstance<V>,
+) -> V::Number {
+    let player = live.player().id;
+    let hook = sts2_core::ModifyHook::CardPlayCount {
+        player,
+        card: card.face.ident.card,
+    };
+    let mut count = card.face.play_count();
+    let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
+    super::listen::each::<V>(
+        super::listen::Walk { live, relics },
+        sts2_core::Overrides::of(sts2_core::ModelHook::ModifyCardPlayCount),
+        |listener, _| {
+            let before = count;
+            match <V as sts2_core::Hooks>::modify_hook(listener, hook) {
+                sts2_core::Modify::Nothing => {}
+                sts2_core::Modify::Added(more) => count = count + more,
+                answer => unimplemented!("a play count answered with {answer:?}"),
+            }
+            if count != before {
+                match listener {
+                    sts2_core::Listener::Power { holder, power, .. } => {
+                        modifiers.push((holder, power))
+                    }
+                    _ => {
+                        unimplemented!("a listener other than a power changing a card's play count")
+                    }
+                }
+            }
+        },
+    );
+    for (holder, power) in modifiers {
+        let Some(at) = live.creatures.iter().position(|c| c.id == holder) else {
+            continue;
+        };
+        let carrier = live.creatures[at].carrier();
+        let Some(held) = live
+            .powers
+            .of_mut(holder)
+            .find(|held| held.power() == power)
+        else {
+            continue;
+        };
+        let mut asked = sts2_core::HookEffects::new();
+        <V as sts2_core::Hooks>::power_event_hook(
+            held.event_power(carrier),
+            sts2_core::EventHook::PlayCountModified {
+                card: card.face.ident.card,
+            },
+            &mut asked,
+        );
+        let ascension = live.ascension;
+        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+        for effect in asked {
+            match effect {
+                sts2_core::HookEffect::Decrement => {
+                    board.modify_amount(holder, power, -num_traits::one::<V::Number>())
+                }
+                effect => unimplemented!("a power asking for {effect:?} after a play count"),
+            }
+        }
+    }
+    count
 }
 
 /// Resume the card play the fight parked on a selection.

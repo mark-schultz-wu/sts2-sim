@@ -1,0 +1,9 @@
+# `AggressionPower.BeforeSideTurnStart` takes attacks from the discard pile
+# into hand before the draw, upgraded. The Strike and the Bash played this
+# turn are shuffled off `CombatCardSelection`, and one comes back.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"power","power":"AGGRESSION_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
