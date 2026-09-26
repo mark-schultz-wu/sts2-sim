@@ -491,7 +491,13 @@ fn previewed<V: Rules>(
                     None,
                 ) => {
                     let dealer = super::board::dealer_of::<V>(modifier, creatures);
-                    Some(super::board::modified::<V>(fight, dealer, None, printed()))
+                    Some(super::board::modified::<V>(
+                        fight,
+                        dealer,
+                        None,
+                        Some(held),
+                        printed(),
+                    ))
                 }
                 (Some(modifier), _) => {
                     let dealer = super::board::dealer_of::<V>(modifier, creatures);

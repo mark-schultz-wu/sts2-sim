@@ -35,13 +35,15 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::BelieveInYou => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Bolas => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         ColorlessCard::Calamity => {
@@ -64,15 +66,17 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         // `if`
         ColorlessCard::Discovery => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::DramaticEntrance => {
-            for target in fight.opponents() {
-                let attack = fight.resolve(Effect::Attack {
-                    dealer: fight.actor(),
-                    target,
-                    damage: Amount::Var(CardVar::Damage),
-                    scaling: Scaling::Dynamic,
-                });
-                fight.apply(attack);
-            }
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
             Played::Done
         }
         ColorlessCard::Entropy => {
@@ -123,13 +127,15 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Fisticuffs => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::FlashOfSteel => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }
@@ -162,13 +168,15 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::JackOfAllTrades => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::Knockdown => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::KnockdownPower,
@@ -257,13 +265,15 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         }
         ColorlessCard::Salvo => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(Power::RetainHandPower, PowerAmount::Counted(1));
             Played::Done
         }
@@ -285,13 +295,15 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         }
         ColorlessCard::TagTeam => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(target, Power::TagTeamPower, PowerAmount::Counted(1));
             Played::Done
         }
@@ -313,13 +325,15 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::ThinkingAhead => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::ThrummingHatchet => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         ColorlessCard::UltimateDefend => {
@@ -333,13 +347,15 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         }
         ColorlessCard::UltimateStrike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         // `call DamageCmd.Attack`

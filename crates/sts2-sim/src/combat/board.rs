@@ -247,46 +247,63 @@ impl<'a, V: Rules> Board<'a, V> {
         }
 
         // `FindExistingInstanceForStacking`: a counter stacks into the one
-        // already there. An endless instance is one instance however many
-        // times it lands.
-        let held = self
+        // already there through `ModifyAmount`. An endless instance is one
+        // instance however many times it lands.
+        let held = self.live.powers.of(id).any(|held| held.power() == power);
+        match (held, amount) {
+            (true, PowerAmount::Counted(more)) => self.modify_amount(id, power, more),
+            (true, PowerAmount::Endless) => {}
+            (false, amount) => {
+                self.live
+                    .powers
+                    .push(id, HeldPower::new(power, amount.into(), applier));
+                // An endless power lands no number, so the hook that reads
+                // one has nothing to read.
+                if let PowerAmount::Counted(delta) = amount {
+                    self.amount_changed(id, power, delta);
+                }
+            }
+        }
+    }
+
+    /// `PowerCmd.ModifyAmount` on the instance of `power` that `id` carries,
+    /// by a signed offset.
+    ///
+    /// A counted power whose stack reaches zero is gone. Temporary Strength
+    /// returns exactly what it took, and a zero instance left behind shows a
+    /// creature carrying Strength.
+    fn modify_amount(&mut self, id: CombatId, power: V::Power, offset: V::Number) {
+        let Some(held) = self
             .live
             .powers
             .of_mut(id)
-            .find(|held| held.power() == power);
-        match (held, amount) {
-            (Some(held), PowerAmount::Counted(more)) => {
-                let had = held
-                    .amount
-                    .count()
-                    .unwrap_or_else(|| unimplemented!("a count landing on an endless power"));
-                let more: super::live::Amount = num_traits::NumCast::from(more)
-                    .unwrap_or_else(|| unimplemented!("a power stacked by {more:?}"));
-                held.amount = super::live::Stacked::counted(had + more);
-            }
-            (Some(_), PowerAmount::Endless) => {}
-            (None, amount) => self
-                .live
-                .powers
-                .push(id, HeldPower::new(power, amount.into(), applier)),
-        }
-        // A counted power whose stack reaches zero is gone. Temporary
-        // Strength returns exactly what it took, so leaving a zero instance
-        // here would make a creature observably carry Strength.
-        self.live.powers.retain(id, |held| !held.amount.spent());
-
-        // `AfterPowerAmountChanged`, once the power is on. It carries what
-        // landed rather than the stack the creature now holds, and an amount
-        // of zero raises nothing. An endless power lands no number, so the
-        // hook that reads one has nothing to read.
-        let PowerAmount::Counted(delta) = amount else {
+            .find(|held| held.power() == power)
+        else {
             return;
         };
+        let had = held
+            .amount
+            .count()
+            .unwrap_or_else(|| unimplemented!("a count landing on an endless power"));
+        let more: super::live::Amount = num_traits::NumCast::from(offset)
+            .unwrap_or_else(|| unimplemented!("a power stacked by {offset:?}"));
+        held.amount = super::live::Stacked::counted(had + more);
+        self.live.powers.retain(id, |held| !held.amount.spent());
+        self.amount_changed(id, power, offset);
+    }
+
+    /// `AfterPowerAmountChanged`, once the amount has moved. It carries the
+    /// offset rather than the stack the creature now holds, and an offset of
+    /// zero raises nothing.
+    fn amount_changed(&mut self, id: CombatId, power: V::Power, delta: V::Number) {
+        if delta.is_zero() {
+            return;
+        }
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
             sts2_core::EventHook::PowerAmountChanged {
-                creature: self.live.creatures[at].id,
+                creature: id,
                 power,
                 delta,
             },
@@ -823,10 +840,16 @@ pub(crate) fn modified<V: Rules>(
     fight: Walk<'_, V>,
     dealer: CombatId,
     target: Option<CombatId>,
+    card: Option<&CardInstance<V>>,
     damage: V::Number,
 ) -> V::Number {
+    let card = card.map(|held| (held.id, held.face.ident.card));
     let phases = [
-        ModifyHook::DamageAdditive { target, dealer },
+        ModifyHook::DamageAdditive {
+            target,
+            dealer,
+            card,
+        },
         ModifyHook::DamageMultiplicative { target, dealer },
         ModifyHook::DamageCap { target, dealer },
     ];
@@ -873,7 +896,7 @@ pub(crate) fn resolve<V: Rules>(
             damage: {
                 let damage = carried::<V>(playing, fight.live, damage);
                 match scaling {
-                    Scaling::Dynamic => modified::<V>(fight, dealer, Some(target), damage),
+                    Scaling::Dynamic => modified::<V>(fight, dealer, Some(target), playing, damage),
                     Scaling::Static => damage,
                 }
             },
@@ -1119,6 +1142,61 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
         resolve::<V>(self.walk(), self.acting().as_ref(), effect)
+    }
+
+    fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self)) {
+        let attacking = self
+            .at(self.actor)
+            .is_some_and(|at| self.live.creatures[at].alive);
+        if self.ended.is_some() || self.ending() || !attacking {
+            return;
+        }
+        let monster = self
+            .at(self.actor)
+            .and_then(|at| match self.live.creatures[at].model {
+                Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
+                _ => None,
+            });
+        let command = sts2_core::AttackId(self.live.attacks);
+        self.live.attacks += 1;
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::BeforeAttack {
+                command,
+                attacker: self.actor,
+                source: self.playing,
+                powered: scaling == Scaling::Dynamic,
+            },
+        );
+        if let Some((listener, effect)) = asked.first() {
+            unimplemented!("{listener:?} asking for {effect:?} before an attack")
+        }
+        hits(self);
+        // `IterateCombatHookListeners` hands a fight that is ending no
+        // listeners.
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::AfterAttack {
+                command,
+                attacker: self.actor,
+                monster,
+            },
+        );
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
+                    self.modify_amount(owner, power, offset)
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} after an attack")
+                }
+            }
+        }
     }
 
     #[tracing::instrument(level = "trace", skip_all)]

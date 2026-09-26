@@ -103,10 +103,12 @@ fn hit(out: &mut String, key: &str, scaling: &str) {
 fn command(out: &mut String, words: &[String]) -> Result<(), Error> {
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
     match &words[..] {
+        // One `AttackCommand`, which raises its own hooks around its hits.
         ["attack", target, key, props, hits @ ..] => {
             let scaling = scaling(props)?;
             let hits: Vec<String> = hits.iter().map(|w| w.to_string()).collect();
             let once = hits == ["number", "1"];
+            writeln!(out, "fight.attack({scaling}, |fight| {{").unwrap();
             if !once {
                 writeln!(out, "for _ in 0..{} {{", amount(&hits)?).unwrap();
             }
@@ -129,6 +131,7 @@ fn command(out: &mut String, words: &[String]) -> Result<(), Error> {
             if !once {
                 writeln!(out, "}}").unwrap();
             }
+            writeln!(out, "}});").unwrap();
         }
         ["block", key, props] => writeln!(
             out,

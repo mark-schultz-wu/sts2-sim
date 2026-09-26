@@ -21,13 +21,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::AllForOne => unimplemented!("what {card:?} does when it is played"),
         DefectCard::BallLightning => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.channel(Orb::LightningOrb);
             Played::Done
         }
@@ -35,13 +37,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Barrage => unimplemented!("what {card:?} does when it is played"),
         DefectCard::BeamCell => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::VulnerablePower,
@@ -103,13 +107,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Claw => unimplemented!("what {card:?} does when it is played"),
         DefectCard::ColdSnap => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.channel(Orb::FrostOrb);
             Played::Done
         }
@@ -182,13 +188,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::FlakCannon => unimplemented!("what {card:?} does when it is played"),
         DefectCard::FocusedStrike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(
                 Power::FocusedStrikePower,
                 PowerAmount::Counted(fight.var(CardVar::FocusPower)),
@@ -300,13 +308,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::MultiCast => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Null => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_power(
                 target,
                 Power::WeakPower,
@@ -333,13 +343,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Refract => unimplemented!("what {card:?} does when it is played"),
         DefectCard::RocketPunch => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }
@@ -388,13 +400,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         }
         DefectCard::Strike => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             Played::Done
         }
         DefectCard::Subroutine => {
@@ -413,13 +427,15 @@ pub fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
         DefectCard::Synchronize => unimplemented!("what {card:?} does when it is played"),
         DefectCard::Synthesis => {
             let target = fight.target();
-            let attack = fight.resolve(Effect::Attack {
-                dealer: fight.actor(),
-                target,
-                damage: Amount::Var(CardVar::Damage),
-                scaling: Scaling::Dynamic,
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
             });
-            fight.apply(attack);
             fight.apply_to_actor(Power::FreePowerPower, PowerAmount::Counted(1));
             Played::Done
         }

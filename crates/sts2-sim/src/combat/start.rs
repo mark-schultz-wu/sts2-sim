@@ -93,6 +93,7 @@ pub(crate) fn enter<V: Rules>(
         // Nothing has been applied to anyone yet.
         skip_tick: Bounded::new(),
         card_ids: CardIds::new(),
+        attacks: 0,
         asking: None,
     });
 

@@ -1,0 +1,8 @@
+# `Flatten.AfterAttack` makes the card free this turn once its owner's Osty
+# attacks, and answers no other attacker. A Strike from the player leaves the
+# Flatten in hand at its printed two.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"FLATTEN"}
+{"cmd":"grant","card":"FLATTEN"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":3,"target":2}

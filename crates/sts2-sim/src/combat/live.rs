@@ -1208,6 +1208,9 @@ pub(crate) struct Live<V: Rules> {
     pub(super) skip_tick: Skips<V>,
     /// The ids this fight has given out, and the next one it will.
     pub(super) card_ids: CardIds<V>,
+    /// How many attack commands this fight has started, which is what the
+    /// next one is told apart by.
+    pub(super) attacks: u32,
     /// A card play waiting on an answer, which is the only thing the fight
     /// will take while it is set.
     pub(super) asking: Option<Asking<V>>,
@@ -1250,6 +1253,7 @@ impl<V: Rules> Clone for Live<V> {
             machines,
             skip_tick,
             card_ids,
+            attacks,
             asking,
         } = self;
         *character = source.character;
@@ -1270,6 +1274,7 @@ impl<V: Rules> Clone for Live<V> {
         machines.copy_from(&source.machines);
         skip_tick.copy_from(&source.skip_tick);
         card_ids.clone_from(&source.card_ids);
+        *attacks = source.attacks;
         asking.clone_from(&source.asking);
     }
 }
@@ -1365,6 +1370,7 @@ impl<V: Rules> Live<V> {
                         super::listen::Walk { live: self, relics },
                         fighter.id,
                         Some(player.id),
+                        None,
                         attack.damage,
                     );
                 }
@@ -1658,6 +1664,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             machines: Bounded::new(),
             skip_tick: Bounded::new(),
             card_ids: CardIds::new(),
+            attacks: 0,
             asking: None,
         }
     }

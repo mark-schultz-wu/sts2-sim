@@ -558,10 +558,12 @@ pub enum ModelHook {
     AfterModifyingGoldGained,
     AfterGoldGained,
     ShouldFlush,
+    BeforeAttack,
+    AfterAttack,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 64] = [
+    pub const ALL: [ModelHook; 66] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -626,6 +628,8 @@ impl ModelHook {
         ModelHook::AfterModifyingGoldGained,
         ModelHook::AfterGoldGained,
         ModelHook::ShouldFlush,
+        ModelHook::BeforeAttack,
+        ModelHook::AfterAttack,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -701,21 +705,23 @@ impl ModelHook {
             ModelHook::AfterModifyingGoldGained => "AfterModifyingGoldGained",
             ModelHook::AfterGoldGained => "AfterGoldGained",
             ModelHook::ShouldFlush => "ShouldFlush",
+            ModelHook::BeforeAttack => "BeforeAttack",
+            ModelHook::AfterAttack => "AfterAttack",
         }
     }
 }
 
 /// The [`ModelHook`]s one model's class overrides, one bit each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Overrides(u64);
+pub struct Overrides(u128);
 
 impl Overrides {
     /// The set whose bits are `bits`, one per [`ModelHook`] by its position.
-    pub const fn from_bits(bits: u64) -> Self {
+    pub const fn from_bits(bits: u128) -> Self {
         Overrides(bits)
     }
 
-    pub const fn bits(self) -> u64 {
+    pub const fn bits(self) -> u128 {
         self.0
     }
 
@@ -1319,26 +1325,41 @@ pub trait Fight<V: ContentVersion> {
     /// is. A move that hits once reads one.
     fn intent_repeats(&self) -> V::Count;
 
+    /// `AttackCommand.Execute` from the acting creature, whose hits are
+    /// `hits`.
+    ///
+    /// `BeforeAttack` before the first hit and `AfterAttack` after the last,
+    /// once each however many hits land. A command whose attacker is dead, or
+    /// that starts as the fight is ending, does neither and lands nothing.
+    fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self))
+    where
+        Self: Sized;
+
     /// Perform the acting monster's advertised attack against every opponent.
     ///
     /// Each hit resolves immediately before it lands, so an earlier hit can
     /// change the listeners the next one reaches.
-    fn attack_opponents(&mut self) {
+    fn attack_opponents(&mut self)
+    where
+        Self: Sized,
+    {
         let damage = self.intent_damage();
         let repeats: usize = num_traits::cast(self.intent_repeats()).unwrap_or_else(|| {
             unimplemented!("a move that hits more times than a fight can count")
         });
-        for _ in 0..repeats {
-            for target in self.opponents() {
-                let attack = self.resolve(Effect::Attack {
-                    dealer: self.actor(),
-                    target,
-                    damage: Amount::Number(damage),
-                    scaling: Scaling::Dynamic,
-                });
-                self.apply(attack);
+        self.attack(Scaling::Dynamic, |fight| {
+            for _ in 0..repeats {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Number(damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
             }
-        }
+        });
     }
 
     /// `PowerCmd.Apply<P>(targets, amount, ...)`, which lands on every
@@ -1827,6 +1848,9 @@ pub enum ModifyHook<V: ContentVersion> {
     DamageAdditive {
         target: Option<crate::CombatId>,
         dealer: crate::CombatId,
+        /// `cardSource`: the card whose number this is, and which card it
+        /// is. Nothing for a monster's move.
+        card: Option<(crate::CardId<V>, V::Card)>,
     },
     /// `ModifyDamageMultiplicative`, over what the additions left.
     DamageMultiplicative {
@@ -2136,6 +2160,26 @@ pub enum EventHook<V: ContentVersion> {
         at: crate::CardAt<V>,
         card: V::Card,
     },
+    /// `Hook.BeforeAttack`, as an attack command starts and before its first
+    /// hit.
+    BeforeAttack {
+        command: AttackId,
+        /// `Attacker`.
+        attacker: crate::CombatId,
+        /// `ModelSource`, which is the card for a card's attack and nothing
+        /// for a monster's.
+        source: Option<crate::CardId<V>>,
+        /// `DamageProps.IsPoweredAttack()`.
+        powered: bool,
+    },
+    /// `Hook.AfterAttack`, once the command's last hit has landed.
+    AfterAttack {
+        command: AttackId,
+        /// `Attacker`.
+        attacker: crate::CombatId,
+        /// `Attacker.Monster`, which is nothing for the player.
+        monster: Option<V::Monster>,
+    },
 }
 
 impl<V: ContentVersion> EventHook<V> {
@@ -2171,6 +2215,8 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,
             EventHook::PowerAmountChanged { .. } => ModelHook::AfterPowerAmountChanged,
             EventHook::CardEnteredCombat { .. } => ModelHook::AfterCardEnteredCombat,
+            EventHook::BeforeAttack { .. } => ModelHook::BeforeAttack,
+            EventHook::AfterAttack { .. } => ModelHook::AfterAttack,
             EventHook::Obtained
             | EventHook::Removed
             | EventHook::BeforeApplied { .. }
@@ -2205,6 +2251,13 @@ pub type Opponents = smallvec::SmallVec<[crate::CombatId; 8]>;
 
 /// How many effects a notification's answers hold before they reach the heap.
 pub const HOOK_EFFECTS: usize = 4;
+
+/// One `AttackCommand`, which a listener can tell from every other.
+///
+/// The fight counts them as they start. A listener keeps one to know the
+/// command it bound to when that command ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttackId(pub u32);
 
 /// What a selection from the deck does to each card it takes.
 ///
@@ -2424,6 +2477,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// Unlike [`HookEffect::TickDownDuration`], nothing is skipped. A power
     /// that counts down outside a turn's own tick asks for this.
     Decrement,
+    /// `PowerCmd.ModifyAmount(this, offset)`, by a signed offset. The instance
+    /// goes once it reaches zero.
+    ModifyAmount(V::Number),
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
     /// `PowerCmd.Remove(this)`: the power takes itself off its owner.

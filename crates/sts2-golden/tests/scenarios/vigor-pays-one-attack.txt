@@ -1,0 +1,11 @@
+# `VigorPower` adds its stack to the first powered attack its owner makes, and
+# that attack's end takes the stack off. Three Vigor make the Strike hit the
+# medium slime for nine. The Bash after it hits for its own eight.
+#
+# A port that keeps the Vigor pays the Bash too. One that never adds it shows
+# the Strike's six.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"VIGOR_POWER","amount":3,"target":0}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"play_card","index":0,"target":2}
