@@ -1,0 +1,12 @@
+# `lightning-rod-channels-as-energy-resets`, with a Strike on turn four. That
+# leaves the Nibbit on sixteen, and the three passives at the turn's end leave
+# it on seven. The evoke that makes room on turn five kills it, inside
+# `SetupPlayerTurn`, so the fight ends there and no hand is drawn.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"LIGHTNING_ROD_POWER","amount":5,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}

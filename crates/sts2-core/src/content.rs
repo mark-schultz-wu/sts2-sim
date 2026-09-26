@@ -811,9 +811,9 @@ pub enum EnchantmentStatus {
 /// A number an enchantment works out for the card it is on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnchantHook {
-    /// `EnchantDamageAdditive`, for a powered hit the card deals. An
-    /// unpowered hit asks no listener, the card's enchantment included.
-    DamageAdditive,
+    /// `EnchantDamageAdditive`, for a hit the card deals. `powered` is
+    /// `props.IsPoweredAttack()`.
+    DamageAdditive { powered: bool },
     /// `EnchantBlockAdditive`, for block the card gives.
     BlockAdditive,
     /// `EnchantPlayCount`, over how many times the card's play runs.
@@ -1940,24 +1940,36 @@ pub enum ModifyHook<V: ContentVersion> {
         /// `cardSource`: the card whose number this is, and which card it
         /// is. Nothing for a monster's move.
         card: Option<(crate::CardId<V>, V::Card)>,
+        /// `props.IsPoweredAttack()`.
+        powered: bool,
     },
     /// `ModifyDamageMultiplicative`, over what the additions left.
     DamageMultiplicative {
         target: Option<crate::CombatId>,
         dealer: crate::CombatId,
+        /// `cardSource`, as [`ModifyHook::DamageAdditive`] carries it.
+        card: Option<(crate::CardId<V>, V::Card)>,
+        /// `props.IsPoweredAttack()`.
+        powered: bool,
     },
     /// `ModifyDamageCap`, the most a hit can do.
     DamageCap {
         target: Option<crate::CombatId>,
         dealer: crate::CombatId,
+        /// `props.IsPoweredAttack()`.
+        powered: bool,
     },
     /// `ModifyBlockAdditive`, for block `target` is about to gain.
     BlockAdditive {
         target: crate::CombatId,
+        /// `props.IsPoweredCardOrMonsterMoveBlock()`.
+        powered: bool,
     },
     /// `ModifyBlockMultiplicative`, over what the additions left.
     BlockMultiplicative {
         target: crate::CombatId,
+        /// `props.IsPoweredCardOrMonsterMoveBlock()`.
+        powered: bool,
     },
     /// `ModifyHpLostBeforeOsty`, over what the block did not take.
     HpLostBeforeOsty {
@@ -2305,8 +2317,8 @@ pub enum EventHook<V: ContentVersion> {
         /// `Attacker`.
         attacker: crate::CombatId,
         /// `ModelSource`, which is the card for a card's attack and nothing
-        /// for a monster's.
-        source: Option<crate::CardId<V>>,
+        /// for a monster's: which copy, and which card it is.
+        source: Option<(crate::CardId<V>, V::Card)>,
         /// `DamageProps.IsPoweredAttack()`.
         powered: bool,
     },

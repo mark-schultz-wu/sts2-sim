@@ -1,0 +1,9 @@
+# Gigantification at one triples a powered hit from its owner's cards. Before
+# it binds to an attack, every such card previews at three times, so the
+# Strike prints eighteen. The Strike's attack binds it, deals eighteen, and
+# takes the one off its stack when the attack is over, so the power goes.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"GIGANTIFICATION_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0,"target":1}

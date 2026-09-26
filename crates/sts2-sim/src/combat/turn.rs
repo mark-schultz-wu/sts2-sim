@@ -147,7 +147,15 @@ pub(crate) fn end<V: Rules>(
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
     next.energy = max_energy;
-    energy_reset::<V>(next, relics);
+    // An evoke that ends the fight ends `SetupPlayerTurn` with it, as a
+    // relic's damage before the hand does below.
+    if let Some(ended) = energy_reset::<V>(next, streams, relics, ascension) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
     energy_reset_late::<V>(next, streams.combat(), relics, ascension);
     let player = next.player().id;
     let hook = sts2_core::EventHook::BeforeHandDraw { player };
@@ -966,7 +974,8 @@ fn flush_hand<V: Rules>(live: &mut Live<V>, relics: &crate::run::Belt<V>) {
     live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
 }
 
-/// `Hook.AfterEnergyReset`, raised on every listener.
+/// `Hook.AfterEnergyReset`, raised on every listener, and how the fight
+/// ended if an orb evoked to make room ended it.
 ///
 /// After the reset and before the hand is drawn, which is the order
 /// `SetupPlayerTurn` runs them in.
@@ -975,9 +984,15 @@ fn flush_hand<V: Rules>(live: &mut Live<V>, relics: &crate::run::Belt<V>) {
 ///
 /// A listener asking for something no energy reset carries out.
 #[tracing::instrument(level = "trace", skip_all)]
-pub(super) fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut crate::run::Belt<V>) {
+pub(super) fn energy_reset<V: Rules>(
+    live: &mut Live<V>,
+    streams: &mut crate::stream::Streams<V>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+) -> Option<super::Ended> {
     let player = live.player().id;
     let hook = sts2_core::EventHook::EnergyReset { player };
+    let mut ended = None;
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             // `PlayerCmd.GainEnergy`, then `PowerCmd.Remove(this)`.
@@ -1000,9 +1015,18 @@ pub(super) fn energy_reset<V: Rules>(live: &mut Live<V>, relics: &mut crate::run
             (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Remove) => {
                 live.remove_power(owner, power)
             }
+            // `OrbCmd.Channel` on the player, which evokes an orb to make room.
+            // The streams are lent only here, which most turns never reach.
+            (_, sts2_core::HookEffect::Channel(orb)) => {
+                let mut board =
+                    Board::for_card(live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::channel(&mut board, orb);
+                ended = ended.or(board.ended);
+            }
             (_, effect) => unimplemented!("a listener asking for {effect:?} as energy resets"),
         }
     }
+    ended
 }
 
 /// `AfterEnergyResetLate`, which `Hook.AfterEnergyReset` raises once every

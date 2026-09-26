@@ -491,12 +491,14 @@ fn previewed<V: Rules>(
                     None,
                 ) => {
                     let dealer = super::board::dealer_of::<V>(modifier, creatures);
+                    // A card's `DamageVar` is a powered attack's.
                     Some(super::board::modified::<V>(
                         fight,
                         dealer,
                         None,
                         Some(held),
                         printed(),
+                        true,
                     ))
                 }
                 (Some(modifier), _) => {
