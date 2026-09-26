@@ -1,0 +1,9 @@
+# `HellraiserPower.AfterCardDrawnEarly` auto-plays each Strike its owner draws,
+# free and at an enemy off `CombatTargets`. Turn two's hand draw brings four
+# Strikes and a Defend. The four play as they arrive, so the Nibbit goes from
+# forty-three to nineteen, the energy stays at three, and the Defend is left in
+# hand.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"HELLRAISER_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

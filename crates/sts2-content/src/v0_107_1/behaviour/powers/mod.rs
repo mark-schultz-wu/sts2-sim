@@ -256,6 +256,9 @@ const DAMAGE_INCREASE: f64 = 1.5;
 /// `WeakPower`'s `DamageDecrease`.
 const DAMAGE_DECREASE: f64 = 0.75;
 
+/// `ColossusPower`'s `DamageDecrease`.
+const COLOSSAL: f64 = 0.5;
+
 /// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
 const GIGANTIFIED: f64 = 3.0;
 
@@ -352,6 +355,7 @@ pub(crate) fn modify_hook(
     held: Held,
     state: &State,
     history: sts2_core::History<'_, V>,
+    powers: &dyn sts2_core::PowerView<V>,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     let one: Number = num_traits::one();
@@ -397,6 +401,21 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == holder => Modify::Scaled(SHRUNK),
+        // `ColossusPower.ModifyDamageMultiplicative`: half of a powered hit on
+        // its owner, from a dealer that is vulnerable.
+        (
+            Power::ColossusPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) && powers.power(dealer, Power::VulnerablePower).is_some() => {
+            Modify::Scaled(COLOSSAL)
+        }
+        (Power::ColossusPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `GigantificationPower.ModifyDamageMultiplicative`: a powered hit
         // from a card its owner played, before it binds or from the card it
         // bound to. It reads the card's owner and not the dealer, so Osty's
@@ -708,6 +727,11 @@ pub(crate) fn decide_hook(
                 alive,
             },
         ) => HookResponse::Decision(pet_of == Some(target) && alive && powered),
+        // `NoDrawPower.ShouldDraw`: its owner draws nothing but the turn's own
+        // hand.
+        (Power::NoDrawPower, DecisionHook::ShouldDraw { player, hand_draw }) => {
+            HookResponse::Decision(hand_draw || player != held.holder)
+        }
         // `RetainHandPower.ShouldFlush`, which keeps its own holder's hand.
         (Power::RetainHandPower, DecisionHook::ShouldFlush { player }) => {
             HookResponse::Decision(player != held.holder)
@@ -807,6 +831,40 @@ pub(crate) fn event_hook(
                 side: CombatSide::Enemy,
             },
         ) => Some(HookEffect::TickDownDuration),
+        // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
+        (Power::NoDrawPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::NoDrawPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `HellraiserPower.AfterCardDrawnEarly`: a Strike its owner draws is
+        // auto-played. A fight here has one player, whose cards are all its
+        // holder's. The cap it keeps on auto-plays counts only against
+        // enemies whose hit points are infinite.
+        (Power::HellraiserPower, _, EventHook::CardDrawnEarly { card, id, .. }) => card
+            .tagged(CardTag::Strike)
+            .then_some(HookEffect::AutoPlay(id)),
+        // `HellraiserPower.AfterSideTurnEnd` resets that cap, and its
+        // `BeforeAttack` sets how an auto-played Strike's hit looks.
+        (Power::HellraiserPower, _, EventHook::SideTurnEnd { .. } | EventHook::BeforeAttack { .. }) => {
+            None
+        }
+        // `ColossusPower.AfterSideTurnEnd`: one off its stack as the enemies'
+        // turn ends, whichever side its owner is on.
+        (
+            Power::ColossusPower,
+            PowerAmount::Counted(_),
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+            },
+        ) => Some(HookEffect::Decrement),
+        (
+            Power::ColossusPower,
+            PowerAmount::Endless,
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+            },
+        ) => unimplemented!("an endless Colossus"),
+        (Power::ColossusPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `ShrinkPower.AfterSideTurnEnd`, for the side its owner is among the
         // participants of. An infinite Shrink, the one the game gives a
         // negative amount, lasts the fight.

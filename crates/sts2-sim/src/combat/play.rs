@@ -9,6 +9,7 @@
 //! `sts2-content`, reached through [`Fight`]. This file is the fight that
 //! trait acts on.
 
+use crate::stream::LendsCombat;
 use smallvec::SmallVec;
 use sts2_core::{CardTable, CombatId, Cost, HandIndex, Reason, Rules};
 
@@ -204,7 +205,7 @@ pub(crate) fn play<V: Rules>(
     let card = live.cards.play(play.index);
     let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
-    let count = play_count::<V>(live, streams, relics, &card);
+    let count = play_count::<V, _>(live, streams, relics, &card);
     live.history.start(card.face.ident.card, play.energy);
     let mut board = Board::for_card(
         live,
@@ -219,7 +220,7 @@ pub(crate) fn play<V: Rules>(
     let skipped = std::mem::take(&mut board.skipped);
     merge::<V>(&mut live.skip_tick, skipped);
 
-    carry_on::<V>(
+    carry_on::<V, _>(
         Fighting {
             live,
             streams,
@@ -242,7 +243,109 @@ pub(crate) fn play<V: Rules>(
             ended,
         },
         played,
+        true,
     )
+}
+
+/// `CardCmd.AutoPlay` of the copy `id`, which stands in hand, with no target
+/// named. How the fight ended, if the play ended it.
+///
+/// The play is free, and it runs the loop a play made by hand runs. A card
+/// that targets any enemy draws one off `CombatTargets`. It runs inside
+/// whatever board drew the card, so it draws through that board's streams.
+///
+/// # Panics
+///
+/// A card that stops on a question, or that is unplayable or costs X. A card
+/// that targets an ally, or has no enemy it can hit.
+pub(super) fn auto_play<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    id: sts2_core::CardId<V>,
+) -> Option<super::Ended> {
+    use sts2_core::{CardTable as _, TargetKinds as _};
+
+    let Some(at) = live.cards.find(sts2_core::Pile::Hand, id) else {
+        unimplemented!("auto-playing {id:?} from anywhere but the hand");
+    };
+    let ident = live
+        .cards
+        .get(sts2_core::Pile::Hand, at)
+        .expect("a card found in hand is in hand")
+        .face
+        .ident;
+    if ident.card.unplayable() {
+        unimplemented!("auto-playing {ident:?}, which is unplayable");
+    }
+    if ident.card.cost() == sts2_core::Cost::X {
+        unimplemented!("auto-playing {ident:?}, which costs X");
+    }
+    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::ShouldPlay);
+    let ascension = live.ascension;
+    let target = match super::legal::target_type::<V>(ident, live) {
+        kind if kind == V::TargetType::ANY_ENEMY => {
+            let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+            let Some(target) = sts2_core::Fight::random_opponent(&mut board) else {
+                unimplemented!("auto-playing {ident:?} with no enemy to hit");
+            };
+            Some(target)
+        }
+        kind if kind == V::TargetType::ANY_ALLY => {
+            unimplemented!("auto-playing {ident:?}, which targets an ally")
+        }
+        _ => None,
+    };
+    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardAutoPlayed);
+
+    // `CardPileCmd.Add` to the play pile, where it stands while it runs.
+    let card = live.cards.play(at);
+    let energy = num_traits::zero();
+    let (pile, position) = result_pile::<V>(live, relics, &card, energy);
+    let count = play_count::<V, _>(live, &mut rngs, relics, &card);
+    live.history.start(card.face.ident.card, energy);
+    let mut board = Board::for_card(
+        live,
+        rngs.reborrow(),
+        relics,
+        ascension,
+        target,
+        Some(card.id),
+    );
+    let played = V::on_play(card.face.ident.card, &mut board);
+    let ended = board.ended;
+    let skipped = std::mem::take(&mut board.skipped);
+    merge::<V>(&mut live.skip_tick, skipped);
+
+    let ended = carry_on::<V, _>(
+        Fighting {
+            live: &mut *live,
+            streams: &mut rngs,
+            relics: &mut *relics,
+        },
+        ascension,
+        Resuming {
+            plays: Plays {
+                done: num_traits::zero(),
+                count,
+            },
+            asker: Asker::Card(CardPlay {
+                id: card.id,
+                energy,
+                pile,
+                position,
+            }),
+            target,
+            ended,
+        },
+        played,
+        false,
+    )
+    .unwrap_or_else(|error| unimplemented!("an auto-play that failed: {error:?}"));
+    if live.asking.is_some() {
+        unimplemented!("an auto-played {ident:?} that stops on a question");
+    }
+    ended
 }
 
 /// `GetResultPileTypeForCardPlay`, run through
@@ -337,9 +440,9 @@ fn result_pile<V: Rules>(
 ///
 /// A listener other than a power changing the count, or one that does
 /// something other than add plays.
-fn play_count<V: Rules>(
+fn play_count<V: Rules, S: LendsCombat>(
     live: &mut Live<V>,
-    streams: &mut crate::stream::Streams<V>,
+    streams: &mut S,
     relics: &mut crate::run::Belt<V>,
     card: &super::live::CardInstance<V>,
 ) -> V::Number {
@@ -510,6 +613,7 @@ pub(crate) fn answer<V: Rules>(
         ascension,
         effect,
         played,
+        true,
     )
 }
 
@@ -518,12 +622,16 @@ pub(crate) fn answer<V: Rules>(
 /// `OnPlay` is a coroutine in the game. A card that has to ask says so and
 /// comes back here with the answer. The first call and each resumption use
 /// this loop.
+///
+/// `outermost` is a play no other is running inside, which finishes a fight
+/// it won. A play nested in another leaves that to what it is nested in.
 #[tracing::instrument(level = "trace", skip_all)]
-pub(super) fn carry_on<V: Rules>(
-    fighting: Fighting<'_, V>,
+pub(super) fn carry_on<V: Rules, S: LendsCombat>(
+    fighting: Fighting<'_, V, S>,
     ascension: V::AscensionLevel,
     mut effect: Resuming<V>,
     mut played: sts2_core::Played<V>,
+    outermost: bool,
 ) -> Result<Option<super::Ended>, Error> {
     let Fighting {
         live: next,
@@ -567,7 +675,7 @@ pub(super) fn carry_on<V: Rules>(
                     next.cards
                         .write_in_play(card, |face| face.set_enchantment_status(status));
                 }
-                finished::<V>(
+                finished::<V, _>(
                     Fighting {
                         live: &mut *next,
                         streams: &mut *streams,
@@ -638,7 +746,7 @@ pub(super) fn carry_on<V: Rules>(
 
     let ended = effect.ended;
     let Asker::Card(play) = effect.asker else {
-        if ended == Some(super::Ended::Won) {
+        if outermost && ended == Some(super::Ended::Won) {
             super::listen::combat_ended::<V>(next, relics);
         }
         return Ok(ended);
@@ -663,7 +771,7 @@ pub(super) fn carry_on<V: Rules>(
     }
     next.cards.leave_play(play.id, to, play.position);
 
-    if ended == Some(super::Ended::Won) {
+    if outermost && ended == Some(super::Ended::Won) {
         super::listen::combat_ended::<V>(next, relics);
     }
     Ok(ended)
@@ -675,7 +783,11 @@ pub(super) fn carry_on<V: Rules>(
 /// Once for each play, so a card with replays finishes more than once. A
 /// relic that answers acts through the board a card acts through, and draws
 /// from the same stream.
-fn finished<V: Rules>(fighting: Fighting<'_, V>, ascension: V::AscensionLevel, card: V::Card) {
+fn finished<V: Rules, S: LendsCombat>(
+    fighting: Fighting<'_, V, S>,
+    ascension: V::AscensionLevel,
+    card: V::Card,
+) {
     let Fighting {
         live: next,
         streams,

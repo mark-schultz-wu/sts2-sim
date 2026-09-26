@@ -192,6 +192,25 @@ impl CombatRngs<'_> {
     }
 }
 
+/// Whatever lends a fight's streams as a set: the run's own, or the set a
+/// board already holds. A play draws only through these, so it runs from
+/// either.
+pub(crate) trait LendsCombat {
+    fn combat(&mut self) -> CombatRngs<'_>;
+}
+
+impl<V: Rules> LendsCombat for Streams<V> {
+    fn combat(&mut self) -> CombatRngs<'_> {
+        Streams::combat(self)
+    }
+}
+
+impl LendsCombat for CombatRngs<'_> {
+    fn combat(&mut self) -> CombatRngs<'_> {
+        self.reborrow()
+    }
+}
+
 /// Where in a row a stream's generator is kept.
 ///
 /// Every stream the build has is in its own list, so one that is not is a

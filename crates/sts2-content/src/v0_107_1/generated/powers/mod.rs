@@ -1419,7 +1419,8 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // CHAINS_OF_BINDING_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardDrawn)
-        .with(sts2_core::ModelHook::BeforeSideTurnEnd),
+        .with(sts2_core::ModelHook::BeforeSideTurnEnd)
+        .with(sts2_core::ModelHook::ShouldPlay),
     // CHILD_OF_THE_STARS_POWER
     sts2_core::Overrides::from_bits(0),
     // CLARITY_POWER
@@ -1654,6 +1655,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // HELLRAISER_POWER
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardDrawnEarly)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeAttack),
     // HEX_POWER
@@ -1808,7 +1810,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::ModifyBlockMultiplicative),
     // NO_DRAW_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ShouldDraw),
     // NO_ENERGY_GAIN_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
     // OBLIVION_POWER
@@ -1912,7 +1916,8 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // RINGING_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardEnteredCombat)
-        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ShouldPlay),
     // RITUAL_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
     // ROLLING_BOULDER_POWER
@@ -1979,7 +1984,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterDamageReceived)
         .with(sts2_core::ModelHook::ModifyHpLostAfterOsty),
     // SLOTH_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::BeforeSideTurnStart)
+        .with(sts2_core::ModelHook::ShouldPlay),
     // SLOW_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
@@ -1993,7 +2000,8 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardEnteredCombat)
         .with(sts2_core::ModelHook::AfterCardPlayed)
-        .with(sts2_core::ModelHook::AfterSideTurnEnd),
+        .with(sts2_core::ModelHook::AfterSideTurnEnd)
+        .with(sts2_core::ModelHook::ShouldPlay),
     // SMOKESTACK_POWER
     sts2_core::Overrides::from_bits(0),
     // SNEAKY_POWER

@@ -47,5 +47,6 @@ pub(crate) fn drink<V: Rules>(
             ended,
         },
         used,
+        true,
     )
 }

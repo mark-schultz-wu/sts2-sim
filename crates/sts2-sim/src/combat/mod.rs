@@ -37,9 +37,11 @@ use sts2_core::Rules;
 /// A decision works on these where they stand. One the simulator cannot carry
 /// out is a fault, and [`sts2_core::Play`] makes no promise about a run after
 /// a fault. A refusal is decided before any of this is touched.
-pub(crate) struct Fighting<'a, V: Rules> {
+///
+/// An auto-play runs inside a board, and lends that board's streams.
+pub(crate) struct Fighting<'a, V: Rules, S = crate::stream::Streams<V>> {
     pub(crate) live: &'a mut Live<V>,
-    pub(crate) streams: &'a mut crate::stream::Streams<V>,
+    pub(crate) streams: &'a mut S,
     /// The belt. Relics are notified inside the fight and their models save
     /// what they counted.
     pub(crate) relics: &'a mut crate::run::Belt<V>,

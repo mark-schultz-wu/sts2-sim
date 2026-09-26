@@ -1,0 +1,9 @@
+# `NoDrawPower.ShouldDraw` answers no to every draw but the turn's own hand
+# draw. So the Swift Defend draws nothing, and the hand stays at four. The
+# power goes as its owner's turn ends, and turn two draws its five.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"NO_DRAW_POWER","amount":1,"target":0}
+{"cmd":"enchant","enchantment":"SWIFT","amount":2,"index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}

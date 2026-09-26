@@ -1,0 +1,11 @@
+# `ColossusPower.ModifyDamageMultiplicative` halves a powered hit on its owner
+# from a dealer that carries Vulnerable. The Nibbit's butt shows six once it is
+# vulnerable, and lands as six. Its Vulnerable is gone by its next turn, so the
+# slice after it lands whole, at six. Colossus loses one at the end of each
+# enemy turn: three, then two, then one.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"COLOSSUS_POWER","amount":3,"target":0}
+{"cmd":"power","power":"VULNERABLE_POWER","amount":1,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

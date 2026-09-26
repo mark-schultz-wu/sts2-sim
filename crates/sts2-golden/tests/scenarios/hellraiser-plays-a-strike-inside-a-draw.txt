@@ -1,0 +1,8 @@
+# A Swift Defend's draw brings a Strike and a Defend. Hellraiser auto-plays the
+# Strike inside the Defend's play, before the Defend is finished, so the Nibbit
+# loses six and the Strike goes to the discard pile ahead of the Defend.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"HELLRAISER_POWER","amount":1,"target":0}
+{"cmd":"enchant","enchantment":"SWIFT","amount":2,"index":2}
+{"cmd":"play_card","index":2}

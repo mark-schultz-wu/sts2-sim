@@ -598,7 +598,11 @@ pub(super) fn carry_setup<V: Rules>(
                     }
                 }
                 let drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
-                draw(live, rngs.reborrow(), relics, ascension, drawn);
+                // A card auto-played as it is drawn can end the fight, and an
+                // ending fight hands the hooks after it no listeners.
+                if let Some(ended) = draw(live, rngs.reborrow(), relics, ascension, drawn, true) {
+                    return Carried::Done(Some(ended));
+                }
                 let hook = sts2_core::EventHook::PlayerTurnStart { player };
                 Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
             }
@@ -1305,7 +1309,7 @@ fn roll_moves<V: Rules>(
                 .expect("a retained move machine has its creature");
             let powers = live.powers.of(creature.id).map(|power| {
                 // Through the field, because the machine is borrowed.
-                power.listener(creature.carrier(), live.history.view())
+                power.listener(creature.carrier(), live.history.view(), &live.powers)
             });
             V::roll_monster_move(
                 held.monster,
