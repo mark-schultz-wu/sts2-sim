@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 use sts2_core::{CardTable as _, Modify, ModifyHook, PowerAmount, PowerModel as _};
 
 use super::super::V0_107_1 as V;
-use super::super::generated::cards::{CardTag, Cards, TokenCard};
+use super::super::generated::cards::{CardKeyword, CardTag, Cards, TokenCard};
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::powers::Power;
 use super::super::generated::runstate::CombatSide;
@@ -267,7 +267,7 @@ fn temporary_strength(
         }
         (_, EventHook::PowerAmountChanged { .. }) => {}
         // Asked of every power, and not ones this class overrides.
-        (_, EventHook::MonsterMovePerformed { .. } | EventHook::Removed) => {}
+        (_, EventHook::MonsterMovePerformed { .. } | EventHook::Removed | EventHook::Applied) => {}
         (_, hook) => unimplemented!("what a temporary Strength does for {hook:?}"),
     }
 }
@@ -286,6 +286,7 @@ pub(crate) fn modify_hook(
     amount: PowerAmount<Number>,
     held: Held,
     state: &State,
+    history: sts2_core::History<'_, V>,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     let one: Number = num_traits::one();
@@ -350,8 +351,28 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == holder && card.tagged(CardTag::Shiv) => Modify::Added(amount),
+        // `PhantomBladesPower.ModifyDamageAdditive`: the first Shiv its owner
+        // plays in a turn, and no other. A play counts once it has finished,
+        // so the Shiv being played is not one of them. A fight here has one
+        // player, so every play is its owner's.
         (
-            Power::VigorPower | Power::AccuracyPower,
+            Power::PhantomBladesPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageAdditive {
+                dealer,
+                card: Some((_, card)),
+                ..
+            },
+        ) if dealer == holder
+            && card.tagged(CardTag::Shiv)
+            && !history
+                .finished_this_turn()
+                .any(|played| played.tagged(CardTag::Shiv)) =>
+        {
+            Modify::Added(amount)
+        }
+        (
+            Power::VigorPower | Power::AccuracyPower | Power::PhantomBladesPower,
             PowerAmount::Endless,
             ModifyHook::DamageAdditive { dealer, .. },
         ) if dealer == holder => unimplemented!("an endless {power:?}"),
@@ -403,7 +424,10 @@ pub(crate) fn modify_hook(
             ModifyHook::DamageMultiplicative { .. },
         )
         | (
-            Power::StrengthPower | Power::VigorPower | Power::AccuracyPower,
+            Power::StrengthPower
+            | Power::VigorPower
+            | Power::AccuracyPower
+            | Power::PhantomBladesPower,
             _,
             ModifyHook::DamageAdditive { .. },
         )
@@ -797,7 +821,7 @@ pub(crate) fn event_hook(
                 delta,
             },
         ) if creature == holder => Some(HookEffect::AddReplays {
-            to: sts2_core::Replaying::EveryCopyOf(Cards::Token(TokenCard::SovereignBlade)),
+            to: sts2_core::Writing::EveryCopyOf(Cards::Token(TokenCard::SovereignBlade)),
             amount: delta,
         }),
         // `SwordSagePower.AfterCardEnteredCombat`, which gives a blade that
@@ -810,7 +834,7 @@ pub(crate) fn event_hook(
                 card: Cards::Token(TokenCard::SovereignBlade),
             },
         ) => Some(HookEffect::AddReplays {
-            to: sts2_core::Replaying::One(at),
+            to: sts2_core::Writing::One(at),
             amount,
         }),
         (Power::SwordSagePower, PowerAmount::Endless, EventHook::CardEnteredCombat { .. }) => {
@@ -912,6 +936,40 @@ pub(crate) fn event_hook(
             .bound()
             .filter(|bound| bound.command == command)
             .map(|bound| HookEffect::ModifyAmount(-bound.amount)),
+        // `InfiniteBladesPower.BeforeHandDraw`: its stack of Shivs into its
+        // owner's hand, before the hand is drawn.
+        (
+            Power::InfiniteBladesPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => Some(HookEffect::GenerateInHand {
+            card: Cards::Token(TokenCard::Shiv),
+            count: amount,
+        }),
+        (Power::InfiniteBladesPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless Infinite Blades")
+        }
+        (Power::InfiniteBladesPower, _, EventHook::BeforeHandDraw { .. }) => None,
+        // `PhantomBladesPower.AfterApplied`: every Shiv its owner holds, in
+        // every pile, retains.
+        (Power::PhantomBladesPower, _, EventHook::Applied) => Some(HookEffect::AddKeyword {
+            to: sts2_core::Writing::EveryTagged(CardTag::Shiv),
+            keyword: CardKeyword::Retain,
+        }),
+        // `PhantomBladesPower.AfterCardEnteredCombat`, which gives a Shiv that
+        // joins later the same. A fight here has one player, so the Shiv is
+        // its owner's.
+        (Power::PhantomBladesPower, _, EventHook::CardEnteredCombat { at, card })
+            if card.tagged(CardTag::Shiv) =>
+        {
+            Some(HookEffect::AddKeyword {
+                to: sts2_core::Writing::One(at),
+                keyword: CardKeyword::Retain,
+            })
+        }
+        (Power::PhantomBladesPower, _, EventHook::CardEnteredCombat { .. }) => None,
         // `RoyaltiesPower.AfterCombatEnd`: a gold reward of its stack.
         (Power::RoyaltiesPower, PowerAmount::Counted(amount), EventHook::CombatEnd { .. }) => {
             Some(HookEffect::AddGoldReward(amount))
@@ -961,13 +1019,14 @@ pub(crate) fn event_hook(
             _,
             EventHook::PowerAmountChanged { .. } | EventHook::CardEnteredCombat { .. },
         ) => None,
-        // `BeforeApplied` and `AfterRemoved` are a power's own, and a move
-        // being performed is the move state's. Every power is asked these,
+        // `BeforeApplied`, `AfterApplied` and `AfterRemoved` are a power's
+        // own, and a move being performed is the move state's. Every power is asked these,
         // and one whose class does not override them does nothing.
         (
             _,
             _,
             EventHook::BeforeApplied { .. }
+            | EventHook::Applied
             | EventHook::Removed
             | EventHook::MonsterMovePerformed { .. },
         ) => None,

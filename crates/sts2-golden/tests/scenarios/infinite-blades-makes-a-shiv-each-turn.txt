@@ -1,0 +1,8 @@
+# `InfiniteBladesPower.BeforeHandDraw` puts a Shiv in hand before each turn's
+# draw, so the next hand holds the Shiv and five cards drawn after it.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"INFINITE_BLADES"}
+{"cmd":"grant","card":"INFINITE_BLADES"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":4}
+{"cmd":"end_turn"}

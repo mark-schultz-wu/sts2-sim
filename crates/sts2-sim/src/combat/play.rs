@@ -312,17 +312,28 @@ pub(super) fn carry_on<V: Rules>(
                 let Asker::Card(card) = &effect.asker else {
                     break;
                 };
-                if effect.plays.done >= effect.plays.count {
-                    break;
-                }
                 let card = *card;
                 let played_card = next
                     .cards
                     .named(card)
-                    .unwrap_or_else(|| unimplemented!("a replay of a card that left play"))
+                    .unwrap_or_else(|| {
+                        unimplemented!("a card that left play before its play ended")
+                    })
                     .face
                     .ident
                     .card;
+                finished::<V>(
+                    Fighting {
+                        live: &mut *next,
+                        streams: &mut *streams,
+                        relics: &mut *relics,
+                    },
+                    ascension,
+                    played_card,
+                );
+                if effect.plays.done >= effect.plays.count {
+                    break;
+                }
                 let mut board = Board::for_card(
                     next,
                     streams.combat(),
@@ -410,25 +421,36 @@ pub(super) fn carry_on<V: Rules>(
     };
     next.cards.leave_play(card, to);
 
-    // `AfterCardPlayed`, once the card has left the play pile. A relic that
-    // answers it acts through the board a card acts through, and draws from
-    // the same stream, so this is before the streams are written back.
-    let asked = super::listen::notify::<V>(
-        next,
+    if ended == Some(super::Ended::Won) {
+        super::listen::combat_ended::<V>(next, relics);
+    }
+    Ok(ended)
+}
+
+/// The end of one play of `card`: `History.CardPlayFinished`, then
+/// `AfterCardPlayed`, with the card still in the play pile.
+///
+/// Once for each play, so a card with replays finishes more than once. A
+/// relic that answers acts through the board a card acts through, and draws
+/// from the same stream.
+fn finished<V: Rules>(fighting: Fighting<'_, V>, ascension: V::AscensionLevel, card: V::Card) {
+    let Fighting {
+        live: next,
+        streams,
         relics,
-        sts2_core::EventHook::CardPlayed { card: card_played },
-    );
+    } = fighting;
+    next.finished.push(sts2_core::PlayFinished {
+        card,
+        round: next.round,
+        side: next.side,
+    });
+    let asked = super::listen::notify::<V>(next, relics, sts2_core::EventHook::CardPlayed { card });
     if !asked.is_empty() {
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
         hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }
-
-    if ended == Some(super::Ended::Won) {
-        super::listen::combat_ended::<V>(next, relics);
-    }
-    Ok(ended)
 }
 
 /// What a selection takes without asking, or nothing for one that is a

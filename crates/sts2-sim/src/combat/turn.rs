@@ -62,6 +62,7 @@ pub(crate) fn end<V: Rules>(
     // back only for a turn the player is taking. So the phase a fight ending
     // here reports is the one the enemy turn ran under.
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
+    next.side = <V::CombatSide as SideKinds>::ENEMY;
     clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::ENEMY);
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
@@ -99,6 +100,7 @@ pub(crate) fn end<V: Rules>(
     // is not an extra turn.
     next.round = next.round + num_traits::one();
     next.turn = next.turn + num_traits::one();
+    next.side = <V::CombatSide as SideKinds>::PLAYER;
 
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
@@ -119,6 +121,7 @@ pub(crate) fn end<V: Rules>(
     next.energy = max_energy;
     energy_reset::<V>(next, relics);
     energy_reset_late::<V>(next, streams.combat(), relics, ascension);
+    before_hand_draw::<V>(next, streams.combat(), relics, ascension);
     let drawn = hand_size::<V>(listen::Walk { live: next, relics }, next.turn);
     draw(next, streams.combat(), relics, ascension, drawn);
     // A relic's damage here can end the fight, and a fight ended in
@@ -433,8 +436,8 @@ pub(super) fn side_turn_started<V: Rules>(
 /// `FlushPlayerHand`: what is left in hand goes to the discard pile, unless
 /// a listener answers `ShouldFlush` no, which keeps the whole hand.
 ///
-/// A card that retains stays where it is. The keyword is all this reads:
-/// nothing in a fight sets it on a card that does not print it.
+/// A card that retains stays where it is, whether it prints the keyword or
+/// something in the fight wrote it on.
 #[tracing::instrument(level = "trace", skip_all)]
 fn flush_hand<V: Rules>(live: &mut Live<V>, relics: &crate::run::Belt<V>) {
     let player = live.player().id;
@@ -446,8 +449,7 @@ fn flush_hand<V: Rules>(live: &mut Live<V>, relics: &crate::run::Belt<V>) {
     ) {
         return;
     }
-    live.cards
-        .sift(Pile::Hand, Pile::Discard, |held| held.ident.card.retains());
+    live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
 }
 
 /// `Hook.AfterEnergyReset`, raised on every listener.
@@ -503,6 +505,40 @@ pub(super) fn energy_reset_late<V: Rules>(
                 super::board::summon_osty::<V>(live, rngs.reborrow(), relics, ascension, amount);
             }
             effect => unimplemented!("a listener asking for {effect:?} as energy resets late"),
+        }
+    }
+}
+
+/// `Hook.BeforeHandDraw`, once the energy is reset and before the turn's
+/// hand is drawn.
+///
+/// # Panics
+///
+/// A listener asking for something no hand draw carries out.
+#[tracing::instrument(level = "trace", skip_all)]
+pub(super) fn before_hand_draw<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+) {
+    let player = live.player().id;
+    let hook = sts2_core::EventHook::BeforeHandDraw { player };
+    for (_, effect) in listen::notify::<V>(live, relics, hook) {
+        match effect {
+            sts2_core::HookEffect::GenerateInHand { card, count } => {
+                let count = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("making {count:?} cards in hand"));
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::add_generated_cards(
+                    &mut board,
+                    sts2_core::CardIdent::new(card),
+                    Pile::Hand,
+                    count,
+                );
+            }
+            effect => unimplemented!("a listener asking for {effect:?} before the hand is drawn"),
         }
     }
 }
@@ -749,10 +785,15 @@ fn roll_moves<V: Rules>(
                 .iter()
                 .find(|creature| creature.id == held.creature)
                 .expect("a retained move machine has its creature");
-            let powers = live
-                .powers
-                .of(creature.id)
-                .map(|power| power.listener(creature.carrier()));
+            let powers = live.powers.of(creature.id).map(|power| {
+                // Field by field, because the machine is borrowed.
+                let history = sts2_core::History {
+                    finished: &live.finished,
+                    round: live.round,
+                    side: live.side,
+                };
+                power.listener(creature.carrier(), history)
+            });
             V::roll_monster_move(
                 held.monster,
                 ascension,

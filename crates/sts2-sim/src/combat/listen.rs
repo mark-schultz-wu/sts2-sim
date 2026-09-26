@@ -191,7 +191,7 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
                 pet_of: creature.owner,
                 alive: creature.alive,
             };
-            let listener = held.listener(creature.carrier());
+            let listener = held.listener(creature.carrier(), fight.live.history());
             if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
                 chosen = creature.id;
             }
@@ -373,7 +373,7 @@ pub(crate) fn each<V: Rules>(
             for held in live.powers.of(creature.id) {
                 let overrides = held.power().overrides();
                 if overrides.intersects(hooks) {
-                    ask(held.listener(creature.carrier()), overrides);
+                    ask(held.listener(creature.carrier(), live.history()), overrides);
                 }
             }
         }

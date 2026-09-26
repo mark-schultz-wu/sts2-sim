@@ -547,8 +547,8 @@ impl<V: Rules> Face<V> {
     /// `Keywords.Contains(Innate)` for this copy.
     ///
     /// The union of what the table prints and what has been written on. Asked
-    /// of Innate alone, because that is the one keyword something in a fight
-    /// both writes and reads. The rest are read off the table.
+    /// of Innate and Retain alone, because those are the keywords something
+    /// in a fight both writes and reads. The rest are read off the table.
     pub(super) fn innate(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
@@ -556,6 +556,18 @@ impl<V: Rules> Face<V> {
             || sts2_core::FlagSet::contains(
                 self.added_keywords,
                 <V::CardKeyword as KeywordKinds<V>>::INNATE,
+            )
+    }
+
+    /// `Keywords.Contains(Retain)` for this copy, the way [`Face::innate`]
+    /// reads Innate.
+    pub(super) fn retains(&self) -> bool {
+        use sts2_core::{CardTable as _, KeywordKinds};
+
+        self.ident.card.retains()
+            || sts2_core::FlagSet::contains(
+                self.added_keywords,
+                <V::CardKeyword as KeywordKinds<V>>::RETAIN,
             )
     }
 
@@ -977,7 +989,11 @@ impl<V: Rules> HeldPower<V> {
     ///
     /// A power is held by a creature and does not know which, so the caller
     /// that found it says.
-    pub(crate) fn listener(&self, carrier: Carrier<V>) -> Heard<'_, V> {
+    pub(crate) fn listener<'a>(
+        &'a self,
+        carrier: Carrier<V>,
+        history: sts2_core::History<'a, V>,
+    ) -> Heard<'a, V> {
         sts2_core::Listener::Power {
             power: self.power(),
             amount: self.amount.amount(),
@@ -987,6 +1003,7 @@ impl<V: Rules> HeldPower<V> {
             monster: carrier.monster,
             on_turn_start: self.on_turn_start.amount(),
             state: &self.state,
+            history,
         }
     }
 
@@ -1182,6 +1199,10 @@ pub(crate) struct Live<V: Rules> {
     pub(super) energy: V::Count,
     pub(super) stars: V::Count,
     pub(super) round: V::Count,
+    /// `ICombatState.CurrentSide`: whose turn it is.
+    pub(super) side: V::CombatSide,
+    /// `CombatManager.History`'s finished plays, oldest first.
+    pub(super) finished: Vec<sts2_core::PlayFinished<V>>,
     /// The encounter this active fight belongs to.
     pub(super) encounter: V::Encounter,
     pub(super) cards: super::cards::Cards<V>,
@@ -1216,12 +1237,22 @@ pub(crate) struct Live<V: Rules> {
     pub(super) asking: Option<Asking<V>>,
 }
 
+/// How many finished plays a copied fight has room for before its log grows.
+const PLAYS_AHEAD: usize = 8;
+
 impl<V: Rules> Clone for Live<V> {
     fn clone(&self) -> Self {
         Self {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
             returned: self.returned.clone(),
+            finished: {
+                // Room for the plays a copy goes on to make, so the first
+                // does not reallocate a log copied to its length.
+                let mut finished = Vec::with_capacity(self.finished.len() + PLAYS_AHEAD);
+                finished.extend_from_slice(&self.finished);
+                finished
+            },
             leaving: self.leaving.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
@@ -1242,6 +1273,8 @@ impl<V: Rules> Clone for Live<V> {
             energy,
             stars,
             round,
+            side,
+            finished,
             encounter,
             cards,
             removed_from_deck,
@@ -1263,6 +1296,8 @@ impl<V: Rules> Clone for Live<V> {
         *energy = source.energy;
         *stars = source.stars;
         *round = source.round;
+        *side = source.side;
+        finished.clone_from(&source.finished);
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
@@ -1380,6 +1415,15 @@ impl<V: Rules> Live<V> {
     }
 
     /// The player, which every fight has one of.
+    /// `CombatManager.History`, and where the fight stands now.
+    pub(crate) fn history(&self) -> sts2_core::History<'_, V> {
+        sts2_core::History {
+            finished: &self.finished,
+            round: self.round,
+            side: self.side,
+        }
+    }
+
     /// `CurrentRoom.RoomType`, which is the encounter's.
     pub(crate) fn room(&self) -> V::RoomType {
         <V::Encounter as sts2_core::EncounterTable>::room(self.encounter)
@@ -1641,8 +1685,10 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
         creatures: impl IntoIterator<Item = Fighter<sts2_content::v0_107_1::V0_107_1>>,
     ) -> Self {
         use sts2_content::v0_107_1::{
-            ascension::AscensionLevel, characters::Character, encounters::Encounter,
-            runstate::PlayerTurnPhase,
+            ascension::AscensionLevel,
+            characters::Character,
+            encounters::Encounter,
+            runstate::{CombatSide, PlayerTurnPhase},
         };
 
         Live {
@@ -1653,6 +1699,8 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             energy: 3,
             stars: 0,
             round: 1,
+            side: CombatSide::Player,
+            finished: Vec::new(),
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),

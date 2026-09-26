@@ -1,0 +1,13 @@
+# `PhantomBladesPower.AfterApplied` gives every Shiv Retain. One Shiv is
+# played for nine, and the other stays in hand as the turn ends. The next
+# turn's first Shiv carries the stack again, so it hits for nine too.
+#
+# A port that counts Shivs across turns shows the second at four.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"PHANTOM_BLADES_POWER","amount":5,"target":0}
+{"cmd":"play_card","index":4,"target":2}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":2}

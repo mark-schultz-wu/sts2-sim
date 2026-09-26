@@ -12,13 +12,13 @@ use num_traits::{Saturating as _, Zero};
 use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
 use sts2_core::{
-    Amount, CardAt, CardId, CardIdent, CardNumberModifier, CardVars, CombatId, Effect,
-    EffectResolution, Fight, HookEffect, Modify, ModifyHook, Pile, PowerAmount, PowerTable, Rules,
-    RunStreamKinds, Scaling, SideKinds, Stack,
+    Amount, CardAt, CardId, CardIdent, CardNumberModifier, CardTable as _, CardVars, CombatId,
+    Effect, EffectResolution, Fight, HookEffect, Modify, ModifyHook, Pile, PowerAmount, PowerTable,
+    Rules, RunStreamKinds, Scaling, SideKinds, Stack,
 };
 
 use super::listen::{Listener, Walk};
-use super::live::{CardInstance, Fighter, HeldPower, Live};
+use super::live::{CardInstance, Face, Fighter, HeldPower, Live};
 use super::powers::Powers as _;
 use crate::run::Belt;
 use crate::stream::CombatRngs;
@@ -257,6 +257,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.live
                     .powers
                     .push(id, HeldPower::new(power, amount.into(), applier));
+                self.applied(id, power);
                 // An endless power lands no number, so the hook that reads
                 // one has nothing to read.
                 if let PowerAmount::Counted(delta) = amount {
@@ -264,6 +265,28 @@ impl<'a, V: Rules> Board<'a, V> {
                 }
             }
         }
+    }
+
+    /// `PowerModel.AfterApplied`, asked of the instance of `power` that `id`
+    /// has just taken on, and of nothing else.
+    fn applied(&mut self, id: CombatId, power: V::Power) {
+        let Some(at) = self.at(id) else { return };
+        let carrier = self.live.creatures[at].carrier();
+        let Some(held) = self
+            .live
+            .powers
+            .of_mut(id)
+            .find(|held| held.power() == power)
+        else {
+            return;
+        };
+        let mut asked = sts2_core::HookEffects::new();
+        <V as sts2_core::Hooks>::power_event_hook(
+            held.event_power(carrier),
+            sts2_core::EventHook::Applied,
+            &mut asked,
+        );
+        self.write_cards(asked);
     }
 
     /// `PowerCmd.ModifyAmount` on the instance of `power` that `id` carries,
@@ -308,7 +331,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 delta,
             },
         );
-        self.add_replays(asked.into_iter().map(|(_, effect)| effect));
+        self.write_cards(asked.into_iter().map(|(_, effect)| effect));
     }
 
     /// What `PowerCmd.Apply` does that `ModifyAmount` does not.
@@ -390,34 +413,51 @@ impl<'a, V: Rules> Board<'a, V> {
             self.relics,
             sts2_core::EventHook::CardEnteredCombat { at, card },
         );
-        self.add_replays(asked.into_iter().map(|(_, effect)| effect));
+        self.write_cards(asked.into_iter().map(|(_, effect)| effect));
     }
 
     /// Carry out what the card-writing hooks asked for.
     ///
-    /// The two of them ask for one thing. It is the only effect a fight
-    /// carries out against its own cards rather than against a creature.
-    fn add_replays(&mut self, asked: impl IntoIterator<Item = sts2_core::HookEffect<V>>) {
+    /// Replays and keywords, which are the effects a fight carries out
+    /// against its own cards rather than against a creature.
+    fn write_cards(&mut self, asked: impl IntoIterator<Item = sts2_core::HookEffect<V>>) {
         for effect in asked {
-            let sts2_core::HookEffect::AddReplays { to, amount } = effect else {
-                unimplemented!("a power asking for {effect:?} as it writes on cards")
-            };
-            match to {
-                sts2_core::Replaying::One(at) => {
-                    let index = self.standing(at);
-                    self.live.cards.write(at.pile(), index, |held| {
-                        held.replay(amount);
-                        true
-                    });
+            match effect {
+                sts2_core::HookEffect::AddReplays { to, amount } => {
+                    self.write_on(to, |held| held.replay(amount))
                 }
-                // `PlayerCombatState.AllCards`, which the exhaust and play
-                // piles are among. A blade taken out of the fight is written
-                // on and never played again.
-                sts2_core::Replaying::EveryCopyOf(card) => self
-                    .live
-                    .cards
-                    .write_all_cards(|held| held.ident.card == card, |held| held.replay(amount)),
+                sts2_core::HookEffect::AddKeyword { to, keyword } => self.write_on(to, |held| {
+                    held.modify(
+                        sts2_core::Change::AddKeyword(keyword),
+                        sts2_core::Lasting::ThisFight,
+                    )
+                }),
+                effect => unimplemented!("a power asking for {effect:?} as it writes on cards"),
             }
+        }
+    }
+
+    /// Write on each card `to` names.
+    fn write_on(&mut self, to: sts2_core::Writing<V>, write: impl Fn(&mut Face<V>)) {
+        match to {
+            sts2_core::Writing::One(at) => {
+                let index = self.standing(at);
+                self.live.cards.write(at.pile(), index, |held| {
+                    write(held);
+                    true
+                });
+            }
+            // `PlayerCombatState.AllCards`, which the exhaust and play piles
+            // are among. A blade taken out of the fight is written on and
+            // never played again.
+            sts2_core::Writing::EveryCopyOf(card) => self
+                .live
+                .cards
+                .write_all_cards(|held| held.ident.card == card, write),
+            sts2_core::Writing::EveryTagged(tag) => self
+                .live
+                .cards
+                .write_all_cards(|held| held.ident.card.tagged(tag), write),
         }
     }
 
@@ -474,7 +514,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 && creature.alive
                 && !self.live.powers.of(creature.id).any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
-                        held.listener(creature.carrier()),
+                        held.listener(creature.carrier(), self.live.history()),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
                     )
                     .is_decision_and(|counts| !counts)
@@ -646,7 +686,7 @@ impl<'a, V: Rules> Board<'a, V> {
             .of(id)
             .map(|subject| {
                 let itself = <V as sts2_core::Hooks>::decide_hook(
-                    subject.listener(carrier),
+                    subject.listener(carrier, self.live.history()),
                     sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
                 )
                 .is_decision_and(|remove| !remove);
@@ -1669,15 +1709,23 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         pile: Pile,
         count: usize,
     ) -> Vec<CardAt<V>> {
+        // `IsInProgress`, which a fight already over fails.
+        if self.ended.is_some() {
+            return Vec::new();
+        }
         let mut added = Vec::with_capacity(count);
         for _ in 0..count {
             let id = self.live.card_ids.mint();
+            // A full hand sends the card to the discard pile instead.
+            let full = pile == Pile::Hand
+                && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+            let pile = if full { Pile::Discard } else { pile };
             let index = num_traits::NumCast::from(self.live.cards.len(pile))
                 .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
             self.live.cards.push(pile, CardInstance::new(card, id));
-            added.push(CardAt::new(id, pile, index));
-        }
-        for &at in &added {
+            let at = CardAt::new(id, pile, index);
+            added.push(at);
+            // `CardPileCmd.Add` raises this for each card as it lands.
             self.card_entered_combat(at, card.card);
         }
         added

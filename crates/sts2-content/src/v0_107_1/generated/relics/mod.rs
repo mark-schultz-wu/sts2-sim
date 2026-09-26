@@ -1514,7 +1514,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // BLACK_STAR
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRewards),
     // BLESSED_ANTLER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // BLOOD_SOAKED_ROSE
     sts2_core::Overrides::from_bits(0),
     // BLOOD_VIAL
@@ -1688,7 +1688,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // FROZEN_EGG
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // FUNERARY_MASK
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // FUR_COAT
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
@@ -1749,7 +1749,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // IVORY_TILE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // JEWELED_MASK
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // JEWELRY_BOX
     sts2_core::Overrides::from_bits(0),
     // JOSS_PAPER
@@ -1867,7 +1867,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // NEW_LEAF
     sts2_core::Overrides::from_bits(0),
     // NINJA_SCROLL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // NUNCHAKU
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // NUTRITIOUS_OYSTER
@@ -1996,7 +1996,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // PUNCH_DAGGER
     sts2_core::Overrides::from_bits(0),
     // RADIANT_PEARL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // RAINBOW_RING
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
@@ -2130,9 +2130,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // TINY_MAILBOX
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteHealRewards),
     // TOASTY_MITTENS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // TOOLBOX
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // TOUCH_OF_OROBAS
     sts2_core::Overrides::from_bits(0),
     // TOUGH_BANDAGES

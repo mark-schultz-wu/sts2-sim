@@ -120,6 +120,7 @@ impl sts2_core::Hooks for V0_107_1 {
                 monster,
                 on_turn_start,
                 state,
+                history,
             } => {
                 let held = behaviour::powers::Held {
                     owner,
@@ -128,7 +129,7 @@ impl sts2_core::Hooks for V0_107_1 {
                     monster,
                     on_turn_start,
                 };
-                behaviour::powers::modify_hook(power, amount, held, state, hook)
+                behaviour::powers::modify_hook(power, amount, held, state, history, hook)
             }
             sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
             // The fight asks only a monster whose class overrides the hook,

@@ -560,10 +560,11 @@ pub enum ModelHook {
     ShouldFlush,
     BeforeAttack,
     AfterAttack,
+    BeforeHandDraw,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 66] = [
+    pub const ALL: [ModelHook; 67] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -630,6 +631,7 @@ impl ModelHook {
         ModelHook::ShouldFlush,
         ModelHook::BeforeAttack,
         ModelHook::AfterAttack,
+        ModelHook::BeforeHandDraw,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -707,6 +709,7 @@ impl ModelHook {
             ModelHook::ShouldFlush => "ShouldFlush",
             ModelHook::BeforeAttack => "BeforeAttack",
             ModelHook::AfterAttack => "AfterAttack",
+            ModelHook::BeforeHandDraw => "BeforeHandDraw",
         }
     }
 }
@@ -1042,6 +1045,8 @@ pub trait StreamKinds: std::fmt::Debug + Copy + Eq + 'static {
 pub trait KeywordKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
     /// Starts the fight in hand, which `OnUpgrade` adds to three cards.
     const INNATE: Self;
+    /// Stays in hand as the turn ends, which a power writes onto Shivs.
+    const RETAIN: Self;
 }
 
 /// The things a rest site can offer, as consts a rule can name.
@@ -2035,6 +2040,11 @@ pub enum EventHook<V: ContentVersion> {
         /// `PlayerCombatState.TurnNumber`.
         turn: V::Count,
     },
+    /// `BeforeHandDraw`, once the player's energy is reset and before the
+    /// turn's hand is drawn.
+    BeforeHandDraw {
+        player: crate::CombatId,
+    },
     /// `AfterPlayerTurnStart`, once the player has drawn and before the side
     /// turn starts.
     PlayerTurnStart {
@@ -2113,6 +2123,10 @@ pub enum EventHook<V: ContentVersion> {
     /// `PowerModel.AfterRemoved`, asked of a power as it comes off the
     /// creature that carried it.
     Removed,
+    /// `PowerModel.AfterApplied`, asked of a new instance once it is on, and
+    /// before `AfterPowerAmountChanged`. A stack landing on one already
+    /// there is not asked.
+    Applied,
     /// `Hook.BeforeDeath`, carrying the creature about to die.
     ///
     /// Raised once its hit points are gone and before anything decides
@@ -2186,9 +2200,9 @@ impl<V: ContentVersion> EventHook<V> {
     /// The `AbstractModel` hook this is raised as.
     ///
     /// Nothing for a notification the dump has no row for. `AfterObtained` is
-    /// a relic's own virtual, and `BeforeApplied` and `AfterRemoved` a
-    /// power's. A move being
-    /// performed is the move state's. A model's overrides cannot say whether
+    /// a relic's own virtual. `BeforeApplied`, `AfterApplied` and
+    /// `AfterRemoved` are a power's. A move being performed is the move
+    /// state's. A model's overrides cannot say whether
     /// it answers one of those, so it is always asked.
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
@@ -2199,6 +2213,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RestSiteHeal { .. } => ModelHook::AfterRestSiteHeal,
             EventHook::CombatVictory { .. } => ModelHook::AfterCombatVictory,
             EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
+            EventHook::BeforeHandDraw { .. } => ModelHook::BeforeHandDraw,
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
@@ -2219,23 +2234,63 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::AfterAttack { .. } => ModelHook::AfterAttack,
             EventHook::Obtained
             | EventHook::Removed
+            | EventHook::Applied
             | EventHook::BeforeApplied { .. }
             | EventHook::MonsterMovePerformed { .. } => return None,
         })
     }
 }
 
-/// Which cards a [`HookEffect::AddReplays`] writes on.
+/// Which cards a hook writes on, for [`HookEffect::AddReplays`] and
+/// [`HookEffect::AddKeyword`].
 ///
 /// `PowerModel` reaches cards two ways, and both are here. `AllCards` is the
-/// combat state's own list. A listener that walks it names the card it wants
+/// combat state's own list. A listener that walks it names what it wants
 /// rather than the copies, and the fight does the walking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Replaying<V: ContentVersion> {
+pub enum Writing<V: ContentVersion> {
     /// One copy, named where it sits.
     One(crate::CardAt<V>),
     /// Every copy of one card the fight holds, in every pile.
     EveryCopyOf(V::Card),
+    /// Every card the fight holds that carries this tag, in every pile.
+    EveryTagged(V::CardTag),
+}
+
+/// One `CardPlayFinishedEntry` in `CombatManager.History`: a card's play
+/// that ran to its end, and when.
+///
+/// A card with replays finishes once for each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlayFinished<V: ContentVersion> {
+    pub card: V::Card,
+    /// `RoundNumber` as the play finished.
+    pub round: V::Count,
+    /// `CurrentSide` as the play finished.
+    pub side: V::CombatSide,
+}
+
+/// `CombatManager.History`, as far as a listener reads it, and where the
+/// fight stands now.
+#[derive(Debug, Clone, Copy)]
+pub struct History<'a, V: ContentVersion> {
+    /// Every play that finished this fight, oldest first.
+    pub finished: &'a [PlayFinished<V>],
+    /// `ICombatState.RoundNumber`.
+    pub round: V::Count,
+    /// `ICombatState.CurrentSide`.
+    pub side: V::CombatSide,
+}
+
+impl<V: ContentVersion> History<'_, V> {
+    /// `CardPlaysFinished` where `HappenedThisTurn`: the same round, on the
+    /// same side's turn.
+    pub fn finished_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
+        self.finished
+            .iter()
+            .filter(|entry| entry.round == self.round && entry.side == self.side)
+            .map(|entry| entry.card)
+    }
 }
 
 /// What the listeners an event reaches ask for, in the order they ask.
@@ -2448,6 +2503,12 @@ pub enum HookEffect<V: ContentVersion> {
     LoseEnergy(V::Number),
     /// `CardPileCmd.Draw` for the player.
     Draw(V::Number),
+    /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
+    /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
+    GenerateInHand {
+        card: V::Card,
+        count: V::Number,
+    },
     /// `ForgeCmd.Forge` from a power hook.
     Forge {
         card: V::Card,
@@ -2467,8 +2528,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// out reach different cards: one walks `AllCards`, and the other is given
     /// the single card that just arrived.
     AddReplays {
-        to: Replaying<V>,
+        to: Writing<V>,
         amount: V::Number,
+    },
+    /// `CardCmd.ApplyKeyword`, which writes a word onto each card named.
+    AddKeyword {
+        to: Writing<V>,
+        keyword: V::CardKeyword,
     },
     TickDownDuration,
     /// `PowerCmd.Decrement(this)`: one off the amount, and the instance goes
@@ -2614,6 +2680,9 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// What this instance saves for itself, which is every field of its
         /// own model. A power writes here rather than ask the fight to.
         state: &'a V::PowerState,
+        /// What the fight has done so far, which a power reads rather than
+        /// counts for itself.
+        history: History<'a, V>,
     },
     Relic(&'a V::RelicState),
     /// A monster's own model, which the fight asks after the powers on its
