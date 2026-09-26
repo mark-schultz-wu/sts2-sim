@@ -825,6 +825,27 @@ impl<'a, V: Rules> Board<'a, V> {
         lost
     }
 
+    /// `DoomPower.DoomKill`: each creature in `doomed` loses what hit points
+    /// it has and dies, in order, then `AfterDiedToDoom`.
+    ///
+    /// # Panics
+    ///
+    /// A listener to `AfterDiedToDoom` or `AfterCurrentHpChanged`.
+    pub(super) fn doom_kill(&mut self, doomed: &[CombatId]) {
+        self.unheard(sts2_core::ModelHook::AfterCurrentHpChanged);
+        for &creature in doomed {
+            let Some(at) = self.at(creature) else {
+                continue;
+            };
+            let hp = V::Number::from(self.live.creatures[at].hp);
+            self.lose_hp(creature, hp);
+            if let Some(at) = self.at(creature) {
+                self.kill(at);
+            }
+        }
+        self.unheard(sts2_core::ModelHook::AfterDiedToDoom);
+    }
+
     /// Carry out what the powers asked for after a hit or a broken block,
     /// each on the creature carrying it.
     fn after_hit(&mut self, asked: impl IntoIterator<Item = (Listener<V>, HookEffect<V>)>) {
@@ -834,6 +855,11 @@ impl<'a, V: Rules> Board<'a, V> {
             };
             match effect {
                 HookEffect::RemoveFromOwner(power) => self.live.remove_power(owner, power),
+                HookEffect::ApplyPower {
+                    target,
+                    power,
+                    amount,
+                } => self.land(target, power, amount, Some(owner)),
                 // `CreatureCmd.Damage`, unpowered, from the power's owner.
                 HookEffect::Damage { target, amount } => {
                     let hit = resolve::<V>(
@@ -1406,8 +1432,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 // hit killed is not told it was hit: it dies once they are
                 // done.
                 let mut dying: SmallVec<[CombatId; 2]> = SmallVec::new();
+                let pet_of = self.at(dealer).and_then(|at| self.live.creatures[at].owner);
                 for (receiver, lost, killed) in results {
                     let aimed = receiver == target;
+                    // `TotalDamage`, whose blocked part is the aimed
+                    // creature's alone.
+                    let total = match aimed {
+                        true => blocked + lost,
+                        false => lost,
+                    };
                     if aimed && block_broken {
                         let asked = super::listen::notify::<V>(
                             self.live,
@@ -1421,6 +1454,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                         self.relics,
                         sts2_core::EventHook::DamageGiven {
                             dealer,
+                            pet_of,
+                            target: receiver,
+                            total,
+                            powered,
                             fully_blocked: aimed && fully_blocked,
                         },
                     );

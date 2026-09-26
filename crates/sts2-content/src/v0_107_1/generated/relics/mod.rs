@@ -1529,7 +1529,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // BOOK_OF_FIVE_RINGS
     sts2_core::Overrides::from_bits(0),
     // BOOK_REPAIR_KNIFE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDiedToDoom),
     // BOOMING_CONCH
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
@@ -1589,7 +1589,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // CLAWS
     sts2_core::Overrides::from_bits(0),
     // CLOAK_CLASP
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // CRACKED_CORE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
     // CROSSBOW
@@ -1613,7 +1613,8 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // DIAMOND_DIADEM
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
-        .with(sts2_core::ModelHook::AfterCombatEnd),
+        .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // DINGY_RUG
     sts2_core::Overrides::from_bits(0),
     // DISTINGUISHED_CAPE
@@ -1664,7 +1665,10 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // FAKE_MERCHANTS_RUG
     sts2_core::Overrides::from_bits(0),
     // FAKE_ORICHALCUM
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::BeforeSideTurnEnd)
+        .with(sts2_core::ModelHook::BeforeSideTurnEndVeryEarly)
+        .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // FAKE_SNECKO_EYE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
     // FAKE_STRIKE_DUMMY
@@ -1884,7 +1888,10 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // ORANGE_DOUGH
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // ORICHALCUM
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnStart),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::BeforeSideTurnEnd)
+        .with(sts2_core::ModelHook::BeforeSideTurnEndVeryEarly)
+        .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // ORNAMENTAL_FAN
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
@@ -1921,7 +1928,8 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // PAELS_TEARS
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
-        .with(sts2_core::ModelHook::AfterSideTurnStart),
+        .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // PAELS_TOOTH
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
     // PAELS_WING
@@ -2033,6 +2041,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::BeforeSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // ROYAL_POISON
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
@@ -2049,7 +2058,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // SAND_CASTLE
     sts2_core::Overrides::from_bits(0),
     // SCREAMING_FLAGON
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // SCROLL_BOXES
     sts2_core::Overrides::from_bits(0),
     // SEAL_OF_GOLD
@@ -2095,7 +2104,8 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterRoomEntered)
-        .with(sts2_core::ModelHook::AfterSideTurnStart),
+        .with(sts2_core::ModelHook::AfterSideTurnStart)
+        .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // STONE_CRACKER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // STONE_HUMIDIFIER

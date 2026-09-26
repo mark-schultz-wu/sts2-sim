@@ -4265,7 +4265,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // REFRACT
     sts2_core::Overrides::from_bits(0),
     // REGRET
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // RELAX
     sts2_core::Overrides::from_bits(0),
     // REND
