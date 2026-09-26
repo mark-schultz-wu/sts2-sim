@@ -32,16 +32,21 @@ fn main() {
     println!("cargo::rerun-if-changed=tests/scenarios");
     println!("cargo::rerun-if-env-changed=STS2_GAME_DIR");
     println!("cargo::rerun-if-env-changed=STS2_GAME_VERSION");
+    println!("cargo::rerun-if-env-changed=STS2_ORACLE_STORE");
 
     let cache = cache_dir();
     std::fs::create_dir_all(&cache).expect("the cache directory is creatable");
     println!("cargo::rustc-env=STS2_ORACLE_CACHE={}", cache.display());
+    let store = std::env::var_os("STS2_ORACLE_STORE").map(PathBuf::from);
+    if let Some(store) = &store {
+        std::fs::create_dir_all(store).expect("the oracle store is creatable");
+    }
 
     // One game answers every miss. `start` restarts the run in place, so a
     // launch is paid once rather than once for each recording.
     let mut game = None;
     for (name, recording) in every_recording() {
-        if let Err(why) = ensure(&name, &recording, &cache, &mut game) {
+        if let Err(why) = ensure(&name, &recording, &cache, store.as_deref(), &mut game) {
             // A warning and not a failure. Somebody without the game vendored
             // still builds and still runs everything that does not need it.
             println!("cargo::warning=no oracle transcript for {name}: {why}");
@@ -118,10 +123,13 @@ fn runs() -> Vec<PathBuf> {
 /// The build needs no part of it. A recording carries the build it was taken
 /// on, and `recording::read` refuses one that does not describe the tables. So
 /// one recording cannot be answered by two builds.
+///
+/// A miss here goes to `store` first. See [`Stored`].
 fn ensure(
     name: &str,
     recording: &str,
     cache: &Path,
+    store: Option<&Path>,
     game: &mut Option<Oracle<V>>,
 ) -> Result<(), String> {
     let bytes = recording.as_bytes();
@@ -133,6 +141,14 @@ fn ensure(
         && transcript.is_file()
     {
         return Ok(());
+    }
+
+    let stored = store.map(|store| Stored::new(store, name, fnv1a(bytes)));
+    if let Some(stored) = &stored
+        && stored.take(&transcript)
+    {
+        return std::fs::write(&stamped, key)
+            .map_err(|e| format!("writing {}: {e}", stamped.display()));
     }
 
     let recorded = recording::read::<V>(std::io::Cursor::new(bytes))
@@ -149,15 +165,15 @@ fn ensure(
     let _ = std::fs::remove_file(&transcript);
     let _ = std::fs::remove_file(&stamped);
 
-    // The start goes first and is not a step. `Play::begin` takes it, so
-    // `steps()` does not carry it, and a game driven from `steps()` alone
-    // plays whatever character it launched in.
     // Taken, and put back only once the recording is filled. A game that
     // failed partway is dropped, and the next miss launches a fresh one.
     let oracle = match game.take() {
         Some(oracle) => oracle,
         None => Oracle::<V>::launch(Config::new(dir)).map_err(|e| format!("launching: {e}"))?,
     };
+    // The start goes first and is not a step. `Play::begin` takes it, so
+    // `steps()` does not carry it, and a game driven from `steps()` alone
+    // plays whatever character it launched in.
     let mut cached = Cached::begin(
         FromTranscript {
             path: transcript.clone(),
@@ -171,8 +187,58 @@ fn ensure(
         .map_err(|e| format!("replaying {name}: {e}"))?;
     *game = cached.into_inner();
 
+    if let Some(stored) = &stored {
+        stored.put(&transcript)?;
+    }
     std::fs::write(&stamped, key).map_err(|e| format!("writing {}: {e}", stamped.display()))?;
     Ok(())
+}
+
+/// One transcript's place in a store that outlives the target directory.
+///
+/// CI starts every job with an empty target directory. A store is a directory
+/// the job mounts, named by `STS2_ORACLE_STORE`, which keeps what earlier jobs
+/// recorded. A miss is looked for there before the game is asked, and what the
+/// game answers goes into it.
+struct Stored {
+    path: PathBuf,
+}
+
+impl Stored {
+    /// Named by the whole key, so a transcript in the store never changes. Two
+    /// branches with different versions of one scenario keep one file each.
+    fn new(store: &Path, name: &str, recording: u64) -> Self {
+        Self {
+            path: store.join(format!("{name}.{recording:016x}.{MOD_IDENTITY}.jsonl")),
+        }
+    }
+
+    /// Copies the stored transcript to `transcript`, and says whether there
+    /// was one. A hit moves the file's time, so pruning by age keeps the
+    /// transcripts still in use.
+    fn take(&self, transcript: &Path) -> bool {
+        if std::fs::copy(&self.path, transcript).is_err() {
+            return false;
+        }
+        if let Ok(file) = std::fs::File::options().append(true).open(&self.path) {
+            let _ = file.set_modified(std::time::SystemTime::now());
+        }
+        true
+    }
+
+    /// Puts `transcript` in the store: a copy beside the name, then a rename
+    /// onto it.
+    ///
+    /// So jobs that run at once can share a store. Two jobs that both record a
+    /// miss write two answers that are equally good.
+    fn put(&self, transcript: &Path) -> Result<(), String> {
+        let partial = self
+            .path
+            .with_extension(format!("{}.partial", std::process::id()));
+        std::fs::copy(transcript, &partial)
+            .and_then(|_| std::fs::rename(&partial, &self.path))
+            .map_err(|e| format!("storing {}: {e}", self.path.display()))
+    }
 }
 
 /// FNV-1a, so the key means the same thing next year.
