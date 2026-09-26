@@ -1,0 +1,7 @@
+# `AttackPotion` offers three distinct attacks from the Defect's pool, drawn
+# off `CombatCardGeneration`. The one taken goes to hand, free this turn.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","potion":"ATTACK_POTION"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[0]}

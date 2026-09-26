@@ -260,9 +260,6 @@ pub(super) fn orb_triggers<V: Rules>(
     ) {
         unimplemented!("a listener changing how often an orb triggers");
     }
-    if listen::heard::<V>(live, relics, sts2_core::ModelHook::ModifyOrbValue) {
-        unimplemented!("a listener to an orb's value");
-    }
     for orb in &held {
         let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
         match at {
@@ -444,6 +441,42 @@ pub(super) fn carry_setup<V: Rules>(
                                 count,
                             );
                         }
+                        sts2_core::HookEffect::GenerateOfKind { kind, count } => {
+                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
+                                unimplemented!("making {count:?} cards of one kind")
+                            });
+                            for _ in 0..count {
+                                // `GetDistinctForCombat` over the pool afresh
+                                // each time, in the pool's own order.
+                                let mut cards: Vec<V::Card> = V::combat_cards(live.character)
+                                    .iter()
+                                    .copied()
+                                    .filter(|card| V::card_kind(*card) == Some(kind))
+                                    .collect();
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                // `FirstOrDefault`: an empty pool gives nothing.
+                                let Ok([card]) = sts2_core::Fight::generate_cards::<1>(
+                                    &mut board,
+                                    &mut cards,
+                                    <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION,
+                                ) else {
+                                    continue;
+                                };
+                                sts2_core::Fight::add_generated_cards(
+                                    &mut board,
+                                    card,
+                                    Pile::Hand,
+                                    1,
+                                );
+                            }
+                        }
                         sts2_core::HookEffect::ShuffleIfNecessary => {
                             if live.cards.is_empty(Pile::Draw) {
                                 live.cards.reshuffle(rngs.shuffle);
@@ -517,6 +550,35 @@ pub(super) fn carry_setup<V: Rules>(
                                     },
                                     question,
                                 });
+                            }
+                        }
+                        // `OrbCmd.Passive` on whichever orb is first each
+                        // time, which returns once the fight is ending.
+                        sts2_core::HookEffect::FirstOrbPassive(count) => {
+                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
+                                unimplemented!("{count:?} orb passives at once")
+                            });
+                            for _ in 0..count {
+                                let Some(first) = live
+                                    .orbs
+                                    .as_ref()
+                                    .and_then(|orbs| orbs.queue.first().cloned())
+                                else {
+                                    break;
+                                };
+                                if ended.is_some() {
+                                    break;
+                                }
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                V::orb_passive(&first, &mut board);
+                                ended = ended.or(board.ended);
                             }
                         }
                         effect => unimplemented!(
@@ -686,6 +748,23 @@ pub(super) fn side_turn_started<V: Rules>(
                 let gained: V::Count = num_traits::cast(amount)
                     .unwrap_or_else(|| unimplemented!("{amount:?} energy at once"));
                 live.energy = live.energy + gained;
+            }
+            // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
+            sts2_core::HookEffect::GainBlockPerOrbKind(amount) => {
+                let Listener::Power { owner, .. } = listener else {
+                    unimplemented!("{listener:?} gaining block for its orbs")
+                };
+                let mut kinds: SmallVec<[V::Orb; 10]> = SmallVec::new();
+                for held in live.orbs.iter().flat_map(|orbs| &orbs.queue) {
+                    if !kinds.contains(&held.orb) {
+                        kinds.push(held.orb);
+                    }
+                }
+                let count: V::Number = num_traits::cast(kinds.len())
+                    .expect("a queue's kinds of orb fit a game number");
+                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
+                    creature.block = creature.block + amount * count;
+                }
             }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }

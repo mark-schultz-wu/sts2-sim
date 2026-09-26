@@ -781,7 +781,7 @@ impl Sink {
         self.seq(fight.exhaust(), |sink, card| sink.card(&card));
         self.seq(fight.creatures(), |sink, creature| sink.creature(&creature));
         self.seq(fight.legal(), |sink, playable| sink.playable(&playable));
-        self.orbs(fight.orbs());
+        self.orbs(fight.orbs().as_deref());
     }
 
     fn creature<V: ContentVersion>(&mut self, creature: &impl ObservedCreature<V>) {

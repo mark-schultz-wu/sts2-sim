@@ -287,6 +287,10 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::orbs::evoke(orb, fight);
     }
 
+    fn orb_passive<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
+        behaviour::orbs::passive(orb, fight);
+    }
+
     fn starting_potion_slots() -> usize {
         3
     }
@@ -345,6 +349,10 @@ impl sts2_core::Rules for V0_107_1 {
 
     fn reward_cards(character: Self::Character) -> sts2_core::Drafted<'static, Self::Card> {
         generated::cards::reward_cards(character)
+    }
+
+    fn combat_cards(character: Self::Character) -> &'static [Self::Card] {
+        generated::cards::combat_cards(sts2_core::Table::data(character).card_pool)
     }
 
     /// The card whose type the fight works out is on no shelf. A merchant

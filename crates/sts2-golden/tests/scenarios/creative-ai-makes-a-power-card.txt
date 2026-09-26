@@ -1,0 +1,6 @@
+# `CreativeAiPower.BeforeHandDraw` puts a Power card from the Defect's pool
+# into hand before the draw, drawn off `CombatCardGeneration`.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"CREATIVE_AI_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

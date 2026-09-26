@@ -128,7 +128,7 @@ pub(super) fn sections<V: ContentVersion>(
             Section::Room => sink.maybe(observed.room(), |sink, room| sink.room(room.borrow())),
             Section::Turn => sink.maybe(fight.as_ref(), |sink, fight| {
                 sink.fight_scalars(fight);
-                sink.orbs(fight.orbs());
+                sink.orbs(fight.orbs().as_deref());
             }),
             Section::Creatures => sink.maybe(fight.as_ref(), |sink, fight| {
                 sink.seq(fight.creatures(), |sink, creature| sink.creature(&creature));

@@ -1,0 +1,7 @@
+# `LoopPower.AfterPlayerTurnStart` runs the first orb's passive its stack of
+# times once the player has drawn. The Lightning hits a slime as the turn
+# ends, and once more as the next one starts.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"LOOP_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

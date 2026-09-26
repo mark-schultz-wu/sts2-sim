@@ -38,9 +38,17 @@ pub(crate) fn channelled(orb: Orb) -> Channelled<V> {
 /// `BeforeTurnEndOrbTrigger`.
 pub(crate) fn turn_end<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
     match orb.orb {
-        // `Passive(null)`: its passive number to a random enemy.
-        Orb::LightningOrb => lightning(orb.passive, fight),
+        Orb::LightningOrb => passive(orb, fight),
         orb => unimplemented!("what {orb:?} does as a turn ends"),
+    }
+}
+
+/// `Passive(null)`.
+pub(crate) fn passive<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
+    match orb.orb {
+        // Its passive number to a random enemy.
+        Orb::LightningOrb => lightning(fight.orb_value(orb.orb, orb.passive), fight),
+        orb => unimplemented!("what {orb:?} does as its passive"),
     }
 }
 
@@ -55,7 +63,7 @@ pub(crate) fn turn_start<F: Fight<V>>(orb: &Channelled<V>, _fight: &mut F) {
 /// `Evoke`.
 pub(crate) fn evoke<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
     match orb.orb {
-        Orb::LightningOrb => lightning(orb.evoke, fight),
+        Orb::LightningOrb => lightning(fight.orb_value(orb.orb, orb.evoke), fight),
         orb => unimplemented!("what {orb:?} does as it is evoked"),
     }
 }
