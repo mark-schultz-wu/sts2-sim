@@ -1091,6 +1091,9 @@ pub trait KeywordKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static
     const RETAIN: Self;
     /// Plays itself once discarded.
     const SLY: Self;
+    /// Exhausts from hand as the turn ends, which a power writes onto cards
+    /// it makes.
+    const ETHEREAL: Self;
 }
 
 /// The things a rest site can offer, as consts a rule can name.
@@ -2158,6 +2161,9 @@ pub enum EventHook<V: ContentVersion> {
     CardDrawn {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `Keywords.Contains(Ethereal)` for the copy drawn, which a word
+        /// written on it counts toward.
+        ethereal: bool,
     },
     /// `BeforeApplied`, asked of a power on its way onto a creature.
     ///
@@ -2459,6 +2465,15 @@ pub const HOOK_EFFECTS: usize = 4;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttackId(pub u32);
 
+/// Which of the character's combat pool a generation effect draws from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolFilter {
+    /// The cards of one type.
+    OfKind(CardKind),
+    /// Every card but the `Basic` and `Ancient` ones.
+    NotBasicOrAncient,
+}
+
 /// `CardPilePosition`: which end of a pile a card goes to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PilePosition {
@@ -2686,12 +2701,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// `OrbCmd.Passive` on the first orb the owner holds, `count` times, and
     /// nothing with no orb.
     FirstOrbPassive(V::Number),
-    /// `count` times, one card of `kind` from the character's combat pool,
-    /// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`,
-    /// into hand.
-    GenerateOfKind {
-        kind: CardKind,
+    /// `count` times, one card of the character's combat pool that `filter`
+    /// keeps, drawn by `CardFactory.GetDistinctForCombat` off
+    /// `CombatCardGeneration`. Each carries `keyword` where one is named, and
+    /// they go into hand.
+    GenerateFromPool {
+        filter: PoolFilter,
         count: V::Number,
+        keyword: Option<V::CardKeyword>,
     },
     /// One change written on the card that asked, as its own
     /// `EnergyCost.AddThisCombat` or kin write it.
