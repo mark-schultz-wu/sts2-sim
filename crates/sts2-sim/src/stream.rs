@@ -69,12 +69,13 @@ impl<V: Rules> Streams<V> {
     /// the row where it lies, and there is nothing to put back.
     pub(crate) fn combat(&mut self) -> CombatRngs<'_> {
         let kinds = V::run_rng_types();
-        let [shuffle, niche, generation, ai, targets] = self
+        let [shuffle, niche, generation, selection, ai, targets] = self
             .run
             .get_disjoint_mut([
                 slot(kinds, V::RunRngType::SHUFFLE),
                 slot(kinds, V::RunRngType::NICHE),
                 slot(kinds, V::RunRngType::COMBAT_CARD_GENERATION),
+                slot(kinds, V::RunRngType::COMBAT_CARD_SELECTION),
                 slot(kinds, V::RunRngType::MONSTER_AI),
                 slot(kinds, V::RunRngType::COMBAT_TARGETS),
             ])
@@ -83,6 +84,7 @@ impl<V: Rules> Streams<V> {
             shuffle,
             niche,
             generation,
+            selection,
             ai,
             targets,
         }
@@ -153,6 +155,9 @@ pub(crate) struct CombatRngs<'a> {
     pub(crate) niche: &'a mut MegaRng,
     /// The stream a rule that creates or takes cards draws from.
     pub(crate) generation: &'a mut MegaRng,
+    /// The stream a rule that picks among cards already in the fight draws
+    /// from.
+    pub(crate) selection: &'a mut MegaRng,
     /// The stream a monster's move machine rolls against.
     pub(crate) ai: &'a mut MegaRng,
     /// The stream a random target is drawn from.
@@ -167,6 +172,7 @@ impl CombatRngs<'_> {
             shuffle: self.shuffle,
             niche: self.niche,
             generation: self.generation,
+            selection: self.selection,
             ai: self.ai,
             targets: self.targets,
         }

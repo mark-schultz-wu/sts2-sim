@@ -322,6 +322,9 @@ pub(super) fn before_side_turn_start<V: Rules>(
                     creature.block = creature.block + amount;
                 }
             }
+            (_, sts2_core::HookEffect::AttacksFromDiscard(count)) => {
+                attacks_from_discard::<V>(live, rngs.reborrow(), count)
+            }
             // A relic's owner is the player, whose orbs these are.
             (Listener::Relic { .. }, sts2_core::HookEffect::Channel(orb)) => {
                 let mut board =
@@ -330,6 +333,38 @@ pub(super) fn before_side_turn_start<V: Rules>(
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn starts"),
         }
+    }
+}
+
+/// `AggressionPower.BeforeSideTurnStart`: the discard pile's attacks, in an
+/// unstable shuffle off `CombatCardSelection`, and the first `count` of them
+/// into hand. Each is upgraded where an upgrade can still raise it.
+fn attacks_from_discard<V: Rules>(live: &mut Live<V>, rngs: CombatRngs<'_>, count: V::Number) {
+    use sts2_core::rng::GameRng as _;
+
+    let count: usize = num_traits::cast(count)
+        .unwrap_or_else(|| unimplemented!("{count:?} attacks from the discard pile"));
+    let mut attacks: Vec<sts2_core::CardId<V>> = live
+        .cards
+        .iter(Pile::Discard)
+        .filter(|held| V::card_kind(held.face.ident.card) == Some(sts2_core::CardKind::Attack))
+        .map(|held| held.id)
+        .collect();
+    rngs.selection.unstable_shuffle(&mut attacks);
+    for id in attacks.into_iter().take(count) {
+        if live.cards.len(Pile::Hand) >= MAX_CARDS_IN_HAND {
+            unimplemented!("an attack from the discard pile into a full hand");
+        }
+        let at = live
+            .cards
+            .find(Pile::Discard, id)
+            .expect("a shuffled attack is still in the discard pile");
+        live.cards.move_to(Pile::Discard, at, Pile::Hand);
+        let at = live.cards.len(Pile::Hand) - 1;
+        live.cards.write(Pile::Hand, at, |held| {
+            held.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight);
+            true
+        });
     }
 }
 

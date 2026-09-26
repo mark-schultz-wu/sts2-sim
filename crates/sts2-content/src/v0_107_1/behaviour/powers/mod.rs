@@ -376,6 +376,16 @@ pub(crate) fn modify_hook(
             PowerAmount::Endless,
             ModifyHook::DamageAdditive { dealer, .. },
         ) if dealer == holder => unimplemented!("an endless {power:?}"),
+        // `OneTwoPunchPower.ModifyCardPlayCount`: one more play of an attack
+        // its owner plays.
+        (Power::OneTwoPunchPower, _, ModifyHook::CardPlayCount { player, card })
+            if player == holder
+                && <V as sts2_core::Rules>::card_kind(card)
+                    == Some(sts2_core::CardKind::Attack) =>
+        {
+            Modify::Added(one)
+        }
+        (Power::OneTwoPunchPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
         // `SlipperyPower.ModifyHpLostAfterOsty`, which hands back one however
         // much its owner was about to lose. A hit that the block took whole
         // loses nothing, and this leaves that where it is.
@@ -515,10 +525,11 @@ pub(crate) fn decide_hook(
         (Power::RetainHandPower, DecisionHook::ShouldFlush { player }) => {
             HookResponse::Decision(player != held.holder)
         }
-        // `BurrowedPower.ShouldClearBlock`, which keeps its own holder's.
-        (Power::BurrowedPower, DecisionHook::ShouldClearBlock { creature }) => {
-            HookResponse::Decision(creature != held.holder)
-        }
+        // `ShouldClearBlock`, which keeps its own holder's.
+        (
+            Power::BurrowedPower | Power::BarricadePower,
+            DecisionHook::ShouldClearBlock { creature },
+        ) => HookResponse::Decision(creature != held.holder),
         // `InfestedPower.ShouldStopCombatFromEnding`, for as long as it is on
         // a creature in the fight.
         (Power::InfestedPower, DecisionHook::ShouldStopCombatFromEnding) => {
@@ -786,7 +797,7 @@ pub(crate) fn event_hook(
         (
             Power::SlumberPower,
             PowerAmount::Counted(amount),
-            EventHook::DamageReceived { target, unblocked },
+            EventHook::DamageReceived { target, unblocked, .. },
         ) if target == holder && unblocked >= one => {
             if amount == one {
                 asked.extend([
@@ -805,7 +816,7 @@ pub(crate) fn event_hook(
         }
         // `SlipperyPower.AfterDamageReceived`, which spends an instance on
         // every hit that reaches its owner's hit points.
-        (Power::SlipperyPower, _, EventHook::DamageReceived { target, unblocked })
+        (Power::SlipperyPower, _, EventHook::DamageReceived { target, unblocked, .. })
             if target == holder && unblocked >= one =>
         {
             Some(HookEffect::Decrement)
@@ -941,6 +952,55 @@ pub(crate) fn event_hook(
             .bound()
             .filter(|bound| bound.command == command)
             .map(|bound| HookEffect::ModifyAmount(-bound.amount)),
+        // `FlameBarrierPower.AfterDamageReceived`: a powered attack on its
+        // owner takes its stack back off the attacker.
+        (
+            Power::FlameBarrierPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived {
+                target,
+                dealer: Some(dealer),
+                powered: true,
+                ..
+            },
+        ) if target == holder => Some(HookEffect::Damage {
+            target: dealer,
+            amount,
+        }),
+        (Power::FlameBarrierPower, PowerAmount::Endless, EventHook::DamageReceived { target, .. })
+            if target == holder =>
+        {
+            unimplemented!("an endless Flame Barrier")
+        }
+        (Power::FlameBarrierPower, _, EventHook::DamageReceived { .. }) => None,
+        // `FlameBarrierPower.AfterSideTurnEnd`, which goes once the other side
+        // has had its turn.
+        (Power::FlameBarrierPower, _, EventHook::SideTurnEnd { side }) if side != owner => {
+            Some(HookEffect::Remove)
+        }
+        // `OneTwoPunchPower.AfterModifyingCardPlayCount`, and its
+        // `AfterSideTurnEnd` for its owner's own side.
+        (Power::OneTwoPunchPower, _, EventHook::PlayCountModified { .. }) => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::OneTwoPunchPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::FlameBarrierPower | Power::OneTwoPunchPower, _, EventHook::SideTurnEnd { .. }) => {
+            None
+        }
+        // `AggressionPower.BeforeSideTurnStart`, for its owner's own side.
+        (
+            Power::AggressionPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeSideTurnStart { side, .. },
+        ) if side == owner => Some(HookEffect::AttacksFromDiscard(amount)),
+        (Power::AggressionPower, PowerAmount::Endless, EventHook::BeforeSideTurnStart { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Aggression")
+        }
+        (Power::AggressionPower, _, EventHook::BeforeSideTurnStart { .. }) => None,
         // `TyrannyPower.AfterPlayerTurnStart`: its owner picks its stack of
         // cards from hand, and each is exhausted.
         (

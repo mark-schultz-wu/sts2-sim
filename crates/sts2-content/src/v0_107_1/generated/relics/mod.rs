@@ -2126,7 +2126,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // THROWING_AXE
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
-        .with(sts2_core::ModelHook::AfterRoomEntered),
+        .with(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        .with(sts2_core::ModelHook::AfterRoomEntered)
+        .with(sts2_core::ModelHook::ModifyCardPlayCount),
     // TINGSHA
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDiscarded),
     // TINY_MAILBOX
