@@ -77,7 +77,8 @@ pub trait ObservedFight<V: ContentVersion> {
     fn exhaust(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_;
     fn creatures(&self) -> impl ExactSizeIterator<Item = impl ObservedCreature<V>> + '_;
     fn legal(&self) -> impl ExactSizeIterator<Item = impl ObservedPlayable<V>> + '_;
-    fn orbs(&self) -> Option<&Orbs<V>>;
+    /// The orb queue, with each number as the fight's listeners leave it.
+    fn orbs(&self) -> Option<std::borrow::Cow<'_, Orbs<V>>>;
 }
 
 /// One creature in a fight, as a digest reads it. What [`Creature`] holds.
@@ -249,8 +250,8 @@ impl<V: ContentVersion> ObservedFight<V> for &Combat<V> {
         self.legal.iter()
     }
 
-    fn orbs(&self) -> Option<&Orbs<V>> {
-        self.orbs.as_ref()
+    fn orbs(&self) -> Option<std::borrow::Cow<'_, Orbs<V>>> {
+        self.orbs.as_ref().map(std::borrow::Cow::Borrowed)
     }
 }
 

@@ -907,6 +907,13 @@ pub(crate) fn modified<V: Rules>(
     modified_by::<V>(fight, damage, &phases)
 }
 
+/// One of an orb's numbers after every listener has had its say, which is
+/// `OrbModel.ModifyOrbValue`. The player's orbs are the only ones.
+pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Number) -> V::Number {
+    let player = player::<V>(&fight.live.creatures);
+    modified_by::<V>(fight, base, &[ModifyHook::OrbValue { player, orb }])
+}
+
 /// One block gain after every listener in the fight has had its say, which
 /// is `Hook.ModifyBlock`.
 ///
@@ -1194,6 +1201,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn resolve(&self, effect: Effect<V>) -> Self::ResolvedEffect {
         resolve::<V>(self.walk(), self.acting().as_ref(), effect)
+    }
+
+    fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number {
+        orb_value::<V>(self.walk(), orb, base)
     }
 
     fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self)) {
@@ -1525,9 +1536,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if orbs.capacity == V::Count::zero() {
             return;
         }
-        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::ModifyOrbValue) {
-            unimplemented!("a listener to an orb's value");
-        }
         let Some(orbs) = self.live.orbs.as_mut() else {
             return;
         };
@@ -1558,9 +1566,6 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }) else {
             return;
         };
-        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::ModifyOrbValue) {
-            unimplemented!("a listener to an orb's value");
-        }
         V::orb_evoke(&orb, self);
         if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::AfterOrbEvoked) {
             unimplemented!("a listener to an orb evoked");

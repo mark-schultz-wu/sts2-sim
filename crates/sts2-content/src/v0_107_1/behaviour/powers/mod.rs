@@ -409,6 +409,19 @@ pub(crate) fn modify_hook(
             Modify::Added(one)
         }
         (Power::OneTwoPunchPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
+        // `FocusPower.ModifyOrbValue`: its stack onto each number its owner's
+        // orbs show, and no lower than nothing.
+        (Power::FocusPower, PowerAmount::Counted(amount), ModifyHook::OrbValue { player, .. })
+            if player == holder =>
+        {
+            Modify::Added(amount)
+        }
+        (Power::FocusPower, PowerAmount::Endless, ModifyHook::OrbValue { player, .. })
+            if player == holder =>
+        {
+            unimplemented!("an endless Focus")
+        }
+        (Power::FocusPower, _, ModifyHook::OrbValue { .. }) => Modify::Nothing,
         // `SlipperyPower.ModifyHpLostAfterOsty`, which hands back one however
         // much its owner was about to lose. A hit that the block took whole
         // loses nothing, and this leaves that where it is.
@@ -1024,6 +1037,48 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Aggression")
         }
         (Power::AggressionPower, _, EventHook::BeforeSideTurnStart { .. }) => None,
+        // `CoolantPower.AfterSideTurnStart`: its stack of block for each kind
+        // of orb its owner holds.
+        (Power::CoolantPower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            Some(HookEffect::GainBlockPerOrbKind(amount))
+        }
+        (Power::CoolantPower, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Coolant")
+        }
+        (Power::CoolantPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `LoopPower.AfterPlayerTurnStart`: the first orb's passive, its stack
+        // of times.
+        (Power::LoopPower, PowerAmount::Counted(amount), EventHook::PlayerTurnStart { player })
+            if player == holder =>
+        {
+            Some(HookEffect::FirstOrbPassive(amount))
+        }
+        (Power::LoopPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless Loop")
+        }
+        (Power::LoopPower, _, EventHook::PlayerTurnStart { .. }) => None,
+        // `CreativeAiPower.BeforeHandDraw`: its stack of Power cards from the
+        // character's pool, one at a time.
+        (
+            Power::CreativeAiPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => Some(HookEffect::GenerateOfKind {
+            kind: sts2_core::CardKind::Power,
+            count: amount,
+        }),
+        (Power::CreativeAiPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless Creative AI")
+        }
+        (Power::CreativeAiPower, _, EventHook::BeforeHandDraw { .. }) => None,
         // `GenesisPower.AfterEnergyReset`: its stack of stars, every turn.
         (Power::GenesisPower, PowerAmount::Counted(amount), EventHook::EnergyReset { player })
             if player == holder =>

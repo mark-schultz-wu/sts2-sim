@@ -1546,6 +1546,25 @@ impl<V: Rules> Live<V> {
     }
 
     /// The player, which every fight has one of.
+    /// The orb queue as the game reports it, each number through
+    /// `ModifyOrbValue`. The queue itself, while nothing listens.
+    pub(crate) fn reported_orbs(
+        &self,
+        relics: &crate::run::Belt<V>,
+    ) -> Option<std::borrow::Cow<'_, sts2_core::Orbs<V>>> {
+        let orbs = self.orbs.as_ref()?;
+        if !super::listen::heard::<V>(self, relics, sts2_core::ModelHook::ModifyOrbValue) {
+            return Some(std::borrow::Cow::Borrowed(orbs));
+        }
+        let walk = || super::listen::Walk { live: self, relics };
+        let mut reported = orbs.clone();
+        for held in &mut reported.queue {
+            held.passive = super::board::orb_value::<V>(walk(), held.orb, held.passive);
+            held.evoke = super::board::orb_value::<V>(walk(), held.orb, held.evoke);
+        }
+        Some(std::borrow::Cow::Owned(reported))
+    }
+
     /// `CombatManager.History`, as a listener reads it.
     pub(crate) fn history(&self) -> sts2_core::History<'_, V> {
         self.plays.history()
@@ -1643,7 +1662,7 @@ impl<V: Rules> Live<V> {
                 self.energy,
                 self.stars,
             ),
-            orbs: self.orbs.clone(),
+            orbs: self.reported_orbs(relics).map(std::borrow::Cow::into_owned),
         }
     }
 

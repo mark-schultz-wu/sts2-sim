@@ -1516,6 +1516,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("finding Osty")
     }
 
+    /// `OrbModel.ModifyOrbValue`: one of an orb's numbers, as the fight's
+    /// listeners leave it. `PassiveVal` and `EvokeVal` read theirs through
+    /// this each time.
+    fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number;
+
     /// `OrbCmd.Channel`: the orb joins the end of the player's queue.
     ///
     /// A player with no slots of their own gains one first. A full queue
@@ -1922,6 +1927,12 @@ pub enum ModifyHook<V: ContentVersion> {
         turn: V::Count,
         room: V::RoomType,
     },
+    /// `ModifyOrbValue`: a number `player`'s orb shows, as its passive or its
+    /// evoke reads it.
+    OrbValue {
+        player: crate::CombatId,
+        orb: V::Orb,
+    },
     /// `ModifyCardPlayCount`: how many times a card `player` plays runs its
     /// effect.
     CardPlayCount {
@@ -1946,6 +1957,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
+            ModifyHook::OrbValue { .. } => ModelHook::ModifyOrbValue,
         }
     }
 }
@@ -2535,6 +2547,19 @@ pub enum HookEffect<V: ContentVersion> {
     Damage {
         target: crate::CombatId,
         amount: V::Number,
+    },
+    /// `CreatureCmd.GainBlock` on the listener's owner, unpowered: `amount`
+    /// for each kind of orb its owner holds, which is `CoolantPower`'s.
+    GainBlockPerOrbKind(V::Number),
+    /// `OrbCmd.Passive` on the first orb the owner holds, `count` times, and
+    /// nothing with no orb.
+    FirstOrbPassive(V::Number),
+    /// `count` times, one card of `kind` from the character's combat pool,
+    /// drawn by `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`,
+    /// into hand.
+    GenerateOfKind {
+        kind: CardKind,
+        count: V::Number,
     },
     /// One change written on the card that asked, as its own
     /// `EnergyCost.AddThisCombat` or kin write it.
@@ -3515,6 +3540,9 @@ pub trait Rules: Hooks {
     /// `OrbModel.Evoke`: what the orb does as it leaves.
     fn orb_evoke<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
 
+    /// `OrbModel.Passive` with no target named, which `OrbCmd.Passive` runs.
+    fn orb_passive<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+
     /// Neow's event id, which the opening room reports.
     fn neow_event() -> Self::Event;
 
@@ -3557,6 +3585,10 @@ pub trait Rules: Hooks {
     /// `Character.CardPool`, which is what a fight's card reward draws from.
     /// [`Rules::colorless_cards`] is the other pool, and no character holds it.
     fn reward_cards(character: Self::Character) -> Drafted<'static, Self::Card>;
+
+    /// The character's pool narrowed by `CardFactory.FilterForCombat`, in the
+    /// order a combat generation effect shuffles it.
+    fn combat_cards(character: Self::Character) -> &'static [Self::Card];
 
     /// The cards one of a merchant's character shelves draws from.
     ///

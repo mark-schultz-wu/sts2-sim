@@ -122,10 +122,10 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
         }
     }
 
-    fn orbs(&self) -> Option<&Orbs<V>> {
+    fn orbs(&self) -> Option<Cow<'_, Orbs<V>>> {
         match self {
-            Fight::Live { live, .. } => live.orbs.as_ref(),
-            Fight::Over(combat) => combat.orbs.as_ref(),
+            Fight::Live { live, relics } => live.reported_orbs(relics),
+            Fight::Over(combat) => combat.orbs.as_ref().map(Cow::Borrowed),
         }
     }
 }
