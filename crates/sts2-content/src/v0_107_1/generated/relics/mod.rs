@@ -1584,7 +1584,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // CHARONS_ASHES
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardExhausted),
     // CHEMICAL_X
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCardPlayed),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::BeforeCardPlayed)
+        .with(sts2_core::ModelHook::ModifyXValue),
     // CHOICES_PARADOX
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // CHOSEN_CHEESE

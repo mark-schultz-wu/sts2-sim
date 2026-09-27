@@ -614,10 +614,11 @@ pub enum ModelHook {
     TryModifyPowerAmountReceived,
     AfterModifyingPowerAmountGiven,
     AfterModifyingPowerAmountReceived,
+    ModifyXValue,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 93] = [
+    pub const ALL: [ModelHook; 94] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -711,6 +712,7 @@ impl ModelHook {
         ModelHook::TryModifyPowerAmountReceived,
         ModelHook::AfterModifyingPowerAmountGiven,
         ModelHook::AfterModifyingPowerAmountReceived,
+        ModelHook::ModifyXValue,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -821,6 +823,7 @@ impl ModelHook {
             ModelHook::TryModifyPowerAmountReceived => "TryModifyPowerAmountReceived",
             ModelHook::AfterModifyingPowerAmountGiven => "AfterModifyingPowerAmountGiven",
             ModelHook::AfterModifyingPowerAmountReceived => "AfterModifyingPowerAmountReceived",
+            ModelHook::ModifyXValue => "ModifyXValue",
         }
     }
 }
@@ -1774,6 +1777,12 @@ pub trait Fight<V: ContentVersion> {
     /// How many orbs the player holds, which is `OrbQueue.Orbs.Count`.
     fn orbs_held(&self) -> usize {
         unimplemented!("counting orbs")
+    }
+
+    /// `ResolveEnergyXValue` for the card being played: the X its play
+    /// captured, which `Hook.ModifyXValue` can change.
+    fn x_value(&self) -> V::Number {
+        unimplemented!("an X-cost card's X")
     }
 
     /// One of the enemies that can be hit, drawn off `CombatTargets` by
