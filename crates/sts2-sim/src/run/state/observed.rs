@@ -52,7 +52,12 @@ impl<V: Rules> Observed<V> for State<V> {
     }
 
     fn potions(&self) -> impl ExactSizeIterator<Item = impl Borrow<Held<V>>> + '_ {
-        crate::combat::belt::<V>(&self.player.potions, self.fight(), self.standing().alive)
+        crate::combat::belt::<V>(
+            &self.player.potions,
+            self.fight(),
+            self.standing().alive,
+            self.potions_held(),
+        )
     }
 
     fn potion_slots(&self) -> V::Count {

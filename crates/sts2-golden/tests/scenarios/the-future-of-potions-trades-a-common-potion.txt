@@ -1,0 +1,8 @@
+# A common potion draws only Attack or Skill for its trade. The Fire Potion
+# trades for three upgraded common cards of the type drawn.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"grant","potion":"FORTIFIER"}
+{"cmd":"event","event":"THE_FUTURE_OF_POTIONS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":0,"card":0}]}

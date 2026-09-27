@@ -309,7 +309,7 @@ pub(crate) fn moves<V: Rules>(
         return moves;
     }
 
-    drinks::<V>(potions, Some(live), alive, &mut moves);
+    drinks::<V>(potions, Some(live), alive, false, &mut moves);
 
     let asks = asks_should_play::<V>(Walk { live, relics });
     for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
@@ -342,10 +342,11 @@ pub(crate) fn drinks<V: Rules>(
     potions: &[V::Potion],
     fight: Option<&Live<V>>,
     alive: bool,
+    stuck: bool,
     moves: &mut Legal<V>,
 ) {
     for (at, &potion) in potions.iter().enumerate() {
-        if undrinkable::<V>(potion, fight, alive).is_some() {
+        if undrinkable::<V>(potion, fight, alive, stuck).is_some() {
             continue;
         }
         let targets = match fight {
@@ -362,15 +363,15 @@ pub(crate) fn drinks<V: Rules>(
 ///
 /// The order `NPotionPopup.RefreshButtons` asks in, minus the questions this
 /// slice cannot raise. Nothing is queued, because a decision resolves whole.
-/// Nothing is stuck, because that is a relic and none is ported. The player is
-/// alive, because a dead one stops the run.
+/// `stuck` is `CanRemovePotions` off, which an event sets while it runs.
 pub(crate) fn belt<'a, V: Rules>(
     potions: &'a [V::Potion],
     fight: Option<&'a Live<V>>,
     alive: bool,
+    stuck: bool,
 ) -> impl ExactSizeIterator<Item = Held<V>> + 'a {
     potions.iter().map(move |&potion| {
-        let reason = undrinkable::<V>(potion, fight, alive);
+        let reason = undrinkable::<V>(potion, fight, alive, stuck);
         Held {
             potion,
             // The game reads both out of its localisation tables, which
@@ -398,9 +399,13 @@ fn undrinkable<V: Rules>(
     potion: V::Potion,
     fight: Option<&Live<V>>,
     alive: bool,
+    stuck: bool,
 ) -> Option<Undrinkable> {
     if !alive {
         return Some(Undrinkable::Dead);
+    }
+    if stuck {
+        return Some(Undrinkable::Stuck);
     }
     if potion.usage() == PotionUsage::Automatic {
         return Some(Undrinkable::Automatic);
