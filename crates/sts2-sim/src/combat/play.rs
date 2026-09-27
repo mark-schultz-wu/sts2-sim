@@ -290,45 +290,55 @@ pub(crate) fn play<V: Rules>(
 /// that targets an ally, or has no enemy it can hit.
 pub(super) fn auto_play<V: Rules>(
     live: &mut Live<V>,
-    mut rngs: crate::stream::CombatRngs<'_>,
+    rngs: crate::stream::CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     id: sts2_core::CardId<V>,
     from: sts2_core::Pile,
 ) -> Option<super::Ended> {
-    use sts2_core::{CardTable as _, TargetKinds as _};
-
     let Some(at) = live.cards.find(from, id) else {
         unimplemented!("auto-playing {id:?}, which left the {from:?} pile");
     };
-    let ident = live
-        .cards
-        .get(from, at)
-        .expect("a card found in a pile is in it")
-        .face
-        .ident;
+    // `CardPileCmd.Add` to the play pile, where it stands while it runs.
+    let card = live.cards.play(from, at);
+    auto_play_in_play::<V>(live, rngs, relics, card)
+}
+
+/// `CardCmd.AutoPlay` for a card already in the play pile.
+pub(super) fn auto_play_in_play<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    card: super::live::CardInstance<V>,
+) -> Option<super::Ended> {
+    use sts2_core::{CardTable as _, TargetKinds as _};
+
+    let ident = card.face.ident;
     if ident.card.unplayable() {
-        unimplemented!("auto-playing {ident:?}, which is unplayable");
+        return without_playing::<V>(live, rngs, relics, &card);
     }
     if ident.card.cost() == sts2_core::Cost::X {
         unimplemented!("auto-playing {ident:?}, which costs X");
     }
-    // `Hook.ShouldPlay`, with the auto-play's type.
-    if let Some(preventer) = super::listen::first_deciding::<V>(
+    // `Hook.ShouldPlay`, with the auto-play's type. A refused card goes to
+    // its pile unplayed.
+    if super::listen::first_deciding::<V>(
         super::listen::Walk { live, relics },
         sts2_core::DecisionHook::ShouldPlay {
             card: ident.card,
             affliction: ident.affliction,
         },
         false,
-    ) {
-        unimplemented!("{preventer:?} refusing to let {ident:?} auto-play");
+    )
+    .is_some()
+    {
+        return without_playing::<V>(live, rngs, relics, &card);
     }
     let ascension = live.ascension;
     let target = match super::legal::target_type::<V>(ident, live) {
         kind if kind == V::TargetType::ANY_ENEMY => {
             let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
             let Some(target) = sts2_core::Fight::random_opponent(&mut board) else {
-                unimplemented!("auto-playing {ident:?} with no enemy to hit");
+                return without_playing::<V>(live, rngs, relics, &card);
             };
             Some(target)
         }
@@ -339,8 +349,6 @@ pub(super) fn auto_play<V: Rules>(
     };
     super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardAutoPlayed);
 
-    // `CardPileCmd.Add` to the play pile, where it stands while it runs.
-    let card = live.cards.play(from, at);
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
@@ -388,6 +396,39 @@ pub(super) fn auto_play<V: Rules>(
         unimplemented!("an auto-played {ident:?} that stops on a question");
     }
     ended
+}
+
+/// `CardModel.MoveToResultPileWithoutPlaying` for a card in the play pile:
+/// exhausted once `ExhaustOnNextPlay` or its Exhaust says so, and discarded
+/// otherwise.
+fn without_playing<V: Rules>(
+    live: &mut Live<V>,
+    rngs: crate::stream::CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    card: &super::live::CardInstance<V>,
+) -> Option<super::Ended> {
+    let marked = live.exhaust_next.iter().position(|&id| id == card.id);
+    if let Some(at) = marked {
+        live.exhaust_next.remove(at);
+    }
+    match marked.is_some() || card.face.exhausts() {
+        true => {
+            live.cards.leave_play(
+                card.id,
+                Some(sts2_core::Pile::Exhaust),
+                sts2_core::PilePosition::Bottom,
+            );
+            super::turn::exhausted::<V>(live, rngs, relics, card, false)
+        }
+        false => {
+            live.cards.leave_play(
+                card.id,
+                Some(sts2_core::Pile::Discard),
+                sts2_core::PilePosition::Bottom,
+            );
+            None
+        }
+    }
 }
 
 /// `Hook.BeforeCardPlayed`, before one play of `card`, which stands in the
@@ -463,12 +504,17 @@ fn result_pile<V: Rules>(
     energy: V::Count,
 ) -> (Option<sts2_core::Pile>, sts2_core::PilePosition) {
     let played = card.face.ident.card;
+    // `ExhaustOnNextPlay`, which the pile it picks clears.
+    let marked = live.exhaust_next.iter().position(|&id| id == card.id);
+    if let Some(at) = marked {
+        live.exhaust_next.remove(at);
+    }
     let pile = match played
         .power()
         .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
     {
         true => None,
-        false if card.face.exhausts() => Some(sts2_core::Pile::Exhaust),
+        false if marked.is_some() || card.face.exhausts() => Some(sts2_core::Pile::Exhaust),
         false => Some(sts2_core::Pile::Discard),
     };
     let player = live.player().id;

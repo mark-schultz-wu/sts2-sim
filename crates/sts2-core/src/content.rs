@@ -1788,6 +1788,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("unblockable damage")
     }
 
+    /// `CardPileCmd.AutoPlayFromDrawPile(count, Top, forceExhaust)`: the top
+    /// `count` cards into the play pile, a shuffle first wherever the draw
+    /// pile is empty, then each auto-played in turn.
+    fn auto_play_from_draw(&mut self, _count: usize, _force_exhaust: bool) {
+        unimplemented!("auto-playing from the draw pile")
+    }
+
     /// `CombatEnergyCosts.NextInt(below)`: a cost drawn at random.
     fn next_energy_cost(&mut self, _below: u8) -> V::Number {
         unimplemented!("a random energy cost")

@@ -1446,6 +1446,9 @@ pub(crate) struct Live<V: Rules> {
     /// Cards a listener handed back as it died, which a won fight offers as
     /// `SpecialCardReward`s.
     pub(super) returned: Vec<CardIdent<V>>,
+    /// The copies whose `ExhaustOnNextPlay` is set, which their next play
+    /// clears and so does the end of the turn.
+    pub(super) exhaust_next: smallvec::SmallVec<[CardId<V>; 2]>,
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
@@ -1576,6 +1579,7 @@ impl<V: Rules> Clone for Live<V> {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
             returned: self.returned.clone(),
+            exhaust_next: self.exhaust_next.clone(),
             history: self.history.clone(),
             leaving: self.leaving.clone(),
             powers: self.powers.clone(),
@@ -1603,6 +1607,7 @@ impl<V: Rules> Clone for Live<V> {
             cards,
             removed_from_deck,
             returned,
+            exhaust_next,
             leaving,
             creatures,
             powers,
@@ -1626,6 +1631,7 @@ impl<V: Rules> Clone for Live<V> {
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
         returned.clone_from(&source.returned);
+        exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
@@ -2193,6 +2199,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
             returned: Vec::new(),
+            exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),

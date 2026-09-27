@@ -16,6 +16,11 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         IroncladCard::Bloodletting => bloodletting(fight),
         IroncladCard::Uppercut => uppercut(fight),
         IroncladCard::MoltenFist => molten_fist(fight),
+        // `Havoc`: the top card of the draw pile auto-played, and exhausted.
+        IroncladCard::Havoc => {
+            fight.auto_play_from_draw(1, true);
+            Played::Done
+        }
         // `PerfectedStrike`: its calculated damage to the target. Its test of
         // that damage against twelve picks an animation.
         IroncladCard::PerfectedStrike => {
