@@ -85,9 +85,13 @@ pub(crate) fn resolve<V: Rules>(
     }
     let targets = legal::targets::<V>(takes, &live.creatures, false);
 
-    // `CanPlayTargeting`: the card is pointed at one of the creatures its own
-    // target type accepts, and a card that names one is pointed at something.
-    if !target.is_some_and(|id| targets.contains(&id)) && !targets.is_empty() {
+    // `CanPlayTargeting`: a card that names a creature is pointed at one its
+    // own target type accepts, and a card that names none at nothing.
+    let aimed = match target {
+        Some(id) => targets.contains(&id),
+        None => !legal::names_creature::<V>(takes),
+    };
+    if !aimed {
         return Err(Reason::WrongTarget {
             card,
             target,
@@ -840,7 +844,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     next.cards
                         .write_in_play(card, |face| face.set_enchantment_status(status));
                 }
-                finished::<V, _>(
+                let ended = finished::<V, _>(
                     Fighting {
                         live: &mut *next,
                         streams: &mut *streams,
@@ -851,6 +855,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     card,
                     ethereal,
                 );
+                effect.ended = effect.ended.or(ended);
                 if effect.plays.done >= effect.plays.count {
                     break;
                 }
@@ -988,13 +993,14 @@ fn finished<V: Rules, S: LendsCombat>(
     card: V::Card,
     id: sts2_core::CardId<V>,
     ethereal: bool,
-) {
+) -> Option<super::Ended> {
     let Fighting {
         live: next,
         streams,
         relics,
     } = fighting;
     next.history.finish(card, id, ethereal);
+    let mut ended = None;
     // The copy stays in the play pile until its play is over.
     let affliction = next
         .cards
@@ -1035,6 +1041,20 @@ fn finished<V: Rules, S: LendsCombat>(
                     next.gain_unpowered_block(owner, amount);
                     next.remove_power(owner, power);
                 }
+                // `CreatureCmd.Damage` on the power's owner, unpowered.
+                (
+                    super::listen::Listener::Power { owner, .. },
+                    sts2_core::HookEffect::DamageOwnerInFight {
+                        amount,
+                        unblockable,
+                        self_dealt,
+                    },
+                ) => {
+                    let mut board =
+                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                    board.hit_unpowered(self_dealt.then_some(owner), owner, amount, unblockable);
+                    ended = ended.or(board.ended);
+                }
                 // `PowerCmd.Apply` from nobody.
                 (
                     super::listen::Listener::Power { .. },
@@ -1047,15 +1067,18 @@ fn finished<V: Rules, S: LendsCombat>(
                     let mut board =
                         Board::for_card(next, streams.combat(), relics, ascension, None, None);
                     board.land(target, power, amount, None);
+                    ended = ended.or(board.ended);
                 }
                 (_, effect) => rest.push(effect),
             }
         }
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
         hook::apply::<V, _>(&mut board, rest);
+        ended = ended.or(board.ended);
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }
+    ended
 }
 
 /// What a selection takes without asking, or nothing for one that is a

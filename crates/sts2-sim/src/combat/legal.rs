@@ -325,6 +325,11 @@ pub(crate) fn moves<V: Rules>(
         if refused.is_none() {
             let target = target_type::<V>(card.face.ident, live);
             let targets = targets::<V>(target, &live.creatures, false);
+            // A card that names a creature has nothing to be played at while
+            // none is alive to name.
+            if targets.is_empty() && names_creature::<V>(target) {
+                continue;
+            }
             aimed(hand_index(at), &targets, &mut moves, |index, target| {
                 Decision::PlayCard { index, target }
             });
@@ -462,6 +467,13 @@ pub(super) fn spend<C: num_traits::PrimInt>(cost: Cost, pool: C) -> Option<C> {
 }
 
 /// `CardModel.IsValidTarget`, for a creature offered as this card's target.
+/// Whether a card of this target type is played at a creature, which is
+/// `IsValidTarget` refusing it none.
+pub(super) fn names_creature<V: Rules>(target: V::TargetType) -> bool {
+    target == <V::TargetType as TargetKinds>::ANY_ENEMY
+        || target == <V::TargetType as TargetKinds>::ANY_ALLY
+}
+
 fn valid_target<V: Rules>(target: V::TargetType, creature: &Fighter<V>) -> bool {
     if !creature.alive {
         return false;

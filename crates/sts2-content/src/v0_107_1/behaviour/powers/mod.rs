@@ -91,7 +91,16 @@ pub enum State {
     Sloth {
         played: Number,
     },
+    /// `StranglePower`'s `amountsForPlayedCards`: each card its applier has
+    /// started to play and not finished, with the stack as it began.
+    Strangle {
+        playing: [Option<(sts2_core::CardId<V>, Number)>; STRANGLED_AT_ONCE],
+    },
 }
+
+/// How many plays `StranglePower` keeps at once: one, and one played inside
+/// it.
+const STRANGLED_AT_ONCE: usize = 2;
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +135,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::CurlUpPower => Self::CurlUp { played: None },
             Power::SurroundedPower => Self::Surrounded { facing_left: false },
             Power::SlothPower => Self::Sloth { played: 0 },
+            Power::StranglePower => Self::Strangle {
+                playing: [None; STRANGLED_AT_ONCE],
+            },
             power => Self::Stateless(power),
         }
     }
@@ -148,6 +160,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::CurlUp { .. } => Power::CurlUpPower,
             Self::Surrounded { .. } => Power::SurroundedPower,
             Self::Sloth { .. } => Power::SlothPower,
+            Self::Strangle { .. } => Power::StranglePower,
         }
     }
 
@@ -1710,6 +1723,62 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Demise")
         }
         (Power::DemisePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `BiasedCognitionPower.AfterSideTurnStart`: its stack off its owner's
+        // Focus as its owner's side begins a turn.
+        (
+            Power::BiasedCognitionPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnStart { side, .. },
+        ) if side == owner => Some(HookEffect::ApplyToOwner(
+            Power::FocusPower,
+            PowerAmount::Counted(-amount),
+        )),
+        (Power::BiasedCognitionPower, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Biased Cognition")
+        }
+        (Power::BiasedCognitionPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `StranglePower.BeforeCardPlayed`: a play by its applier, where a
+        // player applied it, noted with the stack as it begins. A fight here
+        // has one player, whose cards are all its applier's.
+        (Power::StranglePower, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. }) => {
+            let State::Strangle { playing } = state else {
+                unreachable!("plays noted for {:?}", state.power())
+            };
+            if applier == Some(fight.player()) {
+                let Some(free) = playing.iter_mut().find(|slot| slot.is_none()) else {
+                    unimplemented!("a Strangle noting more than {STRANGLED_AT_ONCE} plays at once")
+                };
+                *free = Some((id, amount));
+            }
+            None
+        }
+        (Power::StranglePower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Strangle")
+        }
+        // `StranglePower.AfterCardPlayed`: the stack it noted off its owner,
+        // unblockable, unpowered and from nobody.
+        (Power::StranglePower, _, EventHook::CardPlayed { id, .. }) => {
+            let State::Strangle { playing } = state else {
+                unreachable!("plays noted for {:?}", state.power())
+            };
+            playing
+                .iter_mut()
+                .find(|slot| slot.is_some_and(|(noted, _)| noted == id))
+                .and_then(Option::take)
+                .map(|(_, amount)| HookEffect::DamageOwnerInFight {
+                    amount,
+                    unblockable: true,
+                    self_dealt: false,
+                })
+        }
+        // `StranglePower.AfterSideTurnEnd`: gone as its owner's side ends a
+        // turn.
+        (Power::StranglePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::StranglePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `DisintegrationPower.AfterSideTurnEndLate`: its stack off its owner,
         // dealt by the owner and unpowered, as its owner's side's turn ends.
         (

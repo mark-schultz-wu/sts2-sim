@@ -203,13 +203,13 @@ pub(super) enum CostChange<N> {
     Absolute(N),
 }
 
-/// One entry of a card's cost modifier list, in a byte.
+/// One entry of a card's cost modifier list, in two bytes.
 ///
 /// `LocalCostModifier`, minus `reduceOnly`: no ported effect passes it.
 ///
-/// Eight bits say all of it: which pool, which expiration, whether it sets the
-/// cost or shifts it, and by how much.
-#[bitfield(u8, new = false, default = false, debug = false, order = Lsb)]
+/// Sixteen bits say all of it: which pool, which expiration, whether it sets
+/// the cost or shifts it, and by how much.
+#[bitfield(u16, new = false, default = false, debug = false, order = Lsb)]
 #[derive(PartialEq, Eq)]
 pub(super) struct CostModifier {
     /// On the star pool rather than the energy one.
@@ -221,24 +221,27 @@ pub(super) struct CostModifier {
     when_played: bool,
     /// How much, as [`CostChange`] reads it.
     ///
-    /// Raw, because the same four bits carry a set and a shift. A set is a
+    /// Raw, because the same eight bits carry a set and a shift. A set is a
     /// price and reads unsigned. A shift is signed and carries
-    /// [`SHIFT_BIAS`], because four bits cannot be both.
-    #[bits(4)]
+    /// [`SHIFT_BIAS`], because eight bits cannot be both.
+    #[bits(8)]
     amount: u8,
+    #[bits(4)]
+    __: u8,
 }
 
 /// What a shift carries so that it shares the bits a set uses.
 ///
-/// A set is a price, which is never negative, so its four bits run `0..=15`. A
-/// shift runs `-8..=7` over the same four, and this is the offset between
-/// them.
-const SHIFT_BIAS: i8 = 8;
+/// A set is a price, which is never negative, so its eight bits run
+/// `0..=255`. A shift runs `-128..=127` over the same eight, and this is the
+/// offset between them. `BansheesCry` shifts its cost down by its `Energy`
+/// for each Ethereal play of the fight, which runs past four bits.
+const SHIFT_BIAS: i16 = 128;
 
-/// The most a modifier sets a cost to, which is four bits of price.
-pub(super) const SET_AT_MOST: i8 = 15;
-/// How far a modifier shifts a cost, which is the same four bits, biased.
-pub(super) const SHIFT_WITHIN: std::ops::RangeInclusive<i8> = -SHIFT_BIAS..=SHIFT_BIAS - 1;
+/// The most a modifier sets a cost to, which is eight bits of price.
+pub(super) const SET_AT_MOST: i16 = 255;
+/// How far a modifier shifts a cost, which is the same eight bits, biased.
+pub(super) const SHIFT_WITHIN: std::ops::RangeInclusive<i16> = -SHIFT_BIAS..=SHIFT_BIAS - 1;
 
 impl CostModifier {
     /// One modifier, as the change a rule asked for.
@@ -255,7 +258,7 @@ impl CostModifier {
         change: CostChange<N>,
         lasting: sts2_core::Lasting,
     ) -> Self {
-        let fits = |asked: N, within: std::ops::RangeInclusive<i8>| {
+        let fits = |asked: N, within: std::ops::RangeInclusive<i16>| {
             num_traits::NumCast::from(asked)
                 .filter(|amount| within.contains(amount))
                 .unwrap_or_else(|| {
@@ -281,8 +284,8 @@ impl CostModifier {
         }
     }
 
-    fn change(self) -> CostChange<i8> {
-        let amount = self.amount() as i8;
+    fn change(self) -> CostChange<i16> {
+        let amount = i16::from(self.amount());
         match self.absolute() {
             true => CostChange::Absolute(amount),
             false => CostChange::Relative(amount - SHIFT_BIAS),
@@ -2300,7 +2303,7 @@ mod tests {
 
         card.face.turn_ended();
 
-        let kept: Vec<CostChange<i8>> = card
+        let kept: Vec<CostChange<i16>> = card
             .face
             .cost_modifiers
             .iter()
@@ -2316,9 +2319,9 @@ mod tests {
 
     /// Every cost either build prints fits what a modifier sets.
     ///
-    /// [`SET_AT_MOST`] is four bits, which is where the bytes went. The
-    /// dearest card either build prints costs twelve. A build printing a
-    /// dearer one moves the packing rather than finding out in a fight.
+    /// [`SET_AT_MOST`] is eight bits. The dearest card either build prints
+    /// costs twelve. A build printing a dearer one moves the packing rather
+    /// than finding out in a fight.
     #[test]
     fn every_cost_fits_a_modifier() {
         use sts2_core::CardTable as _;
@@ -2330,7 +2333,7 @@ mod tests {
                         continue;
                     };
                     assert!(
-                        i16::from(printed.get()) <= i16::from(SET_AT_MOST),
+                        i16::from(printed.get()) <= SET_AT_MOST,
                         "{build} prints {card:?} at {}, and a modifier sets at most \
                          {SET_AT_MOST}",
                         printed.get(),
