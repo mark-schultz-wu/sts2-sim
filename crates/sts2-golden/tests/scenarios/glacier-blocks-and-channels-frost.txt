@@ -1,0 +1,5 @@
+# Glacier gives its block and channels two Frosts.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"GLACIER"}
+{"cmd":"play_card","index":5}

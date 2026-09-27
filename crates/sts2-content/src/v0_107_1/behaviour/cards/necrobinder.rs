@@ -254,7 +254,9 @@ fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
 
 pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
     match card {
-        NecrobinderCard::Unleash => osty_attack(fight, CardVar::CalculatedDamage),
+        NecrobinderCard::Unleash | NecrobinderCard::Protector => {
+            osty_attack(fight, CardVar::CalculatedDamage)
+        }
         NecrobinderCard::Poke | NecrobinderCard::Flatten => osty_attack(fight, CardVar::OstyDamage),
         NecrobinderCard::Graveblast => graveblast(fight),
         NecrobinderCard::SculptingStrike => sculpting_strike(fight),

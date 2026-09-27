@@ -163,7 +163,10 @@ impl sts2_core::PowerModel<V> for State {
             Power::CurlUpPower => Self::CurlUp { played: None },
             Power::SurroundedPower => Self::Surrounded { facing_left: false },
             Power::SlothPower => Self::Sloth { played: 0 },
-            Power::StranglePower | Power::OblivionPower | Power::AfterimagePower => Self::Noted {
+            Power::StranglePower
+            | Power::OblivionPower
+            | Power::AfterimagePower
+            | Power::SubroutinePower => Self::Noted {
                 power,
                 playing: [None; NOTED_AT_ONCE],
             },
@@ -1865,6 +1868,46 @@ pub(crate) fn event_hook(
         (Power::AfterimagePower, _, EventHook::CardPlayed { id, .. }) => take_noted(state, id)
             .filter(|&amount| amount > 0)
             .map(HookEffect::GainBlock),
+        // `SubroutinePower.BeforeCardPlayed`: a Power its owner plays noted
+        // with the stack as it begins. A fight here has one player.
+        (Power::SubroutinePower, PowerAmount::Counted(amount), EventHook::CardPlaying { card, id, .. })
+            if owner == CombatSide::Player
+                && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power) =>
+        {
+            note(state, id, amount);
+            None
+        }
+        (Power::SubroutinePower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Subroutine")
+        }
+        (Power::SubroutinePower, _, EventHook::CardPlaying { .. }) => None,
+        // `SubroutinePower.AfterCardPlayed`: an energy for each of the stack
+        // it noted, one at a time.
+        (Power::SubroutinePower, _, EventHook::CardPlayed { id, .. }) => {
+            let noted = take_noted(state, id).unwrap_or(0);
+            let count = usize::try_from(noted).expect("a noted stack is not negative");
+            asked.extend(std::iter::repeat_n(HookEffect::GainEnergy(1), count));
+            return;
+        }
+        // `HauntPower.AfterCardPlayed`: for a Soul its owner plays, its stack
+        // on an enemy drawn off `CombatTargets`, unblockable, unpowered and
+        // from nobody. A fight here has one player.
+        (
+            Power::HauntPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlayed {
+                card: Cards::Token(TokenCard::Soul),
+                ..
+            },
+        ) if owner == CombatSide::Player => Some(HookEffect::DamageRandomOpponent {
+            amount,
+            unblockable: true,
+            from_owner: false,
+        }),
+        (Power::HauntPower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
+            unimplemented!("an endless Haunt")
+        }
+        (Power::HauntPower, _, EventHook::CardPlayed { .. }) => None,
         // `TheSealedThronePower.BeforeCardPlayed`: its stack as stars for
         // each play of its owner's. A fight here has one player.
         (

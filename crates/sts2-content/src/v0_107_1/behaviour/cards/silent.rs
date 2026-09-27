@@ -35,6 +35,12 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `Adrenaline`: its energy, then its `Cards` drawn.
+        SilentCard::Adrenaline => {
+            fight.modify_energy(fight.var(CardVar::Energy));
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Done
+        }
         // `CalculatedGamble`: the whole hand discarded, then as many drawn.
         SilentCard::CalculatedGamble => {
             let hand = fight.cards_in(Pile::Hand);

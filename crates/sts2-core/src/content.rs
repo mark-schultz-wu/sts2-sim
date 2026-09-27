@@ -1939,6 +1939,18 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a creature escaping")
     }
 
+    /// `CreatureCmd.Damage` on `target`, unpowered, from `dealer` or from
+    /// nobody, once the damage hooks worked it out.
+    fn damage_unpowered(
+        &mut self,
+        _dealer: Option<crate::CombatId>,
+        _target: crate::CombatId,
+        _amount: V::Number,
+        _unblockable: bool,
+    ) {
+        unimplemented!("unpowered damage")
+    }
+
     /// `CreatureCmd.Kill`: `creature` loses what hit points it has, and dies.
     fn kill(&mut self, _creature: crate::CombatId) {
         unimplemented!("a creature killed outright")
@@ -3738,9 +3750,14 @@ pub enum HookEffect<V: ContentVersion> {
     /// listener's owner, unblockable and unpowered.
     DamageOpponentsUnblockable(V::Number),
     /// `CreatureCmd.Damage` on one enemy that can be hit, drawn by `NextItem`
-    /// off `CombatTargets`, from the listener's owner, unpowered. Nothing
-    /// with no such enemy.
-    DamageRandomOpponent(V::Number),
+    /// off `CombatTargets`, unpowered. Unblockable where it says, and dealt by
+    /// the listener's owner where it says, or by nobody. Nothing with no such
+    /// enemy.
+    DamageRandomOpponent {
+        amount: V::Number,
+        unblockable: bool,
+        from_owner: bool,
+    },
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),

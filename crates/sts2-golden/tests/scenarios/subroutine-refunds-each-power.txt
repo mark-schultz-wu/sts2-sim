@@ -1,0 +1,8 @@
+# Subroutine gives an energy for each Power its owner plays after it
+# lands. Its own play gives none.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SUBROUTINE"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"SUBROUTINE"}
+{"cmd":"play_card","index":5}

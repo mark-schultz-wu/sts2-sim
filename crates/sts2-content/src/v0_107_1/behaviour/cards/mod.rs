@@ -125,6 +125,12 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::ExtraDamage) * owner.osty.map_or(0, Number::from)
         }
+        // `Protector`: a base, and more for each point of maximum health a
+        // living Osty has.
+        (Cards::Necrobinder(NecrobinderCard::Protector), CardVar::CalculatedDamage) => {
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::ExtraDamage) * owner.osty_max_hp.map_or(0, Number::from)
+        }
         // `Sacrifice`: a base, and more for each of twice the maximum health a
         // living Osty has.
         (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {

@@ -2302,6 +2302,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.end_if_ending();
     }
 
+    fn damage_unpowered(
+        &mut self,
+        dealer: Option<CombatId>,
+        target: CombatId,
+        amount: V::Number,
+        unblockable: bool,
+    ) {
+        self.hit_unpowered(dealer, target, amount, unblockable);
+    }
+
     fn kill(&mut self, creature: CombatId) {
         self.kill_outright(creature);
     }
