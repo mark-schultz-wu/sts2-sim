@@ -1713,22 +1713,43 @@ impl<V: Rules> State<V> {
         found.map(|(at, _)| at)
     }
 
-    /// `PlayerCmd.GainGold`, outside a fight.
+    /// `PlayerCmd.GainGold`, outside a fight: `ModifyGoldGained` over the
+    /// belt as a decimal, `AfterModifyingGoldGained`, then the whole part
+    /// gained where any is left.
     ///
     /// # Panics
     ///
-    /// A relic listening to one of the hooks it raises.
+    /// A relic answering one of the hooks in a way nothing here carries out.
     fn gain_gold(&mut self, amount: V::Number) {
-        use sts2_core::ModelHook;
-
-        for hook in [
-            ModelHook::ModifyGoldGained,
-            ModelHook::AfterModifyingGoldGained,
-            ModelHook::AfterGoldGained,
-        ] {
-            self.unheard(hook);
+        let hook = sts2_core::ModifyHook::GoldGained;
+        let mut gained: f64 = num_traits::cast(amount).expect("gold fits a float");
+        let mut left = self
+            .player
+            .relics
+            .hearing(sts2_core::Overrides::of(hook.model_hook()));
+        while left != 0 {
+            let slot = left.trailing_zeros() as usize;
+            left &= left - 1;
+            let listener: crate::combat::Heard<'_, V> =
+                sts2_core::Listener::Relic(&self.player.relics[slot].state);
+            match V::modify_hook(listener, hook) {
+                sts2_core::Modify::Nothing => {}
+                sts2_core::Modify::Scaled(scale) => gained *= scale,
+                answer => unimplemented!("a relic answering {hook:?} with {answer:?}"),
+            }
         }
-        self.player.gold = self.player.gold + amount;
+        if let Some(effect) = self
+            .notify_belt(sts2_core::EventHook::GoldGainModified)
+            .first()
+        {
+            unimplemented!("a relic asking for {effect:?} as a gold gain is modified");
+        }
+        self.unheard(sts2_core::ModelHook::AfterGoldGained);
+        if gained > 0.0 {
+            let whole: V::Number =
+                num_traits::cast(gained.trunc()).expect("gold fits a game number");
+            self.player.gold = self.player.gold + whole;
+        }
     }
 
     /// A game number as the run's health.

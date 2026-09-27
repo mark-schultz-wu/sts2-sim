@@ -1,0 +1,7 @@
+# `HornCleat` gives fourteen block once its owner's block clears on the
+# second turn, and none on the third.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"HORN_CLEAT"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

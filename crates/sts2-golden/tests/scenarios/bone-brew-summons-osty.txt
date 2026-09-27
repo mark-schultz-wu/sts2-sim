@@ -1,0 +1,5 @@
+# `BoneBrew` summons fifteen of Osty.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","potion":"BONE_BREW"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}

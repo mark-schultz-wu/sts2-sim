@@ -88,7 +88,12 @@ pub(crate) fn end<V: Rules>(
     // here reports is the one the enemy turn ran under.
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::NONE;
     next.switch_side(<V::CombatSide as SideKinds>::ENEMY);
-    clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::ENEMY);
+    clear_block::<V>(
+        next,
+        streams.combat(),
+        relics,
+        <V::CombatSide as SideKinds>::ENEMY,
+    );
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
@@ -263,7 +268,12 @@ fn enemies_act<V: Rules>(
     roll_moves(next, relics, ascension, streams.combat().ai)?;
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
-    clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
+    clear_block::<V>(
+        next,
+        streams.combat(),
+        relics,
+        <V::CombatSide as SideKinds>::PLAYER,
+    );
     // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`.
     next.energy = super::board::max_energy::<V>(listen::Walk { live: next, relics }, max_energy);
     // An evoke that ends the fight ends `SetupPlayerTurn` with it, as a
@@ -1620,6 +1630,7 @@ pub(super) fn energy_reset_late<V: Rules>(
 #[tracing::instrument(level = "trace", skip_all)]
 fn clear_block<V: Rules>(
     live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     side: V::CombatSide,
 ) {
@@ -1640,10 +1651,28 @@ fn clear_block<V: Rules>(
             held.block = num_traits::zero();
         }
     }
+    let player = live.player().id;
     for creature in clearing {
-        let hook = sts2_core::EventHook::BlockCleared { creature };
+        let hook = sts2_core::EventHook::BlockCleared {
+            creature,
+            player,
+            turn: live.turn,
+        };
         for (listener, effect) in listen::notify::<V>(live, relics, hook) {
             match (listener, effect) {
+                // `CreatureCmd.GainBlock`, unpowered, on the player who
+                // carries the relic.
+                (Listener::Relic { .. }, sts2_core::HookEffect::GainBlock(amount)) => {
+                    live.gain_unpowered_block(player, amount);
+                }
+                // `PowerCmd.Apply` on the player who carries the relic, from
+                // the player.
+                (Listener::Relic { .. }, sts2_core::HookEffect::ApplyToOwner(power, amount)) => {
+                    let ascension = live.ascension;
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    board.land(player, power, amount, Some(player));
+                }
                 // `CreatureCmd.GainBlock`, unpowered, then
                 // `PowerCmd.Remove(this)`.
                 (

@@ -2158,7 +2158,7 @@ pub(crate) fn event_hook(
         (
             Power::BlockNextTurnPower,
             PowerAmount::Counted(amount),
-            EventHook::BlockCleared { creature },
+            EventHook::BlockCleared { creature, .. },
         ) if creature == holder => {
             Some(HookEffect::GainBlockAndRemove(amount))
         }
