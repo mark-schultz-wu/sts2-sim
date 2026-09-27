@@ -1,7 +1,8 @@
 //! The Necrobinder's cards, where the generator leaves them.
 
 use sts2_core::{
-    Amount, Change, CostPool, Effect, EventHook, Fight, HookEffect, Lasting, Played, Scaling,
+    Amount, Change, CostPool, Effect, EventHook, Fight, HookEffect, Lasting, Pile, PileAct, Played,
+    Scaling, Selection,
 };
 
 use super::super::super::generated::card_plays;
@@ -13,7 +14,49 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
     match card {
         NecrobinderCard::Unleash => osty_attack(fight, CardVar::CalculatedDamage),
         NecrobinderCard::Poke | NecrobinderCard::Flatten => osty_attack(fight, CardVar::OstyDamage),
+        NecrobinderCard::Graveblast => graveblast(fight),
         card => card_plays::necrobinder::on_play(card, fight),
+    }
+}
+
+/// Where a Necrobinder card stopped inside its own play.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `Graveblast`, after its owner picked the card to take back.
+    GraveblastTakeBack,
+}
+
+pub(super) fn resume_play<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    match at {
+        // `CardPileCmd.Add` of the one taken, into hand.
+        Resume::GraveblastTakeBack => {
+            fight.act_on(PileAct::IntoHand, chosen.as_slice());
+            Played::Done
+        }
+    }
+}
+
+/// `Graveblast`: its damage to the target, then one card from the discard
+/// pile picked into hand.
+fn graveblast<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    Played::Asking {
+        pile: Pile::Discard,
+        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::GraveblastTakeBack)),
     }
 }
 

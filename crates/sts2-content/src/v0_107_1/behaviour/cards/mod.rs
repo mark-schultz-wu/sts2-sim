@@ -129,6 +129,7 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Event(event::Resume),
+    Necrobinder(necrobinder::Resume),
     Regent(regent::Resume),
     Silent(silent::Resume),
 }
@@ -277,6 +278,7 @@ pub(crate) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::Event(at) => event::resume_play(fight, at, chosen),
+        Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),
     }

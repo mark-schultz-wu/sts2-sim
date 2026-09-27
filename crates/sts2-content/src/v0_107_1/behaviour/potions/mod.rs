@@ -42,24 +42,36 @@ pub(crate) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
     }
 }
 
-/// What a potion drunk outside a fight asks the run for.
+/// What a potion asks of the run rather than of a fight.
 ///
 /// # Panics
 ///
 /// A potion nobody has ported outside a fight.
-pub(crate) fn on_use_outside_fight(
+pub(crate) fn on_use_on_run(
     potion: Potion,
     run: &impl sts2_core::EventView<V>,
+    in_fight: bool,
 ) -> sts2_core::HookEffects<V> {
-    match potion {
+    use sts2_core::RunStreamKinds as _;
+
+    match (potion, in_fight) {
+        // `CreateRandomPotionOutOfCombat` off `CombatPotionGeneration` and
+        // `TryToProcure`, while the belt has an open slot.
+        (Potion::EntropicBrew, _) => smallvec::smallvec![sts2_core::HookEffect::FillPotionSlots {
+            stream: <V as sts2_core::ContentVersion>::RunRngType::COMBAT_POTION_GENERATION,
+        }],
+        // The rest act on the fight when drunk in one.
+        (_, true) => sts2_core::HookEffects::new(),
         // `CreatureCmd.Heal` for a fifth of the maximum, which
         // `SetCurrentHpInternal` truncates.
-        Potion::BloodPotion => smallvec::smallvec![sts2_core::HookEffect::Heal(
+        (Potion::BloodPotion, false) => smallvec::smallvec![sts2_core::HookEffect::Heal(
             Number::from(run.max_hp()) * ironclad::HEAL_PERCENT / 100
         )],
         // `CreatureCmd.GainMaxHp` by its `MaxHpVar(5)`.
-        Potion::FruitJuice => smallvec::smallvec![sts2_core::HookEffect::GainMaxHp(FRUIT_JUICE)],
-        potion => unimplemented!("what {potion:?} does when it is drunk outside a fight"),
+        (Potion::FruitJuice, false) => {
+            smallvec::smallvec![sts2_core::HookEffect::GainMaxHp(FRUIT_JUICE)]
+        }
+        (potion, false) => unimplemented!("what {potion:?} does when it is drunk outside a fight"),
     }
 }
 

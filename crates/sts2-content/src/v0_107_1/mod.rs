@@ -396,11 +396,12 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::potions::on_use(potion, fight)
     }
 
-    fn on_use_outside_fight(
+    fn on_use_on_run(
         potion: Self::Potion,
         run: &impl sts2_core::EventView<Self>,
+        in_fight: bool,
     ) -> sts2_core::HookEffects<Self> {
-        behaviour::potions::on_use_outside_fight(potion, run)
+        behaviour::potions::on_use_on_run(potion, run, in_fight)
     }
 
     fn on_play<F: sts2_core::Fight<Self>>(

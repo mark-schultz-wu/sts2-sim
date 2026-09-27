@@ -306,6 +306,8 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             Played::Done
         }
+        // Its belt is the run's, which `on_use_on_run` fills.
+        Potion::EntropicBrew => Played::Done,
         // One card from the discard pile, free this turn, into hand.
         Potion::LiquidMemories => Played::Asking {
             pile: Pile::Discard,
