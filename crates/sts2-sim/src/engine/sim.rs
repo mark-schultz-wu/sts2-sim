@@ -124,7 +124,7 @@ impl<V: Rules> Sim<V> {
                 amount,
                 index,
             } => self.state.enchant(*enchantment, *amount, *index),
-            Setup::Event { event } => unimplemented!("jumping to {event:?}"),
+            Setup::Event { event } => self.state.event_here(*event).map(Ok),
         }
     }
 

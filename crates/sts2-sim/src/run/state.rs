@@ -1239,6 +1239,10 @@ impl<V: Rules> State<V> {
                         .push(sts2_core::DeckCard::new(CardIdent::new(card)));
                     continue;
                 }
+                HookEffect::RemoveDeckCardAt(at) => {
+                    self.player.deck_mut().remove(at);
+                    continue;
+                }
                 // `CardCmd.TransformTo`: each leaves its place, and the
                 // replacements join the deck's end in deck order.
                 HookEffect::TransformInDeck { from, into } => {
@@ -2219,6 +2223,27 @@ impl<V: Rules> State<V> {
     pub(crate) fn fight_here(&mut self, encounter: V::Encounter) -> Result<Decided, Error> {
         let fight = self.create_fight(encounter, EncounterQueue::Named, Location::NoLocation)?;
         Ok(self.enter_fight(fight, Location::NoLocation))
+    }
+
+    /// Enter a named event, off the map.
+    ///
+    /// `EventConsoleCmd`: a map point appended to the history, then
+    /// `RunManager.EnterRoom` with the event's room. That seeds the event's
+    /// own stream, and counts it against the act the way travelling does.
+    pub(crate) fn event_here(&mut self, event: V::Event) -> Result<Decided, Error> {
+        let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
+        let state = V::enter_event(event, self, &mut rng);
+        Arc::make_mut(&mut self.visited_events).push(event);
+        self.enter(
+            Location::NoLocation,
+            Phase::Event {
+                state,
+                rng,
+                asking: None,
+                finished: false,
+            },
+        );
+        Ok(Decided::Resolved)
     }
 
     /// Put a power on a creature in the fight.
