@@ -16,6 +16,20 @@ pub enum Resume {
 pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
     match card {
         EventCard::NeowsFury => neows_fury(fight),
+        // Its damage to the target. The Byrdpip pet only animates the hit.
+        EventCard::ByrdSwoop => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         card => card_plays::event::on_play(card, fight),
     }
 }

@@ -1239,6 +1239,19 @@ impl<V: Rules> State<V> {
                         .push(sts2_core::DeckCard::new(CardIdent::new(card)));
                     continue;
                 }
+                // `CardCmd.TransformTo`: each leaves its place, and the
+                // replacements join the deck's end in deck order.
+                HookEffect::TransformInDeck { from, into } => {
+                    let deck = self.player.deck_mut();
+                    let before = deck.len();
+                    deck.retain(|held| held.ident.card != from);
+                    let transformed = before - deck.len();
+                    deck.extend(
+                        std::iter::repeat_n(CardIdent::new(into), transformed)
+                            .map(sts2_core::DeckCard::new),
+                    );
+                    continue;
+                }
                 HookEffect::AddUniformCard { rarity } => {
                     for card in self.uniform_cards(1, rarity) {
                         self.player
@@ -2322,6 +2335,19 @@ impl<V: Rules> State<V> {
                 };
                 options.clear();
                 return Ok(Decided::Resolved);
+            }
+            // `RestSiteOption.OnSelect` for an option the run carries out,
+            // which uses the rest site up.
+            if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HATCH {
+                let effects = sts2_core::RestKinds::selected(option);
+                let Phase::RestSite { options, .. } = &mut self.phase else {
+                    unreachable!("the phase was a rest site when this began");
+                };
+                options.clear();
+                return Ok(match self.carry_out(effects) {
+                    None => Decided::Resolved,
+                    Some(asked) => self.park(asked),
+                });
             }
             if option != <V::RestSiteOption as sts2_core::RestKinds<V>>::SMITH {
                 unimplemented!("the {option:?} rest site option");

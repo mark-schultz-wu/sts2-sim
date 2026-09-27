@@ -1260,6 +1260,14 @@ pub trait RestKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
     /// hook is why the list is the build's answer and not a constant. Both the
     /// belt and the deck listen on it.
     fn offered(relics: &[V::Relic], deck: &[crate::CardIdent<V>]) -> Vec<Self>;
+
+    /// `RestSiteOption.OnSelect` for an option whose selection is something
+    /// the run carries out: `HATCH` obtains Byrdpip.
+    ///
+    /// # Panics
+    ///
+    /// An option the run carries out itself, or one nobody has ported.
+    fn selected(self) -> Vec<HookEffect<V>>;
 }
 
 /// The streams a run keeps, as consts a rule can name.
@@ -3114,6 +3122,14 @@ pub enum HookEffect<V: ContentVersion> {
     ClearAffliction(Writing<V>),
     /// `CardPileCmd.RemoveFromDeck` on the deck card that asked.
     RemoveFromDeck,
+    /// `CardCmd.TransformTo(into)` on each card of the deck that is `from`.
+    /// Each leaves its place, and its replacement joins the deck's end.
+    TransformInDeck {
+        from: V::Card,
+        into: V::Card,
+    },
+    /// `PlayerCmd.AddPet<M>`: the monster beside the player.
+    AddPet(V::Monster),
     /// The card that asked, moved to the top of the draw pile it was
     /// shuffled into.
     ToTopOfDrawPile,

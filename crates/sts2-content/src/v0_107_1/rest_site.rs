@@ -25,19 +25,27 @@ impl RestKinds<V0_107_1> for RestSiteOption {
     /// `HEAL` and `SMITH`, and the two things that change that.
     ///
     /// `MEND` is the second player's, and a run here has one player. Girya and
-    /// the Byrdonis Egg implement `TryModifyRestSiteOptions` in this build,
-    /// and neither is ported. So carrying one stops the run, rather than
-    /// offering a list the game does not.
+    /// the Byrdonis Egg implement `TryModifyRestSiteOptions` in this build.
+    /// Girya is not ported, so carrying it stops the run, rather than offering
+    /// a list the game does not. Each Byrdonis Egg adds `HATCH`.
     fn offered(relics: &[Relic], deck: &[CardIdent<V0_107_1>]) -> Vec<RestSiteOption> {
         if relics.contains(&Relic::Girya) {
             unimplemented!("Girya changes what a rest site offers");
         }
-        if deck
-            .iter()
-            .any(|card| card.card == Cards::Quest(QuestCard::ByrdonisEgg))
-        {
-            unimplemented!("the Byrdonis Egg changes what a rest site offers");
+        let mut offered = vec![RestSiteOption::Heal, RestSiteOption::Smith];
+        offered.extend(
+            deck.iter()
+                .filter(|card| card.card == Cards::Quest(QuestCard::ByrdonisEgg))
+                .map(|_| RestSiteOption::Hatch),
+        );
+        offered
+    }
+
+    /// `HatchRestSiteOption.OnSelect`: `RelicCmd.Obtain<Byrdpip>`.
+    fn selected(self) -> Vec<sts2_core::HookEffect<V0_107_1>> {
+        match self {
+            RestSiteOption::Hatch => vec![sts2_core::HookEffect::ObtainRelic(Relic::Byrdpip)],
+            option => unimplemented!("what choosing {option:?} at a rest site does"),
         }
-        vec![RestSiteOption::Heal, RestSiteOption::Smith]
     }
 }

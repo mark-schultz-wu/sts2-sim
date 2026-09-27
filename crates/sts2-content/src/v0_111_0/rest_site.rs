@@ -29,4 +29,8 @@ impl RestKinds<V0_111_0> for RestSiteOption {
     fn offered(_relics: &[Relic], _deck: &[CardIdent<V0_111_0>]) -> Vec<RestSiteOption> {
         unimplemented!("what a rest site offers on v0.111.0")
     }
+
+    fn selected(self) -> Vec<sts2_core::HookEffect<V0_111_0>> {
+        unimplemented!("what choosing {self:?} at a rest site does on v0.111.0")
+    }
 }
