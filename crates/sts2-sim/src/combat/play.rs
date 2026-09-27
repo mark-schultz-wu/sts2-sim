@@ -954,8 +954,23 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         merge::<V>(&mut next.skip_tick, skipped);
     }
 
-    let ended = effect.ended;
+    let mut ended = effect.ended;
     let Asker::Card(play) = effect.asker else {
+        // `Hook.AfterPotionUsed`, once the potion is done, for a fight still
+        // in progress.
+        if ended.is_none() {
+            let asked = super::listen::notify::<V>(
+                next,
+                relics,
+                sts2_core::EventHook::PotionUsed { in_fight: true },
+            );
+            if !asked.is_empty() {
+                let mut board =
+                    Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+                ended = board.ended;
+            }
+        }
         if outermost && ended == Some(super::Ended::Won) {
             super::listen::combat_ended::<V>(next, relics);
         }

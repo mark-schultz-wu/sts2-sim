@@ -1507,6 +1507,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::AfterCombatVictory)
+        .with(sts2_core::ModelHook::AfterPotionUsed)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // BIG_HAT
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
@@ -2060,7 +2061,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ModifyRestSiteHealAmount),
     // REPTILE_TRINKET
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPotionUsed),
     // RINGING_TRIANGLE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldFlush),
     // RING_OF_THE_DRAKE

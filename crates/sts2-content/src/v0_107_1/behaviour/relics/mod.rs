@@ -26,6 +26,7 @@ mod bing_bong;
 mod black_blood;
 mod black_star;
 mod blood_vial;
+mod bone_flute;
 mod bone_tea;
 mod book_of_five_rings;
 mod booming_conch;
@@ -39,6 +40,7 @@ mod centennial_puzzle;
 mod chosen_cheese;
 mod cracked_core;
 mod cursed_pearl;
+mod data_disk;
 mod daughter_of_the_wind;
 mod divine_destiny;
 mod divine_right;
@@ -60,11 +62,13 @@ mod glass_eye;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
+mod happy_flower;
 mod hefty_tablet;
 mod horn_cleat;
 mod infused_core;
 mod intimidating_helmet;
 mod juzu_bracelet;
+mod kunai;
 mod kusarigama;
 mod lantern;
 mod lava_rock;
@@ -89,6 +93,7 @@ mod paels_horn;
 mod paels_tears;
 mod pandoras_box;
 mod pantograph;
+mod pear;
 mod pen_nib;
 mod permafrost;
 mod phial_holster;
@@ -101,6 +106,7 @@ mod precise_scissors;
 mod radiant_pearl;
 mod red_mask;
 mod regal_pillow;
+mod reptile_trinket;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod runic_pyramid;
@@ -261,6 +267,12 @@ pub enum State {
     BookOfFiveRings(book_of_five_rings::State),
     Kusarigama(kusarigama::State),
     BeatingRemnant(beating_remnant::State),
+    ReptileTrinket,
+    Pear,
+    DataDisk,
+    BoneFlute,
+    HappyFlower(happy_flower::State),
+    Kunai(kunai::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -459,6 +471,12 @@ pub(crate) fn event_hook(
         State::BookOfFiveRings(state) => book_of_five_rings::event_hook(state, hook, asked),
         State::Kusarigama(state) => kusarigama::event_hook(state, hook, asked),
         State::BeatingRemnant(state) => beating_remnant::event_hook(state, hook),
+        State::ReptileTrinket => reptile_trinket::event_hook(hook, asked),
+        State::Pear => pear::event_hook(hook, asked),
+        State::DataDisk => data_disk::event_hook(hook, asked),
+        State::BoneFlute => bone_flute::event_hook(hook, asked),
+        State::HappyFlower(state) => happy_flower::event_hook(state, hook, asked),
+        State::Kunai(state) => kunai::event_hook(state, hook, asked),
     }
 }
 
@@ -597,7 +615,13 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::CentennialPuzzle(_)
         | State::Mango
         | State::BookOfFiveRings(_)
-        | State::Kusarigama(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Kusarigama(_)
+        | State::ReptileTrinket
+        | State::Pear
+        | State::DataDisk
+        | State::BoneFlute
+        | State::HappyFlower(_)
+        | State::Kunai(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -726,6 +750,12 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BookOfFiveRings => State::BookOfFiveRings(book_of_five_rings::State::default()),
             Relic::Kusarigama => State::Kusarigama(kusarigama::State::default()),
             Relic::BeatingRemnant => State::BeatingRemnant(beating_remnant::State::default()),
+            Relic::ReptileTrinket => State::ReptileTrinket,
+            Relic::Pear => State::Pear,
+            Relic::DataDisk => State::DataDisk,
+            Relic::BoneFlute => State::BoneFlute,
+            Relic::HappyFlower => State::HappyFlower(happy_flower::State::default()),
+            Relic::Kunai => State::Kunai(kunai::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -755,6 +785,8 @@ impl sts2_core::RelicModel<V> for State {
                 State::PenNib(state) => pen_nib::display_amount(state),
                 State::BookOfFiveRings(state) => book_of_five_rings::display_amount(state),
                 State::Kusarigama(state) => kusarigama::display_amount(state),
+                State::HappyFlower(state) => happy_flower::display_amount(state),
+                State::Kunai(state) => kunai::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }
