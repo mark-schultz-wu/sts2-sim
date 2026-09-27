@@ -1788,6 +1788,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("unblockable damage")
     }
 
+    /// `CombatCardSelection.NextItem` over the cards in `pile`, or nothing for
+    /// an empty one.
+    fn random_card_in(&mut self, _pile: crate::Pile) -> Option<crate::CardAt<V>> {
+        unimplemented!("a random card from a pile")
+    }
+
     /// `CardPileCmd.AutoPlayFromDrawPile(count, Top, forceExhaust)`: the top
     /// `count` cards into the play pile, a shuffle first wherever the draw
     /// pile is empty, then each auto-played in turn.

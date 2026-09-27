@@ -2309,6 +2309,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.rngs.targets.choose(&hittable).ok().copied()
     }
 
+    fn random_card_in(&mut self, pile: Pile) -> Option<CardAt<V>> {
+        use sts2_core::rng::GameRng as _;
+
+        let cards = sts2_core::Fight::cards_in(self, pile);
+        self.rngs.selection.choose(&cards).ok().copied()
+    }
+
     fn auto_play_from_draw(&mut self, count: usize, force_exhaust: bool) {
         if self.ended.is_some() || self.ending() {
             return;
