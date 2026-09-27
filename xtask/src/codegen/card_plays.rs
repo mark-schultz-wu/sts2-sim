@@ -121,6 +121,17 @@ fn command(out: &mut String, words: &[String]) -> Result<(), Error> {
                     hit(out, key, scaling);
                     writeln!(out, "}}").unwrap();
                 }
+                // Drawn for each hit, and the hits stop once no opponent is
+                // left to draw.
+                "random" if once => {
+                    writeln!(out, "if let Some(target) = fight.random_target() {{").unwrap();
+                    hit(out, key, scaling);
+                    writeln!(out, "}}").unwrap();
+                }
+                "random" => {
+                    writeln!(out, "let Some(target) = fight.random_target() else {{ break }};").unwrap();
+                    hit(out, key, scaling);
+                }
                 other => {
                     return Err(Error::Unread {
                         what: "an attack at",

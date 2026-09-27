@@ -486,8 +486,23 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             });
             Played::Done
         }
-        // `call DamageCmd.Attack`
-        IroncladCard::SwordBoomerang => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::SwordBoomerang => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    let Some(target) = fight.random_target() else {
+                        break;
+                    };
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
+            Played::Done
+        }
         IroncladCard::Tank => {
             fight.apply_to_actor(Power::TankPower, PowerAmount::Counted(1));
             Played::Done

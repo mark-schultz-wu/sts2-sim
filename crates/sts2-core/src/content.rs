@@ -1779,6 +1779,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a random target")
     }
 
+    /// One hit's target in an attack `TargetingRandomOpponents`: a living
+    /// opponent, hittable or not, drawn off `CombatTargets` by `NextItem`.
+    /// Nothing when none is alive.
+    fn random_target(&mut self) -> Option<crate::CombatId> {
+        unimplemented!("a random attack's target")
+    }
+
     /// `PowerCmd.Apply<P>(Owner.Creature, ...)`, on whoever is acting.
     ///
     /// The player for a card and the monster for a move, which is the creature

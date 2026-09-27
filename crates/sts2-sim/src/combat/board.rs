@@ -2169,6 +2169,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.rngs.targets.choose(&hittable).ok().copied()
     }
 
+    fn random_target(&mut self) -> Option<CombatId> {
+        use sts2_core::rng::GameRng as _;
+
+        let alive = sts2_core::Fight::opponents(self);
+        self.rngs.targets.choose(&alive).ok().copied()
+    }
+
     /// `CreatureCmd.Heal`, which is `HealInternal` and the revival it reports.
     ///
     /// `SetCurrentHpInternal` caps at the maximum, and a creature whose health
