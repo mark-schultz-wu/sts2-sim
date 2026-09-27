@@ -501,6 +501,16 @@ pub(super) fn before_side_turn_start<V: Rules>(
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 sts2_core::Fight::channel(&mut board, orb);
             }
+            // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`, from the
+            // player who carries the relic.
+            (Listener::Relic { .. }, sts2_core::HookEffect::ApplyToOpponents(power, amount)) => {
+                let player = live.player().id;
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                for target in board.hittable_opponents() {
+                    board.land(target, power, amount, Some(player));
+                }
+            }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn starts"),
         }
     }
@@ -1313,10 +1323,13 @@ pub(super) fn side_turn_started<V: Rules>(
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 board.modify_amount(owner, power, -num_traits::one::<V::Number>());
             }
-            // `PowerCmd.Apply<P>(Owner, amount, Owner)`.
+            // `PowerCmd.Apply<P>(Owner, amount, Owner)`. A relic's owner is
+            // the player.
             sts2_core::HookEffect::ApplyToOwner(power, amount) => {
-                let Listener::Power { owner, .. } = listener else {
-                    unimplemented!("{listener:?} applying a power to its owner")
+                let owner = match listener {
+                    Listener::Power { owner, .. } => owner,
+                    Listener::Relic { .. } => live.player().id,
+                    listener => unimplemented!("{listener:?} applying a power to its owner"),
                 };
                 let mut board =
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);

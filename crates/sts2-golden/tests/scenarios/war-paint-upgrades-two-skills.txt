@@ -1,0 +1,4 @@
+# `WarPaint` upgrades two of the deck's upgradable Skills, stably shuffled
+# off the Niche stream. The Ironclad's Skills are its Defends.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"WAR_PAINT"}

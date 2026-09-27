@@ -1,0 +1,6 @@
+# `FestivePopper` deals nine to every enemy as its owner's first turn
+# starts, and nothing the turn after.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"FESTIVE_POPPER"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"end_turn"}

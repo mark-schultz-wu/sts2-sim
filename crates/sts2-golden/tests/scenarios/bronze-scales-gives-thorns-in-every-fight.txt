@@ -1,0 +1,6 @@
+# `BronzeScales` gives its owner three Thorns as a fight's room opens. The
+# Nibbit's attack takes three back.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"BRONZE_SCALES"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

@@ -15,6 +15,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
         asked.push(HookEffect::UpgradeRandomDeckCards {
             count: CARDS,
             stream: RunRngType::Niche,
+            kind: None,
         });
     }
 }

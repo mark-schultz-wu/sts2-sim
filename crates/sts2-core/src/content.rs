@@ -2622,6 +2622,9 @@ pub enum EventHook<V: ContentVersion> {
     ShuffleOrder {
         initial: bool,
     },
+    /// `ModifyUnknownMapPointRoomTypes`, as an unknown map point rolls. A
+    /// listener answers with the types it takes out.
+    UnknownRoomTypes,
     /// `AfterRoomEntered`, for a room of this type.
     RoomEntered {
         room: V::RoomType,
@@ -2978,6 +2981,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
+            EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
@@ -3576,11 +3580,15 @@ pub enum HookEffect<V: ContentVersion> {
         /// each into the first open slot.
         into_gained: bool,
     },
-    /// `CardSelectCmd` over the run's upgradable cards.
+    /// `CardSelectCmd` over the run's upgradable cards, of one type where
+    /// `kind` names it.
     UpgradeRandomDeckCards {
         count: usize,
         stream: V::RunRngType,
+        kind: Option<CardKind>,
     },
+    /// Take a room type out of what an unknown map point can roll.
+    RemoveRoomType(V::RoomType),
     /// `PlayerCmd.GainStars`.
     GainStars(V::Number),
     /// `CreatureCmd.Heal` on the listener's owner.
