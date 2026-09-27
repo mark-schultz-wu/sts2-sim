@@ -1782,6 +1782,12 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("counting orbs")
     }
 
+    /// `CreatureCmd.Damage(target, amount, Unblockable | Unpowered, card)`,
+    /// from the card's owner, which is the acting creature.
+    fn damage_unblockable(&mut self, _target: crate::CombatId, _amount: V::Number) {
+        unimplemented!("unblockable damage")
+    }
+
     /// `CombatEnergyCosts.NextInt(below)`: a cost drawn at random.
     fn next_energy_cost(&mut self, _below: u8) -> V::Number {
         unimplemented!("a random energy cost")
@@ -3495,6 +3501,9 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub osty: Option<V::Health>,
     /// How many cards the owner's draw pile holds.
     pub draw: usize,
+    /// How many of the owner's cards in the fight, every pile included, are
+    /// tagged Strike. `PlayerCombatState.AllCards`.
+    pub strikes: usize,
     /// The powers of the creature the card is pointed at, where it is pointed
     /// at one.
     pub target: Option<&'a [crate::Stack<V>]>,

@@ -1,19 +1,88 @@
 //! The Ironclad's cards the generator leaves to a hand port.
 
 use sts2_core::{
-    Amount, CardKind, Change, CostPool, Effect, EventHook, Fight, HookEffect, Lasting, Played,
-    Rules as _, Scaling,
+    Amount, CardKind, Change, CostPool, CreatureView as _, Effect, EventHook, Fight, HookEffect,
+    Lasting, Played, PowerAmount, Rules as _, Scaling,
 };
 
 use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardVar, IroncladCard};
+use super::super::super::generated::powers::Power;
 use super::V;
 
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Whirlwind => whirlwind(fight),
+        IroncladCard::Bloodletting => bloodletting(fight),
+        IroncladCard::Uppercut => uppercut(fight),
+        IroncladCard::MoltenFist => molten_fist(fight),
+        // `PerfectedStrike`: its calculated damage to the target. Its test of
+        // that damage against twelve picks an animation.
+        IroncladCard::PerfectedStrike => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         card => card_plays::ironclad::on_play(card, fight),
     }
+}
+
+/// `Bloodletting`: its `HpLoss` off its owner, unblockable, then its energy.
+fn bloodletting<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
+    fight.modify_energy(fight.var(CardVar::Energy));
+    Played::Done
+}
+
+/// One hit of the card's damage on `target`.
+fn strike<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId) {
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+}
+
+/// `Uppercut`: its damage to the target, then its `Power` as Weak and as
+/// Vulnerable on it.
+fn uppercut<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    strike(fight, target);
+    let amount = PowerAmount::Counted(fight.var(CardVar::Power));
+    fight.apply_power(target, Power::WeakPower, amount);
+    fight.apply_power(target, Power::VulnerablePower, amount);
+    Played::Done
+}
+
+/// `MoltenFist`: its damage to the target, then as much Vulnerable again as
+/// the target holds, if it still stands.
+fn molten_fist<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    strike(fight, target);
+    let held = fight
+        .creatures()
+        .find(|creature| creature.id() == target && creature.alive())
+        .and_then(|creature| creature.power(Power::VulnerablePower));
+    match held {
+        Some(PowerAmount::Counted(held)) if held > 0 => {
+            fight.apply_power(target, Power::VulnerablePower, PowerAmount::Counted(held))
+        }
+        Some(PowerAmount::Endless) => unimplemented!("an endless Vulnerable"),
+        _ => {}
+    }
+    Played::Done
 }
 
 /// `Whirlwind`: its damage to every enemy, once for each energy of its X.

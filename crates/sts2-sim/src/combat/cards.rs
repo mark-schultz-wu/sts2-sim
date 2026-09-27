@@ -224,6 +224,26 @@ impl<V: Rules, P: Piles> Cards<V, P> {
                 })
     }
 
+    /// How many copies in the fight's piles, the exhaust and play piles
+    /// included, are in a state `pick` picks. `PlayerCombatState.AllCards`.
+    pub(crate) fn count_all(&self, pick: impl Fn(&Face<V>) -> bool) -> usize {
+        [
+            Place::Hand,
+            Place::Draw,
+            Place::Discard,
+            Place::Exhaust,
+            Place::Play,
+        ]
+        .into_iter()
+        .map(|pile| {
+            self.piles
+                .iter(pile)
+                .filter(|&card| pick(&self.faces[usize::from(self.states[usize::from(card)])]))
+                .count()
+        })
+        .sum()
+    }
+
     /// Add a copy to the end of `pile`.
     pub(crate) fn push(&mut self, pile: Pile, card: CardInstance<V>) {
         self.store(card);
