@@ -469,7 +469,17 @@ impl<'a, V: Rules> Board<'a, V> {
         // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove` for a power it
         // says is done.
         if spent {
-            self.live.remove_power(id, power);
+            self.remove_power_carried(id, power);
+        }
+    }
+
+    /// `PowerCmd.Remove`, with what its `AfterRemoved` asks carried out.
+    fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
+        for effect in self.live.remove_power_asking(id, power) {
+            match effect {
+                HookEffect::KillCreature(creature) => self.kill_outright(creature),
+                other => unimplemented!("{power:?} asking for {other:?} as it comes off"),
+            }
         }
     }
 
@@ -774,23 +784,30 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `AddGeneratedCardToCombat` of one new copy into the draw pile at
     /// `CardPilePosition.Random`. Nothing once the fight is over.
     fn add_to_draw_at_random(&mut self, card: V::Card) {
+        self.add_at_random_here(card, Pile::Draw);
+    }
+
+    /// `AddGeneratedCardToCombat` of one new copy into `pile` at
+    /// `CardPilePosition.Random`: the place `Rng.Shuffle.NextInt(count + 1)`
+    /// names, from the top. Nothing once the fight is over.
+    fn add_at_random_here(&mut self, card: V::Card, pile: Pile) {
         use sts2_core::rng::GameRng as _;
 
         if self.ended.is_some() {
             return;
         }
-        let places: i32 = num_traits::cast(self.live.cards.len(Pile::Draw) + 1)
-            .expect("a draw pile's places fit the RNG integer");
+        let places: i32 = num_traits::cast(self.live.cards.len(pile) + 1)
+            .expect("a pile's places fit the RNG integer");
         let bound = sts2_core::rng::Bound::try_new(places).expect("a pile has a place");
         let at: usize = num_traits::cast(self.rngs.shuffle.next_int(bound))
             .expect("a draw below the bound is a place");
         let id = self.live.card_ids.mint();
         self.live
             .cards
-            .insert(Pile::Draw, at, CardInstance::new(CardIdent::new(card), id));
+            .insert(pile, at, CardInstance::new(CardIdent::new(card), id));
         let index = num_traits::NumCast::from(at)
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-        self.card_entered_combat(CardAt::new(id, Pile::Draw, index), card);
+        self.card_entered_combat(CardAt::new(id, pile, index), card);
     }
 
     fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card) {
@@ -2114,7 +2131,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn remove_power(&mut self, creature: CombatId, power: V::Power) {
-        self.live.remove_power(creature, power);
+        self.remove_power_carried(creature, power);
+    }
+
+    fn add_at_random(&mut self, card: V::Card, pile: Pile) {
+        self.add_at_random_here(card, pile);
+    }
+
+    fn modify_power_amount(&mut self, creature: CombatId, power: V::Power, amount: V::Number) {
+        self.modify_amount_from(creature, power, amount, Some(creature));
     }
 
     fn set_max_and_current_hp(&mut self, creature: CombatId, hp: V::Health) {

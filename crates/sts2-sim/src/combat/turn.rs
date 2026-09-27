@@ -1225,6 +1225,25 @@ pub(super) fn side_turn_started<V: Rules>(
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }
+    if ended.is_some() {
+        return ended;
+    }
+    // `Hook.AfterSideTurnStartLate`.
+    let hook = sts2_core::EventHook::SideTurnStartLate { side };
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            // `PowerCmd.Decrement(this)`.
+            (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                ended = ended.or(board.ended);
+            }
+            (listener, effect) => {
+                unimplemented!("{listener:?} asking for {effect:?} late as a side turn starts")
+            }
+        }
+    }
     ended
 }
 

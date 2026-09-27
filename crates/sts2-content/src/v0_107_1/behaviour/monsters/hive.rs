@@ -309,6 +309,20 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
         }
         (Monster::Rocket, MoveId::RechargeMove) => {}
+        // `LiquifyMove`: Sandpit at four on itself, aimed at the player, then
+        // six Frantic Escapes at random places: three into the draw pile and
+        // three into the discard pile. `HasLiquified` picks its animations
+        // alone. A fight here has one player.
+        (Monster::TheInsatiable, MoveId::LiquifyGroundMove) => {
+            fight.apply_to_actor(Power::SandpitPower, PowerAmount::Counted(SANDPIT));
+            for escape in 0..ESCAPES {
+                let pile = match escape < ESCAPES / 2 {
+                    true => Pile::Draw,
+                    false => Pile::Discard,
+                };
+                fight.add_at_random(Cards::Status(StatusCard::FranticEscape), pile);
+            }
+        }
         (Monster::Myte, MoveId::ToxicMove) => {
             fight.add_generated_cards(
                 sts2_core::CardIdent::new(Cards::Status(StatusCard::Toxic)),
@@ -420,6 +434,12 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
     });
     fight.heal(actor, amount);
 }
+
+/// `LiquifyMove`'s Sandpit, `PowerCmd.Apply(…, 4m, …)`.
+const SANDPIT: Number = 4;
+
+/// `LiquifyMove`'s six Frantic Escapes.
+const ESCAPES: usize = 6;
 
 /// `GuardedStrikeMove`'s `CreatureCmd.GainBlock(…, 18m, ValueProp.Move, …)`.
 const GUARDED_BLOCK: Number = 18;

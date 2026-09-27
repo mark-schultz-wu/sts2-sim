@@ -1938,6 +1938,29 @@ pub(crate) fn event_hook(
             return;
         }
         (Power::CrabRagePower, _, EventHook::AfterDeath { .. }) => None,
+        // `SandpitPower.AfterSideTurnStartLate`: one off as the enemies' turn
+        // starts.
+        (Power::SandpitPower, _, EventHook::SideTurnStartLate { side: CombatSide::Enemy }) => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::SandpitPower, _, EventHook::SideTurnStartLate { .. }) => None,
+        // `SandpitPower.AfterRemoved`: while its owner and its target both
+        // live, `CreatureCmd.Kill` on the target, forced. A fight here has one
+        // player, who is the target, and the player's death ends the fight
+        // before any pet's matters.
+        (Power::SandpitPower, _, EventHook::Removed) => {
+            let player = fight.player();
+            let alive = |creature| fight.current_hp(creature).is_some_and(|hp| hp > 0);
+            (alive(holder) && alive(player)).then_some(HookEffect::KillCreature(player))
+        }
+        // Its other overrides move the player's figure and the music.
+        (
+            Power::SandpitPower,
+            _,
+            EventHook::Applied
+            | EventHook::PowerAmountChanged { .. }
+            | EventHook::BeforeSideTurnEnd { .. },
+        ) => None,
         // `VitalSparkPower.BeforeCombatStart`: Tainted by its stack on every
         // Skill the player holds.
         (Power::VitalSparkPower, _, EventHook::CombatStarting) => Some(HookEffect::Afflict {

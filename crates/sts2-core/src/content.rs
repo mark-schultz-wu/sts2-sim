@@ -567,6 +567,7 @@ pub enum ModelHook {
     ModifyShuffleOrder,
     AfterShuffle,
     BeforePotionUsed,
+    AfterSideTurnStartLate,
     ShouldDraw,
     AfterPreventingDraw,
     AfterCardDrawnEarly,
@@ -637,7 +638,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 97] = [
+    pub const ALL: [ModelHook; 98] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -668,6 +669,7 @@ impl ModelHook {
         ModelHook::ModifyShuffleOrder,
         ModelHook::AfterShuffle,
         ModelHook::BeforePotionUsed,
+        ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
         ModelHook::AfterPreventingDraw,
         ModelHook::AfterCardDrawnEarly,
@@ -770,6 +772,7 @@ impl ModelHook {
             ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
             ModelHook::AfterShuffle => "AfterShuffle",
             ModelHook::BeforePotionUsed => "BeforePotionUsed",
+            ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
             ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
             ModelHook::AfterCardDrawnEarly => "AfterCardDrawnEarly",
@@ -1806,6 +1809,23 @@ pub trait Fight<V: ContentVersion> {
     /// this each time.
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number;
 
+    /// `CardPileCmd.AddGeneratedCardToCombat` of a new copy into `pile` at
+    /// `CardPilePosition.Random`.
+    fn add_at_random(&mut self, _card: V::Card, _pile: crate::Pile) {
+        unimplemented!("a card added at a random place")
+    }
+
+    /// `PowerCmd.ModifyAmount` on `creature`'s `power`, by a signed amount,
+    /// from the creature holding it.
+    fn modify_power_amount(
+        &mut self,
+        _creature: crate::CombatId,
+        _power: V::Power,
+        _amount: V::Number,
+    ) {
+        unimplemented!("a power's amount moved")
+    }
+
     /// `PowerCmd.Remove` of `power` from `creature`, where it holds one.
     fn remove_power(&mut self, _creature: crate::CombatId, _power: V::Power) {
         unimplemented!("removing a power")
@@ -2489,6 +2509,11 @@ impl<V: ContentVersion> DecisionHook<V> {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    /// `AfterSideTurnStartLate`, once every listener has answered
+    /// [`EventHook::SideTurnStart`].
+    SideTurnStartLate {
+        side: V::CombatSide,
+    },
     /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
     /// it leaves the belt.
     PotionUsing {
@@ -2842,6 +2867,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
             EventHook::Shuffled => ModelHook::AfterShuffle,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
+            EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
@@ -3550,6 +3576,8 @@ pub enum HookEffect<V: ContentVersion> {
     AddToDeck(V::Card),
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
+    /// `CreatureCmd.Kill(creature, force: true)`.
+    KillCreature(crate::CombatId),
     /// `CardPileCmd.AddGeneratedCardToCombat` of `count` new copies into
     /// the player's draw pile, each at `CardPilePosition.Random`: the place
     /// `Rng.Shuffle.NextInt(count + 1)` names, from the top.

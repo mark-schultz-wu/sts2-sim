@@ -159,7 +159,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
         Cards::Event(card) => event::on_play(card, fight),
         Cards::Quest(card) => card_plays::quest::on_play(card, fight),
-        Cards::Status(card) => card_plays::status::on_play(card, fight),
+        Cards::Status(card) => status::on_play(card, fight),
         Cards::Token(card) => token::on_play(card, fight),
         Cards::Deprecated(card) => card_plays::deprecated::on_play(card, fight),
     }
