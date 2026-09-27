@@ -3394,6 +3394,17 @@ pub enum CustomReward<V: ContentVersion> {
     },
 }
 
+/// How `RelicFactory.PullNextRelicFromFront` picks the next relic from the
+/// front of the player's bag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelicPull<V: ContentVersion> {
+    /// At a rarity rolled off the player's rewards stream, with no filter.
+    Rolled,
+    /// At this rarity, among the relics a merchant can stock, which is
+    /// `IsAllowedInShops`.
+    Stocked(<V::Relic as crate::RelicTable>::Rarity),
+}
+
 /// What happens to each card a [`HookEffect::SelectFromPile`] takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PileAct {
@@ -3466,6 +3477,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {
+        stream: Stream<V>,
+    },
+    /// `NextItem` over the deck's upgraded cards off `stream`, then
+    /// `CardCmd.Downgrade` on the one it draws, which sets its level to
+    /// nothing.
+    DowngradeRandomDeckCard {
         stream: Stream<V>,
     },
     /// `CardCmd.Upgrade` on every deck card an upgrade can still raise.
@@ -3701,10 +3718,9 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `RelicCmd.Obtain`, and whatever the relic's pickup asks.
     ObtainRelic(V::Relic),
-    /// `RelicFactory.PullNextRelicFromFront(player)`: a rarity rolled off the
-    /// rewards stream and the next relic of it from the player's bag, then
-    /// `RelicCmd.Obtain`.
-    ObtainNextRelic,
+    /// `RelicFactory.PullNextRelicFromFront`: the next relic from the front
+    /// of the player's bag, as the pull says, then `RelicCmd.Obtain`.
+    ObtainNextRelic(RelicPull<V>),
     /// `EventModel.SetEventFinished`, the last thing an option that ends its
     /// event does. The room then offers nothing, and the run goes on.
     FinishEvent,
@@ -5209,8 +5225,8 @@ pub trait Rules: Hooks {
     );
 
     /// [`crate::EventBehavior::relics_pulled`] for the event entered.
-    fn event_relics_pulled(_state: &Self::EventState) -> usize {
-        0
+    fn event_relics_pulled(_state: &Self::EventState) -> &'static [RelicPull<Self>] {
+        &[]
     }
 
     /// [`crate::EventBehavior::hand_pulled_relics`] for the event entered.

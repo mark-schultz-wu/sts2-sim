@@ -82,6 +82,7 @@ mod touch_of_orobas;
 mod tungsten_rod;
 mod very_hot_cocoa;
 mod winged_boots;
+mod wongos_mystery_ticket;
 mod yummy_cookie;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
@@ -126,6 +127,7 @@ pub enum State {
     DollysMirror,
     DustyTome,
     FishingRod(fishing_rod::State),
+    WongosMysteryTicket(wongos_mystery_ticket::State),
     GlassEye,
     GoldenPearl,
     Gorget,
@@ -250,6 +252,7 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what DustyTome does for {hook:?}"),
         },
         State::FishingRod(state) => fishing_rod::event_hook(state, hook, asked),
+        State::WongosMysteryTicket(state) => wongos_mystery_ticket::event_hook(state, hook, asked),
         State::GlassEye => glass_eye::event_hook(hook, asked),
         State::GoldenPearl => golden_pearl::event_hook(hook, asked),
         State::Gorget => gorget::event_hook(hook, asked),
@@ -387,6 +390,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DollysMirror
         | State::DustyTome
         | State::FishingRod(_)
+        | State::WongosMysteryTicket(_)
         | State::GlassEye
         | State::GoldenPearl
         | State::Gorget
@@ -462,6 +466,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::DollysMirror => State::DollysMirror,
             Relic::DustyTome => State::DustyTome,
             Relic::FishingRod => State::FishingRod(fishing_rod::State::default()),
+            Relic::WongosMysteryTicket => {
+                State::WongosMysteryTicket(wongos_mystery_ticket::State::default())
+            }
             Relic::GlassEye => State::GlassEye,
             Relic::GoldenPearl => State::GoldenPearl,
             Relic::Gorget => State::Gorget,
@@ -538,6 +545,7 @@ impl sts2_core::RelicModel<V> for State {
             Field::Computed => match self {
                 State::BoneTea(state) => bone_tea::display_amount(state),
                 State::FishingRod(state) => fishing_rod::display_amount(state),
+                State::WongosMysteryTicket(state) => wongos_mystery_ticket::display_amount(state),
                 State::SwordOfStone(state) => sword_of_stone::display_amount(state),
                 State::WingedBoots(state) => winged_boots::display_amount(state),
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),

@@ -48,9 +48,9 @@ pub use content::{
     Offered, Opponents, Overrides, Picked, PileAct, PilePosition, PlayAt, PlayFinished,
     PlayStarted, Played, PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount,
     PowerKinds, PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel,
-    RelicPoolKinds, RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, RosterEntry,
-    Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned,
-    Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
+    RelicPoolKinds, RelicPull, RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds,
+    RosterEntry, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd,
+    Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
     TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
 };
 pub use event::{EventBehavior, EventView};

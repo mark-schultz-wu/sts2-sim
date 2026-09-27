@@ -46,12 +46,10 @@ pub trait EventBehavior<V: ContentVersion> {
     ) {
     }
 
-    /// How many relics the event pulls from the front of the player's bag
-    /// as it opens, after [`EventBehavior::set_up`]. Each is at a rarity
-    /// rolled off the player's rewards stream, as `PullNextRelicFromFront`
-    /// rolls it.
-    fn relics_pulled(&self, _state: &Self::State) -> usize {
-        0
+    /// The relics the event pulls from the front of the player's bag as it
+    /// opens, after [`EventBehavior::set_up`], in the order pulled.
+    fn relics_pulled(&self, _state: &Self::State) -> &'static [crate::RelicPull<V>] {
+        &[]
     }
 
     /// The relics [`EventBehavior::relics_pulled`] asked for, in the order

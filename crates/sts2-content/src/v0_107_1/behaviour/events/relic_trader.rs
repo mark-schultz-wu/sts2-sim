@@ -56,8 +56,9 @@ impl EventBehavior<V> for RelicTrader {
     }
 
     /// `NewRelics`, which `CalculateVars` pulls in full as the event opens.
-    fn relics_pulled(&self, _state: &State) -> usize {
-        OPTIONS.len()
+    /// One for each option, each at a rolled rarity.
+    fn relics_pulled(&self, _state: &State) -> &'static [sts2_core::RelicPull<V>] {
+        &[sts2_core::RelicPull::Rolled; OPTIONS.len()]
     }
 
     fn hand_pulled_relics(&self, state: &mut State, relics: &[Relic]) {

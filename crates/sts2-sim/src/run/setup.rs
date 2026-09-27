@@ -80,6 +80,17 @@ impl<V: Rules> RelicBag<V> {
         self.pull(rarity, dealt, |_| true, false)
     }
 
+    /// [`Self::front`] through a filter, which a rarity's deque is walked
+    /// past for when nothing in it passes.
+    pub fn front_where(
+        &self,
+        rarity: Rarity<V>,
+        dealt: &[V::Relic],
+        allowed: impl Fn(V::Relic) -> bool,
+    ) -> V::Relic {
+        self.pull(rarity, dealt, allowed, false)
+    }
+
     /// `RelicGrabBag.PullFromBack`, which is what a merchant stocks from.
     ///
     /// The same deque and the same walk, read from the other end and through a
