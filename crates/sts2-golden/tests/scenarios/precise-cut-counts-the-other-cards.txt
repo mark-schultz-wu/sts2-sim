@@ -1,0 +1,9 @@
+# Precise Cut deals two less for each other card in hand. Neutralize and
+# two Defends leave four cards beside it, so it deals thirteen less eight.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":1}
+{"cmd":"grant","card":"PRECISE_CUT"}
+{"cmd":"play_card","index":4,"target":1}

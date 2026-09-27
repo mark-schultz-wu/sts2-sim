@@ -4142,6 +4142,8 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub draw: usize,
     /// How many cards the owner's exhaust pile holds.
     pub exhaust: usize,
+    /// How many cards the owner's hand holds besides this one.
+    pub hand_besides: usize,
     /// The powers of every living enemy, one creature's after another's.
     pub enemy_powers: &'a [crate::Stack<V>],
     /// How many of the owner's cards in the fight, every pile included, are

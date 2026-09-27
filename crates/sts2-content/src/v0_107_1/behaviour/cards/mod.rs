@@ -131,6 +131,13 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::ExtraDamage) * owner.osty_max_hp.map_or(0, Number::from)
         }
+        // `PreciseCut`: a base, and less for each other card in its owner's
+        // hand.
+        (Cards::Silent(SilentCard::PreciseCut), CardVar::CalculatedDamage) => {
+            let others =
+                Number::try_from(owner.hand_besides).expect("a hand fits the game's numbers");
+            printed.face(CardVar::CalculationBase) - printed.face(CardVar::ExtraDamage) * others
+        }
         // `Sacrifice`: a base, and more for each of twice the maximum health a
         // living Osty has.
         (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {

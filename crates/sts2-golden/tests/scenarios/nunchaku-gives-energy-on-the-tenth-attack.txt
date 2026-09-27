@@ -1,0 +1,24 @@
+# `Nunchaku` gives an energy with every tenth attack its owner plays.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"NUNCHAKU"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}

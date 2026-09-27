@@ -205,6 +205,35 @@ fn severance<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `BoneShards`: where Osty stands, its damage from Osty to every enemy, its
+/// block, then Osty killed where it still lives.
+fn bone_shards<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let Some(osty) = fight.osty() else {
+        return Played::Done;
+    };
+    fight.attack_from(osty, Scaling::Dynamic, |fight| {
+        for target in fight.opponents() {
+            let hit = fight.resolve(Effect::Attack {
+                dealer: osty,
+                target,
+                damage: Amount::Var(CardVar::OstyDamage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(hit);
+        }
+    });
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    if let Some(osty) = fight.osty() {
+        fight.kill(osty);
+    }
+    Played::Done
+}
+
 /// `Dirge`: its `Summon` of Osty once for each energy its X spent. Then as
 /// many Souls go into the draw pile at random, upgraded where Dirge is.
 fn dirge<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -270,6 +299,7 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Eradicate => eradicate(fight),
         NecrobinderCard::GraveWarden => grave_warden(fight),
         NecrobinderCard::Dirge => dirge(fight),
+        NecrobinderCard::BoneShards => bone_shards(fight),
         NecrobinderCard::NegativePulse => negative_pulse(fight),
         NecrobinderCard::Severance => severance(fight),
         // `Friendship`: its Strength off its owner, then its Energy as
