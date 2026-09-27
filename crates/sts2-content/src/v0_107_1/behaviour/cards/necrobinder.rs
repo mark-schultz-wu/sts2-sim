@@ -76,6 +76,24 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
                 lasting: Lasting::ThisFight,
             })
         }
+        // `BansheesCry.AfterCardPlayed`: its `Energy` off its cost for the
+        // rest of the fight for each Ethereal card its owner plays. A fight
+        // here has one player.
+        (NecrobinderCard::BansheesCry, EventHook::CardPlayed { ethereal: true, .. }) => {
+            asked.push(HookEffect::ModifySelf {
+                change: Change::ChangeCost(CostPool::Energy, -printed.face(CardVar::Energy)),
+                lasting: Lasting::ThisFight,
+            })
+        }
+        (NecrobinderCard::BansheesCry, EventHook::CardPlayed { .. }) => {}
+        // `BansheesCry.AfterCardEnteredCombat`, for its own entry alone: its
+        // `Energy` off for each Ethereal play finished this fight before it
+        // came.
+        (NecrobinderCard::BansheesCry, EventHook::CardEnteredCombat { at, .. }) => {
+            if at.id() == id {
+                unimplemented!("a Banshee's Cry entering the fight, which counts Ethereal plays")
+            }
+        }
         (card, hook) => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

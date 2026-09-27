@@ -32,7 +32,7 @@ pub(super) fn event_hook(
         EventHook::RoomEntered { room, .. } if super::combat_room(room) => {
             state.activated_this_combat = false;
         }
-        EventHook::CardPlayed { card } if !state.activated_this_combat => {
+        EventHook::CardPlayed { card, .. } if !state.activated_this_combat => {
             let power = card
                 .power()
                 .unwrap_or_else(|| unimplemented!("a card that works its own type out"));

@@ -700,6 +700,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     })
                     .face;
                 let played_card = face.ident.card;
+                let ethereal = face.ethereal();
                 // `EnchantmentModel.OnPlay`, after the card's own and before
                 // the play is finished.
                 if let Some(enchanted) = face.ident.enchantment {
@@ -727,6 +728,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     },
                     ascension,
                     played_card,
+                    ethereal,
                 );
                 if effect.plays.done >= effect.plays.count {
                     break;
@@ -836,6 +838,7 @@ fn finished<V: Rules, S: LendsCombat>(
     fighting: Fighting<'_, V, S>,
     ascension: V::AscensionLevel,
     card: V::Card,
+    ethereal: bool,
 ) {
     let Fighting {
         live: next,
@@ -843,7 +846,11 @@ fn finished<V: Rules, S: LendsCombat>(
         relics,
     } = fighting;
     next.history.finish(card);
-    let asked = super::listen::notify::<V>(next, relics, sts2_core::EventHook::CardPlayed { card });
+    let asked = super::listen::notify::<V>(
+        next,
+        relics,
+        sts2_core::EventHook::CardPlayed { card, ethereal },
+    );
     if !asked.is_empty() {
         let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
         for (listener, effect) in asked {

@@ -1,0 +1,16 @@
+# `BansheesCry.AfterCardPlayed` takes its two off its cost for the rest of the
+# fight for each Ethereal card its owner plays. Fear and Defile take it from
+# nine to five, and a Defend, which is not Ethereal, leaves it there. It is
+# still five when it comes round again.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"BANSHEES_CRY"}
+{"cmd":"grant","card":"FEAR"}
+{"cmd":"grant","card":"DEFILE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

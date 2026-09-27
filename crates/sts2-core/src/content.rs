@@ -2415,6 +2415,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCardPlayed`, carrying the card its owner just played.
     CardPlayed {
         card: V::Card,
+        /// `Keywords.Contains(Ethereal)` for the copy.
+        ethereal: bool,
     },
     /// `BeforeDamageReceived`, once the damage hooks worked the hit out and
     /// before it meets block.
