@@ -3,7 +3,7 @@
 //! Encounters in a boss room.
 //! Source: `dumps/encounters.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
-use super::super::monsters::Monster;
+use super::super::monsters::{Monster, MoveId};
 use super::{
     EncounterData, EncounterFlag, FamilySet, FlagSet, Gold, Possible, RoomType, Roster, Slot,
     Spawn, Spawns,
@@ -30,6 +30,7 @@ pub(super) const AEONGLASS_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Aeonglass,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -53,6 +54,7 @@ pub(super) const CEREMONIAL_BEAST_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::CeremonialBeast,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -77,10 +79,12 @@ pub(super) const KAISER_CRAB_BOSS: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Crusher,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::Rocket,
             slot: Some(Slot::Second),
+            opens: None,
         },
     ])),
 };
@@ -105,6 +109,7 @@ pub(super) const KNOWLEDGE_DEMON_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::KnowledgeDemon,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -128,6 +133,7 @@ pub(super) const LAGAVULIN_MATRIARCH_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::LagavulinMatriarch,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -151,6 +157,7 @@ pub(super) const MOCK_BOSS_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BigDummy,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -175,10 +182,12 @@ pub(super) const QUEEN_BOSS: EncounterData = EncounterData {
         Spawn {
             monster: Monster::TorchHeadAmalgam,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::Queen,
             slot: Some(Slot::Second),
+            opens: None,
         },
     ])),
 };
@@ -203,6 +212,7 @@ pub(super) const SOUL_FYSH_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::SoulFysh,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -226,6 +236,7 @@ pub(super) const TEST_SUBJECT_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::TestSubject,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -249,6 +260,7 @@ pub(super) const THE_INSATIABLE_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::TheInsatiable,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -273,14 +285,17 @@ pub(super) const THE_KIN_BOSS: EncounterData = EncounterData {
         Spawn {
             monster: Monster::KinFollower,
             slot: Some(Slot::First),
+            opens: Some(MoveId::PowerDanceMove),
         },
         Spawn {
             monster: Monster::KinFollower,
             slot: Some(Slot::Second),
+            opens: None,
         },
         Spawn {
             monster: Monster::KinPriest,
             slot: Some(Slot::Third),
+            opens: None,
         },
     ])),
 };
@@ -305,6 +320,7 @@ pub(super) const VANTOM_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Vantom,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -328,5 +344,6 @@ pub(super) const WATERFALL_GIANT_BOSS: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::WaterfallGiant,
         slot: None,
+        opens: None,
     }])),
 };

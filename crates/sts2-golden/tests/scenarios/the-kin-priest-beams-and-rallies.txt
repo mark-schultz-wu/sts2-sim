@@ -1,0 +1,13 @@
+# The Kin. `TheKinBoss` writes `StartsWithDance` onto its first follower,
+# which the encounter dump now records, so it opens on Power Dance while the
+# second opens on Quick Slash. Each follower enters as a minion. The Priest
+# throws its two orbs, Beams three times for three, and Rallies for two
+# Strength. Killing the Priest takes its minions with it and ends the fight.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"THE_KIN_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":300,"target":0}
+{"cmd":"play_card","index":2,"target":3}

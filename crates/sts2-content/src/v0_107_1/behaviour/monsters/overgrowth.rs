@@ -12,26 +12,33 @@ use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
-/// Five monsters of this act have an `AfterAddedToRoom` that applies one.
-/// Byrdonis opens territorial, the Phrog Parasite opens infested, the Bygone
-/// Effigy opens slow, the Vantom opens slippery, and the Cubex Construct opens
-/// with Artifact. The Cubex gains block first, which `CreatureCmd.GainBlock`
-/// refuses while the fight is not yet in progress.
+/// Seven monsters of this act have an `AfterAddedToRoom` that applies one:
+/// Byrdonis, the Phrog Parasite, the Bygone Effigy, the Vantom, each Inklet,
+/// the Cubex Construct and a Kin Follower. The Cubex gains block first, which
+/// `CreatureCmd.GainBlock` refuses while the fight is not yet in progress.
+///
+/// Nothing for a monster this act does not port.
 pub(super) fn starting_powers(
     monster: Monster,
     ascension: AscensionLevel,
-) -> Vec<(Power, PowerAmount<Number>)> {
-    match monster {
+) -> Option<Vec<(Power, PowerAmount<Number>)>> {
+    Some(match monster {
         Monster::Byrdonis => vec![(Power::TerritorialPower, PowerAmount::Counted(1))],
         Monster::PhrogParasite => vec![(Power::InfestedPower, PowerAmount::Counted(4))],
         Monster::BygoneEffigy => vec![(Power::SlowPower, PowerAmount::Counted(1))],
         Monster::CubexConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
+        Monster::KinFollower => vec![(Power::MinionPower, PowerAmount::Counted(1))],
+        Monster::Inklet => vec![(Power::SlipperyPower, PowerAmount::Counted(1))],
         Monster::Vantom => vec![(
             Power::SlipperyPower,
             PowerAmount::Counted(slippery(ascension)),
         )],
-        _ => Vec::new(),
-    }
+        // The Jaxfruit starts a sound loop. The Eye With Teeth applies
+        // Illusion, which the Fogmog's illusion, the one thing that summons
+        // it, applies beside Minion.
+        Monster::SnappingJaxfruit | Monster::EyeWithTeeth => Vec::new(),
+        _ => return None,
+    })
 }
 
 /// Which branch an Overgrowth monster's conditional state takes.
@@ -113,6 +120,16 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
         }
         (Monster::CeremonialBeast, MoveId::StunMove) => {}
+        // Three hits, which the builder the generator stops on only animates.
+        (Monster::KinPriest, MoveId::BeamMove) => fight.attack_opponents(),
+        // The speech it gives the first time is all `SpeechUsed` reads.
+        (Monster::KinPriest, MoveId::RitualMove) => {
+            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => RITUAL_STRENGTH_DEADLY,
+                false => RITUAL_STRENGTH,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
         (Monster::Flyconid, MoveId::VulnerableSporesMove) => {
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(SPORES));
         }
@@ -127,6 +144,10 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
 /// The block the Crossbow Ruby Raider's Reload gives it, a constant in the
 /// move.
 const RELOAD_BLOCK: Number = 3;
+
+/// `KinPriest.RitualStrength`, either side of `DeadlyEnemies`.
+const RITUAL_STRENGTH: Number = 2;
+const RITUAL_STRENGTH_DEADLY: Number = 3;
 
 /// `CeremonialBeast.PlowStrength`.
 const PLOW_STRENGTH: Number = 2;

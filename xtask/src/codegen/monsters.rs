@@ -364,7 +364,15 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     // The hooks each monster's class overrides. `IterateHookListeners` asks
     // a monster's own model beside the powers on its creature.
     let overrides = super::overrides(&build)?;
-    emit_monsters(&mut out, &machines, &act_of, &overrides)?;
+    // The monsters whose class overrides `AfterAddedToRoom`, one of the
+    // `MonsterModel` virtuals the dump lists. The rest are animation, bestiary
+    // and death-by-Doom presentation.
+    let added: Vec<String> = dump
+        .of("virtual")
+        .filter(|row| row[2] == "AfterAddedToRoom")
+        .map(|row| format!("Self::{}", camel(&row[1])))
+        .collect();
+    emit_monsters(&mut out, &machines, &act_of, &overrides, &added)?;
 
     // The graphs, one file per bucket. `mod.rs` keeps the shape and the enum;
     // a monster's data is a named const it points at, so `data()` stays a
@@ -1126,6 +1134,7 @@ fn emit_monsters(
     machines: &BTreeMap<String, Machine>,
     act_of: &BTreeMap<String, Vec<String>>,
     overrides: &BTreeMap<String, Vec<sts2_core::ModelHook>>,
+    added: &[String],
 ) -> Result<(), Error> {
     writeln!(out, "/// Every monster in the build.").unwrap();
     writeln!(
@@ -1188,6 +1197,19 @@ fn emit_monsters(
         "\n    fn overrides(self) -> sts2_core::Overrides {{\n\
          \x20       OVERRIDES[self as usize]\n\
          \x20   }}"
+    )
+    .unwrap();
+
+    writeln!(
+        extras,
+        "\n    fn overrides_virtual(self, method: sts2_core::MonsterVirtual) -> bool {{\n\
+         \x20       match method {{\n\
+         \x20           sts2_core::MonsterVirtual::AfterAddedToRoom => {{\n\
+         \x20               matches!(self, {})\n\
+         \x20           }}\n\
+         \x20       }}\n\
+         \x20   }}",
+        added.join(" | ")
     )
     .unwrap();
 

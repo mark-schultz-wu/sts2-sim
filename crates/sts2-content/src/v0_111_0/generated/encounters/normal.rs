@@ -3,7 +3,7 @@
 //! Encounters in a monster room, which is most of them.
 //! Source: `dumps/encounters.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
-use super::super::monsters::Monster;
+use super::super::monsters::{Monster, MoveId};
 use super::{
     EncounterData, EncounterFlag, Family, FamilySet, FlagSet, Gold, Possible, RoomType, Roster,
     Slot, Spawn, Spawns,
@@ -30,6 +30,7 @@ pub(super) const AXEBOTS_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Axebot,
         slot: Some(Slot::First),
+        opens: None,
     }])),
 };
 
@@ -53,6 +54,7 @@ pub(super) const BATTLEWORN_DUMMY_EVENT_V1_ENCOUNTER: EncounterData = EncounterD
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BattleFriendV1,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -76,6 +78,7 @@ pub(super) const BATTLEWORN_DUMMY_EVENT_V2_ENCOUNTER: EncounterData = EncounterD
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BattleFriendV2,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -99,6 +102,7 @@ pub(super) const BATTLEWORN_DUMMY_EVENT_V3_ENCOUNTER: EncounterData = EncounterD
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BattleFriendV3,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -172,10 +176,12 @@ pub(super) const CHOMPERS_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Chomper,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::Chomper,
             slot: None,
+            opens: Some(MoveId::ScreechMove),
         },
     ])),
 };
@@ -201,14 +207,17 @@ pub(super) const CONSTRUCT_MENAGERIE_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::PunchConstruct,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::CubexConstruct,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::CubexConstruct,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -273,6 +282,7 @@ pub(super) const CUBEX_CONSTRUCT_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::CubexConstruct,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -297,10 +307,12 @@ pub(super) const CULTISTS_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::CalcifiedCultist,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::DampCultist,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -326,18 +338,22 @@ pub(super) const DENSE_VEGETATION_EVENT_ENCOUNTER: EncounterData = EncounterData
         Spawn {
             monster: Monster::Wriggler,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::Wriggler,
             slot: Some(Slot::Second),
+            opens: None,
         },
         Spawn {
             monster: Monster::Wriggler,
             slot: Some(Slot::Third),
+            opens: None,
         },
         Spawn {
             monster: Monster::Wriggler,
             slot: Some(Slot::Fourth),
+            opens: None,
         },
     ])),
 };
@@ -382,6 +398,7 @@ pub(super) const DEVOTED_SCULPTOR_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::DevotedSculptor,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -406,18 +423,22 @@ pub(super) const EXOSKELETONS_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Exoskeleton,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::Exoskeleton,
             slot: Some(Slot::Second),
+            opens: None,
         },
         Spawn {
             monster: Monster::Exoskeleton,
             slot: Some(Slot::Third),
+            opens: None,
         },
         Spawn {
             monster: Monster::Exoskeleton,
             slot: Some(Slot::Fourth),
+            opens: None,
         },
     ])),
 };
@@ -443,14 +464,17 @@ pub(super) const EXOSKELETONS_WEAK: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Exoskeleton,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::Exoskeleton,
             slot: Some(Slot::Second),
+            opens: None,
         },
         Spawn {
             monster: Monster::Exoskeleton,
             slot: Some(Slot::Third),
+            opens: None,
         },
     ])),
 };
@@ -481,6 +505,7 @@ pub(super) const FABRICATOR_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Fabricator,
         slot: Some(Slot::Third),
+        opens: None,
     }])),
 };
 
@@ -504,6 +529,7 @@ pub(super) const FAKE_MERCHANT_EVENT_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::FakeMerchantMonster,
         slot: Some(Slot::First),
+        opens: None,
     }])),
 };
 
@@ -547,6 +573,7 @@ pub(super) const FOGMOG_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Fogmog,
         slot: Some(Slot::Second),
+        opens: None,
     }])),
 };
 
@@ -570,6 +597,7 @@ pub(super) const FOSSIL_STALKER_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::FossilStalker,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -593,6 +621,7 @@ pub(super) const FROG_KNIGHT_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::FrogKnight,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -616,6 +645,7 @@ pub(super) const FUZZY_WURM_CRAWLER_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::FuzzyWurmCrawler,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -639,6 +669,7 @@ pub(super) const GLOBE_HEAD_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::GlobeHead,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -666,6 +697,7 @@ pub(super) const GREMLIN_MERC_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::GremlinMerc,
         slot: Some(Slot::First),
+        opens: None,
     }])),
 };
 
@@ -689,6 +721,7 @@ pub(super) const HAUNTED_SHIP_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::HauntedShip,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -712,6 +745,7 @@ pub(super) const HUNTER_KILLER_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::HunterKiller,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -736,14 +770,17 @@ pub(super) const INKLETS_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Inklet,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::Inklet,
             slot: None,
+            opens: Some(MoveId::WhirlwindMove),
         },
         Spawn {
             monster: Monster::Inklet,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -768,6 +805,7 @@ pub(super) const LIVING_FOG_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::LivingFog,
         slot: Some(Slot::Sixth),
+        opens: None,
     }])),
 };
 
@@ -791,6 +829,7 @@ pub(super) const LOUSE_PROGENITOR_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::LouseProgenitor,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -814,6 +853,7 @@ pub(super) const MAWLER_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Mawler,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -837,6 +877,7 @@ pub(super) const MOCK_ARTIFACT_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::MockArtifactMonster,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -860,6 +901,7 @@ pub(super) const MOCK_ATTACK_AND_SUMMON_ENCOUNTER: EncounterData = EncounterData
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::MockAttackAndSummonMinionMonster,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -883,6 +925,7 @@ pub(super) const MOCK_MONSTER_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BigDummy,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -906,6 +949,7 @@ pub(super) const MOCK_NO_REWARDS_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BigDummy,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -929,6 +973,7 @@ pub(super) const MOCK_PLATING_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::MockPlatingMonster,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -953,10 +998,12 @@ pub(super) const MOCK_TWO_MONSTER_ENCOUNTER: EncounterData = EncounterData {
         Spawn {
             monster: Monster::BigDummy,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::BigDummy,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -981,6 +1028,7 @@ pub(super) const MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER: EncounterData = EncounterDat
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::MysteriousKnight,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1005,10 +1053,12 @@ pub(super) const MYTES_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Myte,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::Myte,
             slot: Some(Slot::Second),
+            opens: None,
         },
     ])),
 };
@@ -1034,10 +1084,12 @@ pub(super) const NIBBITS_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Nibbit,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::Nibbit,
             slot: Some(Slot::Second),
+            opens: None,
         },
     ])),
 };
@@ -1062,6 +1114,7 @@ pub(super) const NIBBITS_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Nibbit,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1086,10 +1139,12 @@ pub(super) const OVERGROWTH_CRAWLERS: EncounterData = EncounterData {
         Spawn {
             monster: Monster::ShrinkerBeetle,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::FuzzyWurmCrawler,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -1114,6 +1169,7 @@ pub(super) const OVICOPTER_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Ovicopter,
         slot: Some(Slot::Sixth),
+        opens: None,
     }])),
 };
 
@@ -1137,6 +1193,7 @@ pub(super) const OWL_MAGISTRATE_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::OwlMagistrate,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1160,6 +1217,7 @@ pub(super) const PUNCH_CONSTRUCT_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::PunchConstruct,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1270,10 +1328,12 @@ pub(super) const SEAPUNK_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::CalcifiedCultist,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::Seapunk,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -1298,6 +1358,7 @@ pub(super) const SEAPUNK_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Seapunk,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1321,6 +1382,7 @@ pub(super) const SEWER_CLAM_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::SewerClam,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1344,6 +1406,7 @@ pub(super) const SHRINKER_BEETLE_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::ShrinkerBeetle,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1367,6 +1430,7 @@ pub(super) const SLIMED_BERSERKER_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::SlimedBerserker,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1467,6 +1531,7 @@ pub(super) const SLUDGE_SPINNER_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::SludgeSpinner,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1495,14 +1560,17 @@ pub(super) const SLUMBERING_BEETLE_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::BowlbugRock,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::BowlbugSilk,
             slot: Some(Slot::Second),
+            opens: None,
         },
         Spawn {
             monster: Monster::SlumberingBeetle,
             slot: Some(Slot::Third),
+            opens: None,
         },
     ])),
 };
@@ -1528,10 +1596,12 @@ pub(super) const SNAPPING_JAXFRUIT_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::SnappingJaxfruit,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::Flyconid,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -1556,6 +1626,7 @@ pub(super) const SPINY_TOAD_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::SpinyToad,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1579,6 +1650,7 @@ pub(super) const THE_ARCHITECT_EVENT_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Architect,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1603,10 +1675,12 @@ pub(super) const THE_LOST_AND_FORGOTTEN_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::TheLost,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::TheForgotten,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -1631,6 +1705,7 @@ pub(super) const THE_OBSCURA_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::TheObscura,
         slot: Some(Slot::Second),
+        opens: None,
     }])),
 };
 
@@ -1654,6 +1729,7 @@ pub(super) const THIEVING_HOPPER_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::ThievingHopper,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1678,10 +1754,12 @@ pub(super) const TOADPOLES_WEAK: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Toadpole,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::Toadpole,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -1707,10 +1785,12 @@ pub(super) const TUNNELER_NORMAL: EncounterData = EncounterData {
         Spawn {
             monster: Monster::Chomper,
             slot: None,
+            opens: Some(MoveId::ScreechMove),
         },
         Spawn {
             monster: Monster::Tunneler,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -1735,6 +1815,7 @@ pub(super) const TUNNELER_WEAK: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Tunneler,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -1759,10 +1840,12 @@ pub(super) const TURRET_OPERATOR_WEAK: EncounterData = EncounterData {
         Spawn {
             monster: Monster::LivingShield,
             slot: None,
+            opens: None,
         },
         Spawn {
             monster: Monster::TurretOperator,
             slot: None,
+            opens: None,
         },
     ])),
 };
@@ -1807,5 +1890,6 @@ pub(super) const VINE_SHAMBLER_NORMAL: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::VineShambler,
         slot: None,
+        opens: None,
     }])),
 };

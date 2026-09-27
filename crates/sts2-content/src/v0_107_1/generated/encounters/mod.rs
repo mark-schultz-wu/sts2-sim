@@ -4,7 +4,7 @@
 //! Source: `dumps/encounters.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
 use super::acts::Act;
-use super::monsters::Monster;
+use super::monsters::{Monster, MoveId};
 use crate::{Few, Scaled};
 use serde::{Deserialize, Serialize};
 use sts2_core::Table;
@@ -260,6 +260,9 @@ pub struct Spawn {
     /// Which of the encounter's slots it stands in, or `None` for
     /// an encounter that positions nothing.
     pub slot: Option<Slot>,
+    /// The move it opens on where the encounter wrote one onto it,
+    /// or `None` for the one its own graph starts on.
+    pub opens: Option<MoveId>,
 }
 
 /// The monsters a fight opens with, in order.
@@ -733,6 +736,7 @@ impl sts2_core::EncounterTable for Encounter {
     type Act = Act;
     type Room = RoomType;
     type Monster = Monster;
+    type MoveId = MoveId;
 
     /// The acts whose map can roll this encounter. Empty for one an
     /// event starts instead, and for the mocks.
@@ -858,11 +862,11 @@ impl sts2_core::EncounterTable for Encounter {
     }
 
     /// How the encounter chooses its opening roster.
-    fn roster(self) -> sts2_core::EncounterRoster<impl Iterator<Item = Monster>> {
+    fn roster(self) -> sts2_core::EncounterRoster<impl Iterator<Item = (Monster, Option<MoveId>)>> {
         match self.data().roster {
-            Roster::Fixed(spawns) => {
-                sts2_core::EncounterRoster::Fixed(spawns.iter().map(|spawn| spawn.monster))
-            }
+            Roster::Fixed(spawns) => sts2_core::EncounterRoster::Fixed(
+                spawns.iter().map(|spawn| (spawn.monster, spawn.opens)),
+            ),
             Roster::Random => sts2_core::EncounterRoster::Random,
             Roster::Configured => sts2_core::EncounterRoster::Configured,
         }

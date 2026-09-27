@@ -52,6 +52,7 @@ public static class MonsterDump
 
         output.Append(Stamp.Header("monster"));
         output.Append("# act <act> <monster>\n");
+        output.Append("# virtual <monster> <method>\n");
         output.Append("# monster <id> <minHp> <maxHp> <initialState> <stateCount>\n");
         output.Append("# move <monster> <state> <followUp> <mustPerformOnce> <intentCount>\n");
         output.Append("# intent <monster> <state> <index> <type> <count> <damage>\n");
@@ -72,6 +73,27 @@ public static class MonsterDump
             foreach (MonsterModel monster in act.AllMonsters.OrderBy(m => m.Id.Entry, StringComparer.Ordinal))
             {
                 output.Append($"act {act.Id.Entry} {monster.Id.Entry}\n");
+            }
+        }
+
+        // The virtual methods `MonsterModel` itself declares, and which of them
+        // each monster's class overrides. `HookDump` covers the hooks
+        // `AbstractModel` declares. These are a monster's own, like
+        // `AfterAddedToRoom`, which the fight runs as a monster enters. So a
+        // monster that overrides one has to say what it does.
+        foreach (MonsterModel monster in AllMonsters())
+        {
+            foreach (string method in monster
+                .GetType()
+                .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Where(m => !m.IsSpecialName
+                    && m.DeclaringType != typeof(MonsterModel)
+                    && m.GetBaseDefinition().DeclaringType == typeof(MonsterModel))
+                .Select(m => m.Name)
+                .Distinct()
+                .OrderBy(name => name, StringComparer.Ordinal))
+            {
+                output.Append($"virtual {monster.Id.Entry} {method}\n");
             }
         }
 
