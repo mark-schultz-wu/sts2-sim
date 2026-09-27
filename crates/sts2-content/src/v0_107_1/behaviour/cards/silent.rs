@@ -2,11 +2,12 @@
 
 use sts2_core::{
     Amount, CardIdent, CardKind, Change, CostPool, Effect, EventHook, Fight, HookEffect, Lasting,
-    Pile, Played, Rules as _, Scaling, Selection,
+    Pile, Played, PowerAmount, Rules as _, Scaling, Selection,
 };
 
 use super::super::super::generated::card_plays;
 use super::super::super::generated::cards::{CardVar, Cards, SilentCard, TokenCard};
+use super::super::super::generated::powers::Power;
 use super::V;
 
 /// Where a Silent card stopped inside its own play.
@@ -19,9 +20,22 @@ pub enum Resume {
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
     match card {
         SilentCard::Survivor => survivor(fight),
+        SilentCard::Haze => haze(fight),
         SilentCard::UpMySleeve => up_my_sleeve(fight),
         card => card_plays::silent::on_play(card, fight),
     }
+}
+
+/// `Haze`: its Poison onto each enemy that can be hit, one at a time.
+fn haze<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    for target in fight.hittable_opponents() {
+        fight.apply_power(
+            target,
+            Power::PoisonPower,
+            PowerAmount::Counted(fight.var(CardVar::PoisonPower)),
+        );
+    }
+    Played::Done
 }
 
 pub(super) fn resume_play<F: Fight<V>>(

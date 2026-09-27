@@ -127,12 +127,12 @@ pub enum Resume {
 #[tracing::instrument(level = "trace", skip_all, fields(card = ?card))]
 pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
     match card {
-        Cards::Ironclad(card) => card_plays::ironclad::on_play(card, fight),
+        Cards::Ironclad(card) => ironclad::on_play(card, fight),
         Cards::Silent(card) => silent::on_play(card, fight),
         Cards::Regent(card) => regent::on_play(card, fight),
         Cards::Necrobinder(card) => necrobinder::on_play(card, fight),
         Cards::Defect(card) => defect::on_play(card, fight),
-        Cards::Colorless(card) => card_plays::colorless::on_play(card, fight),
+        Cards::Colorless(card) => colorless::on_play(card, fight),
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
         Cards::Event(card) => event::on_play(card, fight),
         Cards::Quest(card) => card_plays::quest::on_play(card, fight),

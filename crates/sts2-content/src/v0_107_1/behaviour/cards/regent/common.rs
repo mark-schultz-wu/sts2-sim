@@ -5,10 +5,30 @@ use sts2_core::{
     Selection,
 };
 
-use super::super::super::super::generated::cards::{CardVar, Cards, TokenCard};
+use super::super::super::super::generated::cards::{CardVar, Cards, StatusCard, TokenCard};
 use super::super::super::super::generated::powers::Power;
 use super::super::V;
 use super::Resume;
+
+/// `CollisionCourse`: its damage to the target, then a Debris into hand.
+pub(super) fn collision_course<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    fight.add_generated_cards(
+        CardIdent::new(Cards::Status(StatusCard::Debris)),
+        Pile::Hand,
+        1,
+    );
+    Played::Done
+}
 
 /// `Glitterstream`. Gain block now and after the next block clear.
 ///

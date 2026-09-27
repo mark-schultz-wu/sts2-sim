@@ -1,0 +1,8 @@
+# Tempest channels a Lightning for each energy of its X: three, which fill
+# the orb slots and strike as the turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","card":"TEMPEST"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}

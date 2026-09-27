@@ -1,9 +1,39 @@
 //! The Ironclad's cards the generator leaves to a hand port.
 
-use sts2_core::{CardKind, Change, CostPool, EventHook, HookEffect, Lasting, Rules as _};
+use sts2_core::{
+    Amount, CardKind, Change, CostPool, Effect, EventHook, Fight, HookEffect, Lasting, Played,
+    Rules as _, Scaling,
+};
 
-use super::super::super::generated::cards::IroncladCard;
+use super::super::super::generated::card_plays;
+use super::super::super::generated::cards::{CardVar, IroncladCard};
 use super::V;
+
+pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
+    match card {
+        IroncladCard::Whirlwind => whirlwind(fight),
+        card => card_plays::ironclad::on_play(card, fight),
+    }
+}
+
+/// `Whirlwind`: its damage to every enemy, once for each energy of its X.
+fn whirlwind<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let hits = fight.x_value();
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            for target in fight.opponents() {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            }
+        }
+    });
+    Played::Done
+}
 
 /// Deliver a notification to one Ironclad card in the fight.
 pub(super) fn event_hook(
