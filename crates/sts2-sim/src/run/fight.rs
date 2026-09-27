@@ -105,7 +105,7 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting() else {
             // `RemoveBeforeUse`, then what it asks the run for.
             self.drank(at);
-            let effects = V::on_use_outside_fight(potion, &*self);
+            let effects = V::on_use_on_run(potion, &*self, false);
             if self.carry_out(effects).is_some() {
                 unimplemented!("a potion drunk outside a fight that asks a question");
             }
@@ -114,6 +114,11 @@ impl<V: Rules> State<V> {
         let since = fighting.live.removed_from_deck().len();
         let ended = combat::drink(fighting, potion, target)?;
         self.drank(at);
+        // What the potion asks of the run beside the fight, which is its belt.
+        let effects = V::on_use_on_run(potion, &*self, true);
+        if self.carry_out(effects).is_some() {
+            unimplemented!("a potion drunk in a fight that asks the run a question");
+        }
         Ok(Ok(self.settle(ended, since)))
     }
 

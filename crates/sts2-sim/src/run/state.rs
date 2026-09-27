@@ -1287,6 +1287,27 @@ impl<V: Rules> State<V> {
                     self.player.potion_slots = self.player.potion_slots + slots;
                     continue;
                 }
+                HookEffect::FillPotionSlots { stream } => {
+                    let character = self.character();
+                    // `HasOpenPotionSlots`, before each potion is made.
+                    while self.player.potions.len()
+                        < num_traits::cast::<_, usize>(self.player.potion_slots)
+                            .expect("the belt has an addressable number of slots")
+                    {
+                        let potion = crate::reward::potion::distinct::<V, _>(
+                            self.streams.run(stream),
+                            character,
+                            1,
+                        );
+                        let Some(&potion) = potion.first() else {
+                            break;
+                        };
+                        if !self.procure(potion) {
+                            break;
+                        }
+                    }
+                    continue;
+                }
                 // `TryToProcure` fails on a full belt, and the potion is lost.
                 HookEffect::ProcureRandomPotions { count, stream } => {
                     let character = self.character();

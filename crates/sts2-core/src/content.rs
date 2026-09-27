@@ -3225,6 +3225,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),
+    /// `PotionFactory.CreateRandomPotionOutOfCombat` off the named stream and
+    /// `PotionCmd.TryToProcure`, one at a time for as long as the belt has an
+    /// open slot and the potion lands.
+    FillPotionSlots {
+        stream: V::RunRngType,
+    },
     /// `PotionCmd.Discard` on the potion at this place in the belt, counting
     /// held potions in slot order.
     DiscardPotion(usize),
@@ -4617,16 +4623,18 @@ pub trait Rules: Hooks {
     /// card.
     fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F) -> Played<Self>;
 
-    /// `PotionModel.OnUse` outside a fight, for a potion `AnyTime` lets a
-    /// player drink there, as what it asks the run for. The potion has left
+    /// What `PotionModel.OnUse` asks of the run rather than of a fight.
+    /// Outside a fight, where `AnyTime` lets a player drink, that is all of
+    /// it. Inside one, it is any part touching the belt. The potion has left
     /// the belt, as [`Rules::on_use`] says.
     ///
     /// # Panics
     ///
     /// A potion nobody has ported outside a fight.
-    fn on_use_outside_fight(
+    fn on_use_on_run(
         potion: Self::Potion,
         run: &impl crate::EventView<Self>,
+        in_fight: bool,
     ) -> HookEffects<Self>;
 
     /// What a card that works its own target out from the fight names.
