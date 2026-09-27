@@ -5,6 +5,7 @@ mod brain_leech;
 mod byrdonis_nest;
 mod dense_vegetation;
 mod jungle_maze_adventure;
+mod luminous_choir;
 mod morphic_grove;
 mod orobas;
 mod room_full_of_cheese;
@@ -41,6 +42,7 @@ pub enum State {
     ByrdonisNest(byrdonis_nest::State),
     DenseVegetation(dense_vegetation::State),
     JungleMazeAdventure(jungle_maze_adventure::State),
+    LuminousChoir(luminous_choir::State),
     MorphicGrove(morphic_grove::State),
     Orobas(orobas::State),
     RoomFullOfCheese(room_full_of_cheese::State),
@@ -188,6 +190,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::JungleMazeAdventure => {
             State::JungleMazeAdventure(jungle_maze_adventure::JungleMazeAdventure.enter(run, rng))
         }
+        Event::LuminousChoir => State::LuminousChoir(luminous_choir::LuminousChoir.enter(run, rng)),
         Event::MorphicGrove => State::MorphicGrove(morphic_grove::MorphicGrove.enter(run, rng)),
         Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
         Event::RoomFullOfCheese => {
@@ -225,6 +228,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::JungleMazeAdventure(state) => {
             jungle_maze_adventure::JungleMazeAdventure.observe(state, run)
         }
+        State::LuminousChoir(state) => luminous_choir::LuminousChoir.observe(state, run),
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.observe(state, run),
         State::Orobas(state) => orobas::Orobas.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
@@ -259,6 +263,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::JungleMazeAdventure(state) => {
             jungle_maze_adventure::JungleMazeAdventure.choose(state, option, run, rng)
+        }
+        State::LuminousChoir(state) => {
+            luminous_choir::LuminousChoir.choose(state, option, run, rng)
         }
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.choose(state, option, run, rng),
         State::Orobas(state) => orobas::Orobas.choose(state, option, run, rng),

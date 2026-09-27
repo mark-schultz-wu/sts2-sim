@@ -46,6 +46,7 @@ mod precise_scissors;
 mod ring_of_the_snake;
 mod sand_castle;
 mod stone_humidifier;
+mod strike_dummy;
 mod sword_of_stone;
 mod winged_boots;
 
@@ -107,6 +108,7 @@ pub enum State {
     RingOfTheSnake,
     SandCastle,
     StoneHumidifier,
+    StrikeDummy,
     SwordOfStone(sword_of_stone::State),
     WingedBoots(winged_boots::State),
 }
@@ -164,6 +166,7 @@ pub(crate) fn event_hook(
         },
         State::SandCastle => sand_castle::event_hook(hook, asked),
         State::StoneHumidifier => stone_humidifier::event_hook(hook, asked),
+        State::StrikeDummy => strike_dummy::event_hook(hook),
         State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
         State::WingedBoots(state) => winged_boots::event_hook(state, hook),
     }
@@ -191,6 +194,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
+        State::StrikeDummy => strike_dummy::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::Anchor
@@ -273,6 +277,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RingOfTheSnake => State::RingOfTheSnake,
             Relic::SandCastle => State::SandCastle,
             Relic::StoneHumidifier => State::StoneHumidifier,
+            Relic::StrikeDummy => State::StrikeDummy,
             Relic::SwordOfStone => State::SwordOfStone(sword_of_stone::State::default()),
             Relic::WingedBoots => State::WingedBoots(winged_boots::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
