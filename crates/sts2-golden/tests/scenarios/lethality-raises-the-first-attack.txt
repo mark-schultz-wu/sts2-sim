@@ -1,0 +1,14 @@
+# `LethalityPower` raises a powered hit from its owner's first attack of the
+# turn by its stack in hundredths, counting the attack plays started this turn.
+# At fifty, before any attack, the Spiral Strike prints nine and Unleash ten.
+# A Defend played first is no attack, and leaves both. The Strike's first play
+# deals nine and its replay six, since the replay is a
+# second play started, so the Nibbit loses fifteen. Unleash then prints and
+# deals seven.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"LETHALITY_POWER","amount":50,"target":0}
+{"cmd":"enchant","enchantment":"SPIRAL","amount":1,"index":0}
+{"cmd":"play_card","index":3}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}

@@ -1027,7 +1027,11 @@ pub(crate) fn modified<V: Rules>(
         }
         None => damage,
     };
-    let card = card.map(|held| (held.id, held.face.ident.card));
+    let card = card.map(|held| sts2_core::CardSource {
+        id: held.id,
+        card: held.face.ident.card,
+        playing: fight.live.cards.in_play(held.id),
+    });
     let phases = [
         ModifyHook::DamageAdditive {
             target,
