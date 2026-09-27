@@ -1,0 +1,7 @@
+# Beckon left in hand as the turn ends costs six hit points, unblockable,
+# and goes to the discard pile.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BECKON"}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}

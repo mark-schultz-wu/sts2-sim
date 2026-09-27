@@ -245,6 +245,35 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * skills
         }
+        // `Finisher`: a base, and one more hit for each attack its owner's
+        // plays finished this turn. A fight here has one player.
+        (Cards::Silent(SilentCard::Finisher), CardVar::CalculatedHits) => {
+            let attacks = owner
+                .history
+                .finished_this_turn()
+                .filter(|&card| {
+                    <V0_107_1 as sts2_core::Rules>::card_kind(card)
+                        == Some(sts2_core::CardKind::Attack)
+                })
+                .count();
+            let attacks = Number::try_from(attacks).expect("a turn's plays fit the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * attacks
+        }
+        // `NoEscape`: a base, and more for each whole `DoomThreshold` of Doom
+        // on its target.
+        (Cards::Necrobinder(NecrobinderCard::NoEscape), CardVar::CalculatedDoom) => {
+            let doom = owner
+                .target
+                .and_then(|powers| powers.iter().find(|stack| stack.power == Power::DoomPower))
+                .map_or(0, |stack| match stack.amount {
+                    sts2_core::PowerAmount::Counted(amount) => amount,
+                    sts2_core::PowerAmount::Endless => unimplemented!("an endless Doom"),
+                });
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra)
+                    * (doom / printed.face(CardVar::DoomThreshold))
+        }
         // `Radiate`: a base, and one more hit for each star its owner gained
         // this turn. A fight here has one player.
         (Cards::Regent(RegentCard::Radiate), CardVar::CalculatedHits) => {

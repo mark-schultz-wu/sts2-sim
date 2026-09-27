@@ -1,0 +1,10 @@
+# Summon Forth brings every Sovereign Blade outside the hand back into it,
+# then forges eight. The blade King's Courage made lies in the discard
+# pile once played.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"KINGS_COURAGE"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"SUMMON_FORTH"}
+{"cmd":"play_card","index":5}

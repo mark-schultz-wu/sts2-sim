@@ -1,0 +1,6 @@
+# Acrobatics draws three cards, then discards one its owner picks.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"ACROBATICS"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[0]}

@@ -1,0 +1,8 @@
+# No Escape puts ten Doom on its target, and five more for each ten it
+# already carries.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"NO_ESCAPE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"NO_ESCAPE"}
+{"cmd":"play_card","index":5,"target":1}

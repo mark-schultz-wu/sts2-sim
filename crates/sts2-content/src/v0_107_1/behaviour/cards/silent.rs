@@ -21,6 +21,8 @@ pub enum Resume {
     DaggerThrow,
     /// `HiddenDaggers`, after its owner picked the cards to discard.
     HiddenDaggers,
+    /// `Acrobatics`, after its owner picked the card to discard.
+    Acrobatics,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
@@ -37,6 +39,22 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `Acrobatics`: its `Cards` drawn, then one card of the hand
+        // discarded.
+        SilentCard::Acrobatics => {
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Asking {
+                pile: Pile::Hand,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Silent(Resume::Acrobatics)),
+            }
+        }
+        // `Finisher`: its damage to the target, once for each attack its
+        // owner finished this turn.
+        SilentCard::Finisher => {
+            hit_target(fight, fight.var(CardVar::CalculatedHits));
+            Played::Done
+        }
         // `Expertise`: cards drawn up to its `Cards` in hand.
         SilentCard::Expertise => {
             let hand = super::Number::try_from(fight.cards_in(Pile::Hand).len())
@@ -136,7 +154,7 @@ pub(super) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         // `CardCmd.Discard` of the one taken.
-        Resume::Survivor | Resume::Prepared | Resume::DaggerThrow => {
+        Resume::Survivor | Resume::Prepared | Resume::DaggerThrow | Resume::Acrobatics => {
             fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
             Played::Done
         }
