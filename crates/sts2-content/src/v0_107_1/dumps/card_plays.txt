@@ -75,7 +75,7 @@ play ARSENAL power self ARSENAL_POWER var ArsenalPower
 upgrade ARSENAL keyword Innate
 card ASCENDERS_BANE
 card ASHEN_STRIKE
-unplayed ASHEN_STRIKE call DamageCmd.Attack
+play ASHEN_STRIKE attack chosen CalculatedDamage Move number 1
 upgrade ASHEN_STRIKE raise ExtraDamage 1
 card ASSASSINATE
 play ASSASSINATE attack chosen Damage Move number 1
@@ -181,7 +181,7 @@ card BODYGUARD
 play BODYGUARD summon var Summon
 upgrade BODYGUARD raise Summon 2
 card BODY_SLAM
-unplayed BODY_SLAM call DamageCmd.Attack
+play BODY_SLAM attack chosen CalculatedDamage Move number 1
 upgrade BODY_SLAM cost -1
 card BOLAS
 play BOLAS attack chosen Damage Move number 1
@@ -235,7 +235,7 @@ card BULLET_TIME
 unplayed BULLET_TIME foreach
 upgrade BULLET_TIME cost -1
 card BULLY
-unplayed BULLY call DamageCmd.Attack
+play BULLY attack chosen CalculatedDamage Move number 1
 upgrade BULLY raise ExtraDamage 1
 card BULWARK
 play BULWARK block Block Move
@@ -392,7 +392,7 @@ card CREATIVE_AI
 play CREATIVE_AI power self CREATIVE_AI_POWER var CreativeAi
 upgrade CREATIVE_AI cost -1
 card CRESCENT_SPEAR
-unplayed CRESCENT_SPEAR call DamageCmd.Attack
+play CRESCENT_SPEAR attack chosen CalculatedDamage Move number 1
 upgrade CRESCENT_SPEAR raise ExtraDamage 1
 card CRIMSON_MANTLE
 unplayed CRIMSON_MANTLE call PowerCmd.Apply
@@ -441,7 +441,7 @@ card DEATHS_DOOR
 unplayed DEATHS_DOOR for
 upgrade DEATHS_DOOR raise Block 1
 card DEATH_MARCH
-unplayed DEATH_MARCH call DamageCmd.Attack
+play DEATH_MARCH attack chosen CalculatedDamage Move number 1
 upgrade DEATH_MARCH raise CalculationBase 1
 upgrade DEATH_MARCH raise ExtraDamage 2
 card DEBILITATE
@@ -733,7 +733,7 @@ play GAMMA_BLAST power chosen WEAK_POWER var WeakPower
 play GAMMA_BLAST power chosen VULNERABLE_POWER var VulnerablePower
 upgrade GAMMA_BLAST raise Damage 5
 card GANG_UP
-unplayed GANG_UP call DamageCmd.Attack
+play GANG_UP attack chosen CalculatedDamage Move number 1
 upgrade GANG_UP raise ExtraDamage 2
 card GATHER_LIGHT
 play GATHER_LIGHT block Block Move
@@ -771,7 +771,7 @@ play GLOW draw var Cards
 play GLOW power self DRAW_CARDS_NEXT_TURN_POWER var Cards
 upgrade GLOW raise Stars 1
 card GOLD_AXE
-unplayed GOLD_AXE call DamageCmd.Attack
+play GOLD_AXE attack chosen CalculatedDamage Move number 1
 upgrade GOLD_AXE keyword Retain
 card GO_FOR_THE_EYES
 unplayed GO_FOR_THE_EYES if
@@ -1031,7 +1031,7 @@ card MELANCHOLY
 play MELANCHOLY block Block Move
 upgrade MELANCHOLY raise Block 4
 card MEMENTO_MORI
-unplayed MEMENTO_MORI call DamageCmd.Attack
+play MEMENTO_MORI attack chosen CalculatedDamage Move number 1
 upgrade MEMENTO_MORI raise CalculationBase 2
 upgrade MEMENTO_MORI raise ExtraDamage 1
 card METAMORPHOSIS
@@ -1049,7 +1049,7 @@ card MIMIC
 unplayed MIMIC call CreatureCmd.GainBlock
 upgrade MIMIC unkeyword Exhaust
 card MIND_BLAST
-unplayed MIND_BLAST call DamageCmd.Attack
+play MIND_BLAST attack chosen CalculatedDamage Move number 1
 upgrade MIND_BLAST cost -1
 card MIND_ROT
 card MINION_DIVE_BOMB
@@ -1087,7 +1087,7 @@ upgrade MONOLOGUE keyword Retain
 card MULTI_CAST
 unplayed MULTI_CAST call ResolveEnergyXValue
 card MURDER
-unplayed MURDER call DamageCmd.Attack
+play MURDER attack chosen CalculatedDamage Move number 1
 upgrade MURDER cost -1
 card NECRO_MASTERY
 play NECRO_MASTERY summon var Summon
@@ -1234,7 +1234,7 @@ play POUNCE attack chosen Damage Move number 1
 play POUNCE power self FREE_SKILL_POWER number 1
 upgrade POUNCE raise Damage 6
 card PRECISE_CUT
-unplayed PRECISE_CUT call DamageCmd.Attack
+play PRECISE_CUT attack chosen CalculatedDamage Move number 1
 upgrade PRECISE_CUT raise CalculationBase 3
 card PREDATOR
 play PREDATOR attack chosen Damage Move number 1
@@ -1351,7 +1351,7 @@ upgrade RELAX raise Block 2
 upgrade RELAX raise Cards 1
 upgrade RELAX raise Energy 1
 card REND
-unplayed REND call DamageCmd.Attack
+play REND attack chosen CalculatedDamage Move number 1
 upgrade REND raise ExtraDamage 3
 upgrade REND raise CalculationBase 3
 card RESONANCE
@@ -1529,7 +1529,7 @@ card SOUL
 play SOUL draw var Cards
 upgrade SOUL raise Cards 1
 card SOUL_STORM
-unplayed SOUL_STORM call DamageCmd.Attack
+play SOUL_STORM attack chosen CalculatedDamage Move number 1
 upgrade SOUL_STORM raise ExtraDamage 1
 card SOVEREIGN_BLADE
 unplayed SOVEREIGN_BLADE call DamageCmd.Attack
@@ -1635,7 +1635,7 @@ card SUPERCRITICAL
 play SUPERCRITICAL energy var Energy
 upgrade SUPERCRITICAL raise Energy 2
 card SUPERMASSIVE
-unplayed SUPERMASSIVE call DamageCmd.Attack
+play SUPERMASSIVE attack chosen CalculatedDamage Move number 1
 upgrade SUPERMASSIVE raise ExtraDamage 1
 card SUPPRESS
 play SUPPRESS attack chosen Damage Move number 1
@@ -1726,7 +1726,7 @@ play THUNDERCLAP attack opponents Damage Move number 1
 play THUNDERCLAP power opponents VULNERABLE_POWER var VulnerablePower
 upgrade THUNDERCLAP raise Damage 3
 card TIMES_UP
-unplayed TIMES_UP call DamageCmd.Attack
+play TIMES_UP attack chosen CalculatedDamage Move number 1
 upgrade TIMES_UP keyword Retain
 card TOOLS_OF_THE_TRADE
 play TOOLS_OF_THE_TRADE power self TOOLS_OF_THE_TRADE_POWER number 1

@@ -139,10 +139,32 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }
-        // `call DamageCmd.Attack`
-        ColorlessCard::GangUp => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        ColorlessCard::GoldAxe => unimplemented!("what {card:?} does when it is played"),
+        ColorlessCard::GangUp => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
+        ColorlessCard::GoldAxe => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         // `call cardPlay.Target.Powers.All`
         ColorlessCard::HandOfGreed => unimplemented!("what {card:?} does when it is played"),
         // `call PileType.Draw.GetPile`
@@ -196,8 +218,19 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         }
         // `call CreatureCmd.GainBlock`
         ColorlessCard::Mimic => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        ColorlessCard::MindBlast => unimplemented!("what {card:?} does when it is played"),
+        ColorlessCard::MindBlast => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         ColorlessCard::Nostalgia => {
             fight.apply_to_actor(Power::NostalgiaPower, PowerAmount::Counted(1));
             Played::Done
@@ -252,8 +285,19 @@ pub fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
         ColorlessCard::Purity => unimplemented!("what {card:?} does when it is played"),
         // `call CombatState.GetTeammatesOf`
         ColorlessCard::Rally => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        ColorlessCard::Rend => unimplemented!("what {card:?} does when it is played"),
+        ColorlessCard::Rend => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         // `if`
         ColorlessCard::Restlessness => unimplemented!("what {card:?} does when it is played"),
         ColorlessCard::RollingBoulder => {

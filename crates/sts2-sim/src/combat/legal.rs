@@ -34,9 +34,6 @@ pub(super) fn hand<V: Rules>(
 
 /// What a card names as its target.
 pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::TargetType {
-    if card.affliction.is_some() {
-        unimplemented!("what an afflicted card prints");
-    }
     // One of the four cards that work their target out from the fight, which
     // they do by reading the player's own powers.
     card.card
@@ -59,13 +56,22 @@ pub(super) fn costs<V: Rules>(
 ) -> (sts2_core::Cost, sts2_core::Cost) {
     let card = (held.id, held.face.ident.card);
     let ethereal = held.face.ethereal();
+    let affliction = held.face.ident.affliction;
     held.face.costs(|cost| {
         super::board::modified_by::<V>(
             fight,
             cost,
             &[
-                sts2_core::ModifyHook::EnergyCost { card, ethereal },
-                sts2_core::ModifyHook::EnergyCostLate { card, ethereal },
+                sts2_core::ModifyHook::EnergyCost {
+                    card,
+                    ethereal,
+                    affliction,
+                },
+                sts2_core::ModifyHook::EnergyCostLate {
+                    card,
+                    ethereal,
+                    affliction,
+                },
             ],
         )
     })
@@ -512,7 +518,7 @@ fn previewed<V: Rules>(
     held.face
         .numbers()
         .map(|var| {
-            let printed = || super::board::var::<V>(held, var.id, fight.live);
+            let printed = || super::board::var::<V>(held, var.id, fight.live, target);
             let resolved = match (var.modifier, target) {
                 // `UpdateCardPreview` hands the null target to
                 // `Hook.ModifyDamage` rather than skipping it, so a hit

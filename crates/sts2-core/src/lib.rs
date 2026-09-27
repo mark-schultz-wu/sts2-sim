@@ -36,21 +36,21 @@ mod step;
 pub use play::recording;
 
 pub use content::{
-    ActTable, Amount, AscensionKinds, AttackId, CHOICES, CardDraw, CardKind, CardNumber,
-    CardNumberModifier, CardOwner, CardRarityKinds, CardSource, CardTable, CardTagKinds, CardVars,
-    Change, CharacterTable, ContentError, ContentVersion, Cost, CostPool, CreatureView,
-    CustomReward, DecisionHook, DeckAct, DeckPick, Drafted, Effect, EffectResolution, EnchantHook,
-    EnchantmentStatus, EnchantmentTable, EncounterRoster, EncounterTable, EventHook, EventPower,
-    EventTable, Fight, FightView, Fixed, FlagSet, History, HistoryEntry, HookEffect, HookEffects,
-    Hooks, KeywordKinds, Lasting, Layout, Listener, MAX_CARDS_IN_HAND, MapPointKinds, ModelHook,
-    Modify, ModifyHook, MonsterKinds, MonsterSpawn, MonsterTable, MoveKinds, MoveLog, MoveMachine,
-    MovePinned, Opponents, Overrides, Picked, PileAct, PilePosition, PlayFinished, PlayStarted,
-    Played, PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount, PowerKinds,
-    PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel, RelicPoolKinds,
-    RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, Rules, RunStreamKinds,
-    Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned, Stream, StreamKinds, Table,
-    Taken, TargetKinds, Temporary, TurnHistory, TurnPhaseKinds, UnplayableReasonKinds, Version,
-    Writing,
+    ActTable, AfflictionTable, Amount, AscensionKinds, AttackId, CHOICES, CardDraw, CardKind,
+    CardNumber, CardNumberModifier, CardOwner, CardRarityKinds, CardSource, CardTable,
+    CardTagKinds, CardVars, Change, CharacterTable, ContentError, ContentVersion, Cost, CostPool,
+    CreatureView, CustomReward, DecisionHook, DeckAct, DeckPick, Drafted, Effect, EffectResolution,
+    EnchantHook, EnchantmentStatus, EnchantmentTable, EncounterRoster, EncounterTable, EventHook,
+    EventPower, EventTable, Fight, FightView, Fixed, FlagSet, History, HistoryEntry, HookEffect,
+    HookEffects, Hooks, KeywordKinds, Lasting, Layout, Listener, MAX_CARDS_IN_HAND, MapPointKinds,
+    ModelHook, Modify, ModifyHook, MonsterKinds, MonsterSpawn, MonsterTable, MoveKinds, MoveLog,
+    MoveMachine, MovePinned, Opponents, Overrides, Picked, PileAct, PilePosition, PlayFinished,
+    PlayStarted, Played, PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount,
+    PowerKinds, PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel,
+    RelicPoolKinds, RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, Rules,
+    RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned, Stream,
+    StreamKinds, Table, Taken, TargetKinds, Temporary, TurnHistory, TurnPhaseKinds,
+    UnplayableReasonKinds, Version, Writing,
 };
 pub use event::{EventBehavior, EventView};
 pub use hook_response::HookResponse;

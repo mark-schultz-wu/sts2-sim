@@ -1,0 +1,10 @@
+# The Vine Shambler's Grasping Vines applies one Tangled.
+# `TangledPower.AfterApplied` puts Entangled on every Attack the player has,
+# and each costs one more while it lasts. A Strike on turn three costs two.
+# Tangled goes as the player's turn ends, and takes Entangled with it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"VINE_SHAMBLER_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}

@@ -232,5 +232,32 @@ fn emit_afflictions(
     writeln!(out, "    }}").unwrap();
     writeln!(out, "}}").unwrap();
 
+    writeln!(
+        out,
+        "\nimpl sts2_core::AfflictionTable for Affliction {{\n\
+         \x20   fn afflicts(self, kind: sts2_core::CardKind) -> bool {{\n\
+         \x20       self.data().afflicts.contains(match kind {{\n\
+         \x20           sts2_core::CardKind::Attack => CardType::Attack,\n\
+         \x20           sts2_core::CardKind::Skill => CardType::Skill,\n\
+         \x20           sts2_core::CardKind::Power => CardType::Power,\n\
+         \x20           sts2_core::CardKind::Status => CardType::Status,\n\
+         \x20           sts2_core::CardKind::Curse => CardType::Curse,\n\
+         \x20           sts2_core::CardKind::Quest => CardType::Quest,\n\
+         \x20       }})\n\
+         \x20   }}\n\
+         \n\
+         \x20   fn afflicts_unplayable(self) -> bool {{\n\
+         \x20       self.data()\n\
+         \x20           .flags\n\
+         \x20           .contains(AfflictionFlag::AfflictsUnplayableCards)\n\
+         \x20   }}\n\
+         \n\
+         \x20   fn stackable(self) -> bool {{\n\
+         \x20       self.data().flags.contains(AfflictionFlag::Stackable)\n\
+         \x20   }}\n\
+         }}"
+    )
+    .unwrap();
+
     Ok(())
 }

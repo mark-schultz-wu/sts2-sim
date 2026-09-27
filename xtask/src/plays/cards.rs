@@ -307,6 +307,15 @@ impl Card<'_> {
         }
     }
 
+    /// The class of one of this card's vars.
+    fn class(&self, key: &str) -> Option<&str> {
+        self.build
+            .vars
+            .get(self.id)?
+            .get(key)
+            .map(|(class, _)| class.as_str())
+    }
+
     /// A var this card prints as it is, with the class it is.
     fn printed(&self, key: &str) -> Option<&str> {
         match self.build.vars.get(self.id)?.get(key)? {
@@ -497,10 +506,17 @@ fn game(card: &Card, stmt: &Stmt, locals: &Locals) -> Option<String> {
 /// `DamageCmd.Attack(damage)` and the builder calls after it.
 fn attack(card: &Card, damage: &[Vec<Tok>], builders: &[Call], locals: &Locals) -> Option<String> {
     let [damage] = damage else { return None };
-    let (key, [Tok::Punct("."), Tok::Ident(value)]) = card.var(damage)? else {
-        return None;
+    // A printed `DamageVar`'s base value, or a `CalculatedDamageVar` handed
+    // over whole, which works itself out against each creature it hits.
+    let key = match card.var(damage)? {
+        (key, [Tok::Punct("."), Tok::Ident(value)])
+            if value == "BaseValue" && card.printed(&key)? == "DamageVar" =>
+        {
+            key
+        }
+        (key, []) if card.class(&key)? == "CalculatedDamageVar" => key,
+        _ => return None,
     };
-    (value == "BaseValue" && card.printed(&key)? == "DamageVar").then_some(())?;
 
     let (mut from, mut target, mut hits, mut props, mut run) =
         (false, None, Number::Literal(1), "Move", false);

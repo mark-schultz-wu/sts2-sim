@@ -257,3 +257,26 @@ impl Affliction {
         }
     }
 }
+
+impl sts2_core::AfflictionTable for Affliction {
+    fn afflicts(self, kind: sts2_core::CardKind) -> bool {
+        self.data().afflicts.contains(match kind {
+            sts2_core::CardKind::Attack => CardType::Attack,
+            sts2_core::CardKind::Skill => CardType::Skill,
+            sts2_core::CardKind::Power => CardType::Power,
+            sts2_core::CardKind::Status => CardType::Status,
+            sts2_core::CardKind::Curse => CardType::Curse,
+            sts2_core::CardKind::Quest => CardType::Quest,
+        })
+    }
+
+    fn afflicts_unplayable(self) -> bool {
+        self.data()
+            .flags
+            .contains(AfflictionFlag::AfflictsUnplayableCards)
+    }
+
+    fn stackable(self) -> bool {
+        self.data().flags.contains(AfflictionFlag::Stackable)
+    }
+}

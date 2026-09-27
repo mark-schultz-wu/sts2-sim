@@ -617,6 +617,18 @@ impl<'a, V: Rules> Board<'a, V> {
                         sts2_core::Lasting::ThisFight,
                     )
                 }),
+                // `CardCmd.Afflict`, which does nothing to a card in a fight
+                // that is ending. `Hook.ShouldAfflict` has no model answering
+                // it in this build.
+                sts2_core::HookEffect::Afflict { to, affliction } => {
+                    if self.ended.is_some() || self.ending() {
+                        continue;
+                    }
+                    self.write_on(to, |held| afflict::<V>(held, affliction));
+                }
+                sts2_core::HookEffect::ClearAffliction(to) => {
+                    self.write_on(to, |held| held.ident.affliction = None)
+                }
                 effect => unimplemented!("a power asking for {effect:?} as it writes on cards"),
             }
         }
@@ -643,6 +655,14 @@ impl<'a, V: Rules> Board<'a, V> {
                 .live
                 .cards
                 .write_all_cards(|held| held.ident.card.tagged(tag), write),
+            sts2_core::Writing::EveryOfKind(kind) => self
+                .live
+                .cards
+                .write_all_cards(|held| V::card_kind(held.ident.card) == Some(kind), write),
+            sts2_core::Writing::EveryAfflictedWith(affliction) => self
+                .live
+                .cards
+                .write_all_cards(|held| held.ident.affliction == Some(affliction), write),
         }
     }
 
@@ -1298,6 +1318,30 @@ pub(super) fn blocked<V: Rules>(
     modified_by::<V>(fight, amount, &phases)
 }
 
+/// `CardCmd.Afflict` on one copy, once `AfflictionModel.CanAfflict` lets it.
+///
+/// A card of a type the affliction refuses keeps what it has. So does a card
+/// with another affliction, or with this one where it does not stack.
+fn afflict<V: Rules>(held: &mut Face<V>, affliction: V::Affliction) {
+    use sts2_core::AfflictionTable as _;
+
+    let kind = V::card_kind(held.ident.card)
+        .unwrap_or_else(|| unimplemented!("afflicting a card whose type is worked out"));
+    if !affliction.afflicts(kind) {
+        return;
+    }
+    if !affliction.afflicts_unplayable() {
+        unimplemented!("{affliction:?}, which refuses a card with Unplayable");
+    }
+    match held.ident.affliction {
+        None => held.ident.affliction = Some(affliction),
+        Some(already) if already == affliction && affliction.stackable() => {
+            unimplemented!("{affliction:?} stacking onto a card that has it")
+        }
+        Some(_) => {}
+    }
+}
+
 /// One effect after the fight's listeners have had their say.
 ///
 /// The one path a number takes. It is worked out from the card that prints
@@ -1322,7 +1366,7 @@ pub(crate) fn resolve<V: Rules>(
             card: playing.map(|held| held.face.ident.card),
             powered: scaling == Scaling::Dynamic,
             damage: {
-                let damage = carried::<V>(playing, fight.live, damage);
+                let damage = carried::<V>(playing, fight.live, damage, Some(target));
                 let powered = scaling == Scaling::Dynamic;
                 modified::<V>(fight, Some(dealer), Some(target), playing, damage, powered)
             },
@@ -1332,7 +1376,9 @@ pub(crate) fn resolve<V: Rules>(
             amount,
             scaling,
         } => {
-            let amount = carried::<V>(playing, fight.live, amount);
+            // A block effect names who gains it, and no creature the card
+            // points at.
+            let amount = carried::<V>(playing, fight.live, amount, None);
             // `Hook.ModifyBlock` asks the played card's enchantment whatever
             // the block's props, since `GainBlock` always runs it.
             let amount = match playing.and_then(|held| held.face.ident.enchantment) {
@@ -1355,6 +1401,7 @@ fn carried<V: Rules>(
     playing: Option<&CardInstance<V>>,
     live: &Live<V>,
     amount: Amount<V>,
+    target: Option<CombatId>,
 ) -> V::Number {
     match amount {
         Amount::Number(number) => number,
@@ -1363,6 +1410,7 @@ fn carried<V: Rules>(
                 .unwrap_or_else(|| unimplemented!("a card's variable with no card being played")),
             key,
             live,
+            target,
         ),
     }
 }
@@ -1370,8 +1418,14 @@ fn carried<V: Rules>(
 /// What one of this copy's variables is worth right now.
 ///
 /// A `CalculatedVar` counts something in the live fight. It is worth what it
-/// counted, rather than the zero it was built with.
-pub(crate) fn var<V: Rules>(held: &CardInstance<V>, key: V::CardVar, live: &Live<V>) -> V::Number {
+/// counted, rather than the zero it was built with. `target` is the creature
+/// the card is pointed at, which some count on.
+pub(crate) fn var<V: Rules>(
+    held: &CardInstance<V>,
+    key: V::CardVar,
+    live: &Live<V>,
+    target: Option<CombatId>,
+) -> V::Number {
     let number = held.face.number(key);
     match number.calculated {
         false => number.base,
@@ -1379,10 +1433,13 @@ pub(crate) fn var<V: Rules>(held: &CardInstance<V>, key: V::CardVar, live: &Live
             let osty = osty::<V>(&live.creatures)
                 .filter(|osty| osty.alive)
                 .map(|osty| osty.hp);
+            let targeted: Option<SmallVec<[Stack<V>; 8]>> =
+                target.map(|target| live.powers.of(target).map(HeldPower::stack).collect());
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live),
                 osty,
                 draw: live.cards.len(Pile::Draw),
+                target: targeted.as_deref(),
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -1738,7 +1795,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 key.name()
             );
         }
-        var::<V>(&held, key, self.live)
+        var::<V>(&held, key, self.live, self.target)
     }
 
     fn upgraded(&self) -> bool {

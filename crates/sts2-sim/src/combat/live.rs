@@ -1900,6 +1900,13 @@ impl<V: Rules> Live<V> {
                     unimplemented!("{power:?} taking block as it comes off")
                 }
                 sts2_core::HookEffect::LoseBlock => {}
+                // `CardCmd.ClearAffliction` over `AllCards`.
+                sts2_core::HookEffect::ClearAffliction(sts2_core::Writing::EveryAfflictedWith(
+                    affliction,
+                )) => self.cards.write_all_cards(
+                    |held| held.ident.affliction == Some(affliction),
+                    |held| held.ident.affliction = None,
+                ),
                 other => unimplemented!("{power:?} asking for {other:?} as it comes off"),
             }
         }

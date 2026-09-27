@@ -22,8 +22,19 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         IroncladCard::Anger => unimplemented!("what {card:?} does when it is played"),
         // `if`
         IroncladCard::Armaments => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        IroncladCard::AshenStrike => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::AshenStrike => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         IroncladCard::Barricade => {
             fight.apply_to_actor(Power::BarricadePower, PowerAmount::Counted(1));
             Played::Done
@@ -68,8 +79,19 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
             });
             Played::Done
         }
-        // `call DamageCmd.Attack`
-        IroncladCard::BodySlam => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::BodySlam => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         // `call CreatureCmd.Damage`
         IroncladCard::Brand => unimplemented!("what {card:?} does when it is played"),
         IroncladCard::Break => {
@@ -92,8 +114,19 @@ pub fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
         }
         // `call CreatureCmd.Damage`
         IroncladCard::Breakthrough => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        IroncladCard::Bully => unimplemented!("what {card:?} does when it is played"),
+        IroncladCard::Bully => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         // `call CardSelectCmd.FromHand`
         IroncladCard::BurningPact => unimplemented!("what {card:?} does when it is played"),
         // `call ResolveEnergyXValue`
