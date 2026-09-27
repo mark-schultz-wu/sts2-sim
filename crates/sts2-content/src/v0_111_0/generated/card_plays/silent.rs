@@ -654,8 +654,7 @@ pub fn upgrade(card: SilentCard) -> &'static [Change<V>] {
             Change::Raise(CardVar::CalculationBase, 2),
             Change::Raise(CardVar::ExtraDamage, 1),
         ],
-        // `call RemoveKeyword`
-        SilentCard::Mirage => unimplemented!("card upgrade: {card:?}"),
+        SilentCard::Mirage => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         SilentCard::Murder => &[Change::ChangeCost(CostPool::Energy, -1)],
         SilentCard::Neutralize => &[
             Change::Raise(CardVar::Damage, 1),

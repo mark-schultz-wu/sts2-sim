@@ -366,6 +366,9 @@ pub(crate) struct Face<V: Rules> {
     /// A set, which is what the build spells it as: one bit per word, in a
     /// byte.
     added_keywords: V::CardKeywordSet,
+    /// Keywords `RemoveKeyword` took off, whether the table prints them or
+    /// they were written on.
+    removed_keywords: V::CardKeywordSet,
     /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
@@ -501,6 +504,7 @@ impl<V: Rules> Face<V> {
             cost_modifiers: [CostModifier::from_bits(0); MODIFIERS],
             modifiers: 0,
             added_keywords: sts2_core::FlagSet::from_members(&[]),
+            removed_keywords: sts2_core::FlagSet::from_members(&[]),
             replays: 0,
             enchantment_status: sts2_core::EnchantmentStatus::Normal,
         };
@@ -575,27 +579,48 @@ impl<V: Rules> Face<V> {
             sts2_core::Change::SetCost(pool, to) => {
                 self.modify_cost(pool, CostChange::Absolute(to), lasting)
             }
-            // `AddKeyword`, which is a set: a word already on the copy is not
-            // added twice.
+            // `Keywords` is one set the copy owns, which both of these write.
+            // A word already on the copy is not added twice.
             sts2_core::Change::AddKeyword(keyword) => {
                 self.added_keywords = sts2_core::FlagSet::with(self.added_keywords, keyword);
+                self.removed_keywords = sts2_core::FlagSet::without(self.removed_keywords, keyword);
+            }
+            sts2_core::Change::RemoveKeyword(keyword) => {
+                self.added_keywords = sts2_core::FlagSet::without(self.added_keywords, keyword);
+                self.removed_keywords = sts2_core::FlagSet::with(self.removed_keywords, keyword);
             }
         }
     }
 
+    /// `Keywords.Contains(keyword)` for this copy: what the table prints, as
+    /// `printed` says, and what has been written on, less what was taken off.
+    fn keyword(&self, printed: bool, keyword: V::CardKeyword) -> bool {
+        (printed || sts2_core::FlagSet::contains(self.added_keywords, keyword))
+            && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
+    }
+
+    /// `Keywords.Contains(Exhaust)` for this copy, which an upgrade can take
+    /// off.
+    pub(super) fn exhausts(&self) -> bool {
+        use sts2_core::{CardTable as _, KeywordKinds};
+
+        self.keyword(
+            self.ident.card.exhausts(),
+            <V::CardKeyword as KeywordKinds<V>>::EXHAUST,
+        )
+    }
+
     /// `Keywords.Contains(Innate)` for this copy.
     ///
-    /// The union of what the table prints and what has been written on. Asked
-    /// of Innate, Retain and Sly alone, because those are the keywords
-    /// something in a fight both writes and reads. The rest are read off the table.
+    /// Asked of the keywords something in a fight writes or takes off, and
+    /// reads. The rest are read off the table.
     pub(super) fn innate(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
-        self.ident.card.innate()
-            || sts2_core::FlagSet::contains(
-                self.added_keywords,
-                <V::CardKeyword as KeywordKinds<V>>::INNATE,
-            )
+        self.keyword(
+            self.ident.card.innate(),
+            <V::CardKeyword as KeywordKinds<V>>::INNATE,
+        )
     }
 
     /// `Keywords.Contains(Ethereal)` for this copy, the way [`Face::innate`]
@@ -603,11 +628,10 @@ impl<V: Rules> Face<V> {
     pub(super) fn ethereal(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
-        self.ident.card.ethereal()
-            || sts2_core::FlagSet::contains(
-                self.added_keywords,
-                <V::CardKeyword as KeywordKinds<V>>::ETHEREAL,
-            )
+        self.keyword(
+            self.ident.card.ethereal(),
+            <V::CardKeyword as KeywordKinds<V>>::ETHEREAL,
+        )
     }
 
     /// `IsSlyThisTurn` for this copy, the keyword the way [`Face::innate`]
@@ -615,11 +639,10 @@ impl<V: Rules> Face<V> {
     pub(super) fn sly(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
-        self.ident.card.sly()
-            || sts2_core::FlagSet::contains(
-                self.added_keywords,
-                <V::CardKeyword as KeywordKinds<V>>::SLY,
-            )
+        self.keyword(
+            self.ident.card.sly(),
+            <V::CardKeyword as KeywordKinds<V>>::SLY,
+        )
     }
 
     /// `Keywords.Contains(Retain)` for this copy, the way [`Face::innate`]
@@ -627,11 +650,10 @@ impl<V: Rules> Face<V> {
     pub(super) fn retains(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
-        self.ident.card.retains()
-            || sts2_core::FlagSet::contains(
-                self.added_keywords,
-                <V::CardKeyword as KeywordKinds<V>>::RETAIN,
-            )
+        self.keyword(
+            self.ident.card.retains(),
+            <V::CardKeyword as KeywordKinds<V>>::RETAIN,
+        )
     }
 
     /// Append one cost modifier, which is what every `Set` and `Add` on
@@ -804,15 +826,49 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
     }
 }
 
-impl<V: Rules> sts2_core::PowerView<V> for PowerStore<V> {
+/// The fight's creatures and their powers, as a listener reads ones it does
+/// not own. Borrowed field by field, so a caller holding another part of the
+/// fight mutably can still lend it.
+pub(crate) struct Onlookers<'a, V: Rules> {
+    pub(crate) creatures: &'a Creatures<V>,
+    pub(crate) powers: &'a PowerStore<V>,
+    pub(crate) relics: &'a crate::run::Belt<V>,
+}
+
+impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
     fn power(
         &self,
         creature: CombatId,
         power: V::Power,
     ) -> Option<sts2_core::PowerAmount<V::Number>> {
-        self.of(creature)
+        self.powers
+            .of(creature)
             .find(|held| held.power() == power)
             .map(|held| held.amount.amount())
+    }
+
+    fn pet_owner(&self, creature: CombatId) -> Option<CombatId> {
+        self.creatures
+            .iter()
+            .find(|fighter| fighter.id == creature)
+            .and_then(|fighter| fighter.owner)
+    }
+
+    fn monster(&self, creature: CombatId) -> Option<V::Monster> {
+        self.creatures
+            .iter()
+            .find(|fighter| fighter.id == creature)
+            .and_then(|fighter| fighter.carrier().monster)
+    }
+
+    /// The belt is the one player's, and every creature that is no monster
+    /// is that player.
+    fn relic(&self, creature: CombatId, relic: V::Relic) -> bool {
+        let player = self
+            .creatures
+            .iter()
+            .any(|fighter| fighter.id == creature && fighter.carrier().monster.is_none());
+        player && self.relics.iter().any(|held| held.relic == relic)
     }
 }
 
@@ -1087,7 +1143,7 @@ impl<V: Rules> HeldPower<V> {
         &'a self,
         carrier: Carrier<V>,
         history: sts2_core::History<'a, V>,
-        powers: &'a PowerStore<V>,
+        fight: &'a Onlookers<'a, V>,
     ) -> Heard<'a, V> {
         sts2_core::Listener::Power {
             power: self.power(),
@@ -1099,7 +1155,7 @@ impl<V: Rules> HeldPower<V> {
             on_turn_start: self.on_turn_start.amount(),
             state: &self.state,
             history,
-            powers,
+            fight,
         }
     }
 
@@ -1650,29 +1706,34 @@ impl<V: Rules> Live<V> {
     }
 
     /// A change a card writes on itself, wherever in the fight it stands.
+    /// That includes the play pile, since a card hears the attack its own play
+    /// makes.
     ///
     /// # Panics
     ///
-    /// A card no combat pile holds.
+    /// A card no combat pile holds, and that is not being played.
     pub(super) fn modify_self(
         &mut self,
         id: CardId<V>,
         change: sts2_core::Change<V>,
         lasting: sts2_core::Lasting,
     ) {
-        let (pile, at) = [
+        let write = |held: &mut Face<V>| {
+            held.modify(change, lasting);
+            true
+        };
+        let found = [
             sts2_core::Pile::Hand,
             sts2_core::Pile::Draw,
             sts2_core::Pile::Discard,
             sts2_core::Pile::Exhaust,
         ]
         .into_iter()
-        .find_map(|pile| self.cards.find(pile, id).map(|at| (pile, at)))
-        .unwrap_or_else(|| unimplemented!("a card writing on itself out of every pile"));
-        self.cards.write(pile, at, |held| {
-            held.modify(change, lasting);
-            true
-        });
+        .find_map(|pile| self.cards.find(pile, id).map(|at| (pile, at)));
+        match found {
+            Some((pile, at)) => self.cards.write(pile, at, write),
+            None => self.cards.write_in_play(id, write),
+        }
     }
 
     /// `CombatManager.History`, as a listener reads it.

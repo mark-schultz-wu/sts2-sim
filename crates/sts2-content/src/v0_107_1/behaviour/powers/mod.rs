@@ -17,6 +17,7 @@ use super::super::generated::cards::{CardKeyword, CardTag, Cards, TokenCard};
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::orbs::Orb;
 use super::super::generated::powers::Power;
+use super::super::generated::relics::Relic;
 use super::super::generated::runstate::CombatSide;
 type Number = <V as sts2_core::ContentVersion>::Number;
 
@@ -109,21 +110,48 @@ impl sts2_core::PowerModel<V> for State {
             // `TemporaryStrengthPower.Type`, which is a debuff when it lends
             // a negative amount.
             Some((_, positive)) => !positive,
-            None => power
-                .debuff()
-                .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff")),
+            // Every power whose `Type` this build computes lends, which
+            // `every_computed_type_is_a_lend` holds the table to.
+            None => power.debuff().unwrap_or_else(|| {
+                unimplemented!(
+                    "whether {power:?} is a debuff: its `Type` is computed, and it lends nothing"
+                )
+            }),
         }
     }
 }
 
 /// What a temporary power lends, and `IsPositive`, for the family that lends
-/// Strength or Dexterity and takes it back.
+/// Strength, Dexterity or Focus for a turn and takes it back.
+///
+/// Every subclass of `TemporaryStrengthPower`, `TemporaryDexterityPower` and
+/// `TemporaryFocusPower`, which is `InternallyAppliedPower`, and its
+/// `IsPositive` override. None of them overrides anything else, so
+/// [`temporary`] is the whole of each.
 fn lends(power: Power) -> Option<(Power, bool)> {
-    match power {
-        Power::CrushUnderPower => Some((Power::StrengthPower, false)),
-        Power::SpeedPotionPower => Some((Power::DexterityPower, true)),
-        _ => None,
-    }
+    use Power::{DexterityPower as Dexterity, FocusPower as Focus, StrengthPower as Strength};
+
+    Some(match power {
+        Power::CoordinatePower
+        | Power::FeedingFrenzyPower
+        | Power::FlexPotionPower
+        | Power::ReptileTrinketPower
+        | Power::SetupStrikePower => (Strength, true),
+        Power::CrushUnderPower
+        | Power::DarkShacklesPower
+        | Power::DyingStarPower
+        | Power::EnfeeblingTouchPower
+        | Power::ManglePower
+        | Power::MockTemporaryStrengthLossPower
+        | Power::MonarchsGazeStrengthDownPower
+        | Power::PiercingWailPower
+        | Power::ShacklingPotionPower => (Strength, false),
+        Power::AnticipatePower | Power::HelicalDartPower | Power::SpeedPotionPower => {
+            (Dexterity, true)
+        }
+        Power::FocusedStrikePower | Power::HotfixPower | Power::SynchronizePower => (Focus, true),
+        _ => return None,
+    })
 }
 
 impl State {
@@ -250,11 +278,22 @@ static REVIVE: LazyLock<sts2_core::NextMove<V>> =
 static SPAWNED: LazyLock<sts2_core::NextMove<V>> =
     LazyLock::new(|| built(MoveId::SpawnedMove, IntentKind::Stun));
 
-/// `VulnerablePower`'s `DamageIncrease`.
-const DAMAGE_INCREASE: f64 = 1.5;
+/// `VulnerablePower`'s `DamageIncrease`, in hundredths.
+///
+/// Vulnerable's and Weak's multipliers are sums of the game's decimals, which
+/// a binary float adds a hair off. So they are summed in hundredths, which is
+/// exact, and turned into a float once. The float nearest a decimal fraction
+/// lands every product that is a whole number on that whole number.
+const DAMAGE_INCREASE: i32 = 150;
 
-/// `WeakPower`'s `DamageDecrease`.
-const DAMAGE_DECREASE: f64 = 0.75;
+/// `WeakPower`'s `DamageDecrease`, in hundredths.
+const DAMAGE_DECREASE: i32 = 75;
+
+/// `PaperPhrog.ModifyVulnerableMultiplier`'s `0.25m`, in hundredths.
+const PHROG: i32 = 25;
+
+/// `PaperKrane.ModifyWeakMultiplier`'s `0.15m`, in hundredths.
+const KRANE: i32 = 15;
 
 /// `ColossusPower`'s `DamageDecrease`.
 const COLOSSAL: f64 = 0.5;
@@ -272,6 +311,53 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 /// holds a tenth a hair high. So every product lands at or above the decimal
 /// one, and truncates to the same whole number.
 const SLOW_PER_CARD: f64 = 0.1;
+
+/// What Vulnerable on `holder` multiplies a powered hit from `dealer` by.
+///
+/// # Panics
+///
+/// An endless Cruelty.
+fn vulnerable(
+    fight: &dyn sts2_core::FightView<V>,
+    holder: sts2_core::CombatId,
+    dealer: sts2_core::CombatId,
+) -> f64 {
+    let mut by = DAMAGE_INCREASE;
+    // Both answer the dealer hitting itself with nothing.
+    if dealer != holder {
+        if fight.relic(dealer, Relic::PaperPhrog) {
+            by += PHROG;
+        }
+        match fight.power(dealer, Power::CrueltyPower) {
+            // `Amount / 100m`, which is its stack in hundredths.
+            Some(PowerAmount::Counted(amount)) => by += amount,
+            Some(PowerAmount::Endless) => unimplemented!("an endless Cruelty"),
+            None => {}
+        }
+    }
+    // `amount + (amount - 1m)`.
+    if fight.power(holder, Power::DebilitatePower).is_some() {
+        by += by - 100;
+    }
+    f64::from(by) / 100.0
+}
+
+/// What Weak on `holder` multiplies a powered hit it deals `target` by.
+fn weak(
+    fight: &dyn sts2_core::FightView<V>,
+    holder: sts2_core::CombatId,
+    target: Option<sts2_core::CombatId>,
+) -> f64 {
+    let mut by = DAMAGE_DECREASE;
+    if target.is_some_and(|target| fight.relic(target, Relic::PaperKrane)) {
+        by -= KRANE;
+    }
+    // `amount - (1m - amount)`.
+    if fight.power(holder, Power::DebilitatePower).is_some() {
+        by -= 100 - by;
+    }
+    f64::from(by) / 100.0
+}
 
 /// `TemporaryStrengthPower` and `TemporaryDexterityPower`, which lend `lent`
 /// and take it back.
@@ -355,7 +441,7 @@ pub(crate) fn modify_hook(
     held: Held,
     state: &State,
     history: sts2_core::History<'_, V>,
-    powers: &dyn sts2_core::PowerView<V>,
+    fight: &dyn sts2_core::FightView<V>,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
     let one: Number = num_traits::one();
@@ -374,24 +460,32 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if target == Some(holder) => Modify::Scaled(1.0 + SLOW_PER_CARD * f64::from(counted)),
+        // `VulnerablePower.ModifyDamageMultiplicative`: its `DamageIncrease`,
+        // raised by the dealer's Paper Phrog and Cruelty, then by the
+        // holder's own Debilitate.
         (
             Power::VulnerablePower,
             _,
             ModifyHook::DamageMultiplicative {
                 target,
-                powered: true,
-                ..
-            },
-        ) if target == Some(holder) => Modify::Scaled(DAMAGE_INCREASE),
-        (
-            Power::WeakPower,
-            _,
-            ModifyHook::DamageMultiplicative {
                 dealer,
                 powered: true,
                 ..
             },
-        ) if dealer == holder => Modify::Scaled(DAMAGE_DECREASE),
+        ) if target == Some(holder) => Modify::Scaled(vulnerable(fight, holder, dealer)),
+        // `WeakPower.ModifyDamageMultiplicative`: its `DamageDecrease`,
+        // lowered by the target's Paper Krane, then by the holder's own
+        // Debilitate.
+        (
+            Power::WeakPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if dealer == holder => Modify::Scaled(weak(fight, holder, target)),
         (
             Power::ShrinkPower,
             _,
@@ -401,6 +495,49 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == holder => Modify::Scaled(SHRUNK),
+        // `CalcifyPower.ModifyDamageAdditive`: its stack onto a powered hit
+        // from Osty, where its holder is the player Osty stands beside.
+        (
+            Power::CalcifyPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageAdditive {
+                dealer,
+                powered: true,
+                ..
+            },
+        ) if fight.monster(dealer) == Some(Monster::Osty)
+            && fight.pet_owner(dealer) == Some(holder) =>
+        {
+            Modify::Added(amount)
+        }
+        (Power::CalcifyPower, PowerAmount::Endless, ModifyHook::DamageAdditive { dealer, .. })
+            if fight.pet_owner(dealer) == Some(holder) =>
+        {
+            unimplemented!("an endless Calcify")
+        }
+        (Power::CalcifyPower, _, ModifyHook::DamageAdditive { .. }) => Modify::Nothing,
+        // `ModifyMaxEnergy`: its stack onto its owner's energy, or off it for
+        // Waste Away.
+        (
+            Power::DemesnePower | Power::PyrePower | Power::FriendshipPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::MaxEnergy { player },
+        ) if player == holder => Modify::Added(amount),
+        (Power::WasteAwayPower, PowerAmount::Counted(amount), ModifyHook::MaxEnergy { player })
+            if player == holder =>
+        {
+            Modify::Added(-amount)
+        }
+        (
+            Power::DemesnePower | Power::PyrePower | Power::FriendshipPower | Power::WasteAwayPower,
+            PowerAmount::Endless,
+            ModifyHook::MaxEnergy { player },
+        ) if player == holder => unimplemented!("an endless {power:?}"),
+        (
+            Power::DemesnePower | Power::PyrePower | Power::FriendshipPower | Power::WasteAwayPower,
+            _,
+            ModifyHook::MaxEnergy { .. },
+        ) => Modify::Nothing,
         // `ColossusPower.ModifyDamageMultiplicative`: half of a powered hit on
         // its owner, from a dealer that is vulnerable.
         (
@@ -412,7 +549,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if target == Some(holder) && powers.power(dealer, Power::VulnerablePower).is_some() => {
+        ) if target == Some(holder) && fight.power(dealer, Power::VulnerablePower).is_some() => {
             Modify::Scaled(COLOSSAL)
         }
         (Power::ColossusPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
@@ -572,7 +709,10 @@ pub(crate) fn modify_hook(
         }
         // `ModifyHandDraw`: its stack more cards for its owner.
         (
-            Power::MachineLearningPower | Power::TyrannyPower | Power::ToolsOfTheTradePower,
+            Power::MachineLearningPower
+            | Power::TyrannyPower
+            | Power::ToolsOfTheTradePower
+            | Power::DemesnePower,
             PowerAmount::Counted(amount),
             ModifyHook::HandDraw { player, .. },
         ) if player == holder => Modify::Added(amount),
@@ -589,7 +729,8 @@ pub(crate) fn modify_hook(
             Power::MachineLearningPower
             | Power::DrawCardsNextTurnPower
             | Power::TyrannyPower
-            | Power::ToolsOfTheTradePower,
+            | Power::ToolsOfTheTradePower
+            | Power::DemesnePower,
             PowerAmount::Endless,
             ModifyHook::HandDraw { .. },
         ) => unimplemented!("an endless {power:?}"),
@@ -613,7 +754,8 @@ pub(crate) fn modify_hook(
             Power::MachineLearningPower
             | Power::DrawCardsNextTurnPower
             | Power::TyrannyPower
-            | Power::ToolsOfTheTradePower,
+            | Power::ToolsOfTheTradePower
+            | Power::DemesnePower,
             _,
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
@@ -831,6 +973,19 @@ pub(crate) fn event_hook(
                 side: CombatSide::Enemy,
             },
         ) => Some(HookEffect::TickDownDuration),
+        // `DebilitatePower.AfterSideTurnEnd`: one off its stack as its owner's
+        // turn ends. What it does to Vulnerable and Weak, they read.
+        (Power::DebilitatePower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::Decrement)
+        }
+        (Power::DebilitatePower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Debilitate")
+        }
+        (Power::DebilitatePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
         (Power::NoDrawPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
             Some(HookEffect::Remove)
@@ -1681,4 +1836,27 @@ pub(crate) fn event_hook(
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };
     asked.extend(effect);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A power whose `Type` the table leaves computed has to lend, or asking
+    /// whether it is a debuff panics in the middle of a fight. Hotfix did, on
+    /// its first play.
+    #[test]
+    fn every_computed_type_is_a_lend() {
+        use sts2_core::{PowerTable as _, Table as _};
+
+        let unanswered: Vec<Power> = Power::ALL
+            .iter()
+            .copied()
+            .filter(|&power| power.debuff().is_none() && lends(power).is_none())
+            .collect();
+        assert!(
+            unanswered.is_empty(),
+            "computed types nothing answers: {unanswered:?}"
+        );
+    }
 }

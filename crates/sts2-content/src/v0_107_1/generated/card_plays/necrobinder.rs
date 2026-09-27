@@ -547,8 +547,10 @@ pub fn upgrade(card: NecrobinderCard) -> &'static [Change<V>] {
         NecrobinderCard::ForbiddenGrimoire => &[Change::ChangeCost(CostPool::Energy, -1)],
         NecrobinderCard::Friendship => &[Change::Raise(CardVar::StrengthPower, -1)],
         NecrobinderCard::GlimpseBeyond => &[Change::Raise(CardVar::Cards, 1)],
-        // `call RemoveKeyword`
-        NecrobinderCard::Graveblast => unimplemented!("card upgrade: {card:?}"),
+        NecrobinderCard::Graveblast => &[
+            Change::Raise(CardVar::Damage, 2),
+            Change::RemoveKeyword(CardKeyword::Exhaust),
+        ],
         NecrobinderCard::GraveWarden => &[Change::Raise(CardVar::Block, 3)],
         NecrobinderCard::Hang => &[Change::Raise(CardVar::Damage, 3)],
         NecrobinderCard::Haunt => &[Change::Raise(CardVar::HpLoss, 2)],
@@ -625,8 +627,7 @@ pub fn upgrade(card: NecrobinderCard) -> &'static [Change<V>] {
         NecrobinderCard::Strike => &[Change::Raise(CardVar::Damage, 3)],
         NecrobinderCard::TheScythe => &[Change::Raise(CardVar::Increase, 1)],
         NecrobinderCard::TimesUp => &[Change::AddKeyword(CardKeyword::Retain)],
-        // `call RemoveKeyword`
-        NecrobinderCard::Transfigure => unimplemented!("card upgrade: {card:?}"),
+        NecrobinderCard::Transfigure => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         NecrobinderCard::Undeath => &[Change::Raise(CardVar::Block, 2)],
         NecrobinderCard::Unleash => &[Change::Raise(CardVar::CalculationBase, 3)],
         NecrobinderCard::Veilpiercer => &[Change::Raise(CardVar::Damage, 3)],

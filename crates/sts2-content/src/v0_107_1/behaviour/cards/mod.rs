@@ -100,7 +100,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Ironclad(card) => card_plays::ironclad::on_play(card, fight),
         Cards::Silent(card) => card_plays::silent::on_play(card, fight),
         Cards::Regent(card) => regent::on_play(card, fight),
-        Cards::Necrobinder(card) => card_plays::necrobinder::on_play(card, fight),
+        Cards::Necrobinder(card) => necrobinder::on_play(card, fight),
         Cards::Defect(card) => defect::on_play(card, fight),
         Cards::Colorless(card) => card_plays::colorless::on_play(card, fight),
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
@@ -144,7 +144,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     // The fight asks only a card whose class overrides the hook.
     match card {
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
-        Cards::Necrobinder(card) => necrobinder::event_hook(card, printed, hook, asked),
+        Cards::Necrobinder(card) => necrobinder::event_hook(card, id, printed, hook, asked),
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }

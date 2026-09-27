@@ -163,8 +163,7 @@ pub fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
 pub fn upgrade(card: EventCard) -> &'static [Change<V>] {
     match card {
         EventCard::Apotheosis => &[Change::ChangeCost(CostPool::Energy, -1)],
-        // `call RemoveKeyword`
-        EventCard::Apparition => unimplemented!("card upgrade: {card:?}"),
+        EventCard::Apparition => &[Change::RemoveKeyword(CardKeyword::Ethereal)],
         EventCard::BrightestFlame => &[
             Change::Raise(CardVar::Energy, 1),
             Change::Raise(CardVar::Cards, 1),

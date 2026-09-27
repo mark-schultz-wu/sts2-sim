@@ -203,6 +203,9 @@ fn change(words: &[String]) -> Result<String, Error> {
         ["raise", key, by] => format!("Change::Raise(CardVar::{}, {})", sanitize(key), number(by)?),
         ["cost", by] => format!("Change::ChangeCost(CostPool::Energy, {})", number(by)?),
         ["keyword", keyword] => format!("Change::AddKeyword(CardKeyword::{})", sanitize(keyword)),
+        ["unkeyword", keyword] => {
+            format!("Change::RemoveKeyword(CardKeyword::{})", sanitize(keyword))
+        }
         _ => {
             return Err(Error::Unread {
                 what: "an upgrade",

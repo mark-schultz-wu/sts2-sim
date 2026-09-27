@@ -1,0 +1,9 @@
+# `CalcifyPower.ModifyDamageAdditive` adds its stack to a powered hit from
+# Osty, when its holder is the player Osty stands beside. At four, Unleash
+# prints eleven and deals eleven, where it would deal seven. The Strike after
+# it is the player's own hit, and still deals six.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"CALCIFY_POWER","amount":4,"target":0}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":0,"target":1}

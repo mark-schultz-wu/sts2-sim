@@ -492,8 +492,7 @@ pub fn upgrade(card: DefectCard) -> &'static [Change<V>] {
         DefectCard::Capacitor => &[Change::Raise(CardVar::Repeat, 1)],
         DefectCard::Chaos => &[Change::Raise(CardVar::Repeat, 1)],
         DefectCard::ChargeBattery => &[Change::Raise(CardVar::Block, 3)],
-        // `call RemoveKeyword`
-        DefectCard::Chill => unimplemented!("card upgrade: {card:?}"),
+        DefectCard::Chill => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         DefectCard::Claw => &[
             Change::Raise(CardVar::Damage, 1),
             Change::Raise(CardVar::Increase, 1),
@@ -510,8 +509,7 @@ pub fn upgrade(card: DefectCard) -> &'static [Change<V>] {
         DefectCard::Defragment => &[Change::Raise(CardVar::FocusPower, 1)],
         DefectCard::DoubleEnergy => &[Change::ChangeCost(CostPool::Energy, -1)],
         DefectCard::Dualcast => &[Change::ChangeCost(CostPool::Energy, -1)],
-        // `call RemoveKeyword`
-        DefectCard::EchoForm => unimplemented!("card upgrade: {card:?}"),
+        DefectCard::EchoForm => &[Change::RemoveKeyword(CardKeyword::Ethereal)],
         DefectCard::EnergySurge => &[Change::Raise(CardVar::Energy, 1)],
         DefectCard::Feral => &[Change::ChangeCost(CostPool::Energy, -1)],
         DefectCard::FightThrough => &[Change::Raise(CardVar::Block, 4)],
@@ -524,8 +522,7 @@ pub fn upgrade(card: DefectCard) -> &'static [Change<V>] {
             Change::Raise(CardVar::Damage, 1),
             Change::Raise(CardVar::PlayMax, 1),
         ],
-        // `call RemoveKeyword`
-        DefectCard::Fusion => unimplemented!("card upgrade: {card:?}"),
+        DefectCard::Fusion => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         DefectCard::GeneticAlgorithm => &[Change::Raise(CardVar::Increase, 1)],
         DefectCard::Glacier => &[Change::Raise(CardVar::Block, 3)],
         DefectCard::Glasswork => &[Change::Raise(CardVar::Block, 3)],
@@ -537,14 +534,14 @@ pub fn upgrade(card: DefectCard) -> &'static [Change<V>] {
         DefectCard::Hailstorm => &[Change::Raise(CardVar::HailstormPower, 2)],
         DefectCard::HelixDrill => &[Change::Raise(CardVar::Damage, 2)],
         DefectCard::Hibernate => &[Change::Raise(CardVar::Repeat, 1)],
-        // `call RemoveKeyword`
-        DefectCard::Hologram => unimplemented!("card upgrade: {card:?}"),
-        // `call RemoveKeyword`
-        DefectCard::Hotfix => unimplemented!("card upgrade: {card:?}"),
+        DefectCard::Hologram => &[
+            Change::Raise(CardVar::Block, 2),
+            Change::RemoveKeyword(CardKeyword::Exhaust),
+        ],
+        DefectCard::Hotfix => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         DefectCard::Hyperbeam => &[Change::Raise(CardVar::Damage, 6)],
         DefectCard::IceLance => &[Change::Raise(CardVar::Damage, 5)],
-        // `call RemoveKeyword`
-        DefectCard::Ignition => unimplemented!("card upgrade: {card:?}"),
+        DefectCard::Ignition => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         DefectCard::ImitationLearning => &[Change::Raise(CardVar::ImitationLearningPower, 1)],
         DefectCard::Iteration => &[Change::Raise(CardVar::IterationPower, 1)],
         DefectCard::Leap => &[Change::Raise(CardVar::Block, 3)],
@@ -562,8 +559,7 @@ pub fn upgrade(card: DefectCard) -> &'static [Change<V>] {
         DefectCard::OneForAll => &[Change::Raise(CardVar::OneForAllPower, 1)],
         DefectCard::Overclock => &[Change::Raise(CardVar::Cards, 1)],
         DefectCard::Quadcast => &[Change::ChangeCost(CostPool::Energy, -1)],
-        // `call RemoveKeyword`
-        DefectCard::Rainbow => unimplemented!("card upgrade: {card:?}"),
+        DefectCard::Rainbow => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         DefectCard::Reboot => &[Change::Raise(CardVar::Cards, 2)],
         DefectCard::Refract => &[Change::Raise(CardVar::Damage, 3)],
         DefectCard::RocketPunch => &[
@@ -595,8 +591,7 @@ pub fn upgrade(card: DefectCard) -> &'static [Change<V>] {
         DefectCard::TrashToTreasure => &[Change::ChangeCost(CostPool::Energy, -1)],
         DefectCard::Turbo => &[Change::Raise(CardVar::Energy, 1)],
         DefectCard::Uproar => &[Change::Raise(CardVar::Damage, 2)],
-        // `call RemoveKeyword`
-        DefectCard::Voltaic => unimplemented!("card upgrade: {card:?}"),
+        DefectCard::Voltaic => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         DefectCard::WhiteNoise => &[Change::ChangeCost(CostPool::Energy, -1)],
         DefectCard::Zap => &[Change::ChangeCost(CostPool::Energy, -1)],
     }

@@ -106,6 +106,7 @@ pub fn cards(game: &Path, version: &str, version_dir: &Path) -> Result<String, E
          # upgrade <card> raise <var> <by>\n\
          # upgrade <card> cost <by>\n\
          # upgrade <card> keyword <keyword>\n\
+         # upgrade <card> unkeyword <keyword>\n\
          # unupgraded <card> <the first statement no change matches>\n\
          # turnend <card>, which acts when a turn ends with it in hand\n\
          # An amount is `var <key>` or `number <n>`.\n",
@@ -577,6 +578,12 @@ fn upgrade(card: &Card, stmt: &Stmt) -> Option<String> {
         ("AddKeyword" | "base.AddKeyword", [keyword]) => match &keyword[..] {
             [Tok::Ident(ty), Tok::Punct("."), Tok::Ident(keyword)] if ty == "CardKeyword" => {
                 Some(format!("keyword {keyword}"))
+            }
+            _ => None,
+        },
+        ("RemoveKeyword" | "base.RemoveKeyword", [keyword]) => match &keyword[..] {
+            [Tok::Ident(ty), Tok::Punct("."), Tok::Ident(keyword)] if ty == "CardKeyword" => {
+                Some(format!("unkeyword {keyword}"))
             }
             _ => None,
         },

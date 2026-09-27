@@ -1,0 +1,7 @@
+# `DemesnePower` adds its stack to its owner's hand draw and, through
+# `ModifyMaxEnergy`, to the energy each turn resets to. At one, turn two opens
+# on four energy and six cards.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEMESNE_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

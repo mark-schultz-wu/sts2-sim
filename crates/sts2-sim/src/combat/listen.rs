@@ -195,8 +195,12 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
                 pet_of: creature.owner,
                 alive: creature.alive,
             };
-            let listener =
-                held.listener(creature.carrier(), fight.live.history(), &fight.live.powers);
+            let onlookers = super::live::Onlookers {
+                creatures: &fight.live.creatures,
+                powers: &fight.live.powers,
+                relics: fight.relics,
+            };
+            let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
             if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
                 chosen = creature.id;
             }
@@ -211,6 +215,51 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
 /// path nobody has ported, and asking this is how it stops by name.
 pub(crate) fn heard<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> bool {
     Kinds::hearing(live, relics, Overrides::of(hook)).is_some()
+}
+
+/// A model in the fight that overrides a hook, as a panic names it.
+#[derive(Debug)]
+#[expect(dead_code, reason = "read through `Debug`, in the panic that names it")]
+pub(crate) enum Overrider<V: Rules> {
+    Power(V::Power, CombatId),
+    Monster(V::Monster),
+    Relic(V::Relic),
+    Card(sts2_core::CardIdent<V>),
+}
+
+/// Every model in the fight that overrides `hook`, for a panic to name. The
+/// slow walk, which only a hook nobody has ported asks for.
+#[cold]
+pub(crate) fn listeners_to<V: Rules>(
+    live: &Live<V>,
+    relics: &Belt<V>,
+    hook: ModelHook,
+) -> Vec<Overrider<V>> {
+    let hooks = Overrides::of(hook);
+    let mut named = Vec::new();
+    for creature in live.creatures.iter() {
+        for held in live.powers.of(creature.id) {
+            if held.power().overrides().intersects(hooks) {
+                named.push(Overrider::Power(held.power(), creature.id));
+            }
+        }
+        if let Some(monster) = creature.carrier().monster
+            && monster.overrides().intersects(hooks)
+        {
+            named.push(Overrider::Monster(monster));
+        }
+    }
+    for held in relics.iter() {
+        if held.relic.overrides().intersects(hooks) {
+            named.push(Overrider::Relic(held.relic));
+        }
+    }
+    for (id, _) in live.cards.listening(hooks) {
+        if let Some(card) = live.cards.named(id) {
+            named.push(Overrider::Card(card.face.ident));
+        }
+    }
+    named
 }
 
 impl Kinds {
@@ -389,13 +438,18 @@ pub(crate) fn each<V: Rules>(
     else {
         return;
     };
+    let onlookers = super::live::Onlookers {
+        creatures: &live.creatures,
+        powers: &live.powers,
+        relics,
+    };
     for creature in live.creatures.iter() {
         if powers {
             for held in live.powers.of(creature.id) {
                 let overrides = held.power().overrides();
                 if overrides.intersects(hooks) {
                     ask(
-                        held.listener(creature.carrier(), live.history(), &live.powers),
+                        held.listener(creature.carrier(), live.history(), &onlookers),
                         overrides,
                     );
                 }

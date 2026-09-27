@@ -651,8 +651,7 @@ pub fn upgrade(card: SilentCard) -> &'static [Change<V>] {
         SilentCard::Prepared => &[Change::Raise(CardVar::Cards, 1)],
         SilentCard::Reflex => &[Change::Raise(CardVar::Cards, 1)],
         SilentCard::Ricochet => &[Change::Raise(CardVar::Repeat, 1)],
-        // `call RemoveKeyword`
-        SilentCard::Scare => unimplemented!("card upgrade: {card:?}"),
+        SilentCard::Scare => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         SilentCard::SerpentForm => &[Change::Raise(CardVar::SerpentFormPower, 2)],
         SilentCard::Shadowmeld => &[Change::ChangeCost(CostPool::Energy, -1)],
         SilentCard::ShadowStep => &[Change::ChangeCost(CostPool::Energy, -1)],

@@ -589,8 +589,7 @@ pub fn upgrade(card: IroncladCard) -> &'static [Change<V>] {
         IroncladCard::Cruelty => &[Change::Raise(CardVar::CrueltyPower, 25)],
         IroncladCard::DarkEmbrace => &[Change::ChangeCost(CostPool::Energy, -1)],
         IroncladCard::Defend => &[Change::Raise(CardVar::Block, 3)],
-        // `call RemoveKeyword`
-        IroncladCard::DemonicShield => unimplemented!("card upgrade: {card:?}"),
+        IroncladCard::DemonicShield => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         IroncladCard::DemonForm => &[Change::Raise(CardVar::StrengthPower, 1)],
         IroncladCard::Dismantle => &[Change::Raise(CardVar::Damage, 2)],
         IroncladCard::Dominate => &[Change::Raise(CardVar::VulnerablePower, 1)],

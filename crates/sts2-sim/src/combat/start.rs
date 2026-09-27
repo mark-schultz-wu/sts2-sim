@@ -193,8 +193,15 @@ pub(crate) fn enter<V: Rules>(
         <V::CombatSide as SideKinds>::PLAYER,
         turn,
     );
-    // `SetupPlayerTurn` resets the energy, which the fight opened on already,
-    // and raises the hooks that follow.
+    // `SetupPlayerTurn` resets the energy to `MaxEnergy`, which runs
+    // `Hook.ModifyMaxEnergy`, and raises the hooks that follow.
+    live.energy = super::board::max_energy::<V>(
+        Walk {
+            live: &live,
+            relics,
+        },
+        energy,
+    );
     if let Some(ended) = super::turn::energy_reset::<V>(&mut live, &mut streams, relics, ascension)
     {
         unimplemented!("a fight that ends {ended:?} as its first energy resets");

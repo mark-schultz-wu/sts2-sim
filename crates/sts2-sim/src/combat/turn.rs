@@ -142,11 +142,12 @@ pub(crate) fn end<V: Rules>(
     next.phase = <V::PlayerTurnPhase as TurnPhaseKinds>::START;
 
     // `PrepareForNextTurn`, before the player draws anything.
-    roll_moves(next, ascension, streams.combat().ai)?;
+    roll_moves(next, relics, ascension, streams.combat().ai)?;
 
     // `AfterTurnStart` on the player, then `SetupPlayerTurn`.
     clear_block::<V>(next, relics, <V::CombatSide as SideKinds>::PLAYER);
-    next.energy = max_energy;
+    // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`.
+    next.energy = super::board::max_energy::<V>(listen::Walk { live: next, relics }, max_energy);
     // An evoke that ends the fight ends `SetupPlayerTurn` with it, as a
     // relic's damage before the hand does below.
     if let Some(ended) = energy_reset::<V>(next, streams, relics, ascension) {
@@ -835,7 +836,8 @@ pub(super) fn unheard<V: Rules>(
     hook: sts2_core::ModelHook,
 ) {
     if listen::heard::<V>(live, relics, hook) {
-        unimplemented!("a listener to {}", hook.name());
+        let named = listen::listeners_to::<V>(live, relics, hook);
+        unimplemented!("a listener to {}: {named:?}", hook.name());
     }
 }
 
@@ -1295,6 +1297,7 @@ fn move_performed<V: Rules>(live: &mut Live<V>, creature: CombatId, move_id: V::
 #[tracing::instrument(level = "trace", skip_all)]
 fn roll_moves<V: Rules>(
     live: &mut Live<V>,
+    relics: &crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     ai: &mut MegaRng,
 ) -> Result<(), Error> {
@@ -1302,6 +1305,12 @@ fn roll_moves<V: Rules>(
         .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
     for held in live.machines.iter_mut() {
         let rolled = {
+            // Field by field, because the machines are borrowed.
+            let fight = super::live::Onlookers {
+                creatures: &live.creatures,
+                powers: &live.powers,
+                relics,
+            };
             let creature = live
                 .creatures
                 .iter()
@@ -1309,7 +1318,7 @@ fn roll_moves<V: Rules>(
                 .expect("a retained move machine has its creature");
             let powers = live.powers.of(creature.id).map(|power| {
                 // Through the field, because the machine is borrowed.
-                power.listener(creature.carrier(), live.history.view(), &live.powers)
+                power.listener(creature.carrier(), live.history.view(), &fight)
             });
             V::roll_monster_move(
                 held.monster,

@@ -1,0 +1,12 @@
+# Vulnerable and Weak read `DebilitatePower` on the creature they are on.
+# Debilitate takes Vulnerable's half again to a whole, and Weak's quarter to a
+# half. So the Strike prints twelve and deals twelve, and the Nibbit's butt
+# shows six, where Weak alone shows nine. Debilitate loses one as the Nibbit's
+# turn ends and goes, so its slice on turn two shows four.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"VULNERABLE_POWER","amount":2,"target":1}
+{"cmd":"power","power":"WEAK_POWER","amount":2,"target":1}
+{"cmd":"power","power":"DEBILITATE_POWER","amount":1,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}

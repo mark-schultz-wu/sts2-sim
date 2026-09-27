@@ -513,7 +513,15 @@ impl<'a, V: Rules> Board<'a, V> {
                 && creature.alive
                 && !self.live.powers.of(creature.id).any(|held| {
                     <V as sts2_core::Hooks>::decide_hook(
-                        held.listener(creature.carrier(), self.live.history(), &self.live.powers),
+                        held.listener(
+                            creature.carrier(),
+                            self.live.history(),
+                            &super::live::Onlookers {
+                                creatures: &self.live.creatures,
+                                powers: &self.live.powers,
+                                relics: &*self.relics,
+                            },
+                        ),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
                     )
                     .is_decision_and(|counts| !counts)
@@ -685,7 +693,15 @@ impl<'a, V: Rules> Board<'a, V> {
             .of(id)
             .map(|subject| {
                 let itself = <V as sts2_core::Hooks>::decide_hook(
-                    subject.listener(carrier, self.live.history(), &self.live.powers),
+                    subject.listener(
+                        carrier,
+                        self.live.history(),
+                        &super::live::Onlookers {
+                            creatures: &self.live.creatures,
+                            powers: &self.live.powers,
+                            relics: &*self.relics,
+                        },
+                    ),
                     sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
                 )
                 .is_decision_and(|remove| !remove);
@@ -1052,6 +1068,15 @@ pub(super) fn enchanted_by<V: Rules>(
     }
 }
 
+/// `PlayerCombatState.MaxEnergy`: the player's own, after every listener
+/// has had its say.
+pub(crate) fn max_energy<V: Rules>(fight: Walk<'_, V>, base: V::Count) -> V::Count {
+    let player = player::<V>(&fight.live.creatures);
+    let base: V::Number = num_traits::cast(base).expect("an energy fits a game number");
+    let energy = modified_by::<V>(fight, base, &[ModifyHook::MaxEnergy { player }]);
+    num_traits::cast(energy).expect("a max energy fits the build's count type")
+}
+
 /// One of an orb's numbers after every listener has had its say, which is
 /// `OrbModel.ModifyOrbValue`. The player's orbs are the only ones.
 pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Number) -> V::Number {
@@ -1361,14 +1386,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self)) {
+        self.attack_from(self.actor, scaling, hits);
+    }
+
+    fn attack_from(&mut self, attacker: CombatId, scaling: Scaling, hits: impl FnOnce(&mut Self)) {
         let attacking = self
-            .at(self.actor)
+            .at(attacker)
             .is_some_and(|at| self.live.creatures[at].alive);
         if self.ended.is_some() || self.ending() || !attacking {
             return;
         }
         let monster = self
-            .at(self.actor)
+            .at(attacker)
             .and_then(|at| match self.live.creatures[at].model {
                 Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
                 _ => None,
@@ -1380,7 +1409,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.relics,
             sts2_core::EventHook::BeforeAttack {
                 command,
-                attacker: self.actor,
+                attacker,
                 source: self.playing.map(|id| {
                     let card = self
                         .live
@@ -1406,7 +1435,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.relics,
             sts2_core::EventHook::AfterAttack {
                 command,
-                attacker: self.actor,
+                attacker,
                 monster,
             },
         );
@@ -1414,6 +1443,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             match (listener, effect) {
                 (Listener::Power { owner, power, .. }, HookEffect::ModifyAmount(offset)) => {
                     self.modify_amount(owner, power, offset)
+                }
+                // Written on the card that asked, wherever it stands.
+                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    self.live.modify_self(id, change, lasting)
                 }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} after an attack")
