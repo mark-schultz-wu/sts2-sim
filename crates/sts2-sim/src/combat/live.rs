@@ -1481,9 +1481,10 @@ pub(crate) struct Live<V: Rules> {
     pub(super) cards: super::cards::Cards<V>,
     /// Deck cards a combat command removed permanently while this fight ran.
     pub(super) removed_from_deck: Vec<CardIdent<V>>,
-    /// Cards a listener handed back as it died, which a won fight offers as
-    /// `SpecialCardReward`s.
-    pub(super) returned: Vec<CardIdent<V>>,
+    /// `CombatRoom.ExtraRewards`' cards, which a won fight offers as
+    /// `SpecialCardReward`s. An event adds its own as the fight opens, and a
+    /// listener hands one back as it dies.
+    pub(super) extra_cards: Vec<CardIdent<V>>,
     /// The copies whose `ExhaustOnNextPlay` is set, which their next play
     /// clears and so does the end of the turn.
     pub(super) exhaust_next: smallvec::SmallVec<[CardId<V>; 2]>,
@@ -1640,7 +1641,7 @@ impl<V: Rules> Clone for Live<V> {
         Self {
             cards: self.cards.clone(),
             removed_from_deck: self.removed_from_deck.clone(),
-            returned: self.returned.clone(),
+            extra_cards: self.extra_cards.clone(),
             exhaust_next: self.exhaust_next.clone(),
             history: self.history.clone(),
             leaving: self.leaving.clone(),
@@ -1669,7 +1670,7 @@ impl<V: Rules> Clone for Live<V> {
             encounter,
             cards,
             removed_from_deck,
-            returned,
+            extra_cards,
             exhaust_next,
             leaving,
             creatures,
@@ -1694,7 +1695,7 @@ impl<V: Rules> Clone for Live<V> {
         *encounter = source.encounter;
         cards.clone_from(&source.cards);
         removed_from_deck.clone_from(&source.removed_from_deck);
-        returned.clone_from(&source.returned);
+        extra_cards.clone_from(&source.extra_cards);
         exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
         creatures.copy_from(&source.creatures);
@@ -1756,10 +1757,16 @@ impl<V: Rules> Live<V> {
         &self.removed_from_deck
     }
 
-    /// The cards this fight hands back once it is won, in the order they came
-    /// back.
-    pub(crate) fn returned(&self) -> &[CardIdent<V>] {
-        &self.returned
+    /// `CombatRoom.AddExtraReward` of a special card, which an event does as
+    /// it builds its fight's room.
+    pub(crate) fn add_extra_card(&mut self, card: CardIdent<V>) {
+        self.extra_cards.push(card);
+    }
+
+    /// The special cards this fight offers once it is won, in the order they
+    /// were added.
+    pub(crate) fn extra_cards(&self) -> &[CardIdent<V>] {
+        &self.extra_cards
     }
 
     /// What the fight's end asked of the run, in the order it asked.
@@ -2322,7 +2329,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             encounter: Encounter::SlimesWeak,
             cards: super::cards::Cards::with_cards(0),
             removed_from_deck: Vec::new(),
-            returned: Vec::new(),
+            extra_cards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
             creatures: creatures.into_iter().collect(),

@@ -693,6 +693,14 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::computed_target(card, powers)
     }
 
+    fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool {
+        behaviour::cards::narrows_unknown_rooms(card, act)
+    }
+
+    fn deck_card_next_event(card: Self::Card, act: usize, event: Self::Event) -> Self::Event {
+        behaviour::cards::next_event(card, act, event)
+    }
+
     fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType {
         behaviour::potions::computed_target(potion, in_combat)
     }

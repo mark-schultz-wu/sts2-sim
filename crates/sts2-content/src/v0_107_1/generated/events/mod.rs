@@ -416,6 +416,7 @@ static ROWS: [EventData; 69] = [
 
 impl sts2_core::EventTable for Event {
     type Act = Act;
+    type Encounter = Encounter;
 
     /// The acts whose own list offers this event.
     ///
@@ -534,6 +535,13 @@ impl sts2_core::EventTable for Event {
     /// The event id hash used by its private RNG.
     fn seed_name(self) -> &'static str {
         <Self as sts2_core::Table>::data(self).seed_name
+    }
+
+    /// The fight a `Combat`-layout event builds as it opens.
+    fn combat_layout(self) -> Option<Encounter> {
+        let data = <Self as sts2_core::Table>::data(self);
+        data.encounter
+            .filter(|_| data.layout == EventLayoutType::Combat)
     }
 }
 /// Every event in an act's own events, in the act's own order.

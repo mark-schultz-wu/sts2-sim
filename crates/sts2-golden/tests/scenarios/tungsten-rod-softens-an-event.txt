@@ -1,0 +1,10 @@
+# Tungsten Rod takes one off a loss of HP outside a fight too. Calling Bell's
+# rare relic on this seed is the rod, and Colossal Flower's first dig then
+# costs four rather than five.
+{"cmd":"start","seed":"C000000002","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"DARV"}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","take":[{"index":2}]}
+{"cmd":"answer","skip":true}
+{"cmd":"event","event":"COLOSSAL_FLOWER"}
+{"cmd":"choose_option","index":1}

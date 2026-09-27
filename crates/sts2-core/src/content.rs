@@ -184,6 +184,13 @@ pub trait EventTable: Table {
 
     /// The event id's deterministic hash, already cast for seed arithmetic.
     fn seed_name(self) -> &'static str;
+
+    /// The fights a build names.
+    type Encounter: Copy + 'static;
+
+    /// The encounter a `Combat`-layout event builds as it opens, which is
+    /// `GenerateInternalCombatState`. Nothing for any other layout.
+    fn combat_layout(self) -> Option<Self::Encounter>;
 }
 
 /// What a table says about a monster, beyond its row.
@@ -571,6 +578,7 @@ pub enum ModelHook {
     AfterShuffle,
     AfterModifyingHandDraw,
     ShouldProcurePotion,
+    ModifyNextEvent,
     BeforePotionUsed,
     AfterSideTurnStartLate,
     ShouldDraw,
@@ -643,7 +651,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 100] = [
+    pub const ALL: [ModelHook; 101] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -675,6 +683,7 @@ impl ModelHook {
         ModelHook::AfterShuffle,
         ModelHook::AfterModifyingHandDraw,
         ModelHook::ShouldProcurePotion,
+        ModelHook::ModifyNextEvent,
         ModelHook::BeforePotionUsed,
         ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
@@ -780,6 +789,7 @@ impl ModelHook {
             ModelHook::AfterShuffle => "AfterShuffle",
             ModelHook::AfterModifyingHandDraw => "AfterModifyingHandDraw",
             ModelHook::ShouldProcurePotion => "ShouldProcurePotion",
+            ModelHook::ModifyNextEvent => "ModifyNextEvent",
             ModelHook::BeforePotionUsed => "BeforePotionUsed",
             ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
@@ -3651,8 +3661,12 @@ pub enum HookEffect<V: ContentVersion> {
     MimicRestSiteHeal,
     /// `EventModel.EnterCombatWithoutExitingEvent`, which fights inside the
     /// event's room and does not come back to it. It is the whole of the
-    /// option that starts it.
-    FightInEvent(V::Encounter),
+    /// option that starts it. `reward` is a card its extra rewards offer as
+    /// a `SpecialCardReward`.
+    FightInEvent {
+        encounter: V::Encounter,
+        reward: Option<V::Card>,
+    },
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
@@ -4503,7 +4517,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + EventTable<Act = Self::Act>
+        + EventTable<Act = Self::Act, Encounter = Self::Encounter>
         + 'static;
 
     /// A run-wide rule chosen before the run starts.
@@ -5007,6 +5021,23 @@ pub trait Rules: Hooks {
     ///
     /// A card whose override nobody has ported.
     fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
+
+    /// `ModifyUnknownMapPointRoomTypes` for a card in the deck, in the act
+    /// counted from zero: whether it leaves an unknown room nothing but an
+    /// event.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool;
+
+    /// `ModifyNextEvent` for a card in the deck: the event it puts in place
+    /// of `event`, which is `event` where it changes nothing.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn deck_card_next_event(card: Self::Card, act: usize, event: Self::Event) -> Self::Event;
 
     /// `PotionModel.TargetType`, overridden, for a potion that reads whether a
     /// fight is in progress, which `in_combat` says.

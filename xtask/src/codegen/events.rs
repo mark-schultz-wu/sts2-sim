@@ -430,6 +430,13 @@ fn emit_events(
          \x20   /// The event id hash used by its private RNG.\n\
          \x20   fn seed_name(self) -> &'static str {{\n\
          \x20       <Self as sts2_core::Table>::data(self).seed_name\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// The fight a `Combat`-layout event builds as it opens.\n\
+         \x20   fn combat_layout(self) -> Option<Encounter> {{\n\
+         \x20       let data = <Self as sts2_core::Table>::data(self);\n\
+         \x20       data.encounter\n\
+         \x20           .filter(|_| data.layout == EventLayoutType::Combat)\n\
          \x20   }}"
     )
     .unwrap();
@@ -470,7 +477,8 @@ fn emit_events(
     super::rows(out, "EventData", &table);
 
     writeln!(out, "impl sts2_core::EventTable for Event {{").unwrap();
-    writeln!(out, "    type Act = Act;\n").unwrap();
+    writeln!(out, "    type Act = Act;").unwrap();
+    writeln!(out, "    type Encounter = Encounter;\n").unwrap();
     out.push_str(&extras);
     writeln!(out, "}}").unwrap();
 

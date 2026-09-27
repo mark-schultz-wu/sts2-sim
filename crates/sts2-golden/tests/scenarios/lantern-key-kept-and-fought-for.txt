@@ -1,0 +1,9 @@
+# Keeping the key turns the page to the fight. The knight's health is the one
+# rolled as the event opened, and the won fight offers a Lantern Key beside
+# its own rewards.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"THE_LANTERN_KEY"}
+{"cmd":"choose_option","index":1}
+{"cmd":"choose_option","index":0}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":1}

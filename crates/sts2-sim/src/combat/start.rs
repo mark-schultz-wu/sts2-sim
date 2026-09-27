@@ -32,6 +32,9 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.
     pub(crate) strayed: bool,
+    /// The monsters' health, where an event rolled it as it opened. Empty
+    /// for a fight that rolls its own.
+    pub(crate) rolled: &'a [V::Health],
 }
 
 /// A fight as it opens, with the streams it drew from.
@@ -76,7 +79,7 @@ pub(crate) fn enter<V: Rules>(
         encounter,
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
-        returned: Vec::new(),
+        extra_cards: Vec::new(),
         exhaust_next: smallvec::SmallVec::new(),
         leaving: Vec::new(),
         creatures: super::live::Creatures::new(),
@@ -124,7 +127,10 @@ pub(crate) fn enter<V: Rules>(
         ascension,
         encounter,
         &mut streams,
-        &monsters,
+        monster::Roster {
+            monsters: &monsters,
+            rolled: entering.rolled,
+        },
         creatures,
         powers,
         machines,
@@ -380,4 +386,21 @@ pub(super) fn hand_size<V: Rules>(fight: Walk<'_, V>, turn: V::Count) -> usize {
     ];
     let drawn = super::board::modified_by::<V>(fight, base, &phases);
     num_traits::cast(drawn).unwrap_or_else(|| unimplemented!("a hand of {drawn:?} cards"))
+}
+
+/// The health a `Combat`-layout event's monsters roll as it opens, off the
+/// run's `Niche` stream.
+pub(crate) fn roll_layout<V: Rules>(
+    raw_seed: u64,
+    floor: V::Count,
+    ascension: V::AscensionLevel,
+    encounter: V::Encounter,
+    streams: &mut Streams<V>,
+) -> Result<smallvec::SmallVec<[V::Health; 2]>, Error> {
+    let monsters = encounter::opening::<V>(raw_seed, floor, encounter)?;
+    Ok(monster::roll_layout::<V>(
+        &monsters,
+        ascension,
+        streams.combat().niche,
+    ))
 }
