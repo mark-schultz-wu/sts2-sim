@@ -539,6 +539,8 @@ pub(super) enum Pickup<V: Rules> {
     /// `RewardsCmd.OfferCustom`: a screen to take rewards from until every
     /// one is taken or the rest are skipped.
     Rewards { offered: Vec<Offer<V>> },
+    /// The event's own question, which [`Rules::event_question`] asks.
+    Event,
 }
 
 /// A pickup's question, and the rest of its `AfterObtained`, which runs once
@@ -663,6 +665,7 @@ impl<V: Rules> State<V> {
             Phase::Neow { .. } | Phase::Event { .. } => {
                 self.phase.asking().map(|asked| match asked.pickup {
                     Pickup::Rewards { .. } => sts2_core::QuestionKind::Rewards,
+                    Pickup::Event => self.event_question().kind(),
                     _ => sts2_core::QuestionKind::SelectCards,
                 })
             }
@@ -1557,8 +1560,21 @@ impl<V: Rules> State<V> {
                     continue;
                 }
                 HookEffect::OfferRewards(rewards) => Pickup::Rewards {
-                    offered: self.custom_rewards(rewards),
+                    offered: self.custom_rewards(
+                        rewards,
+                        sts2_core::Stream::Player(V::PlayerRngType::REWARDS),
+                    ),
                 },
+                HookEffect::OfferEventRewards => {
+                    let Phase::Event { state, .. } = &self.phase else {
+                        unreachable!("only an event offers rewards of its own")
+                    };
+                    let rewards = V::event_rewards(state);
+                    Pickup::Rewards {
+                        offered: self.custom_rewards(&rewards, sts2_core::Stream::Event),
+                    }
+                }
+                HookEffect::AskEvent => Pickup::Event,
                 HookEffect::CloneDeckCard { excluding } => Pickup::CloneDeckCard { excluding },
                 // `CardSelectCmd` takes the whole list without asking when it
                 // holds no more than it must take, and returns nothing from an
@@ -1794,10 +1810,16 @@ impl<V: Rules> State<V> {
         self.unheard(ModelHook::TryModifyRestSiteHealRewards);
     }
 
-    /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`: each
-    /// reward filled in in the order given, the hooks, then the sort.
-    fn custom_rewards(&mut self, rewards: &[sts2_core::CustomReward<V>]) -> Vec<Offer<V>> {
+    /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`, off
+    /// `stream`. The potions are drawn as their rewards are made. Each reward
+    /// then fills in in the order given, and the hooks and the sort follow.
+    fn custom_rewards(
+        &mut self,
+        rewards: &[sts2_core::CustomReward<V>],
+        stream: sts2_core::Stream<V>,
+    ) -> Vec<Offer<V>> {
         use sts2_core::CustomReward;
+        use sts2_core::rng::GameRng as _;
 
         let character = self.character();
         let act = self.act();
@@ -1812,7 +1834,24 @@ impl<V: Rules> State<V> {
         }) {
             self.card_reward_unheard();
         }
-        // A relic reward draws nothing, so its pulls can come first.
+        // `new PotionReward(potion, player)`: the potion is drawn before the
+        // set fills anything in.
+        let mut potions = SmallVec::<[V::Potion; 4]>::new();
+        for reward in rewards {
+            let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+            let pool = match *reward {
+                CustomReward::PotionOf(rarity) => V::reward_potions(character).at(rarity),
+                CustomReward::UnlockedPotion => V::unlocked_potions(character),
+                _ => continue,
+            };
+            potions.push(
+                *rng.choose(pool)
+                    .unwrap_or_else(|_| unimplemented!("no potion to offer for {reward:?}")),
+            );
+        }
+        let mut potions = potions.into_iter();
+        // A relic reward of a set rarity draws nothing, so its pulls can come
+        // first.
         let mut relics = rewards
             .iter()
             .filter_map(|reward| match *reward {
@@ -1822,101 +1861,94 @@ impl<V: Rules> State<V> {
             .map(|rarity| (self.pull_relic(rarity), rarity))
             .collect::<SmallVec<[(V::Relic, Rarity<V>); 4]>>()
             .into_iter();
-        let mut offered: Vec<Offer<V>> = rewards
-            .iter()
-            .map(|reward| {
-                let rng = self.streams.player(V::PlayerRngType::REWARDS);
-                match *reward {
-                    CustomReward::Relic(_) => {
-                        let (relic, rarity) = relics.next().expect("each relic reward was pulled");
-                        Offer::Relic {
-                            relic,
-                            rarity,
-                            taken: false,
-                        }
-                    }
-                    CustomReward::CharacterCards(count) => Offer::Card {
-                        cards: crate::reward::card::regular::<V, _>(
-                            rng,
-                            V::reward_cards(character),
-                            count,
-                            true,
-                        )
-                        .into_iter()
-                        .map(CardIdent::new)
-                        .collect(),
-                        taken: false,
-                    },
-                    CustomReward::SpecificPotion(potion) => Offer::Potion {
-                        potion,
-                        taken: false,
-                    },
-                    CustomReward::UncommonPotion => {
-                        use sts2_core::rng::GameRng as _;
-                        Offer::Potion {
-                            potion: *rng
-                                .choose(
-                                    V::reward_potions(character)
-                                        .at(sts2_core::RewardRarity::Uncommon),
-                                )
-                                .unwrap_or_else(|_| unimplemented!("no uncommon potion to offer")),
-                            taken: false,
-                        }
-                    }
-                    CustomReward::Potion => Offer::Potion {
-                        potion: crate::reward::potion::rolled::<V, _>(rng, character),
-                        taken: false,
-                    },
-                    CustomReward::ColorlessCards(count) => Offer::Card {
-                        cards: crate::reward::card::regular::<V, _>(
-                            rng,
-                            V::colorless_cards(),
-                            count,
-                            false,
-                        )
-                        .into_iter()
-                        .map(CardIdent::new)
-                        .collect(),
-                        taken: false,
-                    },
-                    CustomReward::CardsOf {
-                        pool,
+        let mut offered: Vec<Offer<V>> = Vec::with_capacity(rewards.len());
+        for reward in rewards {
+            let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+            offered.push(match *reward {
+                CustomReward::Relic(_) => {
+                    let (relic, rarity) = relics.next().expect("each relic reward was pulled");
+                    Offer::Relic {
+                        relic,
                         rarity,
-                        count,
-                        upgrade_roll,
-                    } => Offer::Card {
-                        cards: crate::reward::card::uniform_rolled::<V, _>(
-                            rng,
-                            V::reward_cards(pool.unwrap_or(character)).at(rarity),
-                            count,
-                            upgrade_roll.then_some(act),
-                        ),
                         taken: false,
-                    },
-                    CustomReward::UpgradedCardsOf {
-                        rarity,
-                        kind,
-                        count,
-                    } => Offer::Card {
-                        cards: crate::reward::card::upgraded_of::<V, _>(
-                            rng,
-                            &V::merchant_cards(character, kind, rarity),
-                            count,
-                        ),
-                        taken: false,
-                    },
-                    CustomReward::UnlockedPotion => {
-                        use sts2_core::rng::GameRng as _;
-                        Offer::Potion {
-                            potion: *rng
-                                .choose(V::unlocked_potions(character))
-                                .unwrap_or_else(|_| unimplemented!("a character with no potion")),
-                            taken: false,
-                        }
                     }
                 }
-            })
-            .collect();
+                CustomReward::RolledRelic => {
+                    let rarity = crate::reward::relic_rarity::<V, _>(rng);
+                    Offer::Relic {
+                        relic: self.pull_relic(rarity),
+                        rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                        taken: false,
+                    }
+                }
+                CustomReward::Gold(amount) => Offer::Gold {
+                    amount: crate::reward::fixed_gold::<V, _>(rng, amount),
+                    taken: false,
+                },
+                CustomReward::CharacterCards(count) => Offer::Card {
+                    cards: crate::reward::card::regular::<V, _>(
+                        rng,
+                        V::reward_cards(character),
+                        count,
+                        true,
+                    )
+                    .into_iter()
+                    .map(CardIdent::new)
+                    .collect(),
+                    taken: false,
+                },
+                CustomReward::SpecificPotion(potion) => Offer::Potion {
+                    potion,
+                    taken: false,
+                },
+                CustomReward::PotionOf(_) | CustomReward::UnlockedPotion => Offer::Potion {
+                    potion: potions.next().expect("each potion reward drew its potion"),
+                    taken: false,
+                },
+                CustomReward::Potion => Offer::Potion {
+                    potion: crate::reward::potion::rolled::<V, _>(rng, character),
+                    taken: false,
+                },
+                CustomReward::ColorlessCards(count) => Offer::Card {
+                    cards: crate::reward::card::regular::<V, _>(
+                        rng,
+                        V::colorless_cards(),
+                        count,
+                        false,
+                    )
+                    .into_iter()
+                    .map(CardIdent::new)
+                    .collect(),
+                    taken: false,
+                },
+                CustomReward::CardsOf {
+                    pool,
+                    rarity,
+                    count,
+                    upgrade_roll,
+                } => Offer::Card {
+                    cards: crate::reward::card::uniform_rolled::<V, _>(
+                        rng,
+                        V::reward_cards(pool.unwrap_or(character)).at(rarity),
+                        count,
+                        upgrade_roll.then_some(act),
+                    ),
+                    taken: false,
+                },
+                CustomReward::UpgradedCardsOf {
+                    rarity,
+                    kind,
+                    count,
+                } => Offer::Card {
+                    cards: crate::reward::card::upgraded_of::<V, _>(
+                        rng,
+                        &V::merchant_cards(character, kind, rarity),
+                        count,
+                    ),
+                    taken: false,
+                },
+            });
+        }
         self.modify_rewards(&mut offered, None);
         crate::reward::sort(&mut offered);
         offered
@@ -3079,6 +3111,13 @@ impl<V: Rules> State<V> {
         {
             return Ok(self.take_parked(answer));
         }
+        if let Some(Asked {
+            pickup: Pickup::Event,
+            ..
+        }) = self.phase.asking()
+        {
+            return Ok(self.answer_event(answer));
+        }
         let Some(asking) = self.phase.asking_mut() else {
             unimplemented!("answering a question inside a fight");
         };
@@ -3123,12 +3162,38 @@ impl<V: Rules> State<V> {
             }
             Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
             Pickup::Rewards { .. } => unreachable!("a reward screen is answered above"),
+            Pickup::Event => unreachable!("an event's own question is answered above"),
         }
         // The rest of the pickup, which can ask again.
         if let Some(next) = self.carry_out(asked.rest) {
             return Ok(self.park(next));
         }
         Ok(Decided::Resolved)
+    }
+
+    /// The question the event the run stands in parks on.
+    fn event_question(&self) -> Question<V> {
+        let Phase::Event { state, .. } = &self.phase else {
+            unreachable!("only an event asks its own question")
+        };
+        V::event_question(state).unwrap_or_else(|| unreachable!("an event parked on no question"))
+    }
+
+    /// Answer the event's own question, then carry out what the answer asked
+    /// and the rest of what parked it.
+    fn answer_event(&mut self, answer: &Answer) -> Decided {
+        let Phase::Event { state, asking, .. } = &mut self.phase else {
+            unreachable!("only an event asks its own question")
+        };
+        let asked = asking
+            .take()
+            .unwrap_or_else(|| unreachable!("the event's question is parked"));
+        let mut effects = V::answer_event(state, answer);
+        effects.extend(asked.rest);
+        match self.carry_out(effects) {
+            Some(next) => self.park(next),
+            None => Decided::Resolved,
+        }
     }
 
     /// Upgrade the card the smith was pointed at.
@@ -3372,6 +3437,7 @@ impl<V: Rules> State<V> {
                     }
                     Pickup::CloneDeckCard { .. } => unreachable!("a room parks on no clone"),
                     Pickup::Rewards { offered } => reward_moves(offered, moves),
+                    Pickup::Event => event_moves(self.event_question(), moves),
                 }
             }
             Phase::RestSite {
@@ -3647,6 +3713,7 @@ impl<V: Rules> State<V> {
             Phase::Neow { .. } | Phase::Event { .. } => self.phase.asking().map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
                     Pickup::Rewards { offered } => return asked::<V>(offered),
+                    Pickup::Event => return self.event_question(),
                     Pickup::Cards { offered, min, max } => (
                         u32::try_from(*min).expect("a selection counts in a few cards"),
                         u32::try_from(*max).expect("a selection counts in a few cards"),
@@ -3959,6 +4026,30 @@ fn reward_moves<V: Rules>(offered: &[Offer<V>], moves: &mut Legal<V>) {
     }
     // Nothing a fight or a ported relic offers disallows skipping. See `asked`.
     moves.push(Decision::Answer(Answer::Skip));
+}
+
+/// The answers to an event's own question: each hidden cell of a grid, with
+/// either tool.
+fn event_moves<V: Rules>(question: Question<V>, moves: &mut Legal<V>) {
+    let Question::Divine {
+        width,
+        height,
+        cleared,
+        ..
+    } = question
+    else {
+        unimplemented!("the answers to {question:?}")
+    };
+    for x in 0..width {
+        for y in 0..height {
+            if cleared.contains(&sts2_core::Cell { x, y }) {
+                continue;
+            }
+            for tool in [sts2_core::Tool::Small, sts2_core::Tool::Big] {
+                moves.push(Decision::Answer(Answer::Divine { x, y, tool }));
+            }
+        }
+    }
 }
 
 fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {

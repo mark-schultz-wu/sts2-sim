@@ -20,6 +20,16 @@ pub(crate) fn relic_rarity<V: Rules, R: GameRng>(rng: &mut R) -> crate::run::Rar
     }
 }
 
+/// `GoldReward.Populate` for a reward made at one amount, which still draws
+/// once, over the range from the amount to the amount.
+pub(crate) fn fixed_gold<V: Rules, R: GameRng>(rng: &mut R, amount: V::Number) -> V::Number {
+    use sts2_core::rng::{RngInteger as _, Span};
+
+    let min: R::Int = num_traits::cast(amount).expect("a gold amount fits the RNG integer");
+    let span = Span::new(min, min + R::Int::ONE).expect("a range one wide");
+    num_traits::cast(rng.next_int_range(span)).expect("a reward's gold is a game number")
+}
+
 /// One thing a reward screen offers, and whether it is still on offer.
 ///
 /// The indices never renumber as rewards are taken, so a taken reward stays in

@@ -72,4 +72,23 @@ pub trait EventBehavior<V: ContentVersion> {
         run: &impl EventView<V>,
         rng: &mut R,
     ) -> crate::HookEffects<V>;
+
+    /// The question the event parks on after
+    /// [`HookEffect::AskEvent`](crate::HookEffect::AskEvent), as it stands.
+    fn question(&self, _state: &Self::State) -> Option<crate::Question<V>> {
+        None
+    }
+
+    /// Take the answer to [`EventBehavior::question`]. What it does to the
+    /// run comes back, in the order the game does it.
+    fn answer(&self, _state: &mut Self::State, answer: &crate::Answer) -> crate::HookEffects<V> {
+        unimplemented!("an event answered with {answer:?}")
+    }
+
+    /// The rewards
+    /// [`HookEffect::OfferEventRewards`](crate::HookEffect::OfferEventRewards)
+    /// offers, in the order the game makes them.
+    fn rewards(&self, _state: &Self::State) -> Vec<crate::CustomReward<V>> {
+        unimplemented!("an event with rewards of its own")
+    }
 }

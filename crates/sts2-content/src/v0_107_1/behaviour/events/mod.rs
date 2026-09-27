@@ -8,6 +8,7 @@ mod bugslayer;
 mod byrdonis_nest;
 mod colorful_philosophers;
 mod colossal_flower;
+mod crystal_sphere;
 mod darv;
 mod dense_vegetation;
 mod doll_room;
@@ -69,6 +70,7 @@ pub enum State {
     DollRoom(doll_room::State),
     SpiritGrafter(spirit_grafter::State),
     ColossalFlower(colossal_flower::State),
+    CrystalSphere(crystal_sphere::State),
     Bugslayer(bugslayer::State),
     ColorfulPhilosophers(colorful_philosophers::State),
     PotionCourier(potion_courier::State),
@@ -303,6 +305,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::ThisOrThat => State::ThisOrThat(this_or_that::ThisOrThat.enter(run, rng)),
         Event::Wellspring => State::Wellspring(wellspring::Wellspring.enter(run, rng)),
+        Event::CrystalSphere => State::CrystalSphere(crystal_sphere::CrystalSphere.enter(run, rng)),
         Event::WhisperingHollow => {
             State::WhisperingHollow(whispering_hollow::WhisperingHollow.enter(run, rng))
         }
@@ -370,6 +373,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::DollRoom(state) => doll_room::DollRoom.observe(state, run),
         State::SpiritGrafter(state) => spirit_grafter::SpiritGrafter.observe(state, run),
         State::ColossalFlower(state) => colossal_flower::ColossalFlower.observe(state, run),
+        State::CrystalSphere(state) => crystal_sphere::CrystalSphere.observe(state, run),
         State::Bugslayer(state) => bugslayer::Bugslayer.observe(state, run),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
         State::FieldOfManSizedHoles(state) => {
@@ -444,6 +448,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::ColossalFlower(state) => {
             colossal_flower::ColossalFlower.choose(state, option, run, rng)
         }
+        State::CrystalSphere(state) => {
+            crystal_sphere::CrystalSphere.choose(state, option, run, rng)
+        }
         State::Bugslayer(state) => bugslayer::Bugslayer.choose(state, option, run, rng),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
         State::FieldOfManSizedHoles(state) => {
@@ -491,5 +498,29 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             whispering_hollow::WhisperingHollow.choose(state, option, run, rng)
         }
         State::WoodCarvings(state) => wood_carvings::WoodCarvings.choose(state, option, run, rng),
+    }
+}
+
+/// [`EventBehavior::question`] for the event entered.
+pub(crate) fn question(state: &State) -> Option<sts2_core::Question<V>> {
+    match state {
+        State::CrystalSphere(state) => crystal_sphere::CrystalSphere.question(state),
+        _ => None,
+    }
+}
+
+/// [`EventBehavior::answer`] for the event entered.
+pub(crate) fn answer(state: &mut State, answer: &sts2_core::Answer) -> HookEffects<V> {
+    match state {
+        State::CrystalSphere(state) => crystal_sphere::CrystalSphere.answer(state, answer),
+        state => unimplemented!("{state:?} answered with {answer:?}"),
+    }
+}
+
+/// [`EventBehavior::rewards`] for the event entered.
+pub(crate) fn rewards(state: &State) -> Vec<sts2_core::CustomReward<V>> {
+    match state {
+        State::CrystalSphere(state) => crystal_sphere::CrystalSphere.rewards(state),
+        state => unimplemented!("rewards of {state:?}'s own"),
     }
 }
