@@ -9,6 +9,9 @@ use super::Number;
 /// `KingsCourage`'s `ForgeVar(15)`.
 const KINGS_COURAGE: Number = 15;
 
+/// `CosmicConcoction`'s `CardsVar(3)`.
+const COSMIC_CARDS: usize = 3;
+
 /// `StarPotion`'s `StarsVar(3)`.
 const STARS: Number = 3;
 
@@ -33,6 +36,25 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
                 CardVar::Damage,
                 KINGS_COURAGE,
             );
+            Played::Done
+        }
+        // `Self`: `GetDistinctForCombat` of three colorless cards off
+        // `CombatCardGeneration`, each upgraded and into hand.
+        Potion::CosmicConcoction => {
+            use sts2_core::{Change, Lasting, Pile, Rules as _, RunStreamKinds as _};
+
+            let mut cards = V::combat_colorless_cards().to_vec();
+            let made: [_; COSMIC_CARDS] = fight
+                .generate_cards(
+                    &mut cards,
+                    <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
+                )
+                .unwrap_or_else(|_| unimplemented!("a colorless pool short of three"));
+            for card in made {
+                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
+                    fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
+                }
+            }
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),

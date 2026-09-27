@@ -11,6 +11,9 @@ use super::Number;
 /// `CunningPotion`'s `CardsVar(3)`.
 const CUNNING_SHIVS: usize = 3;
 
+/// `GhostInAJar`'s `PowerVar<IntangiblePower>(1)`.
+const GHOST_IN_A_JAR: Number = 1;
+
 /// `PoisonPotion`'s `PowerVar<PoisonPower>(6)`.
 const POISON: Number = 6;
 
@@ -37,6 +40,11 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             for at in fight.add_generated_cards(shiv, Pile::Hand, CUNNING_SHIVS) {
                 fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
             }
+            Played::Done
+        }
+        // `AnyPlayer`: its Intangible on the player drinking it.
+        Potion::GhostInAJar => {
+            fight.apply_to_actor(Power::IntangiblePower, PowerAmount::Counted(GHOST_IN_A_JAR));
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),

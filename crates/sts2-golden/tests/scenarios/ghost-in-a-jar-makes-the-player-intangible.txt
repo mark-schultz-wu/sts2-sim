@@ -1,0 +1,7 @@
+# Ghost in a Jar puts one Intangible on the player drinking it, so the
+# Nibbit's twelve takes off one.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"GHOST_IN_A_JAR"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}

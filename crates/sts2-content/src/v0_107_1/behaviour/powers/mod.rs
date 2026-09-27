@@ -2134,7 +2134,8 @@ pub(crate) fn event_hook(
             _,
             EventHook::Applied
             | EventHook::PowerAmountChanged { .. }
-            | EventHook::BeforeSideTurnEnd { .. },
+            | EventHook::BeforeSideTurnEnd { .. }
+            | EventHook::OstyRevived,
         ) => None,
         // `VitalSparkPower.BeforeCombatStart`: Tainted by its stack on every
         // Skill the player holds.

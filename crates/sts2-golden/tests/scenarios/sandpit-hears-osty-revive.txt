@@ -1,0 +1,10 @@
+# Sandpit hears `AfterOstyRevived`, which only moves the creatures on
+# screen. Sacrifice kills Osty once the Sandpit is down, and Bone Brew
+# stands it back up.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"THE_INSATIABLE_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"SACRIFICE"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","potion":"BONE_BREW"}
+{"cmd":"use_potion","index":0,"target":null}
