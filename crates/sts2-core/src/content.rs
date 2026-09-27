@@ -3478,6 +3478,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
     /// the deck's bottom, cloned by the listener.
     CloneIntoDeck,
+    /// `Rng.NextInt(below)` off a stream, drawn for its place in the stream
+    /// alone, which a flavour line makes.
+    DrawFromStream {
+        stream: Stream<V>,
+        below: u32,
+    },
     /// `RelicCmd.Remove` on the first of the player's relics that is this
     /// one.
     RemoveRelic(V::Relic),
@@ -3622,6 +3628,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.AutoPlay` of this copy, with no target named: the card plays
     /// for free, and one that targets an enemy picks it off `CombatTargets`.
     AutoPlay(crate::CardId<V>),
+    /// `EnchantmentModel.Status = Disabled` on the enchantment of the card
+    /// that asked.
+    DisableOwnEnchantment,
     /// `Card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
     /// `CombatEnergyCosts`, on the card whose enchantment asked. Slither's.
     RandomSelfCost {
@@ -4021,10 +4030,13 @@ pub trait Hooks: ContentVersion {
     ) -> crate::HookResponse<bool>;
 
     /// `EnchantDamageAdditive` and its kin, answered by the enchantment on a
-    /// card. [`Modify::Nothing`] for one whose class does not override the
-    /// hook.
-    fn enchant_modify(enchanted: crate::Enchanted<Self>, hook: EnchantHook)
-    -> Modify<Self::Number>;
+    /// card, whose `Status` is `status`. [`Modify::Nothing`] for one whose
+    /// class does not override the hook.
+    fn enchant_modify(
+        enchanted: crate::Enchanted<Self>,
+        status: crate::EnchantmentStatus,
+        hook: EnchantHook,
+    ) -> Modify<Self::Number>;
 
     /// What an enchantment asks for when `hook` reaches the card `id` it is
     /// on, pushed onto `asked`. Asked only of an enchantment whose class

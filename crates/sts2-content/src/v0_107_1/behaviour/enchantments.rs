@@ -30,7 +30,7 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::Slither => base && card.card.cost() != Cost::X,
         Enchantment::Sown | Enchantment::Swift => base,
         // `CanEnchantCardType`, which takes an attack alone.
-        Enchantment::Corrupted | Enchantment::Sharp => {
+        Enchantment::Corrupted | Enchantment::Sharp | Enchantment::Vigorous => {
             base && V::card_kind(card.card) == Some(CardKind::Attack)
         }
         Enchantment::Nimble => base && card.card.gains_block(),
@@ -48,6 +48,7 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
 pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent<V>) {
     match enchantment {
         Enchantment::Corrupted
+        | Enchantment::Vigorous
         | Enchantment::Nimble
         | Enchantment::PerfectFit
         | Enchantment::Sharp
@@ -66,7 +67,11 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
 
 /// An enchantment's `EnchantDamageAdditive`, `EnchantDamageMultiplicative`,
 /// `EnchantBlockAdditive` or `EnchantPlayCount`, over the card it is on.
-pub(crate) fn modify(enchanted: Enchanted<V>, hook: EnchantHook) -> Modify<i32> {
+pub(crate) fn modify(
+    enchanted: Enchanted<V>,
+    status: EnchantmentStatus,
+    hook: EnchantHook,
+) -> Modify<i32> {
     let amount = i32::from(enchanted.amount);
     match (enchanted.enchantment, hook) {
         // Sharp's own check: a powered attack, and nothing for any other hit.
@@ -77,10 +82,17 @@ pub(crate) fn modify(enchanted: Enchanted<V>, hook: EnchantHook) -> Modify<i32> 
             Modify::Scaled(1.5)
         }
         (Enchantment::Nimble, EnchantHook::BlockAdditive) => Modify::Added(amount),
+        // Its amount on a powered hit, until its card is first played.
+        (Enchantment::Vigorous, EnchantHook::DamageAdditive { powered: true })
+            if status == EnchantmentStatus::Normal =>
+        {
+            Modify::Added(amount)
+        }
         // Its `Times`, which it prints as one.
         (Enchantment::Spiral, EnchantHook::PlayCount) => Modify::Added(1),
         (
             Enchantment::Corrupted
+            | Enchantment::Vigorous
             | Enchantment::Nimble
             | Enchantment::PerfectFit
             | Enchantment::Sharp
@@ -108,6 +120,12 @@ pub(crate) fn event_hook(
         (Enchantment::Slither, EventHook::CardDrawn { id: drawn, .. }) => {
             if drawn == id {
                 asked.push(HookEffect::RandomSelfCost { below: 4 });
+            }
+        }
+        // `AfterCardPlayed` for its own card: spent once that play is over.
+        (Enchantment::Vigorous, EventHook::CardPlayed { id: played, .. }) => {
+            if played == id {
+                asked.push(HookEffect::DisableOwnEnchantment);
             }
         }
         // To the top of a shuffle, but not the one a fight opens on.
@@ -149,7 +167,8 @@ pub(crate) fn on_play<F: Fight<V>>(
         | Enchantment::PerfectFit
         | Enchantment::Sharp
         | Enchantment::Slither
-        | Enchantment::Spiral => {}
+        | Enchantment::Spiral
+        | Enchantment::Vigorous => {}
         enchantment => unimplemented!("what {enchantment:?} does when its card is played"),
     }
 }

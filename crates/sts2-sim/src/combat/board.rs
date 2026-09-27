@@ -1584,12 +1584,23 @@ pub(crate) fn modified<V: Rules>(
 ) -> V::Number {
     // The card's enchantment has its say first, and only when a card deals
     // the hit. Its scale stays a decimal until the listeners are done.
-    let (damage, scale) = match card.and_then(|held| held.face.ident.enchantment) {
-        Some(enchanted) => {
-            let added =
-                enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive { powered }, damage);
+    let enchanted = card.and_then(|held| {
+        held.face
+            .ident
+            .enchantment
+            .map(|enchanted| (enchanted, held.face.enchantment_status()))
+    });
+    let (damage, scale) = match enchanted {
+        Some((enchanted, status)) => {
+            let added = enchanted_by::<V>(
+                enchanted,
+                status,
+                EnchantHook::DamageAdditive { powered },
+                damage,
+            );
             match <V as sts2_core::Hooks>::enchant_modify(
                 enchanted,
+                status,
                 EnchantHook::DamageMultiplicative { powered },
             ) {
                 Modify::Nothing => (added, None),
@@ -1634,10 +1645,11 @@ pub(crate) fn modified<V: Rules>(
 /// An enchantment that does more to the number than add to it.
 pub(super) fn enchanted_by<V: Rules>(
     enchanted: sts2_core::Enchanted<V>,
+    status: sts2_core::EnchantmentStatus,
     hook: EnchantHook,
     amount: V::Number,
 ) -> V::Number {
-    match <V as sts2_core::Hooks>::enchant_modify(enchanted, hook) {
+    match <V as sts2_core::Hooks>::enchant_modify(enchanted, status, hook) {
         Modify::Nothing => amount,
         Modify::Added(more) => amount + more,
         answer => unimplemented!("an enchantment answering {hook:?} with {answer:?}"),
@@ -1801,8 +1813,15 @@ pub(crate) fn resolve<V: Rules>(
             let amount = carried::<V>(playing, fight.live, amount, None);
             // `Hook.ModifyBlock` asks the played card's enchantment whatever
             // the block's props, since `GainBlock` always runs it.
-            let amount = match playing.and_then(|held| held.face.ident.enchantment) {
-                Some(enchanted) => enchanted_by::<V>(enchanted, EnchantHook::BlockAdditive, amount),
+            let amount = match playing.and_then(|held| {
+                held.face
+                    .ident
+                    .enchantment
+                    .map(|e| (e, held.face.enchantment_status()))
+            }) {
+                Some((enchanted, status)) => {
+                    enchanted_by::<V>(enchanted, status, EnchantHook::BlockAdditive, amount)
+                }
                 None => amount,
             };
             let powered = scaling == Scaling::Dynamic;

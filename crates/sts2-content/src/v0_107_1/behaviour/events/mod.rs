@@ -27,6 +27,7 @@ mod sapphire_seed;
 mod self_help_book;
 mod slippery_bridge;
 mod spirit_grafter;
+mod stone_of_all_time;
 mod sunken_statue;
 mod symbiote;
 mod tablet_of_truth;
@@ -60,6 +61,7 @@ use super::relics::tradable;
 pub enum State {
     InfestedAutomaton(infested_automaton::State),
     Symbiote(symbiote::State),
+    StoneOfAllTime(stone_of_all_time::State),
     TheLanternKey(the_lantern_key::State),
     ZenWeaver(zen_weaver::State),
     RanwidTheElder(ranwid_the_elder::State),
@@ -244,6 +246,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::InfestedAutomaton(infested_automaton::InfestedAutomaton.enter(run, rng))
         }
         Event::Symbiote => State::Symbiote(symbiote::Symbiote.enter(run, rng)),
+        Event::StoneOfAllTime => {
+            State::StoneOfAllTime(stone_of_all_time::StoneOfAllTime.enter(run, rng))
+        }
         Event::TheLanternKey => {
             State::TheLanternKey(the_lantern_key::TheLanternKey.enter(run, rng))
         }
@@ -342,7 +347,7 @@ pub(crate) fn hand_pulled_relics(
 pub(crate) fn holds_potions(state: &State) -> bool {
     matches!(
         state,
-        State::TheFutureOfPotions(_) | State::RanwidTheElder(_)
+        State::TheFutureOfPotions(_) | State::RanwidTheElder(_) | State::StoneOfAllTime(_)
     )
 }
 
@@ -357,6 +362,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
             infested_automaton::InfestedAutomaton.observe(state, run)
         }
         State::Symbiote(state) => symbiote::Symbiote.observe(state, run),
+        State::StoneOfAllTime(state) => stone_of_all_time::StoneOfAllTime.observe(state, run),
         State::TheLanternKey(state) => the_lantern_key::TheLanternKey.observe(state, run),
         State::ZenWeaver(state) => zen_weaver::ZenWeaver.observe(state, run),
         State::RanwidTheElder(state) => ranwid_the_elder::RanwidTheElder.observe(state, run),
@@ -420,6 +426,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             infested_automaton::InfestedAutomaton.choose(state, option, run, rng)
         }
         State::Symbiote(state) => symbiote::Symbiote.choose(state, option, run, rng),
+        State::StoneOfAllTime(state) => {
+            stone_of_all_time::StoneOfAllTime.choose(state, option, run, rng)
+        }
         State::TheLanternKey(state) => {
             the_lantern_key::TheLanternKey.choose(state, option, run, rng)
         }

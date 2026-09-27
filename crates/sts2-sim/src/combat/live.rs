@@ -743,6 +743,7 @@ impl<V: Rules> Face<V> {
         let replays = match self.ident.enchantment {
             Some(enchanted) => super::board::enchanted_by::<V>(
                 enchanted,
+                self.enchantment_status,
                 sts2_core::EnchantHook::PlayCount,
                 replays,
             ),

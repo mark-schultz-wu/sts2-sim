@@ -1428,6 +1428,17 @@ impl<V: Rules> State<V> {
                     }
                     continue;
                 }
+                HookEffect::DrawFromStream { stream, below } => {
+                    use sts2_core::rng::GameRng as _;
+
+                    let bound = sts2_core::rng::Bound::try_new(
+                        num_traits::cast(below).expect("a bound fits the RNG integer"),
+                    )
+                    .expect("a draw has somewhere to land");
+                    let _drawn =
+                        stream_of(&mut self.phase, &mut self.streams, stream).next_int(bound);
+                    continue;
+                }
                 HookEffect::RemoveRelic(relic) => {
                     let Some(slot) = self
                         .player

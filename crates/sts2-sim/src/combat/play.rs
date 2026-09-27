@@ -983,6 +983,13 @@ fn finished<V: Rules, S: LendsCombat>(
                     super::listen::Listener::Card { id },
                     sts2_core::HookEffect::ModifySelf { change, lasting },
                 ) => next.modify_self(id, change, lasting),
+                // The card is still in the play pile until its play is over.
+                (
+                    super::listen::Listener::Card { id },
+                    sts2_core::HookEffect::DisableOwnEnchantment,
+                ) => next.cards.write_in_play(id, |face| {
+                    face.set_enchantment_status(sts2_core::EnchantmentStatus::Disabled)
+                }),
                 // `CreatureCmd.GainBlock`, unpowered, on the power's owner,
                 // then `PowerCmd.Remove(this)`.
                 (
