@@ -298,6 +298,10 @@ const KRANE: i32 = 15;
 /// `ColossusPower`'s `DamageDecrease`.
 const COLOSSAL: f64 = 0.5;
 
+/// `PaleBlueDotPower.cardPlayThresholdValue`: the plays its owner finishes in
+/// one turn for the next turn's hand to grow.
+const PALE_BLUE_DOT_PLAYS: usize = 5;
+
 /// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
 const GIGANTIFIED: f64 = 3.0;
 
@@ -664,6 +668,23 @@ pub(crate) fn modify_hook(
             Modify::Scaled(COLOSSAL)
         }
         (Power::ColossusPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
+        // `ConquerorPower.ModifyDamageMultiplicative`: double a powered hit on
+        // its owner from a Sovereign Blade.
+        (
+            Power::ConquerorPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                card:
+                    Some(sts2_core::CardSource {
+                        card: Cards::Token(TokenCard::SovereignBlade),
+                        ..
+                    }),
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(2.0),
+        (Power::ConquerorPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `GigantificationPower.ModifyDamageMultiplicative`: a powered hit
         // from a card its owner played, before it binds or from the card it
         // bound to. It reads the card's owner and not the dealer, so Osty's
@@ -827,6 +848,24 @@ pub(crate) fn modify_hook(
             PowerAmount::Counted(amount),
             ModifyHook::HandDraw { player, .. },
         ) if player == holder => Modify::Added(amount),
+        // `PaleBlueDotPower.ModifyHandDraw`: its stack more cards for its
+        // owner, once it finished enough plays in its last turn. A fight here
+        // has one player, whose plays are all its holder's.
+        (
+            Power::PaleBlueDotPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::HandDraw { player, turn, .. },
+        ) if player == holder => {
+            match history.finished_last_player_turn(turn).count() >= PALE_BLUE_DOT_PLAYS {
+                true => Modify::Added(amount),
+                false => Modify::Nothing,
+            }
+        }
+        (Power::PaleBlueDotPower, PowerAmount::Endless, ModifyHook::HandDraw { player, .. })
+            if player == holder =>
+        {
+            unimplemented!("an endless Pale Blue Dot")
+        }
         // `DrawCardsNextTurnPower.ModifyHandDraw`, which waits for the stack
         // to have been there as its owner's turn began.
         (
@@ -866,7 +905,8 @@ pub(crate) fn modify_hook(
             | Power::DrawCardsNextTurnPower
             | Power::TyrannyPower
             | Power::ToolsOfTheTradePower
-            | Power::DemesnePower,
+            | Power::DemesnePower
+            | Power::PaleBlueDotPower,
             _,
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
@@ -1103,6 +1143,19 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Debilitate")
         }
         (Power::DebilitatePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ConquerorPower.AfterSideTurnEnd`: one off its stack as its owner's
+        // side's turn ends.
+        (Power::ConquerorPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::Decrement)
+        }
+        (Power::ConquerorPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Conqueror")
+        }
+        (Power::ConquerorPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `BeforeCardPlayed`: one off the stack for each card of its kind its
         // owner plays, which stands in the play pile.
         (
@@ -1624,6 +1677,36 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Flame Barrier")
         }
         (Power::FlameBarrierPower, _, EventHook::DamageReceived { .. }) => None,
+        // `ReflectPower.AfterDamageReceived`: what the block took off a
+        // powered attack on its owner goes back at the attacker, unpowered.
+        (
+            Power::ReflectPower,
+            _,
+            EventHook::DamageReceived {
+                target,
+                blocked,
+                dealer: Some(dealer),
+                powered: true,
+                ..
+            },
+        ) if target == holder && blocked > num_traits::zero() => Some(HookEffect::Damage {
+            target: dealer,
+            amount: blocked,
+        }),
+        (Power::ReflectPower, _, EventHook::DamageReceived { .. }) => None,
+        // `ReflectPower.AfterSideTurnStart`: one off its stack as its owner's
+        // side's turn starts.
+        (Power::ReflectPower, PowerAmount::Counted(_), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            Some(HookEffect::Decrement)
+        }
+        (Power::ReflectPower, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Reflect")
+        }
+        (Power::ReflectPower, _, EventHook::SideTurnStart { .. }) => None,
         // `FlameBarrierPower.AfterSideTurnEnd`, which goes once the other side
         // has had its turn.
         (Power::FlameBarrierPower, _, EventHook::SideTurnEnd { side }) if side != owner => {
@@ -1816,6 +1899,19 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Creative AI")
         }
         (Power::CreativeAiPower, _, EventHook::BeforeHandDraw { .. }) => None,
+        // `SpectrumShiftPower.BeforeHandDraw`: its stack of distinct
+        // colorless cards.
+        (
+            Power::SpectrumShiftPower,
+            PowerAmount::Counted(amount),
+            EventHook::BeforeHandDraw { player },
+        ) if player == holder => Some(HookEffect::GenerateDistinctColorless { count: amount }),
+        (Power::SpectrumShiftPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless Spectrum Shift")
+        }
+        (Power::SpectrumShiftPower, _, EventHook::BeforeHandDraw { .. }) => None,
         // `CallOfTheVoidPower.BeforeHandDraw`: its stack of cards from the
         // character's pool, none of them Basic or Ancient, each made Ethereal.
         (

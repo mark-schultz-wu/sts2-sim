@@ -1,0 +1,9 @@
+# `CardSelectCmd.FromCombatPile` returns nothing without asking when the pile
+# is empty. Neow's Fury played first deals its ten and the play is over, so the
+# Strike after it is played at once.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"NEOWS_FURY"}
+{"cmd":"grant","card":"NEOWS_FURY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"play_card","index":3,"target":1}

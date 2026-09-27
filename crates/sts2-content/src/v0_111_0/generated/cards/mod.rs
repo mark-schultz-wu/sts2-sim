@@ -2817,6 +2817,65 @@ pub fn merchant_colorless_cards() -> &'static [Cards] {
     ]
 }
 
+/// The colourless pool as a combat generation effect sees it.
+///
+/// The same narrowing [`combat_cards`] applies, on the one pool no
+/// character holds.
+pub fn combat_colorless_cards() -> &'static [Cards] {
+    &[
+        Cards::Colorless(ColorlessCard::Anointed),
+        Cards::Colorless(ColorlessCard::Automation),
+        Cards::Colorless(ColorlessCard::BeatDown),
+        Cards::Colorless(ColorlessCard::Bolas),
+        Cards::Colorless(ColorlessCard::Calamity),
+        Cards::Colorless(ColorlessCard::Catastrophe),
+        Cards::Colorless(ColorlessCard::DarkShackles),
+        Cards::Colorless(ColorlessCard::Discovery),
+        Cards::Colorless(ColorlessCard::DramaticEntrance),
+        Cards::Colorless(ColorlessCard::Entropy),
+        Cards::Colorless(ColorlessCard::Equilibrium),
+        Cards::Colorless(ColorlessCard::EternalArmor),
+        Cards::Colorless(ColorlessCard::Fasten),
+        Cards::Colorless(ColorlessCard::Finesse),
+        Cards::Colorless(ColorlessCard::Fisticuffs),
+        Cards::Colorless(ColorlessCard::FlashOfSteel),
+        Cards::Colorless(ColorlessCard::GoldAxe),
+        Cards::Colorless(ColorlessCard::Impatience),
+        Cards::Colorless(ColorlessCard::JackOfAllTrades),
+        Cards::Colorless(ColorlessCard::Jackpot),
+        Cards::Colorless(ColorlessCard::MasterOfStrategy),
+        Cards::Colorless(ColorlessCard::Mayhem),
+        Cards::Colorless(ColorlessCard::MindBlast),
+        Cards::Colorless(ColorlessCard::Nostalgia),
+        Cards::Colorless(ColorlessCard::Omnislice),
+        Cards::Colorless(ColorlessCard::Panache),
+        Cards::Colorless(ColorlessCard::PanicButton),
+        Cards::Colorless(ColorlessCard::PrepTime),
+        Cards::Colorless(ColorlessCard::Production),
+        Cards::Colorless(ColorlessCard::Prolong),
+        Cards::Colorless(ColorlessCard::Prowess),
+        Cards::Colorless(ColorlessCard::Purity),
+        Cards::Colorless(ColorlessCard::Rend),
+        Cards::Colorless(ColorlessCard::Restlessness),
+        Cards::Colorless(ColorlessCard::RollingBoulder),
+        Cards::Colorless(ColorlessCard::Salvo),
+        Cards::Colorless(ColorlessCard::Scrawl),
+        Cards::Colorless(ColorlessCard::SecretTechnique),
+        Cards::Colorless(ColorlessCard::SecretWeapon),
+        Cards::Colorless(ColorlessCard::SeekerStrike),
+        Cards::Colorless(ColorlessCard::Shockwave),
+        Cards::Colorless(ColorlessCard::Splash),
+        Cards::Colorless(ColorlessCard::Stratagem),
+        Cards::Colorless(ColorlessCard::TheBomb),
+        Cards::Colorless(ColorlessCard::TheGambit),
+        Cards::Colorless(ColorlessCard::ThinkingAhead),
+        Cards::Colorless(ColorlessCard::ThrummingHatchet),
+        Cards::Colorless(ColorlessCard::UltimateDefend),
+        Cards::Colorless(ColorlessCard::UltimateStrike),
+        Cards::Colorless(ColorlessCard::Volley),
+    ]
+}
+
 /// Cards eligible for an ordinary room reward, split by rarity.
 ///
 /// Each slice keeps the game's pool order, so an index into one means

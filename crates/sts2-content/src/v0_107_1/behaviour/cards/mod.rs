@@ -22,6 +22,7 @@ use super::super::generated::cards::{CardVar, Cards, NecrobinderCard};
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
 mod defect;
+mod event;
 mod necrobinder;
 mod regent;
 mod silent;
@@ -91,6 +92,7 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 /// Where a card's own play stops to ask something, under its card grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
+    Event(event::Resume),
     Regent(regent::Resume),
     Silent(silent::Resume),
 }
@@ -106,7 +108,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Defect(card) => defect::on_play(card, fight),
         Cards::Colorless(card) => card_plays::colorless::on_play(card, fight),
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
-        Cards::Event(card) => card_plays::event::on_play(card, fight),
+        Cards::Event(card) => event::on_play(card, fight),
         Cards::Quest(card) => card_plays::quest::on_play(card, fight),
         Cards::Status(card) => card_plays::status::on_play(card, fight),
         Cards::Token(card) => token::on_play(card, fight),
@@ -160,6 +162,7 @@ pub(crate) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
+        Resume::Event(at) => event::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),
     }

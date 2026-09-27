@@ -1475,15 +1475,16 @@ impl<V: Rules> CombatHistory<V> {
         self.this_turn.push(sts2_core::HistoryEntry::Drawn(card));
     }
 
-    /// The turn at `round` on `side` is over. Its entries join the chain,
-    /// unless it had none.
-    fn end_turn(&mut self, round: V::Count, side: V::CombatSide) {
+    /// The turn at `round` on `side`, in the player's turn `player_turn`, is
+    /// over. Its entries join the chain, unless it had none.
+    fn end_turn(&mut self, round: V::Count, side: V::CombatSide, player_turn: V::Count) {
         if self.this_turn.is_empty() {
             return;
         }
         let turn = sts2_core::TurnHistory {
             round,
             side,
+            player_turn,
             entries: self.this_turn.drain(..).collect(),
             before: self.before.take(),
         };
@@ -1784,7 +1785,7 @@ impl<V: Rules> Live<V> {
     /// `SwitchSides`: the turn now over joins the history, and `side` takes
     /// its turn.
     pub(super) fn switch_side(&mut self, side: V::CombatSide) {
-        self.history.end_turn(self.round, self.side);
+        self.history.end_turn(self.round, self.side, self.turn);
         self.side = side;
     }
 

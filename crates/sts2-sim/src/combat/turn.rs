@@ -577,6 +577,29 @@ pub(super) fn carry_setup<V: Rules>(
                                 keyword,
                             );
                         }
+                        sts2_core::HookEffect::GenerateDistinctColorless { count } => {
+                            let count: usize = num_traits::cast(count).unwrap_or_else(|| {
+                                unimplemented!("making {count:?} colorless cards")
+                            });
+                            let mut cards = V::combat_colorless_cards().to_vec();
+                            sts2_core::rng::GameRng::unstable_shuffle(rngs.generation, &mut cards);
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            for card in cards.into_iter().take(count) {
+                                sts2_core::Fight::add_generated_cards(
+                                    &mut board,
+                                    sts2_core::CardIdent::new(card),
+                                    Pile::Hand,
+                                    1,
+                                );
+                            }
+                        }
                         sts2_core::HookEffect::ShuffleIfNecessary => {
                             if live.cards.is_empty(Pile::Draw) {
                                 super::board::shuffle::<V>(live, rngs.shuffle, relics);
@@ -908,6 +931,15 @@ pub(super) fn side_turn_started<V: Rules>(
                     unimplemented!("{listener:?} removing itself as a side turn starts")
                 };
                 live.remove_power(owner, power);
+            }
+            // `PowerCmd.Decrement(this)`.
+            sts2_core::HookEffect::Decrement => {
+                let Listener::Power { owner, power, .. } = listener else {
+                    unimplemented!("{listener:?} decrementing itself as a side turn starts")
+                };
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                board.modify_amount(owner, power, -num_traits::one::<V::Number>());
             }
             // `PowerCmd.Apply<P>(Owner, amount, Owner)`.
             sts2_core::HookEffect::ApplyToOwner(power, amount) => {
