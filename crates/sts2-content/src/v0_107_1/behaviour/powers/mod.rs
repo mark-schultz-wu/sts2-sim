@@ -666,17 +666,17 @@ pub(crate) fn modify_hook(
         (
             Power::DemesnePower | Power::PyrePower | Power::FriendshipPower,
             PowerAmount::Counted(amount),
-            ModifyHook::MaxEnergy { player },
+            ModifyHook::MaxEnergy { player, .. },
         ) if player == holder => Modify::Added(amount),
-        (Power::WasteAwayPower, PowerAmount::Counted(amount), ModifyHook::MaxEnergy { player })
-            if player == holder =>
-        {
-            Modify::Added(-amount)
-        }
+        (
+            Power::WasteAwayPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::MaxEnergy { player, .. },
+        ) if player == holder => Modify::Added(-amount),
         (
             Power::DemesnePower | Power::PyrePower | Power::FriendshipPower | Power::WasteAwayPower,
             PowerAmount::Endless,
-            ModifyHook::MaxEnergy { player },
+            ModifyHook::MaxEnergy { player, .. },
         ) if player == holder => unimplemented!("an endless {power:?}"),
         (
             Power::DemesnePower | Power::PyrePower | Power::FriendshipPower | Power::WasteAwayPower,
@@ -2454,13 +2454,13 @@ pub(crate) fn event_hook(
         }
         (Power::AggressionPower, _, EventHook::BeforeSideTurnStart { .. }) => None,
         // `DoomPower.BeforeSideTurnEnd`, for its owner's own side.
-        (Power::DoomPower, _, EventHook::BeforeSideTurnEnd { side }) => match side == owner {
+        (Power::DoomPower, _, EventHook::BeforeSideTurnEnd { side, .. }) => match side == owner {
             true => Some(HookEffect::DoomKill),
             false => None,
         },
         // `HailstormPower.BeforeSideTurnEnd`: its stack of damage to every enemy
         // while its owner holds a Frost orb.
-        (Power::HailstormPower, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEnd { side })
+        (Power::HailstormPower, PowerAmount::Counted(amount), EventHook::BeforeSideTurnEnd { side, .. })
             if side == owner =>
         {
             Some(HookEffect::DamageOpponentsHolding {
@@ -2468,7 +2468,7 @@ pub(crate) fn event_hook(
                 amount,
             })
         }
-        (Power::HailstormPower, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { side })
+        (Power::HailstormPower, PowerAmount::Endless, EventHook::BeforeSideTurnEnd { side, .. })
             if side == owner =>
         {
             unimplemented!("an endless Hailstorm")

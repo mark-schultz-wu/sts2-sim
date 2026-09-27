@@ -37,6 +37,10 @@ mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
 mod nutritious_oyster;
+mod paels_blood;
+mod paels_flesh;
+mod paels_horn;
+mod paels_tears;
 mod permafrost;
 mod phial_holster;
 mod pocketwatch;
@@ -102,6 +106,10 @@ pub enum State {
     NeowsTorment,
     NewLeaf,
     NutritiousOyster,
+    PaelsBlood,
+    PaelsFlesh(paels_flesh::State),
+    PaelsHorn,
+    PaelsTears(paels_tears::State),
     Permafrost(permafrost::State),
     PhialHolster,
     Pocketwatch(pocketwatch::State),
@@ -157,6 +165,14 @@ pub(crate) fn event_hook(
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
         State::NewLeaf => new_leaf::event_hook(hook, asked),
         State::NutritiousOyster => nutritious_oyster::event_hook(hook, asked),
+        // Its one hook is `ModifyHandDraw`, which the fight asks of it.
+        State::PaelsBlood => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what PaelsBlood does for {hook:?}"),
+        },
+        State::PaelsFlesh(state) => paels_flesh::event_hook(state, hook),
+        State::PaelsHorn => paels_horn::event_hook(hook, asked),
+        State::PaelsTears(state) => paels_tears::event_hook(state, hook, asked),
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::PhialHolster => phial_holster::event_hook(hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
@@ -204,6 +220,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
+        State::PaelsBlood => paels_blood::modify_hook(hook),
+        State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::Anchor
@@ -231,6 +249,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::NeowsTorment
         | State::NewLeaf
         | State::NutritiousOyster
+        | State::PaelsHorn
+        | State::PaelsTears(_)
         | State::Permafrost(_)
         | State::PhialHolster
         | State::Pomander
@@ -280,6 +300,10 @@ impl sts2_core::RelicModel<V> for State {
             Relic::NeowsTorment => State::NeowsTorment,
             Relic::NewLeaf => State::NewLeaf,
             Relic::NutritiousOyster => State::NutritiousOyster,
+            Relic::PaelsBlood => State::PaelsBlood,
+            Relic::PaelsFlesh => State::PaelsFlesh(paels_flesh::State::default()),
+            Relic::PaelsHorn => State::PaelsHorn,
+            Relic::PaelsTears => State::PaelsTears(paels_tears::State::default()),
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::PhialHolster => State::PhialHolster,
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
@@ -317,6 +341,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::SwordOfStone(state) => sword_of_stone::display_amount(state),
                 State::WingedBoots(state) => winged_boots::display_amount(state),
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),
+                State::PaelsFlesh(state) => paels_flesh::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }

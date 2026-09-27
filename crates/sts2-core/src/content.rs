@@ -2269,6 +2269,8 @@ pub enum ModifyHook<V: ContentVersion> {
     /// `PlayerCombatState.MaxEnergy` asks every time it is read.
     MaxEnergy {
         player: crate::CombatId,
+        /// The player's `TurnNumber`, which a listener reads off the player.
+        turn: V::Count,
     },
     /// `TryModifyEnergyCostInCombat`, over a card's cost once its own
     /// modifiers are folded in. Every cost the fight reads is of a card in
@@ -2634,6 +2636,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `BeforeSideTurnEnd`, the last of the three before a side's turn ends.
     BeforeSideTurnEnd {
         side: V::CombatSide,
+        /// The player's `PlayerCombatState.Energy`, which a listener reads.
+        energy: V::Count,
     },
     SideTurnEnd {
         side: V::CombatSide,

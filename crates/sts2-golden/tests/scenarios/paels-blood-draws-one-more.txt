@@ -1,0 +1,6 @@
+# `PaelsBlood.ModifyHandDraw` draws one more card each turn: six in the
+# opening hand and six on turn two.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_BLOOD"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

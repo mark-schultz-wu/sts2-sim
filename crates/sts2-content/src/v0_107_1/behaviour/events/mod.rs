@@ -9,6 +9,7 @@ mod jungle_maze_adventure;
 mod luminous_choir;
 mod morphic_grove;
 mod orobas;
+mod pael;
 mod room_full_of_cheese;
 mod sapphire_seed;
 mod self_help_book;
@@ -31,7 +32,7 @@ use sts2_core::{
 
 use super::super::EventOptionId;
 use super::super::V0_107_1 as V;
-use super::super::generated::cards::{CardRarity, CardTag};
+use super::super::generated::cards::{CardRarity, CardTag, Cards, QuestCard};
 use super::super::generated::enchantments::Enchantment;
 use super::super::generated::events::{Event, EventOption as Said};
 use super::super::generated::potions::Potion;
@@ -48,6 +49,7 @@ pub enum State {
     LuminousChoir(luminous_choir::State),
     MorphicGrove(morphic_grove::State),
     Orobas(ancient::Offered),
+    Pael(ancient::Offered),
     RoomFullOfCheese(room_full_of_cheese::State),
     SapphireSeed(sapphire_seed::State),
     SelfHelpBook(self_help_book::State),
@@ -118,6 +120,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::ByrdonisNest => byrdonis_nest::ByrdonisNest.allowed(run),
         Event::MorphicGrove => morphic_grove::MorphicGrove.allowed(run),
         Event::Orobas => orobas::Orobas.allowed(run),
+        Event::Pael => pael::Pael.allowed(run),
         Event::RoomFullOfCheese => room_full_of_cheese::RoomFullOfCheese.allowed(run),
         Event::SunkenStatue => sunken_statue::SunkenStatue.allowed(run),
         Event::TeaMaster => tea_master::TeaMaster.allowed(run),
@@ -176,6 +179,16 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
     }
 }
 
+/// `Player.HasEventPet`: a relic that adds a pet, or a Byrdonis Egg in the
+/// deck.
+fn has_event_pet(run: &impl EventView<V>) -> bool {
+    run.relics().any(adds_pet)
+        || run
+            .deck()
+            .iter()
+            .any(|card| card.card == Cards::Quest(QuestCard::ByrdonisEgg))
+}
+
 /// Whether any card in the deck takes `enchantment`.
 fn enchantable(run: &impl EventView<V>, enchantment: Enchantment) -> bool {
     run.deck().iter().any(|card| can_enchant(enchantment, card))
@@ -199,6 +212,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::LuminousChoir => State::LuminousChoir(luminous_choir::LuminousChoir.enter(run, rng)),
         Event::MorphicGrove => State::MorphicGrove(morphic_grove::MorphicGrove.enter(run, rng)),
         Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
+        Event::Pael => State::Pael(pael::Pael.enter(run, rng)),
         Event::RoomFullOfCheese => {
             State::RoomFullOfCheese(room_full_of_cheese::RoomFullOfCheese.enter(run, rng))
         }
@@ -247,6 +261,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::LuminousChoir(state) => luminous_choir::LuminousChoir.observe(state, run),
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.observe(state, run),
         State::Orobas(state) => orobas::Orobas.observe(state, run),
+        State::Pael(state) => pael::Pael.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
         State::SapphireSeed(state) => sapphire_seed::SapphireSeed.observe(state, run),
         State::SelfHelpBook(state) => self_help_book::SelfHelpBook.observe(state, run),
@@ -289,6 +304,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.choose(state, option, run, rng),
         State::Orobas(state) => orobas::Orobas.choose(state, option, run, rng),
+        State::Pael(state) => pael::Pael.choose(state, option, run, rng),
         State::RoomFullOfCheese(state) => {
             room_full_of_cheese::RoomFullOfCheese.choose(state, option, run, rng)
         }
