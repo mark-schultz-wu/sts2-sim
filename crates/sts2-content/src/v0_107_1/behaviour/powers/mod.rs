@@ -2677,6 +2677,17 @@ pub(crate) fn event_hook(
             count: amount,
             act: sts2_core::PileAct::Exhaust,
         }),
+        // `ThunderPower.AfterOrbEvoked`: its stack to each creature a
+        // Lightning's evoke hit that is still alive, unpowered. A fight here
+        // has one player, whose every orb is its owner's.
+        (
+            Power::ThunderPower,
+            PowerAmount::Counted(amount),
+            EventHook::OrbEvoked {
+                orb: Orb::LightningOrb,
+            },
+        ) if owner == CombatSide::Player => Some(HookEffect::DamageTargets(amount)),
+        (Power::ThunderPower, _, EventHook::OrbEvoked { .. }) => None,
         // `EntropyPower.AfterPlayerTurnStart`: its owner picks its stack of
         // cards from hand, and each is transformed at random.
         (

@@ -1782,6 +1782,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("counting orbs")
     }
 
+    /// `CombatEnergyCosts.NextInt(below)`: a cost drawn at random.
+    fn next_energy_cost(&mut self, _below: u8) -> V::Number {
+        unimplemented!("a random energy cost")
+    }
+
     /// `ResolveEnergyXValue` for the card being played: the X its play
     /// captured, which `Hook.ModifyXValue` can change.
     fn x_value(&self) -> V::Number {
@@ -2442,6 +2447,11 @@ pub enum EventHook<V: ContentVersion> {
         /// `oldPileType`, nothing for a card that came from no pile.
         from: Option<crate::Pile>,
     },
+    /// `AfterOrbEvoked`, once an orb's evoke has run. The creatures it hit
+    /// stay with the fight, which [`HookEffect::DamageTargets`] reaches.
+    OrbEvoked {
+        orb: V::Orb,
+    },
     /// `AfterCardExhausted`, once the card lies in the exhaust pile.
     CardExhausted {
         card: V::Card,
@@ -2704,6 +2714,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::CardExhausted { .. } => ModelHook::AfterCardExhausted,
+            EventHook::OrbEvoked { .. } => ModelHook::AfterOrbEvoked,
             EventHook::CardChangedPiles { .. } => ModelHook::AfterCardChangedPiles,
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
             EventHook::PowerAmountReceivedModified { .. } => {
@@ -3140,6 +3151,9 @@ pub enum HookEffect<V: ContentVersion> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
     },
+    /// `CreatureCmd.Damage` on the living creatures the event hit, from the
+    /// listener's owner, unpowered.
+    DamageTargets(V::Number),
     /// `CardPileCmd.Add(this, PileType.Hand)` for the card listening, from
     /// whichever pile it stands in.
     ToHand,
@@ -4296,7 +4310,9 @@ pub trait Rules: Hooks {
     fn orb_turn_start<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
 
     /// `OrbModel.Evoke`: what the orb does as it leaves.
-    fn orb_evoke<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+    ///
+    /// The creatures it hit, which `AfterOrbEvoked` names.
+    fn orb_evoke<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F) -> Opponents;
 
     /// `EnchantmentModel.OnPlay`, after each play of the card it is on.
     /// `status` is this copy's `EnchantmentModel.Status`, which the

@@ -1,8 +1,8 @@
 //! The potions every character's pool draws from.
 
 use sts2_core::{
-    Amount, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile, Played, PowerAmount,
-    RunStreamKinds as _, Scaling, Table as _,
+    Amount, CardTable as _, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile,
+    Played, PowerAmount, RunStreamKinds as _, Scaling, Table as _,
 };
 
 use super::super::super::V0_107_1 as V;
@@ -70,6 +70,10 @@ const RADIANT_ENERGY: Number = 1;
 const RADIANCE: Number = 3;
 /// `RegenPotion`'s `PowerVar<RegenPower>(5)`.
 const REGEN: Number = 5;
+/// `SneckoOil`'s `CardsVar(7)`.
+const SNECKO_OIL_CARDS: Number = 7;
+/// `SneckoOil.NextEnergyCost`'s bound: `CombatEnergyCosts.NextInt(4)`.
+const SNECKO_OIL_COSTS: u8 = 4;
 
 /// `VulnerablePotion`'s `PowerVar<VulnerablePower>(3)`.
 const VULNERABLE: Number = 3;
@@ -272,6 +276,23 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         }
         Potion::Duplicator => {
             fight.apply_to_actor(Power::DuplicationPower, PowerAmount::Counted(DUPLICATION));
+            Played::Done
+        }
+        // `AnyPlayer`: its cards drawn, then each card in hand whose printed
+        // energy cost is a number gets a cost drawn off `CombatEnergyCosts`
+        // for this turn or until played, in hand order.
+        Potion::SneckoOil => {
+            fight.draw(SNECKO_OIL_CARDS);
+            for card in fight.cards_in(Pile::Hand) {
+                if let sts2_core::Cost::Fixed(_) = fight.card_ident(card).card.cost() {
+                    let cost = fight.next_energy_cost(SNECKO_OIL_COSTS);
+                    fight.modify_card(
+                        card,
+                        Change::SetCost(CostPool::Energy, cost),
+                        Lasting::ThisTurnOrUntilPlayed,
+                    );
+                }
+            }
             Played::Done
         }
         // `HittableEnemies`, taken once: Weak on every one, then Vulnerable

@@ -2876,6 +2876,87 @@ pub fn combat_colorless_cards() -> &'static [Cards] {
     ]
 }
 
+/// The curse pool, unlocked.
+pub fn unlocked_curse_cards() -> &'static [Cards] {
+    &[
+        Cards::Curse(CurseCard::AscendersBane),
+        Cards::Curse(CurseCard::BadLuck),
+        Cards::Curse(CurseCard::Clumsy),
+        Cards::Curse(CurseCard::CurseOfTheBell),
+        Cards::Curse(CurseCard::Debt),
+        Cards::Curse(CurseCard::Decay),
+        Cards::Curse(CurseCard::Doubt),
+        Cards::Curse(CurseCard::Enthralled),
+        Cards::Curse(CurseCard::Folly),
+        Cards::Curse(CurseCard::Greed),
+        Cards::Curse(CurseCard::Guilty),
+        Cards::Curse(CurseCard::Injury),
+        Cards::Curse(CurseCard::Normality),
+        Cards::Curse(CurseCard::PoorSleep),
+        Cards::Curse(CurseCard::Regret),
+        Cards::Curse(CurseCard::Shame),
+        Cards::Curse(CurseCard::SporeMind),
+        Cards::Curse(CurseCard::Writhe),
+    ]
+}
+
+/// The curse pool as a combat generation effect sees it.
+pub fn combat_curse_cards() -> &'static [Cards] {
+    &[
+        Cards::Curse(CurseCard::BadLuck),
+        Cards::Curse(CurseCard::Clumsy),
+        Cards::Curse(CurseCard::CurseOfTheBell),
+        Cards::Curse(CurseCard::Debt),
+        Cards::Curse(CurseCard::Decay),
+        Cards::Curse(CurseCard::Doubt),
+        Cards::Curse(CurseCard::Enthralled),
+        Cards::Curse(CurseCard::Folly),
+        Cards::Curse(CurseCard::Greed),
+        Cards::Curse(CurseCard::Guilty),
+        Cards::Curse(CurseCard::Injury),
+        Cards::Curse(CurseCard::Normality),
+        Cards::Curse(CurseCard::PoorSleep),
+        Cards::Curse(CurseCard::Regret),
+        Cards::Curse(CurseCard::Shame),
+        Cards::Curse(CurseCard::SporeMind),
+        Cards::Curse(CurseCard::Writhe),
+    ]
+}
+
+/// The status pool, unlocked.
+pub fn unlocked_status_cards() -> &'static [Cards] {
+    &[
+        Cards::Status(StatusCard::Beckon),
+        Cards::Status(StatusCard::Burn),
+        Cards::Status(StatusCard::Dazed),
+        Cards::Status(StatusCard::Debris),
+        Cards::Status(StatusCard::FranticEscape),
+        Cards::Status(StatusCard::Infection),
+        Cards::Status(StatusCard::Wither),
+        Cards::Status(StatusCard::Slimed),
+        Cards::Status(StatusCard::Soot),
+        Cards::Status(StatusCard::Toxic),
+        Cards::Status(StatusCard::Void),
+        Cards::Status(StatusCard::Wound),
+    ]
+}
+
+/// The status pool as a combat generation effect sees it.
+pub fn combat_status_cards() -> &'static [Cards] {
+    &[
+        Cards::Status(StatusCard::Beckon),
+        Cards::Status(StatusCard::Burn),
+        Cards::Status(StatusCard::Dazed),
+        Cards::Status(StatusCard::Debris),
+        Cards::Status(StatusCard::Infection),
+        Cards::Status(StatusCard::Wither),
+        Cards::Status(StatusCard::Slimed),
+        Cards::Status(StatusCard::Toxic),
+        Cards::Status(StatusCard::Void),
+        Cards::Status(StatusCard::Wound),
+    ]
+}
+
 /// Cards eligible for an ordinary room reward, split by rarity.
 ///
 /// Each slice keeps the game's pool order, so an index into one means
