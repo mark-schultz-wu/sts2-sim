@@ -27,6 +27,8 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Spa
         Encounter::RubyRaidersNormal => ruby_raiders_normal(rng),
         Encounter::SlitheringStranglerNormal => slithering_strangler_normal(rng),
         Encounter::FlyconidNormal => flyconid_normal(rng),
+        Encounter::BowlbugsWeak => bowlbugs_weak(rng),
+        Encounter::BowlbugsNormal => bowlbugs_normal(rng),
         encounter => unimplemented!("the roster {encounter:?} rolls"),
     }
 }
@@ -79,6 +81,43 @@ fn slimes_weak<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
         .into_iter()
         .map(Spawned::new)
         .collect()
+}
+
+/// `BowlbugsWeak`. The Rock, then one of the Egg and the Nectar by
+/// `NextItem`.
+fn bowlbugs_weak<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    let bug_at: usize = num_traits::cast(
+        rng.next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two bugs")),
+    )
+    .expect("a two-way draw is zero or one");
+    [
+        Monster::BowlbugRock,
+        [Monster::BowlbugEgg, Monster::BowlbugNectar][bug_at],
+    ]
+    .into_iter()
+    .map(Spawned::new)
+    .collect()
+}
+
+/// `BowlbugsNormal`. The Rock, then two workers by `NextItem`, each drawn
+/// from those `_workerValidCounts` still allows. Each worker is allowed once,
+/// so the second draw is over the two the first left, in the table's order.
+fn bowlbugs_normal<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    let mut workers = vec![
+        Monster::BowlbugEgg,
+        Monster::BowlbugSilk,
+        Monster::BowlbugNectar,
+    ];
+    let mut roster = vec![Monster::BowlbugRock];
+    for _ in 0..2 {
+        let count: R::Int = num_traits::cast(workers.len()).expect("a few workers");
+        let at: usize = num_traits::cast(
+            rng.next_int(Bound::try_new(count).expect("a worker is still allowed")),
+        )
+        .expect("a draw below the count is an index");
+        roster.push(workers.remove(at));
+    }
+    roster.into_iter().map(Spawned::new).collect()
 }
 
 /// `FlyconidNormal`. One medium slime by `NextItem`, then the Flyconid.

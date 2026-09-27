@@ -1,0 +1,8 @@
+# `BowlbugsNormal` fields the Rock, then two workers by `NextItem`. Each
+# worker is allowed once, so the second draw is over the two the first
+# left. This seed draws the Egg, then the Silk.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"BOWLBUGS_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -1,0 +1,12 @@
+# `BowlbugsWeak` fields the Rock, then one of the Egg and the Nectar by
+# `NextItem`. This seed draws the Nectar. Three Defends block the Rock's
+# headbutt in full, so Imbalanced sets it off balance and it is stunned. It
+# spends turn two dizzy, then headbutts again.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"BOWLBUGS_WEAK"}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

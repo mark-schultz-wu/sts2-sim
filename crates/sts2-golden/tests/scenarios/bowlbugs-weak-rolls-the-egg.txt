@@ -1,0 +1,6 @@
+# On this seed `BowlbugsWeak` draws the Egg beside the Rock. The Egg bites
+# and blocks every turn, and enters with no power of its own.
+{"cmd":"start","seed":"0RACLE4","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"BOWLBUGS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
