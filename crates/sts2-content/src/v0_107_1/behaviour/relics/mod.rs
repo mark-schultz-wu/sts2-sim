@@ -124,6 +124,7 @@ mod storybook;
 mod strawberry;
 mod strike_dummy;
 mod sword_of_stone;
+mod tiny_mailbox;
 mod toasty_mittens;
 mod touch_of_orobas;
 mod tungsten_rod;
@@ -289,6 +290,7 @@ pub enum State {
     PrayerWheel,
     WhiteStar,
     RedSkull(red_skull::State),
+    TinyMailbox,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -501,6 +503,7 @@ pub(crate) fn event_hook(
         State::PrayerWheel => prayer_wheel::event_hook(hook, asked),
         State::WhiteStar => white_star::event_hook(hook, asked),
         State::RedSkull(state) => red_skull::event_hook(state, hook, asked),
+        State::TinyMailbox => tiny_mailbox::event_hook(hook, asked),
     }
 }
 
@@ -653,7 +656,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::RippleBasin(_)
         | State::PrayerWheel
         | State::WhiteStar
-        | State::RedSkull(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::RedSkull(_)
+        | State::TinyMailbox => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -796,6 +800,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PrayerWheel => State::PrayerWheel,
             Relic::WhiteStar => State::WhiteStar,
             Relic::RedSkull => State::RedSkull(red_skull::State::default()),
+            Relic::TinyMailbox => State::TinyMailbox,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }

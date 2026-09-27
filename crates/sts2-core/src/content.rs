@@ -2760,6 +2760,11 @@ pub enum EventHook<V: ContentVersion> {
     RestSiteHeal {
         mimicked: bool,
     },
+    /// `TryModifyRestSiteHealRewards`, once `AfterRestSiteHeal` has run. A
+    /// listener answers with the rewards it adds.
+    RestSiteHealRewards {
+        mimicked: bool,
+    },
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won, in a room of this type.
     CombatVictory {
@@ -3124,6 +3129,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
             EventHook::RestSiteHeal { .. } => ModelHook::AfterRestSiteHeal,
+            EventHook::RestSiteHealRewards { .. } => ModelHook::TryModifyRestSiteHealRewards,
             EventHook::CombatVictory { .. } => ModelHook::AfterCombatVictory,
             EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
             EventHook::PlayerTurnStartLate { .. } => ModelHook::AfterPlayerTurnStartLate,
