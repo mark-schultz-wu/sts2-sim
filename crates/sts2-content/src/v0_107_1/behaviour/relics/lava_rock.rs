@@ -24,6 +24,7 @@ pub(super) fn event_hook(
     if let EventHook::ModifyRewards {
         room: Some(RoomType::Boss),
         act: 0,
+        ..
     } = hook
         && !state.triggered
     {

@@ -1,0 +1,27 @@
+# `EternalFeather` heals three for every whole five cards of the deck as
+# a rest site is entered. Thirteen cards heal six.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BLOODLETTING"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"grant","card":"INJURY"}
+{"cmd":"grant","card":"GREED"}
+{"cmd":"grant","card":"DOUBT"}
+{"cmd":"grant","relic":"ETERNAL_FEATHER"}
+{"cmd":"enter_room","type":"RestSite"}

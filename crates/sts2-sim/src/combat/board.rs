@@ -639,6 +639,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             dealer,
                             powered,
                             card: card.and(self.playing),
+                            player: self.live.player().id,
                         },
                     );
                     self.after_hit(asked);
@@ -1295,7 +1296,14 @@ impl<'a, V: Rules> Board<'a, V> {
                 },
             );
         }
+        // `Hook.AfterModifyingHpLostAfterOsty` over the modifiers, which does
+        // nothing for one that does not override it.
         for (holder, power) in modifiers {
+            if !sts2_core::PowerTable::overrides(power)
+                .contains(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)
+            {
+                continue;
+            }
             let Some(at) = self
                 .live
                 .powers
@@ -1378,6 +1386,11 @@ impl<'a, V: Rules> Board<'a, V> {
     /// each on the creature carrying it.
     fn after_hit(&mut self, asked: impl IntoIterator<Item = (Listener<V>, HookEffect<V>)>) {
         for (listener, effect) in asked {
+            // `CardPileCmd.Draw` for the relic's owner, the player.
+            if let (Listener::Relic { .. }, HookEffect::Draw(count)) = (listener, effect) {
+                sts2_core::Fight::draw(self, count);
+                continue;
+            }
             let Listener::Power {
                 owner, power: this, ..
             } = listener
@@ -3231,20 +3244,22 @@ pub(super) fn draw_pausing<V: Rules>(
                 // enchantment checks before it draws.
                 (Listener::Card { id }, HookEffect::RandomSelfCost { below }) => {
                     if live.cards.find(Pile::Hand, id).is_some() {
-                        let bound = sts2_core::rng::Bound::try_new(
-                            num_traits::NumCast::from(below)
-                                .expect("a cost bound fits the game's RNG integer"),
-                        )
-                        .expect("a random cost has somewhere to land");
-                        let cost = rngs.energy_costs.next_int(bound);
-                        let cost = num_traits::NumCast::from(cost)
-                            .expect("an energy cost fits a game number");
+                        let cost = random_cost::<V>(&mut rngs, below);
                         live.modify_self(
                             id,
                             sts2_core::Change::SetCost(sts2_core::CostPool::Energy, cost),
                             sts2_core::Lasting::ThisFight,
                         );
                     }
+                }
+                // Wherever the card stands.
+                (_, HookEffect::RandomCost { card, below }) => {
+                    let cost = random_cost::<V>(&mut rngs, below);
+                    live.modify_self(
+                        card,
+                        sts2_core::Change::SetCost(sts2_core::CostPool::Energy, cost),
+                        sts2_core::Lasting::ThisFight,
+                    );
                 }
                 (_, effect) => rest.push(effect),
             }
@@ -3261,6 +3276,16 @@ pub(super) fn draw_pausing<V: Rules>(
         ended = ended.or(board.ended);
     }
     Drawn::Done(ended)
+}
+
+/// `CombatEnergyCosts.NextInt(below)`, as a cost.
+fn random_cost<V: Rules>(rngs: &mut CombatRngs<'_>, below: u8) -> V::Number {
+    let bound = sts2_core::rng::Bound::try_new(
+        num_traits::NumCast::from(below).expect("a cost bound fits the game's RNG integer"),
+    )
+    .expect("a random cost has somewhere to land");
+    let cost = rngs.energy_costs.next_int(bound);
+    num_traits::NumCast::from(cost).expect("an energy cost fits a game number")
 }
 
 #[cfg(test)]

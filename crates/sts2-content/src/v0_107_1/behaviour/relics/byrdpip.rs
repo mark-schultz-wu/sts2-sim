@@ -15,7 +15,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             from: Cards::Quest(QuestCard::ByrdonisEgg),
             into: Cards::Event(EventCard::ByrdSwoop),
         }),
-        EventHook::CombatStarting => asked.push(HookEffect::AddPet(Monster::Byrdpip)),
+        EventHook::CombatStarting { .. } => asked.push(HookEffect::AddPet(Monster::Byrdpip)),
         hook => unimplemented!("what Byrdpip does for {hook:?}"),
     }
 }

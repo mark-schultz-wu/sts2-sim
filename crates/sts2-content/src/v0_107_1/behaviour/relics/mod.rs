@@ -13,6 +13,7 @@
 
 mod akabeko;
 mod alchemical_coffer;
+mod amethyst_aubergine;
 mod anchor;
 mod arcane_scroll;
 mod archaic_tooth;
@@ -32,6 +33,7 @@ mod bronze_scales;
 mod burning_blood;
 mod byrdpip;
 mod calling_bell;
+mod centennial_puzzle;
 mod chosen_cheese;
 mod cracked_core;
 mod cursed_pearl;
@@ -40,12 +42,14 @@ mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
 mod empty_cage;
+mod eternal_feather;
 mod fake_anchor;
 mod fake_blood_vial;
 mod fake_happy_flower;
 mod fake_lees_waffle;
 mod fake_mango;
 mod fake_orichalcum;
+mod fake_snecko_eye;
 mod fake_strike_dummy;
 mod fake_venerable_tea_set;
 mod festive_popper;
@@ -59,11 +63,13 @@ mod horn_cleat;
 mod infused_core;
 mod intimidating_helmet;
 mod juzu_bracelet;
+mod lantern;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
 mod lost_coffer;
 mod lost_wisp;
+mod lucky_fysh;
 mod meal_ticket;
 mod mercury_hourglass;
 mod mr_struggles;
@@ -77,6 +83,8 @@ mod paels_flesh;
 mod paels_horn;
 mod paels_tears;
 mod pandoras_box;
+mod pantograph;
+mod pen_nib;
 mod permafrost;
 mod phial_holster;
 mod phylactery_unbound;
@@ -86,6 +94,7 @@ mod pomander;
 mod precarious_shears;
 mod precise_scissors;
 mod radiant_pearl;
+mod red_mask;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod runic_pyramid;
@@ -231,6 +240,15 @@ pub enum State {
     BagOfPreparation,
     WingedBoots(winged_boots::State),
     YummyCookie,
+    RedMask,
+    Lantern,
+    LuckyFysh,
+    AmethystAubergine,
+    EternalFeather,
+    Pantograph,
+    FakeSneckoEye,
+    CentennialPuzzle(centennial_puzzle::State),
+    PenNib(pen_nib::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -412,6 +430,15 @@ pub(crate) fn event_hook(
         },
         State::WingedBoots(state) => winged_boots::event_hook(state, hook),
         State::YummyCookie => yummy_cookie::event_hook(hook, asked),
+        State::RedMask => red_mask::event_hook(hook, asked),
+        State::Lantern => lantern::event_hook(hook, asked),
+        State::LuckyFysh => lucky_fysh::event_hook(hook, asked),
+        State::AmethystAubergine => amethyst_aubergine::event_hook(hook, asked),
+        State::EternalFeather => eternal_feather::event_hook(hook, asked),
+        State::Pantograph => pantograph::event_hook(hook, asked),
+        State::FakeSneckoEye => fake_snecko_eye::event_hook(hook, asked),
+        State::CentennialPuzzle(state) => centennial_puzzle::event_hook(state, hook, asked),
+        State::PenNib(state) => pen_nib::event_hook(state, hook),
     }
 }
 
@@ -450,6 +477,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::TungstenRod => tungsten_rod::modify_hook(hook),
         State::RingOfTheDrake => ring_of_the_drake::modify_hook(hook),
         State::InfusedCore => infused_core::modify_hook(hook),
+        State::PenNib(state) => pen_nib::modify_hook(state, hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -535,7 +563,15 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::WarPaint
         | State::JuzuBracelet
         | State::WingedBoots(_)
-        | State::YummyCookie => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::YummyCookie
+        | State::RedMask
+        | State::Lantern
+        | State::LuckyFysh
+        | State::AmethystAubergine
+        | State::EternalFeather
+        | State::Pantograph
+        | State::FakeSneckoEye
+        | State::CentennialPuzzle(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -649,6 +685,15 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BagOfPreparation => State::BagOfPreparation,
             Relic::WingedBoots => State::WingedBoots(winged_boots::State::default()),
             Relic::YummyCookie => State::YummyCookie,
+            Relic::RedMask => State::RedMask,
+            Relic::Lantern => State::Lantern,
+            Relic::LuckyFysh => State::LuckyFysh,
+            Relic::AmethystAubergine => State::AmethystAubergine,
+            Relic::EternalFeather => State::EternalFeather,
+            Relic::Pantograph => State::Pantograph,
+            Relic::FakeSneckoEye => State::FakeSneckoEye,
+            Relic::CentennialPuzzle => State::CentennialPuzzle(centennial_puzzle::State::default()),
+            Relic::PenNib => State::PenNib(pen_nib::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -675,6 +720,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),
                 State::PollinousCore(state) => pollinous_core::display_amount(state),
                 State::PaelsFlesh(state) => paels_flesh::display_amount(state),
+                State::PenNib(state) => pen_nib::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }

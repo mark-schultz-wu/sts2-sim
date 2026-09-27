@@ -1,0 +1,7 @@
+# Buffer on the player hears `AfterModifyingHpLostAfterOsty`, so each hit runs
+# that pass over the powers that changed it. Slippery caps the Strike on the
+# Vantom at one, and it does not override the pass, so it is not asked.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"VANTOM_BOSS"}
+{"cmd":"power","power":"BUFFER_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":0,"target":1}
