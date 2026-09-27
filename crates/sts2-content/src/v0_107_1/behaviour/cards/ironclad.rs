@@ -85,6 +85,31 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         IroncladCard::Pillage => pillage(fight),
         IroncladCard::TrueGrit => true_grit(fight),
         IroncladCard::Dismantle => dismantle(fight),
+        // `Hemokinesis`: its `HpLoss` off its owner, unblockable, then its
+        // damage to the target.
+        IroncladCard::Hemokinesis => {
+            fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
+            let target = fight.target();
+            strike(fight, target);
+            Played::Done
+        }
+        // `Breakthrough`: its `HpLoss` off its owner, unblockable, then its
+        // damage to every enemy.
+        IroncladCard::Breakthrough => {
+            fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
+            fight.attack(Scaling::Dynamic, |fight| {
+                for target in fight.opponents() {
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
+            Played::Done
+        }
         // `BloodWall`: its `HpLoss` off its owner, unblockable, then its
         // block.
         IroncladCard::BloodWall => {

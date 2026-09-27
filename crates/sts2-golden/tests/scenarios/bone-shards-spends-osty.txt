@@ -1,0 +1,5 @@
+# Bone Shards has Osty hit every enemy, gives its block, then kills Osty.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"BONE_SHARDS"}
+{"cmd":"play_card","index":5}

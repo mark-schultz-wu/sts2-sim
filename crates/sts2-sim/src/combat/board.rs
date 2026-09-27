@@ -1934,6 +1934,8 @@ pub(crate) fn var<V: Rules>(
                 osty_max_hp,
                 draw: live.cards.len(Pile::Draw),
                 exhaust: live.cards.len(Pile::Exhaust),
+                hand_besides: live.cards.len(Pile::Hand)
+                    - usize::from(live.cards.find(Pile::Hand, held.id).is_some()),
                 enemy_powers: &enemy_powers,
                 strikes: live.cards.count_all(|face| {
                     sts2_core::CardTable::tagged(

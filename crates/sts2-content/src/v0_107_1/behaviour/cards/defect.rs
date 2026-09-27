@@ -119,6 +119,11 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         }
         DefectCard::Compact => compact(fight),
         DefectCard::Ftl => ftl(fight),
+        // `Capacitor`: its `Repeat` more orb slots.
+        DefectCard::Capacitor => {
+            fight.add_orb_slots(fight.var(CardVar::Repeat));
+            Played::Done
+        }
         // `Scavenge`: one card of the hand exhausted, then energy next turn.
         DefectCard::Scavenge => Played::Asking {
             pile: Pile::Hand,

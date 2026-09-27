@@ -85,6 +85,7 @@ mod mr_struggles;
 mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
+mod nunchaku;
 mod nutritious_oyster;
 mod orichalcum;
 mod paels_blood;
@@ -273,6 +274,7 @@ pub enum State {
     BoneFlute,
     HappyFlower(happy_flower::State),
     Kunai(kunai::State),
+    Nunchaku(nunchaku::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -477,6 +479,7 @@ pub(crate) fn event_hook(
         State::BoneFlute => bone_flute::event_hook(hook, asked),
         State::HappyFlower(state) => happy_flower::event_hook(state, hook, asked),
         State::Kunai(state) => kunai::event_hook(state, hook, asked),
+        State::Nunchaku(state) => nunchaku::event_hook(state, hook, asked),
     }
 }
 
@@ -621,7 +624,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DataDisk
         | State::BoneFlute
         | State::HappyFlower(_)
-        | State::Kunai(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Kunai(_)
+        | State::Nunchaku(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -756,6 +760,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BoneFlute => State::BoneFlute,
             Relic::HappyFlower => State::HappyFlower(happy_flower::State::default()),
             Relic::Kunai => State::Kunai(kunai::State::default()),
+            Relic::Nunchaku => State::Nunchaku(nunchaku::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -787,6 +792,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::Nunchaku(state) => nunchaku::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }

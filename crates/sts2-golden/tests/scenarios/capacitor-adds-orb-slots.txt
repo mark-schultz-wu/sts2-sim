@@ -1,0 +1,5 @@
+# Capacitor gives two more orb slots.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CAPACITOR"}
+{"cmd":"play_card","index":5}

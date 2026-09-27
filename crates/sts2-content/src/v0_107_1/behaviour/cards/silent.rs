@@ -35,6 +35,30 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `BouncingFlask`: its Poison on an enemy drawn off `CombatTargets`,
+        // its `Repeat` times.
+        SilentCard::BouncingFlask => {
+            let poison = PowerAmount::Counted(fight.var(CardVar::PoisonPower));
+            for _ in 0..fight.var(CardVar::Repeat) {
+                if let Some(target) = fight.random_opponent() {
+                    fight.apply_power(target, Power::PoisonPower, poison);
+                }
+            }
+            Played::Done
+        }
+        // `BubbleBubble`: its Poison on the target, where it already carries
+        // Poison.
+        SilentCard::BubbleBubble => {
+            let target = fight.target();
+            let poisoned = fight.creatures().any(|creature| {
+                creature.id() == target && creature.power(Power::PoisonPower).is_some()
+            });
+            if poisoned {
+                let poison = PowerAmount::Counted(fight.var(CardVar::PoisonPower));
+                fight.apply_power(target, Power::PoisonPower, poison);
+            }
+            Played::Done
+        }
         // `Adrenaline`: its energy, then its `Cards` drawn.
         SilentCard::Adrenaline => {
             fight.modify_energy(fight.var(CardVar::Energy));
