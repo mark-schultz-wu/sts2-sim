@@ -72,6 +72,23 @@ pub(crate) fn starting_powers(
     }
 }
 
+/// Powers a monster's `AfterAddedToRoom` applies to each of its opponents.
+/// The Rocket surrounds the player.
+pub(crate) fn starting_opponent_powers(
+    monster: Monster,
+) -> Vec<(
+    super::super::generated::powers::Power,
+    sts2_core::PowerAmount<Number>,
+)> {
+    match monster {
+        Monster::Rocket => vec![(
+            super::super::generated::powers::Power::SurroundedPower,
+            sts2_core::PowerAmount::Counted(1),
+        )],
+        _ => Vec::new(),
+    }
+}
+
 /// What `AfterAddedToRoom` writes over the health a monster was built with.
 ///
 /// Filed by act beside the moves, the way the starting powers are.
@@ -170,6 +187,12 @@ pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
             | Monster::KinPriest,
             EventHook::AfterDeath { .. },
         ) => {}
+        // The Kaiser Crab's arms move its background as their health falls,
+        // and move the music on as one dies.
+        (
+            Monster::Crusher | Monster::Rocket,
+            EventHook::CurrentHpChanged { .. } | EventHook::BeforeDeath { .. },
+        ) => {}
         (monster, hook) => unimplemented!("what {monster:?} does for {hook:?}"),
     }
 }
@@ -198,6 +221,8 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::ToughEgg
         | Monster::TheObscura
         | Monster::Entomancer
+        | Monster::Crusher
+        | Monster::Rocket
         | Monster::BowlbugRock
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront

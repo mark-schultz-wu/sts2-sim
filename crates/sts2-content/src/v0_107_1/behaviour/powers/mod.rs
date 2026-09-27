@@ -76,6 +76,11 @@ pub enum State {
     CurlUp {
         played: Option<sts2_core::CardId<V>>,
     },
+    /// `SurroundedPower.Facing`: whether its owner faces left, where it
+    /// starts facing right.
+    Surrounded {
+        facing_left: bool,
+    },
 }
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
@@ -105,6 +110,7 @@ impl sts2_core::PowerModel<V> for State {
                 cards_left: AUTOMATION_CARDS,
             },
             Power::CurlUpPower => Self::CurlUp { played: None },
+            Power::SurroundedPower => Self::Surrounded { facing_left: false },
             power => Self::Stateless(power),
         }
     }
@@ -124,6 +130,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Gigantification { .. } => Power::GigantificationPower,
             Self::Automation { .. } => Power::AutomationPower,
             Self::CurlUp { .. } => Power::CurlUpPower,
+            Self::Surrounded { .. } => Power::SurroundedPower,
         }
     }
 
@@ -186,6 +193,29 @@ impl State {
                 *counted
             }
             _ => 0,
+        }
+    }
+
+    /// `SurroundedPower.Facing`, as whether it faces left.
+    fn facing_left(&self) -> bool {
+        match self {
+            Self::Surrounded { facing_left } => *facing_left,
+            state => unreachable!("facing state for {:?}", state.power()),
+        }
+    }
+
+    /// `SurroundedPower.UpdateDirection`: facing right, a target with
+    /// Back Attack Left turns its owner left, and the other way round.
+    fn turn_toward(&mut self, fight: &dyn sts2_core::FightView<V>, target: sts2_core::CombatId) {
+        let Self::Surrounded { facing_left } = self else {
+            unreachable!("facing state for {:?}", self.power())
+        };
+        let behind = match *facing_left {
+            false => Power::BackAttackLeftPower,
+            true => Power::BackAttackRightPower,
+        };
+        if fight.power(target, behind).is_some() {
+            *facing_left = !*facing_left;
         }
     }
 
@@ -333,6 +363,15 @@ const PHROG: i32 = 25;
 
 /// `PaperKrane.ModifyWeakMultiplier`'s `0.15m`, in hundredths.
 const KRANE: i32 = 15;
+
+/// `SurroundedPower`'s `1.5m` on a hit from behind.
+const SURROUNDED: f64 = 1.5;
+
+/// `CrabRagePower`'s `PowerVar<StrengthPower>(6m)`.
+const CRAB_RAGE: Number = 6;
+
+/// `CrabRagePower`'s `BlockVar(99m, ValueProp.Unpowered)`.
+const CRAB_BLOCK: Number = 99;
 
 /// `FlutterPower`'s `DamageDecrease` of 50, as the share left.
 const FLUTTER: f64 = 0.5;
@@ -671,6 +710,28 @@ pub(crate) fn modify_hook(
             },
         ) if target == Some(holder) => Modify::Scaled(FLUTTER),
         (Power::FlutterPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
+        // `SurroundedPower.ModifyDamageMultiplicative`: half again on a hit
+        // on its owner from behind, which is from a dealer with Back Attack
+        // Left while it faces right, and the other way round.
+        (
+            Power::SurroundedPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                dealer: Some(dealer),
+                ..
+            },
+        ) if target == Some(holder) => {
+            let behind = match state.facing_left() {
+                false => Power::BackAttackLeftPower,
+                true => Power::BackAttackRightPower,
+            };
+            match fight.power(dealer, behind) {
+                Some(_) => Modify::Scaled(SURROUNDED),
+                None => Modify::Nothing,
+            }
+        }
+        (Power::SurroundedPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `TaintedPower.ModifyDamageAdditive`: its stack onto a powered attack
         // on its owner.
         (
@@ -1818,6 +1879,65 @@ pub(crate) fn event_hook(
             EventHook::DamageReceived { target, .. },
         ) if target == holder => unimplemented!("an endless Personal Hive"),
         (Power::PersonalHivePower, _, EventHook::DamageReceived { .. }) => None,
+        // `SurroundedPower.BeforeCardPlayed` and `BeforePotionUsed`: its owner
+        // turns toward a target behind it. A fight here has one player, whose
+        // every card and potion is its owner's.
+        (
+            Power::SurroundedPower,
+            _,
+            EventHook::CardPlaying {
+                target: Some(target),
+                ..
+            }
+            | EventHook::PotionUsing {
+                target: Some(target),
+            },
+        ) => {
+            state.turn_toward(fight, target);
+            None
+        }
+        (Power::SurroundedPower, _, EventHook::CardPlaying { .. } | EventHook::PotionUsing { .. }) => {
+            None
+        }
+        // `SurroundedPower.AfterDeath`: once an enemy dies, its owner turns
+        // toward the first enemy left where every one left stands on the
+        // same side of it.
+        (
+            Power::SurroundedPower,
+            _,
+            EventHook::AfterDeath {
+                side,
+                removal_prevented: false,
+                ..
+            },
+        ) if side != owner => {
+            let hittable = fight.living_opponents(holder);
+            let all = |power| hittable.iter().all(|&enemy| fight.power(enemy, power).is_some());
+            if let Some(&first) = hittable.first()
+                && (all(Power::BackAttackLeftPower) || all(Power::BackAttackRightPower))
+            {
+                state.turn_toward(fight, first);
+            }
+            None
+        }
+        (Power::SurroundedPower, _, EventHook::AfterDeath { .. }) => None,
+        // `CrabRagePower.AfterDeath`: when another on its side dies, six
+        // Strength, ninety-nine unpowered block, and then it goes.
+        (
+            Power::CrabRagePower,
+            _,
+            EventHook::AfterDeath {
+                creature, side, ..
+            },
+        ) if creature != holder && side == owner => {
+            asked.extend([
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(CRAB_RAGE)),
+                HookEffect::GainBlock(CRAB_BLOCK),
+                HookEffect::Remove,
+            ]);
+            return;
+        }
+        (Power::CrabRagePower, _, EventHook::AfterDeath { .. }) => None,
         // `VitalSparkPower.BeforeCombatStart`: Tainted by its stack on every
         // Skill the player holds.
         (Power::VitalSparkPower, _, EventHook::CombatStarting) => Some(HookEffect::Afflict {

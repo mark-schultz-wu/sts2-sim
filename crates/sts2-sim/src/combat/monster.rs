@@ -149,6 +149,19 @@ pub(crate) fn initialize<V: Rules>(
         for (power, amount) in V::monster_starting_powers(monster, ascension, side) {
             powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
         }
+        let opponents: SmallVec<[CombatId; 2]> = creatures
+            .iter()
+            .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
+            .map(|creature| creature.id)
+            .collect();
+        for (power, amount) in V::monster_starting_opponent_powers(monster, ascension) {
+            for &opponent in &opponents {
+                powers.push(
+                    opponent,
+                    HeldPower::new(power, Stacked::from(amount), Some(id)),
+                );
+            }
+        }
     }
 
     // `AfterCreatureAdded`, which runs once every creature the encounter built

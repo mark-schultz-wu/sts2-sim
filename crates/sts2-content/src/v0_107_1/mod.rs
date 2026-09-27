@@ -679,6 +679,13 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::monsters::starting_powers(monster, ascension, side).into_iter()
     }
 
+    fn monster_starting_opponent_powers(
+        monster: Self::Monster,
+        _ascension: Self::AscensionLevel,
+    ) -> impl Iterator<Item = (Self::Power, sts2_core::PowerAmount<Self::Number>)> {
+        behaviour::monsters::starting_opponent_powers(monster).into_iter()
+    }
+
     fn computed_card_target(
         card: Self::Card,
         powers: &[sts2_core::Stack<Self>],
