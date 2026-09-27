@@ -46,6 +46,18 @@ pub trait EventBehavior<V: ContentVersion> {
     ) {
     }
 
+    /// How many relics the event pulls from the front of the player's bag
+    /// as it opens, after [`EventBehavior::set_up`]. Each is at a rarity
+    /// rolled off the player's rewards stream, as `PullNextRelicFromFront`
+    /// rolls it.
+    fn relics_pulled(&self, _state: &Self::State) -> usize {
+        0
+    }
+
+    /// The relics [`EventBehavior::relics_pulled`] asked for, in the order
+    /// pulled.
+    fn hand_pulled_relics(&self, _state: &mut Self::State, _relics: &[V::Relic]) {}
+
     /// The page as it stands. Whether the event has finished is the run's,
     /// which [`HookEffect::FinishEvent`](crate::HookEffect::FinishEvent)
     /// sets, and a finished room offers nothing.

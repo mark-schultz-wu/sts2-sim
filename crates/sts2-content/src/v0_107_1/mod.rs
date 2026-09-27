@@ -759,6 +759,14 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::set_up(state, run, rewards);
     }
 
+    fn event_relics_pulled(state: &Self::EventState) -> usize {
+        behaviour::events::relics_pulled(state)
+    }
+
+    fn hand_event_pulled_relics(state: &mut Self::EventState, relics: &[Self::Relic]) {
+        behaviour::events::hand_pulled_relics(state, relics);
+    }
+
     fn event_holds_potions(state: &Self::EventState) -> bool {
         behaviour::events::holds_potions(state)
     }

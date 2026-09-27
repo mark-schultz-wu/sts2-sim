@@ -16,6 +16,7 @@ mod anchor;
 mod arcane_scroll;
 mod archaic_tooth;
 mod biiig_hug;
+mod bing_bong;
 mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
@@ -24,6 +25,7 @@ mod byrdpip;
 mod chosen_cheese;
 mod cracked_core;
 mod cursed_pearl;
+mod daughter_of_the_wind;
 mod divine_right;
 mod dollys_mirror;
 mod fishing_rod;
@@ -32,12 +34,14 @@ mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
 mod hefty_tablet;
+mod intimidating_helmet;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
 mod lost_coffer;
 mod lost_wisp;
 mod mercury_hourglass;
+mod mr_struggles;
 mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
@@ -117,6 +121,10 @@ pub enum State {
     LostCoffer,
     LostWisp,
     MercuryHourglass,
+    DaughterOfTheWind,
+    MrStruggles,
+    BingBong,
+    IntimidatingHelmet,
     NeowsTalisman,
     NeowsTorment,
     NewLeaf,
@@ -142,6 +150,36 @@ pub enum State {
     VeryHotCocoa,
     WingedBoots(winged_boots::State),
     YummyCookie,
+}
+
+/// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
+/// pet, and neither a starter, an event relic nor an ancient's. Nothing here
+/// melts a relic.
+///
+/// # Panics
+///
+/// A relic whose model decides for itself whether it is used up, or whether
+/// it does something on pickup or brings a pet.
+pub(crate) fn tradable(relic: Relic) -> bool {
+    use super::super::generated::relics::{RelicFlag, RelicRarity};
+
+    let data = relic.data();
+    if matches!(
+        data.rarity,
+        RelicRarity::Starter | RelicRarity::Event | RelicRarity::Ancient
+    ) {
+        return false;
+    }
+    [
+        RelicFlag::UsedUp,
+        RelicFlag::UponPickup,
+        RelicFlag::SpawnsPets,
+    ]
+    .into_iter()
+    .all(|flag| match data.flags.get(flag) {
+        Field::Constant(set) => !set,
+        Field::Computed => unimplemented!("whether {relic:?} is {flag:?}"),
+    })
 }
 
 /// `RelicModel.AddsPet`, which two relics override.
@@ -190,6 +228,10 @@ pub(crate) fn event_hook(
         State::LostCoffer => lost_coffer::event_hook(hook, asked),
         State::LostWisp => lost_wisp::event_hook(hook, asked),
         State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
+        State::DaughterOfTheWind => daughter_of_the_wind::event_hook(hook, asked),
+        State::MrStruggles => mr_struggles::event_hook(hook, asked),
+        State::BingBong => bing_bong::event_hook(hook, asked),
+        State::IntimidatingHelmet => intimidating_helmet::event_hook(hook, asked),
         State::NeowsTalisman => neows_talisman::event_hook(hook, asked),
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
         State::NewLeaf => new_leaf::event_hook(hook, asked),
@@ -283,6 +325,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LostCoffer
         | State::LostWisp
         | State::MercuryHourglass
+        | State::DaughterOfTheWind
+        | State::MrStruggles
+        | State::BingBong
+        | State::IntimidatingHelmet
         | State::NeowsTalisman
         | State::NeowsTorment
         | State::NewLeaf
@@ -341,6 +387,10 @@ impl sts2_core::RelicModel<V> for State {
             Relic::LostCoffer => State::LostCoffer,
             Relic::LostWisp => State::LostWisp,
             Relic::MercuryHourglass => State::MercuryHourglass,
+            Relic::DaughterOfTheWind => State::DaughterOfTheWind,
+            Relic::MrStruggles => State::MrStruggles,
+            Relic::BingBong => State::BingBong,
+            Relic::IntimidatingHelmet => State::IntimidatingHelmet,
             Relic::NeowsTalisman => State::NeowsTalisman,
             Relic::NeowsTorment => State::NeowsTorment,
             Relic::NewLeaf => State::NewLeaf,

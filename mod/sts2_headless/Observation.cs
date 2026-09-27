@@ -279,6 +279,17 @@ public static class Observation
     private static string? Words(LocString? loc) =>
         loc != null && loc.Exists() ? loc.GetFormattedText() : null;
 
+    /// <summary>The relic whose own title an event option carries as its title.</summary>
+    /// <remarks>
+    /// Doll Room offers each doll this way. It keys the option by the relic's
+    /// display name rather than a localisation key, and never calls
+    /// <c>WithRelic</c>. The title is the one handle on which relic it is.
+    /// </remarks>
+    private static RelicModel? TitledRelic(LocString? title) =>
+        title is { LocTable: "relics" }
+            ? ModelDb.AllRelics.FirstOrDefault(r => r.Title.LocEntryKey == title.LocEntryKey)
+            : null;
+
     /// <summary>An event's prose, prepared the way the event room prepares it.</summary>
     /// <remarks>
     /// An event's text is not a fixed string. <em>Gain <c>{MaxHp}</c> Max HP</em>
@@ -854,7 +865,7 @@ public static class Observation
                         ["locked"] = o.IsLocked,
                         ["proceed"] = o.IsProceed,
                         ["chosen"] = o.WasChosen,
-                        ["relic"] = o.Relic?.Id.Entry,
+                        ["relic"] = (o.Relic ?? TitledRelic(o.Title))?.Id.Entry,
                     }).ToList(),
                 };
             }
