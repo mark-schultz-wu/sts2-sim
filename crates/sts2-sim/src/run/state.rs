@@ -495,6 +495,9 @@ pub(super) enum Phase<V: Rules> {
         options: Vec<V::RestSiteOption>,
         /// Waiting for the card the smith upgrades.
         upgrading: bool,
+        /// The rewards the heal offered, while they are on screen, or what an
+        /// option's pickup asks.
+        asking: Option<Asked<V>>,
     },
     /// The fight the run died in, as it stood when the player fell.
     ///
@@ -643,7 +646,9 @@ impl<V: Rules> Phase<V> {
     /// The question a pickup or an event option parked the room on.
     fn asking(&self) -> Option<&Asked<V>> {
         match self {
-            Phase::Neow { asking, .. } | Phase::Event { asking, .. } => asking.as_ref(),
+            Phase::Neow { asking, .. }
+            | Phase::Event { asking, .. }
+            | Phase::RestSite { asking, .. } => asking.as_ref(),
             _ => None,
         }
     }
@@ -651,7 +656,9 @@ impl<V: Rules> Phase<V> {
     /// Where the rooms that park keep what they are parked on.
     fn asking_mut(&mut self) -> Option<&mut Option<Asked<V>>> {
         match self {
-            Phase::Neow { asking, .. } | Phase::Event { asking, .. } => Some(asking),
+            Phase::Neow { asking, .. }
+            | Phase::Event { asking, .. }
+            | Phase::RestSite { asking, .. } => Some(asking),
             _ => None,
         }
     }
@@ -678,6 +685,10 @@ impl<V: Rules> State<V> {
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
                 Some(sts2_core::QuestionKind::Rewards)
             }
+            // Only a heal's rewards park at a rest site.
+            Phase::RestSite {
+                asking: Some(_), ..
+            } => Some(sts2_core::QuestionKind::Rewards),
             Phase::RestSite { upgrading, .. } if *upgrading => {
                 Some(sts2_core::QuestionKind::SelectCards)
             }
@@ -1320,7 +1331,10 @@ impl<V: Rules> State<V> {
                     continue;
                 }
                 HookEffect::MimicRestSiteHeal => {
-                    self.rest_site_heal(true);
+                    if let Some(asked) = self.rest_site_heal(true) {
+                        let pickup = asked.pickup;
+                        unimplemented!("a heal an event gives offering {pickup:?}");
+                    }
                     continue;
                 }
                 HookEffect::FightInEvent { .. } => {
@@ -1890,15 +1904,14 @@ impl<V: Rules> State<V> {
 
     /// `HealRestSiteOption.ExecuteRestSiteHeal`: three tenths of the maximum
     /// after `ModifyRestSiteHealAmount`, `AfterRestSiteHeal`, then the rewards
-    /// a relic adds. `mimicked` for an event's heal.
+    /// a relic adds, which `RewardsCmd.OfferCustom` puts on screen where there
+    /// are any. `mimicked` for an event's heal.
     ///
     /// # Panics
     ///
-    /// A relic changing the amount other than by adding to it, adding a
-    /// reward, or asking for something the run cannot carry out here.
-    fn rest_site_heal(&mut self, mimicked: bool) {
-        use sts2_core::ModelHook;
-
+    /// A relic changing the amount other than by adding to it, or asking for
+    /// something the run cannot carry out here.
+    fn rest_site_heal(&mut self, mimicked: bool) -> Option<Asked<V>> {
         let max_hp: u64 = num_traits::cast(self.player.max_hp)
             .expect("maximum health fits an unsigned rest calculation");
         let mut healed: V::Number =
@@ -1927,7 +1940,8 @@ impl<V: Rules> State<V> {
             let pickup = asked.pickup;
             unimplemented!("a rest site's heal asking for {pickup:?}");
         }
-        self.unheard(ModelHook::TryModifyRestSiteHealRewards);
+        let rewards = self.notify_belt(sts2_core::EventHook::RestSiteHealRewards { mimicked });
+        self.carry_out(rewards)
     }
 
     /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`, off
@@ -2796,6 +2810,7 @@ impl<V: Rules> State<V> {
             Phase::RestSite {
                 options,
                 upgrading: false,
+                asking: None,
             },
         );
     }
@@ -3169,13 +3184,19 @@ impl<V: Rules> State<V> {
             let option = *options
                 .get(usize::from(index))
                 .unwrap_or_else(|| unimplemented!("an option the rest site does not offer"));
+            // The option's `OnSelect` awaits the heal's rewards, so the
+            // options stay up until the screen is done.
             if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HEAL {
-                self.rest_site_heal(false);
-                let Phase::RestSite { options, .. } = &mut self.phase else {
-                    unreachable!("the phase was a rest site when this began");
-                };
-                options.clear();
-                return Ok(Decided::Resolved);
+                return Ok(match self.rest_site_heal(false) {
+                    None => {
+                        let Phase::RestSite { options, .. } = &mut self.phase else {
+                            unreachable!("the phase was a rest site when this began");
+                        };
+                        options.clear();
+                        Decided::Resolved
+                    }
+                    Some(asked) => self.park(asked),
+                });
             }
             // `RestSiteOption.OnSelect` for an option the run carries out,
             // which uses the rest site up.
@@ -3308,7 +3329,13 @@ impl<V: Rules> State<V> {
         }
         match self.carry_out(rest) {
             Some(next) => self.park(next),
-            None => Decided::Resolved,
+            None => {
+                // A rest site's option is done once its heal's rewards are.
+                if let Phase::RestSite { options, .. } = &mut self.phase {
+                    options.clear();
+                }
+                Decided::Resolved
+            }
         }
     }
 
@@ -3691,7 +3718,9 @@ impl<V: Rules> State<V> {
     /// sizes and its rewards alone.
     fn answers(&self, moves: &mut Legal<V>) -> bool {
         match &self.phase {
-            Phase::Neow { .. } | Phase::Event { .. } if self.phase.asking().is_some() => {
+            Phase::Neow { .. } | Phase::Event { .. } | Phase::RestSite { .. }
+                if self.phase.asking().is_some() =>
+            {
                 let Some(asked) = self.phase.asking() else {
                     unreachable!("the guard found it parked")
                 };
@@ -3988,7 +4017,11 @@ impl<V: Rules> State<V> {
     /// The question the run is parked on, if it is parked.
     fn asking(&self) -> Option<Question<V>> {
         match &self.phase {
-            Phase::Neow { .. } | Phase::Event { .. } => self.phase.asking().map(|asking| {
+            Phase::Neow { .. }
+            | Phase::Event { .. }
+            | Phase::RestSite {
+                asking: Some(_), ..
+            } => self.phase.asking().map(|asking| {
                 let (min, max, cards): (u32, u32, Vec<CardIdent<V>>) = match &asking.pickup {
                     Pickup::Rewards { offered } => return asked::<V>(offered),
                     Pickup::Event => return self.event_question(),
@@ -4533,6 +4566,7 @@ mod tests {
                 <V as sts2_core::ContentVersion>::RestSiteOption::SMITH,
             ],
             upgrading: false,
+            asking: None,
         };
 
         run.choose(1).expect("the smith can be chosen");
