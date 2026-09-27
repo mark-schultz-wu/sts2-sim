@@ -710,6 +710,10 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::enter(event, run, rng)
     }
 
+    fn event_holds_potions(state: &Self::EventState) -> bool {
+        behaviour::events::holds_potions(state)
+    }
+
     fn observe_event(
         state: &Self::EventState,
         run: &impl sts2_core::EventView<Self>,

@@ -1113,6 +1113,19 @@ impl<V: Rules> State<V> {
             .front(rarity, &self.dealt_relics)
     }
 
+    /// `Player.CanRemovePotions` off: an event that holds the potions while it
+    /// runs, and has not finished.
+    pub(super) fn potions_held(&self) -> bool {
+        match &self.phase {
+            Phase::Event {
+                state,
+                finished: false,
+                ..
+            } => V::event_holds_potions(state),
+            _ => false,
+        }
+    }
+
     /// Which act the run stands in, counted from zero.
     pub(super) fn act(&self) -> usize {
         self.act
@@ -1192,6 +1205,10 @@ impl<V: Rules> State<V> {
                 }
                 HookEffect::GainGold(amount) => {
                     self.gain_gold(amount);
+                    continue;
+                }
+                HookEffect::DiscardPotion(at) => {
+                    self.drank(at);
                     continue;
                 }
                 HookEffect::MimicRestSiteHeal => {
@@ -1526,7 +1543,9 @@ impl<V: Rules> State<V> {
         if rewards.iter().any(|reward| {
             matches!(
                 reward,
-                CustomReward::CharacterCards(_) | CustomReward::ColorlessCards(_)
+                CustomReward::CharacterCards(_)
+                    | CustomReward::ColorlessCards(_)
+                    | CustomReward::UpgradedCardsOf { .. }
             )
         }) {
             self.card_reward_unheard();
@@ -1562,6 +1581,18 @@ impl<V: Rules> State<V> {
                         .into_iter()
                         .map(CardIdent::new)
                         .collect(),
+                        taken: false,
+                    },
+                    CustomReward::UpgradedCardsOf {
+                        rarity,
+                        kind,
+                        count,
+                    } => Offer::Card {
+                        cards: crate::reward::card::upgraded_of::<V, _>(
+                            rng,
+                            &V::merchant_cards(character, kind, rarity),
+                            count,
+                        ),
                         taken: false,
                     },
                     CustomReward::UnlockedPotion => {
@@ -2797,8 +2828,13 @@ impl<V: Rules> State<V> {
     pub(crate) fn belt(&self) -> Vec<sts2_core::Held<V>> {
         // A fight that is over is not one a potion can be drunk in, so a live
         // fight is the only one read.
-        crate::combat::belt::<V>(&self.player.potions, self.fight(), self.standing().alive)
-            .collect()
+        crate::combat::belt::<V>(
+            &self.player.potions,
+            self.fight(),
+            self.standing().alive,
+            self.potions_held(),
+        )
+        .collect()
     }
 
     /// Every decision the run accepts right now, in the order a driver picks
@@ -2823,7 +2859,13 @@ impl<V: Rules> State<V> {
             return moves;
         }
         // No fight is live here, so a drink names no creature.
-        crate::combat::drinks::<V>(&self.player.potions, None, alive, &mut moves);
+        crate::combat::drinks::<V>(
+            &self.player.potions,
+            None,
+            alive,
+            self.potions_held(),
+            &mut moves,
+        );
         let before = moves.len();
         self.room_moves(&mut moves);
         if moves.len() > before {

@@ -3069,6 +3069,14 @@ pub enum CustomReward {
     /// `CardReward` over the colourless pool at `RegularEncounter` odds, with
     /// no upgrade roll, offering this many cards.
     ColorlessCards(usize),
+    /// `CardReward` over the character's own pool at uniform odds, of one
+    /// rarity and one type, and then every card it offers upgraded. The
+    /// Future of Potions offers it.
+    UpgradedCardsOf {
+        rarity: RewardRarity,
+        kind: CardKind,
+        count: usize,
+    },
 }
 
 /// What happens to each card a [`HookEffect::SelectFromPile`] takes.
@@ -3217,6 +3225,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),
+    /// `PotionCmd.Discard` on the potion at this place in the belt, counting
+    /// held potions in slot order.
+    DiscardPotion(usize),
     /// `CardPileCmd.Add(this, PileType.Hand)` for the card listening, from
     /// whichever pile it stands in.
     ToHand,
@@ -4695,6 +4706,10 @@ pub trait Rules: Hooks {
         state: &Self::EventState,
         run: &impl crate::EventView<Self>,
     ) -> crate::Room<Self>;
+
+    /// Whether the event's `BeforeEventStarted` sets `CanRemovePotions` off,
+    /// which its `OnEventFinished` puts back.
+    fn event_holds_potions(state: &Self::EventState) -> bool;
 
     fn choose_event<R: crate::rng::GameRng>(
         state: &mut Self::EventState,

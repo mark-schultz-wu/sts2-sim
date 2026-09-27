@@ -15,6 +15,7 @@ mod slippery_bridge;
 mod sunken_statue;
 mod tablet_of_truth;
 mod tea_master;
+mod the_future_of_potions;
 mod the_legends_were_true;
 mod this_or_that;
 mod wellspring;
@@ -52,6 +53,7 @@ pub enum State {
     SunkenStatue(sunken_statue::State),
     TabletOfTruth(tablet_of_truth::State),
     TeaMaster(tea_master::State),
+    TheFutureOfPotions(the_future_of_potions::State),
     TheLegendsWereTrue(the_legends_were_true::State),
     ThisOrThat(this_or_that::State),
     Wellspring(wellspring::State),
@@ -206,6 +208,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::TabletOfTruth(tablet_of_truth::TabletOfTruth.enter(run, rng))
         }
         Event::TeaMaster => State::TeaMaster(tea_master::TeaMaster.enter(run, rng)),
+        Event::TheFutureOfPotions => {
+            State::TheFutureOfPotions(the_future_of_potions::TheFutureOfPotions.enter(run, rng))
+        }
         Event::TheLegendsWereTrue => {
             State::TheLegendsWereTrue(the_legends_were_true::TheLegendsWereTrue.enter(run, rng))
         }
@@ -217,6 +222,12 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::WoodCarvings => State::WoodCarvings(wood_carvings::WoodCarvings.enter(run, rng)),
         _ => unimplemented!("entering event {event:?}"),
     }
+}
+
+/// `BeforeEventStarted` setting `CanRemovePotions` off, as The Future of
+/// Potions does.
+pub(crate) fn holds_potions(state: &State) -> bool {
+    matches!(state, State::TheFutureOfPotions(_))
 }
 
 pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
@@ -238,6 +249,9 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
+        State::TheFutureOfPotions(state) => {
+            the_future_of_potions::TheFutureOfPotions.observe(state, run)
+        }
         State::TheLegendsWereTrue(state) => {
             the_legends_were_true::TheLegendsWereTrue.observe(state, run)
         }
@@ -280,6 +294,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.choose(state, option, run, rng),
         State::TabletOfTruth(state) => {
             tablet_of_truth::TabletOfTruth.choose(state, option, run, rng)
+        }
+        State::TheFutureOfPotions(state) => {
+            the_future_of_potions::TheFutureOfPotions.choose(state, option, run, rng)
         }
         State::TeaMaster(state) => tea_master::TeaMaster.choose(state, option, run, rng),
         State::TheLegendsWereTrue(state) => {
