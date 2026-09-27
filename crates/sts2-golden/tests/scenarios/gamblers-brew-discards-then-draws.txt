@@ -1,0 +1,10 @@
+# Gambler's Brew discards the cards picked from hand, draws as many, and only
+# then auto-plays the Sly cards among them. The Ricochet goes down with five
+# others, and drawing six empties the draw pile, so the discard pile, the
+# Ricochet with it, shuffles back before the Ricochet plays.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"RICOCHET"}
+{"cmd":"grant","potion":"GAMBLERS_BREW"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[0,1,2,3,4,7]}

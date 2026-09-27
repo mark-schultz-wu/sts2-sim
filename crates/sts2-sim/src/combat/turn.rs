@@ -982,7 +982,15 @@ pub(super) fn play_sly<V: Rules>(
     sly: SmallVec<[sts2_core::CardId<V>; 2]>,
 ) -> Option<super::Ended> {
     for id in sly {
-        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, Pile::Discard);
+        // `CardPileCmd.Add` to the play pile from wherever the card stands
+        // by now: a draw between can shuffle it into the draw pile.
+        let Some(from) = [Pile::Discard, Pile::Draw, Pile::Hand, Pile::Exhaust]
+            .into_iter()
+            .find(|&pile| live.cards.find(pile, id).is_some())
+        else {
+            unimplemented!("a Sly card that left every pile before it played");
+        };
+        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from);
         if ended.is_some() {
             return ended;
         }
