@@ -561,6 +561,7 @@ pub enum ModelHook {
     AfterSideTurnStart,
     BeforeSideTurnEndEarly,
     AfterSideTurnEnd,
+    AfterSideTurnEndLate,
     AfterEnergyReset,
     AfterBlockCleared,
     AfterDeath,
@@ -654,7 +655,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 101] = [
+    pub const ALL: [ModelHook; 102] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -666,6 +667,7 @@ impl ModelHook {
         ModelHook::AfterSideTurnStart,
         ModelHook::BeforeSideTurnEndEarly,
         ModelHook::AfterSideTurnEnd,
+        ModelHook::AfterSideTurnEndLate,
         ModelHook::AfterEnergyReset,
         ModelHook::AfterBlockCleared,
         ModelHook::AfterDeath,
@@ -772,6 +774,7 @@ impl ModelHook {
             ModelHook::AfterSideTurnStart => "AfterSideTurnStart",
             ModelHook::BeforeSideTurnEndEarly => "BeforeSideTurnEndEarly",
             ModelHook::AfterSideTurnEnd => "AfterSideTurnEnd",
+            ModelHook::AfterSideTurnEndLate => "AfterSideTurnEndLate",
             ModelHook::AfterEnergyReset => "AfterEnergyReset",
             ModelHook::AfterBlockCleared => "AfterBlockCleared",
             ModelHook::AfterDeath => "AfterDeath",
@@ -2110,7 +2113,7 @@ impl Lasting {
 /// `CardModel.OnPlay` is an `async Task`, and a card that selects awaits in the
 /// middle of one. Nothing here is a coroutine, so a card that has to ask says
 /// where it stopped and is called back.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use = "a card play can stop on a question that must be carried"]
 pub enum Played<V: ContentVersion> {
     /// The play ran to its end.
@@ -2126,7 +2129,7 @@ pub enum Played<V: ContentVersion> {
     },
     /// The play stopped on a choose-a-card screen.
     Choosing {
-        offered: [crate::CardIdent<V>; CHOICES],
+        offered: Offered<V>,
         skippable: bool,
         at: V::Resume,
     },
@@ -2141,6 +2144,9 @@ pub enum Taken<V: ContentVersion> {
 
 /// The choose-a-card screen's fixed capacity.
 pub const CHOICES: usize = 3;
+
+/// The cards a choice offers, which is at most [`CHOICES`].
+pub type Offered<V> = smallvec::SmallVec<[crate::CardIdent<V>; CHOICES]>;
 
 /// `CardPile.MaxCardsInHand`: the most a hand holds.
 pub const MAX_CARDS_IN_HAND: usize = 10;
@@ -2829,6 +2835,10 @@ pub enum EventHook<V: ContentVersion> {
     SideTurnEnd {
         side: V::CombatSide,
     },
+    /// `AfterSideTurnEndLate`, once every `AfterSideTurnEnd` has run.
+    SideTurnEndLate {
+        side: V::CombatSide,
+    },
     /// `AfterEnergyReset`, carrying the player's creature.
     EnergyReset {
         player: crate::CombatId,
@@ -2980,6 +2990,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,
             EventHook::BeforeSideTurnEnd { .. } => ModelHook::BeforeSideTurnEnd,
             EventHook::SideTurnEnd { .. } => ModelHook::AfterSideTurnEnd,
+            EventHook::SideTurnEndLate { .. } => ModelHook::AfterSideTurnEndLate,
             EventHook::EnergyReset { .. } => ModelHook::AfterEnergyReset,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
@@ -3877,6 +3888,16 @@ impl<V: Hooks> DeckCard<V> {
     }
 }
 
+/// What one monster's own model saves between its moves.
+///
+/// `MonsterModel`'s fields, which a move writes and a later move or a
+/// conditional state reads. The fight keeps one beside the monster's move
+/// graph.
+pub trait MonsterModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq + Sized {
+    /// The model as a monster enters a fight.
+    fn new(monster: V::Monster) -> Self;
+}
+
 /// One power's own model, as the creature carrying it holds one.
 ///
 /// `PowerModel`'s subclasses read their own fields off `this`, the way a
@@ -4029,6 +4050,10 @@ pub trait Hooks: ContentVersion {
 
     /// What one power's own model saves, which the creature carries for it.
     type PowerState: PowerModel<Self>;
+
+    /// What one monster's own model saves, which the fight carries beside
+    /// its move graph.
+    type MonsterState: MonsterModel<Self>;
 
     /// What one deck card's own model saves, its `[SavedProperty]` fields,
     /// which the run carries for it between fights.
@@ -4946,6 +4971,7 @@ pub trait Rules: Hooks {
         ascension: Self::AscensionLevel,
         spawn: MonsterSpawn<Self::Encounter>,
         powers: impl IntoIterator<Item = crate::Listener<'a, Self, P>>,
+        state: &Self::MonsterState,
         machine: &mut MoveMachine,
         rng: &mut R,
     ) -> Result<Option<crate::NextMove<Self>>, ContentError>;
@@ -5106,12 +5132,20 @@ pub trait Rules: Hooks {
         owner: CardOwner<'_, Self>,
     ) -> Self::Number;
 
-    /// What one of a monster's moves does, which is its `onPerform`.
+    /// What one of a monster's moves does, which is its `onPerform`. `state`
+    /// is the monster's own model, which the move reads and writes. A move
+    /// that asks the player something hands the question back, and the rest
+    /// of its move resumes through [`Rules::resume_play`].
     ///
     /// # Panics
     ///
     /// A move nobody has ported.
-    fn perform_move<F: Fight<Self>>(monster: Self::Monster, move_id: Self::MoveId, fight: &mut F);
+    fn perform_move<F: Fight<Self>>(
+        monster: Self::Monster,
+        move_id: Self::MoveId,
+        state: &mut Self::MonsterState,
+        fight: &mut F,
+    ) -> Played<Self>;
 
     /// Generate an encounter whose roster is code rather than table data.
     /// An unported build-specific rule returns a typed error.

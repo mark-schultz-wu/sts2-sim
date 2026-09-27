@@ -27,12 +27,14 @@ use super::generated::cards::{CardType, Cards, combat_cards};
 pub enum Resume {
     Card(cards::Resume),
     Potion(potions::Resume),
+    Monster(monsters::Resume),
 }
 
 pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -> Played<V> {
     match (at, answer) {
         (Resume::Card(at), Taken::Selected(cards)) => cards::resume_play(fight, at, cards),
         (Resume::Potion(at), answer) => potions::resume(fight, at, answer),
+        (Resume::Monster(at), Taken::Chosen(card)) => monsters::resume(fight, at, card),
         (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
     }
 }

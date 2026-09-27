@@ -1,0 +1,30 @@
+# The Knowledge Demon's `CurseOfKnowledge` stops the enemy turn on a choice
+# of two cards, and the chosen card's power lands on the player. The first
+# set is skipped, the second takes Sloth and the third Waste Away. Plating
+# keeps the player standing, and the Energy Potion pays for a fourth card.
+#
+# After three plays, Sloth marks the Defend unplayable. The next turn's play
+# shows its count starting again. Ponder heals the demon back to full.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"ENERGY_POTION"}
+{"cmd":"fight","encounter":"KNOWLEDGE_DEMON_BOSS"}
+{"cmd":"power","power":"PLATING_POWER","amount":60,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[]}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[1]}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[1]}

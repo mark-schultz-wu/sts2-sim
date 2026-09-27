@@ -10,7 +10,7 @@ use sts2_core::{CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
 use super::board::Board;
 use super::listen::{self, Listener};
-use super::live::{CREATURES, Face, Landing, Live, Setup, Skips, Then};
+use super::live::{CREATURES, EnemyTurn, Face, Landing, Live, Setup, Skips, Then};
 use super::pile::MAX_CARDS_IN_HAND;
 use super::powers::Powers as _;
 use super::start::hand_size;
@@ -64,14 +64,15 @@ pub(crate) fn end<V: Rules>(
     }
     flush_hand(next, relics);
     end_of_turn_cleanup(next);
-    // `AfterSideTurnEnd` for the side that just ended.
-    let asked = tick_powers::<V>(
+    // `AfterTurnEnd` for the side that just ended.
+    if let Some(ended) = after_turn_end::<V>(
         next,
+        streams.combat(),
         relics,
+        ascension,
         &mut skipping,
         <V::CombatSide as SideKinds>::PLAYER,
-    );
-    if let Some(ended) = applied::<V>(next, streams.combat(), relics, ascension, asked) {
+    ) {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
             listen::combat_ended::<V>(next, relics);
@@ -91,14 +92,113 @@ pub(crate) fn end<V: Rules>(
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
-    let ended = side_turn_started::<V>(
+    if let Some(ended) = side_turn_started::<V>(
         next,
         streams.combat(),
         relics,
         ascension,
         <V::CombatSide as SideKinds>::ENEMY,
+    ) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
+    let acting: SmallVec<[CombatId; CREATURES]> = next
+        .creatures
+        .iter()
+        .filter(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
+        .map(|creature| creature.id)
+        .collect();
+    enemies_act(
+        Fighting {
+            live: next,
+            streams,
+            relics,
+        },
+        ascension,
+        max_energy,
+        skipping,
+        &acting,
     )
-    .or_else(|| enemy_turn(next, streams.combat(), relics, &mut skipping));
+}
+
+/// Answer the question a monster's move stopped the enemy turn on, then carry
+/// the turn on from the enemy after it.
+#[tracing::instrument(level = "trace", skip_all)]
+pub(super) fn resume_enemy_turn<V: Rules>(
+    fighting: Fighting<'_, V>,
+    parked: EnemyTurn<V>,
+    taken: sts2_core::Taken<V>,
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let mut skipping = std::mem::take(&mut live.skip_tick);
+    let ascension = live.ascension;
+    // What the player chose acts from the player, as `IChoosable.OnChosen`
+    // does.
+    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    let played = V::resume_play(&mut board, parked.at, taken);
+    let ended = board.ended;
+    super::play::merge::<V>(&mut skipping, std::mem::take(&mut board.skipped));
+    if played != sts2_core::Played::Done {
+        unimplemented!("a monster's move asking a second question");
+    }
+    move_performed::<V>(live, parked.actor, parked.move_id);
+    if let Some(ended) = ended {
+        live.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(live, relics);
+        }
+        return Ok(Some(ended));
+    }
+    enemies_act(
+        Fighting {
+            live,
+            streams,
+            relics,
+        },
+        ascension,
+        parked.max_energy,
+        skipping,
+        &parked.acting,
+    )
+}
+
+/// The enemies in `acting` perform their moves in order, and the round ends.
+#[tracing::instrument(level = "trace", skip_all)]
+fn enemies_act<V: Rules>(
+    fighting: Fighting<'_, V>,
+    ascension: V::AscensionLevel,
+    max_energy: V::Count,
+    mut skipping: Skips<V>,
+    acting: &[CombatId],
+) -> Result<Option<super::Ended>, Error> {
+    let Fighting {
+        live: next,
+        streams,
+        relics,
+    } = fighting;
+    let ended = match enemy_turn(
+        next,
+        streams.combat(),
+        relics,
+        &mut skipping,
+        acting,
+        max_energy,
+    ) {
+        Acted::Over(ended) => ended,
+        // The turn waits on the player's answer.
+        Acted::Parked(asking) => {
+            next.asking = Some(asking);
+            next.skip_tick = skipping;
+            return Ok(None);
+        }
+    };
     // `EndEnemyTurn` is gated on `IsInProgress`, which both endings clear:
     // `ProcessPendingLoss` for a death and `EndCombatInternal` for a win. So
     // a fight that ended during the enemy turn ends the turn with it, and
@@ -119,15 +219,14 @@ pub(crate) fn end<V: Rules>(
         <V::CombatSide as SideKinds>::ENEMY,
     ) {
         Some(ended) => Some(ended),
-        None => {
-            let asked = tick_powers::<V>(
-                next,
-                relics,
-                &mut skipping,
-                <V::CombatSide as SideKinds>::ENEMY,
-            );
-            applied::<V>(next, streams.combat(), relics, ascension, asked)
-        }
+        None => after_turn_end::<V>(
+            next,
+            streams.combat(),
+            relics,
+            ascension,
+            &mut skipping,
+            <V::CombatSide as SideKinds>::ENEMY,
+        ),
     };
     if let Some(ended) = ended {
         next.skip_tick = skipping;
@@ -1507,7 +1606,8 @@ fn clear_block<V: Rules>(
     }
 }
 
-/// `AfterSideTurnEnd`, raised on every listener once this side's turn ends.
+/// `hook`, `AfterSideTurnEnd` or its late pass, raised on every listener once a
+/// side's turn ends.
 ///
 /// Which side's turn ending counts a power down is the power's own rule. What
 /// the powers ask to apply comes back, in the order they asked.
@@ -1520,12 +1620,11 @@ fn tick_powers<V: Rules>(
     live: &mut Live<V>,
     relics: &mut crate::run::Belt<V>,
     skipping: &mut Skips<V>,
-    side: V::CombatSide,
+    hook: sts2_core::EventHook<V>,
 ) -> Applying<V> {
     let mut applying = Applying::<V>::new();
     let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
     let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
-    let hook = sts2_core::EventHook::SideTurnEnd { side };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         let Listener::Power { owner, power, .. } = listener else {
             unimplemented!("{listener:?} asking for {effect:?} as a turn ends")
@@ -1607,6 +1706,30 @@ fn tick_powers<V: Rules>(
     applying
 }
 
+/// `Hook.AfterTurnEnd`: every `AfterSideTurnEnd`, then every
+/// `AfterSideTurnEndLate`, and how the fight ended if either ended it.
+#[tracing::instrument(level = "trace", skip_all)]
+fn after_turn_end<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+    skipping: &mut Skips<V>,
+    side: V::CombatSide,
+) -> Option<super::Ended> {
+    let hooks = [
+        sts2_core::EventHook::SideTurnEnd { side },
+        sts2_core::EventHook::SideTurnEndLate { side },
+    ];
+    for hook in hooks {
+        let asked = tick_powers::<V>(live, relics, skipping, hook);
+        if let Some(ended) = applied::<V>(live, rngs.reborrow(), relics, ascension, asked) {
+            return Some(ended);
+        }
+    }
+    None
+}
+
 /// What a turn end's listeners asked for on the creature carrying them,
 /// inline to one for each creature a fight holds.
 type Applying<V> = SmallVec<[TurnEndAsk<V>; CREATURES]>;
@@ -1668,26 +1791,29 @@ fn applied<V: Rules>(
     None
 }
 
-/// `ExecuteEnemyTurn`: each enemy performs what it advertised.
+/// How far an enemy turn got.
+enum Acted<V: Rules> {
+    /// Every enemy acted, or one ended the fight.
+    Over(Option<super::Ended>),
+    /// A move stopped on the player's answer.
+    Parked(super::live::Asking<V>),
+}
+
+/// `ExecuteEnemyTurn`: each enemy in `acting` performs what it advertised.
 ///
-/// The list is taken first, and each is held against the fight again before it
-/// acts. An earlier move can take a later one out of the fight.
+/// Each is held against the fight again before it acts. An earlier move can
+/// take a later one out of the fight.
 #[tracing::instrument(level = "trace", skip_all)]
 fn enemy_turn<V: Rules>(
     live: &mut Live<V>,
     mut rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     skipping: &mut Skips<V>,
-) -> Option<super::Ended> {
+    acting: &[CombatId],
+    max_energy: V::Count,
+) -> Acted<V> {
     let mut ended = None;
-    let acting: SmallVec<[CombatId; CREATURES]> = live
-        .creatures
-        .iter()
-        .filter(|creature| creature.side == <V::CombatSide as SideKinds>::ENEMY)
-        .map(|creature| creature.id)
-        .collect();
-
-    for id in acting {
+    for (at, &id) in acting.iter().enumerate() {
         let Some(creature) = live.creatures.iter().find(|c| c.id == id) else {
             continue;
         };
@@ -1700,6 +1826,7 @@ fn enemy_turn<V: Rules>(
             .find(|held| held.creature == id)
             .unwrap_or_else(|| unimplemented!("an enemy with no move graph"));
         let monster = held.monster;
+        let mut state = held.state;
         // `OnMovePerformed`, which is what lets the graph leave this move. It
         // happens beside `PerformMove` rather than after what the move does.
         held.machine.performed();
@@ -1716,17 +1843,46 @@ fn enemy_turn<V: Rules>(
             ascension,
             (id, damage, repeats),
         );
-        V::perform_move(monster, next_move.id, &mut board);
-        move_performed::<V>(board.live, id, next_move.id);
+        let played = V::perform_move(monster, next_move.id, &mut state, &mut board);
         ended = ended.or(board.ended);
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
+        // A monster whose move took it out of the fight took its model too.
+        if let Some(held) = live.machines.iter_mut().find(|held| held.creature == id) {
+            held.state = state;
+        }
+        match played {
+            sts2_core::Played::Done => {}
+            sts2_core::Played::Choosing {
+                offered,
+                skippable,
+                at: resume,
+            } => {
+                if ended.is_some() {
+                    unimplemented!("a move asking in a fight it ended");
+                }
+                return Acted::Parked(super::live::Asking {
+                    then: Then::EnemyTurn(EnemyTurn {
+                        actor: id,
+                        move_id: next_move.id,
+                        at: resume,
+                        acting: acting[at + 1..].iter().copied().collect(),
+                        max_energy,
+                    }),
+                    question: super::live::Asked::Offered { offered, skippable },
+                });
+            }
+            sts2_core::Played::Asking { .. } => {
+                unimplemented!("a monster's move selecting from a pile")
+            }
+        }
+        move_performed::<V>(live, id, next_move.id);
         // `CheckWinCondition` after each enemy's turn: an ended fight gives
         // the enemies after it no turn.
         if ended.is_some() {
             break;
         }
     }
-    ended
+    Acted::Over(ended)
 }
 
 /// `MonsterMoveState.OnPerform`, which the move state gives the powers on
@@ -1794,6 +1950,7 @@ fn roll_moves<V: Rules>(
                     ..held.spawn
                 },
                 powers,
+                &held.state,
                 &mut held.machine,
                 ai,
             )?

@@ -7,7 +7,7 @@
 //! A monster nobody has ported panics naming itself, so this tree is also the
 //! list of fights the simulator can take a turn in.
 
-use sts2_core::{ContentError, EventHook, Fight, MonsterSpawn};
+use sts2_core::{ContentError, EventHook, Fight, MonsterSpawn, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::encounters::Encounter;
@@ -21,6 +21,17 @@ pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 mod hive;
 mod overgrowth;
 mod summoned;
+
+pub use hive::Resume;
+
+/// Carry a monster's move on with the player's answer.
+pub(crate) fn resume<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: Option<sts2_core::CardIdent<V>>,
+) -> Played<V> {
+    hive::resume(fight, at, chosen)
+}
 
 type V = V0_107_1;
 
@@ -117,8 +128,10 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
     at: u8,
     spawn: MonsterSpawn<Encounter>,
     powers: &[sts2_core::Listener<'_, V, P>],
+    model: &Model,
 ) -> Result<u8, ContentError> {
     match monster {
+        Monster::KnowledgeDemon => hive::knowledge_demon_branch(model, at),
         Monster::BowlbugRock | Monster::SlumberingBeetle | Monster::Ovicopter => {
             hive::conditional(monster, at, spawn, powers)
         }
@@ -207,14 +220,25 @@ pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
 ///
 /// A monster nobody has ported.
 #[tracing::instrument(level = "trace", skip_all, fields(monster = ?monster, move_id = ?move_id))]
-pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mut F) {
+pub(crate) fn perform<F: Fight<V>>(
+    monster: Monster,
+    move_id: MoveId,
+    model: &mut Model,
+    fight: &mut F,
+) -> Played<V> {
     // Two states no table names. `Creature.Stun` builds one and
     // `IllusionPower` builds the other, and what each does belongs to
     // whoever built it rather than to the monster standing on it.
     match move_id {
-        MoveId::Stunned => return,
-        MoveId::ReviveMove => return revive(fight),
+        MoveId::Stunned => return Played::Done,
+        MoveId::ReviveMove => {
+            revive(fight);
+            return Played::Done;
+        }
         _ => {}
+    }
+    if monster == Monster::KnowledgeDemon {
+        return hive::knowledge_demon(move_id, model, fight);
     }
     match monster {
         Monster::ThievingHopper
@@ -243,5 +267,25 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::CeremonialBeast
         | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
         _ => monster_moves::perform(monster, move_id, fight),
+    }
+    Played::Done
+}
+
+/// What a monster's own model saves between its moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Model {
+    /// A monster whose moves save nothing.
+    Stateless,
+    /// `KnowledgeDemon.CurseOfKnowledgeCounter`: the curses it has cast. Its
+    /// `IsBurnt` picks animations alone.
+    KnowledgeDemon { curses: u8 },
+}
+
+impl sts2_core::MonsterModel<V> for Model {
+    fn new(monster: Monster) -> Self {
+        match monster {
+            Monster::KnowledgeDemon => Self::KnowledgeDemon { curses: 0 },
+            _ => Self::Stateless,
+        }
     }
 }

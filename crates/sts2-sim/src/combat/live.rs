@@ -117,7 +117,7 @@ pub(super) enum Asked<V: Rules> {
         selection: sts2_core::Selection,
     },
     Offered {
-        offered: [CardIdent<V>; sts2_core::CHOICES],
+        offered: sts2_core::Offered<V>,
         skippable: bool,
     },
 }
@@ -139,6 +139,22 @@ pub(super) enum Then<V: Rules> {
         act: sts2_core::PileAct,
         stage: Setup<V>,
     },
+    /// The enemy turn, which a monster's move parked on a choice.
+    EnemyTurn(EnemyTurn<V>),
+}
+
+/// Where the enemy turn stands while a monster's move waits on the player.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct EnemyTurn<V: Rules> {
+    /// The monster whose move asked.
+    pub(super) actor: CombatId,
+    pub(super) move_id: V::MoveId,
+    /// Where the move goes on from, which `V::resume_play` picks up.
+    pub(super) at: V::Resume,
+    /// The enemies still to act after it, in turn order.
+    pub(super) acting: smallvec::SmallVec<[CombatId; CREATURES]>,
+    /// The energy the player's next turn resets to.
+    pub(super) max_energy: V::Count,
 }
 
 /// Where `SetupPlayerTurn` stands, with what the hook it stopped in has still
