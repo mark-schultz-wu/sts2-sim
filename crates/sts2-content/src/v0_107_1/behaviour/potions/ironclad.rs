@@ -58,6 +58,14 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             ),
             at: super::super::Resume::Potion(super::Resume::Ironclad(Resume::Ashwater)),
         },
+        // `AnyPlayer`: one more replay on every card of the player's in the
+        // fight tagged Strike.
+        Potion::SoldiersStew => {
+            use super::super::super::generated::cards::CardTag;
+
+            fight.add_replays(sts2_core::Writing::EveryTagged(CardTag::Strike), 1);
+            Played::Done
+        }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

@@ -1941,6 +1941,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a creature killed outright")
     }
 
+    /// `CardModel.BaseReplayCount += amount` on each card `to` names.
+    fn add_replays(&mut self, _to: Writing<V>, _amount: V::Number) {
+        unimplemented!("replays added to cards")
+    }
+
     /// `PlayerCmd.LoseGold`: the player's gold down by `amount`, stopping at
     /// none.
     fn lose_gold(&mut self, _amount: V::Number) {
@@ -2748,6 +2753,8 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
+    /// `AfterOstyRevived`, once a dead Osty stands back up.
+    OstyRevived,
     /// `AfterCardChangedPiles` for a card that joined the deck, outside a
     /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
     AddedToDeck {
@@ -3104,6 +3111,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::AfterAttack { .. } => ModelHook::AfterAttack,
             EventHook::PlayCountModified { .. } => ModelHook::AfterModifyingCardPlayCount,
             EventHook::HpLostModified => ModelHook::AfterModifyingHpLostAfterOsty,
+            EventHook::OstyRevived => ModelHook::AfterOstyRevived,
             EventHook::ResultPileModified { .. } => {
                 ModelHook::AfterModifyingCardPlayResultPileOrPosition
             }

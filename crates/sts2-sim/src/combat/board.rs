@@ -2291,6 +2291,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.kill_outright(creature);
     }
 
+    fn add_replays(&mut self, to: sts2_core::Writing<V>, amount: V::Number) {
+        self.write_cards([HookEffect::AddReplays { to, amount }]);
+    }
+
     fn lose_gold(&mut self, amount: V::Number) {
         self.live.gold = (self.live.gold - amount).max(V::Number::zero());
     }
@@ -2574,7 +2578,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                     self.live.creatures[at].max_hp = health;
                 }
                 self.heal(id, amount);
-                self.unheard(ModelHook::AfterOstyRevived);
+                let asked = super::listen::notify::<V>(
+                    self.live,
+                    self.relics,
+                    sts2_core::EventHook::OstyRevived,
+                );
+                if let Some((listener, effect)) = asked.first() {
+                    unimplemented!("{listener:?} asking for {effect:?} as Osty revives")
+                }
             }
             // `AddPet<Osty>`, which rolls nothing for a creature on the
             // player's side. Then `DieForYouPower`, `SetMaxHp` and `Heal`.
