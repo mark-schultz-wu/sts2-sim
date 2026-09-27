@@ -712,9 +712,24 @@ impl<'a, V: Rules> Board<'a, V> {
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
-            sts2_core::EventHook::CardEnteredCombat { at, card },
+            // A card the fight adds is a new model: nothing here clones one.
+            sts2_core::EventHook::CardEnteredCombat {
+                at,
+                card,
+                clone: false,
+            },
         );
-        self.write_cards(asked.into_iter().map(|(_, effect)| effect));
+        let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // Written on the card that asked, wherever it stands.
+                (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
+                    self.live.modify_self(id, change, lasting)
+                }
+                (_, effect) => rest.push(effect),
+            }
+        }
+        self.write_cards(rest);
     }
 
     /// Carry out what the card-writing hooks asked for.

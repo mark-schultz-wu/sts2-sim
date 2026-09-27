@@ -43,6 +43,7 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: NecrobinderCard,
     id: sts2_core::CardId<V>,
     printed: &P,
+    history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -86,12 +87,26 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
             })
         }
         (NecrobinderCard::BansheesCry, EventHook::CardPlayed { .. }) => {}
-        // `BansheesCry.AfterCardEnteredCombat`, for its own entry alone: its
-        // `Energy` off for each Ethereal play finished this fight before it
-        // came.
-        (NecrobinderCard::BansheesCry, EventHook::CardEnteredCombat { at, .. }) => {
-            if at.id() == id {
-                unimplemented!("a Banshee's Cry entering the fight, which counts Ethereal plays")
+        // `BansheesCry.AfterCardEnteredCombat`, for its own entry alone and
+        // not a clone's: its `Energy` off for the rest of the fight for each
+        // Ethereal play finished this fight before it came.
+        (NecrobinderCard::BansheesCry, EventHook::CardEnteredCombat { at, clone, .. }) => {
+            if at.id() == id && !clone {
+                let ethereal: super::Number = history
+                    .finished_this_fight()
+                    .filter(|finished| finished.ethereal)
+                    .count()
+                    .try_into()
+                    .expect("a fight's plays fit a game number");
+                if ethereal != 0 {
+                    asked.push(HookEffect::ModifySelf {
+                        change: Change::ChangeCost(
+                            CostPool::Energy,
+                            -ethereal * printed.face(CardVar::Energy),
+                        ),
+                        lasting: Lasting::ThisFight,
+                    });
+                }
             }
         }
         (card, hook) => unimplemented!("what {card:?} does for {hook:?}"),

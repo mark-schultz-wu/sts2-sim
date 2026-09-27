@@ -51,7 +51,11 @@ pub(crate) fn end<V: Rules>(
     }
     // `DoTurnEnd` returns once the fight is over, and a fight an orb ended
     // ends the turn with it.
-    if let Some(ended) = turn_end(next, streams.combat(), relics, ascension) {
+    let ended = turn_end(next, streams.combat(), relics, ascension);
+    // What `DoTurnEnd` put on the player skips this turn's tick too.
+    let landed = std::mem::take(&mut next.skip_tick);
+    super::play::merge::<V>(&mut skipping, landed.iter().copied().collect());
+    if let Some(ended) = ended {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
             listen::combat_ended::<V>(next, relics);
@@ -285,6 +289,12 @@ fn turn_end<V: Rules>(
             Some(card.id),
         );
         V::on_card_turn_end(card.face.ident.card, &mut board);
+        let skipped = std::mem::take(&mut board.skipped);
+        let ended = board.ended;
+        super::play::merge::<V>(&mut live.skip_tick, skipped);
+        if ended.is_some() {
+            return ended;
+        }
     }
     None
 }

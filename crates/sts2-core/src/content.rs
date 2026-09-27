@@ -2656,6 +2656,8 @@ pub enum EventHook<V: ContentVersion> {
     CardEnteredCombat {
         at: crate::CardAt<V>,
         card: V::Card,
+        /// `IsClone`: the card is a clone of another, which is `CloneOf`.
+        clone: bool,
     },
     /// `Hook.BeforeAttack`, as an attack command starts and before its first
     /// hit.
@@ -2815,6 +2817,8 @@ pub struct PlayFinished<V: ContentVersion> {
     pub card: V::Card,
     /// Which copy it was, which `CardPlay.Card` is.
     pub id: crate::CardId<V>,
+    /// `WasEthereal`: the copy was Ethereal as it was played.
+    pub ethereal: bool,
 }
 
 /// One entry in `CombatManager.History`, of the kinds a listener reads.
@@ -2882,6 +2886,20 @@ impl<V: ContentVersion> History<'_, V> {
             .take_while(move |before| before.player_turn >= last)
             .filter(move |before| before.player_turn == last)
             .flat_map(|before| before.entries.iter())
+            .filter_map(|entry| match entry {
+                HistoryEntry::Finished(finished) => Some(*finished),
+                _ => None,
+            })
+    }
+
+    /// Every `CardPlaysFinished` entry of the fight, the turn it stands in
+    /// first and then the turns before it, latest first.
+    pub fn finished_this_fight(&self) -> impl Iterator<Item = PlayFinished<V>> + '_ {
+        let before = std::iter::successors(self.before, |before| before.before.as_deref())
+            .flat_map(|before| before.entries.iter());
+        self.this_turn
+            .iter()
+            .chain(before)
             .filter_map(|entry| match entry {
                 HistoryEntry::Finished(finished) => Some(*finished),
                 _ => None,
