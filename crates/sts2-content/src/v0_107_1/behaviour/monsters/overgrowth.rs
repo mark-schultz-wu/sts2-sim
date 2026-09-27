@@ -67,9 +67,32 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(INHALE_STRENGTH))
         }
         (Monster::Fogmog, MoveId::IllusionMove) => illusion(fight),
+        // The `TestMode.IsOff` block these open with only finds the creature
+        // node.
+        (Monster::SnappingJaxfruit, MoveId::EnergyOrbMove) => {
+            fight.attack_opponents();
+            fight.apply_to_actor(
+                Power::StrengthPower,
+                PowerAmount::Counted(ENERGY_ORB_STRENGTH),
+            );
+        }
+        (Monster::Flyconid, MoveId::VulnerableSporesMove) => {
+            fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(SPORES));
+        }
+        (Monster::Flyconid, MoveId::FrailSporesMove) => {
+            fight.attack_opponents();
+            fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(SPORES));
+        }
         (monster, move_id) => monster_moves::perform(monster, move_id, fight),
     }
 }
+
+/// What the Snapping Jaxfruit's Energy Orb adds to it, a constant in the move.
+const ENERGY_ORB_STRENGTH: Number = 2;
+
+/// The Vulnerable and the Frail a Flyconid's spores apply, constants in the
+/// moves.
+const SPORES: Number = 2;
 
 /// What the Fuzzy Wurm Crawler's Inhale adds to it.
 ///

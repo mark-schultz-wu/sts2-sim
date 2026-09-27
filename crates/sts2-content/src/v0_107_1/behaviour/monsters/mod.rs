@@ -154,9 +154,11 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::DecimillipedeSegmentFront
         | Monster::DecimillipedeSegmentMiddle
         | Monster::DecimillipedeSegmentBack => hive::perform(monster, move_id, fight),
-        Monster::ShrinkerBeetle | Monster::FuzzyWurmCrawler | Monster::Fogmog => {
-            overgrowth::perform(monster, move_id, fight)
-        }
+        Monster::ShrinkerBeetle
+        | Monster::FuzzyWurmCrawler
+        | Monster::Fogmog
+        | Monster::SnappingJaxfruit
+        | Monster::Flyconid => overgrowth::perform(monster, move_id, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
 }

@@ -1,0 +1,10 @@
+# The Snapping Jaxfruit's one move attacks for three and gives it two
+# Strength, so it hits for three, five and seven. Its Flyconid opens on Smash,
+# then Frail Spores, then Vulnerable Spores. Under Frail a Defend gives three
+# block rather than five.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SNAPPING_JAXFRUIT_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}

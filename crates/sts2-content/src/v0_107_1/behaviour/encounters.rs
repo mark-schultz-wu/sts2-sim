@@ -26,6 +26,7 @@ pub(crate) fn generate<R: GameRng>(encounter: Encounter, rng: &mut R) -> Vec<Spa
         Encounter::DecimillipedeElite => decimillipede_elite(rng),
         Encounter::RubyRaidersNormal => ruby_raiders_normal(rng),
         Encounter::SlitheringStranglerNormal => slithering_strangler_normal(rng),
+        Encounter::FlyconidNormal => flyconid_normal(rng),
         encounter => unimplemented!("the roster {encounter:?} rolls"),
     }
 }
@@ -78,6 +79,21 @@ fn slimes_weak<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
         .into_iter()
         .map(Spawned::new)
         .collect()
+}
+
+/// `FlyconidNormal`. One medium slime by `NextItem`, then the Flyconid.
+fn flyconid_normal<R: GameRng>(rng: &mut R) -> Vec<Spawned<V>> {
+    let medium_at: usize = num_traits::cast(
+        rng.next_int(Bound::try_new(R::Int::ONE + R::Int::ONE).expect("two medium slimes")),
+    )
+    .expect("a two-way draw is zero or one");
+    [
+        [Monster::LeafSlimeM, Monster::TwigSlimeM][medium_at],
+        Monster::Flyconid,
+    ]
+    .into_iter()
+    .map(Spawned::new)
+    .collect()
 }
 
 /// `SlimesNormal`. Both medium slimes, then both small ones.
