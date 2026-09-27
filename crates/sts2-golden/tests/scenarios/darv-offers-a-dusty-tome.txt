@@ -1,0 +1,7 @@
+# Darv draws one relic from each set the run qualifies for, shuffles them,
+# and `NextBool` then offers two and the Dusty Tome. The Tome's
+# `SetupForPlayer` draws an ancient card off the rewards stream. Taking it
+# adds that card to the deck, upgraded.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"DARV"}
+{"cmd":"choose_option","index":2}

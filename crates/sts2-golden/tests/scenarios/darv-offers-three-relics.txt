@@ -1,0 +1,4 @@
+# On this seed `NextBool` goes the other way, and Darv offers three of its
+# shuffled relics and no Tome.
+{"cmd":"start","seed":"0RACLE2","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"DARV"}

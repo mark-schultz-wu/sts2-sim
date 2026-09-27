@@ -4,6 +4,7 @@ mod ancient;
 mod aroma_of_chaos;
 mod brain_leech;
 mod byrdonis_nest;
+mod darv;
 mod dense_vegetation;
 mod jungle_maze_adventure;
 mod luminous_choir;
@@ -44,6 +45,7 @@ pub enum State {
     AromaOfChaos(aroma_of_chaos::State),
     BrainLeech(brain_leech::State),
     ByrdonisNest(byrdonis_nest::State),
+    Darv(darv::State),
     DenseVegetation(dense_vegetation::State),
     JungleMazeAdventure(jungle_maze_adventure::State),
     LuminousChoir(luminous_choir::State),
@@ -112,6 +114,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::SelfHelpBook => self_help_book::SelfHelpBook.allowed(run),
         Event::JungleMazeAdventure => jungle_maze_adventure::JungleMazeAdventure.allowed(run),
         Event::TabletOfTruth => tablet_of_truth::TabletOfTruth.allowed(run),
+        Event::Darv => darv::Darv.allowed(run),
         Event::DenseVegetation => dense_vegetation::DenseVegetation.allowed(run),
         Event::BrainLeech => brain_leech::BrainLeech.allowed(run),
         Event::SapphireSeed => sapphire_seed::SapphireSeed.allowed(run),
@@ -203,6 +206,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::AromaOfChaos => State::AromaOfChaos(aroma_of_chaos::AromaOfChaos.enter(run, rng)),
         Event::BrainLeech => State::BrainLeech(brain_leech::BrainLeech.enter(run, rng)),
         Event::ByrdonisNest => State::ByrdonisNest(byrdonis_nest::ByrdonisNest.enter(run, rng)),
+        Event::Darv => State::Darv(darv::Darv.enter(run, rng)),
         Event::DenseVegetation => {
             State::DenseVegetation(dense_vegetation::DenseVegetation.enter(run, rng))
         }
@@ -243,6 +247,18 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
     }
 }
 
+/// `SetupForPlayer` on what the options offer, off the player's rewards
+/// stream. Darv's Dusty Tome is the one option that sets itself up.
+pub(crate) fn set_up<R: sts2_core::rng::GameRng>(
+    state: &mut State,
+    run: &impl EventView<V>,
+    rewards: &mut R,
+) {
+    if let State::Darv(state) = state {
+        darv::Darv.set_up(state, run, rewards);
+    }
+}
+
 /// `BeforeEventStarted` setting `CanRemovePotions` off, as The Future of
 /// Potions does.
 pub(crate) fn holds_potions(state: &State) -> bool {
@@ -254,6 +270,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
         State::BrainLeech(state) => brain_leech::BrainLeech.observe(state, run),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.observe(state, run),
+        State::Darv(state) => darv::Darv.observe(state, run),
         State::DenseVegetation(state) => dense_vegetation::DenseVegetation.observe(state, run),
         State::JungleMazeAdventure(state) => {
             jungle_maze_adventure::JungleMazeAdventure.observe(state, run)
@@ -293,6 +310,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
         State::BrainLeech(state) => brain_leech::BrainLeech.choose(state, option, run, rng),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.choose(state, option, run, rng),
+        State::Darv(state) => darv::Darv.choose(state, option, run, rng),
         State::DenseVegetation(state) => {
             dense_vegetation::DenseVegetation.choose(state, option, run, rng)
         }
