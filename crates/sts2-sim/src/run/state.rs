@@ -2086,6 +2086,34 @@ impl<V: Rules> State<V> {
                         });
                     }
                 }
+                // `CardReward.Populate` after the hook: three cards at the
+                // odds of the room named.
+                sts2_core::HookEffect::AddCardReward(room) => {
+                    use crate::reward::combat::{CARDS_OFFERED, Room};
+                    use sts2_core::RoomKinds as _;
+
+                    let room = match room {
+                        room if room == V::RoomType::ELITE => Room::Elite,
+                        room if room == V::RoomType::BOSS => Room::Boss,
+                        _ => Room::Monster,
+                    };
+                    let ascension = self.ascension();
+                    let character = self.character();
+                    let act = self.act();
+                    let (rng, odds) = self.rewarding();
+                    offered.push(Offer::Card {
+                        cards: crate::reward::card::encounter::<V, _>(
+                            rng,
+                            odds,
+                            ascension,
+                            character,
+                            CARDS_OFFERED,
+                            act,
+                            room.card_odds(),
+                        ),
+                        taken: false,
+                    });
+                }
                 // `GoldReward(amount)` sets its amount as it is built, so it
                 // is populated already and draws nothing.
                 sts2_core::HookEffect::AddGoldReward(amount) => offered.push(Offer::Gold {

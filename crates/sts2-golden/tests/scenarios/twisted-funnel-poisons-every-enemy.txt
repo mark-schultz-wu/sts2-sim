@@ -1,0 +1,6 @@
+# `TwistedFunnel` puts four Poison on every enemy as the first turn
+# begins, and none on later turns.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"TWISTED_FUNNEL"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}

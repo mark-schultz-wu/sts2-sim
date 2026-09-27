@@ -926,6 +926,7 @@ pub(super) fn carry_setup<V: Rules>(
             // damage here can end the fight.
             Setup::PlayerTurnStart(mut rest) => {
                 let mut ended = None;
+                let mut drawing = None;
                 while !rest.is_empty() {
                     let (listener, effect) = rest.remove(0);
                     match effect {
@@ -1026,42 +1027,95 @@ pub(super) fn carry_setup<V: Rules>(
                                 ended = ended.or(board.ended);
                             }
                         }
+                        // `CardPileCmd.Draw` for the player, which a shuffle's
+                        // question can pause. A fight that is over draws
+                        // nothing, and a negative count draws nothing.
+                        sts2_core::HookEffect::Draw(count) => {
+                            if ended.is_none() {
+                                drawing = Some(num_traits::cast(count).unwrap_or(0));
+                                break;
+                            }
+                        }
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),
                     }
                 }
-                // `AfterPlayerTurnStartLate`, once every listener above has
-                // run.
-                if ended.is_none() {
-                    let player = live.player().id;
-                    let hook = sts2_core::EventHook::PlayerTurnStartLate {
-                        player,
-                        turn: live.turn,
-                    };
-                    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
-                        match effect {
-                            // `CreatureCmd.Heal` on the player who carries
-                            // the relic.
-                            sts2_core::HookEffect::Heal(amount) => {
-                                let mut board = Board::for_card(
-                                    live,
-                                    rngs.reborrow(),
-                                    relics,
-                                    ascension,
-                                    None,
-                                    None,
-                                );
-                                sts2_core::Fight::heal(&mut board, player, amount);
+                if let Some(left) = drawing {
+                    Setup::TurnStartDrawing {
+                        left,
+                        resumed: false,
+                        rest,
+                    }
+                } else {
+                    // `AfterPlayerTurnStartLate`, once every listener above
+                    // has run.
+                    if ended.is_none() {
+                        let player = live.player().id;
+                        let hook = sts2_core::EventHook::PlayerTurnStartLate {
+                            player,
+                            turn: live.turn,
+                        };
+                        for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+                            match effect {
+                                // `CreatureCmd.Heal` on the player who carries
+                                // the relic.
+                                sts2_core::HookEffect::Heal(amount) => {
+                                    let mut board = Board::for_card(
+                                        live,
+                                        rngs.reborrow(),
+                                        relics,
+                                        ascension,
+                                        None,
+                                        None,
+                                    );
+                                    sts2_core::Fight::heal(&mut board, player, amount);
+                                }
+                                effect => unimplemented!(
+                                    "{listener:?} asking for {effect:?} late as the turn starts"
+                                ),
                             }
-                            effect => unimplemented!(
-                                "{listener:?} asking for {effect:?} late as the turn starts"
-                            ),
                         }
                     }
+                    return Carried::Done(ended);
                 }
-                return Carried::Done(ended);
             }
+            Setup::TurnStartDrawing {
+                left,
+                resumed,
+                rest,
+            } => match super::board::draw_pausing::<V>(
+                live,
+                rngs.reborrow(),
+                relics,
+                ascension,
+                left,
+                false,
+                resumed,
+            ) {
+                super::board::Drawn::Done(Some(ended)) => return Carried::Done(Some(ended)),
+                super::board::Drawn::Done(None) => Setup::PlayerTurnStart(rest),
+                super::board::Drawn::Paused {
+                    left,
+                    asks: (pile, count, act),
+                } => {
+                    let next = Setup::TurnStartDrawing {
+                        left,
+                        resumed: true,
+                        rest,
+                    };
+                    match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                        Err(question) => {
+                            return Carried::Parked(super::live::Asking {
+                                then: Then::Setup { act, stage: next },
+                                question,
+                            });
+                        }
+                        Ok(Some(ended)) => return Carried::Done(Some(ended)),
+                        Ok(None) => next,
+                    }
+                }
+            },
         };
     }
 }

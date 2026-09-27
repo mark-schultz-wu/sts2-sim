@@ -96,12 +96,14 @@ mod pandoras_box;
 mod pantograph;
 mod pear;
 mod pen_nib;
+mod pendulum;
 mod permafrost;
 mod phial_holster;
 mod phylactery_unbound;
 mod pocketwatch;
 mod pollinous_core;
 mod pomander;
+mod prayer_wheel;
 mod precarious_shears;
 mod precise_scissors;
 mod radiant_pearl;
@@ -110,6 +112,7 @@ mod regal_pillow;
 mod reptile_trinket;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
+mod ripple_basin;
 mod runic_pyramid;
 mod sand_castle;
 mod seal_of_gold;
@@ -123,9 +126,12 @@ mod sword_of_stone;
 mod toasty_mittens;
 mod touch_of_orobas;
 mod tungsten_rod;
+mod twisted_funnel;
 mod vajra;
+mod venerable_tea_set;
 mod very_hot_cocoa;
 mod war_paint;
+mod white_star;
 mod winged_boots;
 mod wongos_mystery_ticket;
 mod yummy_cookie;
@@ -275,6 +281,12 @@ pub enum State {
     HappyFlower(happy_flower::State),
     Kunai(kunai::State),
     Nunchaku(nunchaku::State),
+    VenerableTeaSet(venerable_tea_set::State),
+    TwistedFunnel,
+    Pendulum(pendulum::State),
+    RippleBasin(ripple_basin::State),
+    PrayerWheel,
+    WhiteStar,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -480,6 +492,12 @@ pub(crate) fn event_hook(
         State::HappyFlower(state) => happy_flower::event_hook(state, hook, asked),
         State::Kunai(state) => kunai::event_hook(state, hook, asked),
         State::Nunchaku(state) => nunchaku::event_hook(state, hook, asked),
+        State::VenerableTeaSet(state) => venerable_tea_set::event_hook(state, hook, asked),
+        State::TwistedFunnel => twisted_funnel::event_hook(hook, asked),
+        State::Pendulum(state) => pendulum::event_hook(state, hook, asked),
+        State::RippleBasin(state) => ripple_basin::event_hook(state, hook, asked),
+        State::PrayerWheel => prayer_wheel::event_hook(hook, asked),
+        State::WhiteStar => white_star::event_hook(hook, asked),
     }
 }
 
@@ -625,7 +643,13 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::BoneFlute
         | State::HappyFlower(_)
         | State::Kunai(_)
-        | State::Nunchaku(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Nunchaku(_)
+        | State::VenerableTeaSet(_)
+        | State::TwistedFunnel
+        | State::Pendulum(_)
+        | State::RippleBasin(_)
+        | State::PrayerWheel
+        | State::WhiteStar => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -761,6 +785,12 @@ impl sts2_core::RelicModel<V> for State {
             Relic::HappyFlower => State::HappyFlower(happy_flower::State::default()),
             Relic::Kunai => State::Kunai(kunai::State::default()),
             Relic::Nunchaku => State::Nunchaku(nunchaku::State::default()),
+            Relic::VenerableTeaSet => State::VenerableTeaSet(venerable_tea_set::State::default()),
+            Relic::TwistedFunnel => State::TwistedFunnel,
+            Relic::Pendulum => State::Pendulum(pendulum::State::default()),
+            Relic::RippleBasin => State::RippleBasin(ripple_basin::State::default()),
+            Relic::PrayerWheel => State::PrayerWheel,
+            Relic::WhiteStar => State::WhiteStar,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -793,6 +823,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
                 State::Nunchaku(state) => nunchaku::display_amount(state),
+                State::Pendulum(state) => pendulum::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }

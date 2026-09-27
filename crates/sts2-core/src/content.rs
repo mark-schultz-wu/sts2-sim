@@ -3883,6 +3883,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CombatRoom.AddExtraReward` with a `GoldReward` of this much, which
     /// the fight's rewards offer beside its own.
     AddGoldReward(V::Number),
+    /// `CardReward(CardCreationOptions.ForRoom(room), 3)`, added to a set's
+    /// rewards: three cards at the odds that kind of room rolls.
+    AddCardReward(V::RoomType),
     /// `CombatRoom.AddExtraReward` of a `CardRemovalReward`.
     AddCardRemovalReward,
     /// `PlayerCmd.LoseGold`, which stops at none.

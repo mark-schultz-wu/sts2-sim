@@ -1,0 +1,7 @@
+# `VenerableTeaSet` gives two energy as the first fight after a rest site
+# resets its owner's energy, and only then.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"VENERABLE_TEA_SET"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
