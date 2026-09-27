@@ -26,6 +26,8 @@ enum Target {
     /// A local that took `base.CombatState.HittableEnemies` earlier in the
     /// play, which is the list as it stood then.
     Held,
+    /// `TargetingRandomOpponents`: one living opponent for each hit.
+    Random,
 }
 
 impl Target {
@@ -35,6 +37,7 @@ impl Target {
             Target::Actor => "self",
             Target::Opponents => "opponents",
             Target::Held => "held",
+            Target::Random => "random",
         }
     }
 }
@@ -538,6 +541,11 @@ fn attack(card: &Card, damage: &[Vec<Tok>], builders: &[Call], locals: &Locals) 
                 if state == "base.CombatState" && target.is_none() =>
             {
                 target = Some(Target::Opponents);
+            }
+            ("TargetingRandomOpponents", [state])
+                if state == "base.CombatState" && target.is_none() =>
+            {
+                target = Some(Target::Random);
             }
             ("WithHitCount", [_]) => hits = card.number(&args[0])?,
             ("Unpowered", []) => props = "Move+Unpowered",

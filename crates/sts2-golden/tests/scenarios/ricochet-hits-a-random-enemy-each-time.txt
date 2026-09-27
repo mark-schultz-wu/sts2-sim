@@ -1,0 +1,9 @@
+# Ricochet and Rip and Tear each draw a target off `CombatTargets` for every
+# hit, from the living enemies. Four hits of three and two of seven land
+# across two Nibbits in the order the stream picks.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"RICOCHET"}
+{"cmd":"grant","card":"RIP_AND_TEAR"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"play_card","index":6}
+{"cmd":"play_card","index":4}

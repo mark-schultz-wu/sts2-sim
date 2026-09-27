@@ -424,8 +424,23 @@ pub fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
             fight.draw(fight.var(CardVar::Cards));
             Played::Done
         }
-        // `call DamageCmd.Attack`
-        SilentCard::Ricochet => unimplemented!("what {card:?} does when it is played"),
+        SilentCard::Ricochet => {
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    let Some(target) = fight.random_target() else {
+                        break;
+                    };
+                    let attack = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(attack);
+                }
+            });
+            Played::Done
+        }
         // `foreach`
         SilentCard::Scare => unimplemented!("what {card:?} does when it is played"),
         SilentCard::SerpentForm => {

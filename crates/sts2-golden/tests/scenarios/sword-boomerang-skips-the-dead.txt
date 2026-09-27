@@ -1,0 +1,9 @@
+# Sword Boomerang draws each hit's target from the enemies still alive. With
+# 50 Strength a hit kills either Nibbit, so the second draw has one left to
+# land on, and that kill wins the fight.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"SWORD_BOOMERANG"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":50,"target":0}
+{"cmd":"play_card","index":1}
