@@ -637,7 +637,12 @@ pub(super) fn carry_setup<V: Rules>(
                         }
                         sts2_core::HookEffect::ShuffleIfNecessary => {
                             if live.cards.is_empty(Pile::Draw) {
-                                super::board::shuffle::<V>(live, rngs.shuffle, relics);
+                                super::board::shuffle::<V>(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                );
                             }
                         }
                         sts2_core::HookEffect::SelectFromPile { pile, count, act } => {

@@ -1,0 +1,10 @@
+# `BiiigHug.AfterObtained` asks for four deck cards to remove. Its
+# `AfterShuffle` then puts a Soot into the draw pile, at the place
+# `Rng.Shuffle.NextInt` names, each time the discard pile is shuffled back.
+{"cmd":"start","seed":"0RACLEB","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TEZCATARA"}
+{"cmd":"choose_option","index":1}
+{"cmd":"answer","cards":[0,1,2,3]}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

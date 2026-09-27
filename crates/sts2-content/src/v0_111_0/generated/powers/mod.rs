@@ -2157,7 +2157,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterSideTurnEnd)
         .with(sts2_core::ModelHook::BeforeCardPlayed),
     // STRATAGEM_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterShuffle),
     // STRENGTH_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyDamageAdditive),
     // SUBROUTINE_POWER

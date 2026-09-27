@@ -15,6 +15,7 @@ mod alchemical_coffer;
 mod anchor;
 mod arcane_scroll;
 mod archaic_tooth;
+mod biiig_hug;
 mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
@@ -59,6 +60,7 @@ mod strike_dummy;
 mod sword_of_stone;
 mod very_hot_cocoa;
 mod winged_boots;
+mod yummy_cookie;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
 
@@ -89,6 +91,7 @@ pub enum State {
     Anchor,
     ArcaneScroll,
     ArchaicTooth,
+    BiiigHug,
     BoneTea(bone_tea::State),
     BoomingConch,
     BoundPhylactery,
@@ -134,6 +137,7 @@ pub enum State {
     SwordOfStone(sword_of_stone::State),
     VeryHotCocoa,
     WingedBoots(winged_boots::State),
+    YummyCookie,
 }
 
 /// `RelicModel.AddsPet`, which two relics override.
@@ -151,6 +155,7 @@ pub(crate) fn event_hook(
         State::AlchemicalCoffer => alchemical_coffer::event_hook(hook, asked),
         State::Anchor => anchor::event_hook(hook, asked),
         State::ArchaicTooth => archaic_tooth::event_hook(hook, asked),
+        State::BiiigHug => biiig_hug::event_hook(hook, asked),
         State::ArcaneScroll => arcane_scroll::event_hook(hook, asked),
         State::BoneTea(state) => bone_tea::event_hook(state, hook, asked),
         State::BoomingConch => booming_conch::event_hook(hook, asked),
@@ -213,6 +218,7 @@ pub(crate) fn event_hook(
         State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
         State::VeryHotCocoa => very_hot_cocoa::event_hook(hook, asked),
         State::WingedBoots(state) => winged_boots::event_hook(state, hook),
+        State::YummyCookie => yummy_cookie::event_hook(hook, asked),
     }
 }
 
@@ -247,6 +253,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Anchor
         | State::ArcaneScroll
         | State::ArchaicTooth
+        | State::BiiigHug
         | State::BoneTea(_)
         | State::BoundPhylactery
         | State::BurningBlood
@@ -285,7 +292,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Storybook
         | State::SwordOfStone(_)
         | State::VeryHotCocoa
-        | State::WingedBoots(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::WingedBoots(_)
+        | State::YummyCookie => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -300,6 +308,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::AlchemicalCoffer => State::AlchemicalCoffer,
             Relic::Anchor => State::Anchor,
             Relic::ArchaicTooth => State::ArchaicTooth,
+            Relic::BiiigHug => State::BiiigHug,
             Relic::ArcaneScroll => State::ArcaneScroll,
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
             Relic::BoomingConch => State::BoomingConch,
@@ -346,6 +355,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::SwordOfStone => State::SwordOfStone(sword_of_stone::State::default()),
             Relic::VeryHotCocoa => State::VeryHotCocoa,
             Relic::WingedBoots => State::WingedBoots(winged_boots::State::default()),
+            Relic::YummyCookie => State::YummyCookie,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
