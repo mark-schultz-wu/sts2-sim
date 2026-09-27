@@ -1,0 +1,5 @@
+# `ExoskeletonsWeak` fields three Exoskeletons in the first three slots.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"EXOSKELETONS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

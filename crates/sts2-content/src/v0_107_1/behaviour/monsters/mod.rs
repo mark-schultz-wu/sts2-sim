@@ -100,7 +100,31 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
 ) -> Result<u8, ContentError> {
     match monster {
         Monster::BowlbugRock | Monster::SlumberingBeetle => hive::conditional(monster, at, powers),
+        Monster::Exoskeleton => exoskeleton_opens(at, spawn),
         _ => overgrowth::conditional(monster, at, spawn),
+    }
+}
+
+/// `Exoskeleton`'s `INIT_MOVE`, which reads its `SlotName`. Both of its
+/// encounters name their slots `first` to `fourth` in roster order, and the
+/// state adds a branch for each slot in that order.
+fn exoskeleton_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentError> {
+    if !matches!(
+        spawn.encounter,
+        Encounter::ExoskeletonsWeak | Encounter::ExoskeletonsNormal
+    ) {
+        unimplemented!("an Exoskeleton spawned {spawn:?}");
+    }
+    let invalid = ContentError::InvalidMonsterState { index: at };
+    match sts2_core::Table::data(Monster::Exoskeleton)
+        .states
+        .get(usize::from(at))
+    {
+        Some(State::Conditional(branches)) => branches
+            .get(usize::from(spawn.position.get()))
+            .copied()
+            .ok_or(invalid),
+        _ => Err(invalid),
     }
 }
 
