@@ -566,6 +566,7 @@ pub enum ModelHook {
     ModifyHandDrawLate,
     ModifyShuffleOrder,
     AfterShuffle,
+    BeforePotionUsed,
     ShouldDraw,
     AfterPreventingDraw,
     AfterCardDrawnEarly,
@@ -636,7 +637,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 96] = [
+    pub const ALL: [ModelHook; 97] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -666,6 +667,7 @@ impl ModelHook {
         ModelHook::ModifyHandDrawLate,
         ModelHook::ModifyShuffleOrder,
         ModelHook::AfterShuffle,
+        ModelHook::BeforePotionUsed,
         ModelHook::ShouldDraw,
         ModelHook::AfterPreventingDraw,
         ModelHook::AfterCardDrawnEarly,
@@ -767,6 +769,7 @@ impl ModelHook {
             ModelHook::ModifyHandDrawLate => "ModifyHandDrawLate",
             ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
             ModelHook::AfterShuffle => "AfterShuffle",
+            ModelHook::BeforePotionUsed => "BeforePotionUsed",
             ModelHook::ShouldDraw => "ShouldDraw",
             ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
             ModelHook::AfterCardDrawnEarly => "AfterCardDrawnEarly",
@@ -2486,6 +2489,12 @@ impl<V: ContentVersion> DecisionHook<V> {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
+    /// it leaves the belt.
+    PotionUsing {
+        /// The creature it is aimed at, where it aims.
+        target: Option<crate::CombatId>,
+    },
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
     /// A fight here has one player, who is the shuffler.
     Shuffled,
@@ -2649,6 +2658,8 @@ pub enum EventHook<V: ContentVersion> {
     CardPlaying {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `CardPlay.Target`.
+        target: Option<crate::CombatId>,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
         /// `EnergyCost.GetResolved()`: the cost with every modifier, or the
@@ -2830,6 +2841,7 @@ impl<V: ContentVersion> EventHook<V> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
             EventHook::Shuffled => ModelHook::AfterShuffle,
+            EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
@@ -4841,6 +4853,13 @@ pub trait Rules: Hooks {
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
         side: Self::CombatSide,
+    ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
+
+    /// Powers a monster's `AfterAddedToRoom` applies to each of its
+    /// opponents, from itself.
+    fn monster_starting_opponent_powers(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
     /// What one potion does when it is drunk, which is `PotionModel.OnUse`.

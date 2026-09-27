@@ -2116,6 +2116,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterDeath)
         .with(sts2_core::ModelHook::BeforeCardPlayed)
+        .with(sts2_core::ModelHook::BeforePotionUsed)
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative),
     // SWIPE_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeDeath),

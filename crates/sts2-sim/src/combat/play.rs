@@ -236,7 +236,7 @@ pub(crate) fn play<V: Rules>(
     let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
-    before_played::<V, _>(live, streams, relics, &card, play.energy);
+    before_played::<V, _>(live, streams, relics, &card, play.energy, play.target);
     live.history
         .start(card.face.ident.card, card.id, play.energy, true);
     let mut board = Board::for_card(
@@ -354,7 +354,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
-    before_played::<V, _>(live, &mut rngs, relics, &card, energy);
+    before_played::<V, _>(live, &mut rngs, relics, &card, energy, target);
     live.history
         .start(card.face.ident.card, card.id, energy, true);
     let mut board = Board::for_card(
@@ -447,6 +447,7 @@ fn before_played<V: Rules, S: LendsCombat>(
     relics: &mut crate::run::Belt<V>,
     card: &super::live::CardInstance<V>,
     energy: V::Count,
+    target: Option<sts2_core::CombatId>,
 ) {
     if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed) {
         return;
@@ -466,6 +467,7 @@ fn before_played<V: Rules, S: LendsCombat>(
     let hook = sts2_core::EventHook::CardPlaying {
         card: card.face.ident.card,
         id: card.id,
+        target,
         ethereal: card.face.ethereal(),
         resolved,
     };
@@ -831,7 +833,14 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .cards
                     .named(card)
                     .expect("a card replaying stands in the play pile");
-                before_played::<V, _>(next, streams, relics, &replaying, play.energy);
+                before_played::<V, _>(
+                    next,
+                    streams,
+                    relics,
+                    &replaying,
+                    play.energy,
+                    effect.target,
+                );
                 next.history.start(played_card, card, play.energy, false);
                 let mut board = Board::for_card(
                     next,

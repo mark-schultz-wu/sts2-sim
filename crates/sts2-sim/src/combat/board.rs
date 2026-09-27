@@ -380,6 +380,21 @@ impl<'a, V: Rules> Board<'a, V> {
         for (power, amount) in entering {
             self.land(id, power, amount, Some(id));
         }
+        let aimed: SmallVec<[_; 2]> =
+            V::monster_starting_opponent_powers(monster, self.live.ascension).collect();
+        // `CombatState.GetOpponentsOf`, pets included.
+        let opponents: SmallVec<[CombatId; 4]> = self
+            .live
+            .creatures
+            .iter()
+            .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
+            .map(|creature| creature.id)
+            .collect();
+        for (power, amount) in aimed {
+            for &opponent in &opponents {
+                self.land(opponent, power, amount, Some(id));
+            }
+        }
     }
 
     fn applied(&mut self, id: CombatId, power: V::Power) {
@@ -1188,6 +1203,19 @@ impl<'a, V: Rules> Board<'a, V> {
                     self.live.remove_power(owner, power)
                 }
                 (Listener::Power { owner, .. }, effect) if owner == creature => own.push(effect),
+                // `PowerCmd.Apply` on the power's owner, from itself.
+                (Listener::Power { owner, .. }, HookEffect::ApplyToOwner(power, amount)) => {
+                    self.land(owner, power, amount, Some(owner));
+                }
+                // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
+                    let block = self.resolve(sts2_core::Effect::GainBlock {
+                        recipient: owner,
+                        amount: sts2_core::Amount::Number(amount),
+                        scaling: Scaling::Static,
+                    });
+                    sts2_core::Fight::apply(self, block);
+                }
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     self.live.modify_self(id, change, lasting)
                 }
