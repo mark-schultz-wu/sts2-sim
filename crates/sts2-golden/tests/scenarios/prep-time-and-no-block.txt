@@ -1,0 +1,10 @@
+# Prep Time gives its holder its stack of Vigor as its side's turn starts, so
+# the Nibbit's attack lands harder. No Block leaves a Defend's block at
+# nothing, and loses one as the enemies' turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PREP_TIME_POWER","amount":3,"target":1}
+{"cmd":"power","power":"NO_BLOCK_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}

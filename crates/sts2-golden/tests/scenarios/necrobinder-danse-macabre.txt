@@ -1,0 +1,9 @@
+# Danse Macabre gives its stack as block before each card whose resolved cost
+# is two or more. Pull Aggro, at two, draws it, and a Strike, at one, does not.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"PULL_AGGRO"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"DANSE_MACABRE_POWER","amount":4,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
