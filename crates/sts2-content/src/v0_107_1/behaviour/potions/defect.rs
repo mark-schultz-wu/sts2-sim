@@ -10,6 +10,9 @@ use super::Number;
 /// `FocusPotion`'s `PowerVar<FocusPower>(2)`.
 const FOCUS: Number = 2;
 
+/// `PotionOfCapacity`'s `RepeatVar(2)`: the orb slots it adds.
+const CAPACITY: Number = 2;
+
 /// What one of the Defect's potions does when it is drunk.
 ///
 /// # Panics
@@ -20,6 +23,11 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         // On its drinker, whom `Self` names.
         Potion::FocusPotion => {
             fight.apply_to_actor(Power::FocusPower, PowerAmount::Counted(FOCUS));
+            Played::Done
+        }
+        // `OrbCmd.AddSlots` for its drinker.
+        Potion::PotionOfCapacity => {
+            fight.add_orb_slots(CAPACITY);
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),

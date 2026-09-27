@@ -462,6 +462,9 @@ pub struct CardNumber<K, N> {
 pub enum CardNumberModifier {
     /// `Hook.ModifyDamage`, against the creature the card is pointed at.
     Damage,
+    /// The same, for a `DamageVar` whose props carry `Unpowered`, which a
+    /// hook reading a powered attack passes over.
+    UnpoweredDamage,
     /// The same, for the owner's Osty rather than the owner. An
     /// `OstyDamageVar`, or a `CalculatedDamageVar` built `FromOsty`.
     OstyDamage,
@@ -1005,13 +1008,15 @@ pub trait PotionTable: Table {
     fn usage(self) -> PotionUsage;
 
     /// What it can be pointed at, or `None` for one that works it out from a
-    /// fight rather than printing it.
+    /// fight rather than printing it, which
+    /// [`Rules::computed_potion_target`] answers.
     fn target(self) -> Option<Self::Target>;
 
     /// Whether the potion's own check lets it be drunk.
     ///
     /// `PotionModel.PassesCustomUsabilityCheck`, which is `virtual`. `None`
-    /// for the one potion that answers it from live state.
+    /// for the one potion that answers it from live state, which
+    /// [`Rules::computed_potion_check`] answers.
     fn passes_own_check(self) -> Option<bool>;
 }
 
@@ -1879,6 +1884,12 @@ pub trait Fight<V: ContentVersion> {
     /// leaving, and leaves when `dequeue` says so. Nothing, with no orb.
     fn evoke_next(&mut self, _dequeue: bool) {
         unimplemented!("evoking an orb")
+    }
+
+    /// `OrbCmd.AddSlots`: `amount` more orb slots for the player, and never
+    /// past ten. Nothing once the fight is ending.
+    fn add_orb_slots(&mut self, _amount: V::Number) {
+        unimplemented!("adding orb slots")
     }
 
     /// How many orbs the player holds, which is `OrbQueue.Orbs.Count`.
@@ -4996,6 +5007,21 @@ pub trait Rules: Hooks {
     ///
     /// A card whose override nobody has ported.
     fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
+
+    /// `PotionModel.TargetType`, overridden, for a potion that reads whether a
+    /// fight is in progress, which `in_combat` says.
+    ///
+    /// # Panics
+    ///
+    /// A potion whose override nobody has ported.
+    fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType;
+
+    /// `PotionModel.PassesCustomUsabilityCheck`, overridden, the same way.
+    ///
+    /// # Panics
+    ///
+    /// A potion whose override nobody has ported.
+    fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool;
 
     /// What a card works out from the fight for a number it prints.
     ///

@@ -1541,6 +1541,9 @@ fn modified_from<V: Rules>(fight: Walk<'_, V>, amount: f64, phases: &[ModifyHook
     num_traits::cast(number.max(0.0).trunc()).expect("a modified number is a game number")
 }
 
+/// The most orb slots `OrbCmd.AddSlots` gives a player.
+const MAX_ORB_SLOTS: u8 = 10;
+
 /// `ModifyHpLost` in the phases after a hit found who takes it.
 fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number) -> V::Number {
     let player = fight.live.player().id;
@@ -1900,6 +1903,12 @@ pub(crate) fn effect_of<V: Rules>(
                 scaling: Scaling::Dynamic,
             })
         }
+        CardNumberModifier::UnpoweredDamage => target.map(|target| Effect::Attack {
+            dealer,
+            target,
+            damage: Amount::Var(key),
+            scaling: Scaling::Static,
+        }),
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
             amount: Amount::Var(key),
@@ -1927,7 +1936,9 @@ pub(crate) fn dealer_of<V: Rules>(
                 .unwrap_or_else(|| unimplemented!("Osty's damage with no Osty"))
                 .id
         }
-        CardNumberModifier::Damage | CardNumberModifier::Block => player::<V>(creatures),
+        CardNumberModifier::Damage
+        | CardNumberModifier::UnpoweredDamage
+        | CardNumberModifier::Block => player::<V>(creatures),
     }
 }
 
@@ -2588,6 +2599,21 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 return;
             }
         }
+    }
+
+    fn add_orb_slots(&mut self, amount: V::Number) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let orbs = self.live.orbs.get_or_insert_with(|| sts2_core::Orbs {
+            capacity: V::Count::zero(),
+            queue: Vec::new(),
+        });
+        let capacity: V::Number =
+            num_traits::cast(orbs.capacity).expect("an orb capacity fits a game number");
+        let most: V::Number = num_traits::cast(MAX_ORB_SLOTS).expect("ten fits a game number");
+        let added = amount.min(most - capacity);
+        orbs.capacity = num_traits::cast(capacity + added).expect("an orb capacity fits a count");
     }
 
     fn damage_unblockable(&mut self, target: CombatId, amount: V::Number) {

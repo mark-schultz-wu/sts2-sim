@@ -1,0 +1,6 @@
+# Ship in a Bottle gives ten block now and Block Next Turn at ten.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"SHIP_IN_A_BOTTLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}

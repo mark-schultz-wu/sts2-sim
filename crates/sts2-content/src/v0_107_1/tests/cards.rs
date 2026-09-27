@@ -277,6 +277,7 @@ fn every_printed_number_matches_the_dump() {
                 "OstyDamageVar" | "CalculatedDamageVar+FromOsty" => {
                     Some(CardNumberModifier::OstyDamage)
                 }
+                "DamageVar+Unpowered" => Some(CardNumberModifier::UnpoweredDamage),
                 "BlockVar" | "CalculatedBlockVar" => Some(CardNumberModifier::Block),
                 _ => None,
             },

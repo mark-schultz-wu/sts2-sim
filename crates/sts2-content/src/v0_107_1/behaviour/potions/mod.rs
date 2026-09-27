@@ -8,6 +8,7 @@
 //! list of what a run can drink.
 
 mod defect;
+mod event;
 mod ironclad;
 mod necrobinder;
 mod regent;
@@ -17,6 +18,7 @@ mod silent;
 use sts2_core::{Fight, Played, PotionTable, Taken};
 
 use super::super::V0_107_1 as V;
+use super::super::generated::cards::TargetType;
 use super::super::generated::potions::{Potion, PotionPool};
 
 /// What a potion's own numbers are held as.
@@ -40,6 +42,7 @@ pub(crate) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         PotionPool::Defect => defect::on_use(potion, fight),
         PotionPool::Necrobinder => necrobinder::on_use(potion, fight),
         PotionPool::Regent => regent::on_use(potion, fight),
+        PotionPool::Event => event::on_use(potion, fight),
         _ => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }
@@ -84,4 +87,16 @@ pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -
     match at {
         Resume::Shared(at) => shared::resume(fight, at, answer),
     }
+}
+
+/// [`sts2_core::Rules::computed_potion_target`]. Only an event potion works
+/// its target out.
+pub(crate) fn computed_target(potion: Potion, in_combat: bool) -> TargetType {
+    event::computed_target(potion, in_combat)
+}
+
+/// [`sts2_core::Rules::computed_potion_check`]. Only an event potion answers
+/// from the run.
+pub(crate) fn computed_check(potion: Potion, in_combat: bool) -> bool {
+    event::computed_check(potion, in_combat)
 }

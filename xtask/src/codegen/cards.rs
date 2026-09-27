@@ -180,6 +180,7 @@ fn previewed(class: &str) -> Option<&'static str> {
     Some(match class {
         "DamageVar" | "CalculatedDamageVar" => "Some(CardNumberModifier::Damage)",
         "OstyDamageVar" | "CalculatedDamageVar+FromOsty" => "Some(CardNumberModifier::OstyDamage)",
+        "DamageVar+Unpowered" => "Some(CardNumberModifier::UnpoweredDamage)",
         "BlockVar" | "CalculatedBlockVar" => "Some(CardNumberModifier::Block)",
         "CalculationBaseVar"
         | "CalculationExtraVar"

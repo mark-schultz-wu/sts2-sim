@@ -14,6 +14,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Serialization;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Unlocks;
+using MegaCrit.Sts2.Core.ValueProps;
 
 namespace Sts2Dump;
 
@@ -234,13 +235,25 @@ public static class CardDump
     /// A <c>CalculatedDamageVar</c> built with <c>FromOsty</c> is dumped as
     /// <c>CalculatedDamageVar+FromOsty</c>. Its preview runs the damage hooks
     /// with the owner's Osty dealing, as an <c>OstyDamageVar</c>'s does.
+    ///
+    /// A <c>DamageVar</c> whose <c>Props</c> carry <c>Unpowered</c> is dumped
+    /// with <c>+Unpowered</c> on its class. Its preview hands those props to
+    /// the damage hooks, and a hook that reads a powered attack skips it.
     /// </remarks>
     private static string VarClass(DynamicVar var)
     {
         string name = var.GetType().Name;
         int arity = name.IndexOf('`');
         name = arity < 0 ? name : name.Substring(0, arity);
-        return var is CalculatedDamageVar { IsFromOsty: true } ? name + "+FromOsty" : name;
+        if (var is CalculatedDamageVar { IsFromOsty: true })
+        {
+            name += "+FromOsty";
+        }
+        if (var is DamageVar damage && damage.Props.HasFlag(ValueProp.Unpowered))
+        {
+            name += "+Unpowered";
+        }
+        return name;
     }
 
     /// <summary>

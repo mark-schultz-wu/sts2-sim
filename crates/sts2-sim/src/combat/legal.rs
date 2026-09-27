@@ -418,19 +418,17 @@ fn undrinkable<V: Rules>(
         }
         Some(_) => {}
     }
-    match potion.passes_own_check() {
-        Some(true) => None,
-        Some(false) => Some(Undrinkable::ItsOwnCheck),
-        None => unimplemented!("a potion that decides for itself whether it can be drunk"),
-    }
+    let passes = potion
+        .passes_own_check()
+        .unwrap_or_else(|| V::computed_potion_check(potion, fight.is_some()));
+    (!passes).then_some(Undrinkable::ItsOwnCheck)
 }
 
 /// The creatures a potion can be pointed at.
 fn aimable<V: Rules>(potion: V::Potion, creatures: &[Fighter<V>]) -> Targets {
-    let Some(target) = potion.target() else {
-        // One of the potions that work their target out from the fight.
-        unimplemented!("a potion that decides its own target");
-    };
+    let target = potion
+        .target()
+        .unwrap_or_else(|| V::computed_potion_target(potion, true));
     creatures
         .iter()
         .filter(|creature| {
@@ -560,19 +558,22 @@ fn previewed<V: Rules>(
                 (
                     Some(
                         modifier @ (sts2_core::CardNumberModifier::Damage
-                        | sts2_core::CardNumberModifier::OstyDamage),
+                        | sts2_core::CardNumberModifier::OstyDamage
+                        | sts2_core::CardNumberModifier::UnpoweredDamage),
                     ),
                     None,
                 ) => {
                     let dealer = super::board::dealer_of::<V>(modifier, creatures);
-                    // A card's `DamageVar` is a powered attack's.
+                    // A card's `DamageVar` is a powered attack's unless its
+                    // props say otherwise.
+                    let powered = modifier != sts2_core::CardNumberModifier::UnpoweredDamage;
                     Some(super::board::modified::<V>(
                         fight,
                         Some(dealer),
                         None,
                         Some(held),
                         printed(),
-                        true,
+                        powered,
                     ))
                 }
                 (Some(modifier), _) => {

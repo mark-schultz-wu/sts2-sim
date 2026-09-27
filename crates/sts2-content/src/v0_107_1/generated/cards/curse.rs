@@ -154,7 +154,7 @@ pub(super) static ROWS: [CardData; 18] = [
             id: CardVar::Damage,
             base: 2,
             calculated: false,
-            modifier: Some(CardNumberModifier::Damage),
+            modifier: Some(CardNumberModifier::UnpoweredDamage),
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
