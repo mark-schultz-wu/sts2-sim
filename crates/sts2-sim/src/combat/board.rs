@@ -1015,7 +1015,7 @@ impl<'a, V: Rules> Board<'a, V> {
         );
         for (listener, effect) in asked {
             match effect {
-                HookEffect::ReturnCard(card) => self.live.returned.push(card),
+                HookEffect::ReturnCard(card) => self.live.extra_cards.push(card),
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }

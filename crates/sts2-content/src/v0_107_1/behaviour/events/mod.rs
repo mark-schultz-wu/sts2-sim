@@ -33,6 +33,7 @@ mod tablet_of_truth;
 mod tea_master;
 mod tezcatara;
 mod the_future_of_potions;
+mod the_lantern_key;
 mod the_legends_were_true;
 mod this_or_that;
 mod wellspring;
@@ -59,6 +60,7 @@ use super::relics::tradable;
 pub enum State {
     InfestedAutomaton(infested_automaton::State),
     Symbiote(symbiote::State),
+    TheLanternKey(the_lantern_key::State),
     ZenWeaver(zen_weaver::State),
     RanwidTheElder(ranwid_the_elder::State),
     RelicTrader(relic_trader::State),
@@ -242,6 +244,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::InfestedAutomaton(infested_automaton::InfestedAutomaton.enter(run, rng))
         }
         Event::Symbiote => State::Symbiote(symbiote::Symbiote.enter(run, rng)),
+        Event::TheLanternKey => {
+            State::TheLanternKey(the_lantern_key::TheLanternKey.enter(run, rng))
+        }
         Event::ZenWeaver => State::ZenWeaver(zen_weaver::ZenWeaver.enter(run, rng)),
         Event::RanwidTheElder => {
             State::RanwidTheElder(ranwid_the_elder::RanwidTheElder.enter(run, rng))
@@ -352,6 +357,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
             infested_automaton::InfestedAutomaton.observe(state, run)
         }
         State::Symbiote(state) => symbiote::Symbiote.observe(state, run),
+        State::TheLanternKey(state) => the_lantern_key::TheLanternKey.observe(state, run),
         State::ZenWeaver(state) => zen_weaver::ZenWeaver.observe(state, run),
         State::RanwidTheElder(state) => ranwid_the_elder::RanwidTheElder.observe(state, run),
         State::RelicTrader(state) => relic_trader::RelicTrader.observe(state, run),
@@ -414,6 +420,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             infested_automaton::InfestedAutomaton.choose(state, option, run, rng)
         }
         State::Symbiote(state) => symbiote::Symbiote.choose(state, option, run, rng),
+        State::TheLanternKey(state) => {
+            the_lantern_key::TheLanternKey.choose(state, option, run, rng)
+        }
         State::ZenWeaver(state) => zen_weaver::ZenWeaver.choose(state, option, run, rng),
         State::RanwidTheElder(state) => {
             ranwid_the_elder::RanwidTheElder.choose(state, option, run, rng)

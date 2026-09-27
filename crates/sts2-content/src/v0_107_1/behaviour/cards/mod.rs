@@ -17,9 +17,10 @@ use sts2_core::{CardVars, Fight, Played};
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
 use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, RegentCard,
+    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, QuestCard, RegentCard,
     SilentCard, TokenCard,
 };
+use super::super::generated::events::Event;
 use super::super::generated::powers::Power;
 
 /// What the run holds a card's numbers as.
@@ -293,5 +294,35 @@ pub(crate) fn resume_play<F: Fight<V>>(
         Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),
+    }
+}
+
+/// The act, counted from zero, in which the Lantern Key answers.
+const LANTERN_KEY_ACT: usize = 2;
+
+/// `ModifyUnknownMapPointRoomTypes` for a card in the deck. The Lantern Key
+/// leaves nothing but an event in its act.
+///
+/// # Panics
+///
+/// Any other card, which the run asks only when its class overrides the hook.
+pub(crate) fn narrows_unknown_rooms(card: Cards, act: usize) -> bool {
+    match card {
+        Cards::Quest(QuestCard::LanternKey) => act == LANTERN_KEY_ACT,
+        card => unimplemented!("what {card:?} does to an unknown room"),
+    }
+}
+
+/// `ModifyNextEvent` for a card in the deck. The Lantern Key sends its act's
+/// next event to War Historian Repy.
+///
+/// # Panics
+///
+/// Any other card, which the run asks only when its class overrides the hook.
+pub(crate) fn next_event(card: Cards, act: usize, event: Event) -> Event {
+    match card {
+        Cards::Quest(QuestCard::LanternKey) if act == LANTERN_KEY_ACT => Event::WarHistorianRepy,
+        Cards::Quest(QuestCard::LanternKey) => event,
+        card => unimplemented!("what {card:?} does to the next event"),
     }
 }

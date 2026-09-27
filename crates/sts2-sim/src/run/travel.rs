@@ -119,13 +119,14 @@ impl<V: Rules> State<V> {
                 let mut event_rng =
                     crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
                 let mut streams = *self.streams();
-                let state = self.open_event(event, &mut event_rng, &mut streams);
+                let (state, layout) = self.open_event(event, &mut event_rng, &mut streams)?;
                 let (events_used, _, unknown_odds) = self.event_state();
                 self.enter_event(
                     to,
                     super::state::EnteredEvent {
                         event,
                         state,
+                        layout,
                         rng: event_rng,
                         streams,
                         events_used,
@@ -172,14 +173,21 @@ impl<V: Rules> State<V> {
                     None
                 })
                 .unwrap_or_else(|| unimplemented!("an exhausted event queue"));
+            // `Hook.ModifyNextEvent`, which a deck card can answer.
+            let event = self
+                .deck_hearing(sts2_core::ModelHook::ModifyNextEvent)
+                .fold(event, |event, card| {
+                    V::deck_card_next_event(card, self.act(), event)
+                });
             let mut event_rng =
                 crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
-            let state = self.open_event(event, &mut event_rng, &mut streams);
+            let (state, layout) = self.open_event(event, &mut event_rng, &mut streams)?;
             self.enter_event(
                 to,
                 super::state::EnteredEvent {
                     event,
                     state,
+                    layout,
                     rng: event_rng,
                     streams,
                     events_used,

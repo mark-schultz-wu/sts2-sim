@@ -20,6 +20,7 @@ pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
 mod hive;
 mod overgrowth;
+mod summoned;
 
 type V = V0_107_1;
 
@@ -63,6 +64,7 @@ pub(crate) fn starting_powers(
 
     match overgrowth::starting_powers(monster, ascension)
         .or_else(|| hive::starting_powers(monster, ascension, side))
+        .or_else(|| summoned::starting_powers(monster))
     {
         Some(applied) => applied,
         None if !monster.overrides_virtual(sts2_core::MonsterVirtual::AfterAddedToRoom) => {
