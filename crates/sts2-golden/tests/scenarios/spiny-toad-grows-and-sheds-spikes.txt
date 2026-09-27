@@ -1,0 +1,9 @@
+# The Spiny Toad enters with nothing, then protrudes spikes: Thorns at five.
+# A Strike into it on turn two costs the player five. Its explosion hits,
+# then takes the five Thorns back.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SPINY_TOAD_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

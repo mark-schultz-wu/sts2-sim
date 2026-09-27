@@ -31,18 +31,15 @@ pub enum IntentKind {
     Unknown = 14,
 }
 
-/// A set of [`IntentKind`]s: one bit per kind, at its discriminant.
+/// A move's [`IntentKind`]s, in the order it declares them.
 ///
-/// A set rather than a list because the order is presentation. The
-/// game stores an ordered `AbstractIntent[]`, but the only readers are
-/// the node that lays out intent icons and the one that gathers hover
-/// tips; nothing in the rules looks at it, and no move in the build
-/// telegraphs one kind twice, so nothing else is lost.
+/// Up to 3, four bits each at the kind's discriminant, the first in the
+/// low bits. 15 marks a place left empty.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct IntentSet(u16);
+pub struct IntentList(u16);
 
-impl IntentSet {
-    /// Every member, in the enum's own order.
+impl IntentList {
+    /// Every kind, at its discriminant.
     const MEMBERS: [IntentKind; 15] = [
         IntentKind::Attack,
         IntentKind::Buff,
@@ -61,43 +58,46 @@ impl IntentSet {
         IntentKind::Unknown,
     ];
 
+    /// How many kinds a move can declare.
+    const PLACES: usize = 3;
+
+    /// A place with no kind in it.
+    const EMPTY: u16 = 15;
+
     pub const fn new(members: &[IntentKind]) -> Self {
+        assert!(
+            members.len() <= Self::PLACES,
+            "a move declares too many intents"
+        );
         let mut bits = 0u16;
-        let mut i = 0;
-        while i < members.len() {
-            bits |= 1u16 << members[i] as u8;
-            i += 1;
+        let mut at = 0;
+        while at < Self::PLACES {
+            let kind = match at < members.len() {
+                true => members[at] as u16,
+                false => Self::EMPTY,
+            };
+            bits |= kind << (4 * at);
+            at += 1;
         }
         Self(bits)
     }
 
-    pub const fn contains(self, member: IntentKind) -> bool {
-        self.0 & (1u16 << member as u8) != 0
-    }
-
-    /// The members, in the enum's own order.
+    /// The kinds, in the order the move declares them.
     pub fn iter(self) -> impl Iterator<Item = IntentKind> {
-        Self::MEMBERS.into_iter().filter(move |&m| self.contains(m))
+        (0..Self::PLACES)
+            .map(move |at| (self.0 >> (4 * at)) & 0xF)
+            .take_while(|&kind| kind != Self::EMPTY)
+            .map(|kind| Self::MEMBERS[usize::from(kind)])
+    }
+
+    pub fn contains(self, member: IntentKind) -> bool {
+        self.iter().any(|kind| kind == member)
     }
 }
 
-impl std::fmt::Debug for IntentSet {
+impl std::fmt::Debug for IntentList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_set().entries(self.iter()).finish()
-    }
-}
-
-impl sts2_core::FlagSet for IntentSet {
-    type Member = IntentKind;
-
-    const MEMBERS: &'static [IntentKind] = &Self::MEMBERS;
-
-    fn from_members(members: &[IntentKind]) -> Self {
-        Self::new(members)
-    }
-
-    fn contains(self, member: IntentKind) -> bool {
-        Self::contains(self, member)
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 
@@ -116,17 +116,17 @@ pub struct Attack {
 
 /// Everything a move telegraphs.
 ///
-/// The kinds as a set, and beside it the numbers the three kinds that
+/// The kinds in order, and beside them the numbers the three kinds that
 /// carry any actually carry. Held here rather than one payload per
 /// intent because it saves the slice: a move's telegraph is now inline,
 /// and the whole table lost a separate array of 433 intents.
 ///
-/// The two payloads and the set agree, which codegen checks: `attack`
-/// is present exactly when the set holds `Attack` or `DeathBlow`, and
+/// The two payloads and the kinds agree, which codegen checks: `attack`
+/// is present exactly when the kinds hold `Attack` or `DeathBlow`, and
 /// `cards` exactly when it holds `StatusCard`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Intents {
-    pub kinds: IntentSet,
+    pub kinds: IntentList,
     /// The numbers for whichever of `Attack` or `DeathBlow` is in
     /// `kinds`.
     pub attack: Option<Attack>,

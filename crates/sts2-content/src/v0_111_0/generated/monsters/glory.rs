@@ -4,7 +4,7 @@
 //! Source: `dumps/monsters.txt`, build v0.111.0 (41cef1ea), assembly 1579942752, content 1568834832.
 
 use super::{
-    Attack, Branch, FollowUp, IntentKind, IntentSet, Intents, MonsterData, Move, MoveId, Repeat,
+    Attack, Branch, FollowUp, IntentKind, IntentList, Intents, MonsterData, Move, MoveId, Repeat,
     RepeatCount, State,
 };
 use crate::{Field, Scaled};
@@ -24,7 +24,7 @@ pub(super) const AEONGLASS: MonsterData = MonsterData {
             id: MoveId::EbbMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Defend]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Defend]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 22u16,
@@ -42,7 +42,7 @@ pub(super) const AEONGLASS: MonsterData = MonsterData {
             id: MoveId::EyeLasersMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 11u16,
@@ -60,7 +60,7 @@ pub(super) const AEONGLASS: MonsterData = MonsterData {
             id: MoveId::IncreasingIntensityMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::StatusCard, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::StatusCard, IntentKind::Buff]),
                 attack: None,
                 cards: Some(Field::Constant(Scaled {
                     base: 1u8,
@@ -86,7 +86,7 @@ pub(super) const AXEBOT: MonsterData = MonsterData {
             id: MoveId::BootUpMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Defend, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Defend, IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -95,7 +95,7 @@ pub(super) const AXEBOT: MonsterData = MonsterData {
             id: MoveId::HammerUppercutMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Debuff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 14u16,
@@ -113,7 +113,7 @@ pub(super) const AXEBOT: MonsterData = MonsterData {
             id: MoveId::OneTwoMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 10u16,
@@ -145,7 +145,7 @@ pub(super) const DEVOTED_SCULPTOR: MonsterData = MonsterData {
             id: MoveId::ForbiddenIncantationMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -154,7 +154,7 @@ pub(super) const DEVOTED_SCULPTOR: MonsterData = MonsterData {
             id: MoveId::SavageMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 12u16,
@@ -186,7 +186,7 @@ pub(super) const FABRICATOR: MonsterData = MonsterData {
             id: MoveId::DisintegrateMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 11u16,
@@ -204,7 +204,7 @@ pub(super) const FABRICATOR: MonsterData = MonsterData {
             id: MoveId::FabricateMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Summon]),
+                kinds: IntentList::new(&[IntentKind::Summon]),
                 attack: None,
                 cards: None,
             },
@@ -213,7 +213,7 @@ pub(super) const FABRICATOR: MonsterData = MonsterData {
             id: MoveId::FabricatingStrikeMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Summon]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Summon]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 18u16,
@@ -258,7 +258,7 @@ pub(super) const FLAIL_KNIGHT: MonsterData = MonsterData {
             id: MoveId::FlailMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 9u16,
@@ -276,7 +276,7 @@ pub(super) const FLAIL_KNIGHT: MonsterData = MonsterData {
             id: MoveId::RamMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 15u16,
@@ -311,7 +311,7 @@ pub(super) const FLAIL_KNIGHT: MonsterData = MonsterData {
             id: MoveId::WarChant,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -334,7 +334,7 @@ pub(super) const FROG_KNIGHT: MonsterData = MonsterData {
             id: MoveId::BeetleCharge,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 35u16,
@@ -352,7 +352,7 @@ pub(super) const FROG_KNIGHT: MonsterData = MonsterData {
             id: MoveId::ForTheQueen,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -362,7 +362,7 @@ pub(super) const FROG_KNIGHT: MonsterData = MonsterData {
             id: MoveId::StrikeDownEvil,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 21u16,
@@ -380,7 +380,7 @@ pub(super) const FROG_KNIGHT: MonsterData = MonsterData {
             id: MoveId::TongueLash,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Debuff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 13u16,
@@ -412,7 +412,7 @@ pub(super) const GLOBE_HEAD: MonsterData = MonsterData {
             id: MoveId::GalvanicBurst,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Buff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 16u16,
@@ -430,7 +430,7 @@ pub(super) const GLOBE_HEAD: MonsterData = MonsterData {
             id: MoveId::ShockingSlap,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Debuff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 13u16,
@@ -448,7 +448,7 @@ pub(super) const GLOBE_HEAD: MonsterData = MonsterData {
             id: MoveId::ThunderStrike,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 6u16,
@@ -479,7 +479,7 @@ pub(super) const GUARDBOT: MonsterData = MonsterData {
         id: MoveId::GuardMove,
         follow_up: FollowUp::Next(0),
         intents: Intents {
-            kinds: IntentSet::new(&[IntentKind::Defend]),
+            kinds: IntentList::new(&[IntentKind::Defend]),
             attack: None,
             cards: None,
         },
@@ -502,7 +502,7 @@ pub(super) const LIVING_SHIELD: MonsterData = MonsterData {
             id: MoveId::ShieldSlamMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 6u16,
@@ -520,7 +520,7 @@ pub(super) const LIVING_SHIELD: MonsterData = MonsterData {
             id: MoveId::SmashMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Buff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 16u16,
@@ -552,7 +552,7 @@ pub(super) const MAGI_KNIGHT: MonsterData = MonsterData {
             id: MoveId::DampenMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Debuff]),
                 attack: None,
                 cards: None,
             },
@@ -561,7 +561,7 @@ pub(super) const MAGI_KNIGHT: MonsterData = MonsterData {
             id: MoveId::MagicBomb,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 35u16,
@@ -579,7 +579,7 @@ pub(super) const MAGI_KNIGHT: MonsterData = MonsterData {
             id: MoveId::PowerShieldMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Defend]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Defend]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 6u16,
@@ -597,7 +597,7 @@ pub(super) const MAGI_KNIGHT: MonsterData = MonsterData {
             id: MoveId::PrepMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Defend]),
+                kinds: IntentList::new(&[IntentKind::Defend]),
                 attack: None,
                 cards: None,
             },
@@ -606,7 +606,7 @@ pub(super) const MAGI_KNIGHT: MonsterData = MonsterData {
             id: MoveId::RamMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 10u16,
@@ -638,7 +638,7 @@ pub(super) const MECHA_KNIGHT: MonsterData = MonsterData {
             id: MoveId::ChargeMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 25u16,
@@ -656,7 +656,7 @@ pub(super) const MECHA_KNIGHT: MonsterData = MonsterData {
             id: MoveId::FlamethrowerMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::StatusCard]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::StatusCard]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 8u16,
@@ -677,7 +677,7 @@ pub(super) const MECHA_KNIGHT: MonsterData = MonsterData {
             id: MoveId::HeavyCleaveMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 35u16,
@@ -695,7 +695,7 @@ pub(super) const MECHA_KNIGHT: MonsterData = MonsterData {
             id: MoveId::WindupMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Defend, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Defend, IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -717,7 +717,7 @@ pub(super) const NOISEBOT: MonsterData = MonsterData {
         id: MoveId::NoiseMove,
         follow_up: FollowUp::Next(0),
         intents: Intents {
-            kinds: IntentSet::new(&[IntentKind::StatusCard]),
+            kinds: IntentList::new(&[IntentKind::StatusCard]),
             attack: None,
             cards: Some(Field::Constant(Scaled {
                 base: 2u8,
@@ -742,7 +742,7 @@ pub(super) const OWL_MAGISTRATE: MonsterData = MonsterData {
             id: MoveId::JudicialFlight,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -751,7 +751,7 @@ pub(super) const OWL_MAGISTRATE: MonsterData = MonsterData {
             id: MoveId::MagistrateScrutiny,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 16u16,
@@ -769,7 +769,7 @@ pub(super) const OWL_MAGISTRATE: MonsterData = MonsterData {
             id: MoveId::PeckAssault,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 4u16,
@@ -787,7 +787,7 @@ pub(super) const OWL_MAGISTRATE: MonsterData = MonsterData {
             id: MoveId::Verdict,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Debuff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 33u16,
@@ -820,7 +820,7 @@ pub(super) const QUEEN: MonsterData = MonsterData {
             id: MoveId::BurnBrightForMeMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff, IntentKind::Defend]),
+                kinds: IntentList::new(&[IntentKind::Buff, IntentKind::Defend]),
                 attack: None,
                 cards: None,
             },
@@ -829,7 +829,7 @@ pub(super) const QUEEN: MonsterData = MonsterData {
             id: MoveId::EnrageMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -838,7 +838,7 @@ pub(super) const QUEEN: MonsterData = MonsterData {
             id: MoveId::ExecutionMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 15u16,
@@ -856,7 +856,7 @@ pub(super) const QUEEN: MonsterData = MonsterData {
             id: MoveId::OffWithYourHeadMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 3u16,
@@ -874,7 +874,7 @@ pub(super) const QUEEN: MonsterData = MonsterData {
             id: MoveId::PuppetStringsMove,
             follow_up: FollowUp::Next(7),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::CardDebuff]),
+                kinds: IntentList::new(&[IntentKind::CardDebuff]),
                 attack: None,
                 cards: None,
             },
@@ -884,7 +884,7 @@ pub(super) const QUEEN: MonsterData = MonsterData {
             id: MoveId::YouAreMineMove,
             follow_up: FollowUp::Next(6),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Debuff]),
                 attack: None,
                 cards: None,
             },
@@ -907,7 +907,7 @@ pub(super) const SCROLL_OF_BITING: MonsterData = MonsterData {
             id: MoveId::Chew,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 5u16,
@@ -925,7 +925,7 @@ pub(super) const SCROLL_OF_BITING: MonsterData = MonsterData {
             id: MoveId::Chomp,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 14u16,
@@ -943,7 +943,7 @@ pub(super) const SCROLL_OF_BITING: MonsterData = MonsterData {
             id: MoveId::MoreTeeth,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -978,7 +978,7 @@ pub(super) const SLIMED_BERSERKER: MonsterData = MonsterData {
             id: MoveId::FuriousPummelingMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 4u16,
@@ -996,7 +996,7 @@ pub(super) const SLIMED_BERSERKER: MonsterData = MonsterData {
             id: MoveId::LeechingHugMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Debuff, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Debuff, IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -1005,7 +1005,7 @@ pub(super) const SLIMED_BERSERKER: MonsterData = MonsterData {
             id: MoveId::SmotherMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 30u16,
@@ -1023,7 +1023,7 @@ pub(super) const SLIMED_BERSERKER: MonsterData = MonsterData {
             id: MoveId::VomitIchorMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::StatusCard]),
+                kinds: IntentList::new(&[IntentKind::StatusCard]),
                 attack: None,
                 cards: Some(Field::Constant(Scaled {
                     base: 10u8,
@@ -1049,7 +1049,7 @@ pub(super) const SOUL_NEXUS: MonsterData = MonsterData {
             id: MoveId::DrainLifeMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::DebuffStrong]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::DebuffStrong]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 18u16,
@@ -1067,7 +1067,7 @@ pub(super) const SOUL_NEXUS: MonsterData = MonsterData {
             id: MoveId::MaelstromMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 6u16,
@@ -1102,7 +1102,7 @@ pub(super) const SOUL_NEXUS: MonsterData = MonsterData {
             id: MoveId::SoulBurnMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 29u16,
@@ -1134,7 +1134,7 @@ pub(super) const SPECTRAL_KNIGHT: MonsterData = MonsterData {
             id: MoveId::Hex,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Debuff]),
                 attack: None,
                 cards: None,
             },
@@ -1155,7 +1155,7 @@ pub(super) const SPECTRAL_KNIGHT: MonsterData = MonsterData {
             id: MoveId::SoulFlame,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 3u16,
@@ -1173,7 +1173,7 @@ pub(super) const SPECTRAL_KNIGHT: MonsterData = MonsterData {
             id: MoveId::SoulSlash,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 15u16,
@@ -1204,7 +1204,7 @@ pub(super) const STABBOT: MonsterData = MonsterData {
         id: MoveId::StabMove,
         follow_up: FollowUp::Next(0),
         intents: Intents {
-            kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
+            kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Debuff]),
             attack: Some(Attack {
                 damage: Field::Constant(Scaled {
                     base: 11u16,
@@ -1235,7 +1235,7 @@ pub(super) const TEST_SUBJECT: MonsterData = MonsterData {
             id: MoveId::BigPounce,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 45u16,
@@ -1253,7 +1253,7 @@ pub(super) const TEST_SUBJECT: MonsterData = MonsterData {
             id: MoveId::BiteMove,
             follow_up: FollowUp::Next(7),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 20u16,
@@ -1271,7 +1271,7 @@ pub(super) const TEST_SUBJECT: MonsterData = MonsterData {
             id: MoveId::BurningGrowlMove,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::StatusCard, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::StatusCard, IntentKind::Buff]),
                 attack: None,
                 cards: Some(Field::Constant(Scaled {
                     base: 3u8,
@@ -1283,7 +1283,7 @@ pub(super) const TEST_SUBJECT: MonsterData = MonsterData {
             id: MoveId::MultiClawMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 10u16,
@@ -1298,7 +1298,7 @@ pub(super) const TEST_SUBJECT: MonsterData = MonsterData {
             id: MoveId::Phase3LacerateMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 10u16,
@@ -1316,7 +1316,7 @@ pub(super) const TEST_SUBJECT: MonsterData = MonsterData {
             id: MoveId::RespawnMove,
             follow_up: FollowUp::OncePerformed(6),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Heal, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Heal, IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -1326,7 +1326,7 @@ pub(super) const TEST_SUBJECT: MonsterData = MonsterData {
             id: MoveId::SkullBashMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Debuff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 14u16,
@@ -1358,7 +1358,7 @@ pub(super) const THE_FORGOTTEN: MonsterData = MonsterData {
             id: MoveId::Dread,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Computed,
                     repeats: Field::Constant(Scaled {
@@ -1373,7 +1373,7 @@ pub(super) const THE_FORGOTTEN: MonsterData = MonsterData {
             id: MoveId::Miasma,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Debuff, IntentKind::Defend, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Debuff, IntentKind::Defend, IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -1396,7 +1396,7 @@ pub(super) const THE_LOST: MonsterData = MonsterData {
             id: MoveId::DebilitatingSmog,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Debuff, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Debuff, IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -1405,7 +1405,7 @@ pub(super) const THE_LOST: MonsterData = MonsterData {
             id: MoveId::EyeLasers,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 4u16,
@@ -1437,7 +1437,7 @@ pub(super) const TORCH_HEAD_AMALGAM: MonsterData = MonsterData {
             id: MoveId::BeamMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 8u16,
@@ -1455,7 +1455,7 @@ pub(super) const TORCH_HEAD_AMALGAM: MonsterData = MonsterData {
             id: MoveId::StrongTackleMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 26u16,
@@ -1473,7 +1473,7 @@ pub(super) const TORCH_HEAD_AMALGAM: MonsterData = MonsterData {
             id: MoveId::Tackle2Move,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 18u16,
@@ -1491,7 +1491,7 @@ pub(super) const TORCH_HEAD_AMALGAM: MonsterData = MonsterData {
             id: MoveId::Tackle3Move,
             follow_up: FollowUp::Next(4),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 14u16,
@@ -1509,7 +1509,7 @@ pub(super) const TORCH_HEAD_AMALGAM: MonsterData = MonsterData {
             id: MoveId::Tackle4Move,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 14u16,
@@ -1541,7 +1541,7 @@ pub(super) const TURRET_OPERATOR: MonsterData = MonsterData {
             id: MoveId::ReloadMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -1550,7 +1550,7 @@ pub(super) const TURRET_OPERATOR: MonsterData = MonsterData {
             id: MoveId::UnloadMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 3u16,
@@ -1568,7 +1568,7 @@ pub(super) const TURRET_OPERATOR: MonsterData = MonsterData {
             id: MoveId::UnloadMove2,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 3u16,
@@ -1599,7 +1599,7 @@ pub(super) const ZAPBOT: MonsterData = MonsterData {
         id: MoveId::Zap,
         follow_up: FollowUp::Next(0),
         intents: Intents {
-            kinds: IntentSet::new(&[IntentKind::Attack]),
+            kinds: IntentList::new(&[IntentKind::Attack]),
             attack: Some(Attack {
                 damage: Field::Constant(Scaled {
                     base: 14u16,

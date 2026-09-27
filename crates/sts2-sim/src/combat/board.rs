@@ -594,6 +594,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             },
                             dealer,
                             powered,
+                            card: card.and(self.playing),
                         },
                     );
                     self.after_hit(asked);

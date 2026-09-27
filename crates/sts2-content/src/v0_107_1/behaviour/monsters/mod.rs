@@ -184,6 +184,8 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
     }
     match monster {
         Monster::ThievingHopper
+        | Monster::LouseProgenitor
+        | Monster::SpinyToad
         | Monster::BowlbugRock
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront

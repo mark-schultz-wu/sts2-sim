@@ -501,7 +501,7 @@ fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> 
         let found = intent_kind(kind);
         assert!(
             intents.kinds.contains(found),
-            "{where_}: {kind} is not in the set"
+            "{where_}: {kind} is not in the list"
         );
         assert!(
             !expected.contains(&found),
@@ -530,13 +530,14 @@ fn check_intents(monster: &str, state: &str, intents: &Intents, count: &str) -> 
         }
     }
 
-    // The other direction: a bit the dump never asked for would otherwise sit
-    // in the set unnoticed, and so would a payload with no intent to belong to.
-    let mut got: Vec<IntentKind> = intents.kinds.iter().collect();
-    let mut want = expected.clone();
-    got.sort_by_key(|k| *k as u8);
-    want.sort_by_key(|k| *k as u8);
-    assert_eq!(got, want, "{monster}.{state}: the set has extra kinds");
+    // The other direction: a kind the dump never asked for would otherwise sit
+    // in the list unnoticed, and so would a payload with no intent to belong
+    // to. The list keeps the dump's order.
+    let got: Vec<IntentKind> = intents.kinds.iter().collect();
+    assert_eq!(
+        got, expected,
+        "{monster}.{state}: the list differs from the dump"
+    );
 
     let attacks = expected
         .iter()
