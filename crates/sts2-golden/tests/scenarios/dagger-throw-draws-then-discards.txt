@@ -1,0 +1,7 @@
+# `DaggerThrow` hits its target, draws one card, then discards one card of
+# the hand.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DAGGER_THROW"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"answer","cards":[1]}

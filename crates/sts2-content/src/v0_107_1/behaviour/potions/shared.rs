@@ -27,6 +27,9 @@ const CURE_ALL_CARDS: Number = 2;
 const CURE_ALL_ENERGY: Number = 1;
 /// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
 const DEXTERITY: Number = 2;
+/// `BottledPotential`'s `CardsVar(5)`.
+const BOTTLED_POTENTIAL: Number = 5;
+
 /// `EnergyPotion`'s `EnergyVar(2)`.
 const ENERGY: Number = 2;
 
@@ -212,6 +215,15 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         // `AnyPlayer` again, for each of these.
         Potion::SwiftPotion => {
             fight.draw(SWIFT);
+            Played::Done
+        }
+        // `AnyPlayer`: the whole hand onto the bottom of the draw pile, a
+        // shuffle, then its `Cards` drawn.
+        Potion::BottledPotential => {
+            let hand = fight.cards_in(Pile::Hand);
+            fight.act_on(sts2_core::PileAct::IntoDraw, &hand);
+            fight.shuffle();
+            fight.draw(BOTTLED_POTENTIAL);
             Played::Done
         }
         Potion::EnergyPotion => {

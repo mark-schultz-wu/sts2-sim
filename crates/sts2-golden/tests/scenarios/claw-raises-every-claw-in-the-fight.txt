@@ -1,0 +1,8 @@
+# `Claw` raises the damage of every Claw its owner holds in the fight,
+# itself included, once its hit lands. The second Claw hits for five.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":5,"target":1}

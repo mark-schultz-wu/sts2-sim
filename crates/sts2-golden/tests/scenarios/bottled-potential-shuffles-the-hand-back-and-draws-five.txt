@@ -1,0 +1,8 @@
+# `BottledPotential` puts the whole hand on the bottom of the draw pile, then
+# shuffles the discard and draw piles together, then draws five. The Strike
+# played first is in that shuffle.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"BOTTLED_POTENTIAL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"use_potion","index":0,"target":null}

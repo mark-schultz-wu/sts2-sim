@@ -1156,6 +1156,14 @@ pub(super) fn act_on<V: Rules>(
                 true => Pile::Discard,
                 false => Pile::Hand,
             },
+            sts2_core::PileAct::IntoDraw => Pile::Draw,
+            // `CardPilePosition.Top`, the front, where a draw takes from.
+            sts2_core::PileAct::OntoDrawTop => {
+                live.cards.move_to(from, at, Pile::Draw);
+                live.cards
+                    .move_to_top(Pile::Draw, live.cards.len(Pile::Draw) - 1);
+                continue;
+            }
         };
         live.cards.move_to(from, at, to);
     }

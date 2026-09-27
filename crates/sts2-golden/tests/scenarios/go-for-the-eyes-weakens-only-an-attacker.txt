@@ -1,0 +1,10 @@
+# `GoForTheEyes` applies Weak only to a target that `IntendsToAttack`. The
+# Shrinker Beetle opens on a strong debuff, so the first play only hits. Its
+# second move attacks, and the second play weakens it.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"grant","card":"GO_FOR_THE_EYES"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"GO_FOR_THE_EYES"}
+{"cmd":"play_card","index":5,"target":1}

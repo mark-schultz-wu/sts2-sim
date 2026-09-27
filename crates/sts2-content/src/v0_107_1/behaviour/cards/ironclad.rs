@@ -10,8 +10,48 @@ use super::super::super::generated::cards::{CardVar, IroncladCard};
 use super::super::super::generated::powers::Power;
 use super::V;
 
+/// Where an Ironclad card's play stops to ask something.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `Headbutt`, after its owner picked the card to put back.
+    HeadbuttOntoDraw,
+}
+
+pub(super) fn resume_play<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    match at {
+        // `CardPileCmd.Add(cardModel, PileType.Draw, CardPilePosition.Top)`.
+        Resume::HeadbuttOntoDraw => {
+            fight.act_on(PileAct::OntoDrawTop, chosen.as_slice());
+            Played::Done
+        }
+    }
+}
+
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
+        // `Anger`: its damage to the target, then a clone of itself into the
+        // discard pile.
+        IroncladCard::Anger => {
+            let target = fight.target();
+            strike(fight, target);
+            fight.clone_this(Pile::Discard);
+            Played::Done
+        }
+        // `Headbutt`: its damage to the target, then one card of the discard
+        // pile onto the top of the draw pile.
+        IroncladCard::Headbutt => {
+            let target = fight.target();
+            strike(fight, target);
+            Played::Asking {
+                pile: Pile::Discard,
+                selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Ironclad(Resume::HeadbuttOntoDraw)),
+            }
+        }
         IroncladCard::Whirlwind => whirlwind(fight),
         IroncladCard::Bloodletting => bloodletting(fight),
         IroncladCard::Uppercut => uppercut(fight),

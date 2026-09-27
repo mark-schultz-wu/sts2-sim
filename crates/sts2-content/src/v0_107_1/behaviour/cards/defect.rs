@@ -7,14 +7,152 @@ use super::super::super::generated::cards::{CardVar, DefectCard};
 use super::super::super::generated::orbs::Orb;
 use super::V;
 
+/// Where a Defect card's play stops to ask something.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `Hologram`, after its owner picked the card to take back.
+    HologramIntoHand,
+}
+
+pub(super) fn resume_play<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    match at {
+        // `CardPileCmd.Add(cardModel, PileType.Hand)`.
+        Resume::HologramIntoHand => {
+            fight.act_on(PileAct::IntoHand, chosen.as_slice());
+            Played::Done
+        }
+    }
+}
+
 pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
     match card {
+        DefectCard::Barrage => barrage(fight),
+        DefectCard::Claw => claw(fight),
+        DefectCard::CompileDriver => compile_driver(fight),
+        DefectCard::GoForTheEyes => go_for_the_eyes(fight),
+        DefectCard::GunkUp => gunk_up(fight),
+        DefectCard::Hologram => hologram(fight),
         DefectCard::Dualcast => dualcast(fight),
         DefectCard::Tempest => tempest(fight),
         DefectCard::Scrape => scrape(fight),
         DefectCard::MomentumStrike => momentum_strike(fight),
         DefectCard::TeslaCoil => tesla_coil(fight),
         card => card_plays::defect::on_play(card, fight),
+    }
+}
+
+/// Its damage to `target`, `hits` times, as one attack.
+fn hit<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId, hits: super::Number) {
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+}
+
+/// `Barrage`: its damage to the target, once for each of its
+/// `CalculatedHits`.
+fn barrage<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    let hits = fight.var(CardVar::CalculatedHits);
+    hit(fight, target, hits);
+    Played::Done
+}
+
+/// `Claw`: its damage to the target, then its `Increase` onto the damage of
+/// every Claw its owner holds in the fight, itself included.
+fn claw<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::Cards;
+
+    let target = fight.target();
+    hit(fight, target, 1);
+    let raise = sts2_core::Change::Raise(CardVar::Damage, fight.var(CardVar::Increase));
+    // `AllCards`: the hand, the draw, discard and exhaust piles, then the
+    // play pile, which holds the Claw being played.
+    for pile in [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust] {
+        for card in fight.cards_in(pile) {
+            if fight.card_ident(card).card == Cards::Defect(DefectCard::Claw) {
+                fight.modify_card(card, raise, sts2_core::Lasting::ThisFight);
+            }
+        }
+    }
+    fight.modify_this(raise, sts2_core::Lasting::ThisFight);
+    Played::Done
+}
+
+/// `CompileDriver`: its damage to the target, then as many cards drawn as
+/// its `CalculatedCards`.
+fn compile_driver<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    hit(fight, target, 1);
+    let cards = fight.var(CardVar::CalculatedCards);
+    fight.draw(cards);
+    Played::Done
+}
+
+/// `GoForTheEyes`: its damage to the target, then its Weak on it where the
+/// target `IntendsToAttack`: an attack or a death blow among its intents.
+fn go_for_the_eyes<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CreatureView as _;
+
+    use super::super::super::generated::monsters::IntentKind;
+    use super::super::super::generated::powers::Power;
+
+    let target = fight.target();
+    hit(fight, target, 1);
+    let attacking = fight
+        .creatures()
+        .find(|creature| creature.id() == target)
+        .is_some_and(|creature| {
+            creature
+                .intents()
+                .any(|intent| matches!(intent, IntentKind::Attack | IntentKind::DeathBlow))
+        });
+    if attacking {
+        let weak = sts2_core::PowerAmount::Counted(fight.var(CardVar::WeakPower));
+        fight.apply_power(target, Power::WeakPower, weak);
+    }
+    Played::Done
+}
+
+/// `GunkUp`: its damage to the target, once for each of its `Repeat`, then a
+/// Slimed into the discard pile.
+fn gunk_up<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, StatusCard};
+
+    let target = fight.target();
+    let hits = fight.var(CardVar::Repeat);
+    hit(fight, target, hits);
+    fight.add_generated_cards(
+        sts2_core::CardIdent::new(Cards::Status(StatusCard::Slimed)),
+        Pile::Discard,
+        1,
+    );
+    Played::Done
+}
+
+/// `Hologram`: its block, then one card of the discard pile into the hand.
+fn hologram<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    Played::Asking {
+        pile: Pile::Discard,
+        selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Defect(Resume::HologramIntoHand)),
     }
 }
 

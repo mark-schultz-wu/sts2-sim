@@ -808,20 +808,15 @@ impl<'a, V: Rules> Board<'a, V> {
         let index = num_traits::NumCast::from(at)
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
         let at = CardAt::new(id, pile, index);
-        self.card_entered_combat(at, card);
+        self.card_entered_combat(at, card, false);
         Some(at)
     }
 
-    fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card) {
+    fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card, clone: bool) {
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
-            // A card the fight adds is a new model: nothing here clones one.
-            sts2_core::EventHook::CardEnteredCombat {
-                at,
-                card,
-                clone: false,
-            },
+            sts2_core::EventHook::CardEnteredCombat { at, card, clone },
         );
         let mut rest: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
         for (listener, effect) in asked {
@@ -1897,6 +1892,12 @@ pub(crate) fn var<V: Rules>(
                 }),
                 target: targeted.as_deref(),
                 history: live.history(),
+                block: live
+                    .creatures
+                    .iter()
+                    .find(|creature| creature.side == <V::CombatSide as SideKinds>::PLAYER)
+                    .map_or_else(num_traits::zero, |player| player.block),
+                orbs: live.orbs.as_ref().map_or(&[], |orbs| orbs.queue.as_slice()),
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -2345,7 +2346,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .replace(card.pile(), at, CardInstance::new(into, id));
         // `AfterCardEnteredCombat` for the replacement, then
         // `AfterCardChangedPiles` from no pile.
-        self.card_entered_combat(CardAt::new(id, card.pile(), card.index()), into.card);
+        self.card_entered_combat(CardAt::new(id, card.pile(), card.index()), into.card, false);
         let hook = sts2_core::EventHook::CardChangedPiles {
             card: into.card,
             id,
@@ -2384,7 +2385,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         // fight the way a generated card does. It is raised after the raise,
         // which is the order `ForgeCmd` adds and then increases in.
         if let Some(at) = created {
-            self.card_entered_combat(at, card);
+            self.card_entered_combat(at, card, false);
         }
     }
 
@@ -2762,6 +2763,42 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .map(|taken| taken.map(CardIdent::new))
     }
 
+    fn shuffle(&mut self) {
+        // `IsOverOrEnding`, which a fight already over is.
+        if self.ended.is_some() {
+            return;
+        }
+        let ascension = self.ascension;
+        shuffle::<V>(self.live, self.rngs.reborrow(), self.relics, ascension);
+    }
+
+    fn clone_this(&mut self, pile: Pile) -> Option<CardAt<V>> {
+        // `IsInProgress`, which a fight already over fails.
+        if self.ended.is_some() {
+            return None;
+        }
+        let playing = self
+            .playing
+            .unwrap_or_else(|| unimplemented!("a card cloning itself with none being played"));
+        let face = self
+            .live
+            .cards
+            .named(playing)
+            .unwrap_or_else(|| unimplemented!("a card cloning itself from outside the fight"))
+            .face;
+        let id = self.live.card_ids.mint();
+        // A full hand sends the card to the discard pile instead.
+        let full =
+            pile == Pile::Hand && self.live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND;
+        let pile = if full { Pile::Discard } else { pile };
+        let index = num_traits::NumCast::from(self.live.cards.len(pile))
+            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+        self.live.cards.push(pile, face.named(id));
+        let at = CardAt::new(id, pile, index);
+        self.card_entered_combat(at, face.ident.card, true);
+        Some(at)
+    }
+
     fn add_generated_cards(
         &mut self,
         card: CardIdent<V>,
@@ -2785,7 +2822,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             let at = CardAt::new(id, pile, index);
             added.push(at);
             // `CardPileCmd.Add` raises this for each card as it lands.
-            self.card_entered_combat(at, card.card);
+            self.card_entered_combat(at, card.card, false);
         }
         added
     }
