@@ -372,6 +372,8 @@ pub(super) fn auto_play<V: Rules>(
 /// play pile. A power that counts plays down decrements through the walk
 /// itself.
 ///
+/// A card that shifts its own cost writes it wherever it stands.
+///
 /// # Panics
 ///
 /// A listener asking for anything else before a card is played.
@@ -385,8 +387,16 @@ fn before_played<V: Rules>(
         id: card.id,
         ethereal: card.face.ethereal(),
     };
-    if let Some((listener, effect)) = super::listen::notify::<V>(live, relics, hook).first() {
-        unimplemented!("{listener:?} asking for {effect:?} before a card is played")
+    for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            (
+                super::listen::Listener::Card { id },
+                sts2_core::HookEffect::ModifySelf { change, lasting },
+            ) => live.modify_self(id, change, lasting),
+            (listener, effect) => {
+                unimplemented!("{listener:?} asking for {effect:?} before a card is played")
+            }
+        }
     }
 }
 

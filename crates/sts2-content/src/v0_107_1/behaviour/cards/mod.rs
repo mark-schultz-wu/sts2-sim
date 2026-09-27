@@ -26,6 +26,7 @@ type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
 mod defect;
 mod event;
+mod ironclad;
 mod necrobinder;
 mod regent;
 mod silent;
@@ -176,6 +177,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         Cards::Curse(CurseCard::Guilty)
             if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
+        Cards::Ironclad(card) => ironclad::event_hook(card, id, hook, asked),
         Cards::Necrobinder(card) => necrobinder::event_hook(card, id, printed, hook, asked),
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
         Cards::Silent(card) => silent::event_hook(card, id, hook, asked),
