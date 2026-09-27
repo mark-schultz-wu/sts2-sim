@@ -118,6 +118,63 @@ fn spur<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `Sacrifice`: where Osty stands, its calculated block worked out, then
+/// Osty killed, then the block gained.
+fn sacrifice<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let Some(osty) = fight.osty() else {
+        return Played::Done;
+    };
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::CalculatedBlock),
+        scaling: Scaling::Dynamic,
+    });
+    fight.kill(osty);
+    fight.apply(block);
+    Played::Done
+}
+
+/// `Eradicate`: its damage to the target, once for each energy its X spent,
+/// as one attack.
+fn eradicate<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    let hits = fight.x_value();
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+    Played::Done
+}
+
+/// `GraveWarden`: its block, then its `Cards` of Souls into the draw pile at
+/// random.
+fn grave_warden<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    for _ in 0..fight.var(CardVar::Cards) {
+        if fight
+            .add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw)
+            .is_none()
+        {
+            break;
+        }
+    }
+    Played::Done
+}
+
 /// `SculptingStrike`: its damage to the target, then one card of the hand
 /// that is not Ethereal of its own made Ethereal.
 fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -156,6 +213,9 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Reave => reave(fight),
         NecrobinderCard::Putrefy => putrefy(fight),
         NecrobinderCard::Spur => spur(fight),
+        NecrobinderCard::Sacrifice => sacrifice(fight),
+        NecrobinderCard::Eradicate => eradicate(fight),
+        NecrobinderCard::GraveWarden => grave_warden(fight),
         card => card_plays::necrobinder::on_play(card, fight),
     }
 }

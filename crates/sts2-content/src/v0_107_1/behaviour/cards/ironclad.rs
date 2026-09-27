@@ -15,6 +15,10 @@ use super::V;
 pub enum Resume {
     /// `Headbutt`, after its owner picked the card to put back.
     HeadbuttOntoDraw,
+    /// `TrueGrit`, upgraded, after its owner picked the card to exhaust.
+    TrueGritExhaust,
+    /// `Armaments`, after its owner picked the card to upgrade.
+    ArmamentsUpgrade,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -26,6 +30,18 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardPileCmd.Add(cardModel, PileType.Draw, CardPilePosition.Top)`.
         Resume::HeadbuttOntoDraw => {
             fight.act_on(PileAct::OntoDrawTop, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.Exhaust` of the one taken.
+        Resume::TrueGritExhaust => {
+            fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.Upgrade` of the one taken.
+        Resume::ArmamentsUpgrade => {
+            for &card in chosen.as_slice() {
+                fight.modify_card(card, Change::Upgrade, Lasting::ThisFight);
+            }
             Played::Done
         }
     }
@@ -67,6 +83,8 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
             Played::Done
         }
         IroncladCard::Pillage => pillage(fight),
+        IroncladCard::TrueGrit => true_grit(fight),
+        IroncladCard::Armaments => armaments(fight),
         // `Havoc`: the top card of the draw pile auto-played, and exhausted.
         IroncladCard::Havoc => {
             fight.auto_play_from_draw(1, true);
@@ -88,6 +106,61 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
             Played::Done
         }
         card => card_plays::ironclad::on_play(card, fight),
+    }
+}
+
+/// Its block, onto its owner.
+fn block<F: Fight<V>>(fight: &mut F) {
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+}
+
+/// `TrueGrit`: its block, then a card from hand exhausted. Upgraded, its
+/// owner picks the card. Otherwise it is drawn off `CombatCardSelection`.
+fn true_grit<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    block(fight);
+    if fight.upgraded() {
+        return Played::Asking {
+            pile: Pile::Hand,
+            selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Card(super::Resume::Ironclad(Resume::TrueGritExhaust)),
+        };
+    }
+    if let Some(card) = fight.random_card_in(Pile::Hand) {
+        fight.act_on(PileAct::Exhaust, &[card]);
+    }
+    Played::Done
+}
+
+/// `Armaments`: its block, then a card in hand upgraded. Upgraded, every
+/// upgradable card in hand is. Otherwise its owner picks one of them, which
+/// `FromHandForUpgrade` takes without asking where there is one.
+fn armaments<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CardTable as _;
+
+    block(fight);
+    let upgradable: smallvec::SmallVec<[_; 10]> = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| {
+            let ident = fight.card_ident(card);
+            ident.upgrade < ident.card.max_upgrade()
+        })
+        .collect();
+    if fight.upgraded() {
+        for card in upgradable {
+            fight.modify_card(card, Change::Upgrade, Lasting::ThisFight);
+        }
+        return Played::Done;
+    }
+    Played::AskingAmong {
+        cards: upgradable,
+        selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Ironclad(Resume::ArmamentsUpgrade)),
     }
 }
 

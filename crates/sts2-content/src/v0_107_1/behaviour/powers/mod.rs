@@ -561,9 +561,9 @@ fn temporary(
             unimplemented!("an endless temporary {lent:?}")
         }
         (_, EventHook::SideTurnEnd { .. }) => {}
-        // `AfterPowerAmountChanged` on its own instance. The instance being
-        // put on is `BeforeApplied`'s, and changes by the whole of its
-        // amount, which the override passes over.
+        // `AfterPowerAmountChanged` on its own instance: the lent power by the
+        // change, signed. The instance being put on is `BeforeApplied`'s, and
+        // changes by the whole of its amount, which the override passes over.
         (
             PowerAmount::Counted(total),
             EventHook::PowerAmountChanged {
@@ -571,9 +571,9 @@ fn temporary(
                 power: changed,
                 delta,
             },
-        ) if creature == held.holder && changed == power && delta != total => {
-            unimplemented!("a temporary {lent:?} stacked onto its own instance")
-        }
+        ) if creature == held.holder && changed == power && delta != total => asked.push(
+            HookEffect::ApplyToOwner(lent, PowerAmount::Counted(signed(delta))),
+        ),
         (_, EventHook::PowerAmountChanged { .. }) => {}
         // Asked of every power, and not ones this class overrides.
         (_, EventHook::MonsterMovePerformed { .. }) => {}

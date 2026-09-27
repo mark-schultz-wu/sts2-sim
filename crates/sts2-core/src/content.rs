@@ -1934,6 +1934,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("a creature escaping")
     }
 
+    /// `CreatureCmd.Kill`: `creature` loses what hit points it has, and dies.
+    fn kill(&mut self, _creature: crate::CombatId) {
+        unimplemented!("a creature killed outright")
+    }
+
     /// `PlayerCmd.LoseGold`: the player's gold down by `amount`, stopping at
     /// none.
     fn lose_gold(&mut self, _amount: V::Number) {
@@ -4067,6 +4072,8 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub powers: &'a [crate::Stack<V>],
     /// `Owner.Osty.CurrentHp`, while Osty is alive.
     pub osty: Option<V::Health>,
+    /// `Owner.Osty.MaxHp`, while Osty is alive.
+    pub osty_max_hp: Option<V::Health>,
     /// How many cards the owner's draw pile holds.
     pub draw: usize,
     /// How many of the owner's cards in the fight, every pile included, are

@@ -125,6 +125,12 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::ExtraDamage) * owner.osty.map_or(0, Number::from)
         }
+        // `Sacrifice`: a base, and more for each of twice the maximum health a
+        // living Osty has.
+        (Cards::Necrobinder(NecrobinderCard::Sacrifice), CardVar::CalculatedBlock) => {
+            let twice = owner.osty_max_hp.map_or(0, |hp| Number::from(hp) * 2);
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * twice
+        }
         // `Bully`: a base, and more for each Vulnerable on its target.
         (Cards::Ironclad(IroncladCard::Bully), CardVar::CalculatedDamage) => {
             let vulnerable = owner

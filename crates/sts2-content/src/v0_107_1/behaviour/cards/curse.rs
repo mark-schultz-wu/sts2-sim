@@ -14,6 +14,7 @@ const SHAME_FRAIL: super::Number = 1;
 pub(super) fn on_turn_end<F: Fight<V>>(card: CurseCard, fight: &mut F) {
     match card {
         CurseCard::Shame => shame(fight),
+        CurseCard::Doubt => doubt(fight),
         CurseCard::Debt => debt(fight),
         CurseCard::Decay => decay(fight),
         card => card_plays::curse::on_turn_end(card, fight),
@@ -25,6 +26,16 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: CurseCard, fight: &mut F) {
 /// on a fresh one.
 fn shame<F: Fight<V>>(fight: &mut F) {
     fight.apply_to_actor(Power::FrailPower, PowerAmount::Counted(SHAME_FRAIL));
+    fight.discard_this();
+}
+
+/// `Doubt`: its Weak onto its holder, which then goes to the discard pile.
+/// Weak landing on the player skips its next tick, as Shame's Frail does.
+fn doubt<F: Fight<V>>(fight: &mut F) {
+    fight.apply_to_actor(
+        Power::WeakPower,
+        PowerAmount::Counted(fight.var(CardVar::WeakPower)),
+    );
     fight.discard_this();
 }
 

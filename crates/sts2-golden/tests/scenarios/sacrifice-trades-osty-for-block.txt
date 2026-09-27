@@ -1,0 +1,8 @@
+# Sacrifice works out twice Osty's maximum health as block, kills Osty, then
+# gains the block. A second Sacrifice with no Osty does nothing.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SACRIFICE"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"SACRIFICE"}
+{"cmd":"play_card","index":5}
