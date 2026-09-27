@@ -6,15 +6,42 @@ use sts2_core::{
 };
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardVar, NecrobinderCard};
+use super::super::super::generated::cards::{CardKeyword, CardVar, NecrobinderCard};
 use super::super::super::generated::monsters::Monster;
 use super::V;
+
+/// `SculptingStrike`: its damage to the target, then one card of the hand
+/// that is not Ethereal of its own made Ethereal.
+fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    let ethereal = CardKeyword::Ethereal;
+    let cards = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| !fight.card_keyword(card, ethereal))
+        .collect();
+    Played::AskingAmong {
+        cards,
+        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::SculptingStrikeEthereal)),
+    }
+}
 
 pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
     match card {
         NecrobinderCard::Unleash => osty_attack(fight, CardVar::CalculatedDamage),
         NecrobinderCard::Poke | NecrobinderCard::Flatten => osty_attack(fight, CardVar::OstyDamage),
         NecrobinderCard::Graveblast => graveblast(fight),
+        NecrobinderCard::SculptingStrike => sculpting_strike(fight),
         card => card_plays::necrobinder::on_play(card, fight),
     }
 }
@@ -24,6 +51,8 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
 pub enum Resume {
     /// `Graveblast`, after its owner picked the card to take back.
     GraveblastTakeBack,
+    /// `SculptingStrike`, after its owner picked the card to make Ethereal.
+    SculptingStrikeEthereal,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -35,6 +64,14 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardPileCmd.Add` of the one taken, into hand.
         Resume::GraveblastTakeBack => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Ethereal)`.
+        Resume::SculptingStrikeEthereal => {
+            for &card in chosen.as_slice() {
+                let ethereal = Change::AddKeyword(CardKeyword::Ethereal);
+                fight.modify_card(card, ethereal, Lasting::ThisFight);
+            }
             Played::Done
         }
     }

@@ -2588,6 +2588,35 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn card_costs(&self, card: CardAt<V>, global: bool) -> (sts2_core::Cost, sts2_core::Cost) {
+        let at = self.standing(card);
+        let held = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found");
+        match global {
+            false => held.face.costs(|cost| cost),
+            true => super::legal::costs::<V>(
+                &held,
+                super::listen::Walk {
+                    live: self.live,
+                    relics: self.relics,
+                },
+            ),
+        }
+    }
+
+    fn card_keyword(&self, card: CardAt<V>, keyword: V::CardKeyword) -> bool {
+        let at = self.standing(card);
+        self.live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found")
+            .face
+            .has_keyword(keyword)
+    }
+
     fn local_cost(&self, card: CardAt<V>) -> sts2_core::Cost {
         let at = self.standing(card);
         self.live

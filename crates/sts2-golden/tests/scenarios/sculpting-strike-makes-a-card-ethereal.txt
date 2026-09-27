@@ -1,0 +1,11 @@
+# `SculptingStrike` hits, then makes one card of the hand Ethereal. It offers
+# only cards that are not Ethereal of their own, so the Dazed is left out.
+# The card it takes exhausts as the turn ends, before the Dazed, in the
+# order the hand holds them.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"grant","card":"SCULPTING_STRIKE"}
+{"cmd":"play_card","index":6,"target":1}
+{"cmd":"answer","cards":[0]}
+{"cmd":"end_turn"}

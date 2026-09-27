@@ -1,0 +1,10 @@
+# `TouchOfInsanity` offers only the cards of the hand that cost energy or
+# stars, so the free Anger is left out. The Bash it makes free costs nothing
+# for the rest of the fight.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"TOUCH_OF_INSANITY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[1]}
+{"cmd":"play_card","index":1,"target":1}

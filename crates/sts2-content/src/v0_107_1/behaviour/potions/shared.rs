@@ -103,6 +103,8 @@ pub enum Resume {
     DropletOfPrecognition,
     /// `GamblersBrew`, after the cards picked from hand to discard.
     GamblersBrew,
+    /// `TouchOfInsanity`, after the card picked to make free.
+    TouchOfInsanity,
 }
 
 /// What one of the shared potions does when it is drunk.
@@ -343,6 +345,25 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             at: super::super::Resume::Potion(super::Resume::Shared(Resume::LiquidMemories)),
         },
         // Any number of cards from hand, discarded, and as many drawn.
+        // `Self`: one card of the hand that costs energy or stars, with its
+        // own modifiers or with every one.
+        Potion::TouchOfInsanity => {
+            let costs = |cost| matches!(cost, sts2_core::Cost::Fixed(cost) if cost.get() > 0);
+            let cards = fight
+                .cards_in(Pile::Hand)
+                .into_iter()
+                .filter(|&card| {
+                    let (energy, stars) = fight.card_costs(card, false);
+                    let (all_energy, all_stars) = fight.card_costs(card, true);
+                    costs(energy) || costs(stars) || costs(all_energy) || costs(all_stars)
+                })
+                .collect();
+            Played::AskingAmong {
+                cards,
+                selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Potion(super::Resume::Shared(Resume::TouchOfInsanity)),
+            }
+        }
         Potion::GamblersBrew => Played::Asking {
             pile: Pile::Hand,
             selection: sts2_core::Selection::UpTo(
@@ -474,6 +495,20 @@ pub(super) fn resume<F: Fight<V>>(
                 free_this_turn(fight, at);
             }
             fight.act_on(PileAct::IntoHand, picked.as_slice());
+            Played::Done
+        }
+        // `SetToFreeThisCombat`: both costs at nothing for the rest of the
+        // fight.
+        (Resume::TouchOfInsanity, sts2_core::Taken::Selected(picked)) => {
+            for &card in picked.as_slice() {
+                for pool in [sts2_core::CostPool::Energy, sts2_core::CostPool::Star] {
+                    fight.modify_card(
+                        card,
+                        sts2_core::Change::SetCost(pool, 0),
+                        sts2_core::Lasting::ThisFight,
+                    );
+                }
+            }
             Played::Done
         }
         // `CardCmd.DiscardAndDraw` for as many as were picked.
