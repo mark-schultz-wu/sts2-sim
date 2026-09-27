@@ -108,6 +108,13 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                 });
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * vulnerable
         }
+        // `PerfectedStrike`: a base, and more for each of its owner's cards in
+        // the fight tagged Strike, itself included.
+        (Cards::Ironclad(IroncladCard::PerfectedStrike), CardVar::CalculatedDamage) => {
+            let strikes =
+                Number::try_from(owner.strikes).expect("a fight's cards fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * strikes
+        }
         // `MindBlast`: a base, and one more for each card in the draw pile.
         (Cards::Colorless(ColorlessCard::MindBlast), CardVar::CalculatedDamage) => {
             let draw =

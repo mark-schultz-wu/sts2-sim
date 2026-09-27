@@ -1656,6 +1656,12 @@ pub(crate) fn var<V: Rules>(
                 powers: &powers::<V>(live),
                 osty,
                 draw: live.cards.len(Pile::Draw),
+                strikes: live.cards.count_all(|face| {
+                    sts2_core::CardTable::tagged(
+                        face.ident.card,
+                        <<V::Card as sts2_core::CardTable>::Tag as sts2_core::CardTagKinds>::STRIKE,
+                    )
+                }),
                 target: targeted.as_deref(),
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
@@ -2251,6 +2257,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
         let hittable = self.hittable_opponents();
         self.rngs.targets.choose(&hittable).ok().copied()
+    }
+
+    fn damage_unblockable(&mut self, target: CombatId, amount: V::Number) {
+        self.hit_unpowered(Some(self.actor), target, amount, true);
     }
 
     fn next_energy_cost(&mut self, below: u8) -> V::Number {
