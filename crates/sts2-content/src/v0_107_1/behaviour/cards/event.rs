@@ -19,6 +19,14 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
     match card {
         EventCard::NeowsFury => neows_fury(fight),
         EventCard::Metamorphosis => metamorphosis(fight),
+        // `BrightestFlame`: its Energy, its Cards drawn, then its `MaxHp` off
+        // its owner's maximum.
+        EventCard::BrightestFlame => {
+            fight.modify_energy(fight.var(CardVar::Energy));
+            fight.draw(fight.var(CardVar::Cards));
+            fight.lose_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
+            Played::Done
+        }
         // Its damage to the target. The Byrdpip pet only animates the hit.
         EventCard::ByrdSwoop => {
             let target = fight.target();

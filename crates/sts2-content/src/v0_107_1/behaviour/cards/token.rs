@@ -61,8 +61,30 @@ pub(super) fn on_play<F: Fight<V>>(card: TokenCard, fight: &mut F) -> Played<V> 
     match card {
         TokenCard::SovereignBlade => sovereign_blade(fight),
         TokenCard::Shiv => shiv(fight),
+        TokenCard::SweepingGaze => sweeping_gaze(fight),
         card => card_plays::token::on_play(card, fight),
     }
+}
+
+/// `SweepingGaze`: where Osty stands, its damage from Osty to an enemy drawn
+/// at random.
+fn sweeping_gaze<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let Some(osty) = fight.osty() else {
+        return Played::Done;
+    };
+    fight.attack_from(osty, Scaling::Dynamic, |fight| {
+        let Some(target) = fight.random_target() else {
+            return;
+        };
+        let hit = fight.resolve(Effect::Attack {
+            dealer: osty,
+            target,
+            damage: Amount::Var(CardVar::OstyDamage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(hit);
+    });
+    Played::Done
 }
 
 /// The creatures a card's attack hits: every opponent while the player

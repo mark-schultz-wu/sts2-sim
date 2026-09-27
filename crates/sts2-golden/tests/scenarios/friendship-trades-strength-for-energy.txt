@@ -1,0 +1,6 @@
+# Friendship takes two Strength and gives one more energy each turn.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"FRIENDSHIP"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}

@@ -84,6 +84,7 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         }
         IroncladCard::Pillage => pillage(fight),
         IroncladCard::TrueGrit => true_grit(fight),
+        IroncladCard::Dismantle => dismantle(fight),
         IroncladCard::Armaments => armaments(fight),
         // `Havoc`: the top card of the draw pile auto-played, and exhausted.
         IroncladCard::Havoc => {
@@ -107,6 +108,19 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         }
         card => card_plays::ironclad::on_play(card, fight),
     }
+}
+
+/// `Dismantle`: its damage to the target, twice where the target carries
+/// Vulnerable.
+fn dismantle<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    let vulnerable = fight.creatures().any(|creature| {
+        creature.id() == target && creature.power(Power::VulnerablePower).is_some()
+    });
+    for _ in 0..1 + u8::from(vulnerable) {
+        strike(fight, target);
+    }
+    Played::Done
 }
 
 /// Its block, onto its owner.

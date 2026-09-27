@@ -1946,6 +1946,18 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("replays added to cards")
     }
 
+    /// `PlayerCombatState.Energy`: what the player has left to spend.
+    fn energy(&self) -> V::Number {
+        unimplemented!("the player's energy")
+    }
+
+    /// `CreatureCmd.LoseMaxHp`: unblockable, unpowered damage from nobody for
+    /// what the new maximum leaves above the current, then that maximum, at
+    /// one or more.
+    fn lose_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
+        unimplemented!("maximum health lost in a fight")
+    }
+
     /// `PlayerCmd.LoseGold`: the player's gold down by `amount`, stopping at
     /// none.
     fn lose_gold(&mut self, _amount: V::Number) {
@@ -4095,6 +4107,10 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub osty_max_hp: Option<V::Health>,
     /// How many cards the owner's draw pile holds.
     pub draw: usize,
+    /// How many cards the owner's exhaust pile holds.
+    pub exhaust: usize,
+    /// The powers of every living enemy, one creature's after another's.
+    pub enemy_powers: &'a [crate::Stack<V>],
     /// How many of the owner's cards in the fight, every pile included, are
     /// tagged Strike. `PlayerCombatState.AllCards`.
     pub strikes: usize,

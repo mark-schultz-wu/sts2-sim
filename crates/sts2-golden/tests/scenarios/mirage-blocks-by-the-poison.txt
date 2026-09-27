@@ -1,0 +1,7 @@
+# Mirage gives a block of the Poison on the living enemies.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"POISON_POTION"}
+{"cmd":"use_potion","index":0,"target":1}
+{"cmd":"grant","card":"MIRAGE"}
+{"cmd":"play_card","index":7}

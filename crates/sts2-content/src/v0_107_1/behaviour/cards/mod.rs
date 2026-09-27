@@ -131,6 +131,28 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             let twice = owner.osty_max_hp.map_or(0, |hp| Number::from(hp) * 2);
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * twice
         }
+        // `AshenStrike`: a base, and more for each card in its owner's
+        // exhaust pile.
+        (Cards::Ironclad(IroncladCard::AshenStrike), CardVar::CalculatedDamage) => {
+            let exhausted =
+                Number::try_from(owner.exhaust).expect("an exhaust pile fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * exhausted
+        }
+        // `Mirage`: a base, and one more for each Poison on the living
+        // enemies.
+        (Cards::Silent(SilentCard::Mirage), CardVar::CalculatedBlock) => {
+            let poison: Number = owner
+                .enemy_powers
+                .iter()
+                .filter(|stack| stack.power == Power::PoisonPower)
+                .map(|stack| match stack.amount {
+                    sts2_core::PowerAmount::Counted(amount) => amount,
+                    sts2_core::PowerAmount::Endless => unimplemented!("an endless Poison"),
+                })
+                .sum();
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * poison
+        }
         // `Bully`: a base, and more for each Vulnerable on its target.
         (Cards::Ironclad(IroncladCard::Bully), CardVar::CalculatedDamage) => {
             let vulnerable = owner
