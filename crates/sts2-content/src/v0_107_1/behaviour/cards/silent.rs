@@ -19,6 +19,8 @@ pub enum Resume {
     Prepared,
     /// `DaggerThrow`, after its owner picked the card to discard.
     DaggerThrow,
+    /// `HiddenDaggers`, after its owner picked the cards to discard.
+    HiddenDaggers,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
@@ -35,6 +37,25 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `Expertise`: cards drawn up to its `Cards` in hand.
+        SilentCard::Expertise => {
+            let hand = super::Number::try_from(fight.cards_in(Pile::Hand).len())
+                .expect("a hand fits a game number");
+            fight.draw((fight.var(CardVar::Cards) - hand).max(0));
+            Played::Done
+        }
+        // `HiddenDaggers`: its `Cards` of the hand discarded, then Shivs.
+        SilentCard::HiddenDaggers => {
+            let count = usize::try_from(fight.var(CardVar::Cards))
+                .ok()
+                .and_then(nonmax::NonMaxUsize::new)
+                .expect("a count of cards is not negative");
+            Played::Asking {
+                pile: Pile::Hand,
+                selection: Selection::Exactly(count),
+                at: super::super::Resume::Card(super::Resume::Silent(Resume::HiddenDaggers)),
+            }
+        }
         // `BouncingFlask`: its Poison on an enemy drawn off `CombatTargets`,
         // its `Repeat` times.
         SilentCard::BouncingFlask => {
@@ -117,6 +138,21 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardCmd.Discard` of the one taken.
         Resume::Survivor | Resume::Prepared | Resume::DaggerThrow => {
             fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.Discard` of those taken, then its `Shivs` into hand,
+        // each upgraded where Hidden Daggers is.
+        Resume::HiddenDaggers => {
+            fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
+            let shivs: usize = num_traits::cast(fight.var(CardVar::Shivs))
+                .expect("a count of Shivs is not negative");
+            let upgraded = fight.upgraded();
+            let shiv = CardIdent::new(Cards::Token(TokenCard::Shiv));
+            for at in fight.add_generated_cards(shiv, Pile::Hand, shivs) {
+                if upgraded {
+                    fight.modify_card(at, Change::Upgrade, Lasting::ThisFight);
+                }
+            }
             Played::Done
         }
     }

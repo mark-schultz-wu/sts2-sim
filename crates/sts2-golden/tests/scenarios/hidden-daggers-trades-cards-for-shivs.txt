@@ -1,0 +1,6 @@
+# Hidden Daggers discards two cards its owner picks, then makes two Shivs.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HIDDEN_DAGGERS"}
+{"cmd":"play_card","index":7}
+{"cmd":"answer","cards":[0,1]}

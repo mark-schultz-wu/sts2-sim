@@ -1,0 +1,6 @@
+# Undeath gives its block and puts a clone of itself into the discard
+# pile.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"UNDEATH"}
+{"cmd":"play_card","index":5}

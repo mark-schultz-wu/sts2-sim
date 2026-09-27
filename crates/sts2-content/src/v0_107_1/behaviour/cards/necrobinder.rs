@@ -299,6 +299,32 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Eradicate => eradicate(fight),
         NecrobinderCard::GraveWarden => grave_warden(fight),
         NecrobinderCard::Dirge => dirge(fight),
+        // `Undeath`: its block, then a clone of itself into the discard pile.
+        NecrobinderCard::Undeath => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            fight.clone_this(Pile::Discard);
+            Played::Done
+        }
+        // `SharedFate`: its Strength off its owner, then off the target.
+        NecrobinderCard::SharedFate => {
+            use super::super::super::generated::powers::Power;
+
+            let own = fight.var(CardVar::PlayerStrengthLoss);
+            fight.apply_to_actor(Power::StrengthPower, sts2_core::PowerAmount::Counted(-own));
+            let theirs = fight.var(CardVar::EnemyStrengthLoss);
+            let target = fight.target();
+            fight.apply_power(
+                target,
+                Power::StrengthPower,
+                sts2_core::PowerAmount::Counted(-theirs),
+            );
+            Played::Done
+        }
         NecrobinderCard::BoneShards => bone_shards(fight),
         NecrobinderCard::NegativePulse => negative_pulse(fight),
         NecrobinderCard::Severance => severance(fight),

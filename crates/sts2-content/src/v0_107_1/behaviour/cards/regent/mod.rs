@@ -14,6 +14,8 @@ mod uncommon;
 pub enum Resume {
     /// `Begone`, after it selected the card to turn into a Minion Strike.
     BegoneTransform,
+    /// `Glimmer`, after its owner picked the cards to put back.
+    GlimmerPutBack,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
@@ -24,6 +26,20 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Radiate => uncommon::radiate(fight),
         RegentCard::LunarBlast => uncommon::lunar_blast(fight),
         RegentCard::HeavenlyDrill => heavenly_drill(fight),
+        // `Glimmer`: its `Cards` drawn, then its `PutBack` of the hand onto
+        // the top of the draw pile.
+        RegentCard::Glimmer => {
+            fight.draw(fight.var(CardVar::Cards));
+            let count = usize::try_from(fight.var(CardVar::PutBack))
+                .ok()
+                .and_then(nonmax::NonMaxUsize::new)
+                .expect("a count of cards is not negative");
+            Played::Asking {
+                pile: sts2_core::Pile::Hand,
+                selection: sts2_core::Selection::Exactly(count),
+                at: super::super::Resume::Card(super::Resume::Regent(Resume::GlimmerPutBack)),
+            }
+        }
         RegentCard::ManifestAuthority => manifest_authority(fight),
         card => card_plays::regent::on_play(card, fight),
     }
@@ -107,5 +123,10 @@ pub(super) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::BegoneTransform => common::begone_transform(fight, chosen),
+        // `CardPileCmd.Add` onto the top of the draw pile.
+        Resume::GlimmerPutBack => {
+            fight.act_on(sts2_core::PileAct::OntoDrawTop, chosen.as_slice());
+            Played::Done
+        }
     }
 }

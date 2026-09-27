@@ -22,8 +22,46 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
             },
             None => Played::Done,
         },
+        // `ThinkingAhead`: its `Cards` drawn, then one card of the hand onto
+        // the top of the draw pile.
+        ColorlessCard::ThinkingAhead => {
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Asking {
+                pile: Pile::Hand,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Colorless(
+                    Resume::ThinkingAheadPutBack,
+                )),
+            }
+        }
+        ColorlessCard::JackOfAllTrades => jack_of_all_trades(fight),
         card => card_plays::colorless::on_play(card, fight),
     }
+}
+
+/// `JackOfAllTrades`: `GetDistinctForCombat` of its `Cards` of colorless
+/// cards other than itself, off `CombatCardGeneration`, into hand.
+fn jack_of_all_trades<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::RunStreamKinds as _;
+
+    use super::super::super::generated::cards::Cards;
+
+    let mut pool: Vec<_> = V::combat_colorless_cards()
+        .iter()
+        .copied()
+        .filter(|&card| card != Cards::Colorless(ColorlessCard::JackOfAllTrades))
+        .collect();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION;
+    let made: Vec<_> = match cards(fight) {
+        1 => fight.generate_cards::<1>(&mut pool, stream).map(Vec::from),
+        2 => fight.generate_cards::<2>(&mut pool, stream).map(Vec::from),
+        count => unimplemented!("Jack of All Trades making {count} cards"),
+    }
+    .unwrap_or_else(|_| unimplemented!("a colorless pool short of Jack of All Trades' cards"));
+    for card in made {
+        fight.add_generated_cards(card, Pile::Hand, 1);
+    }
+    Played::Done
 }
 
 /// Where a colorless card stopped inside its own play.
@@ -31,6 +69,8 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
 pub enum Resume {
     /// `Purity`, after the cards picked from hand to exhaust.
     PurityExhausts,
+    /// `ThinkingAhead`, after the card picked from hand to put back.
+    ThinkingAheadPutBack,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -41,6 +81,11 @@ pub(super) fn resume_play<F: Fight<V>>(
     match at {
         Resume::PurityExhausts => {
             fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
+        // `CardPileCmd.Add` onto the top of the draw pile.
+        Resume::ThinkingAheadPutBack => {
+            fight.act_on(PileAct::OntoDrawTop, chosen.as_slice());
             Played::Done
         }
     }

@@ -119,6 +119,27 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         }
         DefectCard::Compact => compact(fight),
         DefectCard::Ftl => ftl(fight),
+        // `Turbo`: its energy, then a Void into the discard pile.
+        DefectCard::Turbo => {
+            fight.modify_energy(fight.var(CardVar::Energy));
+            add_status(fight, StatusCard::Void);
+            Played::Done
+        }
+        // `Sunder`: its damage to the target, then its energy where the hit
+        // killed it.
+        DefectCard::Sunder => {
+            use sts2_core::CreatureView as _;
+
+            let target = fight.target();
+            hit(fight, target, 1);
+            let standing = fight
+                .creatures()
+                .any(|creature| creature.id() == target && creature.alive());
+            if !standing {
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            Played::Done
+        }
         // `Capacitor`: its `Repeat` more orb slots.
         DefectCard::Capacitor => {
             fight.add_orb_slots(fight.var(CardVar::Repeat));

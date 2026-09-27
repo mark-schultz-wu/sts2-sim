@@ -1,0 +1,5 @@
+# Turbo gives two energy and puts a Void into the discard pile.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"TURBO"}
+{"cmd":"play_card","index":5}

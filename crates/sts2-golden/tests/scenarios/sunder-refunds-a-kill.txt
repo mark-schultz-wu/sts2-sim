@@ -1,0 +1,10 @@
+# Sunder gives three energy back where its hit kills its target. The
+# Lantern gives the fourth energy it needs to be played twice. It kills
+# the Twig Slime, and not the Leaf Slime.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"LANTERN"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"SUNDER"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"SUNDER"}
+{"cmd":"play_card","index":5,"target":2}

@@ -1,0 +1,5 @@
+# Primal Force turns each Attack in hand into a Giant Rock.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"PRIMAL_FORCE"}
+{"cmd":"play_card","index":5}
