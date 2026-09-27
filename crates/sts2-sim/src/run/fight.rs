@@ -97,7 +97,7 @@ impl<V: Rules> State<V> {
                 takes: held
                     .potion
                     .target()
-                    .unwrap_or_else(|| unimplemented!("a potion that decides its own target")),
+                    .unwrap_or_else(|| V::computed_potion_target(held.potion, true)),
             });
         }
 

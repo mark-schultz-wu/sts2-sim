@@ -1,0 +1,7 @@
+# Orobic Acid takes one Attack, one Skill and one Power from the character's
+# pool, each shuffled off `CombatCardGeneration`. Each is free this turn and
+# lands in hand.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"OROBIC_ACID"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}

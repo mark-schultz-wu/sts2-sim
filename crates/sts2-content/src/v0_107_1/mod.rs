@@ -693,6 +693,14 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::cards::computed_target(card, powers)
     }
 
+    fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType {
+        behaviour::potions::computed_target(potion, in_combat)
+    }
+
+    fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool {
+        behaviour::potions::computed_check(potion, in_combat)
+    }
+
     fn calculated_card_var<P: sts2_core::Printed<Self> + ?Sized>(
         card: Self::Card,
         key: Self::CardVar,
