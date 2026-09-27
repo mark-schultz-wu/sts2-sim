@@ -147,6 +147,9 @@ pub(super) enum Then<V: Rules> {
 pub(super) enum Setup<V: Rules> {
     /// Inside `BeforeHandDraw`, before the hand is drawn.
     BeforeHandDraw(super::listen::Answers<V>),
+    /// Drawing the hand, with this many cards still to draw. `resumed` for a
+    /// draw that a shuffle's question paused.
+    Drawing { left: usize, resumed: bool },
     /// Inside `AfterPlayerTurnStart`, the last of the setup.
     PlayerTurnStart(super::listen::Answers<V>),
 }

@@ -22,6 +22,7 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Begone => common::begone(),
         RegentCard::CollisionCourse => common::collision_course(fight),
         RegentCard::Radiate => uncommon::radiate(fight),
+        RegentCard::LunarBlast => uncommon::lunar_blast(fight),
         card => card_plays::regent::on_play(card, fight),
     }
 }

@@ -1683,14 +1683,14 @@ pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Numb
 /// is `Hook.ModifyBlock`.
 ///
 /// The same hook whether the block is previewed or gained, as damage's is.
-/// `powered` is `IsPoweredCardOrMonsterMoveBlock`, and `card` is whether a
-/// card's own play gives it. `play` is that play, while one is under way.
+/// `powered` is `IsPoweredCardOrMonsterMoveBlock`, and `card` is the card
+/// whose own play gives it. `play` is that play, while one is under way.
 pub(super) fn blocked<V: Rules>(
     fight: Walk<'_, V>,
     recipient: CombatId,
     amount: V::Number,
     powered: bool,
-    card: bool,
+    card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
 ) -> V::Number {
     let phases = [
@@ -1830,7 +1830,14 @@ pub(crate) fn resolve<V: Rules>(
                 recipient,
                 // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A
                 // card's block and a monster move's are the powered ones.
-                amount: blocked::<V>(fight, recipient, amount, powered, playing.is_some(), play),
+                amount: blocked::<V>(
+                    fight,
+                    recipient,
+                    amount,
+                    powered,
+                    playing.map(|held| held.face.ident.card),
+                    play,
+                ),
                 powered,
                 play,
             }
@@ -2544,6 +2551,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.orbs.as_ref().map_or(0, |orbs| orbs.queue.len())
     }
 
+    fn channelled(&self) -> Vec<sts2_core::Channelled<V>> {
+        self.live
+            .orbs
+            .as_ref()
+            .map_or_else(Vec::new, |orbs| orbs.queue.clone())
+    }
+
     /// `IsHittable`: alive, and no listener refusing a hit on it.
     fn random_opponent(&mut self) -> Option<CombatId> {
         use sts2_core::rng::GameRng as _;
@@ -2816,6 +2830,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         Some(cards[at])
     }
 
+    fn take_random_cards(&mut self, cards: &mut [CardAt<V>], count: usize) -> Vec<CardAt<V>> {
+        use sts2_core::rng::GameRng as _;
+
+        self.rngs.selection.unstable_shuffle(cards);
+        cards.iter().take(count).copied().collect()
+    }
+
     fn remove_card(&mut self, card: CardAt<V>) -> CardIdent<V> {
         let at = self.standing(card);
         let ident = self.live.cards.remove(card.pile(), at).face.ident;
@@ -2924,14 +2945,40 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 }
 
+/// A selection a listener asks for after a shuffle: from `pile`, `count`
+/// cards, and what happens to them.
+pub(super) type ShuffleAsks<V> = (
+    Pile,
+    <V as sts2_core::ContentVersion>::Number,
+    sts2_core::PileAct,
+);
+
 /// `CardPileCmd.Shuffle`: the discard pile shuffled into the draw pile, then
 /// `ModifyShuffleOrder` over the result.
+///
+/// # Panics
+///
+/// A listener asking the player something after the shuffle, which only a
+/// draw that can pause carries out.
 pub(super) fn shuffle<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
 ) {
+    if let Some(asks) = shuffle_asking::<V>(live, rngs, relics, ascension) {
+        unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause");
+    }
+}
+
+/// [`shuffle`], handing back the selection a listener asks for after it,
+/// which is `CardSelectCmd.FromCombatPile` inside `AfterShuffle`.
+pub(super) fn shuffle_asking<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+) -> Option<ShuffleAsks<V>> {
     live.cards.reshuffle(rngs.shuffle);
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
@@ -2951,11 +2998,20 @@ pub(super) fn shuffle<V: Rules>(
     // `Hook.AfterShuffle`.
     let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::Shuffled);
     if asked.is_empty() {
-        return;
+        return None;
     }
+    let mut asks = None;
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     for (listener, effect) in asked {
         match effect {
+            // The selection waits for the draw to pause, so nothing may
+            // follow it.
+            effect if asks.is_some() => {
+                unimplemented!("{listener:?} asking for {effect:?} after a shuffle's selection")
+            }
+            HookEffect::SelectFromPile { pile, count, act } => {
+                asks = Some((pile, count, act));
+            }
             HookEffect::AddToDrawAtRandom { card, count } => {
                 let count: usize = num_traits::cast(count)
                     .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
@@ -2966,6 +3022,7 @@ pub(super) fn shuffle<V: Rules>(
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
     }
+    asks
 }
 
 /// `CardPileCmd.Draw`, which shuffles the discard pile back in when the draw
@@ -2979,32 +3036,66 @@ pub(super) fn shuffle<V: Rules>(
 #[must_use = "a card auto-played as it is drawn can end the fight"]
 pub(super) fn draw<V: Rules>(
     live: &mut Live<V>,
-    mut rngs: CombatRngs<'_>,
+    rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
     count: usize,
     hand_draw: bool,
 ) -> Option<super::Ended> {
+    match draw_pausing::<V>(live, rngs, relics, ascension, count, hand_draw, false) {
+        Drawn::Done(ended) => ended,
+        Drawn::Paused { asks, .. } => {
+            unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
+        }
+    }
+}
+
+/// How a draw that can pause stopped.
+pub(super) enum Drawn<V: Rules> {
+    /// As many cards as there were to draw, and how the fight ended if it did.
+    Done(Option<super::Ended>),
+    /// A shuffle inside it asked for a selection, with `left` cards still to
+    /// draw once it is answered.
+    Paused { left: usize, asks: ShuffleAsks<V> },
+}
+
+/// [`draw`], stopping where a shuffle inside it asks the player something.
+/// `resumed` is a draw that carries on from such a stop, which has asked
+/// `ShouldDraw` already.
+pub(super) fn draw_pausing<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    count: usize,
+    hand_draw: bool,
+    resumed: bool,
+) -> Drawn<V> {
     // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
     // when a listener stops it.
     let player = live.player().id;
     let hook = sts2_core::DecisionHook::ShouldDraw { player, hand_draw };
-    if super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
+    if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
         super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::AfterPreventingDraw);
-        return None;
+        return Drawn::Done(None);
     }
     let mut ended = None;
-    for _ in 0..count {
+    for drawing in 0..count {
         // `IsOverOrEnding`, and `CardPile.MaxCardsInHand`: a full hand stops
         // the draw.
         if ended.is_some() || live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND {
-            return ended;
+            return Drawn::Done(ended);
         }
         if live.cards.is_empty(Pile::Draw) {
             if live.cards.is_empty(Pile::Discard) {
-                return ended;
+                return Drawn::Done(ended);
             }
-            shuffle::<V>(live, rngs.reborrow(), relics, ascension);
+            if let Some(asks) = shuffle_asking::<V>(live, rngs.reborrow(), relics, ascension) {
+                return Drawn::Paused {
+                    left: count - drawing,
+                    asks,
+                };
+            }
         }
         let drawn = live
             .cards
@@ -3093,7 +3184,7 @@ pub(super) fn draw<V: Rules>(
         super::hook::apply::<V, _>(&mut board, rest);
         ended = ended.or(board.ended);
     }
-    ended
+    Drawn::Done(ended)
 }
 
 #[cfg(test)]

@@ -1741,6 +1741,16 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("choosing a random card from combat")
     }
 
+    /// `TakeRandom(count)` over `cards` off `CombatCardSelection`: the list
+    /// shuffled whole, then its first `count`, fewer where it is shorter.
+    fn take_random_cards(
+        &mut self,
+        _cards: &mut [crate::CardAt<V>],
+        _count: usize,
+    ) -> Vec<crate::CardAt<V>> {
+        unimplemented!("taking cards at random from the fight")
+    }
+
     /// `CardPileCmd.RemoveFromCombat` for one named card.
     fn remove_card(&mut self, _card: crate::CardAt<V>) -> crate::CardIdent<V> {
         unimplemented!("removing a card from combat")
@@ -1908,6 +1918,11 @@ pub trait Fight<V: ContentVersion> {
     /// How many orbs the player holds, which is `OrbQueue.Orbs.Count`.
     fn orbs_held(&self) -> usize {
         unimplemented!("counting orbs")
+    }
+
+    /// The player's orbs, front first, which is `OrbQueue.Orbs`.
+    fn channelled(&self) -> Vec<crate::Channelled<V>> {
+        unimplemented!("listing orbs")
     }
 
     /// `CreatureCmd.Damage(target, amount, Unblockable | Unpowered, card)`,
@@ -2347,16 +2362,16 @@ pub enum ModifyHook<V: ContentVersion> {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
-        /// `cardSource != null`: a card's own play gives the block.
-        card: bool,
+        /// `cardSource`: the card whose own play gives the block.
+        card: Option<V::Card>,
     },
     /// `ModifyBlockMultiplicative`, over what the additions left.
     BlockMultiplicative {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
-        /// `cardSource != null`, as [`ModifyHook::BlockAdditive`] carries it.
-        card: bool,
+        /// `cardSource`, as [`ModifyHook::BlockAdditive`] carries it.
+        card: Option<V::Card>,
         /// `cardPlay`, as the play's [`PlayAt`].
         play: Option<PlayAt>,
     },

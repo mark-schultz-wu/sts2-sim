@@ -123,6 +123,21 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                 Number::try_from(owner.draw).expect("a draw pile's size fits the game's numbers");
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * draw
         }
+        // `LunarBlast`: a base, and one more hit for each Skill its owner's
+        // plays finished this turn. A fight here has one player.
+        (Cards::Regent(RegentCard::LunarBlast), CardVar::CalculatedHits) => {
+            let skills = owner
+                .history
+                .finished_this_turn()
+                .filter(|&card| {
+                    <V0_107_1 as sts2_core::Rules>::card_kind(card)
+                        == Some(sts2_core::CardKind::Skill)
+                })
+                .count();
+            let skills = Number::try_from(skills).expect("a turn's plays fit the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * skills
+        }
         // `Radiate`: a base, and one more hit for each star its owner gained
         // this turn. A fight here has one player.
         (Cards::Regent(RegentCard::Radiate), CardVar::CalculatedHits) => {
@@ -141,6 +156,7 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 /// Where a card's own play stops to ask something, under its card grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
+    Colorless(colorless::Resume),
     Event(event::Resume),
     Necrobinder(necrobinder::Resume),
     Regent(regent::Resume),
@@ -290,6 +306,7 @@ pub(crate) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
+        Resume::Colorless(at) => colorless::resume_play(fight, at, chosen),
         Resume::Event(at) => event::resume_play(fight, at, chosen),
         Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),

@@ -1,0 +1,20 @@
+# Panache passes over the play it was applied by, counts down each later
+# play, and on the fifth hits every enemy for its stack, unpowered. Applied
+# here as a power, so the Strike is the play it passes over, and the Defend
+# is the fifth after it. Impatience draws only with no attack in hand.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"PANACHE"}
+{"cmd":"grant","card":"IMPATIENCE"}
+{"cmd":"grant","card":"IMPATIENCE"}
+{"cmd":"grant","card":"IMPATIENCE"}
+{"cmd":"grant","card":"IMPATIENCE"}
+{"cmd":"grant","card":"IMPATIENCE"}
+{"cmd":"grant","card":"IMPATIENCE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PANACHE_POWER","amount":10,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":0}

@@ -13,6 +13,7 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         DefectCard::Tempest => tempest(fight),
         DefectCard::Scrape => scrape(fight),
         DefectCard::MomentumStrike => momentum_strike(fight),
+        DefectCard::TeslaCoil => tesla_coil(fight),
         card => card_plays::defect::on_play(card, fight),
     }
 }
@@ -78,6 +79,34 @@ fn dualcast<F: Fight<V>>(fight: &mut F) -> Played<V> {
     if fight.orbs_held() > 0 {
         fight.evoke_next(false);
         fight.evoke_next(true);
+    }
+    Played::Done
+}
+
+/// `TeslaCoil`: its `Damage` at its target, then each Lightning's passive at
+/// the same target, twice for an upgraded copy. The Lightnings are listed as
+/// the damage leaves them.
+fn tesla_coil<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let hit = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(hit);
+    });
+    let times = if fight.upgraded() { 2 } else { 1 };
+    let lightning: Vec<_> = fight
+        .channelled()
+        .into_iter()
+        .filter(|orb| orb.orb == Orb::LightningOrb)
+        .collect();
+    for orb in &lightning {
+        for _ in 0..times {
+            super::super::orbs::passive_at(orb, target, fight);
+        }
     }
     Played::Done
 }

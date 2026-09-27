@@ -8,7 +8,7 @@ use crate::rng::MegaRng;
 use smallvec::SmallVec;
 use sts2_core::{CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
-use super::board::{Board, draw};
+use super::board::Board;
 use super::listen::{self, Listener};
 use super::live::{CREATURES, Face, Landing, Live, Setup, Skips, Then};
 use super::pile::MAX_CARDS_IN_HAND;
@@ -750,16 +750,53 @@ pub(super) fn carry_setup<V: Rules>(
                     let innate = live.cards.innate_to_top();
                     drawn = drawn.max(innate).min(MAX_CARDS_IN_HAND);
                 }
-                // A card auto-played as it is drawn can end the fight, and an
-                // ending fight hands the hooks after it no listeners.
-                if let Some(ended) = draw(live, rngs.reborrow(), relics, ascension, drawn, true) {
-                    return Carried::Done(Some(ended));
+                Setup::Drawing {
+                    left: drawn,
+                    resumed: false,
                 }
-                let hook = sts2_core::EventHook::PlayerTurnStart {
-                    player,
-                    turn: live.turn,
-                };
-                Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
+            }
+            // The hand's draw. A shuffle inside it can ask for a selection,
+            // which the setup parks on and then draws the rest.
+            Setup::Drawing { left, resumed } => {
+                match super::board::draw_pausing::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    ascension,
+                    left,
+                    true,
+                    resumed,
+                ) {
+                    // A card auto-played as it is drawn can end the fight, and
+                    // an ending fight hands the hooks after it no listeners.
+                    super::board::Drawn::Done(Some(ended)) => return Carried::Done(Some(ended)),
+                    super::board::Drawn::Done(None) => {
+                        let hook = sts2_core::EventHook::PlayerTurnStart {
+                            player,
+                            turn: live.turn,
+                        };
+                        Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
+                    }
+                    super::board::Drawn::Paused {
+                        left,
+                        asks: (pile, count, act),
+                    } => {
+                        let rest = Setup::Drawing {
+                            left,
+                            resumed: true,
+                        };
+                        match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                            Err(question) => {
+                                return Carried::Parked(super::live::Asking {
+                                    then: Then::Setup { act, stage: rest },
+                                    question,
+                                });
+                            }
+                            Ok(Some(ended)) => return Carried::Done(Some(ended)),
+                            Ok(None) => rest,
+                        }
+                    }
+                }
             }
             // `Hook.AfterPlayerTurnStart`, the last of the setup. A relic's
             // damage here can end the fight.

@@ -68,6 +68,12 @@ pub enum State {
     Gigantification {
         bound: Option<(sts2_core::AttackId, sts2_core::CardId<V>)>,
     },
+    /// `PanachePower`'s `CardsLeft`, and its `alreadyApplied`, which passes
+    /// over the play that applied it.
+    Panache {
+        cards_left: u8,
+        applied: bool,
+    },
     /// `AutomationPower`'s `cardsLeft`.
     Automation {
         cards_left: u8,
@@ -106,6 +112,10 @@ impl sts2_core::PowerModel<V> for State {
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
             Power::GigantificationPower => Self::Gigantification { bound: None },
+            Power::PanachePower => Self::Panache {
+                cards_left: PANACHE_CARDS,
+                applied: false,
+            },
             Power::AutomationPower => Self::Automation {
                 cards_left: AUTOMATION_CARDS,
             },
@@ -129,6 +139,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Feral { .. } => Power::FeralPower,
             Self::Gigantification { .. } => Power::GigantificationPower,
             Self::Automation { .. } => Power::AutomationPower,
+            Self::Panache { .. } => Power::PanachePower,
             Self::CurlUp { .. } => Power::CurlUpPower,
             Self::Surrounded { .. } => Power::SurroundedPower,
         }
@@ -381,6 +392,9 @@ const FRAIL: f64 = 0.75;
 
 /// `ColossusPower`'s `DamageDecrease`.
 const COLOSSAL: f64 = 0.5;
+
+/// `PanachePower._baseCardsLeft`: the plays for each payout.
+const PANACHE_CARDS: u8 = 5;
 
 /// `AutomationPower._baseCardsLeft`: the cards its owner draws for each
 /// payout.
@@ -1060,7 +1074,7 @@ pub(crate) fn modify_hook(
             ModifyHook::BlockMultiplicative {
                 target,
                 powered: true,
-                card: true,
+                card: Some(_),
                 ..
             },
         ) if target == holder => Modify::Scaled(0.0),
@@ -1152,6 +1166,20 @@ pub(crate) fn modify_hook(
         ) if target == holder => {
             unimplemented!("an endless Dexterity")
         }
+        // `FastenPower.ModifyBlockAdditive`: its stack on powered block its
+        // owner gains, from a Defend or from no card at all.
+        (
+            Power::FastenPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::BlockAdditive {
+                target,
+                powered: true,
+                card,
+            },
+        ) if target == holder && card.is_none_or(|card| card.tagged(CardTag::Defend)) => {
+            Modify::Added(amount)
+        }
+        (Power::FastenPower, _, ModifyHook::BlockAdditive { .. }) => Modify::Nothing,
         // `FrailPower.ModifyBlockMultiplicative`: a quarter off the block a
         // card or a move gives its owner.
         (
@@ -2572,6 +2600,57 @@ pub(crate) fn event_hook(
         }
         (Power::AutomationPower, PowerAmount::Endless, EventHook::CardDrawn { .. }) => {
             unimplemented!("an endless Automation")
+        }
+        // `PanachePower.AfterCardPlayed`: each play after the one that
+        // applied it counts down, and the fifth hits every enemy for its
+        // stack, unpowered. A fight here has one player, whose cards are all
+        // its holder's.
+        (Power::PanachePower, PowerAmount::Counted(amount), EventHook::CardPlayed { .. }) => {
+            let State::Panache {
+                cards_left,
+                applied,
+            } = state
+            else {
+                unreachable!("cards left for {:?}", state.power())
+            };
+            let hit = *applied && {
+                *cards_left -= 1;
+                *cards_left == 0
+            };
+            *applied = true;
+            if hit {
+                *cards_left = PANACHE_CARDS;
+                Some(HookEffect::DamageOpponents(amount))
+            } else {
+                None
+            }
+        }
+        // `PanachePower.AfterSideTurnEnd`: the count starts again as its
+        // owner's side ends a turn.
+        (Power::PanachePower, _, EventHook::SideTurnEnd { side }) => {
+            if side == owner {
+                let State::Panache { cards_left, .. } = state else {
+                    unreachable!("cards left for {:?}", state.power())
+                };
+                *cards_left = PANACHE_CARDS;
+            }
+            None
+        }
+        (Power::PanachePower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
+            unimplemented!("an endless Panache")
+        }
+        // `StratagemPower.AfterShuffle`: `FromCombatPile` over the draw pile
+        // for its stack of cards, each into hand. A fight here has one
+        // player, whose shuffle is its holder's.
+        (Power::StratagemPower, PowerAmount::Counted(amount), EventHook::Shuffled) => {
+            Some(HookEffect::SelectFromPile {
+                pile: sts2_core::Pile::Draw,
+                count: amount,
+                act: sts2_core::PileAct::IntoHand,
+            })
+        }
+        (Power::StratagemPower, PowerAmount::Endless, EventHook::Shuffled) => {
+            unimplemented!("an endless Stratagem")
         }
         // `ReflectPower.AfterDamageReceived`: what the block took off a
         // powered attack on its owner goes back at the attacker, unpowered.

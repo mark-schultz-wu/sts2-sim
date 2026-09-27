@@ -1,0 +1,12 @@
+# Fasten's power adds its stack to powered block its owner gains from a
+# Defend, and to none from another card.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"CLOAK_OF_STARS"}
+{"cmd":"grant","card":"CLOAK_OF_STARS"}
+{"cmd":"grant","card":"CLOAK_OF_STARS"}
+{"cmd":"grant","card":"CLOAK_OF_STARS"}
+{"cmd":"grant","card":"CLOAK_OF_STARS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"FASTEN_POWER","amount":4,"target":0}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":0}
