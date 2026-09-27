@@ -824,6 +824,13 @@ impl<V: Rules> State<V> {
                 });
                 offered
             }
+            sts2_core::DeckAct::RemoveBasicTagged(tag) => deck
+                .filter(|(_, card)| {
+                    card.card.tagged(tag)
+                        && card.card.rarity() == sts2_core::CardRarityKinds::BASIC
+                        && !card.card.eternal()
+                })
+                .collect(),
             sts2_core::DeckAct::Upgrade => self.upgradable().collect(),
             // `IsTransformable` in the deck is `IsRemovable`, and a quest
             // card is never offered.
@@ -899,7 +906,7 @@ impl<V: Rules> State<V> {
         use sts2_core::rng::GameRng as _;
 
         match act {
-            sts2_core::DeckAct::Remove => {
+            sts2_core::DeckAct::Remove | sts2_core::DeckAct::RemoveBasicTagged(_) => {
                 let mut taken = taken.to_vec();
                 taken.sort_unstable_by(|a, b| b.cmp(a));
                 for at in taken {

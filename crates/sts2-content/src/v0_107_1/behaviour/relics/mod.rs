@@ -36,6 +36,7 @@ mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
 mod lost_coffer;
+mod lost_wisp;
 mod mercury_hourglass;
 mod neows_talisman;
 mod neows_torment;
@@ -113,6 +114,7 @@ pub enum State {
     LeadPaperweight,
     LeafyPoultice,
     LostCoffer,
+    LostWisp,
     MercuryHourglass,
     NeowsTalisman,
     NeowsTorment,
@@ -184,6 +186,7 @@ pub(crate) fn event_hook(
         State::LeadPaperweight => lead_paperweight::event_hook(hook),
         State::LeafyPoultice => leafy_poultice::event_hook(hook, asked),
         State::LostCoffer => lost_coffer::event_hook(hook, asked),
+        State::LostWisp => lost_wisp::event_hook(hook, asked),
         State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
         State::NeowsTalisman => neows_talisman::event_hook(hook, asked),
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
@@ -274,6 +277,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LeadPaperweight
         | State::LeafyPoultice
         | State::LostCoffer
+        | State::LostWisp
         | State::MercuryHourglass
         | State::NeowsTalisman
         | State::NeowsTorment
@@ -331,6 +335,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::LeadPaperweight => State::LeadPaperweight,
             Relic::LeafyPoultice => State::LeafyPoultice,
             Relic::LostCoffer => State::LostCoffer,
+            Relic::LostWisp => State::LostWisp,
             Relic::MercuryHourglass => State::MercuryHourglass,
             Relic::NeowsTalisman => State::NeowsTalisman,
             Relic::NeowsTorment => State::NeowsTorment,

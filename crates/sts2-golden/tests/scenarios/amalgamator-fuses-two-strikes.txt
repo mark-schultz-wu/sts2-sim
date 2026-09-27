@@ -1,0 +1,7 @@
+# Amalgamator's `CombineStrikes` asks for two basic Strikes that can be
+# removed, removes them, and adds an Ultimate Strike. The selection offers
+# the Strikes alone.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"AMALGAMATOR"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[1,3]}

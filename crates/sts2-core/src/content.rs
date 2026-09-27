@@ -3180,6 +3180,9 @@ pub enum DeckAct<V: ContentVersion> {
     /// `FromDeckForTransformation`, then `CardCmd.TransformToRandom` off the
     /// named stream. It offers the cards that can be transformed.
     Transform(Stream<V>),
+    /// `FromDeckForRemoval` over the deck's basic cards with this tag that
+    /// can be removed, then `CardPileCmd.RemoveFromDeck`.
+    RemoveBasicTagged(V::CardTag),
     /// `FromDeckGeneric` over the deck's basic cards that can be transformed,
     /// then `CardCmd.TransformTo` this card.
     TransformBasicInto(V::Card),
