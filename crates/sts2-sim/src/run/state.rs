@@ -1279,6 +1279,14 @@ impl<V: Rules> State<V> {
                         .push(sts2_core::DeckCard::new(CardIdent::new(card)));
                     continue;
                 }
+                HookEffect::AddUpgradedToDeck(card) => {
+                    let mut ident = CardIdent::new(card);
+                    if sts2_core::CardTable::max_upgrade(card) > 0 {
+                        ident.upgrade = 1;
+                    }
+                    self.player.deck_mut().push(sts2_core::DeckCard::new(ident));
+                    continue;
+                }
                 HookEffect::RemoveDeckCardAt(at) => {
                     self.player.deck_mut().remove(at);
                     continue;
@@ -1931,6 +1939,19 @@ impl<V: Rules> State<V> {
         self.map.at(from).is_ok_and(|from| !from.to.contains(&to))
     }
 
+    /// `GenerateInitialOptions`: the event's own draws, then what its options
+    /// set up off the player's rewards stream.
+    pub(super) fn open_event(
+        &self,
+        event: V::Event,
+        rng: &mut crate::rng::MegaRng,
+        streams: &mut Streams<V>,
+    ) -> V::EventState {
+        let mut state = V::enter_event(event, self, rng);
+        V::set_up_event(&mut state, self, streams.player(V::PlayerRngType::REWARDS));
+        state
+    }
+
     pub(super) fn enter_event(&mut self, to: Coord, entered: EnteredEvent<V>) {
         let EnteredEvent {
             event,
@@ -2391,7 +2412,9 @@ impl<V: Rules> State<V> {
     /// own stream, and counts it against the act the way travelling does.
     pub(crate) fn event_here(&mut self, event: V::Event) -> Result<Decided, Error> {
         let mut rng = crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
-        let state = V::enter_event(event, self, &mut rng);
+        let mut streams = *self.streams();
+        let state = self.open_event(event, &mut rng, &mut streams);
+        self.streams = streams;
         Arc::make_mut(&mut self.visited_events).push(event);
         self.enter(
             Location::NoLocation,

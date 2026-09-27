@@ -35,6 +35,17 @@ pub trait EventBehavior<V: ContentVersion> {
 
     fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> Self::State;
 
+    /// `SetupForPlayer` on what the options offer, which draws off the
+    /// player's rewards stream as the options generate. An event whose
+    /// options set nothing up does nothing here.
+    fn set_up<R: GameRng>(
+        &self,
+        _state: &mut Self::State,
+        _run: &impl EventView<V>,
+        _rewards: &mut R,
+    ) {
+    }
+
     /// The page as it stands. Whether the event has finished is the run's,
     /// which [`HookEffect::FinishEvent`](crate::HookEffect::FinishEvent)
     /// sets, and a finished room offers nothing.

@@ -99,6 +99,7 @@ pub enum State {
     CursedPearl,
     DivineRight,
     DollysMirror,
+    DustyTome,
     FishingRod(fishing_rod::State),
     GlassEye,
     GoldenPearl,
@@ -161,6 +162,13 @@ pub(crate) fn event_hook(
         State::CursedPearl => cursed_pearl::event_hook(hook, asked),
         State::DivineRight => divine_right::event_hook(hook, asked),
         State::DollysMirror => dollys_mirror::event_hook(hook, asked),
+        // `DustyTome.AfterObtained` adds the ancient card `SetupForPlayer`
+        // named, upgraded. The relic's model comes with nothing written on
+        // it, so Darv hands that card over beside it.
+        State::DustyTome => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what DustyTome does for {hook:?}"),
+        },
         State::FishingRod(state) => fishing_rod::event_hook(state, hook, asked),
         State::GlassEye => glass_eye::event_hook(hook, asked),
         State::GoldenPearl => golden_pearl::event_hook(hook, asked),
@@ -248,6 +256,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::CursedPearl
         | State::DivineRight
         | State::DollysMirror
+        | State::DustyTome
         | State::FishingRod(_)
         | State::GlassEye
         | State::GoldenPearl
@@ -302,6 +311,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::CursedPearl => State::CursedPearl,
             Relic::DivineRight => State::DivineRight,
             Relic::DollysMirror => State::DollysMirror,
+            Relic::DustyTome => State::DustyTome,
             Relic::FishingRod => State::FishingRod(fishing_rod::State::default()),
             Relic::GlassEye => State::GlassEye,
             Relic::GoldenPearl => State::GoldenPearl,

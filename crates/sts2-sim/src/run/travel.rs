@@ -118,9 +118,9 @@ impl<V: Rules> State<V> {
                 let event = self.act_ancient();
                 let mut event_rng =
                     crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
-                let state = V::enter_event(event, self, &mut event_rng);
+                let mut streams = *self.streams();
+                let state = self.open_event(event, &mut event_rng, &mut streams);
                 let (events_used, _, unknown_odds) = self.event_state();
-                let streams = *self.streams();
                 self.enter_event(
                     to,
                     super::state::EnteredEvent {
@@ -174,7 +174,7 @@ impl<V: Rules> State<V> {
                 .unwrap_or_else(|| unimplemented!("an exhausted event queue"));
             let mut event_rng =
                 crate::event::stream::<V, crate::rng::MegaRng>(self.raw_seed(), 0, event);
-            let state = V::enter_event(event, self, &mut event_rng);
+            let state = self.open_event(event, &mut event_rng, &mut streams);
             self.enter_event(
                 to,
                 super::state::EnteredEvent {

@@ -56,6 +56,11 @@ impl Offered {
         }
     }
 
+    /// The relic an option offers.
+    pub(super) fn relic(&self, option: u8) -> Relic {
+        self.offered[usize::from(option)]
+    }
+
     /// `RelicOption`'s `OnChosen`: `RelicCmd.Obtain`, then `Done`.
     pub(super) fn choose(&mut self, option: u8) -> HookEffects<V> {
         let relic = self.offered[usize::from(option)];

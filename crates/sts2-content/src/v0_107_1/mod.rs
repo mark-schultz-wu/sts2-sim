@@ -744,6 +744,14 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::enter(event, run, rng)
     }
 
+    fn set_up_event<R: sts2_core::rng::GameRng>(
+        state: &mut Self::EventState,
+        run: &impl sts2_core::EventView<Self>,
+        rewards: &mut R,
+    ) {
+        behaviour::events::set_up(state, run, rewards);
+    }
+
     fn event_holds_potions(state: &Self::EventState) -> bool {
         behaviour::events::holds_potions(state)
     }

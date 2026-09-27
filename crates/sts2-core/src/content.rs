@@ -3507,6 +3507,8 @@ pub enum HookEffect<V: ContentVersion> {
     FightInEvent(V::Encounter),
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
+    /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
+    AddUpgradedToDeck(V::Card),
     /// `PlayerCmd.GainEnergy`.
     GainEnergy(V::Number),
     /// `PlayerCmd.LoseEnergy`.
@@ -4900,6 +4902,14 @@ pub trait Rules: Hooks {
         run: &impl crate::EventView<Self>,
         rng: &mut R,
     ) -> Self::EventState;
+
+    /// [`crate::EventBehavior::set_up`] for the event entered, off the
+    /// player's rewards stream.
+    fn set_up_event<R: crate::rng::GameRng>(
+        state: &mut Self::EventState,
+        run: &impl crate::EventView<Self>,
+        rewards: &mut R,
+    );
 
     fn observe_event(
         state: &Self::EventState,
