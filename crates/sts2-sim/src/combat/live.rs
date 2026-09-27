@@ -2024,16 +2024,29 @@ impl<V: Rules> Live<V> {
     /// A power asking for something as it comes off that nothing here carries
     /// out, or taking block that breaks as it goes.
     pub(crate) fn remove_power(&mut self, owner: CombatId, power: V::Power) {
+        if let Some(effect) = self.remove_power_asking(owner, power).first() {
+            unimplemented!("{power:?} asking for {effect:?} as it comes off, outside a board")
+        }
+    }
+
+    /// [`Live::remove_power`], handing back what `AfterRemoved` asked that
+    /// only a board carries out.
+    pub(super) fn remove_power_asking(
+        &mut self,
+        owner: CombatId,
+        power: V::Power,
+    ) -> sts2_core::HookEffects<V> {
+        let mut left = sts2_core::HookEffects::new();
         let Some(carrier) = self
             .creatures
             .iter()
             .find(|c| c.id == owner)
             .map(|c| c.carrier())
         else {
-            return;
+            return left;
         };
         let Some(at) = self.powers.of(owner).position(|held| held.power() == power) else {
-            return;
+            return left;
         };
         let held = self.powers.remove(owner, at);
         let mut asked = sts2_core::HookEffects::new();
@@ -2070,9 +2083,10 @@ impl<V: Rules> Live<V> {
                     |held| held.ident.affliction == Some(affliction),
                     |held| held.ident.affliction = None,
                 ),
-                other => unimplemented!("{power:?} asking for {other:?} as it comes off"),
+                other => left.push(other),
             }
         }
+        left
     }
 
     /// This fight as a snapshot, and the only way out of here.

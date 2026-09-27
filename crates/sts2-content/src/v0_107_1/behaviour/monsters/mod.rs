@@ -193,6 +193,8 @@ pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
             Monster::Crusher | Monster::Rocket,
             EventHook::CurrentHpChanged { .. } | EventHook::BeforeDeath { .. },
         ) => {}
+        // The Insatiable's own death does nothing but return.
+        (Monster::TheInsatiable, EventHook::AfterDeath { .. }) => {}
         (monster, hook) => unimplemented!("what {monster:?} does for {hook:?}"),
     }
 }
@@ -223,6 +225,7 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::Entomancer
         | Monster::Crusher
         | Monster::Rocket
+        | Monster::TheInsatiable
         | Monster::BowlbugRock
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront

@@ -2042,6 +2042,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::AfterCreatureAddedToCombat)
         .with(sts2_core::ModelHook::AfterOstyRevived)
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)
+        .with(sts2_core::ModelHook::AfterSideTurnStartLate)
         .with(sts2_core::ModelHook::BeforeSideTurnEnd),
     // SEEKING_EDGE_POWER
     sts2_core::Overrides::from_bits(0),
