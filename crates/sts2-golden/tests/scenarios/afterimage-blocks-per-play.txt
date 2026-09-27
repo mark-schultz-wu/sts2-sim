@@ -1,0 +1,8 @@
+# Afterimage gives a block for each card its owner plays after it lands,
+# and none for itself.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"AFTERIMAGE"}
+{"cmd":"play_card","index":7}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":0,"target":1}

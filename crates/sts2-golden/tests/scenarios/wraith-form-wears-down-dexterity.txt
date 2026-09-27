@@ -1,0 +1,8 @@
+# Wraith Form takes a Dexterity off its owner as each of its turns starts,
+# and nothing as the enemies' turn starts.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"WRAITH_FORM"}
+{"cmd":"play_card","index":7}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
