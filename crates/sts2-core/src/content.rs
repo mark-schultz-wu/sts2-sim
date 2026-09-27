@@ -2163,12 +2163,16 @@ pub enum ModifyHook<V: ContentVersion> {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
+        /// `cardSource != null`: a card's own play gives the block.
+        card: bool,
     },
     /// `ModifyBlockMultiplicative`, over what the additions left.
     BlockMultiplicative {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
+        /// `cardSource != null`, as [`ModifyHook::BlockAdditive`] carries it.
+        card: bool,
     },
     /// `ModifyHpLostBeforeOsty`, over what the block did not take.
     HpLostBeforeOsty {
@@ -2492,6 +2496,9 @@ pub enum EventHook<V: ContentVersion> {
         id: crate::CardId<V>,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
+        /// `EnergyCost.GetResolved()`: the cost with every modifier, or the
+        /// X the play captured.
+        resolved: V::Number,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
@@ -2512,6 +2519,10 @@ pub enum EventHook<V: ContentVersion> {
         /// `Keywords.Contains(Ethereal)` for the copy drawn, which a word
         /// written on it counts toward.
         ethereal: bool,
+        /// `fromHandDraw`.
+        hand_draw: bool,
+        /// `CombatState.CurrentSide`: whose turn the draw falls in.
+        side: V::CombatSide,
     },
     /// `BeforeApplied`, asked of a power on its way onto a creature.
     ///
@@ -3095,6 +3106,9 @@ pub enum HookEffect<V: ContentVersion> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
     },
+    /// `CreatureCmd.Kill` on the listener's owner: what hit points it has
+    /// are lost, and it dies.
+    KillOwner,
     /// `DoomPower.BeforeSideTurnEnd`, once the owner's hit points are no more
     /// than its Doom. `DoomKill` takes every doomed creature on its side, at
     /// the first one's asking.

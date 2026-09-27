@@ -213,7 +213,7 @@ pub(crate) fn play<V: Rules>(
     let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
-    before_played::<V>(live, relics, &card);
+    before_played::<V, _>(live, streams, relics, &card, play.energy);
     live.history.start(card.face.ident.card, play.energy);
     let mut board = Board::for_card(
         live,
@@ -322,7 +322,7 @@ pub(super) fn auto_play<V: Rules>(
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
-    before_played::<V>(live, relics, &card);
+    before_played::<V, _>(live, &mut rngs, relics, &card, energy);
     live.history.start(card.face.ident.card, energy);
     let mut board = Board::for_card(
         live,
@@ -372,31 +372,53 @@ pub(super) fn auto_play<V: Rules>(
 /// play pile. A power that counts plays down decrements through the walk
 /// itself.
 ///
-/// A card that shifts its own cost writes it wherever it stands.
-///
-/// # Panics
-///
-/// A listener asking for anything else before a card is played.
-fn before_played<V: Rules>(
+/// A card that shifts its own cost writes it wherever it stands, and what
+/// anything else asks runs through the board. `energy` is what the play
+/// spent, which is the X an X-cost card captured.
+fn before_played<V: Rules, S: LendsCombat>(
     live: &mut Live<V>,
+    streams: &mut S,
     relics: &mut crate::run::Belt<V>,
     card: &super::live::CardInstance<V>,
+    energy: V::Count,
 ) {
+    if !super::listen::heard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed) {
+        return;
+    }
+    let resolved = match card.face.ident.card.cost() {
+        sts2_core::Cost::X => num_traits::cast(energy).expect("an energy fits a game number"),
+        _ => {
+            let fight = super::listen::Walk { live, relics };
+            match super::legal::costs::<V>(card, fight).0 {
+                sts2_core::Cost::Fixed(cost) => {
+                    num_traits::cast(cost.get()).expect("a cost fits a game number")
+                }
+                cost => unimplemented!("a card played at a cost of {cost:?}"),
+            }
+        }
+    };
     let hook = sts2_core::EventHook::CardPlaying {
         card: card.face.ident.card,
         id: card.id,
         ethereal: card.face.ethereal(),
+        resolved,
     };
+    let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (
                 super::listen::Listener::Card { id },
                 sts2_core::HookEffect::ModifySelf { change, lasting },
             ) => live.modify_self(id, change, lasting),
-            (listener, effect) => {
-                unimplemented!("{listener:?} asking for {effect:?} before a card is played")
-            }
+            (_, effect) => rest.push(effect),
         }
+    }
+    if !rest.is_empty() {
+        let ascension = live.ascension;
+        let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+        hook::apply::<V, _>(&mut board, rest);
+        let skipped = std::mem::take(&mut board.skipped);
+        merge::<V>(&mut live.skip_tick, skipped);
     }
 }
 
@@ -737,7 +759,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .cards
                     .named(card)
                     .expect("a card replaying stands in the play pile");
-                before_played::<V>(next, relics, &replaying);
+                before_played::<V, _>(next, streams, relics, &replaying, play.energy);
                 next.history.start(played_card, play.energy);
                 let mut board = Board::for_card(
                     next,

@@ -1,0 +1,16 @@
+# Burst plays the next Skill twice, then loses one. Shadowmeld doubles its
+# owner's block. Corrosive Wave puts two Poison on each enemy for every card
+# drawn. Speedster deals three to each enemy for a card drawn outside the hand
+# draw. Backflip, played twice, draws four with all of them listening. Burst,
+# Shadowmeld and Corrosive Wave leave as the turn ends, and turn three draws
+# its hand without them.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"BACKFLIP"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"BURST_POWER","amount":1,"target":0}
+{"cmd":"power","power":"SHADOWMELD_POWER","amount":1,"target":0}
+{"cmd":"power","power":"CORROSIVE_WAVE_POWER","amount":2,"target":0}
+{"cmd":"power","power":"SPEEDSTER_POWER","amount":3,"target":0}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}

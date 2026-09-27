@@ -35,6 +35,26 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
             // reason. A listener that could answer for someone else would need
             // the owner carried alongside the effect.
             HookEffect::ApplyToOwner(power, amount) => fight.apply_to_actor(power, amount),
+            // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`, the list
+            // taken before the first lands.
+            HookEffect::ApplyToOpponents(power, amount) => {
+                for target in fight.hittable_opponents() {
+                    fight.apply_power(target, power, amount);
+                }
+            }
+            // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and from
+            // the owner.
+            HookEffect::DamageOpponents(amount) => {
+                for target in fight.hittable_opponents() {
+                    let hit = fight.resolve(sts2_core::Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: sts2_core::Amount::Number(amount),
+                        scaling: sts2_core::Scaling::Static,
+                    });
+                    fight.apply(hit);
+                }
+            }
             other => unimplemented!("a model asking for {other:?} inside a fight"),
         }
     }

@@ -1189,29 +1189,45 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// A listener to `AfterDiedToDoom` or `AfterCurrentHpChanged`.
     pub(super) fn doom_kill(&mut self, doomed: &[CombatId]) {
-        self.unheard(sts2_core::ModelHook::AfterCurrentHpChanged);
         for &creature in doomed {
-            let Some(at) = self.at(creature) else {
-                continue;
-            };
-            let hp = V::Number::from(self.live.creatures[at].hp);
-            self.lose_hp(creature, hp);
-            if let Some(at) = self.at(creature) {
-                self.kill(at);
-            }
+            self.kill_outright(creature);
         }
         self.unheard(sts2_core::ModelHook::AfterDiedToDoom);
+    }
+
+    /// `CreatureCmd.Kill`: the creature loses what hit points it has, and
+    /// dies.
+    ///
+    /// # Panics
+    ///
+    /// A listener to `AfterCurrentHpChanged`.
+    fn kill_outright(&mut self, creature: CombatId) {
+        self.unheard(sts2_core::ModelHook::AfterCurrentHpChanged);
+        let Some(at) = self.at(creature) else {
+            return;
+        };
+        let hp = V::Number::from(self.live.creatures[at].hp);
+        self.lose_hp(creature, hp);
+        if let Some(at) = self.at(creature) {
+            self.kill(at);
+        }
     }
 
     /// Carry out what the powers asked for after a hit or a broken block,
     /// each on the creature carrying it.
     fn after_hit(&mut self, asked: impl IntoIterator<Item = (Listener<V>, HookEffect<V>)>) {
         for (listener, effect) in asked {
-            let Listener::Power { owner, .. } = listener else {
+            let Listener::Power {
+                owner, power: this, ..
+            } = listener
+            else {
                 unimplemented!("{listener:?} asking for {effect:?} after a hit")
             };
             match effect {
                 HookEffect::RemoveFromOwner(power) => self.live.remove_power(owner, power),
+                // `PowerCmd.Remove(this)`.
+                HookEffect::Remove => self.live.remove_power(owner, this),
+                HookEffect::KillOwner => self.kill_outright(owner),
                 HookEffect::ApplyPower {
                     target,
                     power,
@@ -1433,21 +1449,25 @@ pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Numb
 /// is `Hook.ModifyBlock`.
 ///
 /// The same hook whether the block is previewed or gained, as damage's is.
-/// `powered` is `IsPoweredCardOrMonsterMoveBlock`.
+/// `powered` is `IsPoweredCardOrMonsterMoveBlock`, and `card` is whether a
+/// card's own play gives it.
 pub(super) fn blocked<V: Rules>(
     fight: Walk<'_, V>,
     recipient: CombatId,
     amount: V::Number,
     powered: bool,
+    card: bool,
 ) -> V::Number {
     let phases = [
         ModifyHook::BlockAdditive {
             target: recipient,
             powered,
+            card,
         },
         ModifyHook::BlockMultiplicative {
             target: recipient,
             powered,
+            card,
         },
     ];
     modified_by::<V>(fight, amount, &phases)
@@ -1565,7 +1585,13 @@ pub(crate) fn resolve<V: Rules>(
                 recipient,
                 // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A
                 // card's block and a monster move's are the powered ones.
-                amount: blocked::<V>(fight, recipient, amount, scaling == Scaling::Dynamic),
+                amount: blocked::<V>(
+                    fight,
+                    recipient,
+                    amount,
+                    scaling == Scaling::Dynamic,
+                    playing.is_some(),
+                ),
             }
         }
     };
@@ -2462,6 +2488,8 @@ pub(super) fn draw<V: Rules>(
                 card: drawn.face.ident.card,
                 id: drawn.id,
                 ethereal: drawn.face.ethereal(),
+                hand_draw,
+                side: live.side,
             },
         );
         if asked.is_empty() {

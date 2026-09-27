@@ -361,6 +361,9 @@ fn frees(power: Power, card: Cards, ethereal: bool) -> bool {
     }
 }
 
+/// `DanseMacabrePower`'s `EnergyVar(2)`: the resolved cost it answers from.
+const DANSE_MACABRE_ENERGY: Number = 2;
+
 /// `RadiancePower`'s `EnergyVar(1)`.
 const RADIANCE_ENERGY: Number = 1;
 
@@ -859,6 +862,42 @@ pub(crate) fn modify_hook(
             Modify::Added(one)
         }
         (Power::DuplicationPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
+        // `BurstPower.ModifyCardPlayCount`: one more play of a Skill its
+        // owner plays.
+        (Power::BurstPower, _, ModifyHook::CardPlayCount { player, card })
+            if player == holder
+                && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill) =>
+        {
+            Modify::Added(one)
+        }
+        (Power::BurstPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
+        // `ShadowmeldPower.ModifyBlockMultiplicative`: two to the power of
+        // its stack, on its owner's block.
+        (
+            Power::ShadowmeldPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::BlockMultiplicative { target, .. },
+        ) if target == holder => Modify::Scaled(2f64.powi(amount)),
+        (
+            Power::ShadowmeldPower,
+            PowerAmount::Endless,
+            ModifyHook::BlockMultiplicative { target, .. },
+        ) if target == holder => {
+            unimplemented!("an endless Shadowmeld")
+        }
+        (Power::ShadowmeldPower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
+        // `NoBlockPower.ModifyBlockMultiplicative`: none of its owner's
+        // powered block from a card.
+        (
+            Power::NoBlockPower,
+            _,
+            ModifyHook::BlockMultiplicative {
+                target,
+                powered: true,
+                card: true,
+            },
+        ) if target == holder => Modify::Scaled(0.0),
+        (Power::NoBlockPower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
         // `BufferPower.ModifyHpLostAfterOstyLate`: its holder loses nothing.
         (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target }) if target == holder => {
             Modify::AtMost(num_traits::zero())
@@ -893,6 +932,7 @@ pub(crate) fn modify_hook(
             ModifyHook::BlockAdditive {
                 target,
                 powered: true,
+                ..
             },
         ) if target == holder => Modify::Added(amount),
         (
@@ -901,6 +941,7 @@ pub(crate) fn modify_hook(
             ModifyHook::BlockAdditive {
                 target,
                 powered: true,
+                ..
             },
         ) if target == holder => {
             unimplemented!("an endless Dexterity")
@@ -913,6 +954,7 @@ pub(crate) fn modify_hook(
             ModifyHook::BlockMultiplicative {
                 target,
                 powered: true,
+                ..
             },
         ) if target == holder => Modify::Scaled(FRAIL),
         (Power::FrailPower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
@@ -2114,6 +2156,108 @@ pub(crate) fn event_hook(
             Some(HookEffect::Remove)
         }
         (Power::DuplicationPower, _, EventHook::SideTurnEnd { .. }) => None,
+        (Power::BurstPower, _, EventHook::PlayCountModified { .. }) => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::BurstPower | Power::ShadowmeldPower | Power::CorrosiveWavePower, _, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::Remove)
+        }
+        (Power::BurstPower | Power::ShadowmeldPower | Power::CorrosiveWavePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `NoBlockPower.AfterSideTurnEnd`: one off as the enemies' turn
+        // ends, whoever holds it.
+        (
+            Power::NoBlockPower,
+            _,
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+            },
+        ) => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::NoBlockPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `CorrosiveWavePower.AfterCardDrawn`: its stack of Poison onto every
+        // enemy that can be hit, for each of its owner's cards drawn. A fight
+        // here has one player, whose every card is.
+        (Power::CorrosiveWavePower, amount, EventHook::CardDrawn { .. })
+            if owner == CombatSide::Player =>
+        {
+            Some(HookEffect::ApplyToOpponents(Power::PoisonPower, amount))
+        }
+        (Power::CorrosiveWavePower, _, EventHook::CardDrawn { .. }) => None,
+        // `SpeedsterPower.AfterCardDrawn`: its stack to every enemy that can
+        // be hit, unpowered, for a card of its owner's drawn outside the hand
+        // draw and in its owner's own turn.
+        (
+            Power::SpeedsterPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardDrawn {
+                hand_draw: false,
+                side,
+                ..
+            },
+        ) if owner == CombatSide::Player && side == owner => Some(HookEffect::DamageOpponents(amount)),
+        (Power::SpeedsterPower, PowerAmount::Endless, EventHook::CardDrawn { hand_draw: false, side, .. })
+            if owner == CombatSide::Player && side == owner =>
+        {
+            unimplemented!("an endless Speedster")
+        }
+        (Power::SpeedsterPower, _, EventHook::CardDrawn { .. }) => None,
+        // `PrepTimePower.AfterSideTurnStart`: its stack of Vigor onto its
+        // owner, as its owner's side starts a turn.
+        (Power::PrepTimePower, amount, EventHook::SideTurnStart { side, .. }) if side == owner => {
+            Some(HookEffect::ApplyToOwner(Power::VigorPower, amount))
+        }
+        (Power::PrepTimePower, _, EventHook::SideTurnStart { .. }) => None,
+        // `DanseMacabrePower.BeforeCardPlayed`: its stack as block, unpowered,
+        // before each of its owner's cards resolved at two or more.
+        (
+            Power::DanseMacabrePower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlaying { resolved, .. },
+        ) if owner == CombatSide::Player && resolved >= DANSE_MACABRE_ENERGY => {
+            Some(HookEffect::GainBlock(amount))
+        }
+        (Power::DanseMacabrePower, PowerAmount::Endless, EventHook::CardPlaying { resolved, .. })
+            if owner == CombatSide::Player && resolved >= DANSE_MACABRE_ENERGY =>
+        {
+            unimplemented!("an endless Danse Macabre")
+        }
+        (Power::DanseMacabrePower, _, EventHook::CardPlaying { .. }) => None,
+        // `TheGambitPower.AfterDamageReceived`: a powered hit that takes hit
+        // points from its owner removes it, then kills the owner.
+        (
+            Power::TheGambitPower,
+            _,
+            EventHook::DamageReceived {
+                target,
+                unblocked,
+                powered: true,
+                ..
+            },
+        ) if target == holder && unblocked > 0 => {
+            asked.extend([HookEffect::Remove, HookEffect::KillOwner]);
+            return;
+        }
+        (Power::TheGambitPower, _, EventHook::DamageReceived { .. }) => None,
+        // `MonarchsGazePower.AfterDamageGiven`: its stack of Monarch's Gaze
+        // Strength Down onto whoever a powered hit from its owner lands on.
+        (
+            Power::MonarchsGazePower,
+            amount,
+            EventHook::DamageGiven {
+                dealer: Some(dealer),
+                target,
+                powered: true,
+                ..
+            },
+        ) if dealer == holder => Some(HookEffect::ApplyPower {
+            target,
+            power: Power::MonarchsGazeStrengthDownPower,
+            amount,
+        }),
+        (Power::MonarchsGazePower, _, EventHook::DamageGiven { .. }) => None,
         // `RegenPower.AfterSideTurnEnd`: its stack healed, then one off, as
         // its owner's side ends a turn.
         (Power::RegenPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })

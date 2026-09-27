@@ -1,0 +1,9 @@
+# Monarch's Gaze puts its stack of Strength Down on whoever a powered hit from
+# its owner lands on. The Gambit kills its owner on a powered hit that takes
+# hit points, and the Nibbit's attack loses the fight.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"MONARCHS_GAZE_POWER","amount":2,"target":0}
+{"cmd":"power","power":"THE_GAMBIT_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
