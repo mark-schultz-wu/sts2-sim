@@ -4579,6 +4579,18 @@ pub trait Rules: Hooks {
     /// card.
     fn on_use<F: Fight<Self>>(potion: Self::Potion, fight: &mut F) -> Played<Self>;
 
+    /// `PotionModel.OnUse` outside a fight, for a potion `AnyTime` lets a
+    /// player drink there, as what it asks the run for. The potion has left
+    /// the belt, as [`Rules::on_use`] says.
+    ///
+    /// # Panics
+    ///
+    /// A potion nobody has ported outside a fight.
+    fn on_use_outside_fight(
+        potion: Self::Potion,
+        run: &impl crate::EventView<Self>,
+    ) -> HookEffects<Self>;
+
     /// What a card that works its own target out from the fight names.
     ///
     /// `CardModel.TargetType`, overridden. The player's powers are what the
