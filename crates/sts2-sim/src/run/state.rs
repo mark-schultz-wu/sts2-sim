@@ -2052,6 +2052,7 @@ impl<V: Rules> State<V> {
         let hook = sts2_core::EventHook::ModifyRewards {
             room,
             act: self.act(),
+            acts: self.shared.opening.acts.len(),
         };
         for effect in self.notify_belt(hook) {
             match effect {
@@ -2067,6 +2068,12 @@ impl<V: Rules> State<V> {
                         });
                     }
                 }
+                // `GoldReward(amount)` sets its amount as it is built, so it
+                // is populated already and draws nothing.
+                sts2_core::HookEffect::AddGoldReward(amount) => offered.push(Offer::Gold {
+                    amount,
+                    taken: false,
+                }),
                 effect => unimplemented!("a relic modifying rewards with {effect:?}"),
             }
         }
@@ -2095,10 +2102,16 @@ impl<V: Rules> State<V> {
                         card: card.ident.card,
                         cloned: true,
                     };
-                    if let Some(effect) = self.notify_belt(hook).first() {
-                        unimplemented!("a relic asking for {effect:?} as a clone joins the deck")
+                    for effect in self.notify_belt(hook) {
+                        match effect {
+                            HookEffect::GainGold(amount) => self.gain_gold(amount),
+                            effect => unimplemented!(
+                                "a relic asking for {effect:?} as a clone joins the deck"
+                            ),
+                        }
                     }
                 }
+                HookEffect::GainGold(amount) => self.gain_gold(amount),
                 effect => unimplemented!("a relic asking for {effect:?} as a card joins the deck"),
             }
         }
@@ -2360,7 +2373,11 @@ impl<V: Rules> State<V> {
     ///
     /// A relic asking for something the run cannot carry out as it enters.
     fn room_entered(&mut self, room: V::RoomType, strayed: bool) {
-        let asked = self.notify_belt(sts2_core::EventHook::RoomEntered { room, strayed });
+        let asked = self.notify_belt(sts2_core::EventHook::RoomEntered {
+            room,
+            strayed,
+            deck: self.player.deck.len(),
+        });
         if let Some(asked) = self.carry_out(asked) {
             let pickup = asked.pickup;
             unimplemented!("entering a room asking for {pickup:?}");

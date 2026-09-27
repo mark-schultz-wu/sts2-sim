@@ -17,7 +17,7 @@ const START_OF_TURN: Number = 2;
 /// owner's. Both are `OstyCmd.Summon` for its owner, the only player.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::CombatStarting => asked.push(HookEffect::Summon(START_OF_COMBAT)),
+        EventHook::CombatStarting { .. } => asked.push(HookEffect::Summon(START_OF_COMBAT)),
         EventHook::SideTurnStart { side, .. } if side == <CombatSide as SideKinds>::PLAYER => {
             asked.push(HookEffect::Summon(START_OF_TURN));
         }

@@ -10,7 +10,7 @@ const BLOCK: Number = 10;
 
 /// `BeforeCombatStart`, which is `CreatureCmd.GainBlock` on its owner.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
-    if let EventHook::CombatStarting = hook {
+    if let EventHook::CombatStarting { .. } = hook {
         asked.push(HookEffect::GainBlock(BLOCK));
     }
 }

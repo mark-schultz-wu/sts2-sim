@@ -1,0 +1,28 @@
+# `PenNib` counts each attack played, and the tenth deals double. The
+# eleventh is back to single. Shivs cost nothing, so one turn plays all
+# eleven.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"PEN_NIB"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"play_card","index":7,"target":1}

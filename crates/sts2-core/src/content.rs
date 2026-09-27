@@ -2669,15 +2669,22 @@ pub enum EventHook<V: ContentVersion> {
         /// Whether the map point entered is one the point before does not
         /// lead on to, which only free travel reaches.
         strayed: bool,
+        /// How many cards the deck holds, which a relic reads off its owner.
+        deck: usize,
     },
     /// `TryModifyRewards`, for rewards once they are filled in: a room's of
     /// this type, or a relic's with no room, in the act at this index.
     ModifyRewards {
         room: Option<V::RoomType>,
         act: usize,
+        /// `RunState.Acts.Count`.
+        acts: usize,
     },
-    /// `BeforeCombatStart`, once the fight is built and before it opens.
-    CombatStarting,
+    /// `BeforeCombatStart`, once the fight is built and before it opens, in
+    /// a room of this type.
+    CombatStarting {
+        room: V::RoomType,
+    },
     /// `AfterCombatEnd`, for the fight the run has just finished, in a room
     /// of this type.
     CombatEnd {
@@ -2811,6 +2818,8 @@ pub enum EventHook<V: ContentVersion> {
         powered: bool,
         /// `cardSource`, as the copy being played that deals it.
         card: Option<crate::CardId<V>>,
+        /// The fight's player, which a relic's owner is.
+        player: crate::CombatId,
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
@@ -3040,7 +3049,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
-            EventHook::CombatStarting => ModelHook::BeforeCombatStart,
+            EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
             EventHook::RestSiteHeal { .. } => ModelHook::AfterRestSiteHeal,
             EventHook::CombatVictory { .. } => ModelHook::AfterCombatVictory,
@@ -3782,6 +3791,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `Card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
     /// `CombatEnergyCosts`, on the card whose enchantment asked. Slither's.
     RandomSelfCost {
+        below: u8,
+    },
+    /// `card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
+    /// `CombatEnergyCosts`. Confused's, for a card just drawn.
+    RandomCost {
+        card: crate::CardId<V>,
         below: u8,
     },
     /// One change written on the card that asked, as its own
