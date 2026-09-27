@@ -1,0 +1,6 @@
+# `YummyCookie.AfterObtained` asks for four deck cards to upgrade, and
+# upgrades each.
+{"cmd":"start","seed":"0RACLEB","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TEZCATARA"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0,5,8,9]}

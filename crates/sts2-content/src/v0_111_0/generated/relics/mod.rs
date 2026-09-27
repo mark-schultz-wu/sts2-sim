@@ -1515,7 +1515,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterRoomEntered)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // BIIIG_HUG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterShuffle),
     // BING_BONG
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // BLACK_BLOOD
@@ -2164,7 +2164,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // TEA_OF_DISCOURTESY
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
     // THE_ABACUS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterShuffle),
     // THE_BOOT
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterModifyingHpLostAfterOsty)

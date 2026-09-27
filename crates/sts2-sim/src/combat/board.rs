@@ -8,7 +8,6 @@
 //! build's fights hold no power, relic or card that hooks any of them yet. A
 //! command that needs one stops the run where it stands.
 
-use crate::rng::MegaRng;
 use num_traits::{Saturating as _, Zero};
 use smallvec::SmallVec;
 use sts2_core::rng::GameRng;
@@ -2483,7 +2482,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         for _ in 0..count {
             // `ShuffleIfNecessary`.
             if self.live.cards.is_empty(Pile::Draw) {
-                shuffle::<V>(self.live, self.rngs.shuffle, self.relics);
+                let ascension = self.live.ascension;
+                shuffle::<V>(self.live, self.rngs.reborrow(), self.relics, ascension);
             }
             if self.live.cards.is_empty(Pile::Draw) {
                 break;
@@ -2788,8 +2788,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
 /// `CardPileCmd.Shuffle`: the discard pile shuffled into the draw pile, then
 /// `ModifyShuffleOrder` over the result.
-pub(super) fn shuffle<V: Rules>(live: &mut Live<V>, rng: &mut MegaRng, relics: &mut Belt<V>) {
-    live.cards.reshuffle(rng);
+pub(super) fn shuffle<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+) {
+    live.cards.reshuffle(rngs.shuffle);
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
@@ -2803,6 +2808,24 @@ pub(super) fn shuffle<V: Rules>(live: &mut Live<V>, rng: &mut MegaRng, relics: &
             (listener, effect) => {
                 unimplemented!("{listener:?} asking for {effect:?} over a shuffle")
             }
+        }
+    }
+    // `Hook.AfterShuffle`.
+    let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::Shuffled);
+    if asked.is_empty() {
+        return;
+    }
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    for (listener, effect) in asked {
+        match effect {
+            HookEffect::AddToDrawAtRandom { card, count } => {
+                let count: usize = num_traits::cast(count)
+                    .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                for _ in 0..count {
+                    board.add_to_draw_at_random(card);
+                }
+            }
+            effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
     }
 }
@@ -2843,7 +2866,7 @@ pub(super) fn draw<V: Rules>(
             if live.cards.is_empty(Pile::Discard) {
                 return ended;
             }
-            shuffle::<V>(live, rngs.shuffle, relics);
+            shuffle::<V>(live, rngs.reborrow(), relics, ascension);
         }
         let drawn = live
             .cards

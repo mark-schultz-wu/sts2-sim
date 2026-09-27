@@ -565,6 +565,7 @@ pub enum ModelHook {
     ModifyHandDraw,
     ModifyHandDrawLate,
     ModifyShuffleOrder,
+    AfterShuffle,
     ShouldDraw,
     AfterPreventingDraw,
     AfterCardDrawnEarly,
@@ -635,7 +636,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 95] = [
+    pub const ALL: [ModelHook; 96] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -664,6 +665,7 @@ impl ModelHook {
         ModelHook::ModifyHandDraw,
         ModelHook::ModifyHandDrawLate,
         ModelHook::ModifyShuffleOrder,
+        ModelHook::AfterShuffle,
         ModelHook::ShouldDraw,
         ModelHook::AfterPreventingDraw,
         ModelHook::AfterCardDrawnEarly,
@@ -764,6 +766,7 @@ impl ModelHook {
             ModelHook::ModifyHandDraw => "ModifyHandDraw",
             ModelHook::ModifyHandDrawLate => "ModifyHandDrawLate",
             ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
+            ModelHook::AfterShuffle => "AfterShuffle",
             ModelHook::ShouldDraw => "ShouldDraw",
             ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
             ModelHook::AfterCardDrawnEarly => "AfterCardDrawnEarly",
@@ -2483,6 +2486,9 @@ impl<V: ContentVersion> DecisionHook<V> {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
+    /// A fight here has one player, who is the shuffler.
+    Shuffled,
     /// `ModifyShuffleOrder`, over the draw pile just shuffled. `initial` is
     /// the shuffle a fight opens on.
     ShuffleOrder {
@@ -2823,6 +2829,7 @@ impl<V: ContentVersion> EventHook<V> {
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
+            EventHook::Shuffled => ModelHook::AfterShuffle,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
