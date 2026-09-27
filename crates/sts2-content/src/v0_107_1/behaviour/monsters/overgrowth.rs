@@ -33,10 +33,9 @@ pub(super) fn starting_powers(
             Power::SlipperyPower,
             PowerAmount::Counted(slippery(ascension)),
         )],
-        // The Jaxfruit starts a sound loop. The Eye With Teeth applies
-        // Illusion, which the Fogmog's illusion, the one thing that summons
-        // it, applies beside Minion.
-        Monster::SnappingJaxfruit | Monster::EyeWithTeeth => Vec::new(),
+        // The Jaxfruit starts a sound loop.
+        Monster::SnappingJaxfruit => Vec::new(),
+        Monster::EyeWithTeeth => vec![(Power::IllusionPower, PowerAmount::Counted(1))],
         _ => return None,
     })
 }
@@ -171,11 +170,10 @@ const SPORES: Number = 2;
 /// A constant in the move itself. Its `BuffIntent` advertises none.
 const INHALE_STRENGTH: Number = 7;
 
-/// `Fogmog.IllusionMove`. Its illusion joins the front of the enemy roster.
+/// `Fogmog.IllusionMove`: `CreatureCmd.Add<EyeWithTeeth>` into the
+/// `illusion` slot, the first of `FogmogNormal.Slots`.
 fn illusion<F: Fight<V>>(fight: &mut F) {
-    let eye = fight.summon(Monster::EyeWithTeeth, 0);
-    fight.apply_power(eye, Power::IllusionPower, PowerAmount::Counted(1));
-    fight.apply_power(eye, Power::MinionPower, PowerAmount::Counted(1));
+    fight.summon_into_slot(Monster::EyeWithTeeth, 0);
 }
 
 /// `INIT_MOVE`, the one conditional a Nibbit has.

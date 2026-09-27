@@ -267,11 +267,6 @@ pub(super) fn summon<V: Rules>(
         held.spawn.position = position;
         held.spawn.roster_size = roster_size;
     }
-    // `AfterAddedToRoom`, which applies what the monster enters with.
-    for (power, amount) in V::monster_starting_powers(monster, live.ascension, live.side) {
-        live.powers
-            .push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
-    }
     if super::listen::heard::<V>(
         live,
         relics,

@@ -49,6 +49,7 @@ pub(super) fn starting_powers(
         // loop beside it.
         Monster::BowlbugEgg | Monster::SpinyToad | Monster::Ovicopter => Vec::new(),
         Monster::Chomper => vec![(Power::ArtifactPower, PowerAmount::Counted(2))],
+        Monster::Parafright => vec![(Power::IllusionPower, PowerAmount::Counted(1))],
         // `ToughEgg.AfterAddedToRoom`, for an egg not yet hatched: Hatch at
         // two while the enemies take their turn, and at one otherwise.
         Monster::ToughEgg => {
@@ -208,6 +209,25 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             let hp = fight.niche_int(min, max);
             fight.set_max_and_current_hp(egg, num_traits::cast(hp).expect("a hatchling's health"));
         }
+        // `IllusionMove`: `CreatureCmd.Add<Parafright>` into the `illusion`
+        // slot while the fight is live.
+        (Monster::TheObscura, MoveId::IllusionMove) => {
+            fight.summon_into_slot(Monster::Parafright, ILLUSION_SLOT);
+        }
+        // `WailMove`: Strength at three on every creature on its side.
+        (Monster::TheObscura, MoveId::SailMove) => {
+            use sts2_core::CreatureView as _;
+
+            let side = fight.side();
+            let team: Vec<_> = fight
+                .creatures()
+                .filter(|creature| creature.side() == side && creature.alive())
+                .map(|creature| creature.id())
+                .collect();
+            for creature in team {
+                fight.apply_power(creature, Power::StrengthPower, PowerAmount::Counted(3));
+            }
+        }
         (Monster::Myte, MoveId::ToxicMove) => {
             fight.add_generated_cards(
                 sts2_core::CardIdent::new(Cards::Status(StatusCard::Toxic)),
@@ -319,6 +339,9 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
     });
     fight.heal(actor, amount);
 }
+
+/// `illusion`, the first of `TheObscuraNormal.Slots`.
+const ILLUSION_SLOT: u8 = 0;
 
 /// `LayEggsMove`'s loop, which lays three.
 const EGGS: usize = 3;
