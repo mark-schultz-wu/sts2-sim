@@ -44,17 +44,31 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::Ta
         .unwrap_or_else(|| V::computed_card_target(card.card, &super::board::powers::<V>(live)))
 }
 
-/// `CardModel.CanPlay` asks `Hook.ShouldPlay` of every card, and every cost it
-/// reads runs the two `TryModifyEnergyCostInCombat` hooks. No ported model
-/// answers these, so a fight where one listens stops by name.
+/// `CardModel.CanPlay` asks `Hook.ShouldPlay` of every card. No ported model
+/// answers it, so a fight where one listens stops by name.
 fn unheard_by_the_hand<V: Rules>(live: &Live<V>, relics: &crate::run::Belt<V>) {
-    for hook in [
-        sts2_core::ModelHook::ShouldPlay,
-        sts2_core::ModelHook::TryModifyEnergyCostInCombat,
-        sts2_core::ModelHook::TryModifyEnergyCostInCombatLate,
-    ] {
-        super::turn::unheard::<V>(live, relics, hook);
-    }
+    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::ShouldPlay);
+}
+
+/// `EnergyCost.GetWithModifiers` for a copy in hand or being played, which
+/// runs `Hook.ModifyEnergyCostInCombat` over its own modifiers: every
+/// listener's `TryModifyEnergyCostInCombat`, then every one's `Late`.
+pub(super) fn costs<V: Rules>(
+    held: &CardInstance<V>,
+    fight: Walk<'_, V>,
+) -> (sts2_core::Cost, sts2_core::Cost) {
+    let card = (held.id, held.face.ident.card);
+    let ethereal = held.face.ethereal();
+    held.face.costs(|cost| {
+        super::board::modified_by::<V>(
+            fight,
+            cost,
+            &[
+                sts2_core::ModifyHook::EnergyCost { card, ethereal },
+                sts2_core::ModifyHook::EnergyCostLate { card, ethereal },
+            ],
+        )
+    })
 }
 
 /// Why this card cannot be played, or nothing for one that can.
@@ -161,7 +175,7 @@ impl<'a, V: Rules> InHand<'a, V> {
     ) -> Self {
         let creatures = &fight.live.creatures;
         let target = target_type::<V>(held.face.ident, fight.live);
-        let (cost, star_cost) = held.face.costs();
+        let (cost, star_cost) = costs::<V>(&held, fight);
         let reason = reasons::<V>(held.face.ident, fight.live, cost, star_cost, energy, stars);
         Self {
             held,
@@ -265,7 +279,7 @@ pub(crate) fn moves<V: Rules>(
 
     unheard_by_the_hand::<V>(live, relics);
     for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
-        let (cost, star_cost) = card.face.costs();
+        let (cost, star_cost) = costs::<V>(&card, Walk { live, relics });
         let refused = reasons::<V>(
             card.face.ident,
             live,

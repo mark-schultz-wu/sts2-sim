@@ -523,10 +523,16 @@ impl<V: Rules> Face<V> {
     /// reads.
     ///
     /// The modifiers fold over the printed cost in the order they were
-    /// written. `GetWithModifiers` returns the base untouched for a cost that
-    /// is not a number, so a pool the card is not priced in folds nothing.
-    pub(super) fn costs(&self) -> (sts2_core::Cost, sts2_core::Cost) {
-        let fold = |pool, printed| {
+    /// written, and a cost that is not a number folds nothing. `global` is
+    /// `Hook.ModifyEnergyCostInCombat`, run over the energy cost after those
+    /// and before the clamp. It leaves a cost below zero alone, so this does
+    /// not ask it one.
+    pub(super) fn costs(
+        &self,
+        global: impl FnOnce(V::Number) -> V::Number,
+    ) -> (sts2_core::Cost, sts2_core::Cost) {
+        let mut global = Some(global);
+        let mut fold = |pool, printed| {
             let sts2_core::Cost::Fixed(printed) = printed else {
                 return printed;
             };
@@ -549,6 +555,12 @@ impl<V: Rules> Face<V> {
                         false => amount,
                     }
                 });
+            let folded = match (pool, global.take()) {
+                (sts2_core::CostPool::Energy, Some(global)) if folded >= num_traits::zero() => {
+                    global(folded)
+                }
+                _ => folded,
+            };
             // `Math.Max(0, num)`, which every read clamps at.
             let largest: V::Number =
                 num_traits::NumCast::from(u8::MAX - 1).expect("a fixed cost fits a game number");

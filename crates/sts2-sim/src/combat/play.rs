@@ -41,6 +41,7 @@ pub(crate) struct Play<V: Rules> {
 /// index, then the creature id, then the card's own two rules.
 pub(crate) fn resolve<V: Rules>(
     live: &Live<V>,
+    relics: &crate::run::Belt<V>,
     index: HandIndex,
     target: Option<CombatId>,
 ) -> Result<Play<V>, Reason<V>> {
@@ -53,7 +54,7 @@ pub(crate) fn resolve<V: Rules>(
             count: live.cards.len(sts2_core::Pile::Hand),
         })?;
     let card = held.face.ident;
-    let (cost, star_cost) = held.face.costs();
+    let (cost, star_cost) = legal::costs::<V>(&held, super::listen::Walk { live, relics });
 
     // The creature the play named has to still be in this fight. An id is
     // chosen against an observation, and a fight moves on from one.
@@ -206,8 +207,7 @@ pub(crate) fn play<V: Rules>(
     let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
-    // `Hook.BeforeCardPlayed`, which no ported model answers.
-    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed);
+    before_played::<V>(live, relics, &card);
     live.history.start(card.face.ident.card, play.energy);
     let mut board = Board::for_card(
         live,
@@ -305,7 +305,7 @@ pub(super) fn auto_play<V: Rules>(
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
-    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed);
+    before_played::<V>(live, relics, &card);
     live.history.start(card.face.ident.card, energy);
     let mut board = Board::for_card(
         live,
@@ -349,6 +349,28 @@ pub(super) fn auto_play<V: Rules>(
         unimplemented!("an auto-played {ident:?} that stops on a question");
     }
     ended
+}
+
+/// `Hook.BeforeCardPlayed`, before one play of `card`, which stands in the
+/// play pile. A power that counts plays down decrements through the walk
+/// itself.
+///
+/// # Panics
+///
+/// A listener asking for anything else before a card is played.
+fn before_played<V: Rules>(
+    live: &mut Live<V>,
+    relics: &mut crate::run::Belt<V>,
+    card: &super::live::CardInstance<V>,
+) {
+    let hook = sts2_core::EventHook::CardPlaying {
+        card: card.face.ident.card,
+        id: card.id,
+        ethereal: card.face.ethereal(),
+    };
+    if let Some((listener, effect)) = super::listen::notify::<V>(live, relics, hook).first() {
+        unimplemented!("{listener:?} asking for {effect:?} before a card is played")
+    }
 }
 
 /// `GetResultPileTypeForCardPlay`, run through
@@ -690,6 +712,11 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 if effect.plays.done >= effect.plays.count {
                     break;
                 }
+                let replaying = next
+                    .cards
+                    .named(card)
+                    .expect("a card replaying stands in the play pile");
+                before_played::<V>(next, relics, &replaying);
                 next.history.start(played_card, play.energy);
                 let mut board = Board::for_card(
                     next,
