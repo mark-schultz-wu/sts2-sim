@@ -1,0 +1,12 @@
+# Luminous Choir draws its tribute as it opens: 149 gold, less a draw of
+# `NextInt(0, 50)` off the event's stream. The Golden Pearl pays for it.
+# Offering it takes that gold, then the next relic from the front of the bag,
+# which on this seed is Strike Dummy. Its three more land on the Strike, and
+# none on the Bash, which is not tagged Strike.
+{"cmd":"start","seed":"0RACLE4","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"GOLDEN_PEARL"}
+{"cmd":"event","event":"LUMINOUS_CHOIR"}
+{"cmd":"choose_option","index":1}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":2,"target":1}

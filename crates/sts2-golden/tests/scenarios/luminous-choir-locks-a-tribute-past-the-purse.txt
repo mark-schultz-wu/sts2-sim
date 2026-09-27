@@ -1,0 +1,17 @@
+# Luminous Choir locks its tribute by the price it drew, not the printed one.
+# On this seed the draw makes it 120, and two fights' gold takes the purse
+# from 99 to between that and 149, so the tribute is open. Offering it takes
+# the 120.
+{"cmd":"start","seed":"0RACLE4","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"answer","skip":true}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"answer","take":[{"index":0}]}
+{"cmd":"answer","skip":true}
+{"cmd":"event","event":"LUMINOUS_CHOIR"}
+{"cmd":"choose_option","index":1}

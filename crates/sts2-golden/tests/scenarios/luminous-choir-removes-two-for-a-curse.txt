@@ -1,0 +1,8 @@
+# The starting purse cannot pay Luminous Choir's tribute, so that option is
+# locked. Reaching into the flesh removes the two cards picked, then adds
+# Spore Mind.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"INFLAME"}
+{"cmd":"event","event":"LUMINOUS_CHOIR"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0,10]}
