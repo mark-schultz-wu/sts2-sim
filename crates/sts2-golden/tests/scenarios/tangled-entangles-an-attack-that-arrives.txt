@@ -1,0 +1,13 @@
+# `TangledPower.AfterCardEnteredCombat` puts Entangled on an Attack that
+# arrives while it lasts. Attack Potion's Bully costs nothing this turn, and
+# Entangled makes it one. Bully deals four and two more for each Vulnerable on
+# its target: at two Vulnerable that is eight, and twelve once Vulnerable
+# multiplies it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","potion":"ATTACK_POTION"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"TANGLED_POWER","amount":1,"target":0}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[0]}
+{"cmd":"power","power":"VULNERABLE_POWER","amount":2,"target":1}
+{"cmd":"play_card","index":5,"target":1}

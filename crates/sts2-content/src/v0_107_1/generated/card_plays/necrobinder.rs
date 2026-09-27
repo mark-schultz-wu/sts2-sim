@@ -106,8 +106,19 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         // `for`
         NecrobinderCard::DeathsDoor => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        NecrobinderCard::DeathMarch => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::DeathMarch => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         NecrobinderCard::Debilitate => {
             let target = fight.target();
             fight.attack(Scaling::Dynamic, |fight| {
@@ -415,8 +426,19 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         // `if`
         NecrobinderCard::Snap => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        NecrobinderCard::SoulStorm => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::SoulStorm => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         NecrobinderCard::Sow => {
             fight.attack(Scaling::Dynamic, |fight| {
                 for target in fight.opponents() {
@@ -457,8 +479,19 @@ pub fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Played<V> {
         }
         // `call BuffFromPlay`
         NecrobinderCard::TheScythe => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        NecrobinderCard::TimesUp => unimplemented!("what {card:?} does when it is played"),
+        NecrobinderCard::TimesUp => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         // `call CardSelectCmd.FromHand`
         NecrobinderCard::Transfigure => unimplemented!("what {card:?} does when it is played"),
         // `call CreateClone`

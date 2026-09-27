@@ -178,8 +178,19 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         RegentCard::CosmicIndifference => unimplemented!("what {card:?} does when it is played"),
         // `call CardPile.GetCards`
         RegentCard::CrashLanding => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        RegentCard::CrescentSpear => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::CrescentSpear => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         RegentCard::CrushUnder => {
             let held = fight.opponents();
             fight.attack(Scaling::Dynamic, |fight| {
@@ -638,8 +649,19 @@ pub fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
         }
         // `statement`
         RegentCard::SummonForth => unimplemented!("what {card:?} does when it is played"),
-        // `call DamageCmd.Attack`
-        RegentCard::Supermassive => unimplemented!("what {card:?} does when it is played"),
+        RegentCard::Supermassive => {
+            let target = fight.target();
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::CalculatedDamage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            Played::Done
+        }
         RegentCard::SwordSage => {
             fight.apply_to_actor(
                 Power::SwordSagePower,

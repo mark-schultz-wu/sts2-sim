@@ -15,6 +15,7 @@ use sts2_core::{
 };
 
 use super::super::V0_107_1 as V;
+use super::super::generated::afflictions::Affliction;
 use super::super::generated::cards::{CardKeyword, CardTag, Cards, ColorlessCard, TokenCard};
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::orbs::Orb;
@@ -551,6 +552,7 @@ pub(crate) fn modify_hook(
             ModifyHook::EnergyCostLate {
                 card: (_, card),
                 ethereal,
+                ..
             },
         ) if owner == CombatSide::Player && frees(power, card, ethereal) => {
             Modify::AtMost(num_traits::zero())
@@ -582,6 +584,26 @@ pub(crate) fn modify_hook(
             unimplemented!("an endless Borrowed Time")
         }
         (Power::BorrowedTimePower, _, ModifyHook::EnergyCost { .. }) => Modify::Nothing,
+        // `TangledPower.TryModifyEnergyCostInCombat`: its stack onto a card
+        // with Entangled. A fight here has one player, whose cards are its
+        // holder's.
+        (
+            Power::TangledPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::EnergyCost {
+                affliction: Some(Affliction::Entangled),
+                ..
+            },
+        ) => Modify::Added(amount),
+        (
+            Power::TangledPower,
+            PowerAmount::Endless,
+            ModifyHook::EnergyCost {
+                affliction: Some(Affliction::Entangled),
+                ..
+            },
+        ) => unimplemented!("an endless Tangled"),
+        (Power::TangledPower, _, ModifyHook::EnergyCost { .. }) => Modify::Nothing,
         // `IntangiblePower`: a hit on its owner capped at one, and the hit
         // points it loses capped the same, whatever the hit's props.
         (Power::IntangiblePower, _, ModifyHook::DamageCap { target, .. })
@@ -1194,6 +1216,32 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Conqueror")
         }
         (Power::ConquerorPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `TangledPower.AfterApplied`: Entangled on every Attack its owner has.
+        (Power::TangledPower, _, EventHook::Applied) => Some(HookEffect::Afflict {
+            to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Attack),
+            affliction: Affliction::Entangled,
+        }),
+        // `TangledPower.AfterCardEnteredCombat`: Entangled on an Attack that
+        // arrives with no affliction.
+        (Power::TangledPower, _, EventHook::CardEnteredCombat { at, card })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack) =>
+        {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::One(at),
+                affliction: Affliction::Entangled,
+            })
+        }
+        (Power::TangledPower, _, EventHook::CardEnteredCombat { .. }) => None,
+        // `TangledPower.AfterSideTurnEnd`: gone as its owner's side ends a
+        // turn.
+        (Power::TangledPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::TangledPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `TangledPower.AfterRemoved`: Entangled off every card that has it.
+        (Power::TangledPower, _, EventHook::Removed) => Some(HookEffect::ClearAffliction(
+            sts2_core::Writing::EveryAfflictedWith(Affliction::Entangled),
+        )),
         // `DemisePower.AfterSideTurnEnd`: its stack off its owner as its
         // owner's side's turn ends.
         (Power::DemisePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })

@@ -16,12 +16,14 @@ use sts2_core::{CardVars, Fight, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
-use super::super::generated::cards::{CardVar, Cards, ColorlessCard, NecrobinderCard};
+use super::super::generated::cards::{
+    CardVar, Cards, ColorlessCard, IroncladCard, NecrobinderCard,
+};
+use super::super::generated::powers::Power;
 
 /// What the run holds a card's numbers as.
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
-mod colorless;
 mod defect;
 mod event;
 mod necrobinder;
@@ -86,6 +88,21 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::ExtraDamage) * owner.osty.map_or(0, Number::from)
         }
+        // `Bully`: a base, and more for each Vulnerable on its target.
+        (Cards::Ironclad(IroncladCard::Bully), CardVar::CalculatedDamage) => {
+            let vulnerable = owner
+                .target
+                .and_then(|powers| {
+                    powers
+                        .iter()
+                        .find(|stack| stack.power == Power::VulnerablePower)
+                })
+                .map_or(0, |stack| match stack.amount {
+                    sts2_core::PowerAmount::Counted(amount) => amount,
+                    sts2_core::PowerAmount::Endless => unimplemented!("an endless Vulnerable"),
+                });
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * vulnerable
+        }
         // `MindBlast`: a base, and one more for each card in the draw pile.
         (Cards::Colorless(ColorlessCard::MindBlast), CardVar::CalculatedDamage) => {
             let draw =
@@ -113,7 +130,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Regent(card) => regent::on_play(card, fight),
         Cards::Necrobinder(card) => necrobinder::on_play(card, fight),
         Cards::Defect(card) => defect::on_play(card, fight),
-        Cards::Colorless(card) => colorless::on_play(card, fight),
+        Cards::Colorless(card) => card_plays::colorless::on_play(card, fight),
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
         Cards::Event(card) => event::on_play(card, fight),
         Cards::Quest(card) => card_plays::quest::on_play(card, fight),

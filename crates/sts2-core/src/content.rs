@@ -826,6 +826,16 @@ impl Overrides {
     }
 }
 
+/// What `AfflictionModel.CanAfflict` reads off an affliction.
+pub trait AfflictionTable: Copy {
+    /// `CanAfflictCardType`: whether it goes on a card of this type.
+    fn afflicts(self, kind: CardKind) -> bool;
+    /// `CanAfflictUnplayableCards`.
+    fn afflicts_unplayable(self) -> bool;
+    /// `IsStackable`: whether a second goes onto a card that has this one.
+    fn stackable(self) -> bool;
+}
+
 /// What a table says about an enchantment, beyond its row.
 pub trait EnchantmentTable: Copy {
     /// The hooks this enchantment's class overrides, as the hook dump
@@ -2139,12 +2149,15 @@ pub enum ModifyHook<V: ContentVersion> {
         card: (crate::CardId<V>, V::Card),
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
+        /// The copy's `Affliction`.
+        affliction: Option<V::Affliction>,
     },
     /// `TryModifyEnergyCostInCombatLate`, over what [`ModifyHook::EnergyCost`]
     /// left.
     EnergyCostLate {
         card: (crate::CardId<V>, V::Card),
         ethereal: bool,
+        affliction: Option<V::Affliction>,
     },
     /// `ModifyOrbValue`: a number `player`'s orb shows, as its passive or its
     /// evoke reads it.
@@ -2631,6 +2644,11 @@ pub enum Writing<V: ContentVersion> {
     EveryCopyOf(V::Card),
     /// Every card the fight holds that carries this tag, in every pile.
     EveryTagged(V::CardTag),
+    /// Every card the fight holds of this type, in every pile.
+    EveryOfKind(CardKind),
+    /// Every card the fight holds that carries this affliction, in every
+    /// pile.
+    EveryAfflictedWith(V::Affliction),
 }
 
 /// One `CardPlayStartedEntry` in `CombatManager.History`: a card's play that
@@ -3010,6 +3028,13 @@ pub enum HookEffect<V: ContentVersion> {
     GenerateDistinctColorless {
         count: V::Number,
     },
+    /// `CardCmd.Afflict` with `affliction` on each card `to` names.
+    Afflict {
+        to: Writing<V>,
+        affliction: V::Affliction,
+    },
+    /// `CardCmd.ClearAffliction` on each card `to` names.
+    ClearAffliction(Writing<V>),
     /// The card that asked, moved to the top of the draw pile it was
     /// shuffled into.
     ToTopOfDrawPile,
@@ -3222,6 +3247,9 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub osty: Option<V::Health>,
     /// How many cards the owner's draw pile holds.
     pub draw: usize,
+    /// The powers of the creature the card is pointed at, where it is pointed
+    /// at one.
+    pub target: Option<&'a [crate::Stack<V>]>,
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -3744,6 +3772,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
+        + AfflictionTable
         + 'static;
 
     /// Every card, across all twelve pools.
