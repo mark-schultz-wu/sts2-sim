@@ -12,6 +12,7 @@ mod crystal_sphere;
 mod darv;
 mod dense_vegetation;
 mod doll_room;
+mod fake_merchant;
 mod field_of_man_sized_holes;
 mod infested_automaton;
 mod jungle_maze_adventure;
@@ -69,6 +70,7 @@ pub enum State {
     RanwidTheElder(ranwid_the_elder::State),
     RelicTrader(relic_trader::State),
     DollRoom(doll_room::State),
+    FakeMerchant(fake_merchant::State),
     SpiritGrafter(spirit_grafter::State),
     ColossalFlower(colossal_flower::State),
     CrystalSphere(crystal_sphere::State),
@@ -307,6 +309,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::ThisOrThat => State::ThisOrThat(this_or_that::ThisOrThat.enter(run, rng)),
         Event::Wellspring => State::Wellspring(wellspring::Wellspring.enter(run, rng)),
+        Event::FakeMerchant => State::FakeMerchant(fake_merchant::FakeMerchant.enter(run, rng)),
         Event::WelcomeToWongos => {
             State::WelcomeToWongos(welcome_to_wongos::WelcomeToWongos.enter(run, rng))
         }
@@ -380,6 +383,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::RanwidTheElder(state) => ranwid_the_elder::RanwidTheElder.observe(state, run),
         State::RelicTrader(state) => relic_trader::RelicTrader.observe(state, run),
         State::DollRoom(state) => doll_room::DollRoom.observe(state, run),
+        State::FakeMerchant(state) => fake_merchant::FakeMerchant.observe(state, run),
         State::SpiritGrafter(state) => spirit_grafter::SpiritGrafter.observe(state, run),
         State::ColossalFlower(state) => colossal_flower::ColossalFlower.observe(state, run),
         State::CrystalSphere(state) => crystal_sphere::CrystalSphere.observe(state, run),
@@ -452,6 +456,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::RelicTrader(state) => relic_trader::RelicTrader.choose(state, option, run, rng),
         State::DollRoom(state) => doll_room::DollRoom.choose(state, option, run, rng),
+        State::FakeMerchant(state) => fake_merchant::FakeMerchant.choose(state, option, run, rng),
         State::SpiritGrafter(state) => {
             spirit_grafter::SpiritGrafter.choose(state, option, run, rng)
         }
@@ -535,5 +540,20 @@ pub(crate) fn rewards(state: &State) -> Vec<sts2_core::CustomReward<V>> {
     match state {
         State::CrystalSphere(state) => crystal_sphere::CrystalSphere.rewards(state),
         state => unimplemented!("rewards of {state:?}'s own"),
+    }
+}
+
+/// [`EventBehavior::stock`] for the event entered.
+pub(crate) fn stock<R: sts2_core::rng::GameRng>(state: &mut State, shops: &mut R) {
+    if let State::FakeMerchant(state) = state {
+        fake_merchant::FakeMerchant.stock(state, shops);
+    }
+}
+
+/// [`EventBehavior::buy`] for the event entered.
+pub(crate) fn buy(state: &mut State, index: u8) -> HookEffects<V> {
+    match state {
+        State::FakeMerchant(state) => fake_merchant::FakeMerchant.buy(state, index),
+        state => unimplemented!("buying entry {index} from {state:?}"),
     }
 }

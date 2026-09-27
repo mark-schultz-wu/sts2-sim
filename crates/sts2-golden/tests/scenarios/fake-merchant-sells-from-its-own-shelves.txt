@@ -1,0 +1,11 @@
+# The Fake Merchant's room is a shop of six fake relics, drawn off the
+# event's stream and each priced off the player's shop stream.
+#
+# The ninety-nine gold a run opens on buys the Fake Strike Dummy. Its shelf
+# is then empty, and the fifty-four left no longer cover the Fake Blood Vial.
+# The Strike that opens the next fight hits for one more.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"FAKE_MERCHANT"}
+{"cmd":"buy","index":3}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}

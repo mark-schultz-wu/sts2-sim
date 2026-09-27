@@ -1521,7 +1521,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // BLOOD_SOAKED_ROSE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
     // BLOOD_VIAL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStartLate),
     // BONE_FLUTE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterAttack),
     // BONE_TEA
@@ -1661,7 +1661,7 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // FAKE_ANCHOR
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStart),
     // FAKE_BLOOD_VIAL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStartLate),
     // FAKE_HAPPY_FLOWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)

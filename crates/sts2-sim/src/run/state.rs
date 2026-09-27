@@ -1603,6 +1603,15 @@ impl<V: Rules> State<V> {
                     self.heal(amount);
                     continue;
                 }
+                // `SetCurrentHpInternal` truncates, and the health it adds to
+                // is whole, so the share heals its whole part.
+                HookEffect::HealPercent(percent) => {
+                    let percent: V::Health =
+                        num_traits::cast(percent).expect("a share of health fits the run's health");
+                    let hundred: V::Health = num_traits::cast(100).expect("a hundred fits health");
+                    self.heal(self.player.max_hp * percent / hundred);
+                    continue;
+                }
                 HookEffect::OfferRewards(rewards) => Pickup::Rewards {
                     offered: self.custom_rewards(
                         rewards,
@@ -2374,6 +2383,7 @@ impl<V: Rules> State<V> {
         if !pulled.is_empty() {
             V::hand_event_pulled_relics(&mut state, &pulled);
         }
+        V::stock_event(&mut state, streams.player(V::PlayerRngType::SHOPS));
         Ok((state, layout))
     }
 
@@ -2425,6 +2435,9 @@ impl<V: Rules> State<V> {
     /// The card removal is the one entry that does not clear. Its price climbs
     /// with every removal the run has bought, and it stays on the shelf.
     pub(crate) fn buy(&mut self, index: u8) -> Result<Decided, Error> {
+        if let Phase::Event { .. } = self.phase {
+            return Ok(self.buy_in_event(index));
+        }
         let Phase::Shop { entries, .. } = &self.phase else {
             unimplemented!("buying outside a shop");
         };
@@ -2495,6 +2508,32 @@ impl<V: Rules> State<V> {
             Some(_) => Decided::Abandoned,
             None => Decided::Resolved,
         })
+    }
+
+    /// A purchase from the shop an event's room is, which the event carries
+    /// out.
+    ///
+    /// # Panics
+    ///
+    /// An entry the room does not sell or the run cannot afford.
+    fn buy_in_event(&mut self, index: u8) -> Decided {
+        let Some(Room::Shop { entries }) = self.event_room() else {
+            unimplemented!("buying in an event that is not a shop");
+        };
+        let Some(entry) = entries.iter().find(|entry| entry.index == index) else {
+            unimplemented!("buying a shelf this event does not have");
+        };
+        if !entry.stocked || !entry.affordable {
+            unimplemented!("buying a shelf this event cannot sell");
+        }
+        let Phase::Event { state, .. } = &mut self.phase else {
+            unreachable!("the phase was an event when this began");
+        };
+        let effects = V::buy_in_event(state, index);
+        match self.carry_out(effects) {
+            Some(next) => self.park(next),
+            None => Decided::Resolved,
+        }
     }
 
     /// Finish the purchase this merchant is waiting on.
@@ -3548,18 +3587,26 @@ impl<V: Rules> State<V> {
             ),
             // An event's options are the content's to spell, so its room is
             // built. That is the room alone, and only in an event.
-            Phase::Event { .. } => {
-                if let Some(Room::Event { options, .. }) = self.event_room() {
-                    moves.extend(
-                        options
-                            .iter()
-                            .filter(|option| !option.locked && !option.chosen)
-                            .map(|option| Decision::ChooseOption {
-                                index: option.index,
-                            }),
-                    );
-                }
-            }
+            // An event whose room is a shop sells what it reports.
+            Phase::Event { .. } => match self.event_room() {
+                Some(Room::Event { options, .. }) => moves.extend(
+                    options
+                        .iter()
+                        .filter(|option| !option.locked && !option.chosen)
+                        .map(|option| Decision::ChooseOption {
+                            index: option.index,
+                        }),
+                ),
+                Some(Room::Shop { entries }) => moves.extend(
+                    entries
+                        .iter()
+                        .filter(|entry| {
+                            entry.stocked && entry.affordable && entry.blocked.is_none()
+                        })
+                        .map(|entry| Decision::Buy { index: entry.index }),
+                ),
+                _ => {}
+            },
             Phase::Treasure {
                 finished: false, ..
             } => moves.extend([0, 1].map(|index| Decision::ChooseOption { index })),

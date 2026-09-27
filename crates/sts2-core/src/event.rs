@@ -46,6 +46,18 @@ pub trait EventBehavior<V: ContentVersion> {
     ) {
     }
 
+    /// `BeforeEventStarted` stocking a merchant inventory of the event's own,
+    /// each entry priced off the player's shop stream as `CalcCost` prices
+    /// it. An event with no inventory does nothing here.
+    fn stock<R: GameRng>(&self, _state: &mut Self::State, _shops: &mut R) {}
+
+    /// `MerchantEntry.OnTryPurchaseWrapper` on the event's entry at `index`,
+    /// which the run has checked is stocked and affordable. What the purchase
+    /// does to the run comes back, in the order the game does it.
+    fn buy(&self, _state: &mut Self::State, index: u8) -> crate::HookEffects<V> {
+        unimplemented!("buying entry {index} from an event")
+    }
+
     /// The relics the event pulls from the front of the player's bag as it
     /// opens, after [`EventBehavior::set_up`], in the order pulled.
     fn relics_pulled(&self, _state: &Self::State) -> &'static [crate::RelicPull<V>] {
