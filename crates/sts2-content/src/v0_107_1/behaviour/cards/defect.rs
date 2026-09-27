@@ -3,7 +3,7 @@
 use sts2_core::{Amount, Effect, Fight, Pile, PileAct, Played, Scaling};
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardVar, DefectCard};
+use super::super::super::generated::cards::{CardVar, DefectCard, StatusCard};
 use super::super::super::generated::orbs::Orb;
 use super::V;
 
@@ -26,6 +26,40 @@ pub(super) fn resume_play<F: Fight<V>>(
             Played::Done
         }
     }
+}
+
+/// Its block, onto its owner.
+fn block<F: Fight<V>>(fight: &mut F) {
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+}
+
+/// `CardPileCmd.AddGeneratedCardToCombat` of one `status` into the discard
+/// pile.
+fn add_status<F: Fight<V>>(fight: &mut F, status: StatusCard) {
+    use super::super::super::generated::cards::Cards;
+
+    fight.add_generated_cards(
+        sts2_core::CardIdent::new(Cards::Status(status)),
+        Pile::Discard,
+        1,
+    );
+}
+
+/// `Ftl`: its damage to the target, then its `Cards` drawn while its owner
+/// has finished fewer plays this turn than its `PlayMax`.
+fn ftl<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    hit(fight, fight.target(), 1);
+    let finished = fight.history().finished_this_turn().count();
+    let finished = super::Number::try_from(finished).expect("a turn's plays fit a game number");
+    if finished < fight.var(CardVar::PlayMax) {
+        fight.draw(fight.var(CardVar::Cards));
+    }
+    Played::Done
 }
 
 /// `Compact`: its block, then each Status in hand transformed into a Fuel,
@@ -72,6 +106,69 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
             Played::Done
         }
         DefectCard::Compact => compact(fight),
+        DefectCard::Ftl => ftl(fight),
+        // `Overclock`: its `Cards` drawn, then a Burn into the discard pile.
+        DefectCard::Overclock => {
+            fight.draw(fight.var(CardVar::Cards));
+            add_status(fight, StatusCard::Burn);
+            Played::Done
+        }
+        // `AdaptiveStrike`: its damage to the target, then a clone of itself
+        // into the discard pile, free for the rest of the fight.
+        DefectCard::AdaptiveStrike => {
+            hit(fight, fight.target(), 1);
+            if let Some(clone) = fight.clone_this(Pile::Discard) {
+                fight.modify_card(
+                    clone,
+                    sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
+                    sts2_core::Lasting::ThisFight,
+                );
+            }
+            Played::Done
+        }
+        // `BoostAway`: its block, then a Dazed into the discard pile.
+        DefectCard::BoostAway => {
+            block(fight);
+            add_status(fight, StatusCard::Dazed);
+            Played::Done
+        }
+        // `FightThrough`: its block, then two Wounds into the discard pile,
+        // one at a time.
+        DefectCard::FightThrough => {
+            block(fight);
+            add_status(fight, StatusCard::Wound);
+            add_status(fight, StatusCard::Wound);
+            Played::Done
+        }
+        // `BulkUp`: its `OrbSlots` fewer orb slots, then its Strength and its
+        // Dexterity.
+        DefectCard::BulkUp => {
+            use super::super::super::generated::powers::Power;
+
+            fight.remove_orb_slots(fight.var(CardVar::OrbSlots));
+            let strength = fight.var(CardVar::StrengthPower);
+            fight.apply_to_actor(
+                Power::StrengthPower,
+                sts2_core::PowerAmount::Counted(strength),
+            );
+            let dexterity = fight.var(CardVar::DexterityPower);
+            fight.apply_to_actor(
+                Power::DexterityPower,
+                sts2_core::PowerAmount::Counted(dexterity),
+            );
+            Played::Done
+        }
+        // `Quadcast`: with any orb held, the first orb evoked its `Repeat`
+        // times, leaving on the last.
+        DefectCard::Quadcast => {
+            if fight.orbs_held() > 0 {
+                let repeat = fight.var(CardVar::Repeat);
+                for evoked in 1..=repeat {
+                    fight.evoke_next(evoked == repeat);
+                }
+            }
+            Played::Done
+        }
         DefectCard::Claw => claw(fight),
         DefectCard::CompileDriver => compile_driver(fight),
         DefectCard::GoForTheEyes => go_for_the_eyes(fight),

@@ -1,0 +1,5 @@
+# Boost Away gives its block and puts a Dazed into the discard pile.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BOOST_AWAY"}
+{"cmd":"play_card","index":5}

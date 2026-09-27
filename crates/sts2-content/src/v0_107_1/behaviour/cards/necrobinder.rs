@@ -175,6 +175,36 @@ fn grave_warden<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `NegativePulse`: its block, then its Doom on each enemy that can be hit.
+fn negative_pulse<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    let doom = sts2_core::PowerAmount::Counted(fight.var(CardVar::DoomPower));
+    for target in fight.hittable_opponents() {
+        fight.apply_power(target, Power::DoomPower, doom);
+    }
+    Played::Done
+}
+
+/// `Severance`: its damage to the target, then a Soul into the draw pile at
+/// random, one into the discard pile and one into hand.
+fn severance<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+
+    strike(fight);
+    let soul = Cards::Token(TokenCard::Soul);
+    fight.add_at_random(soul, Pile::Draw);
+    fight.add_generated_cards(sts2_core::CardIdent::new(soul), Pile::Discard, 1);
+    fight.add_generated_cards(sts2_core::CardIdent::new(soul), Pile::Hand, 1);
+    Played::Done
+}
+
 /// `Dirge`: its `Summon` of Osty once for each energy its X spent. Then as
 /// many Souls go into the draw pile at random, upgraded where Dirge is.
 fn dirge<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -238,6 +268,8 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Eradicate => eradicate(fight),
         NecrobinderCard::GraveWarden => grave_warden(fight),
         NecrobinderCard::Dirge => dirge(fight),
+        NecrobinderCard::NegativePulse => negative_pulse(fight),
+        NecrobinderCard::Severance => severance(fight),
         // `Friendship`: its Strength off its owner, then its Energy as
         // Friendship.
         NecrobinderCard::Friendship => {

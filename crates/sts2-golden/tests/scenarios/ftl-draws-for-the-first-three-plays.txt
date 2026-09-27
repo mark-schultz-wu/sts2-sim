@@ -1,0 +1,12 @@
+# FTL draws a card while its owner has finished fewer than three plays this
+# turn. The fourth draws nothing.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"FTL"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","card":"FTL"}
+{"cmd":"play_card","index":6,"target":1}
+{"cmd":"grant","card":"FTL"}
+{"cmd":"play_card","index":7,"target":1}
+{"cmd":"grant","card":"FTL"}
+{"cmd":"play_card","index":8,"target":1}

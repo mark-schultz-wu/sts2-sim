@@ -1,0 +1,5 @@
+# Bulk Up takes an orb slot and gives two Strength and two Dexterity.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BULK_UP"}
+{"cmd":"play_card","index":5}
