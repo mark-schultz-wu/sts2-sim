@@ -1,12 +1,15 @@
 //! Event behavior dispatch for this build.
 
+mod amalgamator;
 mod ancient;
 mod aroma_of_chaos;
 mod brain_leech;
 mod byrdonis_nest;
 mod darv;
 mod dense_vegetation;
+mod field_of_man_sized_holes;
 mod jungle_maze_adventure;
+mod lost_wisp;
 mod luminous_choir;
 mod morphic_grove;
 mod orobas;
@@ -42,12 +45,15 @@ use super::relics::adds_pet;
 
 #[derive(Debug, Clone)]
 pub enum State {
+    Amalgamator(amalgamator::State),
     AromaOfChaos(aroma_of_chaos::State),
     BrainLeech(brain_leech::State),
     ByrdonisNest(byrdonis_nest::State),
     Darv(darv::State),
     DenseVegetation(dense_vegetation::State),
+    FieldOfManSizedHoles(field_of_man_sized_holes::State),
     JungleMazeAdventure(jungle_maze_adventure::State),
+    LostWisp(lost_wisp::State),
     LuminousChoir(luminous_choir::State),
     MorphicGrove(morphic_grove::State),
     Orobas(ancient::Offered),
@@ -203,7 +209,11 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
     rng: &mut R,
 ) -> State {
     match event {
+        Event::Amalgamator => State::Amalgamator(amalgamator::Amalgamator.enter(run, rng)),
         Event::AromaOfChaos => State::AromaOfChaos(aroma_of_chaos::AromaOfChaos.enter(run, rng)),
+        Event::FieldOfManSizedHoles => State::FieldOfManSizedHoles(
+            field_of_man_sized_holes::FieldOfManSizedHoles.enter(run, rng),
+        ),
         Event::BrainLeech => State::BrainLeech(brain_leech::BrainLeech.enter(run, rng)),
         Event::ByrdonisNest => State::ByrdonisNest(byrdonis_nest::ByrdonisNest.enter(run, rng)),
         Event::Darv => State::Darv(darv::Darv.enter(run, rng)),
@@ -213,6 +223,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::JungleMazeAdventure => {
             State::JungleMazeAdventure(jungle_maze_adventure::JungleMazeAdventure.enter(run, rng))
         }
+        Event::LostWisp => State::LostWisp(lost_wisp::LostWisp.enter(run, rng)),
         Event::LuminousChoir => State::LuminousChoir(luminous_choir::LuminousChoir.enter(run, rng)),
         Event::MorphicGrove => State::MorphicGrove(morphic_grove::MorphicGrove.enter(run, rng)),
         Event::Orobas => State::Orobas(orobas::Orobas.enter(run, rng)),
@@ -267,7 +278,11 @@ pub(crate) fn holds_potions(state: &State) -> bool {
 
 pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
     match state {
+        State::Amalgamator(state) => amalgamator::Amalgamator.observe(state, run),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
+        State::FieldOfManSizedHoles(state) => {
+            field_of_man_sized_holes::FieldOfManSizedHoles.observe(state, run)
+        }
         State::BrainLeech(state) => brain_leech::BrainLeech.observe(state, run),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.observe(state, run),
         State::Darv(state) => darv::Darv.observe(state, run),
@@ -275,6 +290,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::JungleMazeAdventure(state) => {
             jungle_maze_adventure::JungleMazeAdventure.observe(state, run)
         }
+        State::LostWisp(state) => lost_wisp::LostWisp.observe(state, run),
         State::LuminousChoir(state) => luminous_choir::LuminousChoir.observe(state, run),
         State::MorphicGrove(state) => morphic_grove::MorphicGrove.observe(state, run),
         State::Orobas(state) => orobas::Orobas.observe(state, run),
@@ -307,7 +323,11 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
     rng: &mut R,
 ) -> HookEffects<V> {
     match state {
+        State::Amalgamator(state) => amalgamator::Amalgamator.choose(state, option, run, rng),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
+        State::FieldOfManSizedHoles(state) => {
+            field_of_man_sized_holes::FieldOfManSizedHoles.choose(state, option, run, rng)
+        }
         State::BrainLeech(state) => brain_leech::BrainLeech.choose(state, option, run, rng),
         State::ByrdonisNest(state) => byrdonis_nest::ByrdonisNest.choose(state, option, run, rng),
         State::Darv(state) => darv::Darv.choose(state, option, run, rng),
@@ -317,6 +337,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::JungleMazeAdventure(state) => {
             jungle_maze_adventure::JungleMazeAdventure.choose(state, option, run, rng)
         }
+        State::LostWisp(state) => lost_wisp::LostWisp.choose(state, option, run, rng),
         State::LuminousChoir(state) => {
             luminous_choir::LuminousChoir.choose(state, option, run, rng)
         }
