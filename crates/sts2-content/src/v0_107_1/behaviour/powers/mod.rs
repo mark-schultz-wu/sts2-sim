@@ -87,6 +87,10 @@ pub enum State {
     Surrounded {
         facing_left: bool,
     },
+    /// `SlothPower._cardsPlayedThisTurn`.
+    Sloth {
+        played: Number,
+    },
 }
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
@@ -121,6 +125,7 @@ impl sts2_core::PowerModel<V> for State {
             },
             Power::CurlUpPower => Self::CurlUp { played: None },
             Power::SurroundedPower => Self::Surrounded { facing_left: false },
+            Power::SlothPower => Self::Sloth { played: 0 },
             power => Self::Stateless(power),
         }
     }
@@ -142,6 +147,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Panache { .. } => Power::PanachePower,
             Self::CurlUp { .. } => Power::CurlUpPower,
             Self::Surrounded { .. } => Power::SurroundedPower,
+            Self::Sloth { .. } => Power::SlothPower,
         }
     }
 
@@ -1213,6 +1219,19 @@ pub(crate) fn modify_hook(
             PowerAmount::Counted(amount),
             ModifyHook::HandDraw { player, .. },
         ) if player == holder => Modify::Added(amount),
+        // `MindRotPower.ModifyHandDraw`: its stack fewer cards for its owner.
+        // Its `Math.Max(0m, …)` floor bites only on a draw already below the
+        // stack, which no ported listener takes it to.
+        (
+            Power::MindRotPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::HandDraw { player, .. },
+        ) if player == holder => Modify::Added(-amount),
+        (Power::MindRotPower, PowerAmount::Endless, ModifyHook::HandDraw { player, .. })
+            if player == holder =>
+        {
+            unimplemented!("an endless Mind Rot")
+        }
         // `ClarityPower.ModifyHandDraw`: one more card for its owner, whatever
         // its stack.
         (Power::ClarityPower, _, ModifyHook::HandDraw { player, .. }) if player == holder => {
@@ -1277,7 +1296,8 @@ pub(crate) fn modify_hook(
             | Power::ToolsOfTheTradePower
             | Power::DemesnePower
             | Power::PaleBlueDotPower
-            | Power::ClarityPower,
+            | Power::ClarityPower
+            | Power::MindRotPower,
             _,
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
@@ -1395,6 +1415,7 @@ pub(crate) fn result_pile(
 /// no override does not implement it.
 pub(crate) fn decide_hook(
     power: Power,
+    amount: PowerAmount<Number>,
     held: Held<'_>,
     state: &State,
     hook: sts2_core::DecisionHook<V>,
@@ -1405,6 +1426,15 @@ pub(crate) fn decide_hook(
         // `RingingPower.ShouldPlay`: a card with Ringing waits while its owner
         // has started a play this turn. A fight here has one player, whose
         // cards are its holder's.
+        // `SlothPower.ShouldPlay`: no more once its owner has played its
+        // stack of cards this turn. A fight here has one player, whose cards
+        // are its holder's.
+        (Power::SlothPower, DecisionHook::ShouldPlay { .. }) => {
+            let (PowerAmount::Counted(amount), State::Sloth { played }) = (amount, state) else {
+                unimplemented!("an endless Sloth")
+            };
+            HookResponse::Decision(*played < amount)
+        }
         (Power::RingingPower, DecisionHook::ShouldPlay { affliction, .. }) => {
             HookResponse::Decision(
                 affliction != Some(Affliction::Ringing)
@@ -1545,8 +1575,8 @@ pub(crate) fn event_hook(
     let one: Number = num_traits::one();
 
     let effect = match (power, amount, hook) {
-        // Its `AfterModifyingHandDraw` only flashes.
-        (Power::PaleBlueDotPower, _, EventHook::HandDrawModified) => return,
+        // Their `AfterModifyingHandDraw` only flashes.
+        (Power::PaleBlueDotPower | Power::MindRotPower, _, EventHook::HandDrawModified) => return,
         (
             Power::ImbalancedPower,
             _,
@@ -1680,6 +1710,43 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Demise")
         }
         (Power::DemisePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `DisintegrationPower.AfterSideTurnEndLate`: its stack off its owner,
+        // dealt by the owner and unpowered, as its owner's side's turn ends.
+        (
+            Power::DisintegrationPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnEndLate { side },
+        ) if side == owner => Some(HookEffect::DamageOwnerInFight {
+            amount,
+            unblockable: false,
+            self_dealt: true,
+        }),
+        (Power::DisintegrationPower, PowerAmount::Endless, EventHook::SideTurnEndLate { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Disintegration")
+        }
+        (Power::DisintegrationPower, _, EventHook::SideTurnEndLate { .. }) => None,
+        // `SlothPower.BeforeCardPlayed`: one more play counted. A fight here
+        // has one player, whose cards are its holder's.
+        (Power::SlothPower, _, EventHook::CardPlaying { .. }) => {
+            let State::Sloth { played } = state else {
+                unreachable!("plays counted for {:?}", state.power())
+            };
+            *played += one;
+            None
+        }
+        // `SlothPower.BeforeSideTurnStart`: the count starts again as its
+        // owner's side's turn begins.
+        (Power::SlothPower, _, EventHook::BeforeSideTurnStart { side, .. }) => {
+            if side == owner {
+                let State::Sloth { played } = state else {
+                    unreachable!("plays counted for {:?}", state.power())
+                };
+                *played = 0;
+            }
+            None
+        }
         // `ConstrictPower.AfterSideTurnEnd`: its stack off its owner, dealt by
         // the owner and unpowered, as its owner's side's turn ends.
         (Power::ConstrictPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })

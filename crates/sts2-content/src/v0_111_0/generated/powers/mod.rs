@@ -1597,7 +1597,7 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
         .with(sts2_core::ModelHook::ShouldAllowHitting)
         .with(sts2_core::ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath),
     // DISINTEGRATION_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEndLate),
     // DOOM_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnEnd)

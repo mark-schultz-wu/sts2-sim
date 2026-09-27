@@ -105,6 +105,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
 impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
     type PowerState = behaviour::powers::State;
+    type MonsterState = behaviour::monsters::Model;
     type CardState = behaviour::cards::State;
 
     fn modify_hook<P: sts2_core::Printed<Self> + ?Sized>(
@@ -156,6 +157,7 @@ impl sts2_core::Hooks for V0_107_1 {
         match listener {
             sts2_core::Listener::Power {
                 power,
+                amount,
                 owner,
                 holder,
                 applier,
@@ -175,7 +177,7 @@ impl sts2_core::Hooks for V0_107_1 {
                     history,
                     fight,
                 };
-                behaviour::powers::decide_hook(power, held, state, hook)
+                behaviour::powers::decide_hook(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic(state) => behaviour::relics::decide_hook(state, hook),
             // A raised hook reaches only a listener that overrides it, and no
@@ -578,10 +580,11 @@ impl sts2_core::Rules for V0_107_1 {
         ascension: Self::AscensionLevel,
         spawn: sts2_core::MonsterSpawn<Self::Encounter>,
         powers: impl IntoIterator<Item = sts2_core::Listener<'a, Self, P>>,
+        state: &Self::MonsterState,
         machine: &mut sts2_core::MoveMachine,
         rng: &mut R,
     ) -> Result<Option<sts2_core::NextMove<Self>>, sts2_core::ContentError> {
-        roll_monster_move(monster, ascension as u8, spawn, powers, machine, rng)
+        roll_monster_move(monster, ascension as u8, spawn, powers, state, machine, rng)
     }
 
     fn follow_up(monster: Self::Monster, machine: &sts2_core::MoveMachine) -> u8 {
@@ -722,9 +725,10 @@ impl sts2_core::Rules for V0_107_1 {
     fn perform_move<F: sts2_core::Fight<Self>>(
         monster: Self::Monster,
         move_id: Self::MoveId,
+        state: &mut Self::MonsterState,
         fight: &mut F,
-    ) {
-        behaviour::monsters::perform(monster, move_id, fight);
+    ) -> sts2_core::Played<Self> {
+        behaviour::monsters::perform(monster, move_id, state, fight)
     }
 
     fn random_encounter_monsters<R: sts2_core::rng::GameRng>(
@@ -875,6 +879,7 @@ fn roll_monster_move<
     ascension: u8,
     spawn: sts2_core::MonsterSpawn<generated::encounters::Encounter>,
     powers: impl IntoIterator<Item = sts2_core::Listener<'a, V0_107_1, P>>,
+    model: &behaviour::monsters::Model,
     machine: &mut sts2_core::MoveMachine,
     rng: &mut R,
 ) -> Result<Option<sts2_core::NextMove<V0_107_1>>, sts2_core::ContentError> {
@@ -917,7 +922,7 @@ fn roll_monster_move<
                 State::Random(branches) => branch(branches, machine, rng)?,
                 State::Conditional(_) => {
                     read.extend(powers.take().into_iter().flatten());
-                    behaviour::monsters::conditional(monster, machine.at, spawn, &read)?
+                    behaviour::monsters::conditional(monster, machine.at, spawn, &read, model)?
                 }
             };
             machine.enter(next);

@@ -429,14 +429,14 @@ fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {
 /// distinct cards of `cards`, off `CombatCardGeneration`. The player takes one
 /// into hand, free this turn, or none.
 fn free_card_of<F: Fight<V>>(fight: &mut F, mut cards: Vec<Cards>) -> Played<V> {
-    let offered = fight
+    let offered: [_; sts2_core::CHOICES] = fight
         .generate_cards(
             &mut cards,
             <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
         )
         .unwrap_or_else(|_| unimplemented!("a pool of {} cards offering three", cards.len()));
     Played::Choosing {
-        offered,
+        offered: offered.into_iter().collect(),
         skippable: true,
         at: super::super::Resume::Potion(super::Resume::Shared(Resume::FreeCardChoice)),
     }

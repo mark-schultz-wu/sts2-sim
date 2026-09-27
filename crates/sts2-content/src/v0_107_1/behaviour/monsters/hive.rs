@@ -510,3 +510,126 @@ fn thievery<F: Fight<V>>(fight: &mut F) {
     }
     fight.attack_opponents();
 }
+
+/// `CurseOfKnowledgeBranch`: a curse while any set is left, a slap once the
+/// three are cast.
+pub(super) fn knowledge_demon_branch(
+    model: &super::Model,
+    at: u8,
+) -> Result<u8, sts2_core::ContentError> {
+    let super::Model::KnowledgeDemon { curses } = *model else {
+        unimplemented!("a Knowledge Demon holding {model:?}")
+    };
+    let wanted = match usize::from(curses) < CURSE_SETS {
+        true => MoveId::CurseOfKnowledgeMove,
+        false => MoveId::SlapMove,
+    };
+    super::state_of(Monster::KnowledgeDemon, wanted, at)
+}
+
+/// `_curseOfKnowledgeSets.Count`.
+const CURSE_SETS: usize = 3;
+
+/// The Knowledge Demon's moves.
+///
+/// `CurseOfKnowledge` offers the player `Disintegration` and one more card of
+/// the set its counter stands at. The card chosen applies its power, which
+/// `resume` carries out.
+pub(super) fn knowledge_demon<F: Fight<V>>(
+    move_id: MoveId,
+    model: &mut super::Model,
+    fight: &mut F,
+) -> sts2_core::Played<V> {
+    use sts2_core::CardIdent;
+
+    use super::super::super::generated::cards::TokenCard;
+
+    // `ThrowingPlayerChoiceContext`'s `PowerCmd.Apply<StrengthPower>`.
+    const PONDER_STRENGTH: Number = 2;
+    const DEADLY_PONDER_STRENGTH: Number = 3;
+    // `30 * Players.Count`, and a fight here has one player.
+    const PONDER_HEAL: Number = 30;
+
+    let deadly = fight.ascension().has(AscensionLevel::DeadlyEnemies);
+    match move_id {
+        MoveId::CurseOfKnowledgeMove => {
+            let super::Model::KnowledgeDemon { curses } = model else {
+                unimplemented!("a Knowledge Demon holding {model:?}")
+            };
+            let set = *curses;
+            let other = match set {
+                0 => TokenCard::MindRot,
+                1 => TokenCard::Sloth,
+                2 => TokenCard::WasteAway,
+                _ => unimplemented!("a Knowledge Demon with no set left at {set}"),
+            };
+            // `CurseOfKnowledgeCounter++`, after the choice in the game.
+            // Nothing reads it before the enemy turn is over.
+            *curses = set + 1;
+            sts2_core::Played::Choosing {
+                offered: [
+                    CardIdent::new(Cards::Token(TokenCard::Disintegration)),
+                    CardIdent::new(Cards::Token(other)),
+                ]
+                .into_iter()
+                .collect(),
+                skippable: true,
+                at: super::super::Resume::Monster(Resume::CurseOfKnowledge { set }),
+            }
+        }
+        // `IsBurnt` picks the demon's animations alone.
+        MoveId::KnowledgeOverwhelmingMove | MoveId::SlapMove => {
+            fight.attack_opponents();
+            sts2_core::Played::Done
+        }
+        MoveId::PonderMove => {
+            fight.attack_opponents();
+            let actor = fight.actor();
+            fight.heal(actor, PONDER_HEAL);
+            let strength = match deadly {
+                true => DEADLY_PONDER_STRENGTH,
+                false => PONDER_STRENGTH,
+            };
+            fight.apply_power(actor, Power::StrengthPower, PowerAmount::Counted(strength));
+            sts2_core::Played::Done
+        }
+        move_id => unimplemented!("what {move_id:?} does when a Knowledge Demon performs it"),
+    }
+}
+
+/// Where a monster's move stopped on the player's answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `ChooseCurse`, for the set at this index.
+    CurseOfKnowledge { set: u8 },
+}
+
+/// `IChoosable.OnChosen` for the card the player took, which applies its
+/// power to them. A skipped choice does nothing.
+pub(super) fn resume<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: Option<sts2_core::CardIdent<V>>,
+) -> sts2_core::Played<V> {
+    use super::super::super::generated::cards::TokenCard;
+
+    // `_disintegrationDamageValues`.
+    const DISINTEGRATION: [Number; CURSE_SETS] = [6, 7, 8];
+
+    let Resume::CurseOfKnowledge { set } = at;
+    let Some(chosen) = chosen else {
+        return sts2_core::Played::Done;
+    };
+    let (power, amount) = match chosen.card {
+        Cards::Token(TokenCard::Disintegration) => {
+            (Power::DisintegrationPower, DISINTEGRATION[usize::from(set)])
+        }
+        Cards::Token(TokenCard::MindRot) => (Power::MindRotPower, 1),
+        Cards::Token(TokenCard::Sloth) => (Power::SlothPower, 3),
+        Cards::Token(TokenCard::WasteAway) => (Power::WasteAwayPower, 1),
+        card => unimplemented!("{card:?} chosen from a curse of knowledge"),
+    };
+    let actor = fight.actor();
+    fight.apply_power(actor, power, PowerAmount::Counted(amount));
+    sts2_core::Played::Done
+}

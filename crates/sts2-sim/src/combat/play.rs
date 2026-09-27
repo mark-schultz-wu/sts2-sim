@@ -726,6 +726,17 @@ pub(crate) fn answer<V: Rules>(
                 stage,
             );
         }
+        Then::EnemyTurn(parked) => {
+            return super::turn::resume_enemy_turn::<V>(
+                Fighting {
+                    live,
+                    streams,
+                    relics,
+                },
+                parked,
+                taken,
+            );
+        }
     };
     let playing = match &effect.asker {
         Asker::Card(card) => Some(card.id),

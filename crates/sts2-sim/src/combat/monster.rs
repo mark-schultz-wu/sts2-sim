@@ -85,6 +85,8 @@ pub(crate) struct Machine<V: Rules> {
     /// stands in one.
     pub(crate) slot: Option<u8>,
     pub(crate) machine: MoveMachine,
+    /// What the monster's own model keeps between its moves.
+    pub(crate) state: V::MonsterState,
 }
 
 impl<V: Rules> Clone for Machine<V> {
@@ -155,11 +157,13 @@ pub(crate) fn initialize<V: Rules>(
             standing: roster_size.get(),
         };
         let mut machine = V::opening_move_machine(monster, opens_on);
+        let state = sts2_core::MonsterModel::new(monster);
         let opening = V::roll_monster_move(
             monster,
             ascension,
             spawn,
             std::iter::empty::<super::live::Heard<'_, V>>(),
+            &state,
             &mut machine,
             rngs.ai,
         )?;
@@ -169,6 +173,7 @@ pub(crate) fn initialize<V: Rules>(
             spawn,
             slot,
             machine,
+            state,
         });
         creatures.push(Fighter {
             id,
@@ -311,6 +316,7 @@ pub(super) fn summon<V: Rules>(
             // Nothing writes onto a monster a fight summons: the
             // roster that could have is long built.
             machine: V::opening_move_machine(monster, None),
+            state: sts2_core::MonsterModel::new(monster),
         },
     );
     for (position, held) in live.machines.iter_mut().enumerate() {
