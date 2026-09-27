@@ -1,0 +1,8 @@
+# Thunder deals its stack to each creature a Lightning's evoke hit that is
+# still alive, unpowered. Zap channels a Lightning, and Dualcast evokes it
+# twice, so Thunder follows each evoke.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"THUNDER_POWER","amount":3,"target":0}
+{"cmd":"play_card","index":2}
+{"cmd":"play_card","index":1}

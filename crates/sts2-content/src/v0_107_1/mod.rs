@@ -348,8 +348,11 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::enchantments::on_play(enchanted, status, fight);
     }
 
-    fn orb_evoke<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
-        behaviour::orbs::evoke(orb, fight);
+    fn orb_evoke<F: sts2_core::Fight<Self>>(
+        orb: &sts2_core::Channelled<Self>,
+        fight: &mut F,
+    ) -> sts2_core::Opponents {
+        behaviour::orbs::evoke(orb, fight)
     }
 
     fn orb_passive<F: sts2_core::Fight<Self>>(orb: &sts2_core::Channelled<Self>, fight: &mut F) {
@@ -454,12 +457,9 @@ impl sts2_core::Rules for V0_107_1 {
     }
 
     /// A quest card, and an event, ancient or token one, transforms within
-    /// the colorless pool. Any other transforms within its own. The shop
-    /// lists are each pool's unlocked cards, in the pool's own order.
-    ///
-    /// # Panics
-    ///
-    /// A curse or a status, whose pools the table lists nowhere yet.
+    /// the colorless pool. Any other transforms within its own, a curse or a
+    /// status included. The shop lists are each pool's unlocked cards, in the
+    /// pool's own order.
     fn transform_options(card: Self::Card, in_combat: bool) -> Vec<Self::Card> {
         use generated::cards::CardRarity;
         use sts2_core::CardTable as _;
@@ -474,9 +474,14 @@ impl sts2_core::Rules for V0_107_1 {
                 generated::cards::merchant_cards(pool),
                 generated::cards::combat_cards(pool),
             ),
-            _ if matches!(rarity, CardRarity::Status | CardRarity::Curse) => {
-                unimplemented!("transforming {card:?}, whose pool the table does not list")
-            }
+            _ if rarity == CardRarity::Curse => (
+                generated::cards::unlocked_curse_cards(),
+                generated::cards::combat_curse_cards(),
+            ),
+            _ if rarity == CardRarity::Status => (
+                generated::cards::unlocked_status_cards(),
+                generated::cards::combat_status_cards(),
+            ),
             _ => (
                 generated::cards::merchant_colorless_cards(),
                 generated::cards::combat_colorless_cards(),

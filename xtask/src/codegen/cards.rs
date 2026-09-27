@@ -1176,6 +1176,70 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     writeln!(out, "    ]").unwrap();
     writeln!(out, "}}\n").unwrap();
 
+    // The curse and status pools, which no character holds, each unlocked
+    // and as a combat generation effect sees it. A transform of a curse or a
+    // status draws from its own.
+    for (fname, doc, lists, kind, pool, wrap, card_enum) in [
+        (
+            "unlocked_curse_cards",
+            "The curse pool, unlocked.",
+            &shop_pools,
+            "shoppool",
+            "CURSE_CARD_POOL",
+            "Curse",
+            "CurseCard",
+        ),
+        (
+            "combat_curse_cards",
+            "The curse pool as a combat generation effect sees it.",
+            &combat_pools,
+            "combatpool",
+            "CURSE_CARD_POOL",
+            "Curse",
+            "CurseCard",
+        ),
+        (
+            "unlocked_status_cards",
+            "The status pool, unlocked.",
+            &shop_pools,
+            "shoppool",
+            "STATUS_CARD_POOL",
+            "Status",
+            "StatusCard",
+        ),
+        (
+            "combat_status_cards",
+            "The status pool as a combat generation effect sees it.",
+            &combat_pools,
+            "combatpool",
+            "STATUS_CARD_POOL",
+            "Status",
+            "StatusCard",
+        ),
+    ] {
+        writeln!(out, "/// {doc}").unwrap();
+        writeln!(out, "pub fn {fname}() -> &'static [Cards] {{").unwrap();
+        writeln!(out, "    &[").unwrap();
+        let entries = lists.get(pool).ok_or_else(|| Error::NoOrder {
+            kind,
+            pool: pool.to_string(),
+        })?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "        Cards::{wrap}({card_enum}::{}),",
+                variant(card, None)
+            )
+            .unwrap();
+        }
+        writeln!(out, "    ]").unwrap();
+        writeln!(out, "}}\n").unwrap();
+    }
+
     writeln!(
         out,
         "/// Cards eligible for an ordinary room reward, split by rarity.\n\

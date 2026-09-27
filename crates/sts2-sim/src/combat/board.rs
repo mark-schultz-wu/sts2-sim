@@ -2128,9 +2128,36 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }) else {
             return;
         };
-        V::orb_evoke(&orb, self);
-        if super::listen::heard::<V>(self.live, self.relics, sts2_core::ModelHook::AfterOrbEvoked) {
-            unimplemented!("a listener to an orb evoked");
+        let targets = V::orb_evoke(&orb, self);
+        let hook = sts2_core::EventHook::OrbEvoked { orb: orb.orb };
+        for (listener, effect) in super::listen::notify::<V>(self.live, self.relics, hook) {
+            match (listener, effect) {
+                // `CreatureCmd.Damage` on the evoke's targets still alive.
+                (Listener::Power { owner, .. }, HookEffect::DamageTargets(amount)) => {
+                    for &target in &targets {
+                        if !self
+                            .at(target)
+                            .is_some_and(|at| self.live.creatures[at].alive)
+                        {
+                            continue;
+                        }
+                        let hit = resolve::<V>(
+                            self.walk(),
+                            None,
+                            Effect::Attack {
+                                dealer: owner,
+                                target,
+                                damage: Amount::Number(amount),
+                                scaling: Scaling::Static,
+                            },
+                        );
+                        self.apply(hit);
+                    }
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} as an orb is evoked")
+                }
+            }
         }
     }
 
@@ -2206,6 +2233,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
         let hittable = self.hittable_opponents();
         self.rngs.targets.choose(&hittable).ok().copied()
+    }
+
+    fn next_energy_cost(&mut self, below: u8) -> V::Number {
+        use sts2_core::rng::GameRng as _;
+
+        let bound = sts2_core::rng::Bound::try_new(
+            num_traits::NumCast::from(below).expect("a cost bound fits the game's RNG integer"),
+        )
+        .expect("a random cost has somewhere to land");
+        let cost = self.rngs.energy_costs.next_int(bound);
+        num_traits::NumCast::from(cost).expect("an energy cost fits a game number")
     }
 
     /// `CapturedXValue` is what the play spent, which the history's latest

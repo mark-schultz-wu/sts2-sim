@@ -47,7 +47,9 @@ pub(crate) fn turn_end<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
 pub(crate) fn passive<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
     match orb.orb {
         // Its passive number to a random enemy.
-        Orb::LightningOrb => lightning(fight.orb_value(orb.orb, orb.passive), fight),
+        Orb::LightningOrb => {
+            lightning(fight.orb_value(orb.orb, orb.passive), fight);
+        }
         orb => unimplemented!("what {orb:?} does as its passive"),
     }
 }
@@ -61,20 +63,22 @@ pub(crate) fn turn_start<F: Fight<V>>(orb: &Channelled<V>, _fight: &mut F) {
 }
 
 /// `Evoke`.
-pub(crate) fn evoke<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
+///
+/// The creatures it hit, which `Evoke` returns.
+pub(crate) fn evoke<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) -> sts2_core::Opponents {
     match orb.orb {
-        Orb::LightningOrb => lightning(fight.orb_value(orb.orb, orb.evoke), fight),
+        Orb::LightningOrb => lightning(fight.orb_value(orb.orb, orb.evoke), fight)
+            .into_iter()
+            .collect(),
         orb => unimplemented!("what {orb:?} does as it is evoked"),
     }
 }
 
 /// `LightningOrb.ApplyLightningDamage` with no target named: one enemy that
 /// can be hit, drawn off `CombatTargets`, takes `value`, `ValueProp.Unpowered`
-/// from the player. Nothing with no such enemy, and no draw.
-fn lightning<F: Fight<V>>(value: Number, fight: &mut F) {
-    let Some(target) = fight.random_opponent() else {
-        return;
-    };
+/// from the player. Nothing with no such enemy, and no draw. The one it hit.
+fn lightning<F: Fight<V>>(value: Number, fight: &mut F) -> Option<sts2_core::CombatId> {
+    let target = fight.random_opponent()?;
     let hit = fight.resolve(Effect::Attack {
         dealer: fight.actor(),
         target,
@@ -82,4 +86,5 @@ fn lightning<F: Fight<V>>(value: Number, fight: &mut F) {
         scaling: Scaling::Static,
     });
     fight.apply(hit);
+    Some(target)
 }
