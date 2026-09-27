@@ -1,0 +1,10 @@
+# Tesla Coil hits its target for three, then each Lightning's passive hits the
+# same target. The Defect opens with one Lightning, so the slime takes six.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","card":"TESLA_COIL"}
+{"cmd":"grant","card":"TESLA_COIL"}
+{"cmd":"grant","card":"TESLA_COIL"}
+{"cmd":"grant","card":"TESLA_COIL"}
+{"cmd":"grant","card":"TESLA_COIL"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"play_card","index":0,"target":2}

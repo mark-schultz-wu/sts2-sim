@@ -1,0 +1,10 @@
+# Anointed takes the rare cards in the draw pile into hand, as many as it has
+# room for, shuffled off the combat card selection stream.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"ANOINTED"}
+{"cmd":"grant","card":"ANOINTED"}
+{"cmd":"grant","card":"ANOINTED"}
+{"cmd":"grant","card":"ANOINTED"}
+{"cmd":"grant","card":"ANOINTED"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0}

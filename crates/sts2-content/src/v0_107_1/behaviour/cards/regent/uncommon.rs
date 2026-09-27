@@ -64,3 +64,22 @@ pub(super) fn radiate<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Playe
     });
     sts2_core::Played::Done
 }
+
+/// `LunarBlast`: its `Damage` at its target, once for each of its
+/// `CalculatedHits`.
+pub(super) fn lunar_blast<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Played<V> {
+    let hits = fight.var(CardVar::CalculatedHits);
+    let target = fight.target();
+    fight.attack(sts2_core::Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let attack = fight.resolve(sts2_core::Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: sts2_core::Amount::Var(CardVar::Damage),
+                scaling: sts2_core::Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+    sts2_core::Played::Done
+}

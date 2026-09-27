@@ -1,16 +1,82 @@
 //! The colorless cards the generator leaves to a hand port.
 
-use sts2_core::{EventHook, Fight, HookEffect, Pile, Played};
+use sts2_core::{
+    CardKind, EventHook, Fight, HookEffect, Pile, PileAct, Played, Rules as _, Selection,
+};
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardVar, ColorlessCard};
+use super::super::super::generated::cards::{CardRarity, CardVar, ColorlessCard};
 use super::V;
 
 pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
     match card {
         ColorlessCard::Restlessness => restlessness(fight),
+        ColorlessCard::Impatience => impatience(fight),
+        ColorlessCard::Anointed => anointed(fight),
+        // `FromHand` for up to its `Cards`, each then exhausted.
+        ColorlessCard::Purity => match nonmax::NonMaxUsize::new(cards(fight)) {
+            Some(count) => Played::Asking {
+                pile: Pile::Hand,
+                selection: Selection::UpTo(count),
+                at: super::super::Resume::Card(super::Resume::Colorless(Resume::PurityExhausts)),
+            },
+            None => Played::Done,
+        },
         card => card_plays::colorless::on_play(card, fight),
     }
+}
+
+/// Where a colorless card stopped inside its own play.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Resume {
+    /// `Purity`, after the cards picked from hand to exhaust.
+    PurityExhausts,
+}
+
+pub(super) fn resume_play<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: sts2_core::SelectedCards<V>,
+) -> Played<V> {
+    match at {
+        Resume::PurityExhausts => {
+            fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
+    }
+}
+
+/// The card's `Cards`, as a count.
+fn cards<F: Fight<V>>(fight: &F) -> usize {
+    num_traits::cast(fight.var(CardVar::Cards)).expect("a count of cards is not negative")
+}
+
+/// `Impatience`: its `Cards` drawn, with no attack in hand.
+fn impatience<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let attack = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .any(|at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack));
+    if !attack {
+        fight.draw(fight.var(CardVar::Cards));
+    }
+    Played::Done
+}
+
+/// `Anointed`: the rare cards in the draw pile, `TakeRandom` off
+/// `CombatCardSelection` for as many as the hand has room for, into hand.
+fn anointed<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CardTable as _;
+
+    let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
+    let mut rares: Vec<_> = fight
+        .cards_in(Pile::Draw)
+        .into_iter()
+        .filter(|&at| fight.card_ident(at).card.rarity() == CardRarity::Rare)
+        .collect();
+    let taken = fight.take_random_cards(&mut rares, room);
+    fight.act_on(PileAct::IntoHand, &taken);
+    Played::Done
 }
 
 /// `Restlessness`: with no other card in hand, its `Cards` drawn one at a
