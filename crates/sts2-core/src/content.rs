@@ -2594,9 +2594,17 @@ pub enum EventHook<V: ContentVersion> {
     /// turn starts.
     PlayerTurnStart {
         player: crate::CombatId,
+        /// The player's `TurnNumber`.
+        turn: V::Count,
     },
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
+    /// `AfterCardChangedPiles` for a card that joined the deck, outside a
+    /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
+    AddedToDeck {
+        card: V::Card,
+        cloned: bool,
+    },
     /// `AfterCardChangedPiles`, once a card lands in the pile it moved to.
     /// The fight raises it where a transform lands the replacement.
     CardChangedPiles {
@@ -2708,6 +2716,8 @@ pub enum EventHook<V: ContentVersion> {
         /// `EnergyCost.GetResolved()`: the cost with every modifier, or the
         /// X the play captured.
         resolved: V::Number,
+        /// `CardPlay.Resources.EnergyValue`: the energy this play spent.
+        spent: V::Number,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
@@ -2900,7 +2910,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardExhausted { .. } => ModelHook::AfterCardExhausted,
             EventHook::OrbEvoked { .. } => ModelHook::AfterOrbEvoked,
             EventHook::CurrentHpChanged { .. } => ModelHook::AfterCurrentHpChanged,
-            EventHook::CardChangedPiles { .. } => ModelHook::AfterCardChangedPiles,
+            EventHook::CardChangedPiles { .. } | EventHook::AddedToDeck { .. } => {
+                ModelHook::AfterCardChangedPiles
+            }
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
             EventHook::PowerAmountReceivedModified { .. } => {
                 ModelHook::AfterModifyingPowerAmountReceived
@@ -3408,6 +3420,12 @@ pub enum HookEffect<V: ContentVersion> {
         min: usize,
         max: usize,
     },
+    /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
+    /// the deck's bottom, cloned by the listener.
+    CloneIntoDeck,
+    /// `RelicCmd.Remove` on the first of the player's relics that is this
+    /// one.
+    RemoveRelic(V::Relic),
     /// `PlayerCmd.GainMaxPotionCount`.
     GainPotionSlots(usize),
     /// `PotionFactory.CreateRandomPotionsOutOfCombat` off the named stream,
@@ -5018,6 +5036,14 @@ pub trait Rules: Hooks {
         run: &impl crate::EventView<Self>,
         rewards: &mut R,
     );
+
+    /// [`crate::EventBehavior::relics_pulled`] for the event entered.
+    fn event_relics_pulled(_state: &Self::EventState) -> usize {
+        0
+    }
+
+    /// [`crate::EventBehavior::hand_pulled_relics`] for the event entered.
+    fn hand_event_pulled_relics(_state: &mut Self::EventState, _relics: &[Self::Relic]) {}
 
     fn observe_event(
         state: &Self::EventState,

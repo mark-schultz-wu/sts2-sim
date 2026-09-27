@@ -280,7 +280,10 @@ pub(crate) fn enter<V: Rules>(
     }
     // `SetupPlayerTurn` ends on `AfterPlayerTurnStart`, which can end the
     // fight before the player takes a turn in it.
-    let hook = sts2_core::EventHook::PlayerTurnStart { player };
+    let hook = sts2_core::EventHook::PlayerTurnStart {
+        player,
+        turn: live.turn,
+    };
     let asked = super::listen::notify::<V>(&mut live, relics, hook);
     let ended = match super::turn::carry_setup(
         &mut live,

@@ -2952,12 +2952,12 @@ pub(crate) fn event_hook(
         (Power::CoolantPower, _, EventHook::SideTurnStart { .. }) => None,
         // `LoopPower.AfterPlayerTurnStart`: the first orb's passive, its stack
         // of times.
-        (Power::LoopPower, PowerAmount::Counted(amount), EventHook::PlayerTurnStart { player })
+        (Power::LoopPower, PowerAmount::Counted(amount), EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             Some(HookEffect::FirstOrbPassive(amount))
         }
-        (Power::LoopPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+        (Power::LoopPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Loop")
@@ -3036,7 +3036,7 @@ pub(crate) fn event_hook(
         (
             Power::SummonNextTurnPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder && held.on_turn_start != PowerAmount::Counted(0) => {
             asked.extend([HookEffect::Summon(amount), HookEffect::Remove]);
             return;
@@ -3084,7 +3084,7 @@ pub(crate) fn event_hook(
         (
             Power::TyrannyPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
             count: amount,
@@ -3125,13 +3125,13 @@ pub(crate) fn event_hook(
         (
             Power::EntropyPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
             count: amount,
             act: sts2_core::PileAct::TransformToRandom,
         }),
-        (Power::EntropyPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+        (Power::EntropyPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Entropy")
@@ -3143,7 +3143,7 @@ pub(crate) fn event_hook(
         (
             Power::RollingBoulderPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => {
             asked.extend([
                 HookEffect::DamageOpponents(amount),
@@ -3151,7 +3151,7 @@ pub(crate) fn event_hook(
             ]);
             return;
         }
-        (Power::RollingBoulderPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+        (Power::RollingBoulderPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Rolling Boulder")
@@ -3161,7 +3161,7 @@ pub(crate) fn event_hook(
         (
             Power::ToolsOfTheTradePower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
             count: amount,
@@ -3170,7 +3170,7 @@ pub(crate) fn event_hook(
         (
             Power::TyrannyPower | Power::ToolsOfTheTradePower,
             PowerAmount::Endless,
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => unimplemented!("an endless {power:?}"),
         (
             Power::TyrannyPower | Power::ToolsOfTheTradePower,

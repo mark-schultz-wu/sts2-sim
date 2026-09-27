@@ -727,7 +727,17 @@ impl<V: sts2_content_wire::WireContentVersion> WireRoom<V> {
                     .map(|(i, o)| {
                         Ok(EventOption {
                             index: o.index,
-                            key: option_key::<V>(&format!("room.options[{i}].key"), id, &o.key)?,
+                            key: match o.relic {
+                                // An option keyed by a relic's display name,
+                                // which the relic it names stands for.
+                                Some(relic) if !o.key.contains(".pages.") => EventOptionKey {
+                                    event: id,
+                                    option: sts2_core::EventOptionKinds::from_relic(relic),
+                                },
+                                _ => {
+                                    option_key::<V>(&format!("room.options[{i}].key"), id, &o.key)?
+                                }
+                            },
                             title: o.title,
                             text: o.text,
                             locked: o.locked,
@@ -1382,6 +1392,30 @@ mod tests {
         assert!(reason.contains(UnplayableReason::EnergyCostTooHigh));
         assert!(reason.contains(UnplayableReason::NoLivingAllies));
         assert!(!reason.contains(UnplayableReason::BlockedByHook));
+    }
+
+    /// An option keyed by a relic's display name is that relic, which the
+    /// option reports beside it.
+    #[test]
+    fn an_option_keyed_by_a_relic_title_is_that_relic() {
+        let mut state = base();
+        state["room"] = json!({
+            "type": "Event", "id": "DOLL_ROOM", "finished": false,
+            "title": null, "text": null,
+            "options": [{"index": 0, "key": "Daughter of the Wind", "title": null,
+                         "text": null, "locked": false, "proceed": false,
+                         "chosen": false, "relic": "DAUGHTER_OF_THE_WIND"}]
+        });
+        let room = parse(&state).expect("the key parses").room.expect("a room");
+        let Room::Event { options, .. } = room else {
+            panic!("not an event: {room:?}");
+        };
+        assert_eq!(
+            options[0].key.option,
+            sts2_content::v0_107_1::EventOptionId::Relic(
+                sts2_content::v0_107_1::relics::Relic::DaughterOfTheWind
+            )
+        );
     }
 
     /// An option's key is read as its parts, and held to the room it is in.

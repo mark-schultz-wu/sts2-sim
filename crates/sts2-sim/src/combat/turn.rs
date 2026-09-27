@@ -700,7 +700,10 @@ pub(super) fn carry_setup<V: Rules>(
                 if let Some(ended) = draw(live, rngs.reborrow(), relics, ascension, drawn, true) {
                     return Carried::Done(Some(ended));
                 }
-                let hook = sts2_core::EventHook::PlayerTurnStart { player };
+                let hook = sts2_core::EventHook::PlayerTurnStart {
+                    player,
+                    turn: live.turn,
+                };
                 Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
             }
             // `Hook.AfterPlayerTurnStart`, the last of the setup. A relic's
