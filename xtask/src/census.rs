@@ -398,6 +398,24 @@ fn report(runs: &[Run], top: usize) -> String {
         stopped,
         top,
     );
+    // The same, for the runs that stopped in each act, which is where a
+    // goal for one act reads.
+    for act in 0..ACTS {
+        let stopped: Vec<_> = runs
+            .iter()
+            .filter(|run| run.reached.0 == act)
+            .flat_map(|run| run.stoppers().into_iter().map(move |ending| (ending, run)))
+            .collect();
+        if stopped.is_empty() {
+            continue;
+        }
+        table(
+            &mut out,
+            &format!("panics and errors that stopped a run in act {}", act + 1),
+            stopped.into_iter(),
+            top,
+        );
+    }
     let avoided = runs
         .iter()
         .flat_map(|run| run.stepped_round().map(move |ending| (ending, run)));
