@@ -5,6 +5,7 @@ mod ancient;
 mod aroma_of_chaos;
 mod brain_leech;
 mod byrdonis_nest;
+mod colorful_philosophers;
 mod darv;
 mod dense_vegetation;
 mod field_of_man_sized_holes;
@@ -14,6 +15,7 @@ mod luminous_choir;
 mod morphic_grove;
 mod orobas;
 mod pael;
+mod potion_courier;
 mod room_full_of_cheese;
 mod sapphire_seed;
 mod self_help_book;
@@ -45,6 +47,8 @@ use super::relics::adds_pet;
 
 #[derive(Debug, Clone)]
 pub enum State {
+    ColorfulPhilosophers(colorful_philosophers::State),
+    PotionCourier(potion_courier::State),
     Amalgamator(amalgamator::State),
     AromaOfChaos(aroma_of_chaos::State),
     BrainLeech(brain_leech::State),
@@ -210,6 +214,10 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
 ) -> State {
     match event {
         Event::Amalgamator => State::Amalgamator(amalgamator::Amalgamator.enter(run, rng)),
+        Event::PotionCourier => State::PotionCourier(potion_courier::PotionCourier.enter(run, rng)),
+        Event::ColorfulPhilosophers => {
+            State::ColorfulPhilosophers(colorful_philosophers::ColorfulPhilosophers.enter(run, rng))
+        }
         Event::AromaOfChaos => State::AromaOfChaos(aroma_of_chaos::AromaOfChaos.enter(run, rng)),
         Event::FieldOfManSizedHoles => State::FieldOfManSizedHoles(
             field_of_man_sized_holes::FieldOfManSizedHoles.enter(run, rng),
@@ -279,6 +287,10 @@ pub(crate) fn holds_potions(state: &State) -> bool {
 pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
     match state {
         State::Amalgamator(state) => amalgamator::Amalgamator.observe(state, run),
+        State::PotionCourier(state) => potion_courier::PotionCourier.observe(state, run),
+        State::ColorfulPhilosophers(state) => {
+            colorful_philosophers::ColorfulPhilosophers.observe(state, run)
+        }
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
         State::FieldOfManSizedHoles(state) => {
             field_of_man_sized_holes::FieldOfManSizedHoles.observe(state, run)
@@ -324,6 +336,12 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
 ) -> HookEffects<V> {
     match state {
         State::Amalgamator(state) => amalgamator::Amalgamator.choose(state, option, run, rng),
+        State::PotionCourier(state) => {
+            potion_courier::PotionCourier.choose(state, option, run, rng)
+        }
+        State::ColorfulPhilosophers(state) => {
+            colorful_philosophers::ColorfulPhilosophers.choose(state, option, run, rng)
+        }
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
         State::FieldOfManSizedHoles(state) => {
             field_of_man_sized_holes::FieldOfManSizedHoles.choose(state, option, run, rng)

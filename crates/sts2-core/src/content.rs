@@ -3209,21 +3209,34 @@ pub enum Stream<V: ContentVersion> {
 /// One reward a relic's own screen offers, as `RewardsCmd.OfferCustom` is
 /// handed it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CustomReward {
+pub enum CustomReward<V: ContentVersion> {
     /// `CardReward` over the character's own pool at `RegularEncounter` odds,
     /// from `CardCreationSource.Other`, offering this many cards.
     CharacterCards(usize),
     /// `PotionReward(player)`, a random potion out of combat.
     Potion,
+    /// `PotionReward(potion, player)` for this potion.
+    SpecificPotion(V::Potion),
+    /// `PotionReward(potion, player)` for one `Rng.NextItem` over the
+    /// uncommon potions of the character's pool and the shared one, off the
+    /// rewards stream.
+    UncommonPotion,
     /// `PotionReward(potion, player)` for one `Rng.NextItem` over
     /// [`Rules::unlocked_potions`] off the rewards stream.
     UnlockedPotion,
     /// `CardReward` over the colourless pool at `RegularEncounter` odds, with
     /// no upgrade roll, offering this many cards.
     ColorlessCards(usize),
-    /// `CardReward` over the character's own pool at uniform odds, of one
-    /// rarity, with no rarity modification. Glass Eye offers five.
-    CardsOf { rarity: RewardRarity, count: usize },
+    /// `CardReward` over a character's pool at uniform odds, of one rarity,
+    /// with no rarity or pool modification. `pool` names another character's
+    /// pool, and nothing is the character's own. Glass Eye offers five.
+    CardsOf {
+        pool: Option<V::Character>,
+        rarity: RewardRarity,
+        count: usize,
+        /// `RollForUpgrade` for each card, which `NoUpgradeRoll` leaves out.
+        upgrade_roll: bool,
+    },
     /// `CardReward` over the character's own pool at uniform odds, of one
     /// rarity and one type, and then every card it offers upgraded. The
     /// Future of Potions offers it.
@@ -3295,7 +3308,7 @@ pub enum HookEffect<V: ContentVersion> {
     AddRelicRewards(usize),
     /// `RewardsCmd.OfferCustom`: a screen of these rewards, filled in in this
     /// order, which the player takes from or skips.
-    OfferRewards(&'static [CustomReward]),
+    OfferRewards(&'static [CustomReward<V>]),
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {

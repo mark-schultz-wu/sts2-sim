@@ -58,7 +58,22 @@ pub(crate) fn uniform_of<V: Rules, R: GameRng>(
     pool: &[V::Card],
     count: usize,
 ) -> Vec<V::Card> {
+    uniform_rolled::<V, R>(rng, pool, count, None)
+        .into_iter()
+        .map(|card| card.card)
+        .collect()
+}
+
+/// [`uniform_of`], with [`roll_for_upgrade`] after each card in the act
+/// `roll` names.
+pub(crate) fn uniform_rolled<V: Rules, R: GameRng>(
+    rng: &mut R,
+    pool: &[V::Card],
+    count: usize,
+    roll: Option<usize>,
+) -> Vec<CardIdent<V>> {
     let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
+    let mut offered = Vec::with_capacity(count);
     for _ in 0..count {
         let left: Vec<V::Card> = pool
             .iter()
@@ -69,8 +84,29 @@ pub(crate) fn uniform_of<V: Rules, R: GameRng>(
             .choose(&left)
             .unwrap_or_else(|_| unimplemented!("a reward pool with no card left"));
         drawn.push(card);
+        offered.push(match roll {
+            Some(act) => roll_for_upgrade::<V, R>(rng, card, act),
+            None => CardIdent::new(card),
+        });
     }
-    drawn
+    offered
+}
+
+/// `CardFactory.RollForUpgrade` from no base chance, in the act at `act`: one
+/// roll, whatever the card. One that is not rare upgrades at a quarter per
+/// act.
+fn roll_for_upgrade<V: Rules, R: GameRng>(rng: &mut R, card: V::Card, act: usize) -> CardIdent<V> {
+    let upgrade_roll = rng.next_double() as f32;
+    let upgrade_chance = if V::reward_rarity(card) == RewardRarity::Rare {
+        0.0
+    } else {
+        act as f32 * 0.25
+    };
+    let mut ident = CardIdent::new(card);
+    if card.max_upgrade() > 0 && upgrade_roll <= upgrade_chance {
+        ident.upgrade = 1;
+    }
+    ident
 }
 
 /// The Future of Potions' reward: [`uniform_of`] over the unlocked pool at one
@@ -205,17 +241,7 @@ pub(crate) fn encounter<V: Rules, R: GameRng>(
             .copied()
             .expect("the draw is inside the count");
         drawn.push(card);
-        let upgrade_roll = rng.next_double() as f32;
-        let upgrade_chance = if V::reward_rarity(card) == RewardRarity::Rare {
-            0.0
-        } else {
-            act as f32 * 0.25
-        };
-        let mut ident = CardIdent::new(card);
-        if card.max_upgrade() > 0 && upgrade_roll <= upgrade_chance {
-            ident.upgrade = 1;
-        }
-        offered.push(ident);
+        offered.push(roll_for_upgrade::<V, R>(rng, card, act));
     }
     offered
 }

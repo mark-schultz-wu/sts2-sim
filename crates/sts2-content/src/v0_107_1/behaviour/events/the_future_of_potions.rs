@@ -17,8 +17,8 @@ const OFFERED: usize = 3;
 const CARDS: usize = 3;
 
 /// One reward for each rarity and card type, in the order `reward` reads.
-static REWARDS: [[CustomReward; 1]; 9] = {
-    const fn reward(rarity: RewardRarity, kind: CardKind) -> [CustomReward; 1] {
+static REWARDS: [[CustomReward<V>; 1]; 9] = {
+    const fn reward(rarity: RewardRarity, kind: CardKind) -> [CustomReward<V>; 1] {
         [CustomReward::UpgradedCardsOf {
             rarity,
             kind,

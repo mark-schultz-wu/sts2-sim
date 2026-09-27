@@ -1621,10 +1621,11 @@ impl<V: Rules> State<V> {
 
     /// `RewardsSet.WithCustomRewards` and `GenerateWithoutOffering`: each
     /// reward filled in in the order given, the hooks, then the sort.
-    fn custom_rewards(&mut self, rewards: &[sts2_core::CustomReward]) -> Vec<Offer<V>> {
+    fn custom_rewards(&mut self, rewards: &[sts2_core::CustomReward<V>]) -> Vec<Offer<V>> {
         use sts2_core::CustomReward;
 
         let character = self.character();
+        let act = self.act();
         if rewards.iter().any(|reward| {
             matches!(
                 reward,
@@ -1653,6 +1654,22 @@ impl<V: Rules> State<V> {
                         .collect(),
                         taken: false,
                     },
+                    CustomReward::SpecificPotion(potion) => Offer::Potion {
+                        potion,
+                        taken: false,
+                    },
+                    CustomReward::UncommonPotion => {
+                        use sts2_core::rng::GameRng as _;
+                        Offer::Potion {
+                            potion: *rng
+                                .choose(
+                                    V::reward_potions(character)
+                                        .at(sts2_core::RewardRarity::Uncommon),
+                                )
+                                .unwrap_or_else(|_| unimplemented!("no uncommon potion to offer")),
+                            taken: false,
+                        }
+                    }
                     CustomReward::Potion => Offer::Potion {
                         potion: crate::reward::potion::rolled::<V, _>(rng, character),
                         taken: false,
@@ -1669,15 +1686,18 @@ impl<V: Rules> State<V> {
                         .collect(),
                         taken: false,
                     },
-                    CustomReward::CardsOf { rarity, count } => Offer::Card {
-                        cards: crate::reward::card::uniform_of::<V, _>(
+                    CustomReward::CardsOf {
+                        pool,
+                        rarity,
+                        count,
+                        upgrade_roll,
+                    } => Offer::Card {
+                        cards: crate::reward::card::uniform_rolled::<V, _>(
                             rng,
-                            V::reward_cards(character).at(rarity),
+                            V::reward_cards(pool.unwrap_or(character)).at(rarity),
                             count,
-                        )
-                        .into_iter()
-                        .map(CardIdent::new)
-                        .collect(),
+                            upgrade_roll.then_some(act),
+                        ),
                         taken: false,
                     },
                     CustomReward::UpgradedCardsOf {
