@@ -1,0 +1,15 @@
+# `ConstrictPower.AfterSideTurnEnd` hits its owner for its stack, unpowered
+# and blockable, as the owner's side ends a turn. The Slithering Strangler
+# puts three on the Ironclad. On turn two, a Defend with twenty Dexterity
+# gives more block than the squeeze and the enemies' attacks take together,
+# so the Ironclad loses no hit points. On turn three a Strike kills the Strangler, and Constrict goes with the
+# creature that applied it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"SLITHERING_STRANGLER_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":20,"target":0}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":2}
+{"cmd":"end_turn"}

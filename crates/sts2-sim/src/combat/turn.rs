@@ -1030,7 +1030,7 @@ pub(super) fn side_turn_started<V: Rules>(
                     };
                     let mut board =
                         Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                    board.hit_from_nobody(owner, stack);
+                    board.hit_unpowered(None, owner, stack, true);
                     let alive = board
                         .at(owner)
                         .is_some_and(|at| board.live.creatures[at].alive);
@@ -1243,9 +1243,16 @@ fn tick_powers<V: Rules>(
             sts2_core::HookEffect::ApplyToOwner(power, amount) => {
                 applying.push(TurnEndAsk::Apply(owner, power, amount));
             }
-            sts2_core::HookEffect::DamageOwnerUnblockable(amount) => {
-                applying.push(TurnEndAsk::Damage(owner, amount));
-            }
+            sts2_core::HookEffect::DamageOwnerInFight {
+                amount,
+                unblockable,
+                self_dealt,
+            } => applying.push(TurnEndAsk::Damage {
+                owner,
+                amount,
+                unblockable,
+                dealer: self_dealt.then_some(owner),
+            }),
             // `PowerCmd.Remove(this)`, taken after the ticks for the same
             // reason a power it applies is.
             sts2_core::HookEffect::Remove => leaving.push((owner, power)),
@@ -1308,8 +1315,13 @@ type Applying<V> = SmallVec<[TurnEndAsk<V>; CREATURES]>;
 enum TurnEndAsk<V: Rules> {
     /// `PowerCmd.Apply`.
     Apply(CombatId, V::Power, PowerAmount<V::Number>),
-    /// `CreatureCmd.Damage`, unblockable and unpowered and from nobody.
-    Damage(CombatId, V::Number),
+    /// `CreatureCmd.Damage`, unpowered, from `dealer` or from nobody.
+    Damage {
+        owner: CombatId,
+        amount: V::Number,
+        unblockable: bool,
+        dealer: Option<CombatId>,
+    },
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -1331,7 +1343,12 @@ fn applied<V: Rules>(
             TurnEndAsk::Apply(at, power, amount) => {
                 sts2_core::Fight::apply_power(&mut board, at, power, amount);
             }
-            TurnEndAsk::Damage(at, amount) => board.hit_from_nobody(at, amount),
+            TurnEndAsk::Damage {
+                owner,
+                amount,
+                unblockable,
+                dealer,
+            } => board.hit_unpowered(dealer, owner, amount, unblockable),
         }
         if let Some(ended) = board.ended {
             return Some(ended);

@@ -601,11 +601,17 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
-    /// `CreatureCmd.Damage` on `target` for `amount`, unblockable and
-    /// unpowered and from nobody, once the damage hooks worked it out.
-    pub(super) fn hit_from_nobody(&mut self, target: CombatId, amount: V::Number) {
-        let damage = modified::<V>(self.walk(), None, Some(target), None, amount, false);
-        self.hit(None, target, damage, false, true, None);
+    /// `CreatureCmd.Damage` on `target` for `amount`, unpowered and from no
+    /// card, once the damage hooks worked it out.
+    pub(super) fn hit_unpowered(
+        &mut self,
+        dealer: Option<CombatId>,
+        target: CombatId,
+        amount: V::Number,
+        unblockable: bool,
+    ) {
+        let damage = modified::<V>(self.walk(), dealer, Some(target), None, amount, false);
+        self.hit(dealer, target, damage, false, unblockable, None);
     }
 
     /// `HittableEnemies`: the opponents alive, less any a listener refuses a
@@ -1032,10 +1038,19 @@ impl<'a, V: Rules> Board<'a, V> {
                     )
             })
             .collect();
-        let mut kept = kept.into_iter();
-        self.live
+        // `PowerModel.AfterRemoved` for each power that goes, which
+        // `remove_power` asks.
+        let going: SmallVec<[V::Power; 8]> = self
+            .live
             .powers
-            .retain(id, |_| kept.next().expect("one answer for each power"));
+            .of(id)
+            .zip(kept)
+            .filter(|(_, kept)| !kept)
+            .map(|(held, _)| held.power())
+            .collect();
+        for power in going {
+            self.live.remove_power(id, power);
+        }
     }
 
     /// `Hook.AfterDeath` for `creature`, which fought on `side`.
@@ -1056,7 +1071,11 @@ impl<'a, V: Rules> Board<'a, V> {
         let asked = super::listen::notify::<V>(
             self.live,
             self.relics,
-            sts2_core::EventHook::AfterDeath { creature, side },
+            sts2_core::EventHook::AfterDeath {
+                creature,
+                side,
+                removal_prevented: false,
+            },
         );
         let mut own = sts2_core::HookEffects::new();
         for (listener, effect) in asked {
