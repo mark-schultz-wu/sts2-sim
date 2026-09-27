@@ -621,14 +621,18 @@ pub(super) fn carry_setup<V: Rules>(
                             }
                         }
                         sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
-                            if let Some(question) = select::<V>(live, relics, pile, count, act) {
-                                return Carried::Parked(super::live::Asking {
-                                    then: Then::Setup {
-                                        act,
-                                        stage: Setup::BeforeHandDraw(rest),
-                                    },
-                                    question,
-                                });
+                            match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                                Err(question) => {
+                                    return Carried::Parked(super::live::Asking {
+                                        then: Then::Setup {
+                                            act,
+                                            stage: Setup::BeforeHandDraw(rest),
+                                        },
+                                        question,
+                                    });
+                                }
+                                Ok(Some(ended)) => return Carried::Done(Some(ended)),
+                                Ok(None) => {}
                             }
                         }
                         sts2_core::HookEffect::Remove => {
@@ -684,14 +688,18 @@ pub(super) fn carry_setup<V: Rules>(
                             ended = ended.or(board.ended);
                         }
                         sts2_core::HookEffect::SelectFromPile { pile, count, act } => {
-                            if let Some(question) = select::<V>(live, relics, pile, count, act) {
-                                return Carried::Parked(super::live::Asking {
-                                    then: Then::Setup {
-                                        act,
-                                        stage: Setup::PlayerTurnStart(rest),
-                                    },
-                                    question,
-                                });
+                            match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                                Err(question) => {
+                                    return Carried::Parked(super::live::Asking {
+                                        then: Then::Setup {
+                                            act,
+                                            stage: Setup::PlayerTurnStart(rest),
+                                        },
+                                        question,
+                                    });
+                                }
+                                Ok(Some(ended)) => return Carried::Done(Some(ended)),
+                                Ok(None) => {}
                             }
                         }
                         // `OstyCmd.Summon` for the listener's owner.
@@ -806,33 +814,41 @@ fn generate_from_pool<V: Rules>(
 
 /// `CardSelectCmd.FromHand` or `FromCombatPile` for `count` cards of `pile`:
 /// the cards taken without asking, acted on now, or the question to stop on.
+///
+/// A discard that took Sly cards plays them, and whatever that ended comes
+/// back.
 fn select<V: Rules>(
     live: &mut Live<V>,
-    relics: &crate::run::Belt<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
     pile: Pile,
     count: V::Number,
     act: sts2_core::PileAct,
-) -> Option<super::live::Asked<V>> {
+) -> Result<Option<super::Ended>, super::live::Asked<V>> {
     let count = num_traits::cast(count)
         .and_then(nonmax::NonMaxUsize::new)
         .unwrap_or_else(|| unimplemented!("a selection of {count:?} cards"));
     let selection = sts2_core::Selection::Exactly(count);
     match super::play::taken(live, pile, selection) {
         Some(picked) => {
-            act_on::<V>(live, relics, act, picked.as_slice());
-            None
+            let sly = act_on::<V>(live, relics, act, picked.as_slice());
+            Ok(play_sly::<V>(live, rngs, relics, sly))
         }
-        None => Some(super::live::Asked::Pile { pile, selection }),
+        None => Err(super::live::Asked::Pile { pile, selection }),
     }
 }
 
 /// Carry `act` out on the cards a selection took, in the order it took them.
+///
+/// A discard hands back the Sly cards it took, which the caller auto-plays
+/// once every card is down.
 pub(super) fn act_on<V: Rules>(
     live: &mut Live<V>,
     relics: &crate::run::Belt<V>,
     act: sts2_core::PileAct,
     picked: &[sts2_core::CardAt<V>],
-) {
+) -> SmallVec<[sts2_core::CardId<V>; 2]> {
+    let mut sly = SmallVec::new();
     for card in picked {
         let from = card.pile();
         let at = live
@@ -853,7 +869,7 @@ pub(super) fn act_on<V: Rules>(
                     .get(from, at)
                     .expect("a card stands where it was found");
                 if held.face.sly() {
-                    unimplemented!("a Sly card discarded, which then plays itself");
+                    sly.push(held.id);
                 }
                 unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded);
                 Pile::Discard
@@ -867,6 +883,24 @@ pub(super) fn act_on<V: Rules>(
         };
         live.cards.move_to(from, at, to);
     }
+    sly
+}
+
+/// `CardCmd.AutoPlay` with `SlyDiscard` for each Sly card a discard took, in
+/// the order they went down, and whatever that ended.
+pub(super) fn play_sly<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    sly: SmallVec<[sts2_core::CardId<V>; 2]>,
+) -> Option<super::Ended> {
+    for id in sly {
+        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, Pile::Discard);
+        if ended.is_some() {
+            return ended;
+        }
+    }
+    None
 }
 
 /// A hook this fight raises and nothing ported answers.
@@ -899,9 +933,13 @@ pub(super) fn resume_setup<V: Rules>(
         streams,
         relics,
     } = fighting;
-    act_on::<V>(live, relics, act, picked.as_slice());
+    let sly = act_on::<V>(live, relics, act, picked.as_slice());
     let ascension = live.ascension;
-    match carry_setup(live, streams.combat(), relics, ascension, stage) {
+    let carried = match play_sly::<V>(live, streams.combat(), relics, sly) {
+        Some(ended) => Carried::Done(Some(ended)),
+        None => carry_setup(live, streams.combat(), relics, ascension, stage),
+    };
+    match carried {
         Carried::Parked(asking) => {
             live.asking = Some(asking);
             Ok(None)

@@ -265,10 +265,11 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.counts.add(self.overrides(number(card.id)));
     }
 
-    /// `AddDuringManualCardPlay`: the card at `at` in hand goes to the play
-    /// pile, and stays there while its effect runs.
-    pub(crate) fn play(&mut self, at: usize) -> CardInstance<V> {
-        let card = self.piles.move_to(Place::Hand, at, Place::Play);
+    /// `AddDuringManualCardPlay`, or an auto-play's `CardPileCmd.Add`: the
+    /// card at `at` in `from` goes to the play pile, and stays there while its
+    /// effect runs.
+    pub(crate) fn play(&mut self, from: Pile, at: usize) -> CardInstance<V> {
+        let card = self.piles.move_to(from.into(), at, Place::Play);
         self.card(card)
     }
 

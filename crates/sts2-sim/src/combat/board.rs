@@ -2321,7 +2321,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn act_on(&mut self, act: sts2_core::PileAct, cards: &[CardAt<V>]) {
-        super::turn::act_on::<V>(self.live, self.relics, act, cards);
+        let sly = super::turn::act_on::<V>(self.live, self.relics, act, cards);
+        if self.ended.is_none() {
+            self.ended =
+                super::turn::play_sly::<V>(self.live, self.rngs.reborrow(), self.relics, sly);
+        }
     }
 
     fn modify_this(&mut self, change: sts2_core::Change<V>, lasting: sts2_core::Lasting) {
@@ -2427,7 +2431,13 @@ pub(super) fn draw<V: Rules>(
                 // `IsOverOrEnding` stops an auto-play before it starts.
                 HookEffect::AutoPlay(card) => {
                     if ended.is_none() {
-                        ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, card);
+                        ended = super::play::auto_play::<V>(
+                            live,
+                            rngs.reborrow(),
+                            relics,
+                            card,
+                            Pile::Hand,
+                        );
                     }
                 }
                 effect => unimplemented!("{listener:?} asking for {effect:?} as a card is drawn"),
