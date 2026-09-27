@@ -108,6 +108,7 @@ mod precarious_shears;
 mod precise_scissors;
 mod radiant_pearl;
 mod red_mask;
+mod red_skull;
 mod regal_pillow;
 mod reptile_trinket;
 mod ring_of_the_drake;
@@ -287,6 +288,7 @@ pub enum State {
     RippleBasin(ripple_basin::State),
     PrayerWheel,
     WhiteStar,
+    RedSkull(red_skull::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -498,6 +500,7 @@ pub(crate) fn event_hook(
         State::RippleBasin(state) => ripple_basin::event_hook(state, hook, asked),
         State::PrayerWheel => prayer_wheel::event_hook(hook, asked),
         State::WhiteStar => white_star::event_hook(hook, asked),
+        State::RedSkull(state) => red_skull::event_hook(state, hook, asked),
     }
 }
 
@@ -649,7 +652,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Pendulum(_)
         | State::RippleBasin(_)
         | State::PrayerWheel
-        | State::WhiteStar => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::WhiteStar
+        | State::RedSkull(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -791,6 +795,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::RippleBasin => State::RippleBasin(ripple_basin::State::default()),
             Relic::PrayerWheel => State::PrayerWheel,
             Relic::WhiteStar => State::WhiteStar,
+            Relic::RedSkull => State::RedSkull(red_skull::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }

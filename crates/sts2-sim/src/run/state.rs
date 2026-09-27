@@ -1771,14 +1771,18 @@ impl<V: Rules> State<V> {
         num_traits::cast(amount).unwrap_or_else(|| unimplemented!("{amount:?} as a health"))
     }
 
-    /// `CreatureCmd.Heal` outside a fight, which stops at the maximum.
-    ///
-    /// # Panics
-    ///
-    /// A relic listening to `AfterCurrentHpChanged`.
+    /// `CreatureCmd.Heal` outside a fight, which stops at the maximum. With
+    /// no fight's state it raises no `AfterCurrentHpChanged`.
     fn heal(&mut self, amount: V::Health) {
-        self.unheard(sts2_core::ModelHook::AfterCurrentHpChanged);
         self.player.hp = (self.player.hp + amount).min(self.player.max_hp);
+    }
+
+    /// The player's hit points, as a hook hands them to a relic.
+    fn player_health(&self) -> sts2_core::PlayerHealth<V> {
+        sts2_core::PlayerHealth {
+            hp: self.player.hp,
+            max_hp: self.player.max_hp,
+        }
     }
 
     /// `CreatureCmd.Damage` on the player outside a fight: unblockable,
@@ -1817,7 +1821,6 @@ impl<V: Rules> State<V> {
             ModelHook::BeforeDamageReceived,
             ModelHook::ModifyHpLostBeforeOsty,
             ModelHook::ModifyHpLostBeforeOstyLate,
-            ModelHook::AfterCurrentHpChanged,
         ] {
             self.unheard(hook);
         }
@@ -1826,6 +1829,21 @@ impl<V: Rules> State<V> {
             unimplemented!("a run whose player dies outside a fight");
         }
         self.player.hp = self.player.hp - amount;
+        // `Hook.AfterCurrentHpChanged`, for damage that took hit points.
+        if amount > num_traits::zero() {
+            let hook = sts2_core::EventHook::CurrentHpChanged {
+                creature: sts2_core::CombatId::new(nonmax::NonMaxU8::ZERO),
+                monster: None,
+                pet_of: None,
+                delta: -num_traits::cast::<_, V::Number>(amount)
+                    .expect("a health fits a game number"),
+                in_fight: false,
+                player: self.player_health(),
+            };
+            if let Some(effect) = self.notify_belt(hook).first() {
+                unimplemented!("a relic asking for {effect:?} as damage lands outside a fight");
+            }
+        }
     }
 
     /// `ModifyHpLost`'s two phases after Osty, as the belt answers them for
@@ -2435,6 +2453,7 @@ impl<V: Rules> State<V> {
             room,
             strayed,
             deck: self.player.deck.len(),
+            player: self.player_health(),
         });
         if let Some(asked) = self.carry_out(asked) {
             let pickup = asked.pickup;
@@ -2559,9 +2578,8 @@ impl<V: Rules> State<V> {
         let (stock, cost) = (entry.stock, entry.cost);
 
         // `PlayerCmd.LoseGold` runs after the entry's own purchase in the
-        // game. Nothing between the two reads the gold, and a purchase that
-        // cannot be carried out panics rather than returns, so it is spent
-        // here.
+        // game. Nothing between the two reads the gold, so it is spent here,
+        // and handed back by a purchase that fails.
         self.player.gold = self.player.gold - cost;
         let asking = match stock {
             sts2_core::Stock::Card(Some(on_sale)) => {
@@ -2579,9 +2597,14 @@ impl<V: Rules> State<V> {
                     pickup => unimplemented!("{pickup:?} asked for where a shop sells it"),
                 })
             }
+            // `TryToProcure` refuses where a relic's `ShouldProcurePotion`
+            // says no, and the purchase fails with it. Nothing is spent and
+            // the shelf keeps its potion. A full belt is refused before any
+            // purchase, as the game's own check is.
             sts2_core::Stock::Potion(Some(potion)) => {
                 if !self.procure(potion) {
-                    unimplemented!("buying a potion with no slot to put it in");
+                    self.player.gold = self.player.gold + cost;
+                    return Ok(Decided::Resolved);
                 }
                 None
             }

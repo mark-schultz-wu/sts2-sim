@@ -155,6 +155,10 @@ pub(crate) fn enter<V: Rules>(
         room: live.room(),
         strayed: entering.strayed,
         deck: entering.deck.len(),
+        player: sts2_core::PlayerHealth {
+            hp: live.player().hp,
+            max_hp: live.player().max_hp,
+        },
     };
     for (_, effect) in super::listen::notify::<V>(&mut live, relics, entered) {
         match effect {

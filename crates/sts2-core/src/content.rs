@@ -951,6 +951,13 @@ pub enum EnchantmentStatus {
     Disabled,
 }
 
+/// The player's current and maximum hit points.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlayerHealth<V: ContentVersion> {
+    pub hp: V::Health,
+    pub max_hp: V::Health,
+}
+
 /// `cardSource`, the card whose number a damage hook is working out: which
 /// copy, which card, and whether it is being played.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2727,6 +2734,8 @@ pub enum EventHook<V: ContentVersion> {
         strayed: bool,
         /// How many cards the deck holds, which a relic reads off its owner.
         deck: usize,
+        /// The player's hit points, which a relic reads off its owner.
+        player: PlayerHealth<V>,
     },
     /// `TryModifyRewards`, for rewards once they are filled in: a room's of
     /// this type, or a relic's with no room, in the act at this index.
@@ -2817,6 +2826,10 @@ pub enum EventHook<V: ContentVersion> {
         /// `PetOwner`, which is nothing for anything but a pet.
         pet_of: Option<crate::CombatId>,
         delta: V::Number,
+        /// `CombatManager.IsInProgress`.
+        in_fight: bool,
+        /// The player's hit points, which a relic reads off its owner.
+        player: PlayerHealth<V>,
     },
     /// `AfterOrbEvoked`, once an orb's evoke has run. The creatures it hit
     /// stay with the fight, which [`HookEffect::DamageTargets`] reaches.

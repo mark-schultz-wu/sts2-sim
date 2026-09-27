@@ -46,12 +46,12 @@ pub use content::{
     MAX_CARDS_IN_HAND, MapPointKinds, ModelHook, Modify, ModifyHook, MonsterKinds, MonsterModel,
     MonsterSpawn, MonsterTable, MonsterVirtual, MoveKinds, MoveLog, MoveMachine, MovePinned,
     Offered, Opponents, Overrides, Picked, PileAct, PilePosition, PlayAt, PlayFinished,
-    PlayStarted, Played, PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount,
-    PowerKinds, PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel,
-    RelicPoolKinds, RelicPull, RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds,
-    RosterEntry, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd,
-    Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary, TurnHistory,
-    TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
+    PlayStarted, Played, PlayerHealth, PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage,
+    PowerAmount, PowerKinds, PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds,
+    RelicModel, RelicPoolKinds, RelicPull, RelicTable, RestKinds, Rests, ResultPile, RewardRarity,
+    RoomKinds, RosterEntry, Rules, RunStreamKinds, Scaling, SelectedCards, Selection, SideKinds,
+    SideTurnEnd, Spawned, Stream, StreamKinds, StunResume, Table, Taken, TargetKinds, Temporary,
+    TurnHistory, TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
 };
 pub use event::{EventBehavior, EventView};
 pub use hook_response::HookResponse;

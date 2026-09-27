@@ -1394,11 +1394,18 @@ impl<'a, V: Rules> Board<'a, V> {
             Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
             _ => None,
         };
+        let pet_of = held.owner;
+        let player = self.live.player();
         let hook = sts2_core::EventHook::CurrentHpChanged {
             creature,
             monster,
-            pet_of: held.owner,
+            pet_of,
             delta,
+            in_fight: true,
+            player: sts2_core::PlayerHealth {
+                hp: player.hp,
+                max_hp: player.max_hp,
+            },
         };
         let asked = super::listen::notify::<V>(self.live, self.relics, hook);
         self.after_hit(asked);
@@ -1411,6 +1418,14 @@ impl<'a, V: Rules> Board<'a, V> {
             // `CardPileCmd.Draw` for the relic's owner, the player.
             if let (Listener::Relic { .. }, HookEffect::Draw(count)) = (listener, effect) {
                 sts2_core::Fight::draw(self, count);
+                continue;
+            }
+            // `PowerCmd.Apply` on the relic's owner, the player.
+            if let (Listener::Relic { .. }, HookEffect::ApplyToOwner(power, amount)) =
+                (listener, effect)
+            {
+                let player = self.live.player().id;
+                self.land(player, power, amount, Some(player));
                 continue;
             }
             let Listener::Power {
@@ -2865,6 +2880,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .unwrap_or_else(|| unimplemented!("healing by {amount:?}, which is not a health"));
         creature.hp = (creature.hp + healed).min(creature.max_hp);
         creature.alive = creature.hp > V::Health::zero();
+        // `Hook.AfterCurrentHpChanged` with the amount asked for, however much
+        // of it the maximum let land.
+        if amount > V::Number::zero() {
+            self.current_hp_changed(at, amount);
+        }
     }
 
     fn write_power(
