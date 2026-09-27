@@ -10,6 +10,9 @@ use super::super::super::generated::monsters::{Monster, MoveId};
 use super::super::super::generated::powers::Power;
 use super::{Number, V};
 
+/// `FlutterMove`'s `PowerCmd.Apply<FlutterPower>(…, 5m, …)`.
+const FLUTTER: Number = 5;
+
 /// What a creature's health is counted in.
 type Health = <V as sts2_core::ContentVersion>::Health;
 
@@ -131,6 +134,13 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
     );
     match (monster, move_id) {
         (Monster::ThievingHopper, MoveId::ThieveryMove) => thievery(fight),
+        // `FlutterMove`: `IsHovering`, which picks its sounds, then
+        // `PowerCmd.Apply<FlutterPower>` of five on itself.
+        (Monster::ThievingHopper, MoveId::FlutterMove) => {
+            fight.apply_to_actor(Power::FlutterPower, PowerAmount::Counted(FLUTTER))
+        }
+        // `EscapeMove`: `CreatureCmd.Escape` on itself.
+        (Monster::ThievingHopper, MoveId::EscapeMove) => fight.escape(),
         (Monster::BowlbugRock, MoveId::HeadbuttMove) => fight.attack_opponents(),
         (Monster::SlumberingBeetle, MoveId::RollOutMove) => roll_out(fight),
         // `WritheMove`, whose two hits are the intent's own repeat count.

@@ -272,7 +272,7 @@ impl State {
 }
 
 /// `CreatureCmd.Stun`'s own state, which advertises a stunned turn.
-fn stunned(then: Option<u8>) -> sts2_core::HookEffect<V> {
+fn stunned(then: sts2_core::StunResume) -> sts2_core::HookEffect<V> {
     sts2_core::HookEffect::StunOwner {
         stun: &STUNNED,
         then,
@@ -317,6 +317,9 @@ const PHROG: i32 = 25;
 
 /// `PaperKrane.ModifyWeakMultiplier`'s `0.15m`, in hundredths.
 const KRANE: i32 = 15;
+
+/// `FlutterPower`'s `DamageDecrease` of 50, as the share left.
+const FLUTTER: f64 = 0.5;
 
 /// `FrailPower.ModifyBlockMultiplicative`'s `0.75m`.
 const FRAIL: f64 = 0.75;
@@ -640,6 +643,18 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::DamageCap { .. } | ModifyHook::HpLostAfterOsty { .. },
         ) => Modify::Nothing,
+        // `FlutterPower.ModifyDamageMultiplicative`: its `DamageDecrease` off
+        // a powered attack on its owner.
+        (
+            Power::FlutterPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(FLUTTER),
+        (Power::FlutterPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `HardToKillPower.ModifyDamageCap`: a hit on its owner capped at its
         // stack, whatever the hit's props.
         (
@@ -1408,7 +1423,7 @@ pub(crate) fn event_hook(
             },
         ) if dealer == Some(holder) => {
             state.set_off_balance(true);
-            asked.push(stunned(None));
+            asked.push(stunned(sts2_core::StunResume::Interrupted));
             return;
         }
         (
@@ -1920,7 +1935,7 @@ pub(crate) fn event_hook(
                 asked.extend([
                     HookEffect::Decrement,
                     HookEffect::RemoveFromOwner(Power::PlatingPower),
-                    stunned(None),
+                    stunned(sts2_core::StunResume::Interrupted),
                 ]);
                 return;
             }
@@ -1931,6 +1946,34 @@ pub(crate) fn event_hook(
         {
             unimplemented!("an endless Slumber power")
         }
+        // `FlutterPower.AfterDamageReceived`: a powered attack that reaches
+        // its owner's hit points spends one. The last one stuns its owner,
+        // which then goes on past the move the stun interrupted.
+        (
+            Power::FlutterPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived {
+                target,
+                unblocked,
+                powered: true,
+                ..
+            },
+        ) if target == holder && unblocked != 0 => {
+            if amount == one {
+                asked.extend([
+                    HookEffect::Decrement,
+                    stunned(sts2_core::StunResume::AfterInterrupted),
+                ]);
+                return;
+            }
+            Some(HookEffect::Decrement)
+        }
+        (Power::FlutterPower, PowerAmount::Endless, EventHook::DamageReceived { target, .. })
+            if target == holder =>
+        {
+            unimplemented!("an endless Flutter")
+        }
+        (Power::FlutterPower, _, EventHook::DamageReceived { .. }) => None,
         // `SlipperyPower.AfterDamageReceived`, which spends an instance on
         // every hit that reaches its owner's hit points.
         (Power::SlipperyPower, _, EventHook::DamageReceived { target, unblocked, .. })
@@ -2055,9 +2098,9 @@ pub(crate) fn event_hook(
                             .unwrap_or_else(|_| {
                                 unreachable!("the Ceremonial Beast's graph holds its cry")
                             });
-                    stunned(Some(cry))
+                    stunned(sts2_core::StunResume::At(cry))
                 }
-                _ => stunned(None),
+                _ => stunned(sts2_core::StunResume::Interrupted),
             });
             asked.push(HookEffect::RemoveFromOwner(Power::PlowPower));
             return;
@@ -2076,7 +2119,7 @@ pub(crate) fn event_hook(
             let bite = super::monsters::state_of(Monster::Tunneler, MoveId::BiteMove, 0)
                 .unwrap_or_else(|_| unreachable!("the Tunneler's graph holds its bite"));
             asked.extend([
-                stunned(Some(bite)),
+                stunned(sts2_core::StunResume::At(bite)),
                 HookEffect::RemoveFromOwner(Power::BurrowedPower),
             ]);
             return;

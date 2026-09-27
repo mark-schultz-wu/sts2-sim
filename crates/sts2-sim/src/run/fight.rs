@@ -165,6 +165,7 @@ impl<V: Rules> State<V> {
                     .leaving()
                     .iter()
                     .partition(|effect| matches!(effect, sts2_core::HookEffect::AddGoldReward(_)));
+                let proportion = live.gold_proportion();
                 let combat = live.finish(relics);
                 // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
                 // rewards. It walks the deck's cards ahead of the fight's
@@ -176,7 +177,7 @@ impl<V: Rules> State<V> {
                     let pickup = asked.pickup;
                     unimplemented!("a fight's end asking for {pickup:?}");
                 }
-                let mut offered = self.combat_rewards(&combat);
+                let mut offered = self.combat_rewards(&combat, proportion);
                 offered.extend(
                     returned
                         .into_iter()
@@ -210,13 +211,26 @@ impl<V: Rules> State<V> {
     }
 
     /// `RewardsSet.WithRewardsFromRoom`, for the fight just won.
-    fn combat_rewards(&mut self, combat: &sts2_core::Combat<V>) -> Vec<crate::reward::Offer<V>> {
+    ///
+    /// `proportion` is the room's `GoldProportion`. A gold reward is offered
+    /// while it is above nothing, over the encounter's range scaled by it.
+    fn combat_rewards(
+        &mut self,
+        combat: &sts2_core::Combat<V>,
+        proportion: f32,
+    ) -> Vec<crate::reward::Offer<V>> {
         let encounter = combat
             .encounter
             .unwrap_or_else(|| unimplemented!("a fight with no encounter behind it"));
         let ascension = self.ascension();
         let character = self.character();
-        let gold = V::encounter_gold(encounter, ascension);
+        let gold = (proportion > 0.0).then(|| {
+            let range = V::encounter_gold(encounter, ascension);
+            // `(int)Math.Round((float)gold * GoldProportion)`, which rounds a
+            // half to the even side.
+            let scaled = |gold: u16| (f32::from(gold) * proportion).round_ties_even() as u16;
+            sts2_core::rng::Interval::new(scaled(range.min()), scaled(range.max()))
+        });
         let act = self.act();
         // `GenerateRewardsFor` switches on the room, which is what adds a
         // relic, moves the potion odds, and prices the card reward's

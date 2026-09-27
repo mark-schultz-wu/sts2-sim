@@ -46,16 +46,19 @@ pub(crate) fn won<V: Rules, R: GameRng>(
     odds: &mut Odds,
     ascension: V::AscensionLevel,
     character: V::Character,
-    gold: Interval<u16>,
+    gold: Option<Interval<u16>>,
     act: usize,
     room: Room,
 ) -> (Vec<Offer<V>>, Option<Rarity<V>>) {
     let elite = room == Room::Elite;
     let pays_potion = potion(rng, odds, elite);
-    let mut offered = vec![Offer::Gold {
-        amount: purse::<V, R>(rng, gold),
-        taken: false,
-    }];
+    let mut offered: Vec<Offer<V>> = gold
+        .into_iter()
+        .map(|gold| Offer::Gold {
+            amount: purse::<V, R>(rng, gold),
+            taken: false,
+        })
+        .collect();
     if pays_potion {
         offered.push(Offer::Potion {
             potion: super::potion::rolled::<V, R>(rng, character),
@@ -82,8 +85,7 @@ pub(crate) fn won<V: Rules, R: GameRng>(
 
 /// `GoldReward.Populate`, which is one draw over the encounter's own range.
 ///
-/// The room's `GoldProportion` is one for every fight the map deals. An event
-/// that hands out a part of a fight's gold sets it, and none is ported.
+/// The range is the encounter's own, scaled by the room's `GoldProportion`.
 fn purse<V: Rules, R: GameRng>(rng: &mut R, gold: Interval<u16>) -> V::Number {
     let min = num_traits::cast(gold.min()).expect("a gold minimum fits the RNG integer");
     let max: R::Int = num_traits::cast(gold.max()).expect("a gold maximum fits the RNG integer");
