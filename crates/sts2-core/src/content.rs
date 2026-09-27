@@ -2453,6 +2453,16 @@ pub enum EventHook<V: ContentVersion> {
         /// `oldPileType`, nothing for a card that came from no pile.
         from: Option<crate::Pile>,
     },
+    /// `AfterCurrentHpChanged`, once `creature`'s hit points moved by
+    /// `delta`.
+    CurrentHpChanged {
+        creature: crate::CombatId,
+        /// `Creature.Monster`, which is nothing for a player.
+        monster: Option<V::Monster>,
+        /// `PetOwner`, which is nothing for anything but a pet.
+        pet_of: Option<crate::CombatId>,
+        delta: V::Number,
+    },
     /// `AfterOrbEvoked`, once an orb's evoke has run. The creatures it hit
     /// stay with the fight, which [`HookEffect::DamageTargets`] reaches.
     OrbEvoked {
@@ -2723,6 +2733,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::CardExhausted { .. } => ModelHook::AfterCardExhausted,
             EventHook::OrbEvoked { .. } => ModelHook::AfterOrbEvoked,
+            EventHook::CurrentHpChanged { .. } => ModelHook::AfterCurrentHpChanged,
             EventHook::CardChangedPiles { .. } => ModelHook::AfterCardChangedPiles,
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
             EventHook::PowerAmountReceivedModified { .. } => {
@@ -3187,6 +3198,9 @@ pub enum HookEffect<V: ContentVersion> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
     },
+    /// `CreatureCmd.Damage` on every enemy that can be hit, from the
+    /// listener's owner, unblockable and unpowered.
+    DamageOpponentsUnblockable(V::Number),
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),

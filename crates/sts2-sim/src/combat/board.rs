@@ -556,6 +556,9 @@ impl<'a, V: Rules> Board<'a, V> {
                 );
                 self.after_hit(asked);
             }
+            if lost > zero {
+                self.current_hp_changed(receiver, -lost);
+            }
             let asked = super::listen::notify::<V>(
                 self.live,
                 self.relics,
@@ -617,7 +620,28 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `HittableEnemies`: the opponents alive, less any a listener refuses a
     /// hit on.
     pub(super) fn hittable_opponents(&self) -> SmallVec<[CombatId; 8]> {
-        sts2_core::Fight::opponents(self)
+        self.hittable_among(sts2_core::Fight::opponents(self))
+    }
+
+    /// `HittableEnemies` for the side `of` fights on, whoever is acting.
+    fn hittable_opponents_of(&self, of: CombatId) -> SmallVec<[CombatId; 8]> {
+        let Some(at) = self.at(of) else {
+            return SmallVec::new();
+        };
+        let side = self.live.creatures[at].side;
+        let opponents = self
+            .live
+            .creatures
+            .iter()
+            .filter(|creature| creature.side != side && creature.alive && creature.owner.is_none())
+            .map(|creature| creature.id)
+            .collect();
+        self.hittable_among(opponents)
+    }
+
+    /// `creatures`, less any a listener refuses a hit on.
+    fn hittable_among(&self, creatures: sts2_core::Opponents) -> SmallVec<[CombatId; 8]> {
+        creatures
             .into_iter()
             .filter(|&creature| {
                 !super::listen::any_decides::<V>(
@@ -1202,7 +1226,7 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// # Panics
     ///
-    /// A listener to `AfterDiedToDoom` or `AfterCurrentHpChanged`.
+    /// A listener to `AfterDiedToDoom`.
     pub(super) fn doom_kill(&mut self, doomed: &[CombatId]) {
         for &creature in doomed {
             self.kill_outright(creature);
@@ -1212,20 +1236,39 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `CreatureCmd.Kill`: the creature loses what hit points it has, and
     /// dies.
-    ///
-    /// # Panics
-    ///
-    /// A listener to `AfterCurrentHpChanged`.
     fn kill_outright(&mut self, creature: CombatId) {
-        self.unheard(sts2_core::ModelHook::AfterCurrentHpChanged);
         let Some(at) = self.at(creature) else {
             return;
         };
         let hp = V::Number::from(self.live.creatures[at].hp);
         self.lose_hp(creature, hp);
+        if hp > V::Number::zero() {
+            self.current_hp_changed(creature, -hp);
+        }
         if let Some(at) = self.at(creature) {
             self.kill(at);
         }
+    }
+
+    /// `Hook.AfterCurrentHpChanged` for `creature`, whose hit points moved by
+    /// `delta`, and what its listeners ask.
+    fn current_hp_changed(&mut self, creature: CombatId, delta: V::Number) {
+        let Some(at) = self.at(creature) else {
+            return;
+        };
+        let held = &self.live.creatures[at];
+        let monster = match held.model {
+            Some(sts2_core::ModelId::Monster(monster)) => Some(monster),
+            _ => None,
+        };
+        let hook = sts2_core::EventHook::CurrentHpChanged {
+            creature,
+            monster,
+            pet_of: held.owner,
+            delta,
+        };
+        let asked = super::listen::notify::<V>(self.live, self.relics, hook);
+        self.after_hit(asked);
     }
 
     /// Carry out what the powers asked for after a hit or a broken block,
@@ -1243,6 +1286,13 @@ impl<'a, V: Rules> Board<'a, V> {
                 // `PowerCmd.Remove(this)`.
                 HookEffect::Remove => self.live.remove_power(owner, this),
                 HookEffect::KillOwner => self.kill_outright(owner),
+                // `CreatureCmd.Damage` over `HittableEnemies`, from the
+                // power's owner, unblockable and unpowered.
+                HookEffect::DamageOpponentsUnblockable(amount) => {
+                    for target in self.hittable_opponents_of(owner) {
+                        self.hit_unpowered(Some(owner), target, amount, true);
+                    }
+                }
                 HookEffect::ApplyPower {
                     target,
                     power,
