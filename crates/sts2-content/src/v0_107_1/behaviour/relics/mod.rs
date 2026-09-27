@@ -17,6 +17,7 @@ mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
 mod burning_blood;
+mod byrdpip;
 mod chosen_cheese;
 mod cracked_core;
 mod cursed_pearl;
@@ -77,6 +78,7 @@ pub enum State {
     BoomingConch,
     BoundPhylactery,
     BurningBlood,
+    Byrdpip,
     ChosenCheese,
     CrackedCore,
     CursedPearl,
@@ -127,6 +129,7 @@ pub(crate) fn event_hook(
         State::BoomingConch => booming_conch::event_hook(hook, asked),
         State::BoundPhylactery => bound_phylactery::event_hook(hook, asked),
         State::BurningBlood => burning_blood::event_hook(hook, asked),
+        State::Byrdpip => byrdpip::event_hook(hook, asked),
         State::ChosenCheese => chosen_cheese::event_hook(hook, asked),
         State::CrackedCore => cracked_core::event_hook(hook, asked),
         State::CursedPearl => cursed_pearl::event_hook(hook, asked),
@@ -195,6 +198,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::BoneTea(_)
         | State::BoundPhylactery
         | State::BurningBlood
+        | State::Byrdpip
         | State::ChosenCheese
         | State::CrackedCore
         | State::CursedPearl
@@ -240,6 +244,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::BoomingConch => State::BoomingConch,
             Relic::BoundPhylactery => State::BoundPhylactery,
             Relic::BurningBlood => State::BurningBlood,
+            Relic::Byrdpip => State::Byrdpip,
             Relic::ChosenCheese => State::ChosenCheese,
             Relic::CrackedCore => State::CrackedCore,
             Relic::CursedPearl => State::CursedPearl,

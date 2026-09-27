@@ -1717,7 +1717,7 @@ impl<V: Rules> Board<'_, V> {
     /// # Panics
     ///
     /// A listener to `AfterCreatureAddedToCombat`.
-    fn add_pet(&mut self, monster: V::Monster) -> CombatId {
+    pub(super) fn add_pet(&mut self, monster: V::Monster) -> CombatId {
         let Some(id) = self
             .live
             .creatures

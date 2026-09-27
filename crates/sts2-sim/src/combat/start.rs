@@ -176,6 +176,18 @@ pub(crate) fn enter<V: Rules>(
                     creature.block = creature.block + block;
                 }
             }
+            // `PlayerCmd.AddPet`.
+            (_, HookEffect::AddPet(monster)) => {
+                let mut board = super::board::Board::for_card(
+                    &mut live,
+                    streams.combat(),
+                    relics,
+                    ascension,
+                    None,
+                    None,
+                );
+                board.add_pet(monster);
+            }
             (_, HookEffect::Summon(amount)) => {
                 super::board::summon_osty::<V>(
                     &mut live,

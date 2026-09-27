@@ -1,0 +1,13 @@
+# A Byrdonis Egg in the deck adds Hatch to a rest site, after Heal and Smith.
+# Hatch obtains Byrdpip, whose `AfterObtained` turns the egg into a Byrd
+# Swoop at the deck's end. Each fight then opens with the Byrdpip beside the
+# player, a pet with 9999 hit points that makes no move. Byrd Swoop costs
+# nothing and deals fourteen.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"BYRDONIS_EGG"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"end_turn"}
