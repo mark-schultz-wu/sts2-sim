@@ -1,0 +1,8 @@
+# `Myte`'s `INIT_MOVE` reads its slot. The first puts two Toxic into the
+# player's hand and the second sucks. Toxic left in hand as the turn ends
+# hurts the player by five, then goes to the discard pile.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"MYTES_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

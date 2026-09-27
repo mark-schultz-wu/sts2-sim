@@ -5,7 +5,7 @@ use sts2_core::{
 };
 
 use super::super::super::generated::ascension::AscensionLevel;
-use super::super::super::generated::cards::CardRarity;
+use super::super::super::generated::cards::{CardRarity, Cards, StatusCard};
 use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::monster_moves;
 use super::super::super::generated::monsters::{Monster, MoveId};
@@ -151,6 +151,15 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(2));
         }
         (Monster::LouseProgenitor, MoveId::PounceMove) => fight.attack_opponents(),
+        // `ToxicMove`: `CardPileCmd.AddToCombatAndPreview<Toxic>(targets,
+        // Hand, 2)`, into the hand of the one player.
+        (Monster::Myte, MoveId::ToxicMove) => {
+            fight.add_generated_cards(
+                sts2_core::CardIdent::new(Cards::Status(StatusCard::Toxic)),
+                Pile::Hand,
+                2,
+            );
+        }
         // `SpikesMove`: Thorns at five on itself. `IsSpiny` picks its
         // animations alone.
         (Monster::SpinyToad, MoveId::ProtrudingSpikesMove) => {
