@@ -377,6 +377,9 @@ pub trait CardTable: Table {
     /// The hooks this card's class overrides, as the hook dump measured them.
     /// See [`PowerTable::overrides`].
     fn overrides(self) -> Overrides;
+
+    /// Every hook some card's class in the build overrides.
+    fn heard_by_any() -> Overrides;
 }
 
 /// An exact finite decimal as the game writes it.
@@ -3700,6 +3703,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.ShuffleIfNecessary`: the discard pile shuffled into an
     /// empty draw pile.
     ShuffleIfNecessary,
+    /// `CardCmd.Exhaust` on the top card of the draw pile, or with
+    /// `passing_innate` on the first there that is not innate, falling back
+    /// to the top. Nothing, for an empty pile.
+    ExhaustFromDrawTop {
+        passing_innate: bool,
+    },
     /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
     /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
     GenerateInHand {

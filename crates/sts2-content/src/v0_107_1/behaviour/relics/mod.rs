@@ -66,6 +66,7 @@ mod pollinous_core;
 mod pomander;
 mod precarious_shears;
 mod precise_scissors;
+mod radiant_pearl;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod runic_pyramid;
@@ -76,6 +77,7 @@ mod stone_humidifier;
 mod storybook;
 mod strike_dummy;
 mod sword_of_stone;
+mod toasty_mittens;
 mod touch_of_orobas;
 mod tungsten_rod;
 mod very_hot_cocoa;
@@ -148,6 +150,8 @@ pub enum State {
     PhylacteryUnbound,
     InfusedCore,
     Circlet,
+    RadiantPearl,
+    ToastyMittens,
     EmptyCage,
     Astrolabe,
     PandorasBox,
@@ -273,6 +277,8 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what Sozu does for {hook:?}"),
         },
         State::TungstenRod => tungsten_rod::event_hook(hook),
+        State::RadiantPearl => radiant_pearl::event_hook(hook, asked),
+        State::ToastyMittens => toasty_mittens::event_hook(hook, asked),
         State::TouchOfOrobas => touch_of_orobas::event_hook(hook, asked),
         State::BlackBlood => black_blood::event_hook(hook, asked),
         State::DivineDestiny => divine_destiny::event_hook(hook, asked),
@@ -402,6 +408,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DivineDestiny
         | State::PhylacteryUnbound
         | State::Circlet
+        | State::RadiantPearl
+        | State::ToastyMittens
         | State::EmptyCage
         | State::Astrolabe
         | State::PandorasBox
@@ -478,6 +486,8 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PhylacteryUnbound => State::PhylacteryUnbound,
             Relic::InfusedCore => State::InfusedCore,
             Relic::Circlet => State::Circlet,
+            Relic::RadiantPearl => State::RadiantPearl,
+            Relic::ToastyMittens => State::ToastyMittens,
             Relic::EmptyCage => State::EmptyCage,
             Relic::Astrolabe => State::Astrolabe,
             Relic::PandorasBox => State::PandorasBox,

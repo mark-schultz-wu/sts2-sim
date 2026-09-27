@@ -471,6 +471,24 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         });
     }
 
+    /// `SetupPlayerTurn` on turn one: each innate copy in the draw pile moved
+    /// to its top in pile order. So the last of them ends up first. How many
+    /// there are.
+    pub(crate) fn innate_to_top(&mut self) -> usize {
+        let (faces, states) = (&self.faces, &self.states);
+        let mut innate = 0;
+        self.piles.arrange(Place::Draw, |cards| {
+            for at in 0..cards.len() {
+                let face = &faces[usize::from(states[usize::from(cards[at])])];
+                if face.innate() {
+                    cards[..=at].rotate_right(1);
+                    innate += 1;
+                }
+            }
+        });
+        innate
+    }
+
     /// The copy at `at` in `pile` moved to its top, the rest keeping their
     /// order behind it.
     pub(crate) fn move_to_top(&mut self, pile: Pile, at: usize) {
@@ -552,5 +570,44 @@ impl<V: Rules, P: Piles> Cards<V, P> {
             .ok()
             .filter(|&at| at != u16::MAX)
             .unwrap_or_else(|| unimplemented!("a fight of {at} card states"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sts2_content::v0_107_1::V0_107_1;
+    use sts2_content::v0_107_1::cards::{Cards as Card, RegentCard};
+    use sts2_core::CardIdent;
+
+    use super::super::live::{CardIds, CardInstance};
+    use super::{Cards, Pile};
+
+    /// The fight's first draw puts the innate cards on top.
+    ///
+    /// Two of them, so the order they end up in is visible. Each is moved to
+    /// the top in turn, which leaves the later one in front.
+    #[test]
+    fn the_innate_cards_go_on_top_the_later_first() {
+        let mut ids = CardIds::<V0_107_1>::new();
+        let plain = CardIdent::new(Card::Regent(RegentCard::Strike));
+        // `BigBang.OnUpgrade` is `AddKeyword(Innate)`, so an upgraded one
+        // opens the fight in hand.
+        let innate = CardIdent {
+            upgrade: 1,
+            ..CardIdent::new(Card::Regent(RegentCard::BigBang))
+        };
+        let deck = [plain, innate, plain, plain, plain, innate, plain];
+        let draw: Vec<_> = deck
+            .iter()
+            .map(|card| CardInstance::new(*card, ids.mint()))
+            .collect();
+        let named: Vec<_> = draw.iter().map(|card| card.id).collect();
+        let mut cards = Cards::<V0_107_1>::dealt(&[], &draw);
+
+        assert_eq!(cards.innate_to_top(), 2);
+        let top: Vec<_> = (0..2)
+            .map(|at| cards.get(Pile::Draw, at).expect("a card").id)
+            .collect();
+        assert_eq!(top, [named[5], named[1]]);
     }
 }

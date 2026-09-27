@@ -635,6 +635,53 @@ pub(super) fn carry_setup<V: Rules>(
                                 );
                             }
                         }
+                        sts2_core::HookEffect::ExhaustFromDrawTop { passing_innate } => {
+                            let passed = passing_innate
+                                .then(|| {
+                                    live.cards
+                                        .iter(Pile::Draw)
+                                        .position(|card| !card.face.innate())
+                                })
+                                .flatten();
+                            let top =
+                                passed.or_else(|| (!live.cards.is_empty(Pile::Draw)).then_some(0));
+                            if let Some(at) = top {
+                                let card = live
+                                    .cards
+                                    .get(Pile::Draw, at)
+                                    .expect("a card stands where the walk found it");
+                                let index = num_traits::NumCast::from(at).unwrap_or_else(|| {
+                                    unimplemented!("a pile deeper than a fight can number")
+                                });
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                sts2_core::Fight::act_on(
+                                    &mut board,
+                                    sts2_core::PileAct::Exhaust,
+                                    &[sts2_core::CardAt::new(card.id, Pile::Draw, index)],
+                                );
+                            }
+                        }
+                        // `PowerCmd.Apply` on the player, from a relic.
+                        sts2_core::HookEffect::ApplyToOwner(power, amount)
+                            if matches!(listener, Listener::Relic { .. }) =>
+                        {
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            sts2_core::Fight::apply_to_actor(&mut board, power, amount);
+                        }
                         sts2_core::HookEffect::ShuffleIfNecessary => {
                             if live.cards.is_empty(Pile::Draw) {
                                 super::board::shuffle::<V>(
@@ -693,8 +740,16 @@ pub(super) fn carry_setup<V: Rules>(
                         ),
                     }
                 }
-                let drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
+                let mut drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
                 super::start::after_modifying_hand_draw::<V>(live, relics);
+                // On turn one the innate cards go on top and are all drawn, up
+                // to a full hand. The game sinks a card whose enchantment says
+                // `ShouldStartAtBottomOfDrawPile` first, and `Rules::enchant`
+                // puts no such enchantment on a card.
+                if live.turn == num_traits::one() {
+                    let innate = live.cards.innate_to_top();
+                    drawn = drawn.max(innate).min(MAX_CARDS_IN_HAND);
+                }
                 // A card auto-played as it is drawn can end the fight, and an
                 // ending fight hands the hooks after it no listeners.
                 if let Some(ended) = draw(live, rngs.reborrow(), relics, ascension, drawn, true) {
