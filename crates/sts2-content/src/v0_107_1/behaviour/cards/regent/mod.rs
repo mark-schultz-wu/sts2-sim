@@ -16,6 +16,8 @@ pub enum Resume {
     BegoneTransform,
     /// `Glimmer`, after its owner picked the cards to put back.
     GlimmerPutBack,
+    /// `PhotonCut`, after its owner picked the cards to put back.
+    PhotonCutPutBack,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
@@ -26,6 +28,9 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::Radiate => uncommon::radiate(fight),
         RegentCard::LunarBlast => uncommon::lunar_blast(fight),
         RegentCard::HeavenlyDrill => heavenly_drill(fight),
+        RegentCard::KnockoutBlow => knockout_blow(fight),
+        RegentCard::PhotonCut => photon_cut(fight),
+        RegentCard::SummonForth => summon_forth(fight),
         // `Glimmer`: its `Cards` drawn, then its `PutBack` of the hand onto
         // the top of the draw pile.
         RegentCard::Glimmer => {
@@ -43,6 +48,71 @@ pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V>
         RegentCard::ManifestAuthority => manifest_authority(fight),
         card => card_plays::regent::on_play(card, fight),
     }
+}
+
+/// Its damage to the target, as one attack.
+fn strike<F: Fight<V>>(fight: &mut F) {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+}
+
+/// `KnockoutBlow`: its damage to the target, then its stars where the hit
+/// killed it.
+fn knockout_blow<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CreatureView as _;
+
+    let target = fight.target();
+    strike(fight);
+    let standing = fight
+        .creatures()
+        .any(|creature| creature.id() == target && creature.alive());
+    if !standing {
+        fight.gain_stars(fight.var(CardVar::Stars));
+    }
+    Played::Done
+}
+
+/// `PhotonCut`: its damage to the target, its `Cards` drawn, then its
+/// `PutBack` of the hand onto the top of the draw pile.
+fn photon_cut<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    strike(fight);
+    fight.draw(fight.var(CardVar::Cards));
+    let count = usize::try_from(fight.var(CardVar::PutBack))
+        .ok()
+        .and_then(nonmax::NonMaxUsize::new)
+        .expect("a count of cards is not negative");
+    Played::Asking {
+        pile: sts2_core::Pile::Hand,
+        selection: sts2_core::Selection::Exactly(count),
+        at: super::super::Resume::Card(super::Resume::Regent(Resume::PhotonCutPutBack)),
+    }
+}
+
+/// `SummonForth`: every Sovereign Blade of its owner's outside the hand into
+/// the hand, then its `Forge`.
+fn summon_forth<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+    use sts2_core::Pile;
+
+    let blade = Cards::Token(TokenCard::SovereignBlade);
+    let blades: Vec<_> = [Pile::Draw, Pile::Discard, Pile::Exhaust]
+        .into_iter()
+        .flat_map(|pile| fight.cards_in(pile))
+        .filter(|&card| fight.card_ident(card).card == blade)
+        .collect();
+    fight.act_on(sts2_core::PileAct::IntoHand, &blades);
+    fight.forge(blade, CardVar::Damage, fight.var(CardVar::Forge));
+    Played::Done
 }
 
 /// `HeavenlyDrill`: its damage to the target, once for each energy its X
@@ -124,7 +194,7 @@ pub(super) fn resume_play<F: Fight<V>>(
     match at {
         Resume::BegoneTransform => common::begone_transform(fight, chosen),
         // `CardPileCmd.Add` onto the top of the draw pile.
-        Resume::GlimmerPutBack => {
+        Resume::GlimmerPutBack | Resume::PhotonCutPutBack => {
             fight.act_on(sts2_core::PileAct::OntoDrawTop, chosen.as_slice());
             Played::Done
         }

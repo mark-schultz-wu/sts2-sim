@@ -44,6 +44,12 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
         StatusCard::Infection | StatusCard::Burn | StatusCard::Wither | StatusCard::Toxic => {
             infection(fight)
         }
+        // `Beckon`: its `HpLoss` off its holder, unblockable, and then it goes
+        // to the discard pile.
+        StatusCard::Beckon => {
+            fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
+            fight.discard_this();
+        }
         card => card_plays::status::on_turn_end(card, fight),
     }
 }

@@ -1,0 +1,8 @@
+# Finisher hits once for each attack its owner finished this turn: a
+# Strike and a Neutralize make two.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"grant","card":"FINISHER"}
+{"cmd":"play_card","index":5,"target":1}

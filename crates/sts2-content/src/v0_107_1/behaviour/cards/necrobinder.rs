@@ -299,6 +299,15 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Eradicate => eradicate(fight),
         NecrobinderCard::GraveWarden => grave_warden(fight),
         NecrobinderCard::Dirge => dirge(fight),
+        // `NoEscape`: its calculated Doom on the target.
+        NecrobinderCard::NoEscape => {
+            use super::super::super::generated::powers::Power;
+
+            let target = fight.target();
+            let doom = sts2_core::PowerAmount::Counted(fight.var(CardVar::CalculatedDoom));
+            fight.apply_power(target, Power::DoomPower, doom);
+            Played::Done
+        }
         // `Undeath`: its block, then a clone of itself into the discard pile.
         NecrobinderCard::Undeath => {
             let block = fight.resolve(Effect::GainBlock {
