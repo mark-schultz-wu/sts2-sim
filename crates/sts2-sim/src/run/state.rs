@@ -1293,8 +1293,12 @@ impl<V: Rules> State<V> {
         let mut effects = effects.into_iter();
         while let Some(effect) = effects.next() {
             let pickup = match effect {
-                HookEffect::UpgradeRandomDeckCards { count, stream } => {
-                    self.upgrade_random_deck_cards(count, stream);
+                HookEffect::UpgradeRandomDeckCards {
+                    count,
+                    stream,
+                    kind,
+                } => {
+                    self.upgrade_random_deck_cards(count, stream, kind);
                     continue;
                 }
                 HookEffect::GainGold(amount) => {
@@ -2120,12 +2124,21 @@ impl<V: Rules> State<V> {
         &self,
         hook: sts2_core::ModelHook,
     ) -> impl Iterator<Item = V::Card> + '_ {
+        if self.player.relics.hear(sts2_core::Overrides::of(hook)) {
+            unimplemented!("a relic listening to {} outside a fight", hook.name());
+        }
+        self.deck_cards_hearing(hook)
+    }
+
+    /// [`Self::deck_hearing`], for a hook the caller also raises on the belt.
+    ///
+    /// # Panics
+    ///
+    /// A deck card's enchantment listening to `hook`.
+    fn deck_cards_hearing(&self, hook: sts2_core::ModelHook) -> impl Iterator<Item = V::Card> + '_ {
         use sts2_core::{CardTable as _, EnchantmentTable as _};
 
         let hooks = sts2_core::Overrides::of(hook);
-        if self.player.relics.hear(hooks) {
-            unimplemented!("a relic listening to {} outside a fight", hook.name());
-        }
         if self.player.deck.iter().any(|held| {
             held.ident
                 .enchantment
@@ -2672,8 +2685,17 @@ impl<V: Rules> State<V> {
         // `Hook.ModifyUnknownMapPointRoomTypes`, which a deck card can narrow
         // to an event alone. The roll still draws.
         let narrowed = self
-            .deck_hearing(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes)
+            .deck_cards_hearing(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes)
             .any(|card| V::deck_card_narrows_unknown_rooms(card, self.act));
+        // The same hook on the belt, where a relic takes a room type out.
+        let mut removed: SmallVec<[V::RoomType; 2]> = SmallVec::new();
+        for effect in self.notify_belt(sts2_core::EventHook::UnknownRoomTypes) {
+            match effect {
+                sts2_core::HookEffect::RemoveRoomType(room) => removed.push(room),
+                effect => unimplemented!("a relic asking for {effect:?} as an unknown room rolls"),
+            }
+        }
+        let removes = |room| removed.contains(&room);
         self.unheard(sts2_core::ModelHook::ModifyOddsIncreaseForUnrolledRoomType);
         let node = |at| self.map.at(at).expect("a map edge leads to a node");
         let after = &node(to).to;
@@ -2683,7 +2705,14 @@ impl<V: Rules> State<V> {
                 .all(|&at| node(at).kind == V::MapPointType::SHOP);
         // The room the run leaves is the one it still stands in.
         let in_shop = matches!(self.phase, Phase::Shop { .. });
-        let barred = [narrowed, narrowed, narrowed || in_shop || all_shops];
+        let barred = [
+            narrowed || removes(<V::RoomType as sts2_core::RoomKinds>::MONSTER),
+            narrowed || removes(<V::RoomType as sts2_core::RoomKinds>::TREASURE),
+            narrowed
+                || in_shop
+                || all_shops
+                || removes(<V::RoomType as sts2_core::RoomKinds>::SHOP),
+        ];
         let odds = &mut self.unknown_odds;
         let rooms = [
             UnknownRoom::Monster,
@@ -3969,14 +3998,23 @@ impl<V: Rules> State<V> {
 }
 
 impl<V: Rules> State<V> {
-    fn upgrade_random_deck_cards(&mut self, count: usize, stream: V::RunRngType) {
+    fn upgrade_random_deck_cards(
+        &mut self,
+        count: usize,
+        stream: V::RunRngType,
+        kind: Option<sts2_core::CardKind>,
+    ) {
         use sts2_core::CardTable as _;
         use sts2_core::rng::GameRng as _;
 
         // `CardSelectCmd` shuffles the upgradable cards alone, so a card
         // already at its highest neither takes a place nor moves the shuffle.
         let deck = self.player.deck.clone();
-        let mut upgradable: Vec<usize> = self.upgradable().map(|(at, _)| at).collect();
+        let mut upgradable: Vec<usize> = self
+            .upgradable()
+            .filter(|(_, card)| kind.is_none_or(|kind| V::card_kind(card.card) == Some(kind)))
+            .map(|(at, _)| at)
+            .collect();
         self.streams
             .run(stream)
             .stable_shuffle_by_key(&mut upgradable, |&at| {

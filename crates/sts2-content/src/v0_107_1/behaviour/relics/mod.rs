@@ -11,11 +11,14 @@
 //! Every hook dispatches on the state alone. The state names the relic that
 //! saved it, so no caller can pair a relic with another relic's model.
 
+mod akabeko;
 mod alchemical_coffer;
 mod anchor;
 mod arcane_scroll;
 mod archaic_tooth;
 mod astrolabe;
+mod bag_of_marbles;
+mod bag_of_preparation;
 mod biiig_hug;
 mod bing_bong;
 mod black_blood;
@@ -23,6 +26,7 @@ mod black_star;
 mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
+mod bronze_scales;
 mod burning_blood;
 mod byrdpip;
 mod calling_bell;
@@ -34,6 +38,7 @@ mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
 mod empty_cage;
+mod festive_popper;
 mod fishing_rod;
 mod glass_eye;
 mod golden_pearl;
@@ -42,11 +47,13 @@ mod gremlin_horn;
 mod hefty_tablet;
 mod infused_core;
 mod intimidating_helmet;
+mod juzu_bracelet;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
 mod lost_coffer;
 mod lost_wisp;
+mod meal_ticket;
 mod mercury_hourglass;
 mod mr_struggles;
 mod neows_talisman;
@@ -75,12 +82,15 @@ mod seal_of_gold;
 mod sozu;
 mod stone_humidifier;
 mod storybook;
+mod strawberry;
 mod strike_dummy;
 mod sword_of_stone;
 mod toasty_mittens;
 mod touch_of_orobas;
 mod tungsten_rod;
+mod vajra;
 mod very_hot_cocoa;
+mod war_paint;
 mod winged_boots;
 mod wongos_mystery_ticket;
 mod yummy_cookie;
@@ -183,6 +193,16 @@ pub enum State {
     StrikeDummy,
     SwordOfStone(sword_of_stone::State),
     VeryHotCocoa,
+    BagOfMarbles,
+    Akabeko,
+    FestivePopper,
+    BronzeScales,
+    Vajra,
+    MealTicket,
+    Strawberry,
+    WarPaint,
+    JuzuBracelet,
+    BagOfPreparation,
     WingedBoots(winged_boots::State),
     YummyCookie,
 }
@@ -335,6 +355,22 @@ pub(crate) fn event_hook(
         State::StrikeDummy => strike_dummy::event_hook(hook),
         State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
         State::VeryHotCocoa => very_hot_cocoa::event_hook(hook, asked),
+        State::BagOfMarbles => bag_of_marbles::event_hook(hook, asked),
+        State::Akabeko => akabeko::event_hook(hook, asked),
+        State::FestivePopper => festive_popper::event_hook(hook, asked),
+        State::BronzeScales => bronze_scales::event_hook(hook, asked),
+        State::Vajra => vajra::event_hook(hook, asked),
+        State::MealTicket => meal_ticket::event_hook(hook, asked),
+        State::Strawberry => strawberry::event_hook(hook, asked),
+        State::WarPaint => war_paint::event_hook(hook, asked),
+        State::JuzuBracelet => juzu_bracelet::event_hook(hook, asked),
+        // Its one hook is `ModifyHandDraw`, which the fight asks of it
+        // rather than tells it. `AfterObtained` reaches every relic, and its
+        // own does nothing.
+        State::BagOfPreparation => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what BagOfPreparation does for {hook:?}"),
+        },
         State::WingedBoots(state) => winged_boots::event_hook(state, hook),
         State::YummyCookie => yummy_cookie::event_hook(hook, asked),
     }
@@ -365,6 +401,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::PollinousCore(state) => pollinous_core::modify_hook(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
+        State::BagOfPreparation => bag_of_preparation::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
         State::PaelsBlood => paels_blood::modify_hook(hook),
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
@@ -436,6 +473,15 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Storybook
         | State::SwordOfStone(_)
         | State::VeryHotCocoa
+        | State::BagOfMarbles
+        | State::Akabeko
+        | State::FestivePopper
+        | State::BronzeScales
+        | State::Vajra
+        | State::MealTicket
+        | State::Strawberry
+        | State::WarPaint
+        | State::JuzuBracelet
         | State::WingedBoots(_)
         | State::YummyCookie => unimplemented!("what {state:?} does for {hook:?}"),
     }
@@ -524,6 +570,16 @@ impl sts2_core::RelicModel<V> for State {
             Relic::StrikeDummy => State::StrikeDummy,
             Relic::SwordOfStone => State::SwordOfStone(sword_of_stone::State::default()),
             Relic::VeryHotCocoa => State::VeryHotCocoa,
+            Relic::BagOfMarbles => State::BagOfMarbles,
+            Relic::Akabeko => State::Akabeko,
+            Relic::FestivePopper => State::FestivePopper,
+            Relic::BronzeScales => State::BronzeScales,
+            Relic::Vajra => State::Vajra,
+            Relic::MealTicket => State::MealTicket,
+            Relic::Strawberry => State::Strawberry,
+            Relic::WarPaint => State::WarPaint,
+            Relic::JuzuBracelet => State::JuzuBracelet,
+            Relic::BagOfPreparation => State::BagOfPreparation,
             Relic::WingedBoots => State::WingedBoots(winged_boots::State::default()),
             Relic::YummyCookie => State::YummyCookie,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
