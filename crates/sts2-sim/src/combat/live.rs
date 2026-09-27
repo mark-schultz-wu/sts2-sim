@@ -914,6 +914,10 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
     }
 
     /// The other side's creatures, a pet among them.
+    fn player(&self) -> CombatId {
+        super::board::player::<V>(self.creatures)
+    }
+
     fn living_opponents(&self, creature: CombatId) -> smallvec::SmallVec<[CombatId; 8]> {
         let Some(side) = self
             .creatures
@@ -1027,9 +1031,10 @@ pub(crate) struct Telegraphed<V: Rules> {
 
 /// How many intents one move telegraphs.
 ///
-/// An attack that also blocks draws two, and no ported move draws three.
-/// [`sts2_core::NextMove`] inlines to the same number and says why.
-const INTENTS: usize = 2;
+/// The Infested Prism's Pulsate draws three: an attack, a buff and a block.
+/// That is the most the table holds. [`sts2_core::NextMove`] inlines to the
+/// same number.
+const INTENTS: usize = 3;
 
 impl<V: Rules> Telegraphed<V> {
     /// `UNSET_MOVE`, which a pet shows and never performs.
@@ -2333,13 +2338,13 @@ mod sizes {
         assert_eq!(size_of::<Landing>(), 4);
         assert_eq!(size_of::<Option<Landing>>(), 4, "the niche carries the tag");
         assert_eq!(size_of::<Intended<V>>(), 6);
-        assert_eq!(size_of::<Telegraphed<V>>(), 14);
+        assert_eq!(size_of::<Telegraphed<V>>(), 20);
         assert_eq!(
             size_of::<Option<Telegraphed<V>>>(),
-            14,
+            20,
             "the move name carries the tag"
         );
         assert_eq!(size_of::<Stacked>(), 2);
-        assert_eq!(size_of::<Fighter<V>>(), 36);
+        assert_eq!(size_of::<Fighter<V>>(), 40);
     }
 }

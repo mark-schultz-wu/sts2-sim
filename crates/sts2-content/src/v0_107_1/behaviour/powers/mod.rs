@@ -671,6 +671,27 @@ pub(crate) fn modify_hook(
             },
         ) if target == Some(holder) => Modify::Scaled(FLUTTER),
         (Power::FlutterPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
+        // `TaintedPower.ModifyDamageAdditive`: its stack onto a powered attack
+        // on its owner.
+        (
+            Power::TaintedPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageAdditive {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Added(amount),
+        (
+            Power::TaintedPower,
+            PowerAmount::Endless,
+            ModifyHook::DamageAdditive {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => unimplemented!("an endless Tainted"),
+        (Power::TaintedPower, _, ModifyHook::DamageAdditive { .. }) => Modify::Nothing,
         // `HardToKillPower.ModifyDamageCap`: a hit on its owner capped at its
         // stack, whatever the hit's props.
         (
@@ -1797,6 +1818,58 @@ pub(crate) fn event_hook(
             EventHook::DamageReceived { target, .. },
         ) if target == holder => unimplemented!("an endless Personal Hive"),
         (Power::PersonalHivePower, _, EventHook::DamageReceived { .. }) => None,
+        // `VitalSparkPower.BeforeCombatStart`: Tainted by its stack on every
+        // Skill the player holds.
+        (Power::VitalSparkPower, _, EventHook::CombatStarting) => Some(HookEffect::Afflict {
+            to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Skill),
+            affliction: Affliction::Tainted,
+        }),
+        // `VitalSparkPower.AfterCardEnteredCombat`: Tainted on a Skill that
+        // arrives with no affliction.
+        (Power::VitalSparkPower, _, EventHook::CardEnteredCombat { at, card, .. })
+            if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill) =>
+        {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::One(at),
+                affliction: Affliction::Tainted,
+            })
+        }
+        (Power::VitalSparkPower, _, EventHook::CardEnteredCombat { .. }) => None,
+        // `VitalSparkPower.AfterCardPlayed`: Tainted Power by its stack on the
+        // player, from nobody, once a Tainted card's play is over.
+        (
+            Power::VitalSparkPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlayed {
+                affliction: Some(Affliction::Tainted),
+                ..
+            },
+        ) => Some(HookEffect::ApplyPower {
+            target: fight.player(),
+            power: Power::TaintedPower,
+            amount: PowerAmount::Counted(amount),
+        }),
+        (
+            Power::VitalSparkPower,
+            PowerAmount::Endless,
+            EventHook::CardPlayed {
+                affliction: Some(Affliction::Tainted),
+                ..
+            },
+        ) => unimplemented!("an endless Vital Spark"),
+        (Power::VitalSparkPower, _, EventHook::CardPlayed { .. }) => None,
+        // `VitalSparkPower.AfterRemoved`: Tainted off every card that has it.
+        (Power::VitalSparkPower, _, EventHook::Removed) => Some(HookEffect::ClearAffliction(
+            sts2_core::Writing::EveryAfflictedWith(Affliction::Tainted),
+        )),
+        // `AfterPowerAmountChanged` writes its stack onto each Tainted card's
+        // own amount, which nothing here reads.
+        (Power::VitalSparkPower, _, EventHook::PowerAmountChanged { .. }) => None,
+        // `TaintedPower.AfterSideTurnEnd`: gone as the enemies' turn ends.
+        (Power::TaintedPower, _, EventHook::SideTurnEnd { side: CombatSide::Enemy }) => {
+            Some(HookEffect::Remove)
+        }
+        (Power::TaintedPower, _, EventHook::SideTurnEnd { .. }) => None,
         (
             Power::VulnerablePower
             | Power::WeakPower

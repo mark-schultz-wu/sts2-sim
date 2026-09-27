@@ -50,6 +50,13 @@ pub(super) fn starting_powers(
         Monster::BowlbugEgg | Monster::SpinyToad | Monster::Ovicopter => Vec::new(),
         Monster::Chomper => vec![(Power::ArtifactPower, PowerAmount::Counted(2))],
         Monster::Entomancer => vec![(Power::PersonalHivePower, PowerAmount::Counted(1))],
+        Monster::InfestedPrism => {
+            let spark = match ascension.has(AscensionLevel::DeadlyEnemies) {
+                true => 3,
+                false => 2,
+            };
+            vec![(Power::VitalSparkPower, PowerAmount::Counted(spark))]
+        }
         Monster::Parafright => vec![(Power::IllusionPower, PowerAmount::Counted(1))],
         // `ToughEgg.AfterAddedToRoom`, for an egg not yet hatched: Hatch at
         // two while the enemies take their turn, and at one otherwise.

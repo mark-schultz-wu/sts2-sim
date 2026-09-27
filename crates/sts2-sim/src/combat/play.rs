@@ -949,10 +949,20 @@ fn finished<V: Rules, S: LendsCombat>(
         relics,
     } = fighting;
     next.history.finish(card, id, ethereal);
+    // The copy stays in the play pile until its play is over.
+    let affliction = next
+        .cards
+        .named(id)
+        .and_then(|held| held.face.ident.affliction);
     let asked = super::listen::notify::<V>(
         next,
         relics,
-        sts2_core::EventHook::CardPlayed { card, id, ethereal },
+        sts2_core::EventHook::CardPlayed {
+            card,
+            id,
+            affliction,
+            ethereal,
+        },
     );
     if !asked.is_empty() {
         let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
@@ -971,6 +981,19 @@ fn finished<V: Rules, S: LendsCombat>(
                 ) => {
                     next.gain_unpowered_block(owner, amount);
                     next.remove_power(owner, power);
+                }
+                // `PowerCmd.Apply` from nobody.
+                (
+                    super::listen::Listener::Power { .. },
+                    sts2_core::HookEffect::ApplyPower {
+                        target,
+                        power,
+                        amount,
+                    },
+                ) => {
+                    let mut board =
+                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                    board.land(target, power, amount, None);
                 }
                 (_, effect) => rest.push(effect),
             }

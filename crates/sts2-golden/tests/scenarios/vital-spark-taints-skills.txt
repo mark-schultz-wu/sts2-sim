@@ -1,0 +1,12 @@
+# The Infested Prism enters with Vital Spark at two. Before the fight
+# starts, every Skill the player holds turns Tainted. Playing a Tainted
+# Defend gives the player Tainted Power at two, which adds two to each
+# powered attack on them until the enemies' turn ends. Pulsate draws three
+# intents: an attack, a buff and a block.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"INFESTED_PRISMS_ELITE"}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
