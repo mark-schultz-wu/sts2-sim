@@ -1,0 +1,5 @@
+# Quadcast evokes the first orb four times, and it leaves on the last.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"QUADCAST"}
+{"cmd":"play_card","index":5}

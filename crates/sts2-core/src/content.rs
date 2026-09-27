@@ -1984,6 +1984,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("adding orb slots")
     }
 
+    /// `OrbCmd.RemoveSlots`: `amount` fewer orb slots, and never below none.
+    /// The orbs past the new capacity leave from the back, evoking nothing.
+    /// Nothing once the fight is ending.
+    fn remove_orb_slots(&mut self, _amount: V::Number) {
+        unimplemented!("removing orb slots")
+    }
+
     /// How many orbs the player holds, which is `OrbQueue.Orbs.Count`.
     fn orbs_held(&self) -> usize {
         unimplemented!("counting orbs")

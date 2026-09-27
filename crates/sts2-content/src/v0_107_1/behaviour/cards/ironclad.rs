@@ -85,6 +85,13 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         IroncladCard::Pillage => pillage(fight),
         IroncladCard::TrueGrit => true_grit(fight),
         IroncladCard::Dismantle => dismantle(fight),
+        // `BloodWall`: its `HpLoss` off its owner, unblockable, then its
+        // block.
+        IroncladCard::BloodWall => {
+            fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
+            block(fight);
+            Played::Done
+        }
         IroncladCard::Armaments => armaments(fight),
         // `Havoc`: the top card of the draw pile auto-played, and exhausted.
         IroncladCard::Havoc => {

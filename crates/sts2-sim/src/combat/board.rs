@@ -2781,6 +2781,21 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         orbs.capacity = num_traits::cast(capacity + added).expect("an orb capacity fits a count");
     }
 
+    fn remove_orb_slots(&mut self, amount: V::Number) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let Some(orbs) = self.live.orbs.as_mut() else {
+            return;
+        };
+        let capacity: V::Number =
+            num_traits::cast(orbs.capacity).expect("an orb capacity fits a game number");
+        let left = (capacity - amount.min(capacity)).max(V::Number::zero());
+        orbs.capacity = num_traits::cast(left).expect("an orb capacity fits a count");
+        let kept: usize = num_traits::cast(left).expect("an orb capacity fits a length");
+        orbs.queue.truncate(kept);
+    }
+
     fn damage_unblockable(&mut self, target: CombatId, amount: V::Number) {
         self.hit_unpowered(Some(self.actor), target, amount, true);
     }

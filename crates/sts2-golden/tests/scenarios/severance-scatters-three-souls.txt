@@ -1,0 +1,6 @@
+# Severance hits, then puts a Soul into the draw pile at random, one into
+# the discard pile and one into hand.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SEVERANCE"}
+{"cmd":"play_card","index":5,"target":1}

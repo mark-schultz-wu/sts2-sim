@@ -1,0 +1,5 @@
+# Blood Wall costs two hit points, unblockable, then gives its block.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BLOOD_WALL"}
+{"cmd":"play_card","index":5}

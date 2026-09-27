@@ -1,0 +1,6 @@
+# Negative Pulse gives its block and puts its Doom on each enemy that can
+# be hit.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"NEGATIVE_PULSE"}
+{"cmd":"play_card","index":5}

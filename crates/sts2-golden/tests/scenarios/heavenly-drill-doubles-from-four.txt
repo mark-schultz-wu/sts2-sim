@@ -1,0 +1,10 @@
+# Heavenly Drill hits once for each energy its X spent, and twice as often
+# from four on. Lantern gives the first turn its fourth energy.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"LANTERN"}
+{"cmd":"fight","encounter":"BYGONE_EFFIGY_ELITE"}
+{"cmd":"grant","card":"HEAVENLY_DRILL"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"HEAVENLY_DRILL"}
+{"cmd":"play_card","index":5,"target":1}
