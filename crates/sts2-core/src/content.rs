@@ -99,6 +99,16 @@ pub enum EncounterRoster<T> {
     Configured,
 }
 
+/// One creature a fixed roster names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RosterEntry<M, Id> {
+    pub monster: M,
+    /// The move it opens on, where the encounter writes one.
+    pub opens: Option<Id>,
+    /// Its place in `Encounter.Slots`, where the encounter names slots.
+    pub slot: Option<u8>,
+}
+
 /// What a table says about an encounter, beyond its row.
 ///
 /// The two keys a coverage measurement cuts on. A flat count over 96 encounters
@@ -138,9 +148,15 @@ pub trait EncounterTable: Table {
     fn possible_monsters(self) -> impl Iterator<Item = Self::Monster>;
 
     /// How the encounter chooses its opening roster. A fixed one names each
-    /// creature, and the move it opens on where the encounter writes one.
-    fn roster(self)
-    -> EncounterRoster<impl Iterator<Item = (Self::Monster, Option<Self::MoveId>)>>;
+    /// creature and the move it opens on where the encounter writes one. It
+    /// names the slot each stands in where the encounter has slots.
+    fn roster(
+        self,
+    ) -> EncounterRoster<impl Iterator<Item = RosterEntry<Self::Monster, Self::MoveId>>>;
+
+    /// How many slots `Encounter.Slots` names, which a creature added
+    /// mid-fight is placed among.
+    fn slots(self) -> u8;
 
     /// The encounter entry’s hash, already cast for wrapping seed arithmetic.
     fn seed_name(self) -> &'static str;
@@ -1696,6 +1712,16 @@ pub trait Fight<V: ContentVersion> {
     /// those and folds it on every read.
     fn modify_card(&mut self, card: crate::CardAt<V>, change: Change<V>, lasting: Lasting);
 
+    /// `CreatureCmd.Add<M>(CombatState, slot)` for the last of
+    /// `Encounter.Slots` no enemy stands in. `SortEnemiesBySlotName` then
+    /// places it among the enemies by slot. Nothing, with no slot free.
+    ///
+    /// The monster rolls its hit points when it arrives. It does not advertise
+    /// a move until the enemy side next prepares for a turn.
+    fn summon_into_last_free_slot(&mut self, _monster: V::Monster) -> Option<crate::CombatId> {
+        unimplemented!("a monster added into a free slot")
+    }
+
     /// `CreatureCmd.Add<M>(CombatState, position)`.
     ///
     /// The monster rolls its hit points when it arrives. It does not advertise
@@ -1762,6 +1788,21 @@ pub trait Fight<V: ContentVersion> {
     /// listeners leave it. `PassiveVal` and `EvokeVal` read theirs through
     /// this each time.
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number;
+
+    /// `PowerCmd.Remove` of `power` from `creature`, where it holds one.
+    fn remove_power(&mut self, _creature: crate::CombatId, _power: V::Power) {
+        unimplemented!("removing a power")
+    }
+
+    /// `CreatureCmd.SetMaxAndCurrentHp`: both numbers at once.
+    fn set_max_and_current_hp(&mut self, _creature: crate::CombatId, _hp: V::Health) {
+        unimplemented!("setting a creature's hit points")
+    }
+
+    /// `RunRng.Niche.NextInt(min, max)`, which stops short of `max`.
+    fn niche_int(&mut self, _min: V::Number, _max: V::Number) -> V::Number {
+        unimplemented!("a draw off the niche stream")
+    }
 
     /// `CreatureCmd.Escape` on the actor: its powers go with no hook, and it
     /// leaves the fight without dying.
@@ -3895,6 +3936,9 @@ pub struct MonsterSpawn<E> {
     pub position: nonmax::NonMaxU8,
     /// How many the encounter built. Never zero: a fight has a monster in it.
     pub roster_size: nonmax::NonMaxU8,
+    /// `GetTeammatesOf(Creature).Count(IsAlive)`: how many on its side stand
+    /// as it rolls, itself included.
+    pub standing: u8,
 }
 
 /// One creature an encounter's roster names, as `GenerateMonsters` returns it.
@@ -3912,6 +3956,9 @@ pub struct Spawned<V: ContentVersion> {
     /// `None` is the monster's own table entry, which is what a roster that
     /// writes nothing leaves the machine to open on.
     pub opens_on: Option<V::MoveId>,
+    /// `SlotName`, as its place in `Encounter.Slots`, where the roster names
+    /// one.
+    pub slot: Option<u8>,
 }
 
 impl<V: ContentVersion> Spawned<V> {
@@ -3920,6 +3967,7 @@ impl<V: ContentVersion> Spawned<V> {
         Self {
             monster,
             opens_on: None,
+            slot: None,
         }
     }
 
@@ -3928,6 +3976,7 @@ impl<V: ContentVersion> Spawned<V> {
         Self {
             monster,
             opens_on: Some(opens_on),
+            slot: None,
         }
     }
 }
@@ -4741,9 +4790,12 @@ pub trait Rules: Hooks {
     ///
     /// The level is read the way a move's own numbers are: a monster whose
     /// `AfterAddedToRoom` scales what it applies asks for it.
+    ///
+    /// `side` is `CombatState.CurrentSide` as the monster arrives.
     fn monster_starting_powers(
         monster: Self::Monster,
         ascension: Self::AscensionLevel,
+        side: Self::CombatSide,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
     /// What one potion does when it is drunk, which is `PotionModel.OnUse`.

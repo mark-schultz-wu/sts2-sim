@@ -18,9 +18,10 @@ pub(crate) fn opening<V: Rules>(
 ) -> Result<Vec<Spawned<V>>, Error> {
     match encounter.roster() {
         EncounterRoster::Fixed(monsters) => Ok(monsters
-            .map(|(monster, opens)| match opens {
-                Some(opens) => Spawned::opening_on(monster, opens),
-                None => Spawned::new(monster),
+            .map(|entry| Spawned {
+                monster: entry.monster,
+                opens_on: entry.opens,
+                slot: entry.slot,
             })
             .collect()),
         EncounterRoster::Random => {

@@ -10,6 +10,7 @@ use super::super::super::generated::enchantments::Enchantment;
 use super::super::super::generated::monster_moves;
 use super::super::super::generated::monsters::{Monster, MoveId};
 use super::super::super::generated::powers::Power;
+use super::super::super::generated::runstate::CombatSide;
 use super::{Number, V};
 
 /// `FlutterMove`'s `PowerCmd.Apply<FlutterPower>(…, 5m, …)`.
@@ -22,6 +23,7 @@ type Health = <V as sts2_core::ContentVersion>::Health;
 pub(super) fn starting_powers(
     monster: Monster,
     ascension: AscensionLevel,
+    side: CombatSide,
 ) -> Option<Vec<(Power, PowerAmount<Number>)>> {
     // `PlatingPower`'s own amount, which is also the block it opens with.
     const PLATING: Number = 15;
@@ -47,6 +49,15 @@ pub(super) fn starting_powers(
         // loop beside it.
         Monster::BowlbugEgg | Monster::SpinyToad | Monster::Ovicopter => Vec::new(),
         Monster::Chomper => vec![(Power::ArtifactPower, PowerAmount::Counted(2))],
+        // `ToughEgg.AfterAddedToRoom`, for an egg not yet hatched: Hatch at
+        // two while the enemies take their turn, and at one otherwise.
+        Monster::ToughEgg => {
+            let hatch = match side {
+                CombatSide::Enemy => 2,
+                _ => 1,
+            };
+            vec![(Power::HatchPower, PowerAmount::Counted(hatch))]
+        }
         Monster::LouseProgenitor => {
             vec![(
                 Power::CurlUpPower,
@@ -111,6 +122,7 @@ pub(super) fn health_after_added(
 pub(super) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
     monster: Monster,
     at: u8,
+    spawn: sts2_core::MonsterSpawn<super::super::super::generated::encounters::Encounter>,
     powers: &[sts2_core::Listener<'_, V, P>],
 ) -> Result<u8, sts2_core::ContentError> {
     let held = |wanted| {
@@ -127,6 +139,11 @@ pub(super) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
         Monster::SlumberingBeetle => match held(Power::SlumberPower) {
             Some(_) => MoveId::SnoreMove,
             None => MoveId::RollOutMove,
+        },
+        // `CanLay`: three or fewer stand on its side, itself included.
+        Monster::Ovicopter => match spawn.standing <= LAYS_WHILE {
+            true => MoveId::LayEggsMove,
+            false => MoveId::NutritionalPasteMove,
         },
         monster => unimplemented!("what {monster:?} asks the fight at state {at}"),
     };
@@ -153,6 +170,44 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         (Monster::LouseProgenitor, MoveId::PounceMove) => fight.attack_opponents(),
         // `ToxicMove`: `CardPileCmd.AddToCombatAndPreview<Toxic>(targets,
         // Hand, 2)`, into the hand of the one player.
+        // `LayEggsMove`: three times, `CreatureCmd.Add<ToughEgg>` into the
+        // last slot no enemy holds, then Minion on it.
+        (Monster::Ovicopter, MoveId::LayEggsMove) => {
+            for _ in 0..EGGS {
+                if let Some(egg) = fight.summon_into_last_free_slot(Monster::ToughEgg) {
+                    fight.apply_power(egg, Power::MinionPower, PowerAmount::Counted(1));
+                }
+            }
+        }
+        // `HatchMove`: Hatch goes, then every other power but Minion, then
+        // `Hatch`: its hit points set to a draw off the niche stream.
+        (Monster::ToughEgg, MoveId::HatchMove) => {
+            use sts2_core::{CreatureView as _, Table as _};
+
+            let egg = fight.actor();
+            fight.remove_power(egg, Power::HatchPower);
+            let others: Vec<Power> = fight
+                .creatures()
+                .find(|creature| creature.id() == egg)
+                .map(|creature| {
+                    Power::ALL
+                        .iter()
+                        .copied()
+                        .filter(|&power| power != Power::MinionPower)
+                        .filter(|&power| creature.power(power).is_some())
+                        .collect()
+                })
+                .unwrap_or_default();
+            for power in others {
+                fight.remove_power(egg, power);
+            }
+            let (min, max) = match fight.ascension().has(AscensionLevel::ToughEnemies) {
+                true => (20, 23),
+                false => (19, 22),
+            };
+            let hp = fight.niche_int(min, max);
+            fight.set_max_and_current_hp(egg, num_traits::cast(hp).expect("a hatchling's health"));
+        }
         (Monster::Myte, MoveId::ToxicMove) => {
             fight.add_generated_cards(
                 sts2_core::CardIdent::new(Cards::Status(StatusCard::Toxic)),
@@ -264,6 +319,12 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
     });
     fight.heal(actor, amount);
 }
+
+/// `LayEggsMove`'s loop, which lays three.
+const EGGS: usize = 3;
+
+/// `CanLay`'s bound on how many stand on the Ovicopter's side.
+const LAYS_WHILE: u8 = 3;
 
 /// The Thorns `SpikesMove` applies and `ExplosionMove` takes back.
 const SPINES: Number = 5;

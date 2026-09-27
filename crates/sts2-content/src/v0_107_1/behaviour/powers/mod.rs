@@ -1759,6 +1759,19 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Escape Artist")
         }
         (Power::EscapeArtistPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `HatchPower.AfterSideTurnEnd`: `PowerCmd.Decrement` as its owner's
+        // side ends.
+        (Power::HatchPower, PowerAmount::Counted(_), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::Decrement)
+        }
+        (Power::HatchPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Hatch")
+        }
+        (Power::HatchPower, _, EventHook::SideTurnEnd { .. }) => None,
         (
             Power::VulnerablePower
             | Power::WeakPower

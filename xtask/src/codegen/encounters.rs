@@ -851,14 +851,24 @@ fn emit_encounters(
          \x20   /// How the encounter chooses its opening roster.\n\
          \x20   fn roster(\n\
          \x20       self,\n\
-         \x20   ) -> sts2_core::EncounterRoster<impl Iterator<Item = (Monster, Option<MoveId>)>> {{\n\
+         \x20   ) -> sts2_core::EncounterRoster<impl Iterator<Item = sts2_core::RosterEntry<Monster, MoveId>>>\n\
+         \x20   {{\n\
          \x20       match self.data().roster {{\n\
-         \x20           Roster::Fixed(spawns) => sts2_core::EncounterRoster::Fixed(\n\
-         \x20               spawns.iter().map(|spawn| (spawn.monster, spawn.opens)),\n\
-         \x20           ),\n\
+         \x20           Roster::Fixed(spawns) => sts2_core::EncounterRoster::Fixed(spawns.iter().map(|spawn| {{\n\
+         \x20               sts2_core::RosterEntry {{\n\
+         \x20                   monster: spawn.monster,\n\
+         \x20                   opens: spawn.opens,\n\
+         \x20                   slot: spawn.slot.map(|slot| slot as u8),\n\
+         \x20               }}\n\
+         \x20           }})),\n\
          \x20           Roster::Random => sts2_core::EncounterRoster::Random,\n\
          \x20           Roster::Configured => sts2_core::EncounterRoster::Configured,\n\
          \x20       }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// How many slots the encounter names, which `arrivals` counts.\n\
+         \x20   fn slots(self) -> u8 {{\n\
+         \x20       self.data().arrivals\n\
          \x20   }}\n\
          \n\
          \x20   /// The encounter entry hash used by its private RNG.\n\

@@ -1030,6 +1030,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             self.relics,
                             monster,
                             position + offset,
+                            None,
                             self.rngs.niche,
                         );
                         let summoned = self
@@ -2032,6 +2033,28 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn remove_power(&mut self, creature: CombatId, power: V::Power) {
+        self.live.remove_power(creature, power);
+    }
+
+    fn set_max_and_current_hp(&mut self, creature: CombatId, hp: V::Health) {
+        let Some(at) = self.at(creature) else { return };
+        self.live.creatures[at].max_hp = hp;
+        self.live.creatures[at].hp = hp;
+    }
+
+    fn niche_int(&mut self, min: V::Number, max: V::Number) -> V::Number {
+        use sts2_core::rng::GameRng as _;
+
+        let cast = |n: V::Number| -> i32 {
+            num_traits::cast(n).unwrap_or_else(|| unimplemented!("a niche draw at {n:?}"))
+        };
+        let span = sts2_core::rng::Span::new(cast(min), cast(max))
+            .unwrap_or_else(|_| unimplemented!("a niche draw from {min:?} to {max:?}"));
+        num_traits::cast(self.rngs.niche.next_int_range(span))
+            .expect("a draw inside the span is a game number")
+    }
+
     fn escape(&mut self) {
         let id = self.actor;
         let Some(at) = self.at(id) else { return };
@@ -2654,7 +2677,51 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
-        super::monster::summon(self.live, self.relics, monster, position, self.rngs.niche)
+        super::monster::summon(
+            self.live,
+            self.relics,
+            monster,
+            position,
+            None,
+            self.rngs.niche,
+        )
+    }
+
+    fn summon_into_last_free_slot(&mut self, monster: V::Monster) -> Option<CombatId> {
+        use sts2_core::EncounterTable as _;
+
+        // A slot counts as held by an enemy still in the fight, and only the
+        // living keep a move graph.
+        let held: SmallVec<[u8; 8]> = self
+            .live
+            .machines
+            .iter()
+            .filter(|held| {
+                self.live
+                    .creatures
+                    .iter()
+                    .any(|creature| creature.id == held.creature && creature.alive)
+            })
+            .filter_map(|held| held.slot)
+            .collect();
+        let slot = (0..self.live.encounter.slots())
+            .rev()
+            .find(|slot| !held.contains(slot))?;
+        // `SortEnemiesBySlotName`: after every enemy in an earlier slot.
+        let position = self
+            .live
+            .machines
+            .iter()
+            .filter(|held| held.slot.is_some_and(|held| held < slot))
+            .count();
+        Some(super::monster::summon(
+            self.live,
+            self.relics,
+            monster,
+            position,
+            Some(slot),
+            self.rngs.niche,
+        ))
     }
 }
 
