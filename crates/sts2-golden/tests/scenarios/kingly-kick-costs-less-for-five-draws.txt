@@ -1,0 +1,21 @@
+# `KinglyKick.AfterCardDrawn` takes one off its own cost for the fight each
+# time it is drawn. Five draws of it hold five shifts, and the fold clamps only
+# the sum, so it stays at nothing. Intangible keeps the Regent standing.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"KINGLY_KICK"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"INTANGIBLE_POWER","amount":30,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
