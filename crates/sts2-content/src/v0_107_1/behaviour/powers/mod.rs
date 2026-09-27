@@ -3050,9 +3050,14 @@ pub(crate) fn event_hook(
         )
         | (Power::ShrinkPower | Power::SlumberPower, _, EventHook::Removed) => None,
         // `IllusionPower.AfterApplied` applies Minion to its owner, unless it
-        // has Minion already. The Fogmog's illusion is the one creature this
-        // build puts Illusion on, and it applies Minion right after.
-        (Power::IllusionPower, _, EventHook::Applied) => None,
+        // has Minion already.
+        (Power::IllusionPower, _, EventHook::Applied) => fight
+            .power(holder, Power::MinionPower)
+            .is_none()
+            .then_some(HookEffect::ApplyToOwner(
+                Power::MinionPower,
+                PowerAmount::Counted(one),
+            )),
         (Power::SwordSagePower, _, EventHook::Removed) => {
             unimplemented!("the replays Sword Sage takes back off the blades as it goes")
         }

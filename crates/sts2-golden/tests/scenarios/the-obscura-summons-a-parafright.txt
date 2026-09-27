@@ -1,0 +1,9 @@
+# `IllusionMove` adds a Parafright into the `illusion` slot, ahead of The
+# Obscura. The Parafright enters with Illusion, whose `AfterApplied` adds
+# Minion. `WailMove` gives every creature on its side three Strength, and
+# Hardening Strike hits and blocks.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"THE_OBSCURA_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

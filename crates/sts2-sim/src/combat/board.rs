@@ -372,6 +372,17 @@ impl<'a, V: Rules> Board<'a, V> {
 
     /// `PowerModel.AfterApplied`, asked of the instance of `power` that `id`
     /// has just taken on, and of nothing else.
+    /// `AfterAddedToRoom` for a monster the fight added: the powers it
+    /// enters with, each through `PowerCmd.Apply` from itself.
+    fn arrived(&mut self, id: CombatId, monster: V::Monster) {
+        let side = self.live.side;
+        let entering: SmallVec<[_; 2]> =
+            V::monster_starting_powers(monster, self.live.ascension, side).collect();
+        for (power, amount) in entering {
+            self.land(id, power, amount, Some(id));
+        }
+    }
+
     fn applied(&mut self, id: CombatId, power: V::Power) {
         let Some(at) = self
             .live
@@ -389,7 +400,16 @@ impl<'a, V: Rules> Board<'a, V> {
             sts2_core::EventHook::Applied,
             &mut asked,
         );
-        self.write_cards(asked);
+        let (owned, cards): (SmallVec<[_; 2]>, SmallVec<[_; 2]>) = asked
+            .into_iter()
+            .partition(|effect| matches!(effect, HookEffect::ApplyToOwner(..)));
+        self.write_cards(cards);
+        // `PowerCmd.Apply` on the power's owner, from nobody.
+        for effect in owned {
+            if let HookEffect::ApplyToOwner(power, amount) = effect {
+                self.land(id, power, amount, None);
+            }
+        }
     }
 
     /// `PowerCmd.ModifyAmount` on the instance of `power` that `id` carries,
@@ -1033,6 +1053,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             None,
                             self.rngs.niche,
                         );
+                        self.arrived(id, monster);
                         let summoned = self
                             .live
                             .creatures
@@ -2677,14 +2698,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn summon(&mut self, monster: V::Monster, position: usize) -> CombatId {
-        super::monster::summon(
+        let id = super::monster::summon(
             self.live,
             self.relics,
             monster,
             position,
             None,
             self.rngs.niche,
-        )
+        );
+        self.arrived(id, monster);
+        id
     }
 
     fn summon_into_last_free_slot(&mut self, monster: V::Monster) -> Option<CombatId> {
@@ -2707,6 +2730,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let slot = (0..self.live.encounter.slots())
             .rev()
             .find(|slot| !held.contains(slot))?;
+        Some(self.summon_into_slot(monster, slot))
+    }
+
+    fn summon_into_slot(&mut self, monster: V::Monster, slot: u8) -> CombatId {
         // `SortEnemiesBySlotName`: after every enemy in an earlier slot.
         let position = self
             .live
@@ -2714,14 +2741,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .iter()
             .filter(|held| held.slot.is_some_and(|held| held < slot))
             .count();
-        Some(super::monster::summon(
+        let id = super::monster::summon(
             self.live,
             self.relics,
             monster,
             position,
             Some(slot),
             self.rngs.niche,
-        ))
+        );
+        self.arrived(id, monster);
+        id
     }
 }
 

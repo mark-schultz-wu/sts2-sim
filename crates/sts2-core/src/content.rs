@@ -1712,6 +1712,13 @@ pub trait Fight<V: ContentVersion> {
     /// those and folds it on every read.
     fn modify_card(&mut self, card: crate::CardAt<V>, change: Change<V>, lasting: Lasting);
 
+    /// `CreatureCmd.Add<M>(CombatState, slot)` for this place in
+    /// `Encounter.Slots`. `SortEnemiesBySlotName` then places it among the
+    /// enemies by slot.
+    fn summon_into_slot(&mut self, _monster: V::Monster, _slot: u8) -> crate::CombatId {
+        unimplemented!("a monster added into a slot")
+    }
+
     /// `CreatureCmd.Add<M>(CombatState, slot)` for the last of
     /// `Encounter.Slots` no enemy stands in. `SortEnemiesBySlotName` then
     /// places it among the enemies by slot. Nothing, with no slot free.
