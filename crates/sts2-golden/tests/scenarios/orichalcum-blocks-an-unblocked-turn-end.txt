@@ -1,0 +1,5 @@
+# `Orichalcum` gives six block as its owner's turn ends with none.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ORICHALCUM"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

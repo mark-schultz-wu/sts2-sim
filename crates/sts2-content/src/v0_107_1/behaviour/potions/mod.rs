@@ -24,9 +24,13 @@ use super::super::generated::potions::{Potion, PotionPool};
 /// What a potion's own numbers are held as.
 pub(crate) type Number = <V as sts2_core::ContentVersion>::Number;
 
+/// `CardSelectorPrefs(prompt, 0, 999999999)`: any number of cards.
+pub(super) const ANY_NUMBER: usize = 999_999_999;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Shared(shared::Resume),
+    Ironclad(ironclad::Resume),
 }
 
 /// What a potion does when it is drunk.
@@ -86,6 +90,12 @@ const FRUIT_JUICE: Number = 5;
 pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -> Played<V> {
     match at {
         Resume::Shared(at) => shared::resume(fight, at, answer),
+        Resume::Ironclad(at) => {
+            let Taken::Selected(picked) = answer else {
+                unreachable!("an Ironclad potion asks for cards of a pile")
+            };
+            ironclad::resume(fight, at, picked)
+        }
     }
 }
 

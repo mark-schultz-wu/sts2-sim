@@ -23,9 +23,11 @@ mod biiig_hug;
 mod bing_bong;
 mod black_blood;
 mod black_star;
+mod blood_vial;
 mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
+mod bowler_hat;
 mod bronze_scales;
 mod burning_blood;
 mod byrdpip;
@@ -53,6 +55,7 @@ mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
 mod hefty_tablet;
+mod horn_cleat;
 mod infused_core;
 mod intimidating_helmet;
 mod juzu_bracelet;
@@ -68,6 +71,7 @@ mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
 mod nutritious_oyster;
+mod orichalcum;
 mod paels_blood;
 mod paels_flesh;
 mod paels_horn;
@@ -88,6 +92,7 @@ mod runic_pyramid;
 mod sand_castle;
 mod seal_of_gold;
 mod sozu;
+mod sparkling_rouge;
 mod stone_humidifier;
 mod storybook;
 mod strawberry;
@@ -147,6 +152,7 @@ pub enum State {
     FishingRod(fishing_rod::State),
     FakeHappyFlower(fake_happy_flower::State),
     FakeOrichalcum(fake_orichalcum::State),
+    Orichalcum(orichalcum::State),
     FakeVenerableTeaSet(fake_venerable_tea_set::State),
     WongosMysteryTicket(wongos_mystery_ticket::State),
     GlassEye,
@@ -208,6 +214,10 @@ pub enum State {
     FakeMango,
     FakeLeesWaffle,
     FakeBloodVial,
+    BloodVial,
+    HornCleat,
+    SparklingRouge,
+    BowlerHat,
     FakeStrikeDummy,
     BagOfMarbles,
     Akabeko,
@@ -290,6 +300,7 @@ pub(crate) fn event_hook(
         State::FishingRod(state) => fishing_rod::event_hook(state, hook, asked),
         State::FakeHappyFlower(state) => fake_happy_flower::event_hook(state, hook, asked),
         State::FakeOrichalcum(state) => fake_orichalcum::event_hook(state, hook, asked),
+        State::Orichalcum(state) => orichalcum::event_hook(state, hook, asked),
         State::FakeVenerableTeaSet(state) => fake_venerable_tea_set::event_hook(state, hook, asked),
         State::WongosMysteryTicket(state) => wongos_mystery_ticket::event_hook(state, hook, asked),
         State::GlassEye => glass_eye::event_hook(hook, asked),
@@ -377,6 +388,10 @@ pub(crate) fn event_hook(
         State::FakeMango => fake_mango::event_hook(hook, asked),
         State::FakeLeesWaffle => fake_lees_waffle::event_hook(hook, asked),
         State::FakeBloodVial => fake_blood_vial::event_hook(hook, asked),
+        State::BloodVial => blood_vial::event_hook(hook, asked),
+        State::HornCleat => horn_cleat::event_hook(hook, asked),
+        State::SparklingRouge => sparkling_rouge::event_hook(hook, asked),
+        State::BowlerHat => bowler_hat::event_hook(hook),
         State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
         State::VeryHotCocoa => very_hot_cocoa::event_hook(hook, asked),
         State::BagOfMarbles => bag_of_marbles::event_hook(hook, asked),
@@ -427,6 +442,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::BoomingConch => booming_conch::modify_hook(hook),
         State::BagOfPreparation => bag_of_preparation::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
+        State::BowlerHat => bowler_hat::modify_hook(hook),
         State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
         State::PaelsBlood => paels_blood::modify_hook(hook),
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
@@ -454,6 +470,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::FishingRod(_)
         | State::FakeHappyFlower(_)
         | State::FakeOrichalcum(_)
+        | State::Orichalcum(_)
         | State::FakeVenerableTeaSet(_)
         | State::WongosMysteryTicket(_)
         | State::GlassEye
@@ -505,6 +522,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::FakeMango
         | State::FakeLeesWaffle
         | State::FakeBloodVial
+        | State::BloodVial
+        | State::HornCleat
+        | State::SparklingRouge
         | State::BagOfMarbles
         | State::Akabeko
         | State::FestivePopper
@@ -605,6 +625,11 @@ impl sts2_core::RelicModel<V> for State {
             Relic::FakeMango => State::FakeMango,
             Relic::FakeLeesWaffle => State::FakeLeesWaffle,
             Relic::FakeBloodVial => State::FakeBloodVial,
+            Relic::BloodVial => State::BloodVial,
+            Relic::HornCleat => State::HornCleat,
+            Relic::SparklingRouge => State::SparklingRouge,
+            Relic::BowlerHat => State::BowlerHat,
+            Relic::Orichalcum => State::Orichalcum(orichalcum::State::default()),
             Relic::FakeOrichalcum => State::FakeOrichalcum(fake_orichalcum::State::default()),
             Relic::FakeHappyFlower => State::FakeHappyFlower(fake_happy_flower::State::default()),
             Relic::FakeVenerableTeaSet => {

@@ -1,0 +1,6 @@
+# `KingsCourage` forges fifteen onto the Sovereign Blade, which it creates in
+# hand when the fight holds none.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","potion":"KINGS_COURAGE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}

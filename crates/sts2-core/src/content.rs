@@ -2371,6 +2371,9 @@ pub enum Modify<N> {
 /// it. A listener reads whether it is one of them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModifyHook<V: ContentVersion> {
+    /// `ModifyGoldGained`: the gold the player is about to gain, outside a
+    /// fight.
+    GoldGained,
     /// `ModifyDamageAdditive`. The target is absent for a hit previewed
     /// against nobody.
     DamageAdditive {
@@ -2513,6 +2516,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
+            ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
             ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
             ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
@@ -2906,7 +2910,13 @@ pub enum EventHook<V: ContentVersion> {
     /// them has cleared.
     BlockCleared {
         creature: crate::CombatId,
+        /// The player's creature, which a relic reads its owner as.
+        player: crate::CombatId,
+        /// The player's `TurnNumber`.
+        turn: V::Count,
     },
+    /// `AfterModifyingGoldGained`, asked of the models that changed a gain.
+    GoldGainModified,
     /// `PowerModel.AfterRemoved`, asked of a power as it comes off the
     /// creature that carried it.
     Removed,
@@ -3053,6 +3063,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::SideTurnEndLate { .. } => ModelHook::AfterSideTurnEndLate,
             EventHook::EnergyReset { .. } => ModelHook::AfterEnergyReset,
             EventHook::BlockCleared { .. } => ModelHook::AfterBlockCleared,
+            EventHook::GoldGainModified => ModelHook::AfterModifyingGoldGained,
             EventHook::AfterDeath { .. } => ModelHook::AfterDeath,
             EventHook::BeforeDeath { .. } => ModelHook::BeforeDeath,
             EventHook::BlockBroken { .. } => ModelHook::AfterBlockBroken,
