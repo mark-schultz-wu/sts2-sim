@@ -1233,12 +1233,15 @@ pub(crate) fn decide_hook(
             DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
         ) => HookResponse::Decision(false),
         // `IllusionPower.ShouldPowerBeRemovedOnDeath`, which reads the power
-        // and not whose it is: a debuff goes, and anything else stays. An
-        // `ITemporaryPower` is a debuff that goes regardless, and none is
-        // ported, so a debuff here is a debuff.
+        // and not whose it is: a debuff goes unless it is an `ITemporaryPower`,
+        // and anything else stays. The temporary powers are the ones that
+        // lend a stat.
         (Power::IllusionPower, DecisionHook::ShouldRemovePowerOnDeath { power, .. }) => {
             use sts2_core::PowerTable as _;
 
+            if lends(power).is_some() {
+                return HookResponse::Decision(false);
+            }
             let debuff = power.debuff().unwrap_or_else(|| {
                 unimplemented!("whether {power:?} is a debuff on a dying creature")
             });
@@ -2288,6 +2291,19 @@ pub(crate) fn event_hook(
             Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount))
         }
         (Power::DemonFormPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `SpiritOfAshPower.BeforeCardPlayed`: its stack as block, unpowered,
+        // before each of its owner's Ethereal cards is played.
+        (
+            Power::SpiritOfAshPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlaying { ethereal: true, .. },
+        ) if owner == CombatSide::Player => Some(HookEffect::GainBlock(amount)),
+        (Power::SpiritOfAshPower, PowerAmount::Endless, EventHook::CardPlaying { ethereal: true, .. })
+            if owner == CombatSide::Player =>
+        {
+            unimplemented!("an endless Spirit of Ash")
+        }
+        (Power::SpiritOfAshPower, _, EventHook::CardPlaying { .. }) => None,
         // `DanseMacabrePower.BeforeCardPlayed`: its stack as block, unpowered,
         // before each of its owner's cards resolved at two or more.
         (

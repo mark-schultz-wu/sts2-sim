@@ -17,7 +17,7 @@ use sts2_core::{CardVars, Fight, Played};
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
 use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, TokenCard,
+    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, SilentCard, TokenCard,
 };
 use super::super::generated::powers::Power;
 
@@ -72,6 +72,8 @@ pub(crate) fn computed_target(
 ) -> super::super::generated::cards::TargetType {
     match card {
         Cards::Token(card) => token::computed_target(card, powers),
+        // `Malaise.TargetType`, which names what its constructor does.
+        Cards::Silent(SilentCard::Malaise) => super::super::generated::cards::TargetType::AnyEnemy,
         card => unimplemented!("what {card:?} points at"),
     }
 }

@@ -21,9 +21,20 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
     match card {
         SilentCard::Survivor => survivor(fight),
         SilentCard::Haze => haze(fight),
+        SilentCard::Malaise => malaise(fight),
         SilentCard::UpMySleeve => up_my_sleeve(fight),
         card => card_plays::silent::on_play(card, fight),
     }
+}
+
+/// `Malaise`: its X, one more once upgraded, off the target's Strength, then
+/// as Weak on it.
+fn malaise<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let amount = fight.x_value() + super::Number::from(fight.upgraded());
+    let target = fight.target();
+    fight.apply_power(target, Power::StrengthPower, PowerAmount::Counted(-amount));
+    fight.apply_power(target, Power::WeakPower, PowerAmount::Counted(amount));
+    Played::Done
 }
 
 /// `Haze`: its Poison onto each enemy that can be hit, one at a time.

@@ -1,0 +1,7 @@
+# `Flatten.AfterCardEnteredCombat` sets its own cost to nothing this turn once
+# Osty has attacked this turn. Unleash has Osty attack, then a Flatten granted
+# into hand enters free.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"grant","card":"FLATTEN"}

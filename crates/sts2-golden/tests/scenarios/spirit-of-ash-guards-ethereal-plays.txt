@@ -1,0 +1,10 @@
+# Spirit of Ash gives its stack as block, unpowered, before each of its
+# owner's Ethereal cards is played. Defile is Ethereal, and a Strike is not.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"FEAR"}
+{"cmd":"grant","card":"DEFILE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"SPIRIT_OF_ASH_POWER","amount":3,"target":0}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"play_card","index":1,"target":1}

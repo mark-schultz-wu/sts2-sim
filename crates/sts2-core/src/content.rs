@@ -2831,6 +2831,9 @@ pub enum HistoryEntry<V: ContentVersion> {
     Finished(PlayFinished<V>),
     /// A `CardDrawnEntry`, by the card drawn.
     Drawn(V::Card),
+    /// A `CreatureAttackedEntry`, by the attacker's `Monster`: nothing for
+    /// the player.
+    Attacked(Option<V::Monster>),
 }
 
 /// The entries of one turn now over, and the turns before it.
@@ -2904,6 +2907,15 @@ impl<V: ContentVersion> History<'_, V> {
                 HistoryEntry::Finished(finished) => Some(*finished),
                 _ => None,
             })
+    }
+
+    /// Each `CreatureAttackedEntry` where `HappenedThisTurn`, by the
+    /// attacker's `Monster`.
+    pub fn attacked_this_turn(&self) -> impl Iterator<Item = Option<V::Monster>> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::Attacked(monster) => Some(*monster),
+            _ => None,
+        })
     }
 
     /// `CardPlaysStarted` where `HappenedThisTurn`.
