@@ -1,7 +1,9 @@
-//! `cargo xtask neow <RELIC> [--character <C>] [--seeds <N>]`: the census
-//! seeds whose Neow offers a relic, and the option that takes it.
+//! `cargo xtask neow <RELIC> [--character <C>] [--seeds <N>] [--event <E>]`:
+//! the census seeds whose Neow offers a relic, and the option that takes it.
+//! With `--event`, the seeds whose named ancient offers it instead, entered
+//! the way a scenario's `event` step enters it.
 //!
-//! A scenario that picks a relic up at Neow needs a seed that offers it. This
+//! A scenario that picks a relic up at an ancient needs a seed that offers it. This
 //! runs the `neow_offers` example over the seeds and keeps the ones that name
 //! the relic. The simulator answers, so a relic it cannot offer yet is never
 //! found.
@@ -18,6 +20,9 @@ pub struct Args {
     /// How many seeds to try, from the census's first.
     #[arg(long, default_value_t = 300)]
     seeds: u64,
+    /// An ancient to ask instead of Neow, by id, such as `OROBAS`.
+    #[arg(long)]
+    event: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -37,6 +42,7 @@ pub fn run(args: Args) -> Result<String, Error> {
         relic,
         character,
         seeds,
+        event,
     } = args;
 
     let output = crate::error::output(
@@ -51,7 +57,8 @@ pub fn run(args: Args) -> Result<String, Error> {
                 "neow_offers",
                 "--",
             ])
-            .args([character.as_str(), "0", &seeds.to_string()]),
+            .args([character.as_str(), "0", &seeds.to_string()])
+            .args(event.iter().flat_map(|event| ["--event", event.as_str()])),
     )?;
     let mut found = String::new();
     for line in String::from_utf8_lossy(&output.stdout).lines() {

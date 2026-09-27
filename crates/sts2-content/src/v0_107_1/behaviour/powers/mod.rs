@@ -690,7 +690,9 @@ pub(crate) fn modify_hook(
         {
             Modify::AtMost(one)
         }
-        (Power::IntangiblePower, _, ModifyHook::HpLostAfterOsty { target }) if target == holder => {
+        (Power::IntangiblePower, _, ModifyHook::HpLostAfterOsty { target, .. })
+            if target == holder =>
+        {
             Modify::AtMost(one)
         }
         (
@@ -1099,7 +1101,9 @@ pub(crate) fn modify_hook(
         ) if target == holder => unimplemented!("an endless Unmovable"),
         (Power::UnmovablePower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
         // `BufferPower.ModifyHpLostAfterOstyLate`: its holder loses nothing.
-        (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target }) if target == holder => {
+        (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target, .. })
+            if target == holder =>
+        {
             Modify::AtMost(num_traits::zero())
         }
         (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { .. }) => Modify::Nothing,
@@ -1119,7 +1123,9 @@ pub(crate) fn modify_hook(
         // `SlipperyPower.ModifyHpLostAfterOsty`, which hands back one however
         // much its owner was about to lose. A hit that the block took whole
         // loses nothing, and this leaves that where it is.
-        (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { target }) if target == holder => {
+        (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { target, .. })
+            if target == holder =>
+        {
             Modify::AtMost(one)
         }
         // `DexterityPower.ModifyBlockAdditive` pays powered block from a card
