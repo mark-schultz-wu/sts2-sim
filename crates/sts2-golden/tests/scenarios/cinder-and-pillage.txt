@@ -1,0 +1,9 @@
+# Pillage hits, then draws one card at a time for as long as each is an
+# Attack and the hand has room: a Strike, then a Defend that stops it. Cinder
+# hits, then exhausts a card from hand drawn off `CombatCardSelection`.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CINDER"}
+{"cmd":"grant","card":"PILLAGE"}
+{"cmd":"play_card","index":6,"target":1}
+{"cmd":"play_card","index":5,"target":1}

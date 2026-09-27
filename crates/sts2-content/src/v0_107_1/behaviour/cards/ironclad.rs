@@ -2,7 +2,7 @@
 
 use sts2_core::{
     Amount, CardKind, Change, CostPool, CreatureView as _, Effect, EventHook, Fight, HookEffect,
-    Lasting, Played, PowerAmount, Rules as _, Scaling,
+    Lasting, Pile, PileAct, Played, PowerAmount, Rules as _, Scaling,
 };
 
 use super::super::super::generated::card_plays;
@@ -16,6 +16,17 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         IroncladCard::Bloodletting => bloodletting(fight),
         IroncladCard::Uppercut => uppercut(fight),
         IroncladCard::MoltenFist => molten_fist(fight),
+        // `Cinder`: its damage to the target, then a card from hand drawn off
+        // `CombatCardSelection`, exhausted.
+        IroncladCard::Cinder => {
+            let target = fight.target();
+            strike(fight, target);
+            if let Some(card) = fight.random_card_in(Pile::Hand) {
+                fight.act_on(PileAct::Exhaust, &[card]);
+            }
+            Played::Done
+        }
+        IroncladCard::Pillage => pillage(fight),
         // `Havoc`: the top card of the draw pile auto-played, and exhausted.
         IroncladCard::Havoc => {
             fight.auto_play_from_draw(1, true);
@@ -86,6 +97,29 @@ fn molten_fist<F: Fight<V>>(fight: &mut F) -> Played<V> {
         }
         Some(PowerAmount::Endless) => unimplemented!("an endless Vulnerable"),
         _ => {}
+    }
+    Played::Done
+}
+
+/// `Pillage`: its damage to the target, then one card drawn at a time. The
+/// draws go on while each is an Attack and the hand has room.
+fn pillage<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    strike(fight, target);
+    loop {
+        let before = fight.cards_in(Pile::Hand);
+        fight.draw(1);
+        let after = fight.cards_in(Pile::Hand);
+        let Some(drawn) = after
+            .iter()
+            .find(|card| !before.iter().any(|held| held.id() == card.id()))
+        else {
+            break;
+        };
+        let attack = V::card_kind(fight.card_ident(*drawn).card) == Some(CardKind::Attack);
+        if !attack || after.len() >= sts2_core::MAX_CARDS_IN_HAND {
+            break;
+        }
     }
     Played::Done
 }
