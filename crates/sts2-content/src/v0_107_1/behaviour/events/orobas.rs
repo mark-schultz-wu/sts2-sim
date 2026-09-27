@@ -8,12 +8,10 @@ use sts2_core::rng::GameRng;
 use sts2_core::{EventBehavior, EventView, HookEffects, RelicTable as _, Room};
 
 use super::super::super::V0_107_1 as V;
-use super::super::super::generated::cards::{
-    Cards, DefectCard, IroncladCard, NecrobinderCard, RegentCard, SilentCard,
-};
 use super::super::super::generated::characters::Character;
 use super::super::super::generated::events::Event;
 use super::super::super::generated::relics::{Relic, RelicRarity};
+use super::super::relics::TRANSCENDENCE;
 use super::ancient::{Offered, next_item};
 
 /// `Orobas._prismaticOdds`, which the Sea Glass takes the other side of.
@@ -38,19 +36,6 @@ const ALL_CHARACTERS: [Character; 5] = [
     Character::Regent,
     Character::Necrobinder,
     Character::Defect,
-];
-
-/// `ArchaicTooth.TranscendenceUpgrades`, as the cards it is keyed on.
-///
-/// One per character, and the Regent's is the Falling Star. A deck holding
-/// none of them is one the Tooth has nothing to transform, and it is not
-/// offered.
-const TRANSCENDS: [Cards; 5] = [
-    Cards::Ironclad(IroncladCard::Bash),
-    Cards::Silent(SilentCard::Neutralize),
-    Cards::Necrobinder(NecrobinderCard::Unleash),
-    Cards::Regent(RegentCard::FallingStar),
-    Cards::Defect(DefectCard::Dualcast),
 ];
 
 pub struct Orobas;
@@ -124,7 +109,7 @@ fn pool_three(run: &impl EventView<V>) -> Vec<Relic> {
     if run
         .deck()
         .iter()
-        .any(|held| TRANSCENDS.contains(&held.card))
+        .any(|held| TRANSCENDENCE.iter().any(|&(from, _)| from == held.card))
     {
         pool.push(Relic::ArchaicTooth);
     }

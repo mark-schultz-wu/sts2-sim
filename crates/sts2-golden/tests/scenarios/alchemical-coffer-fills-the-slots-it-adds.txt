@@ -1,0 +1,8 @@
+# `AlchemicalCoffer.AfterObtained` adds four potion slots, then procures four
+# random potions, each into one of the new slots. The three slots the run
+# opened with stay empty, so a potion granted next takes the first of them
+# and stands ahead of the four in the belt.
+{"cmd":"start","seed":"0RACLE2","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":1}
+{"cmd":"grant","potion":"BLOCK_POTION"}

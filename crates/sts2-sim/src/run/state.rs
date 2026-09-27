@@ -977,6 +977,22 @@ impl<V: Rules> State<V> {
     }
 
     /// Put a potion in the first empty physical belt slot.
+    /// `PotionCmd.TryToProcure` into the slot at `slot`, which lands while
+    /// that slot is open.
+    fn procure_into(&mut self, potion: V::Potion, slot: usize) -> bool {
+        let slot = u8::try_from(slot).expect("a belt slot fits a byte");
+        if self.player.potion_positions.contains(&slot) {
+            return false;
+        }
+        let at = self
+            .player
+            .potion_positions
+            .partition_point(|held| *held < slot);
+        self.player.potion_positions.insert(at, slot);
+        self.player.potions.insert(at, potion);
+        true
+    }
+
     fn procure(&mut self, potion: V::Potion) -> bool {
         let slots: usize = num_traits::cast(self.player.potion_slots)
             .expect("the belt has an addressable number of slots");
@@ -1269,6 +1285,23 @@ impl<V: Rules> State<V> {
                 }
                 // `CardCmd.TransformTo`: each leaves its place, and the
                 // replacements join the deck's end in deck order.
+                HookEffect::TransformFirstInDeck(pairs) => {
+                    let deck = self.player.deck_mut();
+                    let found = deck.iter().enumerate().find_map(|(at, held)| {
+                        pairs
+                            .iter()
+                            .find(|(from, _)| *from == held.ident.card)
+                            .map(|&(_, into)| (at, into))
+                    });
+                    if let Some((at, into)) = found {
+                        let held = deck.remove(at);
+                        let mut ident = CardIdent::new(into);
+                        ident.upgrade = u8::from(held.ident.upgrade > 0);
+                        ident.enchantment = held.ident.enchantment;
+                        deck.push(sts2_core::DeckCard::new(ident));
+                    }
+                    continue;
+                }
                 HookEffect::TransformInDeck { from, into } => {
                     let deck = self.player.deck_mut();
                     let before = deck.len();
@@ -1316,15 +1349,24 @@ impl<V: Rules> State<V> {
                     continue;
                 }
                 // `TryToProcure` fails on a full belt, and the potion is lost.
-                HookEffect::ProcureRandomPotions { count, stream } => {
+                HookEffect::ProcureRandomPotions {
+                    count,
+                    stream,
+                    into_gained,
+                } => {
                     let character = self.character();
                     let potions = crate::reward::potion::distinct::<V, _>(
                         self.streams.run(stream),
                         character,
                         count,
                     );
-                    for potion in potions {
-                        self.procure(potion);
+                    let slots: usize = num_traits::cast(self.player.potion_slots)
+                        .expect("the belt has an addressable number of slots");
+                    for (at, potion) in potions.into_iter().enumerate() {
+                        match into_gained {
+                            true => self.procure_into(potion, slots - count + at),
+                            false => self.procure(potion),
+                        };
                     }
                     continue;
                 }
@@ -1573,6 +1615,7 @@ impl<V: Rules> State<V> {
                 reward,
                 CustomReward::CharacterCards(_)
                     | CustomReward::ColorlessCards(_)
+                    | CustomReward::CardsOf { .. }
                     | CustomReward::UpgradedCardsOf { .. }
             )
         }) {
@@ -1605,6 +1648,17 @@ impl<V: Rules> State<V> {
                             V::colorless_cards(),
                             count,
                             false,
+                        )
+                        .into_iter()
+                        .map(CardIdent::new)
+                        .collect(),
+                        taken: false,
+                    },
+                    CustomReward::CardsOf { rarity, count } => Offer::Card {
+                        cards: crate::reward::card::uniform_of::<V, _>(
+                            rng,
+                            V::reward_cards(character).at(rarity),
+                            count,
                         )
                         .into_iter()
                         .map(CardIdent::new)

@@ -11,8 +11,10 @@
 //! Every hook dispatches on the state alone. The state names the relic that
 //! saved it, so no caller can pair a relic with another relic's model.
 
+mod alchemical_coffer;
 mod anchor;
 mod arcane_scroll;
+mod archaic_tooth;
 mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
@@ -24,6 +26,7 @@ mod cursed_pearl;
 mod divine_right;
 mod dollys_mirror;
 mod fishing_rod;
+mod glass_eye;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
@@ -64,6 +67,8 @@ use super::super::generated::relics::Relic;
 
 use crate::Field;
 
+pub(crate) use archaic_tooth::TRANSCENDENCE;
+
 pub(crate) type Number = <V as sts2_core::ContentVersion>::Number;
 
 /// `room is CombatRoom`, which is how a relic tells a fight's room apart.
@@ -80,8 +85,10 @@ fn combat_room(room: super::super::generated::encounters::RoomType) -> bool {
 /// That variant is what says the port has read the relic and found no state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
+    AlchemicalCoffer,
     Anchor,
     ArcaneScroll,
+    ArchaicTooth,
     BoneTea(bone_tea::State),
     BoomingConch,
     BoundPhylactery,
@@ -93,6 +100,7 @@ pub enum State {
     DivineRight,
     DollysMirror,
     FishingRod(fishing_rod::State),
+    GlassEye,
     GoldenPearl,
     Gorget,
     GremlinHorn,
@@ -139,7 +147,9 @@ pub(crate) fn event_hook(
     asked: &mut sts2_core::HookEffects<V>,
 ) {
     match state {
+        State::AlchemicalCoffer => alchemical_coffer::event_hook(hook, asked),
         State::Anchor => anchor::event_hook(hook, asked),
+        State::ArchaicTooth => archaic_tooth::event_hook(hook, asked),
         State::ArcaneScroll => arcane_scroll::event_hook(hook, asked),
         State::BoneTea(state) => bone_tea::event_hook(state, hook, asked),
         State::BoomingConch => booming_conch::event_hook(hook, asked),
@@ -152,6 +162,7 @@ pub(crate) fn event_hook(
         State::DivineRight => divine_right::event_hook(hook, asked),
         State::DollysMirror => dollys_mirror::event_hook(hook, asked),
         State::FishingRod(state) => fishing_rod::event_hook(state, hook, asked),
+        State::GlassEye => glass_eye::event_hook(hook, asked),
         State::GoldenPearl => golden_pearl::event_hook(hook, asked),
         State::Gorget => gorget::event_hook(hook, asked),
         State::GremlinHorn => gremlin_horn::event_hook(hook, asked),
@@ -224,8 +235,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
-        State::Anchor
+        State::AlchemicalCoffer
+        | State::Anchor
         | State::ArcaneScroll
+        | State::ArchaicTooth
         | State::BoneTea(_)
         | State::BoundPhylactery
         | State::BurningBlood
@@ -236,6 +249,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DivineRight
         | State::DollysMirror
         | State::FishingRod(_)
+        | State::GlassEye
         | State::GoldenPearl
         | State::Gorget
         | State::GremlinHorn
@@ -274,7 +288,9 @@ impl sts2_core::RelicModel<V> for State {
     /// A relic nobody has ported.
     fn new(relic: Relic) -> Self {
         match relic {
+            Relic::AlchemicalCoffer => State::AlchemicalCoffer,
             Relic::Anchor => State::Anchor,
+            Relic::ArchaicTooth => State::ArchaicTooth,
             Relic::ArcaneScroll => State::ArcaneScroll,
             Relic::BoneTea => State::BoneTea(bone_tea::State::default()),
             Relic::BoomingConch => State::BoomingConch,
@@ -287,6 +303,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::DivineRight => State::DivineRight,
             Relic::DollysMirror => State::DollysMirror,
             Relic::FishingRod => State::FishingRod(fishing_rod::State::default()),
+            Relic::GlassEye => State::GlassEye,
             Relic::GoldenPearl => State::GoldenPearl,
             Relic::Gorget => State::Gorget,
             Relic::GremlinHorn => State::GremlinHorn,

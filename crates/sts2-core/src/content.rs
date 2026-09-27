@@ -3154,6 +3154,9 @@ pub enum CustomReward {
     /// no upgrade roll, offering this many cards.
     ColorlessCards(usize),
     /// `CardReward` over the character's own pool at uniform odds, of one
+    /// rarity, with no rarity modification. Glass Eye offers five.
+    CardsOf { rarity: RewardRarity, count: usize },
+    /// `CardReward` over the character's own pool at uniform odds, of one
     /// rarity and one type, and then every card it offers upgraded. The
     /// Future of Potions offers it.
     UpgradedCardsOf {
@@ -3272,6 +3275,10 @@ pub enum HookEffect<V: ContentVersion> {
     ProcureRandomPotions {
         count: usize,
         stream: V::RunRngType,
+        /// Each into the slot at `originalSlotCount + i`: the last `count`
+        /// slots, which a `GainMaxPotionCount` just before opened. Otherwise
+        /// each into the first open slot.
+        into_gained: bool,
     },
     /// `CardSelectCmd` over the run's upgradable cards.
     UpgradeRandomDeckCards {
@@ -3373,6 +3380,11 @@ pub enum HookEffect<V: ContentVersion> {
     RemoveFromDeck,
     /// `CardPileCmd.RemoveFromDeck` on the card at this place in the deck.
     RemoveDeckCardAt(usize),
+    /// `CardCmd.Transform` on the first deck card that is the first of a
+    /// pair, into its partner. The partner is upgraded where the card was,
+    /// and carries its enchantment. It leaves its place and joins the deck's
+    /// end.
+    TransformFirstInDeck(&'static [(V::Card, V::Card)]),
     /// `CardCmd.TransformTo(into)` on each card of the deck that is `from`.
     /// Each leaves its place, and its replacement joins the deck's end.
     TransformInDeck {

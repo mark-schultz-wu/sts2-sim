@@ -1,0 +1,6 @@
+# `ArchaicTooth.AfterObtained` transforms the first deck card that
+# `TranscendenceUpgrades` names into its partner. For the Ironclad that is
+# the Bash, which becomes Break and joins the deck's end.
+{"cmd":"start","seed":"0RACLE2","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":2}
