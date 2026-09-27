@@ -1072,6 +1072,15 @@ pub(crate) fn decide_hook(
     use sts2_core::{DecisionHook, HookResponse};
 
     match (power, hook) {
+        // `RingingPower.ShouldPlay`: a card with Ringing waits while its owner
+        // has started a play this turn. A fight here has one player, whose
+        // cards are its holder's.
+        (Power::RingingPower, DecisionHook::ShouldPlay { affliction, .. }) => {
+            HookResponse::Decision(
+                affliction != Some(Affliction::Ringing)
+                    || held.history.started_this_turn().next().is_none(),
+            )
+        }
         // `ShouldCreatureBeRemovedFromCombatAfterDeath`, which keeps its own
         // holder and no other.
         (
@@ -1270,6 +1279,29 @@ pub(crate) fn event_hook(
             EventHook::PowerAmountReceivedModified { .. },
         ) => unimplemented!("an endless Artifact"),
         // `TangledPower.AfterApplied`: Entangled on every Attack its owner has.
+        // `RingingPower.AfterApplied`: Ringing on every card its owner has.
+        (Power::RingingPower, _, EventHook::Applied) => Some(HookEffect::Afflict {
+            to: sts2_core::Writing::Every,
+            affliction: Affliction::Ringing,
+        }),
+        // `RingingPower.AfterCardEnteredCombat`: Ringing on a card that
+        // arrives with no affliction.
+        (Power::RingingPower, _, EventHook::CardEnteredCombat { at, .. }) => {
+            Some(HookEffect::Afflict {
+                to: sts2_core::Writing::One(at),
+                affliction: Affliction::Ringing,
+            })
+        }
+        // `RingingPower.AfterSideTurnEnd`: gone as its owner's side ends a
+        // turn.
+        (Power::RingingPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::RingingPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `RingingPower.AfterRemoved`: Ringing off every card that has it.
+        (Power::RingingPower, _, EventHook::Removed) => Some(HookEffect::ClearAffliction(
+            sts2_core::Writing::EveryAfflictedWith(Affliction::Ringing),
+        )),
         (Power::TangledPower, _, EventHook::Applied) => Some(HookEffect::Afflict {
             to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Attack),
             affliction: Affliction::Entangled,
@@ -1756,6 +1788,55 @@ pub(crate) fn event_hook(
                 state => unreachable!("stolen state for {:?}", state.power()),
             }
         }
+        // `PlowPower.AfterDamageReceived`: a hit that takes hit points off its
+        // owner and leaves it at its stack or below takes the Strength it
+        // gained, lent or its own, and stuns it. The Ceremonial Beast comes
+        // back with Beast Cry. Then Plow goes.
+        (
+            Power::PlowPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived {
+                target, unblocked, ..
+            },
+        ) if target == holder
+            && unblocked > 0
+            && fight
+                .current_hp(holder)
+                .is_some_and(|hp| Number::from(hp) <= amount) =>
+        {
+            use sts2_core::Table as _;
+
+            asked.extend(
+                Power::ALL
+                    .iter()
+                    .copied()
+                    .filter(|&lent| {
+                        lends(lent).is_some_and(|(to, _)| to == Power::StrengthPower)
+                            && fight.power(holder, lent).is_some()
+                    })
+                    .map(HookEffect::RemoveFromOwner),
+            );
+            asked.push(HookEffect::RemoveFromOwner(Power::StrengthPower));
+            asked.push(match monster {
+                Some(Monster::CeremonialBeast) => {
+                    let cry =
+                        super::monsters::state_of(Monster::CeremonialBeast, MoveId::BeastCryMove, 0)
+                            .unwrap_or_else(|_| {
+                                unreachable!("the Ceremonial Beast's graph holds its cry")
+                            });
+                    stunned(Some(cry))
+                }
+                _ => stunned(None),
+            });
+            asked.push(HookEffect::RemoveFromOwner(Power::PlowPower));
+            return;
+        }
+        (Power::PlowPower, PowerAmount::Endless, EventHook::DamageReceived { target, .. })
+            if target == holder =>
+        {
+            unimplemented!("an endless Plow")
+        }
+        (Power::PlowPower, _, EventHook::DamageReceived { .. }) => None,
         // `BurrowedPower.AfterBlockBroken`: a Tunneler whose block breaks is
         // stunned, comes back with a bite, and stops burrowing.
         (Power::BurrowedPower, _, EventHook::BlockBroken { creature })

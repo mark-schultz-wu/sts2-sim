@@ -875,6 +875,13 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
             .and_then(|fighter| fighter.carrier().monster)
     }
 
+    fn current_hp(&self, creature: CombatId) -> Option<V::Health> {
+        self.creatures
+            .iter()
+            .find(|fighter| fighter.id == creature)
+            .map(|fighter| fighter.hp)
+    }
+
     /// The other side's creatures, a pet among them.
     fn living_opponents(&self, creature: CombatId) -> smallvec::SmallVec<[CombatId; 8]> {
         let Some(side) = self

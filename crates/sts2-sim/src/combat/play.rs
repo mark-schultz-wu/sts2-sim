@@ -67,14 +67,20 @@ pub(crate) fn resolve<V: Rules>(
     // The same rules the reported hand carries, asked of the one card being
     // played. Nothing here builds the rest of the hand, or its previews.
     let takes = legal::target_type::<V>(card, live);
-    let refused = legal::reasons::<V>(card, live, cost, star_cost, live.energy, live.stars);
+    let fight = super::listen::Walk { live, relics };
+    let (refused, preventer) = legal::reasons::<V>(
+        card,
+        fight,
+        (cost, star_cost),
+        live.energy,
+        live.stars,
+        legal::asks_should_play::<V>(fight),
+    );
     if let Some(why) = refused {
         return Err(Reason::Unplayable {
             card,
             why,
-            // `BlockedByHook` is the only reason that names one, and nothing
-            // in a fight raises it yet.
-            preventer: None,
+            preventer,
         });
     }
     let targets = legal::targets::<V>(takes, &live.creatures, false);
@@ -283,7 +289,17 @@ pub(super) fn auto_play<V: Rules>(
     if ident.card.cost() == sts2_core::Cost::X {
         unimplemented!("auto-playing {ident:?}, which costs X");
     }
-    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::ShouldPlay);
+    // `Hook.ShouldPlay`, with the auto-play's type.
+    if let Some(preventer) = super::listen::first_deciding::<V>(
+        super::listen::Walk { live, relics },
+        sts2_core::DecisionHook::ShouldPlay {
+            card: ident.card,
+            affliction: ident.affliction,
+        },
+        false,
+    ) {
+        unimplemented!("{preventer:?} refusing to let {ident:?} auto-play");
+    }
     let ascension = live.ascension;
     let target = match super::legal::target_type::<V>(ident, live) {
         kind if kind == V::TargetType::ANY_ENEMY => {

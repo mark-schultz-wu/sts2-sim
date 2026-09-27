@@ -114,10 +114,14 @@ impl<V: Rules> ObservedFight<V> for Fight<'_, V> {
 
     fn legal(&self) -> impl ExactSizeIterator<Item = impl ObservedPlayable<V>> + '_ {
         match self {
-            Fight::Live { live, relics } => Either::Left(live.cards.iter(Pile::Hand).map(|card| {
-                let fight = super::listen::Walk { live, relics };
-                Card::Live(InHand::new(card, fight, live.energy, live.stars))
-            })),
+            Fight::Live { live, relics } => {
+                let asks =
+                    super::legal::asks_should_play::<V>(super::listen::Walk { live, relics });
+                Either::Left(live.cards.iter(Pile::Hand).map(move |card| {
+                    let fight = super::listen::Walk { live, relics };
+                    Card::Live(InHand::new(card, fight, live.energy, live.stars, asks))
+                }))
+            }
             Fight::Over(combat) => Either::Right(combat.legal.iter().map(Card::Over)),
         }
     }

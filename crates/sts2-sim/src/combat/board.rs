@@ -771,6 +771,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 .live
                 .cards
                 .write_all_cards(|held| held.ident.card.tagged(tag), write),
+            sts2_core::Writing::Every => self.live.cards.write_all_cards(|_| true, write),
             sts2_core::Writing::EveryOfKind(kind) => self
                 .live
                 .cards
