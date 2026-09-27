@@ -109,6 +109,10 @@ impl<V: Rules> State<V> {
             if self.carry_out(effects).is_some() {
                 unimplemented!("a potion drunk outside a fight that asks a question");
             }
+            let used = self.notify_belt(sts2_core::EventHook::PotionUsed { in_fight: false });
+            if self.carry_out(used).is_some() {
+                unimplemented!("a relic asking a question after a potion outside a fight");
+            }
             return Ok(Ok(Decided::Resolved));
         };
         let since = fighting.live.removed_from_deck().len();

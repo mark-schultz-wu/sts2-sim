@@ -1,0 +1,4 @@
+# `DataDisk` gives one Focus as each fight's room is entered.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"DATA_DISK"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

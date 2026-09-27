@@ -584,6 +584,7 @@ pub enum ModelHook {
     ShouldProcurePotion,
     ModifyNextEvent,
     BeforePotionUsed,
+    AfterPotionUsed,
     AfterSideTurnStartLate,
     ShouldDraw,
     AfterPreventingDraw,
@@ -656,7 +657,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 103] = [
+    pub const ALL: [ModelHook; 104] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -691,6 +692,7 @@ impl ModelHook {
         ModelHook::ShouldProcurePotion,
         ModelHook::ModifyNextEvent,
         ModelHook::BeforePotionUsed,
+        ModelHook::AfterPotionUsed,
         ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
         ModelHook::AfterPreventingDraw,
@@ -799,6 +801,7 @@ impl ModelHook {
             ModelHook::ShouldProcurePotion => "ShouldProcurePotion",
             ModelHook::ModifyNextEvent => "ModifyNextEvent",
             ModelHook::BeforePotionUsed => "BeforePotionUsed",
+            ModelHook::AfterPotionUsed => "AfterPotionUsed",
             ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
             ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
@@ -2684,6 +2687,11 @@ pub enum EventHook<V: ContentVersion> {
         /// The creature it is aimed at, where it aims.
         target: Option<crate::CombatId>,
     },
+    /// `AfterPotionUsed`, once a potion's use is done. `in_fight` is
+    /// `CombatManager.IsInProgress`.
+    PotionUsed {
+        in_fight: bool,
+    },
     /// `AfterModifyingHandDraw`, to each listener whose `ModifyHandDraw`
     /// changed the turn's hand, before it is drawn. The listener reads for
     /// itself whether it did.
@@ -3083,6 +3091,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::Shuffled => ModelHook::AfterShuffle,
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
+            EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,

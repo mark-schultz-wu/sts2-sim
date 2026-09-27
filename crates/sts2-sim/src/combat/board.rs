@@ -2218,6 +2218,11 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     self.live.modify_self(id, change, lasting)
                 }
+                // `CreatureCmd.GainBlock`, unpowered, on the relic's owner.
+                (Listener::Relic { .. }, HookEffect::GainBlock(amount)) => {
+                    let player = self.live.player().id;
+                    self.live.gain_unpowered_block(player, amount);
+                }
                 (listener, effect) => {
                     unimplemented!("{listener:?} asking for {effect:?} after an attack")
                 }
