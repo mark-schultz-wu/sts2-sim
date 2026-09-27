@@ -12,7 +12,7 @@ const SUMMON: Number = 1;
 /// first. Both are `OstyCmd.Summon` for its owner, the only player.
 pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
     match hook {
-        EventHook::CombatStarting => asked.push(HookEffect::Summon(SUMMON)),
+        EventHook::CombatStarting { .. } => asked.push(HookEffect::Summon(SUMMON)),
         EventHook::EnergyResetLate { turn, .. } if turn != 1 => {
             asked.push(HookEffect::Summon(SUMMON));
         }

@@ -423,6 +423,9 @@ const AUTOMATION_CARDS: u8 = 10;
 /// one turn for the next turn's hand to grow.
 const PALE_BLUE_DOT_PLAYS: usize = 5;
 
+/// `ConfusedPower.NextEnergyCost`'s `NextInt(4)`.
+const CONFUSED_COSTS: u8 = 4;
+
 /// `GigantificationPower.ModifyDamageMultiplicative`'s `3m`.
 const GIGANTIFIED: f64 = 3.0;
 
@@ -2135,7 +2138,7 @@ pub(crate) fn event_hook(
         ) => None,
         // `VitalSparkPower.BeforeCombatStart`: Tainted by its stack on every
         // Skill the player holds.
-        (Power::VitalSparkPower, _, EventHook::CombatStarting) => Some(HookEffect::Afflict {
+        (Power::VitalSparkPower, _, EventHook::CombatStarting { .. }) => Some(HookEffect::Afflict {
             to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Skill),
             affliction: Affliction::Tainted,
         }),
@@ -2878,6 +2881,18 @@ pub(crate) fn event_hook(
             Some(HookEffect::ApplyToOpponents(Power::PoisonPower, amount))
         }
         (Power::CorrosiveWavePower, _, EventHook::CardDrawn { .. }) => None,
+        // `ConfusedPower.AfterCardDrawn`: a cost drawn below four for each of
+        // its owner's cards drawn, unless the card's cost is negative. An X
+        // cost counts as zero, so it draws and keeps spending its X.
+        (Power::ConfusedPower, _, EventHook::CardDrawn { card, id, .. })
+            if owner == CombatSide::Player && card.cost() != sts2_core::Cost::None =>
+        {
+            Some(HookEffect::RandomCost {
+                card: id,
+                below: CONFUSED_COSTS,
+            })
+        }
+        (Power::ConfusedPower, _, EventHook::CardDrawn { .. }) => None,
         // `SpeedsterPower.AfterCardDrawn`: its stack to every enemy that can
         // be hit, unpowered, for a card of its owner's drawn outside the hand
         // draw and in its owner's own turn.
@@ -3462,6 +3477,20 @@ pub(crate) fn event_hook(
         }
         (Power::RoyaltiesPower, PowerAmount::Endless, EventHook::CombatEnd { .. }) => {
             unimplemented!("an endless Royalties")
+        }
+        // `ForbiddenGrimoirePower.AfterCombatEnd`: a card removal reward for
+        // each of its stack.
+        (
+            Power::ForbiddenGrimoirePower,
+            PowerAmount::Counted(amount),
+            EventHook::CombatEnd { .. },
+        ) => {
+            let count = usize::try_from(amount).expect("a stack is not negative");
+            asked.extend(std::iter::repeat_n(HookEffect::AddCardRemovalReward, count));
+            return;
+        }
+        (Power::ForbiddenGrimoirePower, PowerAmount::Endless, EventHook::CombatEnd { .. }) => {
+            unimplemented!("an endless Forbidden Grimoire")
         }
         // `DrawCardsNextTurnPower.AfterSideTurnStart` goes once the turn it
         // drew for has begun.

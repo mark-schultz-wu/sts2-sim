@@ -64,6 +64,11 @@ pub(crate) enum Offer<V: Rules> {
         rarity: crate::run::Rarity<V>,
         taken: bool,
     },
+    /// `CardRemovalReward`: one card of the deck removed, which the player
+    /// picks once it is taken.
+    CardRemoval {
+        taken: bool,
+    },
 }
 
 impl<V: Rules> Offer<V> {
@@ -73,7 +78,8 @@ impl<V: Rules> Offer<V> {
             | Self::Card { taken, .. }
             | Self::SpecialCard { taken, .. }
             | Self::Potion { taken, .. }
-            | Self::Relic { taken, .. } => *taken,
+            | Self::Relic { taken, .. }
+            | Self::CardRemoval { taken } => *taken,
         }
     }
 
@@ -86,6 +92,7 @@ impl<V: Rules> Offer<V> {
             Self::Relic { .. } => 3,
             Self::SpecialCard { .. } => 4,
             Self::Card { .. } => 5,
+            Self::CardRemoval { .. } => 7,
         }
     }
 }

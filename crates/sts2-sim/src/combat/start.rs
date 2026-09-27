@@ -154,6 +154,7 @@ pub(crate) fn enter<V: Rules>(
     let entered = EventHook::RoomEntered {
         room: live.room(),
         strayed: entering.strayed,
+        deck: entering.deck.len(),
     };
     for (_, effect) in super::listen::notify::<V>(&mut live, relics, entered) {
         match effect {
@@ -175,9 +176,8 @@ pub(crate) fn enter<V: Rules>(
     // below. So an affliction asked for here lands once they are, before
     // anything draws.
     let mut afflicting: Vec<HookEffect<V>> = Vec::new();
-    for (listener, effect) in
-        super::listen::notify::<V>(&mut live, relics, EventHook::CombatStarting)
-    {
+    let starting = EventHook::CombatStarting { room: live.room() };
+    for (listener, effect) in super::listen::notify::<V>(&mut live, relics, starting) {
         match (listener, effect) {
             // On the creature carrying the listener, which for a relic is the
             // player.
@@ -210,6 +210,19 @@ pub(crate) fn enter<V: Rules>(
                 );
             }
             (_, afflict @ HookEffect::Afflict { .. }) => afflicting.push(afflict),
+            // `CreatureCmd.Heal` on the player who carries the relic.
+            (super::listen::Listener::Relic { .. }, HookEffect::Heal(amount)) => {
+                let player = live.player().id;
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::heal(&mut board, player, amount);
+            }
+            // `PowerCmd.Apply` on the relic's owner, which is the player.
+            (super::listen::Listener::Relic { .. }, HookEffect::ApplyToOwner(power, amount)) => {
+                let mut board =
+                    Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
+                sts2_core::Fight::apply_to_actor(&mut board, power, amount);
+            }
             (_, other) => unimplemented!("a listener asking for {other:?} as a fight starts"),
         }
     }
