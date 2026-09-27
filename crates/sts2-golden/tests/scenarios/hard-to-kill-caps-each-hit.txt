@@ -1,0 +1,9 @@
+# `HardToKillPower.ModifyDamageCap` caps a hit on its owner at its stack.
+# With ten Strength a Strike deals sixteen, and the first Exoskeleton loses
+# nine. A Bash deals eight, under the cap, and lands whole.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"EXOSKELETONS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":10,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"power","power":"STRENGTH_POWER","amount":-10,"target":0}
+{"cmd":"play_card","index":0,"target":2}

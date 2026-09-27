@@ -640,6 +640,19 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::DamageCap { .. } | ModifyHook::HpLostAfterOsty { .. },
         ) => Modify::Nothing,
+        // `HardToKillPower.ModifyDamageCap`: a hit on its owner capped at its
+        // stack, whatever the hit's props.
+        (
+            Power::HardToKillPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageCap { target, .. },
+        ) if target == Some(holder) => Modify::AtMost(amount),
+        (Power::HardToKillPower, PowerAmount::Endless, ModifyHook::DamageCap { target, .. })
+            if target == Some(holder) =>
+        {
+            unimplemented!("an endless Hard To Kill")
+        }
+        (Power::HardToKillPower, _, ModifyHook::DamageCap { .. }) => Modify::Nothing,
         // `CalcifyPower.ModifyDamageAdditive`: its stack onto a powered hit
         // from Osty, where its holder is the player Osty stands beside.
         (

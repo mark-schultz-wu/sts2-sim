@@ -37,6 +37,7 @@ pub(super) fn starting_powers(
             vec![(Power::ReattachPower, PowerAmount::Counted(REATTACH))]
         }
         Monster::BowlbugRock => vec![(Power::ImbalancedPower, PowerAmount::Counted(1))],
+        Monster::Exoskeleton => vec![(Power::HardToKillPower, PowerAmount::Counted(9))],
         // `BowlbugEgg.AfterAddedToRoom` calls the base alone.
         Monster::BowlbugEgg => Vec::new(),
         Monster::SlumberingBeetle => {

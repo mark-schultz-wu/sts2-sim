@@ -1,0 +1,9 @@
+# `Exoskeleton`'s `INIT_MOVE` reads its slot. The first skitters, the second
+# bites with its mandibles, the third enrages and the fourth rolls between
+# the two attacks. Each enters with Hard To Kill at nine. The second enrages
+# after its mandibles, and the rest roll with no repeat.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"EXOSKELETONS_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
