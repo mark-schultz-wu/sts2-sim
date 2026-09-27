@@ -30,9 +30,8 @@ impl<T> Shuffled<T> {
     }
 }
 
-/// `CardPile.MaxCardsInHand`: the most a hand holds, and so what the fight's
-/// first draw is capped at.
-pub(super) const MAX_CARDS_IN_HAND: usize = 10;
+/// The most a hand holds, and so what the fight's first draw is capped at.
+pub(super) use sts2_core::MAX_CARDS_IN_HAND;
 
 impl<V: sts2_core::Rules> Shuffled<super::live::CardInstance<V>> {
     /// The same, for the one turn the innate cards are put on top first.

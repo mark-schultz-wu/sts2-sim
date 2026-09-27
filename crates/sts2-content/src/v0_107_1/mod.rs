@@ -408,6 +408,10 @@ impl sts2_core::Rules for V0_107_1 {
         generated::cards::combat_cards(sts2_core::Table::data(character).card_pool)
     }
 
+    fn combat_colorless_cards() -> &'static [Self::Card] {
+        generated::cards::combat_colorless_cards()
+    }
+
     /// The card whose type the fight works out is on no shelf. A merchant
     /// stands outside a fight, so nothing can answer for it there either.
     fn merchant_cards(

@@ -1,0 +1,9 @@
+# Neow's Fury kills the Nibbit with a Defend in the discard pile. The fight is
+# ending, so the selection asks nothing and the rewards follow.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"NEOWS_FURY"}
+{"cmd":"grant","card":"NEOWS_FURY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":3,"target":1}

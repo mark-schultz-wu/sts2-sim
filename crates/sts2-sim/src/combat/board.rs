@@ -448,6 +448,10 @@ impl<'a, V: Rules> Board<'a, V> {
                         sts2_core::EventHook::DamageReceived {
                             target: receiver,
                             unblocked: lost,
+                            blocked: match aimed {
+                                true => blocked,
+                                false => zero,
+                            },
                             dealer,
                             powered,
                         },
@@ -2050,8 +2054,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         });
     }
 
-    fn discard(&mut self, card: CardAt<V>) {
-        super::turn::act_on::<V>(self.live, self.relics, sts2_core::PileAct::Discard, &[card]);
+    fn act_on(&mut self, act: sts2_core::PileAct, cards: &[CardAt<V>]) {
+        super::turn::act_on::<V>(self.live, self.relics, act, cards);
     }
 
     fn modify_this(&mut self, change: sts2_core::Change<V>, lasting: sts2_core::Lasting) {

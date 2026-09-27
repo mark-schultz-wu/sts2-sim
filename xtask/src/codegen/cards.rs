@@ -1143,6 +1143,41 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
 
     writeln!(
         out,
+        "/// The colourless pool as a combat generation effect sees it.\n\
+         ///\n\
+         /// The same narrowing [`combat_cards`] applies, on the one pool no\n\
+         /// character holds."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub fn combat_colorless_cards() -> &'static [Cards] {{"
+    )
+    .unwrap();
+    writeln!(out, "    &[").unwrap();
+    {
+        let entries = combat_pools.get(COLORLESS).ok_or_else(|| Error::NoOrder {
+            kind: "combatpool",
+            pool: COLORLESS.to_string(),
+        })?;
+        for (_, id) in entries {
+            let card = cards
+                .iter()
+                .find(|card| card.id == *id)
+                .expect("validated above");
+            writeln!(
+                out,
+                "        Cards::Colorless(ColorlessCard::{}),",
+                variant(card, None)
+            )
+            .unwrap();
+        }
+    }
+    writeln!(out, "    ]").unwrap();
+    writeln!(out, "}}\n").unwrap();
+
+    writeln!(
+        out,
         "/// Cards eligible for an ordinary room reward, split by rarity.\n\
          ///\n\
          /// Each slice keeps the game's pool order, so an index into one means\n\

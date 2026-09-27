@@ -1569,10 +1569,10 @@ pub trait Fight<V: ContentVersion> {
     /// `CardCmd.Discard(this)`, for the card whose behavior is running.
     fn discard_this(&mut self);
 
-    /// `CardCmd.Discard` of one card in hand, which a Sly card answers by
-    /// playing itself.
-    fn discard(&mut self, _card: crate::CardAt<V>) {
-        unimplemented!("discarding a card")
+    /// `act` on each of `cards`, from the pile each stands in. A Sly card
+    /// discarded answers by playing itself.
+    fn act_on(&mut self, _act: PileAct, _cards: &[crate::CardAt<V>]) {
+        unimplemented!("acting on picked cards")
     }
 
     /// Write `change` on the card being played, which stands in the play pile.
@@ -1868,6 +1868,9 @@ pub enum Taken<V: ContentVersion> {
 /// The choose-a-card screen's fixed capacity.
 pub const CHOICES: usize = 3;
 
+/// `CardPile.MaxCardsInHand`: the most a hand holds.
+pub const MAX_CARDS_IN_HAND: usize = 10;
+
 /// How many cards a selection takes, which is `CardSelectorPrefs`'s pair of
 /// counts.
 ///
@@ -1885,8 +1888,8 @@ pub enum Selection {
     Exactly(nonmax::NonMaxUsize),
     /// `CardSelectorPrefs(prompt, 0, n)`, which sets the counts apart.
     ///
-    /// Taking none is an answer, so the selector always asks. Even one card in
-    /// the pile is a question, because leaving it is a choice.
+    /// Taking none is an answer, so the selector asks whenever the pile holds
+    /// a card. Even one card is a question, because leaving it is a choice.
     UpTo(nonmax::NonMaxUsize),
 }
 
@@ -1917,13 +1920,16 @@ impl Selection {
 
     /// Validate cards taken without asking.
     ///
-    /// An exact selection takes a pile whole when it holds no more than the
-    /// requested count. An up-to selection always asks, including for none.
+    /// An empty pile gives nothing without asking, which both
+    /// `CardSelectCmd.FromHand` and `FromCombatPile` check first. An exact
+    /// selection takes a pile whole when it holds no more than the requested
+    /// count. An up-to selection asks otherwise.
     pub fn validate_automatic<V: ContentVersion>(
         self,
         cards: Picked<V>,
     ) -> Option<SelectedCards<V>> {
         match self {
+            _ if cards.is_empty() => Some(SelectedCards(cards)),
             Self::Exactly(count) if cards.len() <= count.get() => Some(SelectedCards(cards)),
             Self::Exactly(_) | Self::UpTo(_) => None,
         }
@@ -2323,6 +2329,10 @@ pub enum EventHook<V: ContentVersion> {
     DamageReceived {
         target: crate::CombatId,
         unblocked: V::Number,
+        /// The `DamageResult`'s `BlockedDamage`: what the block took, on the
+        /// creature the hit was aimed at, and nothing on a pet that took the
+        /// rest.
+        blocked: V::Number,
         /// The creature that dealt it, which is nothing for damage from
         /// nobody.
         dealer: Option<crate::CombatId>,
@@ -2619,6 +2629,10 @@ pub struct TurnHistory<V: ContentVersion> {
     pub round: V::Count,
     /// `CurrentSide` of that turn.
     pub side: V::CombatSide,
+    /// The player's `TurnNumber` through that turn. It counts up as the
+    /// player's side takes a turn, so the enemies' turn after a player's
+    /// shares its number.
+    pub player_turn: V::Count,
     /// Its entries, oldest first. The player's alone, because a fight here
     /// has one player.
     pub entries: Box<[HistoryEntry<V>]>,
@@ -2642,6 +2656,22 @@ impl<V: ContentVersion> History<'_, V> {
             HistoryEntry::Finished(finished) => Some(finished.card),
             _ => None,
         })
+    }
+
+    /// `CardPlaysFinished` where `HappenedLastPlayerTurn`, for a player now
+    /// in its turn `turn`: the player's turn before, and the enemies' turn
+    /// after it. The turn the fight stands in is the player's `turn` or later,
+    /// so none of its entries is one.
+    pub fn finished_last_player_turn(&self, turn: V::Count) -> impl Iterator<Item = V::Card> + '_ {
+        let last = turn - num_traits::one::<V::Count>();
+        std::iter::successors(self.before, |before| before.before.as_deref())
+            .take_while(move |before| before.player_turn >= last)
+            .filter(move |before| before.player_turn == last)
+            .flat_map(|before| before.entries.iter())
+            .filter_map(|entry| match entry {
+                HistoryEntry::Finished(finished) => Some(finished.card),
+                _ => None,
+            })
     }
 
     /// `CardPlaysStarted` where `HappenedThisTurn`.
@@ -2926,6 +2956,13 @@ pub enum HookEffect<V: ContentVersion> {
         filter: PoolFilter,
         count: V::Number,
         keyword: Option<V::CardKeyword>,
+    },
+    /// `count` distinct cards of the colorless pool, from one
+    /// `CardFactory.GetDistinctForCombat` off `CombatCardGeneration`. It
+    /// shuffles the pool once and takes the first `count`, or all of it if it
+    /// is shorter. They go into hand.
+    GenerateDistinctColorless {
+        count: V::Number,
     },
     /// The card that asked, moved to the top of the draw pile it was
     /// shuffled into.
@@ -4017,6 +4054,10 @@ pub trait Rules: Hooks {
     /// The character's pool narrowed by `CardFactory.FilterForCombat`, in the
     /// order a combat generation effect shuffles it.
     fn combat_cards(character: Self::Character) -> &'static [Self::Card];
+
+    /// The colorless pool narrowed by `CardFactory.FilterForCombat`, in the
+    /// order a combat generation effect shuffles it.
+    fn combat_colorless_cards() -> &'static [Self::Card];
 
     /// The cards one of a merchant's character shelves draws from.
     ///

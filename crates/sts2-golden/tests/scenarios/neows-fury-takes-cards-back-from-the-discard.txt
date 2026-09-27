@@ -1,0 +1,10 @@
+# Neow's Fury deals ten, then offers up to two cards from the discard pile.
+# A Strike and a Defend are there, and taking the Defend puts it back in hand.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"NEOWS_FURY"}
+{"cmd":"grant","card":"NEOWS_FURY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"answer","cards":[1]}

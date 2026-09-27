@@ -13,6 +13,8 @@ use super::Number;
 
 /// `BlockPotion`'s `BlockVar(12, ValueProp.Unpowered)`.
 const BLOCK: Number = 12;
+/// `LuckyTonic`'s `PowerVar<BufferPower>(1)`.
+const BUFFER: Number = 1;
 /// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
 const DEXTERITY: Number = 2;
 
@@ -28,6 +30,8 @@ const STRENGTH: Number = 2;
 
 /// `VulnerablePotion`'s `PowerVar<VulnerablePower>(3)`.
 const VULNERABLE: Number = 3;
+/// `WeakPotion`'s `PowerVar<WeakPower>(3)`.
+const WEAK: Number = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
@@ -96,6 +100,15 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
                 Power::VulnerablePower,
                 PowerAmount::Counted(VULNERABLE),
             );
+            Played::Done
+        }
+        Potion::WeakPotion => {
+            fight.apply_power(fight.target(), Power::WeakPower, PowerAmount::Counted(WEAK));
+            Played::Done
+        }
+        // `AnyPlayer` again.
+        Potion::LuckyTonic => {
+            fight.apply_to_actor(Power::BufferPower, PowerAmount::Counted(BUFFER));
             Played::Done
         }
         // `AnyPlayer` again, and a run with one player walks that player's

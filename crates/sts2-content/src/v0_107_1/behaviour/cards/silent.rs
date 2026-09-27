@@ -30,11 +30,9 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        // `FirstOrDefault`, and `CardCmd.Discard` of the one taken.
+        // `CardCmd.Discard` of the one taken.
         Resume::SurvivorDiscard => {
-            if let Some(card) = chosen.one_or_none() {
-                fight.discard(card);
-            }
+            fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
             Played::Done
         }
     }

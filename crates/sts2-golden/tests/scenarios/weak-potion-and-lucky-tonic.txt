@@ -1,0 +1,10 @@
+# Weak Potion puts three Weak on its target, which takes the Nibbit's twelve
+# to nine. Lucky Tonic gives the drinker one Buffer, which keeps off the hit
+# points that attack would take.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"WEAK_POTION"}
+{"cmd":"grant","potion":"LUCKY_TONIC"}
+{"cmd":"use_potion","index":0,"target":1}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}
