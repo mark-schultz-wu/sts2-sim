@@ -2530,6 +2530,10 @@ pub enum EventHook<V: ContentVersion> {
     AfterDeath {
         creature: crate::CombatId,
         side: V::CombatSide,
+        /// `wasRemovalPrevented`: a `ShouldDie` listener kept the creature
+        /// alive. The fight asks no `ShouldDie`, so it raises this for no
+        /// death but one that happened.
+        removal_prevented: bool,
     },
     /// `AfterPowerAmountChanged`, raised on every listener once a power's
     /// amount has moved.
@@ -2971,9 +2975,14 @@ pub enum HookEffect<V: ContentVersion> {
     LoseMaxHp(V::Number),
     /// `CreatureCmd.Damage` on the owner, unpowered and from nobody.
     DamageOwner(V::Number),
-    /// `CreatureCmd.Damage` on the listener's owner in a fight, unblockable
-    /// and unpowered and from nobody.
-    DamageOwnerUnblockable(V::Number),
+    /// `CreatureCmd.Damage` on the listener's owner in a fight, unpowered.
+    /// Unblockable where it says, and dealt by the owner itself where it says,
+    /// or by nobody.
+    DamageOwnerInFight {
+        amount: V::Number,
+        unblockable: bool,
+        self_dealt: bool,
+    },
     /// `CardFactory.CreateForReward` for one card of `rarity` from the
     /// character's pool, at `Uniform` odds and with no upgrade roll, into the
     /// deck.

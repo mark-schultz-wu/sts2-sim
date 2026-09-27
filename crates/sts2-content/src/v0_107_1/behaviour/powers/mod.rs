@@ -1300,7 +1300,11 @@ pub(crate) fn event_hook(
         (Power::DemisePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
             if side == owner =>
         {
-            Some(HookEffect::DamageOwnerUnblockable(amount))
+            Some(HookEffect::DamageOwnerInFight {
+                amount,
+                unblockable: true,
+                self_dealt: false,
+            })
         }
         (Power::DemisePower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
             if side == owner =>
@@ -1308,6 +1312,34 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Demise")
         }
         (Power::DemisePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ConstrictPower.AfterSideTurnEnd`: its stack off its owner, dealt by
+        // the owner and unpowered, as its owner's side's turn ends.
+        (Power::ConstrictPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::DamageOwnerInFight {
+                amount,
+                unblockable: false,
+                self_dealt: true,
+            })
+        }
+        (Power::ConstrictPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Constrict")
+        }
+        (Power::ConstrictPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ConstrictPower.AfterDeath`: gone with the creature that applied it.
+        (
+            Power::ConstrictPower,
+            _,
+            EventHook::AfterDeath {
+                creature,
+                removal_prevented: false,
+                ..
+            },
+        ) if applier == Some(creature) => Some(HookEffect::Remove),
+        (Power::ConstrictPower, _, EventHook::AfterDeath { .. }) => None,
         // `BeforeCardPlayed`: one off the stack for each card of its kind its
         // owner plays, which stands in the play pile.
         (
