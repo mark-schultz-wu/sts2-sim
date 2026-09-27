@@ -1,6 +1,7 @@
 # power data
 # build v0.107.1 commit 59260271 assembly 1692500715 content 3954186980
 # id type instance stack allowNegative removedOnOwnerDeath ownerDeathIsFatal scalesInMultiplayer ownerIsSecondaryEnemy
+# virtual <id> <method>
 power ACCELERANT_POWER Buff None Counter 0 1 1 0 0
 power ACCURACY_POWER Buff None Counter 0 1 1 0 0
 power ADAPTABLE_POWER Buff None Single 0 0 1 0 0
@@ -275,6 +276,104 @@ power WELL_LAID_PLANS_POWER Buff None Counter 0 1 1 0 0
 power WITHERING_PRESENCE_POWER Buff Instanced Counter 0 1 1 0 0
 power WRAITH_FORM_POWER Debuff None Counter 0 1 1 0 0
 # 273 powers
+virtual ADAPTABLE_POWER InitInternalData
+virtual ADAPTABLE_POWER ShouldPowerBeRemovedAfterOwnerDeath
+virtual AFTERIMAGE_POWER InitInternalData
+virtual ANTICIPATE_POWER BeforeApplied
+virtual ARTIFACT_POWER GetScaledAmountForMultiplayer
+virtual AUTOMATION_POWER InitInternalData
+virtual BARRICADE_POWER AfterApplied
+virtual BUFFER_POWER GetScaledAmountForMultiplayer
+virtual BURROWED_POWER AfterRemoved
+virtual CALAMITY_POWER InitInternalData
+virtual CHAINS_OF_BINDING_POWER InitInternalData
+virtual COORDINATE_POWER BeforeApplied
+virtual COVERED_POWER AfterApplied
+virtual CRUSH_UNDER_POWER BeforeApplied
+virtual CURL_UP_POWER InitInternalData
+virtual DAMPEN_POWER AfterApplied
+virtual DAMPEN_POWER AfterRemoved
+virtual DAMPEN_POWER InitInternalData
+virtual DARK_EMBRACE_POWER InitInternalData
+virtual DARK_SHACKLES_POWER BeforeApplied
+virtual DIE_FOR_YOU_POWER ShouldPowerBeRemovedAfterOwnerDeath
+virtual DYING_STAR_POWER BeforeApplied
+virtual ENFEEBLING_TOUCH_POWER BeforeApplied
+virtual FEEDING_FRENZY_POWER BeforeApplied
+virtual FERAL_POWER AfterApplied
+virtual FERAL_POWER InitInternalData
+virtual FLANKING_POWER AfterApplied
+virtual FLEX_POTION_POWER BeforeApplied
+virtual FOCUSED_STRIKE_POWER BeforeApplied
+virtual GIGANTIFICATION_POWER InitInternalData
+virtual GRAVITY_POWER InitInternalData
+virtual GUARDED_POWER AfterApplied
+virtual HARDENED_SHELL_POWER InitInternalData
+virtual HELICAL_DART_POWER BeforeApplied
+virtual HELLRAISER_POWER InitInternalData
+virtual HEX_POWER AfterApplied
+virtual HEX_POWER AfterRemoved
+virtual HOTFIX_POWER BeforeApplied
+virtual ILLUSION_POWER AfterApplied
+virtual ILLUSION_POWER InitInternalData
+virtual INTERCEPT_POWER InitInternalData
+virtual JUGGLING_POWER AfterApplied
+virtual JUGGLING_POWER InitInternalData
+virtual KNOCKDOWN_POWER AfterApplied
+virtual MANGLE_POWER BeforeApplied
+virtual MINION_POWER ShouldOwnerDeathTriggerFatal
+virtual MINION_POWER ShouldPowerBeRemovedAfterOwnerDeath
+virtual MOCK_INVINCIBLE_ON_DEATH_POWER ShouldPowerBeRemovedAfterOwnerDeath
+virtual MOCK_REVIVE_POWER InitInternalData
+virtual MOCK_SCALE_IN_MULTIPLAYER_POWER GetScaledAmountForMultiplayer
+virtual MOCK_TEMPORARY_STRENGTH_LOSS_POWER BeforeApplied
+virtual MONARCHS_GAZE_STRENGTH_DOWN_POWER BeforeApplied
+virtual MONOLOGUE_POWER InitInternalData
+virtual NIGHTMARE_POWER InitInternalData
+virtual OBLIVION_POWER InitInternalData
+virtual ORBIT_POWER InitInternalData
+virtual OUTBREAK_POWER InitInternalData
+virtual PAINFUL_STABS_POWER ShouldPowerBeRemovedAfterOwnerDeath
+virtual PANACHE_POWER InitInternalData
+virtual PHANTOM_BLADES_POWER AfterApplied
+virtual PIERCING_WAIL_POWER BeforeApplied
+virtual PLATING_POWER AfterApplied
+virtual PLATING_POWER GetScaledAmountForMultiplayer
+virtual POSSESS_SPEED_POWER InitInternalData
+virtual POSSESS_STRENGTH_POWER InitInternalData
+virtual REATTACH_POWER InitInternalData
+virtual REATTACH_POWER ShouldOwnerDeathTriggerFatal
+virtual REATTACH_POWER ShouldPowerBeRemovedAfterOwnerDeath
+virtual REPTILE_TRINKET_POWER BeforeApplied
+virtual RINGING_POWER AfterApplied
+virtual RINGING_POWER AfterRemoved
+virtual RITUAL_POWER AfterApplied
+virtual RUPTURE_POWER InitInternalData
+virtual SANDPIT_POWER AfterApplied
+virtual SANDPIT_POWER AfterRemoved
+virtual SERPENT_FORM_POWER InitInternalData
+virtual SETUP_STRIKE_POWER BeforeApplied
+virtual SHACKLING_POTION_POWER BeforeApplied
+virtual SHRINK_POWER AfterApplied
+virtual SHRINK_POWER AfterRemoved
+virtual SKITTISH_POWER GetScaledAmountForMultiplayer
+virtual SKITTISH_POWER InitInternalData
+virtual SLIPPERY_POWER GetScaledAmountForMultiplayer
+virtual SLUMBER_POWER AfterRemoved
+virtual SPEED_POTION_POWER BeforeApplied
+virtual STEAM_ERUPTION_POWER ShouldPowerBeRemovedAfterOwnerDeath
+virtual STORM_POWER InitInternalData
+virtual STRANGLE_POWER InitInternalData
+virtual SUBROUTINE_POWER InitInternalData
+virtual SWORD_SAGE_POWER AfterRemoved
+virtual SYNCHRONIZE_POWER BeforeApplied
+virtual TANGLED_POWER AfterApplied
+virtual TANGLED_POWER AfterRemoved
+virtual TANK_POWER AfterApplied
+virtual VIGOR_POWER InitInternalData
+virtual VITAL_SPARK_POWER AfterRemoved
+virtual VOID_FORM_POWER BeforeApplied
+virtual VOID_FORM_POWER InitInternalData
 enum PowerType 0 None
 enum PowerType 1 Buff
 enum PowerType 2 Debuff

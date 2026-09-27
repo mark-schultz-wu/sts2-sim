@@ -491,6 +491,10 @@ pub trait PowerTable: Table {
     /// Whether `PowerInstanceType` is set: a creature can carry more than one
     /// instance of it, each with its own amount.
     fn instanced(self) -> bool;
+
+    /// Whether this power's class overrides `method`, as the power dump
+    /// measured it.
+    fn overrides_virtual(self, method: PowerVirtual) -> bool;
 }
 
 /// A hook `AbstractModel` declares, which a fight raises on its listeners.
@@ -2542,9 +2546,9 @@ impl<V: ContentVersion> EventHook<V> {
     ///
     /// Nothing for a notification the dump has no row for. `AfterObtained` is
     /// a relic's own virtual. `BeforeApplied`, `AfterApplied` and
-    /// `AfterRemoved` are a power's. A move being performed is the move
-    /// state's. A model's overrides cannot say whether
-    /// it answers one of those, so it is always asked.
+    /// `AfterRemoved` are a power's, which [`EventHook::power_virtual`]
+    /// names. A move being performed is the move state's. A model's overrides
+    /// cannot say whether it answers one of those, so it is always asked.
     pub fn model_hook(&self) -> Option<ModelHook> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
@@ -2590,6 +2594,27 @@ impl<V: ContentVersion> EventHook<V> {
             | EventHook::MonsterMovePerformed { .. } => return None,
         })
     }
+
+    /// The `PowerModel` virtual this is raised as, for the notifications a
+    /// power alone is asked about itself.
+    pub fn power_virtual(&self) -> Option<PowerVirtual> {
+        match self {
+            EventHook::BeforeApplied { .. } => Some(PowerVirtual::BeforeApplied),
+            EventHook::Applied => Some(PowerVirtual::AfterApplied),
+            EventHook::Removed => Some(PowerVirtual::AfterRemoved),
+            _ => None,
+        }
+    }
+}
+
+/// A virtual `PowerModel` declares for itself, which the fight asks of a power
+/// about itself. Every power is asked these, so a power whose class overrides
+/// one answers for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerVirtual {
+    BeforeApplied,
+    AfterApplied,
+    AfterRemoved,
 }
 
 /// Which cards a hook writes on, for [`HookEffect::AddReplays`] and

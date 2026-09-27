@@ -1381,7 +1381,31 @@ impl sts2_core::PowerTable for Power {
     fn instanced(self) -> bool {
         <Self as sts2_core::Table>::data(self).instance.is_some()
     }
+
+    fn overrides_virtual(self, method: sts2_core::PowerVirtual) -> bool {
+        let bit = match method {
+            sts2_core::PowerVirtual::BeforeApplied => 1,
+            sts2_core::PowerVirtual::AfterApplied => 2,
+            sts2_core::PowerVirtual::AfterRemoved => 4,
+        };
+        VIRTUALS[self as usize] & bit != 0
+    }
 }
+
+/// Which of `BeforeApplied`, `AfterApplied` and `AfterRemoved` each
+/// power's class overrides, as bits one, two and four, indexed by the
+/// power's discriminant.
+static VIRTUALS: [u8; 283] = [
+    0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 6, 0, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0,
+    0, 0, 1, 6, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 2, 0, 2, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 6, 0, 0, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 6, 0, 0, 0, 0, 1, 0, 6, 2, 0, 0, 0, 6, 0, 0, 0, 6, 1, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0,
+    0, 4, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 0, 6, 2,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 7, 0, 0, 0, 0, 0, 0,
+];
 
 impl sts2_core::PowerKinds for Power {
     const DIE_FOR_YOU: Power = Power::DieForYouPower;
