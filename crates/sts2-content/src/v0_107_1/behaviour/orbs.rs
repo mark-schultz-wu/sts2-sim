@@ -23,7 +23,7 @@ fn printed(amount: Option<nonmax::NonMaxU8>) -> Number {
 /// An orb nobody has ported.
 pub(crate) fn channelled(orb: Orb) -> Channelled<V> {
     match orb {
-        Orb::LightningOrb => {
+        Orb::LightningOrb | Orb::FrostOrb => {
             let data = orb.data();
             Channelled {
                 orb,
@@ -38,7 +38,7 @@ pub(crate) fn channelled(orb: Orb) -> Channelled<V> {
 /// `BeforeTurnEndOrbTrigger`.
 pub(crate) fn turn_end<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
     match orb.orb {
-        Orb::LightningOrb => passive(orb, fight),
+        Orb::LightningOrb | Orb::FrostOrb => passive(orb, fight),
         orb => unimplemented!("what {orb:?} does as a turn ends"),
     }
 }
@@ -50,6 +50,7 @@ pub(crate) fn passive<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
         Orb::LightningOrb => {
             lightning(fight.orb_value(orb.orb, orb.passive), fight);
         }
+        Orb::FrostOrb => frost(fight.orb_value(orb.orb, orb.passive), fight),
         orb => unimplemented!("what {orb:?} does as its passive"),
     }
 }
@@ -57,7 +58,7 @@ pub(crate) fn passive<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
 /// `AfterTurnStartOrbTrigger`, which the base orb leaves empty.
 pub(crate) fn turn_start<F: Fight<V>>(orb: &Channelled<V>, _fight: &mut F) {
     match orb.orb {
-        Orb::LightningOrb => {}
+        Orb::LightningOrb | Orb::FrostOrb => {}
         orb => unimplemented!("what {orb:?} does as a turn starts"),
     }
 }
@@ -70,8 +71,23 @@ pub(crate) fn evoke<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) -> sts2_cor
         Orb::LightningOrb => lightning(fight.orb_value(orb.orb, orb.evoke), fight)
             .into_iter()
             .collect(),
+        // Its evoke value as block on its owner, the one creature it names.
+        Orb::FrostOrb => {
+            frost(fight.orb_value(orb.orb, orb.evoke), fight);
+            std::iter::once(fight.actor()).collect()
+        }
         orb => unimplemented!("what {orb:?} does as it is evoked"),
     }
+}
+
+/// `FrostOrb`'s block: `value` on the player, unpowered.
+fn frost<F: Fight<V>>(value: Number, fight: &mut F) {
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Number(value),
+        scaling: Scaling::Static,
+    });
+    fight.apply(block);
 }
 
 /// `LightningOrb.ApplyLightningDamage` with no target named: one enemy that

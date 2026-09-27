@@ -2694,6 +2694,25 @@ pub(crate) fn event_hook(
             count: amount,
             act: sts2_core::PileAct::Exhaust,
         }),
+        // `NecroMasteryPower.AfterCurrentHpChanged`: the hit points its
+        // owner's Osty lost, times its stack, to each enemy that can be hit,
+        // unblockable and unpowered.
+        (
+            Power::NecroMasteryPower,
+            PowerAmount::Counted(amount),
+            EventHook::CurrentHpChanged {
+                monster: Some(Monster::Osty),
+                pet_of: Some(pet_of),
+                delta,
+                ..
+            },
+        ) if delta < 0 && pet_of == holder => {
+            Some(HookEffect::DamageOpponentsUnblockable(-delta * amount))
+        }
+        (Power::NecroMasteryPower, PowerAmount::Endless, EventHook::CurrentHpChanged { .. }) => {
+            unimplemented!("an endless Necro Mastery")
+        }
+        (Power::NecroMasteryPower, _, EventHook::CurrentHpChanged { .. }) => None,
         // `ThunderPower.AfterOrbEvoked`: its stack to each creature a
         // Lightning's evoke hit that is still alive, unpowered. A fight here
         // has one player, whose every orb is its owner's.
