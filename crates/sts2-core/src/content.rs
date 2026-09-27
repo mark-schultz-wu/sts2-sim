@@ -1697,6 +1697,18 @@ pub trait Fight<V: ContentVersion> {
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
 
+    /// A card's energy and star costs: its own modifiers alone, or with
+    /// `global` every listener's too, which is `GetWithModifiers(All)`.
+    fn card_costs(&self, _card: crate::CardAt<V>, _global: bool) -> (Cost, Cost) {
+        unimplemented!("reading a card's costs")
+    }
+
+    /// `Keywords.Contains(keyword)` for one card: what its table prints and
+    /// what the fight wrote on it, less what the fight took off.
+    fn card_keyword(&self, _card: crate::CardAt<V>, _keyword: V::CardKeyword) -> bool {
+        unimplemented!("reading a card's keywords")
+    }
+
     /// `CardPileCmd.Shuffle`: the discard pile and the draw pile shuffled
     /// together into a new draw pile, then `AfterShuffle`.
     fn shuffle(&mut self) {
@@ -2142,6 +2154,15 @@ pub enum Played<V: ContentVersion> {
         /// How many it takes, which decides whether it asks at all.
         selection: Selection,
         /// Where the card stopped, in the card's own words.
+        at: V::Resume,
+    },
+    /// The play stopped on a `CardSelectCmd` whose filter lets these cards
+    /// through, which are the ones it offers. They stand in one pile, in its
+    /// order.
+    AskingAmong {
+        cards: smallvec::SmallVec<[crate::CardAt<V>; MAX_CARDS_IN_HAND]>,
+        /// How many it takes, which decides whether it asks at all.
+        selection: Selection,
         at: V::Resume,
     },
     /// The play stopped on a choose-a-card screen.

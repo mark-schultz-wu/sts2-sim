@@ -691,6 +691,19 @@ pub(crate) fn answer<V: Rules>(
                     unimplemented!("a selection with the wrong number of cards")
                 }))
             }
+            // Each card named where it stood as the selection asked, which
+            // nothing moves while it waits.
+            Asked::Among { cards, selection } => {
+                let picked: Option<sts2_core::Picked<V>> = chosen
+                    .iter()
+                    .map(|index| cards.get(index).copied())
+                    .collect();
+                let picked = picked
+                    .unwrap_or_else(|| unimplemented!("a selection naming a card not offered"));
+                sts2_core::Taken::Selected(selection.validate_answer(picked).unwrap_or_else(|| {
+                    unimplemented!("a selection with the wrong number of cards")
+                }))
+            }
             Asked::Offered { offered, skippable } => {
                 let chosen = if chosen.is_empty() {
                     if !*skippable {
@@ -877,6 +890,18 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                 Asked::Pile { pile, selection },
                 taken::<V>(next, pile, selection).map(sts2_core::Taken::Selected),
             ),
+            // `FromHand` over what its filter lets through, which takes them
+            // all unasked the way an unfiltered selection does.
+            sts2_core::Played::AskingAmong {
+                cards,
+                selection,
+                at,
+            } => {
+                let taken = selection
+                    .validate_automatic(cards.iter().copied().collect())
+                    .map(sts2_core::Taken::Selected);
+                (at, Asked::Among { cards, selection }, taken)
+            }
             sts2_core::Played::Choosing {
                 offered,
                 skippable,

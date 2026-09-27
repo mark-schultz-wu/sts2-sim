@@ -116,6 +116,11 @@ pub(super) enum Asked<V: Rules> {
         pile: sts2_core::Pile,
         selection: sts2_core::Selection,
     },
+    /// The cards of one pile a selection's filter lets through.
+    Among {
+        cards: smallvec::SmallVec<[sts2_core::CardAt<V>; sts2_core::MAX_CARDS_IN_HAND]>,
+        selection: sts2_core::Selection,
+    },
     Offered {
         offered: sts2_core::Offered<V>,
         skippable: bool,
@@ -628,6 +633,27 @@ impl<V: Rules> Face<V> {
     fn keyword(&self, printed: bool, keyword: V::CardKeyword) -> bool {
         (printed || sts2_core::FlagSet::contains(self.added_keywords, keyword))
             && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
+    }
+
+    /// `Keywords.Contains(keyword)` for this copy, for the words the table
+    /// answers for.
+    ///
+    /// # Panics
+    ///
+    /// A word the table does not answer for.
+    pub(super) fn has_keyword(&self, keyword: V::CardKeyword) -> bool {
+        use sts2_core::{CardTable as _, KeywordKinds};
+
+        let card = self.ident.card;
+        let printed = match keyword {
+            k if k == <V::CardKeyword as KeywordKinds<V>>::INNATE => card.innate(),
+            k if k == <V::CardKeyword as KeywordKinds<V>>::RETAIN => card.retains(),
+            k if k == <V::CardKeyword as KeywordKinds<V>>::SLY => card.sly(),
+            k if k == <V::CardKeyword as KeywordKinds<V>>::ETHEREAL => card.ethereal(),
+            k if k == <V::CardKeyword as KeywordKinds<V>>::EXHAUST => card.exhausts(),
+            keyword => unimplemented!("whether {card:?} prints {keyword:?}"),
+        };
+        self.keyword(printed, keyword)
     }
 
     /// `Keywords.Contains(Exhaust)` for this copy, which an upgrade can take
@@ -1841,6 +1867,16 @@ impl<V: Rules> Live<V> {
                         .ident
                 })
                 .collect(),
+            Asked::Among { cards, .. } => cards
+                .iter()
+                .map(|card| {
+                    self.cards
+                        .named(card.id())
+                        .expect("an offered card stands in its pile")
+                        .face
+                        .ident
+                })
+                .collect(),
             Asked::Offered { offered, .. } => offered.to_vec(),
         };
         Some(sts2_core::Question::SelectCards {
@@ -1869,20 +1905,24 @@ impl<V: Rules> Live<V> {
     /// building the question.
     pub(crate) fn selecting(&self) -> Option<(u32, u32, usize)> {
         let asked = self.asking.as_ref()?;
+        let bounds = |selection: sts2_core::Selection| match selection {
+            sts2_core::Selection::Exactly(count) => {
+                let count = u32::try_from(count.get()).expect("a selection count fits the wire");
+                (count, count)
+            }
+            sts2_core::Selection::UpTo(count) => (
+                0,
+                u32::try_from(count.get()).expect("a selection count fits the wire"),
+            ),
+        };
         Some(match &asked.question {
             Asked::Pile { pile, selection } => {
-                let (min, max) = match *selection {
-                    sts2_core::Selection::Exactly(count) => {
-                        let count =
-                            u32::try_from(count.get()).expect("a selection count fits the wire");
-                        (count, count)
-                    }
-                    sts2_core::Selection::UpTo(count) => (
-                        0,
-                        u32::try_from(count.get()).expect("a selection count fits the wire"),
-                    ),
-                };
+                let (min, max) = bounds(*selection);
                 (min, max, self.cards.len(*pile))
+            }
+            Asked::Among { cards, selection } => {
+                let (min, max) = bounds(*selection);
+                (min, max, cards.len())
             }
             Asked::Offered { offered, skippable } => (u32::from(!skippable), 1, offered.len()),
         })

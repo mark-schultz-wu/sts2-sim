@@ -361,13 +361,12 @@ fn turn_end<V: Rules>(
         return Some(ended);
     }
     let held: SmallVec<[_; MAX_CARDS_IN_HAND]> = live.cards.iter(Pile::Hand).collect();
-    let ethereal: SmallVec<[usize; MAX_CARDS_IN_HAND]> = held
-        .iter()
-        .enumerate()
-        .filter(|(_, held)| held.face.ethereal())
-        .map(|(at, _)| at)
-        .collect();
-    for at in ethereal.into_iter().rev() {
+    // In hand order, each found where the exhausts before it left it.
+    for ethereal in held.iter().filter(|held| held.face.ethereal()) {
+        let at = live
+            .cards
+            .find(Pile::Hand, ethereal.id)
+            .expect("an Ethereal card stays in hand until it exhausts");
         // `CardCmd.Exhaust`, which ethereal causes.
         let card = live
             .cards
@@ -1892,7 +1891,7 @@ fn enemy_turn<V: Rules>(
                     question: super::live::Asked::Offered { offered, skippable },
                 });
             }
-            sts2_core::Played::Asking { .. } => {
+            sts2_core::Played::Asking { .. } | sts2_core::Played::AskingAmong { .. } => {
                 unimplemented!("a monster's move selecting from a pile")
             }
         }
