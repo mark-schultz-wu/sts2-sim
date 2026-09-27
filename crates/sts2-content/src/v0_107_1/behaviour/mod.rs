@@ -18,9 +18,10 @@ pub(crate) mod potions;
 pub(crate) mod powers;
 pub(crate) mod relics;
 
-use sts2_core::{Fight, Played, Taken};
+use sts2_core::{Fight, Played, Table as _, Taken};
 
 use super::V0_107_1 as V;
+use super::generated::cards::{CardType, Cards, combat_cards};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
@@ -34,4 +35,14 @@ pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -
         (Resume::Potion(at), answer) => potions::resume(fight, at, answer),
         (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),
     }
+}
+
+/// The character's combat pool, narrowed to the cards of `kind`.
+pub(crate) fn character_cards<F: Fight<V>>(fight: &F, kind: CardType) -> Vec<Cards> {
+    let pool = fight.character().data().card_pool;
+    combat_cards(pool)
+        .iter()
+        .copied()
+        .filter(|card| card.data().kind == crate::Field::Constant(kind))
+        .collect()
 }

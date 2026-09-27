@@ -1838,7 +1838,9 @@ static OVERRIDES: [sts2_core::Overrides; 283] = [
     // MAYHEM_POWER
     sts2_core::Overrides::from_bits(0),
     // MIND_ROT_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHandDraw)
+        .with(sts2_core::ModelHook::ModifyHandDraw),
     // MINION_POWER
     sts2_core::Overrides::from_bits(0),
     // MOCK_CLONE_CARDS_ON_PLAY_POWER

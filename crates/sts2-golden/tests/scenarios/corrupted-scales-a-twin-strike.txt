@@ -1,0 +1,16 @@
+# Corrupted scales a powered hit its card deals by one and a half, and
+# `Hook.ModifyDamage` asks it before any listener, in decimals. Twin Strike's
+# five becomes seven and a half, and Vulnerable makes each hit 11.25, so the
+# Nibbit takes eleven twice. A port that floors the enchantment's number
+# first deals ten a hit. The play costs its owner two, once, however many
+# hits it lands.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"grant","card":"TWIN_STRIKE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"enchant","enchantment":"CORRUPTED","amount":1,"index":0}
+{"cmd":"power","power":"VULNERABLE_POWER","amount":3,"target":1}
+{"cmd":"play_card","index":0,"target":1}

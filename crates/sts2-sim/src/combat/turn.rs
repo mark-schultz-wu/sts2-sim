@@ -694,6 +694,7 @@ pub(super) fn carry_setup<V: Rules>(
                     }
                 }
                 let drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
+                super::start::after_modifying_hand_draw::<V>(live, relics);
                 // A card auto-played as it is drawn can end the fight, and an
                 // ending fight hands the hooks after it no listeners.
                 if let Some(ended) = draw(live, rngs.reborrow(), relics, ascension, drawn, true) {
@@ -830,19 +831,9 @@ fn generate_from_pool<V: Rules>(
     count: V::Number,
     keyword: Option<V::CardKeyword>,
 ) {
-    use sts2_core::CardTable as _;
-
     let count: usize = num_traits::cast(count)
         .unwrap_or_else(|| unimplemented!("making {count:?} cards from a pool"));
-    let keeps = |card: V::Card| match filter {
-        sts2_core::PoolFilter::OfKind(kind) => V::card_kind(card) == Some(kind),
-        sts2_core::PoolFilter::NotBasicOrAncient => {
-            let rarity = card.rarity();
-            rarity != <<V::Card as sts2_core::CardTable>::Rarity as sts2_core::CardRarityKinds>::BASIC
-                && rarity
-                    != <<V::Card as sts2_core::CardTable>::Rarity as sts2_core::CardRarityKinds>::ANCIENT
-        }
-    };
+    let keeps = |card: V::Card| crate::reward::card::keeps::<V>(filter, card);
     for _ in 0..count {
         let mut cards: Vec<V::Card> = V::combat_cards(live.character)
             .iter()

@@ -790,11 +790,11 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `AddGeneratedCardToCombat` of one new copy into `pile` at
     /// `CardPilePosition.Random`: the place `Rng.Shuffle.NextInt(count + 1)`
     /// names, from the top. Nothing once the fight is over.
-    fn add_at_random_here(&mut self, card: V::Card, pile: Pile) {
+    fn add_at_random_here(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
         use sts2_core::rng::GameRng as _;
 
         if self.ended.is_some() {
-            return;
+            return None;
         }
         let places: i32 = num_traits::cast(self.live.cards.len(pile) + 1)
             .expect("a pile's places fit the RNG integer");
@@ -807,7 +807,9 @@ impl<'a, V: Rules> Board<'a, V> {
             .insert(pile, at, CardInstance::new(CardIdent::new(card), id));
         let index = num_traits::NumCast::from(at)
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-        self.card_entered_combat(CardAt::new(id, pile, index), card);
+        let at = CardAt::new(id, pile, index);
+        self.card_entered_combat(at, card);
+        Some(at)
     }
 
     fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card) {
@@ -1469,6 +1471,16 @@ pub(super) fn modified_by<V: Rules>(
     amount: V::Number,
     phases: &[ModifyHook<V>],
 ) -> V::Number {
+    modified_from::<V>(fight, float::<V>(amount), phases)
+}
+
+fn float<V: Rules>(number: V::Number) -> f64 {
+    num_traits::cast(number).expect("a number a fight works out fits a float")
+}
+
+/// [`modified_by`] from a number the game holds as a decimal, which is one an
+/// enchantment scaled before any listener.
+fn modified_from<V: Rules>(fight: Walk<'_, V>, amount: f64, phases: &[ModifyHook<V>]) -> V::Number {
     let hooks = phases
         .iter()
         .fold(sts2_core::Overrides::default(), |hooks, phase| {
@@ -1487,16 +1499,15 @@ pub(super) fn modified_by<V: Rules>(
     });
     // A number nothing changes is only floored.
     if answers.is_empty() {
-        return amount.max(V::Number::zero());
+        return num_traits::cast(amount.max(0.0).trunc())
+            .expect("a modified number is a game number");
     }
 
-    let float = |number: V::Number| -> f64 {
-        num_traits::cast(number).expect("a number a fight works out fits a float")
-    };
+    let float = float::<V>;
     // Phase by phase, and within a phase in the order the walk asked. The
     // sort is stable, so it keeps that order.
     answers.sort_by_key(|&(at, _)| at);
-    let mut number = float(amount);
+    let mut number = amount;
     let mut share = 1.0f64;
     let mut phase = answers[0].0;
     for &(at, answer) in &answers {
@@ -1555,12 +1566,21 @@ pub(crate) fn modified<V: Rules>(
     powered: bool,
 ) -> V::Number {
     // The card's enchantment has its say first, and only when a card deals
-    // the hit.
+    // the hit. Its scale stays a decimal until the listeners are done.
     let damage = match card.and_then(|held| held.face.ident.enchantment) {
         Some(enchanted) => {
-            enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive { powered }, damage)
+            let added =
+                enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive { powered }, damage);
+            match <V as sts2_core::Hooks>::enchant_modify(
+                enchanted,
+                EnchantHook::DamageMultiplicative { powered },
+            ) {
+                Modify::Nothing => float::<V>(added),
+                Modify::Scaled(by) => float::<V>(added) * by,
+                answer => unimplemented!("an enchantment scaling a hit with {answer:?}"),
+            }
         }
-        None => damage,
+        None => float::<V>(damage),
     };
     let card = card.map(|held| sts2_core::CardSource {
         id: held.id,
@@ -1586,7 +1606,7 @@ pub(crate) fn modified<V: Rules>(
             powered,
         },
     ];
-    modified_by::<V>(fight, damage, &phases)
+    modified_from::<V>(fight, damage, &phases)
 }
 
 /// `amount` after an enchantment's `hook`, which the game asks before any
@@ -2134,8 +2154,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.remove_power_carried(creature, power);
     }
 
-    fn add_at_random(&mut self, card: V::Card, pile: Pile) {
-        self.add_at_random_here(card, pile);
+    fn add_at_random(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
+        self.add_at_random_here(card, pile)
     }
 
     fn modify_power_amount(&mut self, creature: CombatId, power: V::Power, amount: V::Number) {
@@ -2649,6 +2669,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.character
     }
 
+    fn generate_card(&mut self, cards: &[V::Card]) -> Option<V::Card> {
+        use sts2_core::rng::GameRng as _;
+
+        self.rngs.generation.choose(cards).ok().copied()
+    }
+
     fn generate_cards<const N: usize>(
         &mut self,
         cards: &mut [V::Card],
@@ -2851,12 +2877,12 @@ pub(super) fn shuffle<V: Rules>(
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
+            // The shuffled list is the discard and draw piles, and a card
+            // anywhere else stays put.
             (Listener::Card { id }, HookEffect::ToTopOfDrawPile) => {
-                let at = live
-                    .cards
-                    .find(Pile::Draw, id)
-                    .expect("a card moved in a shuffle was shuffled");
-                live.cards.move_to_top(Pile::Draw, at);
+                if let Some(at) = live.cards.find(Pile::Draw, id) {
+                    live.cards.move_to_top(Pile::Draw, at);
+                }
             }
             (listener, effect) => {
                 unimplemented!("{listener:?} asking for {effect:?} over a shuffle")

@@ -49,6 +49,7 @@ mod paels_tears;
 mod permafrost;
 mod phial_holster;
 mod pocketwatch;
+mod pollinous_core;
 mod pomander;
 mod precarious_shears;
 mod precise_scissors;
@@ -127,6 +128,7 @@ pub enum State {
     Permafrost(permafrost::State),
     PhialHolster,
     Pocketwatch(pocketwatch::State),
+    PollinousCore(pollinous_core::State),
     Pomander,
     PrecariousShears,
     PreciseScissors,
@@ -203,6 +205,7 @@ pub(crate) fn event_hook(
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::PhialHolster => phial_holster::event_hook(hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
+        State::PollinousCore(state) => pollinous_core::event_hook(state, hook),
         State::Pomander => pomander::event_hook(hook, asked),
         State::PrecariousShears => precarious_shears::event_hook(hook, asked),
         State::PreciseScissors => precise_scissors::event_hook(hook, asked),
@@ -245,6 +248,7 @@ pub(crate) fn decide_hook(
 pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
+        State::PollinousCore(state) => pollinous_core::modify_hook(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
@@ -348,6 +352,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::PhialHolster => State::PhialHolster,
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
+            Relic::PollinousCore => State::PollinousCore(pollinous_core::State::default()),
             Relic::Pomander => State::Pomander,
             Relic::PrecariousShears => State::PrecariousShears,
             Relic::PreciseScissors => State::PreciseScissors,
@@ -383,6 +388,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::SwordOfStone(state) => sword_of_stone::display_amount(state),
                 State::WingedBoots(state) => winged_boots::display_amount(state),
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),
+                State::PollinousCore(state) => pollinous_core::display_amount(state),
                 State::PaelsFlesh(state) => paels_flesh::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },

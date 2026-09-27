@@ -1,0 +1,5 @@
+# `Approach` asks for one deck card and enchants it with Corrupted.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"SYMBIOTE"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0]}

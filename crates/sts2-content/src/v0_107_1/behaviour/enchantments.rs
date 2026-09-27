@@ -30,7 +30,9 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         Enchantment::Slither => base && card.card.cost() != Cost::X,
         Enchantment::Sown | Enchantment::Swift => base,
         // `CanEnchantCardType`, which takes an attack alone.
-        Enchantment::Sharp => base && V::card_kind(card.card) == Some(CardKind::Attack),
+        Enchantment::Corrupted | Enchantment::Sharp => {
+            base && V::card_kind(card.card) == Some(CardKind::Attack)
+        }
         Enchantment::Nimble => base && card.card.gains_block(),
         Enchantment::Goopy => base && card.card.tagged(CardTag::Defend),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
@@ -45,7 +47,8 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
 /// not reached.
 pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent<V>) {
     match enchantment {
-        Enchantment::Nimble
+        Enchantment::Corrupted
+        | Enchantment::Nimble
         | Enchantment::PerfectFit
         | Enchantment::Sharp
         | Enchantment::Slither
@@ -61,8 +64,8 @@ pub(crate) fn enchant(enchantment: Enchantment, amount: u8, card: &mut CardIdent
     }
 }
 
-/// An enchantment's `EnchantDamageAdditive`, `EnchantBlockAdditive` or
-/// `EnchantPlayCount`, over the card it is on.
+/// An enchantment's `EnchantDamageAdditive`, `EnchantDamageMultiplicative`,
+/// `EnchantBlockAdditive` or `EnchantPlayCount`, over the card it is on.
 pub(crate) fn modify(enchanted: Enchanted<V>, hook: EnchantHook) -> Modify<i32> {
     let amount = i32::from(enchanted.amount);
     match (enchanted.enchantment, hook) {
@@ -70,11 +73,15 @@ pub(crate) fn modify(enchanted: Enchanted<V>, hook: EnchantHook) -> Modify<i32> 
         (Enchantment::Sharp, EnchantHook::DamageAdditive { powered: true }) => {
             Modify::Added(amount)
         }
+        (Enchantment::Corrupted, EnchantHook::DamageMultiplicative { powered: true }) => {
+            Modify::Scaled(1.5)
+        }
         (Enchantment::Nimble, EnchantHook::BlockAdditive) => Modify::Added(amount),
         // Its `Times`, which it prints as one.
         (Enchantment::Spiral, EnchantHook::PlayCount) => Modify::Added(1),
         (
-            Enchantment::Nimble
+            Enchantment::Corrupted
+            | Enchantment::Nimble
             | Enchantment::PerfectFit
             | Enchantment::Sharp
             | Enchantment::Slither
@@ -132,6 +139,11 @@ pub(crate) fn on_play<F: Fight<V>>(
                 fight.draw(amount);
                 *status = EnchantmentStatus::Disabled;
             }
+        }
+        // Two to its owner, unblockable and unpowered, on every play.
+        Enchantment::Corrupted => {
+            let owner = fight.actor();
+            fight.damage_unblockable(owner, 2);
         }
         Enchantment::Nimble
         | Enchantment::PerfectFit

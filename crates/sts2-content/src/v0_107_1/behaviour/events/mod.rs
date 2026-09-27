@@ -4,11 +4,14 @@ mod amalgamator;
 mod ancient;
 mod aroma_of_chaos;
 mod brain_leech;
+mod bugslayer;
 mod byrdonis_nest;
 mod colorful_philosophers;
+mod colossal_flower;
 mod darv;
 mod dense_vegetation;
 mod field_of_man_sized_holes;
+mod infested_automaton;
 mod jungle_maze_adventure;
 mod lost_wisp;
 mod luminous_choir;
@@ -20,7 +23,9 @@ mod room_full_of_cheese;
 mod sapphire_seed;
 mod self_help_book;
 mod slippery_bridge;
+mod spirit_grafter;
 mod sunken_statue;
+mod symbiote;
 mod tablet_of_truth;
 mod tea_master;
 mod tezcatara;
@@ -47,6 +52,11 @@ use super::relics::adds_pet;
 
 #[derive(Debug, Clone)]
 pub enum State {
+    InfestedAutomaton(infested_automaton::State),
+    Symbiote(symbiote::State),
+    SpiritGrafter(spirit_grafter::State),
+    ColossalFlower(colossal_flower::State),
+    Bugslayer(bugslayer::State),
     ColorfulPhilosophers(colorful_philosophers::State),
     PotionCourier(potion_courier::State),
     Amalgamator(amalgamator::State),
@@ -218,6 +228,15 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::ColorfulPhilosophers => {
             State::ColorfulPhilosophers(colorful_philosophers::ColorfulPhilosophers.enter(run, rng))
         }
+        Event::InfestedAutomaton => {
+            State::InfestedAutomaton(infested_automaton::InfestedAutomaton.enter(run, rng))
+        }
+        Event::Symbiote => State::Symbiote(symbiote::Symbiote.enter(run, rng)),
+        Event::SpiritGrafter => State::SpiritGrafter(spirit_grafter::SpiritGrafter.enter(run, rng)),
+        Event::ColossalFlower => {
+            State::ColossalFlower(colossal_flower::ColossalFlower.enter(run, rng))
+        }
+        Event::Bugslayer => State::Bugslayer(bugslayer::Bugslayer.enter(run, rng)),
         Event::AromaOfChaos => State::AromaOfChaos(aroma_of_chaos::AromaOfChaos.enter(run, rng)),
         Event::FieldOfManSizedHoles => State::FieldOfManSizedHoles(
             field_of_man_sized_holes::FieldOfManSizedHoles.enter(run, rng),
@@ -291,6 +310,13 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::ColorfulPhilosophers(state) => {
             colorful_philosophers::ColorfulPhilosophers.observe(state, run)
         }
+        State::InfestedAutomaton(state) => {
+            infested_automaton::InfestedAutomaton.observe(state, run)
+        }
+        State::Symbiote(state) => symbiote::Symbiote.observe(state, run),
+        State::SpiritGrafter(state) => spirit_grafter::SpiritGrafter.observe(state, run),
+        State::ColossalFlower(state) => colossal_flower::ColossalFlower.observe(state, run),
+        State::Bugslayer(state) => bugslayer::Bugslayer.observe(state, run),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
         State::FieldOfManSizedHoles(state) => {
             field_of_man_sized_holes::FieldOfManSizedHoles.observe(state, run)
@@ -342,6 +368,17 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::ColorfulPhilosophers(state) => {
             colorful_philosophers::ColorfulPhilosophers.choose(state, option, run, rng)
         }
+        State::InfestedAutomaton(state) => {
+            infested_automaton::InfestedAutomaton.choose(state, option, run, rng)
+        }
+        State::Symbiote(state) => symbiote::Symbiote.choose(state, option, run, rng),
+        State::SpiritGrafter(state) => {
+            spirit_grafter::SpiritGrafter.choose(state, option, run, rng)
+        }
+        State::ColossalFlower(state) => {
+            colossal_flower::ColossalFlower.choose(state, option, run, rng)
+        }
+        State::Bugslayer(state) => bugslayer::Bugslayer.choose(state, option, run, rng),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
         State::FieldOfManSizedHoles(state) => {
             field_of_man_sized_holes::FieldOfManSizedHoles.choose(state, option, run, rng)
