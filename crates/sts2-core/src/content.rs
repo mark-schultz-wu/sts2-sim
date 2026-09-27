@@ -184,6 +184,13 @@ pub trait EventTable: Table {
 
     /// The event id's deterministic hash, already cast for seed arithmetic.
     fn seed_name(self) -> &'static str;
+
+    /// The fights a build names.
+    type Encounter: Copy + 'static;
+
+    /// The encounter a `Combat`-layout event builds as it opens, which is
+    /// `GenerateInternalCombatState`. Nothing for any other layout.
+    fn combat_layout(self) -> Option<Self::Encounter>;
 }
 
 /// What a table says about a monster, beyond its row.
@@ -370,6 +377,9 @@ pub trait CardTable: Table {
     /// The hooks this card's class overrides, as the hook dump measured them.
     /// See [`PowerTable::overrides`].
     fn overrides(self) -> Overrides;
+
+    /// Every hook some card's class in the build overrides.
+    fn heard_by_any() -> Overrides;
 }
 
 /// An exact finite decimal as the game writes it.
@@ -462,6 +472,9 @@ pub struct CardNumber<K, N> {
 pub enum CardNumberModifier {
     /// `Hook.ModifyDamage`, against the creature the card is pointed at.
     Damage,
+    /// The same, for a `DamageVar` whose props carry `Unpowered`, which a
+    /// hook reading a powered attack passes over.
+    UnpoweredDamage,
     /// The same, for the owner's Osty rather than the owner. An
     /// `OstyDamageVar`, or a `CalculatedDamageVar` built `FromOsty`.
     OstyDamage,
@@ -566,6 +579,11 @@ pub enum ModelHook {
     ModifyHandDrawLate,
     ModifyShuffleOrder,
     AfterShuffle,
+    AfterModifyingHandDraw,
+    ShouldProcurePotion,
+    ModifyNextEvent,
+    BeforePotionUsed,
+    AfterSideTurnStartLate,
     ShouldDraw,
     AfterPreventingDraw,
     AfterCardDrawnEarly,
@@ -636,7 +654,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 96] = [
+    pub const ALL: [ModelHook; 101] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -666,6 +684,11 @@ impl ModelHook {
         ModelHook::ModifyHandDrawLate,
         ModelHook::ModifyShuffleOrder,
         ModelHook::AfterShuffle,
+        ModelHook::AfterModifyingHandDraw,
+        ModelHook::ShouldProcurePotion,
+        ModelHook::ModifyNextEvent,
+        ModelHook::BeforePotionUsed,
+        ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
         ModelHook::AfterPreventingDraw,
         ModelHook::AfterCardDrawnEarly,
@@ -767,6 +790,11 @@ impl ModelHook {
             ModelHook::ModifyHandDrawLate => "ModifyHandDrawLate",
             ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
             ModelHook::AfterShuffle => "AfterShuffle",
+            ModelHook::AfterModifyingHandDraw => "AfterModifyingHandDraw",
+            ModelHook::ShouldProcurePotion => "ShouldProcurePotion",
+            ModelHook::ModifyNextEvent => "ModifyNextEvent",
+            ModelHook::BeforePotionUsed => "BeforePotionUsed",
+            ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
             ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
             ModelHook::AfterCardDrawnEarly => "AfterCardDrawnEarly",
@@ -931,6 +959,9 @@ pub enum EnchantHook {
     /// `EnchantDamageAdditive`, for a hit the card deals. `powered` is
     /// `props.IsPoweredAttack()`.
     DamageAdditive { powered: bool },
+    /// `EnchantDamageMultiplicative`, over the hit after
+    /// [`EnchantHook::DamageAdditive`].
+    DamageMultiplicative { powered: bool },
     /// `EnchantBlockAdditive`, for block the card gives.
     BlockAdditive,
     /// `EnchantPlayCount`, over how many times the card's play runs.
@@ -990,13 +1021,15 @@ pub trait PotionTable: Table {
     fn usage(self) -> PotionUsage;
 
     /// What it can be pointed at, or `None` for one that works it out from a
-    /// fight rather than printing it.
+    /// fight rather than printing it, which
+    /// [`Rules::computed_potion_target`] answers.
     fn target(self) -> Option<Self::Target>;
 
     /// Whether the potion's own check lets it be drunk.
     ///
     /// `PotionModel.PassesCustomUsabilityCheck`, which is `virtual`. `None`
-    /// for the one potion that answers it from live state.
+    /// for the one potion that answers it from live state, which
+    /// [`Rules::computed_potion_check`] answers.
     fn passes_own_check(self) -> Option<bool>;
 }
 
@@ -1390,6 +1423,10 @@ pub trait RarityKinds: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
     /// slot picks no rarity of its own. A screen reports it as the slot's
     /// rarity.
     const UNDRAFTED: Self;
+
+    /// `RelicRarity.Starter`, a character's own relic, which a bag never
+    /// deals.
+    const STARTER: Self;
 }
 
 /// The ascension ladder, as much of it as a rule needs to ask about.
@@ -1704,6 +1741,16 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("choosing a random card from combat")
     }
 
+    /// `TakeRandom(count)` over `cards` off `CombatCardSelection`: the list
+    /// shuffled whole, then its first `count`, fewer where it is shorter.
+    fn take_random_cards(
+        &mut self,
+        _cards: &mut [crate::CardAt<V>],
+        _count: usize,
+    ) -> Vec<crate::CardAt<V>> {
+        unimplemented!("taking cards at random from the fight")
+    }
+
     /// `CardPileCmd.RemoveFromCombat` for one named card.
     fn remove_card(&mut self, _card: crate::CardAt<V>) -> crate::CardIdent<V> {
         unimplemented!("removing a card from combat")
@@ -1803,6 +1850,24 @@ pub trait Fight<V: ContentVersion> {
     /// this each time.
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number;
 
+    /// `CardPileCmd.AddGeneratedCardToCombat` of a new copy into `pile` at
+    /// `CardPilePosition.Random`, and where it landed. Nothing, in a fight
+    /// already over.
+    fn add_at_random(&mut self, _card: V::Card, _pile: crate::Pile) -> Option<crate::CardAt<V>> {
+        unimplemented!("a card added at a random place")
+    }
+
+    /// `PowerCmd.ModifyAmount` on `creature`'s `power`, by a signed amount,
+    /// from the creature holding it.
+    fn modify_power_amount(
+        &mut self,
+        _creature: crate::CombatId,
+        _power: V::Power,
+        _amount: V::Number,
+    ) {
+        unimplemented!("a power's amount moved")
+    }
+
     /// `PowerCmd.Remove` of `power` from `creature`, where it holds one.
     fn remove_power(&mut self, _creature: crate::CombatId, _power: V::Power) {
         unimplemented!("removing a power")
@@ -1844,9 +1909,20 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("evoking an orb")
     }
 
+    /// `OrbCmd.AddSlots`: `amount` more orb slots for the player, and never
+    /// past ten. Nothing once the fight is ending.
+    fn add_orb_slots(&mut self, _amount: V::Number) {
+        unimplemented!("adding orb slots")
+    }
+
     /// How many orbs the player holds, which is `OrbQueue.Orbs.Count`.
     fn orbs_held(&self) -> usize {
         unimplemented!("counting orbs")
+    }
+
+    /// The player's orbs, front first, which is `OrbQueue.Orbs`.
+    fn channelled(&self) -> Vec<crate::Channelled<V>> {
+        unimplemented!("listing orbs")
     }
 
     /// `CreatureCmd.Damage(target, amount, Unblockable | Unpowered, card)`,
@@ -1934,6 +2010,13 @@ pub trait Fight<V: ContentVersion> {
     /// The character whose pool combat generation reads.
     fn character(&self) -> V::Character {
         unimplemented!("the character in this fight")
+    }
+
+    /// One card of a combat-ready pool, `NextItem` off
+    /// `CombatCardGeneration`, which is each draw `CardFactory.GetForCombat`
+    /// makes. Nothing, for an empty pool.
+    fn generate_card(&mut self, _cards: &[V::Card]) -> Option<V::Card> {
+        unimplemented!("generating a card for combat")
     }
 
     /// Generate distinct cards from a combat-ready pool.
@@ -2279,16 +2362,16 @@ pub enum ModifyHook<V: ContentVersion> {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
-        /// `cardSource != null`: a card's own play gives the block.
-        card: bool,
+        /// `cardSource`: the card whose own play gives the block.
+        card: Option<V::Card>,
     },
     /// `ModifyBlockMultiplicative`, over what the additions left.
     BlockMultiplicative {
         target: crate::CombatId,
         /// `props.IsPoweredCardOrMonsterMoveBlock()`.
         powered: bool,
-        /// `cardSource != null`, as [`ModifyHook::BlockAdditive`] carries it.
-        card: bool,
+        /// `cardSource`, as [`ModifyHook::BlockAdditive`] carries it.
+        card: Option<V::Card>,
         /// `cardPlay`, as the play's [`PlayAt`].
         play: Option<PlayAt>,
     },
@@ -2301,9 +2384,12 @@ pub enum ModifyHook<V: ContentVersion> {
     },
     HpLostAfterOsty {
         target: crate::CombatId,
+        /// The fight's player, which a relic's owner is.
+        player: crate::CombatId,
     },
     HpLostAfterOstyLate {
         target: crate::CombatId,
+        player: crate::CombatId,
     },
     /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
     /// `target`, as an application or a change to one it carries.
@@ -2456,6 +2542,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldAllowFreeTravel`: whether the run can go on to any point of
     /// the next row, rather than only those its point leads on to.
     ShouldAllowFreeTravel,
+    /// `ShouldProcurePotion`: whether the player takes `potion`. One no
+    /// refuses it.
+    ShouldProcurePotion { potion: V::Potion },
 }
 
 impl<V: ContentVersion> DecisionHook<V> {
@@ -2476,6 +2565,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
             DecisionHook::ShouldAllowFreeTravel => ModelHook::ShouldAllowFreeTravel,
+            DecisionHook::ShouldProcurePotion { .. } => ModelHook::ShouldProcurePotion,
             DecisionHook::ShouldDraw { .. } => ModelHook::ShouldDraw,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
@@ -2486,6 +2576,21 @@ impl<V: ContentVersion> DecisionHook<V> {
 /// A notification delivered to one content model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventHook<V: ContentVersion> {
+    /// `AfterSideTurnStartLate`, once every listener has answered
+    /// [`EventHook::SideTurnStart`].
+    SideTurnStartLate {
+        side: V::CombatSide,
+    },
+    /// `BeforePotionUsed`, as the player drinks a potion in a fight, before
+    /// it leaves the belt.
+    PotionUsing {
+        /// The creature it is aimed at, where it aims.
+        target: Option<crate::CombatId>,
+    },
+    /// `AfterModifyingHandDraw`, to each listener whose `ModifyHandDraw`
+    /// changed the turn's hand, before it is drawn. The listener reads for
+    /// itself whether it did.
+    HandDrawModified,
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
     /// A fight here has one player, who is the shuffler.
     Shuffled,
@@ -2542,9 +2647,17 @@ pub enum EventHook<V: ContentVersion> {
     /// turn starts.
     PlayerTurnStart {
         player: crate::CombatId,
+        /// The player's `TurnNumber`.
+        turn: V::Count,
     },
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
+    /// `AfterCardChangedPiles` for a card that joined the deck, outside a
+    /// fight. `cloned` is `clonedBy` being set, for a copy a listener made.
+    AddedToDeck {
+        card: V::Card,
+        cloned: bool,
+    },
     /// `AfterCardChangedPiles`, once a card lands in the pile it moved to.
     /// The fight raises it where a transform lands the replacement.
     CardChangedPiles {
@@ -2649,11 +2762,15 @@ pub enum EventHook<V: ContentVersion> {
     CardPlaying {
         card: V::Card,
         id: crate::CardId<V>,
+        /// `CardPlay.Target`.
+        target: Option<crate::CombatId>,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
         /// `EnergyCost.GetResolved()`: the cost with every modifier, or the
         /// X the play captured.
         resolved: V::Number,
+        /// `CardPlay.Resources.EnergyValue`: the energy this play spent.
+        spent: V::Number,
     },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
@@ -2830,6 +2947,9 @@ impl<V: ContentVersion> EventHook<V> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
             EventHook::Shuffled => ModelHook::AfterShuffle,
+            EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
+            EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
+            EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting => ModelHook::BeforeCombatStart,
@@ -2843,7 +2963,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CardExhausted { .. } => ModelHook::AfterCardExhausted,
             EventHook::OrbEvoked { .. } => ModelHook::AfterOrbEvoked,
             EventHook::CurrentHpChanged { .. } => ModelHook::AfterCurrentHpChanged,
-            EventHook::CardChangedPiles { .. } => ModelHook::AfterCardChangedPiles,
+            EventHook::CardChangedPiles { .. } | EventHook::AddedToDeck { .. } => {
+                ModelHook::AfterCardChangedPiles
+            }
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
             EventHook::PowerAmountReceivedModified { .. } => {
                 ModelHook::AfterModifyingPowerAmountReceived
@@ -3142,6 +3264,8 @@ pub enum PoolFilter {
     OfKind(CardKind),
     /// Every card but the `Basic` and `Ancient` ones.
     NotBasicOrAncient,
+    /// The cards whose canonical cost is nothing, and not X.
+    FreeFixedCost,
 }
 
 /// `CardPilePosition`: which end of a pile a card goes to.
@@ -3180,6 +3304,9 @@ pub enum DeckAct<V: ContentVersion> {
     /// `FromDeckForTransformation`, then `CardCmd.TransformToRandom` off the
     /// named stream. It offers the cards that can be transformed.
     Transform(Stream<V>),
+    /// The same, with each replacement upgraded before it lands, as
+    /// `CardCmd.Upgrade` then `CardCmd.Transform`.
+    TransformUpgraded(Stream<V>),
     /// `FromDeckForRemoval` over the deck's basic cards with this tag that
     /// can be removed, then `CardPileCmd.RemoveFromDeck`.
     RemoveBasicTagged(V::CardTag),
@@ -3209,21 +3336,37 @@ pub enum Stream<V: ContentVersion> {
 /// One reward a relic's own screen offers, as `RewardsCmd.OfferCustom` is
 /// handed it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CustomReward {
+pub enum CustomReward<V: ContentVersion> {
+    /// `RelicReward(rarity)`: the next relic of that rarity from the front
+    /// of the player's bag, pulled as the reward fills in.
+    Relic(<V::Relic as crate::RelicTable>::Rarity),
     /// `CardReward` over the character's own pool at `RegularEncounter` odds,
     /// from `CardCreationSource.Other`, offering this many cards.
     CharacterCards(usize),
     /// `PotionReward(player)`, a random potion out of combat.
     Potion,
+    /// `PotionReward(potion, player)` for this potion.
+    SpecificPotion(V::Potion),
+    /// `PotionReward(potion, player)` for one `Rng.NextItem` over the
+    /// uncommon potions of the character's pool and the shared one, off the
+    /// rewards stream.
+    UncommonPotion,
     /// `PotionReward(potion, player)` for one `Rng.NextItem` over
     /// [`Rules::unlocked_potions`] off the rewards stream.
     UnlockedPotion,
     /// `CardReward` over the colourless pool at `RegularEncounter` odds, with
     /// no upgrade roll, offering this many cards.
     ColorlessCards(usize),
-    /// `CardReward` over the character's own pool at uniform odds, of one
-    /// rarity, with no rarity modification. Glass Eye offers five.
-    CardsOf { rarity: RewardRarity, count: usize },
+    /// `CardReward` over a character's pool at uniform odds, of one rarity,
+    /// with no rarity or pool modification. `pool` names another character's
+    /// pool, and nothing is the character's own. Glass Eye offers five.
+    CardsOf {
+        pool: Option<V::Character>,
+        rarity: RewardRarity,
+        count: usize,
+        /// `RollForUpgrade` for each card, which `NoUpgradeRoll` leaves out.
+        upgrade_roll: bool,
+    },
     /// `CardReward` over the character's own pool at uniform odds, of one
     /// rarity and one type, and then every card it offers upgraded. The
     /// Future of Potions offers it.
@@ -3295,7 +3438,7 @@ pub enum HookEffect<V: ContentVersion> {
     AddRelicRewards(usize),
     /// `RewardsCmd.OfferCustom`: a screen of these rewards, filled in in this
     /// order, which the player takes from or skips.
-    OfferRewards(&'static [CustomReward]),
+    OfferRewards(&'static [CustomReward<V>]),
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {
@@ -3336,6 +3479,29 @@ pub enum HookEffect<V: ContentVersion> {
         min: usize,
         max: usize,
     },
+    /// `CardCmd.Transform` on every deck card that `IsBasicStrikeOrDefend`
+    /// and is removable, each into `CreateRandomCardForTransform` off the
+    /// named stream, in deck order.
+    TransformBasicStrikesAndDefends(Stream<V>),
+    /// `RelicCmd.Replace` on the first starter relic the player holds, with
+    /// the relic `upgrades` pairs it with, or `fallback` for one it names
+    /// nowhere. The replacement takes the starter's slot.
+    ReplaceStarterRelic {
+        upgrades: &'static [(V::Relic, V::Relic)],
+        fallback: V::Relic,
+    },
+    /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
+    /// the deck's bottom, cloned by the listener.
+    CloneIntoDeck,
+    /// `Rng.NextInt(below)` off a stream, drawn for its place in the stream
+    /// alone, which a flavour line makes.
+    DrawFromStream {
+        stream: Stream<V>,
+        below: u32,
+    },
+    /// `RelicCmd.Remove` on the first of the player's relics that is this
+    /// one.
+    RemoveRelic(V::Relic),
     /// `PlayerCmd.GainMaxPotionCount`.
     GainPotionSlots(usize),
     /// `PotionFactory.CreateRandomPotionsOutOfCombat` off the named stream,
@@ -3477,6 +3643,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.AutoPlay` of this copy, with no target named: the card plays
     /// for free, and one that targets an enemy picks it off `CombatTargets`.
     AutoPlay(crate::CardId<V>),
+    /// `EnchantmentModel.Status = Disabled` on the enchantment of the card
+    /// that asked.
+    DisableOwnEnchantment,
     /// `Card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
     /// `CombatEnergyCosts`, on the card whose enchantment asked. Slither's.
     RandomSelfCost {
@@ -3519,12 +3688,22 @@ pub enum HookEffect<V: ContentVersion> {
     MimicRestSiteHeal,
     /// `EventModel.EnterCombatWithoutExitingEvent`, which fights inside the
     /// event's room and does not come back to it. It is the whole of the
-    /// option that starts it.
-    FightInEvent(V::Encounter),
+    /// option that starts it. `reward` is a card its extra rewards offer as
+    /// a `SpecialCardReward`.
+    FightInEvent {
+        encounter: V::Encounter,
+        reward: Option<V::Card>,
+    },
     /// `CardPileCmd.Add(card, PileType.Deck)`, a new card into the run's deck.
     AddToDeck(V::Card),
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
+    /// `CardFactory.CreateForReward` of one card from the character's pool,
+    /// narrowed by the filter, at `RegularEncounter` odds with no upgrade
+    /// roll, into the deck.
+    AddRegularCard(PoolFilter),
+    /// `CreatureCmd.Kill(creature, force: true)`.
+    KillCreature(crate::CombatId),
     /// `CardPileCmd.AddGeneratedCardToCombat` of `count` new copies into
     /// the player's draw pile, each at `CardPilePosition.Random`: the place
     /// `Rng.Shuffle.NextInt(count + 1)` names, from the top.
@@ -3548,6 +3727,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.ShuffleIfNecessary`: the discard pile shuffled into an
     /// empty draw pile.
     ShuffleIfNecessary,
+    /// `CardCmd.Exhaust` on the top card of the draw pile, or with
+    /// `passing_innate` on the first there that is not innate, falling back
+    /// to the top. Nothing, for an empty pile.
+    ExhaustFromDrawTop {
+        passing_innate: bool,
+    },
     /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
     /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
     GenerateInHand {
@@ -3860,10 +4045,13 @@ pub trait Hooks: ContentVersion {
     ) -> crate::HookResponse<bool>;
 
     /// `EnchantDamageAdditive` and its kin, answered by the enchantment on a
-    /// card. [`Modify::Nothing`] for one whose class does not override the
-    /// hook.
-    fn enchant_modify(enchanted: crate::Enchanted<Self>, hook: EnchantHook)
-    -> Modify<Self::Number>;
+    /// card, whose `Status` is `status`. [`Modify::Nothing`] for one whose
+    /// class does not override the hook.
+    fn enchant_modify(
+        enchanted: crate::Enchanted<Self>,
+        status: crate::EnchantmentStatus,
+        hook: EnchantHook,
+    ) -> Modify<Self::Number>;
 
     /// What an enchantment asks for when `hook` reaches the card `id` it is
     /// on, pushed onto `asked`. Asked only of an enchantment whose class
@@ -4365,7 +4553,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + EventTable<Act = Self::Act>
+        + EventTable<Act = Self::Act, Encounter = Self::Encounter>
         + 'static;
 
     /// A run-wide rule chosen before the run starts.
@@ -4830,6 +5018,13 @@ pub trait Rules: Hooks {
         side: Self::CombatSide,
     ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
 
+    /// Powers a monster's `AfterAddedToRoom` applies to each of its
+    /// opponents, from itself.
+    fn monster_starting_opponent_powers(
+        monster: Self::Monster,
+        ascension: Self::AscensionLevel,
+    ) -> impl Iterator<Item = (Self::Power, PowerAmount<Self::Number>)>;
+
     /// What one potion does when it is drunk, which is `PotionModel.OnUse`.
     ///
     /// `OnUseWrapper` calls `RemoveBeforeUse` first, so the potion has left
@@ -4862,6 +5057,38 @@ pub trait Rules: Hooks {
     ///
     /// A card whose override nobody has ported.
     fn computed_card_target(card: Self::Card, powers: &[crate::Stack<Self>]) -> Self::TargetType;
+
+    /// `ModifyUnknownMapPointRoomTypes` for a card in the deck, in the act
+    /// counted from zero: whether it leaves an unknown room nothing but an
+    /// event.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool;
+
+    /// `ModifyNextEvent` for a card in the deck: the event it puts in place
+    /// of `event`, which is `event` where it changes nothing.
+    ///
+    /// # Panics
+    ///
+    /// A card whose override nobody has ported.
+    fn deck_card_next_event(card: Self::Card, act: usize, event: Self::Event) -> Self::Event;
+
+    /// `PotionModel.TargetType`, overridden, for a potion that reads whether a
+    /// fight is in progress, which `in_combat` says.
+    ///
+    /// # Panics
+    ///
+    /// A potion whose override nobody has ported.
+    fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType;
+
+    /// `PotionModel.PassesCustomUsabilityCheck`, overridden, the same way.
+    ///
+    /// # Panics
+    ///
+    /// A potion whose override nobody has ported.
+    fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool;
 
     /// What a card works out from the fight for a number it prints.
     ///
@@ -4933,6 +5160,14 @@ pub trait Rules: Hooks {
         run: &impl crate::EventView<Self>,
         rewards: &mut R,
     );
+
+    /// [`crate::EventBehavior::relics_pulled`] for the event entered.
+    fn event_relics_pulled(_state: &Self::EventState) -> usize {
+        0
+    }
+
+    /// [`crate::EventBehavior::hand_pulled_relics`] for the event entered.
+    fn hand_event_pulled_relics(_state: &mut Self::EventState, _relics: &[Self::Relic]) {}
 
     fn observe_event(
         state: &Self::EventState,

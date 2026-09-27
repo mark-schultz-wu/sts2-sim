@@ -1,0 +1,6 @@
+# Radiant Pearl makes a Luminesce in hand before the first hand is drawn, so
+# the hand opens with six. The second turn draws five as usual.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"RADIANT_PEARL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

@@ -16,17 +16,10 @@ use crate::stream::Streams;
 fn health<V: Rules>(
     monster: V::Monster,
     ascension: V::AscensionLevel,
-    creatures: &[Fighter<V>],
+    used: &[V::Health],
     niche: &mut MegaRng,
 ) -> V::Health {
     let range = V::monster_hp_bounds(monster, ascension);
-    let used = creatures
-        .iter()
-        .filter_map(|creature| match creature.model {
-            Some(ModelId::Monster(_)) => Some(creature.max_hp),
-            _ => None,
-        });
-    let used: SmallVec<[V::Health; CREATURES]> = used.collect();
     // No monster in either build rolls in a range wider than eleven, so this
     // stays inline.
     let available: SmallVec<[V::Health; 16]> =
@@ -36,6 +29,44 @@ fn health<V: Rules>(
     } else {
         niche.next_interval(range)
     }
+}
+
+/// The monsters a fight opens with, and the health each already rolled,
+/// where an event rolled it as it opened. Empty for a fight that rolls its
+/// own.
+#[derive(Clone, Copy)]
+pub(crate) struct Roster<'a, V: Rules> {
+    pub(crate) monsters: &'a [sts2_core::Spawned<V>],
+    pub(crate) rolled: &'a [V::Health],
+}
+
+/// The maximum health of each monster among `creatures`, which a roll keeps
+/// clear of.
+fn monster_hps<V: Rules>(creatures: &[Fighter<V>]) -> SmallVec<[V::Health; CREATURES]> {
+    creatures
+        .iter()
+        .filter_map(|creature| match creature.model {
+            Some(ModelId::Monster(_)) => Some(creature.max_hp),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `GenerateInternalCombatState`: the health each of an encounter's
+/// monsters rolls as a `Combat`-layout event builds its fight, in the order
+/// they stand. `CombatState.CreateCreature` rolls it off `Niche` against the
+/// ones before.
+pub(crate) fn roll_layout<V: Rules>(
+    monsters: &[sts2_core::Spawned<V>],
+    ascension: V::AscensionLevel,
+    niche: &mut MegaRng,
+) -> SmallVec<[V::Health; 2]> {
+    let mut rolled: SmallVec<[V::Health; 2]> = SmallVec::new();
+    for spawned in monsters {
+        let hp = health::<V>(spawned.monster, ascension, &rolled, niche);
+        rolled.push(hp);
+    }
+    rolled
 }
 
 /// One monster's move graph, and where it stands.
@@ -70,11 +101,12 @@ pub(crate) fn initialize<V: Rules>(
     ascension: V::AscensionLevel,
     encounter: V::Encounter,
     streams: &mut Streams<V>,
-    monsters: &[sts2_core::Spawned<V>],
+    roster: Roster<'_, V>,
     creatures: &mut Creatures<V>,
     powers: &mut PowerStore<V>,
     machines: &mut Bounded<Machine<V>, CREATURES>,
 ) -> Result<(), Error> {
+    let Roster { monsters, rolled } = roster;
     let rngs = streams.combat();
 
     // A fight the encounter builds nobody for is not a fight.
@@ -95,7 +127,14 @@ pub(crate) fn initialize<V: Rules>(
         },
     ) in monsters.iter().enumerate()
     {
-        let hp = health::<V>(monster, ascension, &creatures[first..], rngs.niche);
+        // A fight an event built as it opened rolled its health then.
+        let hp = match rolled.get(index) {
+            Some(&hp) => hp,
+            None => {
+                let used = monster_hps::<V>(&creatures[first..]);
+                health::<V>(monster, ascension, &used, rngs.niche)
+            }
+        };
 
         let position = u8::try_from(index)
             .ok()
@@ -148,6 +187,19 @@ pub(crate) fn initialize<V: Rules>(
         let side = <V::CombatSide as SideKinds>::PLAYER;
         for (power, amount) in V::monster_starting_powers(monster, ascension, side) {
             powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
+        }
+        let opponents: SmallVec<[CombatId; 2]> = creatures
+            .iter()
+            .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
+            .map(|creature| creature.id)
+            .collect();
+        for (power, amount) in V::monster_starting_opponent_powers(monster, ascension) {
+            for &opponent in &opponents {
+                powers.push(
+                    opponent,
+                    HeldPower::new(power, Stacked::from(amount), Some(id)),
+                );
+            }
         }
     }
 
@@ -219,7 +271,8 @@ pub(super) fn summon<V: Rules>(
     else {
         panic!("combat has too many creatures to assign an id");
     };
-    let hp = health::<V>(monster, live.ascension, &live.creatures, niche);
+    let used = monster_hps::<V>(&live.creatures);
+    let hp = health::<V>(monster, live.ascension, &used, niche);
     let creature_at = live
         .creatures
         .iter()
@@ -313,7 +366,10 @@ mod tests {
             AscensionLevel::None,
             Encounter::SlimesWeak,
             &mut streams,
-            &inklets,
+            Roster {
+                monsters: &inklets,
+                rolled: &[],
+            },
             &mut creatures,
             &mut powers,
             &mut machines,
@@ -398,7 +454,10 @@ mod tests {
             AscensionLevel::None,
             Encounter::DecimillipedeElite,
             &mut streams,
-            &segments,
+            Roster {
+                monsters: &segments,
+                rolled: &[],
+            },
             &mut creatures,
             &mut powers,
             &mut machines,
@@ -431,7 +490,10 @@ mod tests {
             AscensionLevel::None,
             Encounter::SlimesWeak,
             &mut streams,
-            &monsters,
+            Roster {
+                monsters: &monsters,
+                rolled: &[],
+            },
             &mut creatures,
             &mut powers,
             &mut machines,

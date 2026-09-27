@@ -380,6 +380,21 @@ impl<'a, V: Rules> Board<'a, V> {
         for (power, amount) in entering {
             self.land(id, power, amount, Some(id));
         }
+        let aimed: SmallVec<[_; 2]> =
+            V::monster_starting_opponent_powers(monster, self.live.ascension).collect();
+        // `CombatState.GetOpponentsOf`, pets included.
+        let opponents: SmallVec<[CombatId; 4]> = self
+            .live
+            .creatures
+            .iter()
+            .filter(|creature| creature.side != <V::CombatSide as SideKinds>::ENEMY)
+            .map(|creature| creature.id)
+            .collect();
+        for (power, amount) in aimed {
+            for &opponent in &opponents {
+                self.land(opponent, power, amount, Some(id));
+            }
+        }
     }
 
     fn applied(&mut self, id: CombatId, power: V::Power) {
@@ -454,7 +469,17 @@ impl<'a, V: Rules> Board<'a, V> {
         // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove` for a power it
         // says is done.
         if spent {
-            self.live.remove_power(id, power);
+            self.remove_power_carried(id, power);
+        }
+    }
+
+    /// `PowerCmd.Remove`, with what its `AfterRemoved` asks carried out.
+    fn remove_power_carried(&mut self, id: CombatId, power: V::Power) {
+        for effect in self.live.remove_power_asking(id, power) {
+            match effect {
+                HookEffect::KillCreature(creature) => self.kill_outright(creature),
+                other => unimplemented!("{power:?} asking for {other:?} as it comes off"),
+            }
         }
     }
 
@@ -759,23 +784,32 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `AddGeneratedCardToCombat` of one new copy into the draw pile at
     /// `CardPilePosition.Random`. Nothing once the fight is over.
     fn add_to_draw_at_random(&mut self, card: V::Card) {
+        self.add_at_random_here(card, Pile::Draw);
+    }
+
+    /// `AddGeneratedCardToCombat` of one new copy into `pile` at
+    /// `CardPilePosition.Random`: the place `Rng.Shuffle.NextInt(count + 1)`
+    /// names, from the top. Nothing once the fight is over.
+    fn add_at_random_here(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
         use sts2_core::rng::GameRng as _;
 
         if self.ended.is_some() {
-            return;
+            return None;
         }
-        let places: i32 = num_traits::cast(self.live.cards.len(Pile::Draw) + 1)
-            .expect("a draw pile's places fit the RNG integer");
+        let places: i32 = num_traits::cast(self.live.cards.len(pile) + 1)
+            .expect("a pile's places fit the RNG integer");
         let bound = sts2_core::rng::Bound::try_new(places).expect("a pile has a place");
         let at: usize = num_traits::cast(self.rngs.shuffle.next_int(bound))
             .expect("a draw below the bound is a place");
         let id = self.live.card_ids.mint();
         self.live
             .cards
-            .insert(Pile::Draw, at, CardInstance::new(CardIdent::new(card), id));
+            .insert(pile, at, CardInstance::new(CardIdent::new(card), id));
         let index = num_traits::NumCast::from(at)
             .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
-        self.card_entered_combat(CardAt::new(id, Pile::Draw, index), card);
+        let at = CardAt::new(id, pile, index);
+        self.card_entered_combat(at, card);
+        Some(at)
     }
 
     fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card) {
@@ -981,7 +1015,7 @@ impl<'a, V: Rules> Board<'a, V> {
         );
         for (listener, effect) in asked {
             match effect {
-                HookEffect::ReturnCard(card) => self.live.returned.push(card),
+                HookEffect::ReturnCard(card) => self.live.extra_cards.push(card),
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
@@ -1188,6 +1222,19 @@ impl<'a, V: Rules> Board<'a, V> {
                     self.live.remove_power(owner, power)
                 }
                 (Listener::Power { owner, .. }, effect) if owner == creature => own.push(effect),
+                // `PowerCmd.Apply` on the power's owner, from itself.
+                (Listener::Power { owner, .. }, HookEffect::ApplyToOwner(power, amount)) => {
+                    self.land(owner, power, amount, Some(owner));
+                }
+                // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::GainBlock(amount)) => {
+                    let block = self.resolve(sts2_core::Effect::GainBlock {
+                        recipient: owner,
+                        amount: sts2_core::Amount::Number(amount),
+                        scaling: Scaling::Static,
+                    });
+                    sts2_core::Fight::apply(self, block);
+                }
                 (Listener::Card { id }, HookEffect::ModifySelf { change, lasting }) => {
                     self.live.modify_self(id, change, lasting)
                 }
@@ -1220,9 +1267,10 @@ impl<'a, V: Rules> Board<'a, V> {
         };
         let mut number = float(amount);
         let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
+        let player = self.live.player().id;
         for phase in [
-            ModifyHook::HpLostAfterOsty { target },
-            ModifyHook::HpLostAfterOstyLate { target },
+            ModifyHook::HpLostAfterOsty { target, player },
+            ModifyHook::HpLostAfterOstyLate { target, player },
         ] {
             super::listen::each::<V>(
                 self.walk(),
@@ -1241,6 +1289,9 @@ impl<'a, V: Rules> Board<'a, V> {
                             sts2_core::Listener::Power { holder, power, .. } => {
                                 modifiers.push((holder, power))
                             }
+                            // Every relic's `AfterModifyingHpLostAfterOsty`
+                            // only flashes.
+                            sts2_core::Listener::Relic(_) => {}
                             _ => unimplemented!(
                                 "a listener other than a power changing what a hit takes"
                             ),
@@ -1424,6 +1475,22 @@ pub(super) fn modified_by<V: Rules>(
     amount: V::Number,
     phases: &[ModifyHook<V>],
 ) -> V::Number {
+    scaled_by::<V>(fight, amount, None, phases)
+}
+
+fn float<V: Rules>(number: V::Number) -> f64 {
+    num_traits::cast(number).expect("a number a fight works out fits a float")
+}
+
+/// [`modified_by`] over a number an enchantment scaled first, where `scale`
+/// says so. The game holds the scaled number as a decimal until the
+/// listeners are done.
+fn scaled_by<V: Rules>(
+    fight: Walk<'_, V>,
+    amount: V::Number,
+    scale: Option<f64>,
+    phases: &[ModifyHook<V>],
+) -> V::Number {
     let hooks = phases
         .iter()
         .fold(sts2_core::Overrides::default(), |hooks, phase| {
@@ -1442,16 +1509,18 @@ pub(super) fn modified_by<V: Rules>(
     });
     // A number nothing changes is only floored.
     if answers.is_empty() {
-        return amount.max(V::Number::zero());
+        return match scale {
+            None => amount.max(V::Number::zero()),
+            Some(by) => num_traits::cast((float::<V>(amount) * by).max(0.0).trunc())
+                .expect("a modified number is a game number"),
+        };
     }
 
-    let float = |number: V::Number| -> f64 {
-        num_traits::cast(number).expect("a number a fight works out fits a float")
-    };
+    let float = float::<V>;
     // Phase by phase, and within a phase in the order the walk asked. The
     // sort is stable, so it keeps that order.
     answers.sort_by_key(|&(at, _)| at);
-    let mut number = float(amount);
+    let mut number = float(amount) * scale.unwrap_or(1.0);
     let mut share = 1.0f64;
     let mut phase = answers[0].0;
     for &(at, answer) in &answers {
@@ -1481,14 +1550,18 @@ pub(super) fn modified_by<V: Rules>(
     num_traits::cast(number.max(0.0).trunc()).expect("a modified number is a game number")
 }
 
+/// The most orb slots `OrbCmd.AddSlots` gives a player.
+const MAX_ORB_SLOTS: u8 = 10;
+
 /// `ModifyHpLost` in the phases after a hit found who takes it.
 fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number) -> V::Number {
+    let player = fight.live.player().id;
     modified_by::<V>(
         fight,
         amount,
         &[
-            ModifyHook::HpLostAfterOsty { target },
-            ModifyHook::HpLostAfterOstyLate { target },
+            ModifyHook::HpLostAfterOsty { target, player },
+            ModifyHook::HpLostAfterOstyLate { target, player },
         ],
     )
 }
@@ -1510,12 +1583,32 @@ pub(crate) fn modified<V: Rules>(
     powered: bool,
 ) -> V::Number {
     // The card's enchantment has its say first, and only when a card deals
-    // the hit.
-    let damage = match card.and_then(|held| held.face.ident.enchantment) {
-        Some(enchanted) => {
-            enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive { powered }, damage)
+    // the hit. Its scale stays a decimal until the listeners are done.
+    let enchanted = card.and_then(|held| {
+        held.face
+            .ident
+            .enchantment
+            .map(|enchanted| (enchanted, held.face.enchantment_status()))
+    });
+    let (damage, scale) = match enchanted {
+        Some((enchanted, status)) => {
+            let added = enchanted_by::<V>(
+                enchanted,
+                status,
+                EnchantHook::DamageAdditive { powered },
+                damage,
+            );
+            match <V as sts2_core::Hooks>::enchant_modify(
+                enchanted,
+                status,
+                EnchantHook::DamageMultiplicative { powered },
+            ) {
+                Modify::Nothing => (added, None),
+                Modify::Scaled(by) => (added, Some(by)),
+                answer => unimplemented!("an enchantment scaling a hit with {answer:?}"),
+            }
         }
-        None => damage,
+        None => (damage, None),
     };
     let card = card.map(|held| sts2_core::CardSource {
         id: held.id,
@@ -1541,7 +1634,7 @@ pub(crate) fn modified<V: Rules>(
             powered,
         },
     ];
-    modified_by::<V>(fight, damage, &phases)
+    scaled_by::<V>(fight, damage, scale, &phases)
 }
 
 /// `amount` after an enchantment's `hook`, which the game asks before any
@@ -1552,10 +1645,11 @@ pub(crate) fn modified<V: Rules>(
 /// An enchantment that does more to the number than add to it.
 pub(super) fn enchanted_by<V: Rules>(
     enchanted: sts2_core::Enchanted<V>,
+    status: sts2_core::EnchantmentStatus,
     hook: EnchantHook,
     amount: V::Number,
 ) -> V::Number {
-    match <V as sts2_core::Hooks>::enchant_modify(enchanted, hook) {
+    match <V as sts2_core::Hooks>::enchant_modify(enchanted, status, hook) {
         Modify::Nothing => amount,
         Modify::Added(more) => amount + more,
         answer => unimplemented!("an enchantment answering {hook:?} with {answer:?}"),
@@ -1589,14 +1683,14 @@ pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Numb
 /// is `Hook.ModifyBlock`.
 ///
 /// The same hook whether the block is previewed or gained, as damage's is.
-/// `powered` is `IsPoweredCardOrMonsterMoveBlock`, and `card` is whether a
-/// card's own play gives it. `play` is that play, while one is under way.
+/// `powered` is `IsPoweredCardOrMonsterMoveBlock`, and `card` is the card
+/// whose own play gives it. `play` is that play, while one is under way.
 pub(super) fn blocked<V: Rules>(
     fight: Walk<'_, V>,
     recipient: CombatId,
     amount: V::Number,
     powered: bool,
-    card: bool,
+    card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
 ) -> V::Number {
     let phases = [
@@ -1719,8 +1813,15 @@ pub(crate) fn resolve<V: Rules>(
             let amount = carried::<V>(playing, fight.live, amount, None);
             // `Hook.ModifyBlock` asks the played card's enchantment whatever
             // the block's props, since `GainBlock` always runs it.
-            let amount = match playing.and_then(|held| held.face.ident.enchantment) {
-                Some(enchanted) => enchanted_by::<V>(enchanted, EnchantHook::BlockAdditive, amount),
+            let amount = match playing.and_then(|held| {
+                held.face
+                    .ident
+                    .enchantment
+                    .map(|e| (e, held.face.enchantment_status()))
+            }) {
+                Some((enchanted, status)) => {
+                    enchanted_by::<V>(enchanted, status, EnchantHook::BlockAdditive, amount)
+                }
                 None => amount,
             };
             let powered = scaling == Scaling::Dynamic;
@@ -1729,7 +1830,14 @@ pub(crate) fn resolve<V: Rules>(
                 recipient,
                 // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A
                 // card's block and a monster move's are the powered ones.
-                amount: blocked::<V>(fight, recipient, amount, powered, playing.is_some(), play),
+                amount: blocked::<V>(
+                    fight,
+                    recipient,
+                    amount,
+                    powered,
+                    playing.map(|held| held.face.ident.card),
+                    play,
+                ),
                 powered,
                 play,
             }
@@ -1830,6 +1938,12 @@ pub(crate) fn effect_of<V: Rules>(
                 scaling: Scaling::Dynamic,
             })
         }
+        CardNumberModifier::UnpoweredDamage => target.map(|target| Effect::Attack {
+            dealer,
+            target,
+            damage: Amount::Var(key),
+            scaling: Scaling::Static,
+        }),
         CardNumberModifier::Block => Some(Effect::GainBlock {
             recipient: dealer,
             amount: Amount::Var(key),
@@ -1857,7 +1971,9 @@ pub(crate) fn dealer_of<V: Rules>(
                 .unwrap_or_else(|| unimplemented!("Osty's damage with no Osty"))
                 .id
         }
-        CardNumberModifier::Damage | CardNumberModifier::Block => player::<V>(creatures),
+        CardNumberModifier::Damage
+        | CardNumberModifier::UnpoweredDamage
+        | CardNumberModifier::Block => player::<V>(creatures),
     }
 }
 
@@ -2086,7 +2202,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn remove_power(&mut self, creature: CombatId, power: V::Power) {
-        self.live.remove_power(creature, power);
+        self.remove_power_carried(creature, power);
+    }
+
+    fn add_at_random(&mut self, card: V::Card, pile: Pile) -> Option<CardAt<V>> {
+        self.add_at_random_here(card, pile)
+    }
+
+    fn modify_power_amount(&mut self, creature: CombatId, power: V::Power, amount: V::Number) {
+        self.modify_amount_from(creature, power, amount, Some(creature));
     }
 
     fn set_max_and_current_hp(&mut self, creature: CombatId, hp: V::Health) {
@@ -2427,6 +2551,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.orbs.as_ref().map_or(0, |orbs| orbs.queue.len())
     }
 
+    fn channelled(&self) -> Vec<sts2_core::Channelled<V>> {
+        self.live
+            .orbs
+            .as_ref()
+            .map_or_else(Vec::new, |orbs| orbs.queue.clone())
+    }
+
     /// `IsHittable`: alive, and no listener refusing a hit on it.
     fn random_opponent(&mut self) -> Option<CombatId> {
         use sts2_core::rng::GameRng as _;
@@ -2510,6 +2641,21 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 return;
             }
         }
+    }
+
+    fn add_orb_slots(&mut self, amount: V::Number) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let orbs = self.live.orbs.get_or_insert_with(|| sts2_core::Orbs {
+            capacity: V::Count::zero(),
+            queue: Vec::new(),
+        });
+        let capacity: V::Number =
+            num_traits::cast(orbs.capacity).expect("an orb capacity fits a game number");
+        let most: V::Number = num_traits::cast(MAX_ORB_SLOTS).expect("ten fits a game number");
+        let added = amount.min(most - capacity);
+        orbs.capacity = num_traits::cast(capacity + added).expect("an orb capacity fits a count");
     }
 
     fn damage_unblockable(&mut self, target: CombatId, amount: V::Number) {
@@ -2596,6 +2742,12 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.character
     }
 
+    fn generate_card(&mut self, cards: &[V::Card]) -> Option<V::Card> {
+        use sts2_core::rng::GameRng as _;
+
+        self.rngs.generation.choose(cards).ok().copied()
+    }
+
     fn generate_cards<const N: usize>(
         &mut self,
         cards: &mut [V::Card],
@@ -2676,6 +2828,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let at: usize = num_traits::NumCast::from(self.rngs.generation.next_int(bound))
             .expect("a bounded draw is a candidate index");
         Some(cards[at])
+    }
+
+    fn take_random_cards(&mut self, cards: &mut [CardAt<V>], count: usize) -> Vec<CardAt<V>> {
+        use sts2_core::rng::GameRng as _;
+
+        self.rngs.selection.unstable_shuffle(cards);
+        cards.iter().take(count).copied().collect()
     }
 
     fn remove_card(&mut self, card: CardAt<V>) -> CardIdent<V> {
@@ -2786,24 +2945,50 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 }
 
+/// A selection a listener asks for after a shuffle: from `pile`, `count`
+/// cards, and what happens to them.
+pub(super) type ShuffleAsks<V> = (
+    Pile,
+    <V as sts2_core::ContentVersion>::Number,
+    sts2_core::PileAct,
+);
+
 /// `CardPileCmd.Shuffle`: the discard pile shuffled into the draw pile, then
 /// `ModifyShuffleOrder` over the result.
+///
+/// # Panics
+///
+/// A listener asking the player something after the shuffle, which only a
+/// draw that can pause carries out.
 pub(super) fn shuffle<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
 ) {
+    if let Some(asks) = shuffle_asking::<V>(live, rngs, relics, ascension) {
+        unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause");
+    }
+}
+
+/// [`shuffle`], handing back the selection a listener asks for after it,
+/// which is `CardSelectCmd.FromCombatPile` inside `AfterShuffle`.
+pub(super) fn shuffle_asking<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+) -> Option<ShuffleAsks<V>> {
     live.cards.reshuffle(rngs.shuffle);
     let hook = sts2_core::EventHook::ShuffleOrder { initial: false };
     for (listener, effect) in super::listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
+            // The shuffled list is the discard and draw piles, and a card
+            // anywhere else stays put.
             (Listener::Card { id }, HookEffect::ToTopOfDrawPile) => {
-                let at = live
-                    .cards
-                    .find(Pile::Draw, id)
-                    .expect("a card moved in a shuffle was shuffled");
-                live.cards.move_to_top(Pile::Draw, at);
+                if let Some(at) = live.cards.find(Pile::Draw, id) {
+                    live.cards.move_to_top(Pile::Draw, at);
+                }
             }
             (listener, effect) => {
                 unimplemented!("{listener:?} asking for {effect:?} over a shuffle")
@@ -2813,11 +2998,20 @@ pub(super) fn shuffle<V: Rules>(
     // `Hook.AfterShuffle`.
     let asked = super::listen::notify::<V>(live, relics, sts2_core::EventHook::Shuffled);
     if asked.is_empty() {
-        return;
+        return None;
     }
+    let mut asks = None;
     let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
     for (listener, effect) in asked {
         match effect {
+            // The selection waits for the draw to pause, so nothing may
+            // follow it.
+            effect if asks.is_some() => {
+                unimplemented!("{listener:?} asking for {effect:?} after a shuffle's selection")
+            }
+            HookEffect::SelectFromPile { pile, count, act } => {
+                asks = Some((pile, count, act));
+            }
             HookEffect::AddToDrawAtRandom { card, count } => {
                 let count: usize = num_traits::cast(count)
                     .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
@@ -2828,6 +3022,7 @@ pub(super) fn shuffle<V: Rules>(
             effect => unimplemented!("{listener:?} asking for {effect:?} after a shuffle"),
         }
     }
+    asks
 }
 
 /// `CardPileCmd.Draw`, which shuffles the discard pile back in when the draw
@@ -2841,32 +3036,66 @@ pub(super) fn shuffle<V: Rules>(
 #[must_use = "a card auto-played as it is drawn can end the fight"]
 pub(super) fn draw<V: Rules>(
     live: &mut Live<V>,
-    mut rngs: CombatRngs<'_>,
+    rngs: CombatRngs<'_>,
     relics: &mut Belt<V>,
     ascension: V::AscensionLevel,
     count: usize,
     hand_draw: bool,
 ) -> Option<super::Ended> {
+    match draw_pausing::<V>(live, rngs, relics, ascension, count, hand_draw, false) {
+        Drawn::Done(ended) => ended,
+        Drawn::Paused { asks, .. } => {
+            unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
+        }
+    }
+}
+
+/// How a draw that can pause stopped.
+pub(super) enum Drawn<V: Rules> {
+    /// As many cards as there were to draw, and how the fight ended if it did.
+    Done(Option<super::Ended>),
+    /// A shuffle inside it asked for a selection, with `left` cards still to
+    /// draw once it is answered.
+    Paused { left: usize, asks: ShuffleAsks<V> },
+}
+
+/// [`draw`], stopping where a shuffle inside it asks the player something.
+/// `resumed` is a draw that carries on from such a stop, which has asked
+/// `ShouldDraw` already.
+pub(super) fn draw_pausing<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    count: usize,
+    hand_draw: bool,
+    resumed: bool,
+) -> Drawn<V> {
     // `Hook.ShouldDraw`, once for the whole draw, and `AfterPreventingDraw`
     // when a listener stops it.
     let player = live.player().id;
     let hook = sts2_core::DecisionHook::ShouldDraw { player, hand_draw };
-    if super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
+    if !resumed && super::listen::any_decides::<V>(Walk { live, relics }, hook, false) {
         super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::AfterPreventingDraw);
-        return None;
+        return Drawn::Done(None);
     }
     let mut ended = None;
-    for _ in 0..count {
+    for drawing in 0..count {
         // `IsOverOrEnding`, and `CardPile.MaxCardsInHand`: a full hand stops
         // the draw.
         if ended.is_some() || live.cards.len(Pile::Hand) >= super::pile::MAX_CARDS_IN_HAND {
-            return ended;
+            return Drawn::Done(ended);
         }
         if live.cards.is_empty(Pile::Draw) {
             if live.cards.is_empty(Pile::Discard) {
-                return ended;
+                return Drawn::Done(ended);
             }
-            shuffle::<V>(live, rngs.reborrow(), relics, ascension);
+            if let Some(asks) = shuffle_asking::<V>(live, rngs.reborrow(), relics, ascension) {
+                return Drawn::Paused {
+                    left: count - drawing,
+                    asks,
+                };
+            }
         }
         let drawn = live
             .cards
@@ -2955,7 +3184,7 @@ pub(super) fn draw<V: Rules>(
         super::hook::apply::<V, _>(&mut board, rest);
         ended = ended.or(board.ended);
     }
-    ended
+    Drawn::Done(ended)
 }
 
 #[cfg(test)]

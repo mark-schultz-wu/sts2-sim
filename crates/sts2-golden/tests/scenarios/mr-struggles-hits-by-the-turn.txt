@@ -1,0 +1,8 @@
+# Mr. Struggles hits every enemy as each of its owner's turns starts, for the
+# turn's number: one, then two, then three. The third lands on the block the
+# Nibbit raised on turn two.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MR_STRUGGLES"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

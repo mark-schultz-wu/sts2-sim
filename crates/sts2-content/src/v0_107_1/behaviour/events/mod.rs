@@ -4,30 +4,43 @@ mod amalgamator;
 mod ancient;
 mod aroma_of_chaos;
 mod brain_leech;
+mod bugslayer;
 mod byrdonis_nest;
+mod colorful_philosophers;
+mod colossal_flower;
 mod darv;
 mod dense_vegetation;
+mod doll_room;
 mod field_of_man_sized_holes;
+mod infested_automaton;
 mod jungle_maze_adventure;
 mod lost_wisp;
 mod luminous_choir;
 mod morphic_grove;
 mod orobas;
 mod pael;
+mod potion_courier;
+mod ranwid_the_elder;
+mod relic_trader;
 mod room_full_of_cheese;
 mod sapphire_seed;
 mod self_help_book;
 mod slippery_bridge;
+mod spirit_grafter;
+mod stone_of_all_time;
 mod sunken_statue;
+mod symbiote;
 mod tablet_of_truth;
 mod tea_master;
 mod tezcatara;
 mod the_future_of_potions;
+mod the_lantern_key;
 mod the_legends_were_true;
 mod this_or_that;
 mod wellspring;
 mod whispering_hollow;
 mod wood_carvings;
+mod zen_weaver;
 
 use nonmax::NonMaxU8;
 use sts2_core::{
@@ -42,9 +55,23 @@ use super::super::generated::events::{Event, EventOption as Said};
 use super::super::generated::potions::Potion;
 use super::enchantments::can_enchant;
 use super::relics::adds_pet;
+use super::relics::tradable;
 
 #[derive(Debug, Clone)]
 pub enum State {
+    InfestedAutomaton(infested_automaton::State),
+    Symbiote(symbiote::State),
+    StoneOfAllTime(stone_of_all_time::State),
+    TheLanternKey(the_lantern_key::State),
+    ZenWeaver(zen_weaver::State),
+    RanwidTheElder(ranwid_the_elder::State),
+    RelicTrader(relic_trader::State),
+    DollRoom(doll_room::State),
+    SpiritGrafter(spirit_grafter::State),
+    ColossalFlower(colossal_flower::State),
+    Bugslayer(bugslayer::State),
+    ColorfulPhilosophers(colorful_philosophers::State),
+    PotionCourier(potion_courier::State),
     Amalgamator(amalgamator::State),
     AromaOfChaos(aroma_of_chaos::State),
     BrainLeech(brain_leech::State),
@@ -180,8 +207,9 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::GraveOfTheForgotten => enchantable(run, Enchantment::SoulsPower),
 
         Event::RelicTrader | Event::RanwidTheElder if act == 0 => false,
-        Event::RelicTrader | Event::RanwidTheElder => {
-            unimplemented!("which relics {event:?} can trade for")
+        Event::RelicTrader => run.relics().filter(|&relic| tradable(relic)).count() >= 5,
+        Event::RanwidTheElder => {
+            run.relics().any(tradable) && gold >= 100 && run.potions().next().is_some()
         }
 
         _ => true,
@@ -210,6 +238,31 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
 ) -> State {
     match event {
         Event::Amalgamator => State::Amalgamator(amalgamator::Amalgamator.enter(run, rng)),
+        Event::PotionCourier => State::PotionCourier(potion_courier::PotionCourier.enter(run, rng)),
+        Event::ColorfulPhilosophers => {
+            State::ColorfulPhilosophers(colorful_philosophers::ColorfulPhilosophers.enter(run, rng))
+        }
+        Event::InfestedAutomaton => {
+            State::InfestedAutomaton(infested_automaton::InfestedAutomaton.enter(run, rng))
+        }
+        Event::Symbiote => State::Symbiote(symbiote::Symbiote.enter(run, rng)),
+        Event::StoneOfAllTime => {
+            State::StoneOfAllTime(stone_of_all_time::StoneOfAllTime.enter(run, rng))
+        }
+        Event::TheLanternKey => {
+            State::TheLanternKey(the_lantern_key::TheLanternKey.enter(run, rng))
+        }
+        Event::ZenWeaver => State::ZenWeaver(zen_weaver::ZenWeaver.enter(run, rng)),
+        Event::RanwidTheElder => {
+            State::RanwidTheElder(ranwid_the_elder::RanwidTheElder.enter(run, rng))
+        }
+        Event::RelicTrader => State::RelicTrader(relic_trader::RelicTrader.enter(run, rng)),
+        Event::DollRoom => State::DollRoom(doll_room::DollRoom.enter(run, rng)),
+        Event::SpiritGrafter => State::SpiritGrafter(spirit_grafter::SpiritGrafter.enter(run, rng)),
+        Event::ColossalFlower => {
+            State::ColossalFlower(colossal_flower::ColossalFlower.enter(run, rng))
+        }
+        Event::Bugslayer => State::Bugslayer(bugslayer::Bugslayer.enter(run, rng)),
         Event::AromaOfChaos => State::AromaOfChaos(aroma_of_chaos::AromaOfChaos.enter(run, rng)),
         Event::FieldOfManSizedHoles => State::FieldOfManSizedHoles(
             field_of_man_sized_holes::FieldOfManSizedHoles.enter(run, rng),
@@ -270,15 +323,54 @@ pub(crate) fn set_up<R: sts2_core::rng::GameRng>(
     }
 }
 
+/// [`EventBehavior::relics_pulled`] for the event entered.
+pub(crate) fn relics_pulled(state: &State) -> usize {
+    match state {
+        State::RelicTrader(state) => relic_trader::RelicTrader.relics_pulled(state),
+        _ => 0,
+    }
+}
+
+/// [`EventBehavior::hand_pulled_relics`] for the event entered.
+pub(crate) fn hand_pulled_relics(
+    state: &mut State,
+    relics: &[super::super::generated::relics::Relic],
+) {
+    match state {
+        State::RelicTrader(state) => relic_trader::RelicTrader.hand_pulled_relics(state, relics),
+        state => unreachable!("{state:?} pulls no relics"),
+    }
+}
+
 /// `BeforeEventStarted` setting `CanRemovePotions` off, as The Future of
 /// Potions does.
 pub(crate) fn holds_potions(state: &State) -> bool {
-    matches!(state, State::TheFutureOfPotions(_))
+    matches!(
+        state,
+        State::TheFutureOfPotions(_) | State::RanwidTheElder(_) | State::StoneOfAllTime(_)
+    )
 }
 
 pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
     match state {
         State::Amalgamator(state) => amalgamator::Amalgamator.observe(state, run),
+        State::PotionCourier(state) => potion_courier::PotionCourier.observe(state, run),
+        State::ColorfulPhilosophers(state) => {
+            colorful_philosophers::ColorfulPhilosophers.observe(state, run)
+        }
+        State::InfestedAutomaton(state) => {
+            infested_automaton::InfestedAutomaton.observe(state, run)
+        }
+        State::Symbiote(state) => symbiote::Symbiote.observe(state, run),
+        State::StoneOfAllTime(state) => stone_of_all_time::StoneOfAllTime.observe(state, run),
+        State::TheLanternKey(state) => the_lantern_key::TheLanternKey.observe(state, run),
+        State::ZenWeaver(state) => zen_weaver::ZenWeaver.observe(state, run),
+        State::RanwidTheElder(state) => ranwid_the_elder::RanwidTheElder.observe(state, run),
+        State::RelicTrader(state) => relic_trader::RelicTrader.observe(state, run),
+        State::DollRoom(state) => doll_room::DollRoom.observe(state, run),
+        State::SpiritGrafter(state) => spirit_grafter::SpiritGrafter.observe(state, run),
+        State::ColossalFlower(state) => colossal_flower::ColossalFlower.observe(state, run),
+        State::Bugslayer(state) => bugslayer::Bugslayer.observe(state, run),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.observe(state, run),
         State::FieldOfManSizedHoles(state) => {
             field_of_man_sized_holes::FieldOfManSizedHoles.observe(state, run)
@@ -324,6 +416,35 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
 ) -> HookEffects<V> {
     match state {
         State::Amalgamator(state) => amalgamator::Amalgamator.choose(state, option, run, rng),
+        State::PotionCourier(state) => {
+            potion_courier::PotionCourier.choose(state, option, run, rng)
+        }
+        State::ColorfulPhilosophers(state) => {
+            colorful_philosophers::ColorfulPhilosophers.choose(state, option, run, rng)
+        }
+        State::InfestedAutomaton(state) => {
+            infested_automaton::InfestedAutomaton.choose(state, option, run, rng)
+        }
+        State::Symbiote(state) => symbiote::Symbiote.choose(state, option, run, rng),
+        State::StoneOfAllTime(state) => {
+            stone_of_all_time::StoneOfAllTime.choose(state, option, run, rng)
+        }
+        State::TheLanternKey(state) => {
+            the_lantern_key::TheLanternKey.choose(state, option, run, rng)
+        }
+        State::ZenWeaver(state) => zen_weaver::ZenWeaver.choose(state, option, run, rng),
+        State::RanwidTheElder(state) => {
+            ranwid_the_elder::RanwidTheElder.choose(state, option, run, rng)
+        }
+        State::RelicTrader(state) => relic_trader::RelicTrader.choose(state, option, run, rng),
+        State::DollRoom(state) => doll_room::DollRoom.choose(state, option, run, rng),
+        State::SpiritGrafter(state) => {
+            spirit_grafter::SpiritGrafter.choose(state, option, run, rng)
+        }
+        State::ColossalFlower(state) => {
+            colossal_flower::ColossalFlower.choose(state, option, run, rng)
+        }
+        State::Bugslayer(state) => bugslayer::Bugslayer.choose(state, option, run, rng),
         State::AromaOfChaos(state) => aroma_of_chaos::AromaOfChaos.choose(state, option, run, rng),
         State::FieldOfManSizedHoles(state) => {
             field_of_man_sized_holes::FieldOfManSizedHoles.choose(state, option, run, rng)

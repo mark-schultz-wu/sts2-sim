@@ -1,0 +1,5 @@
+# `Examine` deals fifteen, then offers all three dolls in shuffled order.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"event","event":"DOLL_ROOM"}
+{"cmd":"choose_option","index":2}
+{"cmd":"choose_option","index":2}

@@ -2,13 +2,11 @@
 
 use sts2_core::{
     Amount, CardTable as _, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile,
-    PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling, Table as _,
+    PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling,
 };
 
 use super::super::super::V0_107_1 as V;
-use super::super::super::generated::cards::{
-    CardType, Cards, combat_cards, combat_colorless_cards,
-};
+use super::super::super::generated::cards::{CardType, Cards, combat_colorless_cards};
 use super::super::super::generated::potions::Potion;
 use super::super::super::generated::powers::Power;
 use super::Number;
@@ -63,6 +61,13 @@ const DISTILLED_CHAOS: usize = 3;
 const DUPLICATION: Number = 1;
 /// `FyshOil`'s `PowerVar<StrengthPower>(1)` and `PowerVar<DexterityPower>(1)`.
 const FYSH_OIL: Number = 1;
+
+/// `ShipInABottle`'s `BlockVar(10, ValueProp.Unpowered)`, which is also the
+/// Block Next Turn it applies.
+const SHIP_IN_A_BOTTLE: Number = 10;
+
+/// `ShacklingPotion`'s `PowerVar<StrengthPower>(7)`.
+const SHACKLING: Number = 7;
 /// `MazalethsGift`'s `PowerVar<RitualPower>(1)`.
 const MAZALETHS_GIFT: Number = 1;
 /// `PotionOfBinding`'s `PowerVar<WeakPower>(1)` and
@@ -181,9 +186,16 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             Played::Done
         }
-        Potion::PowerPotion => free_card_of(fight, character_cards(fight, CardType::Power)),
-        Potion::AttackPotion => free_card_of(fight, character_cards(fight, CardType::Attack)),
-        Potion::SkillPotion => free_card_of(fight, character_cards(fight, CardType::Skill)),
+        Potion::PowerPotion => {
+            free_card_of(fight, super::super::character_cards(fight, CardType::Power))
+        }
+        Potion::AttackPotion => free_card_of(
+            fight,
+            super::super::character_cards(fight, CardType::Attack),
+        ),
+        Potion::SkillPotion => {
+            free_card_of(fight, super::super::character_cards(fight, CardType::Skill))
+        }
         Potion::ColorlessPotion => free_card_of(fight, combat_colorless_cards().to_vec()),
         // `CreatureCmd.Damage` on the target, unpowered and from the player.
         Potion::FirePotion => {
@@ -349,6 +361,54 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             Played::Done
         }
+        // `AnyPlayer`: `CreatureCmd.GainBlock`, unpowered, then Block Next
+        // Turn at the same amount, from the drinker.
+        Potion::ShipInABottle => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(SHIP_IN_A_BOTTLE),
+                scaling: Scaling::Static,
+            });
+            fight.apply(block);
+            fight.apply_to_actor(
+                Power::BlockNextTurnPower,
+                PowerAmount::Counted(SHIP_IN_A_BOTTLE),
+            );
+            Played::Done
+        }
+        // `PowerCmd.Apply` over `HittableEnemies`, taken once.
+        Potion::ShacklingPotion => {
+            for target in fight.hittable_opponents() {
+                fight.apply_power(
+                    target,
+                    Power::ShacklingPotionPower,
+                    PowerAmount::Counted(SHACKLING),
+                );
+            }
+            Played::Done
+        }
+        // `GetDistinctForCombat` of one Attack, one Skill and one Power from
+        // the character's pool, each off `CombatCardGeneration`. Each is
+        // free this turn and lands in hand.
+        Potion::OrobicAcid => {
+            let mut made = Vec::with_capacity(3);
+            for kind in [CardType::Attack, CardType::Skill, CardType::Power] {
+                let mut cards = super::super::character_cards(fight, kind);
+                let Ok([card]) = fight.generate_cards::<1>(
+                    &mut cards,
+                    <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
+                ) else {
+                    unimplemented!("a character pool with no {kind:?}");
+                };
+                made.push(card);
+            }
+            for card in made {
+                for at in fight.add_generated_cards(card, Pile::Hand, 1) {
+                    free_this_turn(fight, at);
+                }
+            }
+            Played::Done
+        }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }
@@ -363,16 +423,6 @@ fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {
             Lasting::ThisTurnOrUntilPlayed,
         );
     }
-}
-
-/// The character's combat pool, narrowed to the cards of `kind`.
-fn character_cards<F: Fight<V>>(fight: &F, kind: CardType) -> Vec<Cards> {
-    let pool = fight.character().data().card_pool;
-    combat_cards(pool)
-        .iter()
-        .copied()
-        .filter(|card| card.data().kind == crate::Field::Constant(kind))
-        .collect()
 }
 
 /// `PowerPotion`, `AttackPotion`, `SkillPotion` and `ColorlessPotion`: three

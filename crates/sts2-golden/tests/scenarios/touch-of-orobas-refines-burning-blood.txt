@@ -1,0 +1,10 @@
+# Touch of Orobas replaces the starter relic in its own slot with its
+# refinement. Burning Blood becomes Black Blood, which heals twelve after a
+# fight won.
+{"cmd":"start","seed":"C000000001","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":60,"target":0}
+{"cmd":"play_card","index":2,"target":1}

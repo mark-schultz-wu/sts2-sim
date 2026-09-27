@@ -7,26 +7,36 @@ use super::super::super::V0_107_1 as V;
 
 /// A `CardReward` of three over the character's pool at one rarity, for each
 /// of Common, Common, Uncommon, Uncommon and Rare.
-const REWARDS: [CustomReward; 5] = [
+const REWARDS: [CustomReward<V>; 5] = [
     CustomReward::CardsOf {
+        pool: None,
         rarity: RewardRarity::Common,
         count: 3,
+        upgrade_roll: false,
     },
     CustomReward::CardsOf {
+        pool: None,
         rarity: RewardRarity::Common,
         count: 3,
+        upgrade_roll: false,
     },
     CustomReward::CardsOf {
+        pool: None,
         rarity: RewardRarity::Uncommon,
         count: 3,
+        upgrade_roll: false,
     },
     CustomReward::CardsOf {
+        pool: None,
         rarity: RewardRarity::Uncommon,
         count: 3,
+        upgrade_roll: false,
     },
     CustomReward::CardsOf {
+        pool: None,
         rarity: RewardRarity::Rare,
         count: 3,
+        upgrade_roll: false,
     },
 ];
 

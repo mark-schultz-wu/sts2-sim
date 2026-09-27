@@ -1,0 +1,11 @@
+# Stratagem asks for a card from the draw pile each time it is shuffled, and
+# puts it in hand. Two more cards leave two in the draw pile for turn three,
+# so its draw takes those, shuffles, asks, and then draws the other three.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRATAGEM_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[3]}

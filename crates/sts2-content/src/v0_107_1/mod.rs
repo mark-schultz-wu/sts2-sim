@@ -265,9 +265,10 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn enchant_modify(
         enchanted: sts2_core::Enchanted<Self>,
+        status: sts2_core::EnchantmentStatus,
         hook: sts2_core::EnchantHook,
     ) -> sts2_core::Modify<Self::Number> {
-        behaviour::enchantments::modify(enchanted, hook)
+        behaviour::enchantments::modify(enchanted, status, hook)
     }
 
     fn enchantment_event_hook(
@@ -679,11 +680,34 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::monsters::starting_powers(monster, ascension, side).into_iter()
     }
 
+    fn monster_starting_opponent_powers(
+        monster: Self::Monster,
+        _ascension: Self::AscensionLevel,
+    ) -> impl Iterator<Item = (Self::Power, sts2_core::PowerAmount<Self::Number>)> {
+        behaviour::monsters::starting_opponent_powers(monster).into_iter()
+    }
+
     fn computed_card_target(
         card: Self::Card,
         powers: &[sts2_core::Stack<Self>],
     ) -> Self::TargetType {
         behaviour::cards::computed_target(card, powers)
+    }
+
+    fn deck_card_narrows_unknown_rooms(card: Self::Card, act: usize) -> bool {
+        behaviour::cards::narrows_unknown_rooms(card, act)
+    }
+
+    fn deck_card_next_event(card: Self::Card, act: usize, event: Self::Event) -> Self::Event {
+        behaviour::cards::next_event(card, act, event)
+    }
+
+    fn computed_potion_target(potion: Self::Potion, in_combat: bool) -> Self::TargetType {
+        behaviour::potions::computed_target(potion, in_combat)
+    }
+
+    fn computed_potion_check(potion: Self::Potion, in_combat: bool) -> bool {
+        behaviour::potions::computed_check(potion, in_combat)
     }
 
     fn calculated_card_var<P: sts2_core::Printed<Self> + ?Sized>(
@@ -750,6 +774,14 @@ impl sts2_core::Rules for V0_107_1 {
         rewards: &mut R,
     ) {
         behaviour::events::set_up(state, run, rewards);
+    }
+
+    fn event_relics_pulled(state: &Self::EventState) -> usize {
+        behaviour::events::relics_pulled(state)
+    }
+
+    fn hand_event_pulled_relics(state: &mut Self::EventState, relics: &[Self::Relic]) {
+        behaviour::events::hand_pulled_relics(state, relics);
     }
 
     fn event_holds_potions(state: &Self::EventState) -> bool {

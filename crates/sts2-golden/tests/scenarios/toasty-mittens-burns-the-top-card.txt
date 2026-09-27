@@ -1,0 +1,8 @@
+# Toasty Mittens exhausts the top card of the draw pile and gives a point of
+# Strength before every hand, the first included. The draw pile runs dry on
+# the third turn, so the shuffle comes first there.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"TOASTY_MITTENS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

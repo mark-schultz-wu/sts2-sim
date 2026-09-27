@@ -1,0 +1,7 @@
+# Divine Right becomes Divine Destiny, which gives six stars as the first
+# turn starts.
+{"cmd":"start","seed":"C000000001","character":"REGENT","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

@@ -1,0 +1,7 @@
+# Runic Pyramid answers `ShouldFlush` no, so the hand stays at the turn's end
+# and the next draw lands on top of it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"RUNIC_PYRAMID"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}

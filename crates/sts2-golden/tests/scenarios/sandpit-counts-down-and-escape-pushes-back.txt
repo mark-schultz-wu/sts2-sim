@@ -1,0 +1,10 @@
+# The Insatiable's Liquify Ground puts Sandpit at four on itself and six
+# Frantic Escapes at random places, three in the draw pile and three in the
+# discard pile. The Sandpit loses one as each enemy turn starts. Playing a
+# Frantic Escape adds one back and raises its own cost by one for the fight.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"THE_INSATIABLE_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -15,29 +15,40 @@ mod alchemical_coffer;
 mod anchor;
 mod arcane_scroll;
 mod archaic_tooth;
+mod astrolabe;
 mod biiig_hug;
+mod bing_bong;
+mod black_blood;
+mod black_star;
 mod bone_tea;
 mod booming_conch;
 mod bound_phylactery;
 mod burning_blood;
 mod byrdpip;
+mod calling_bell;
 mod chosen_cheese;
 mod cracked_core;
 mod cursed_pearl;
+mod daughter_of_the_wind;
+mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
+mod empty_cage;
 mod fishing_rod;
 mod glass_eye;
 mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
 mod hefty_tablet;
+mod infused_core;
+mod intimidating_helmet;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
 mod lost_coffer;
 mod lost_wisp;
 mod mercury_hourglass;
+mod mr_struggles;
 mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
@@ -46,19 +57,29 @@ mod paels_blood;
 mod paels_flesh;
 mod paels_horn;
 mod paels_tears;
+mod pandoras_box;
 mod permafrost;
 mod phial_holster;
+mod phylactery_unbound;
 mod pocketwatch;
+mod pollinous_core;
 mod pomander;
 mod precarious_shears;
 mod precise_scissors;
+mod radiant_pearl;
+mod ring_of_the_drake;
 mod ring_of_the_snake;
+mod runic_pyramid;
 mod sand_castle;
 mod seal_of_gold;
+mod sozu;
 mod stone_humidifier;
 mod storybook;
 mod strike_dummy;
 mod sword_of_stone;
+mod toasty_mittens;
+mod touch_of_orobas;
+mod tungsten_rod;
 mod very_hot_cocoa;
 mod winged_boots;
 mod yummy_cookie;
@@ -116,6 +137,27 @@ pub enum State {
     LostCoffer,
     LostWisp,
     MercuryHourglass,
+    DaughterOfTheWind,
+    MrStruggles,
+    BingBong,
+    IntimidatingHelmet,
+    RunicPyramid,
+    TungstenRod,
+    TouchOfOrobas,
+    BlackBlood,
+    RingOfTheDrake,
+    DivineDestiny,
+    PhylacteryUnbound,
+    InfusedCore,
+    Circlet,
+    RadiantPearl,
+    ToastyMittens,
+    EmptyCage,
+    Astrolabe,
+    PandorasBox,
+    CallingBell,
+    BlackStar,
+    Sozu,
     NeowsTalisman,
     NeowsTorment,
     NewLeaf,
@@ -127,6 +169,7 @@ pub enum State {
     Permafrost(permafrost::State),
     PhialHolster,
     Pocketwatch(pocketwatch::State),
+    PollinousCore(pollinous_core::State),
     Pomander,
     PrecariousShears,
     PreciseScissors,
@@ -140,6 +183,36 @@ pub enum State {
     VeryHotCocoa,
     WingedBoots(winged_boots::State),
     YummyCookie,
+}
+
+/// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
+/// pet, and neither a starter, an event relic nor an ancient's. Nothing here
+/// melts a relic.
+///
+/// # Panics
+///
+/// A relic whose model decides for itself whether it is used up, or whether
+/// it does something on pickup or brings a pet.
+pub(crate) fn tradable(relic: Relic) -> bool {
+    use super::super::generated::relics::{RelicFlag, RelicRarity};
+
+    let data = relic.data();
+    if matches!(
+        data.rarity,
+        RelicRarity::Starter | RelicRarity::Event | RelicRarity::Ancient
+    ) {
+        return false;
+    }
+    [
+        RelicFlag::UsedUp,
+        RelicFlag::UponPickup,
+        RelicFlag::SpawnsPets,
+    ]
+    .into_iter()
+    .all(|flag| match data.flags.get(flag) {
+        Field::Constant(set) => !set,
+        Field::Computed => unimplemented!("whether {relic:?} is {flag:?}"),
+    })
 }
 
 /// `RelicModel.AddsPet`, which two relics override.
@@ -188,6 +261,44 @@ pub(crate) fn event_hook(
         State::LostCoffer => lost_coffer::event_hook(hook, asked),
         State::LostWisp => lost_wisp::event_hook(hook, asked),
         State::MercuryHourglass => mercury_hourglass::event_hook(hook, asked),
+        State::DaughterOfTheWind => daughter_of_the_wind::event_hook(hook, asked),
+        State::MrStruggles => mr_struggles::event_hook(hook, asked),
+        State::BingBong => bing_bong::event_hook(hook, asked),
+        State::IntimidatingHelmet => intimidating_helmet::event_hook(hook, asked),
+        State::EmptyCage => empty_cage::event_hook(hook, asked),
+        State::Astrolabe => astrolabe::event_hook(hook, asked),
+        State::PandorasBox => pandoras_box::event_hook(hook, asked),
+        State::CallingBell => calling_bell::event_hook(hook, asked),
+        State::BlackStar => black_star::event_hook(hook, asked),
+        // Its hooks are `ShouldProcurePotion` and `ModifyMaxEnergy`, which the
+        // run and the fight ask of it.
+        State::Sozu => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what Sozu does for {hook:?}"),
+        },
+        State::TungstenRod => tungsten_rod::event_hook(hook),
+        State::RadiantPearl => radiant_pearl::event_hook(hook, asked),
+        State::ToastyMittens => toasty_mittens::event_hook(hook, asked),
+        State::TouchOfOrobas => touch_of_orobas::event_hook(hook, asked),
+        State::BlackBlood => black_blood::event_hook(hook, asked),
+        State::DivineDestiny => divine_destiny::event_hook(hook, asked),
+        State::PhylacteryUnbound => phylactery_unbound::event_hook(hook, asked),
+        State::InfusedCore => infused_core::event_hook(hook, asked),
+        // Its one hook is `ModifyHandDraw`, which the fight asks of it.
+        State::RingOfTheDrake => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what RingOfTheDrake does for {hook:?}"),
+        },
+        // It overrides nothing.
+        State::Circlet => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what Circlet does for {hook:?}"),
+        },
+        // Its one hook is `ShouldFlush`, which the fight asks of it.
+        State::RunicPyramid => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what RunicPyramid does for {hook:?}"),
+        },
         State::NeowsTalisman => neows_talisman::event_hook(hook, asked),
         State::NeowsTorment => neows_torment::event_hook(hook, asked),
         State::NewLeaf => new_leaf::event_hook(hook, asked),
@@ -203,6 +314,7 @@ pub(crate) fn event_hook(
         State::Permafrost(state) => permafrost::event_hook(state, hook, asked),
         State::PhialHolster => phial_holster::event_hook(hook, asked),
         State::Pocketwatch(state) => pocketwatch::event_hook(state, hook),
+        State::PollinousCore(state) => pollinous_core::event_hook(state, hook),
         State::Pomander => pomander::event_hook(hook, asked),
         State::PrecariousShears => precarious_shears::event_hook(hook, asked),
         State::PreciseScissors => precise_scissors::event_hook(hook, asked),
@@ -234,6 +346,8 @@ pub(crate) fn decide_hook(
 ) -> sts2_core::HookResponse<bool> {
     match state {
         State::WingedBoots(state) => winged_boots::decide_hook(state, hook),
+        State::RunicPyramid => runic_pyramid::decide_hook(hook),
+        State::Sozu => sozu::decide_hook(hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
             None => sts2_core::HookResponse::DoesNotImplement,
@@ -245,11 +359,16 @@ pub(crate) fn decide_hook(
 pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
+        State::PollinousCore(state) => pollinous_core::modify_hook(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
         State::PaelsBlood => paels_blood::modify_hook(hook),
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
+        State::Sozu => sozu::modify_hook(hook),
+        State::TungstenRod => tungsten_rod::modify_hook(hook),
+        State::RingOfTheDrake => ring_of_the_drake::modify_hook(hook),
+        State::InfusedCore => infused_core::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -279,6 +398,23 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::LostCoffer
         | State::LostWisp
         | State::MercuryHourglass
+        | State::DaughterOfTheWind
+        | State::MrStruggles
+        | State::BingBong
+        | State::IntimidatingHelmet
+        | State::RunicPyramid
+        | State::TouchOfOrobas
+        | State::BlackBlood
+        | State::DivineDestiny
+        | State::PhylacteryUnbound
+        | State::Circlet
+        | State::RadiantPearl
+        | State::ToastyMittens
+        | State::EmptyCage
+        | State::Astrolabe
+        | State::PandorasBox
+        | State::CallingBell
+        | State::BlackStar
         | State::NeowsTalisman
         | State::NeowsTorment
         | State::NewLeaf
@@ -337,6 +473,27 @@ impl sts2_core::RelicModel<V> for State {
             Relic::LostCoffer => State::LostCoffer,
             Relic::LostWisp => State::LostWisp,
             Relic::MercuryHourglass => State::MercuryHourglass,
+            Relic::DaughterOfTheWind => State::DaughterOfTheWind,
+            Relic::MrStruggles => State::MrStruggles,
+            Relic::BingBong => State::BingBong,
+            Relic::IntimidatingHelmet => State::IntimidatingHelmet,
+            Relic::RunicPyramid => State::RunicPyramid,
+            Relic::TungstenRod => State::TungstenRod,
+            Relic::TouchOfOrobas => State::TouchOfOrobas,
+            Relic::BlackBlood => State::BlackBlood,
+            Relic::RingOfTheDrake => State::RingOfTheDrake,
+            Relic::DivineDestiny => State::DivineDestiny,
+            Relic::PhylacteryUnbound => State::PhylacteryUnbound,
+            Relic::InfusedCore => State::InfusedCore,
+            Relic::Circlet => State::Circlet,
+            Relic::RadiantPearl => State::RadiantPearl,
+            Relic::ToastyMittens => State::ToastyMittens,
+            Relic::EmptyCage => State::EmptyCage,
+            Relic::Astrolabe => State::Astrolabe,
+            Relic::PandorasBox => State::PandorasBox,
+            Relic::CallingBell => State::CallingBell,
+            Relic::BlackStar => State::BlackStar,
+            Relic::Sozu => State::Sozu,
             Relic::NeowsTalisman => State::NeowsTalisman,
             Relic::NeowsTorment => State::NeowsTorment,
             Relic::NewLeaf => State::NewLeaf,
@@ -348,6 +505,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::Permafrost => State::Permafrost(permafrost::State::default()),
             Relic::PhialHolster => State::PhialHolster,
             Relic::Pocketwatch => State::Pocketwatch(pocketwatch::State::default()),
+            Relic::PollinousCore => State::PollinousCore(pollinous_core::State::default()),
             Relic::Pomander => State::Pomander,
             Relic::PrecariousShears => State::PrecariousShears,
             Relic::PreciseScissors => State::PreciseScissors,
@@ -383,6 +541,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::SwordOfStone(state) => sword_of_stone::display_amount(state),
                 State::WingedBoots(state) => winged_boots::display_amount(state),
                 State::Pocketwatch(state) => pocketwatch::display_amount(state),
+                State::PollinousCore(state) => pollinous_core::display_amount(state),
                 State::PaelsFlesh(state) => paels_flesh::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },

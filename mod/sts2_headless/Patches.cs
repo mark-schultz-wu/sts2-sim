@@ -17,6 +17,9 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models.Monsters;
+using MegaCrit.Sts2.Core.Models.Relics;
+using MegaCrit.Sts2.Core.Entities.Relics;
+using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
@@ -413,5 +416,52 @@ internal static class ScreenPathSelections
     {
         string value = string.Join(",", cards.OfType<CardModel>().Select(c => c.Id.Entry));
         Log.Info($"Player {player.NetId} chose cards [{value}]");
+    }
+}
+
+/// <summary>
+/// Gives Calling Bell and Cauldron the rewards a real game gives them.
+/// </summary>
+/// <remarks>
+/// Each builds its reward list behind <c>if (TestMode.IsOn)</c>, and every
+/// headless run is in <c>TestMode</c>. Calling Bell then offers Anchor, Gremlin
+/// Horn and Mummified Hand rather than a relic of each rarity from the bag.
+/// Cauldron offers five named potions rather than five random ones. Both
+/// change what a run holds, so the oracle would record a game nobody plays.
+///
+/// Each prefix builds the list the other branch builds, word for word, and
+/// skips the original. Nothing else in either method reads <c>TestMode</c>.
+/// </remarks>
+internal static class RewardsOutsideTestMode;
+
+/// <inheritdoc cref="RewardsOutsideTestMode"/>
+[HarmonyPatch(typeof(CallingBell), "GenerateRewards")]
+internal static class CallingBellRewards
+{
+    private static bool Prefix(CallingBell __instance, ref List<Reward> __result)
+    {
+        __result = new List<Reward>
+        {
+            new RelicReward(RelicRarity.Common, __instance.Owner),
+            new RelicReward(RelicRarity.Uncommon, __instance.Owner),
+            new RelicReward(RelicRarity.Rare, __instance.Owner),
+        };
+        return false;
+    }
+}
+
+/// <inheritdoc cref="RewardsOutsideTestMode"/>
+[HarmonyPatch(typeof(Cauldron), "GenerateRewards")]
+internal static class CauldronRewards
+{
+    private static bool Prefix(Cauldron __instance, ref List<Reward> __result)
+    {
+        int count = __instance.DynamicVars["Potions"].IntValue;
+        __result = new List<Reward>();
+        for (int i = 0; i < count; i++)
+        {
+            __result.Add(new PotionReward(__instance.Owner));
+        }
+        return false;
     }
 }

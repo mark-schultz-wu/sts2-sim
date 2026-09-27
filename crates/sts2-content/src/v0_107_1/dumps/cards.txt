@@ -2226,7 +2226,7 @@ var BULWARK Forge 10 0 ForgeVar
 card BUNDLE_OF_JOY REGENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust - 0
 var BUNDLE_OF_JOY Cards 3 0 CardsVar
 card BURN STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable - 0
-var BURN Damage 2 0 DamageVar
+var BURN Damage 2 0 DamageVar+Unpowered
 card BURNING_PACT IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 - - 0
 var BURNING_PACT Cards 2 0 CardsVar
 card BURST SILENT_CARD_POOL Skill Rare Self 1 0 -1 0 1 - - 0
@@ -2248,7 +2248,7 @@ card CAPACITOR DEFECT_CARD_POOL Power Uncommon Self 1 0 -1 0 1 - - 0
 var CAPACITOR Repeat 2 0 RepeatVar
 card CAPTURE_SPIRIT NECROBINDER_CARD_POOL Skill Uncommon AnyEnemy 1 0 -1 0 1 - - 0
 var CAPTURE_SPIRIT Cards 3 0 CardsVar
-var CAPTURE_SPIRIT Damage 3 0 DamageVar
+var CAPTURE_SPIRIT Damage 3 0 DamageVar+Unpowered
 card CASCADE IRONCLAD_CARD_POOL Skill Rare Self 0 1 -1 0 1 - - 0
 card CATASTROPHE COLORLESS_CARD_POOL Skill Uncommon Self 2 0 -1 0 1 - - 0
 var CATASTROPHE Cards 2 0 CardsVar
@@ -2373,7 +2373,7 @@ card DEBRIS STATUS_CARD_POOL Status Status None 1 0 -1 0 0 Exhaust - 0
 card DEBT CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable - 0
 var DEBT Gold 10 0 GoldVar
 card DECAY CURSE_CARD_POOL Curse Curse None -1 0 -1 0 0 Unplayable - 0
-var DECAY Damage 2 0 DamageVar
+var DECAY Damage 2 0 DamageVar+Unpowered
 card DECISIONS_DECISIONS REGENT_CARD_POOL Skill Rare Self 0 0 6 0 1 Exhaust - 0
 var DECISIONS_DECISIONS Cards 3 0 CardsVar
 var DECISIONS_DECISIONS Repeat 3 0 RepeatVar
@@ -2699,7 +2699,7 @@ var IMPATIENCE Cards 2 0 CardsVar
 card IMPERVIOUS IRONCLAD_CARD_POOL Skill Rare Self 2 0 -1 0 1 Exhaust - 1
 var IMPERVIOUS Block 30 0 BlockVar
 card INFECTION STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable - 0
-var INFECTION Damage 3 0 DamageVar
+var INFECTION Damage 3 0 DamageVar+Unpowered
 card INFERNAL_BLADE IRONCLAD_CARD_POOL Skill Uncommon Self 1 0 -1 0 1 Exhaust - 0
 card INFERNO IRONCLAD_CARD_POOL Power Uncommon Self 1 0 -1 0 1 - - 0
 var INFERNO InfernoPower 6 0 PowerVar
@@ -3335,7 +3335,7 @@ card TORIC_TOUGHNESS EVENT_CARD_POOL Skill Event Self 2 0 -1 0 1 - - 1
 var TORIC_TOUGHNESS Block 5 0 BlockVar
 var TORIC_TOUGHNESS Turns 2 0 DynamicVar
 card TOXIC STATUS_CARD_POOL Status Status None 1 0 -1 0 0 Exhaust - 0
-var TOXIC Damage 5 0 DamageVar
+var TOXIC Damage 5 0 DamageVar+Unpowered
 card TRACKING SILENT_CARD_POOL Power Rare Self 2 0 -1 0 1 - - 0
 card TRANSFIGURE NECROBINDER_CARD_POOL Skill Rare Self 1 0 -1 0 1 Exhaust - 0
 var TRANSFIGURE Energy 1 0 EnergyVar
@@ -3400,7 +3400,7 @@ card WISH EVENT_CARD_POOL Skill Ancient Self 0 0 -1 0 1 Exhaust - 0
 card WISP NECROBINDER_CARD_POOL Skill Common Self 0 0 -1 0 1 Exhaust - 0
 var WISP Energy 1 0 EnergyVar
 card WITHER STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable - 0
-var WITHER Damage 3 0 DamageVar
+var WITHER Damage 3 0 DamageVar+Unpowered
 card WOUND STATUS_CARD_POOL Status Status None -1 0 -1 0 0 Unplayable - 0
 card WRAITH_FORM SILENT_CARD_POOL Power Ancient Self 3 0 -1 0 1 - - 0
 var WRAITH_FORM IntangiblePower 2 0 PowerVar

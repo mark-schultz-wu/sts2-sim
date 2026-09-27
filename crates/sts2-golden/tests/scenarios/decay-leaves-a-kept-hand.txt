@@ -1,0 +1,11 @@
+# A card with a turn-end effect goes to the discard pile once the effect is
+# done. So under Runic Pyramid the rest of the hand stays, and each Decay
+# leaves it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"RUNIC_PYRAMID"}
+{"cmd":"grant","card":"DECAY"}
+{"cmd":"grant","card":"DECAY"}
+{"cmd":"grant","card":"DECAY"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

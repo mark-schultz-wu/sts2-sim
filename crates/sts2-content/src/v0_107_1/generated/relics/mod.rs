@@ -1994,12 +1994,14 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterModifyingHandDraw)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // POLLINOUS_CORE
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterModifyingHandDraw)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // POMANDER
@@ -2118,7 +2120,9 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::AfterModifyingPowerAmountGiven)
         .with(sts2_core::ModelHook::ModifyPowerAmountGivenAdditive),
     // SOZU
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyMaxEnergy)
+        .with(sts2_core::ModelHook::ShouldProcurePotion),
     // SPARKLING_ROUGE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
     // SPIKED_GAUNTLETS
@@ -2577,6 +2581,7 @@ impl sts2_core::RarityKinds for RelicRarity {
     const RARE: RelicRarity = RelicRarity::Rare;
     const SHOP: RelicRarity = RelicRarity::Shop;
     const UNDRAFTED: RelicRarity = RelicRarity::Undrafted;
+    const STARTER: RelicRarity = RelicRarity::Starter;
 }
 mod crossover;
 mod defect;

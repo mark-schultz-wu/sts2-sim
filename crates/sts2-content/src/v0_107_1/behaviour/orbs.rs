@@ -58,6 +58,35 @@ pub(crate) fn passive<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
     }
 }
 
+/// `OrbCmd.Passive(orb, target)`, which a card aims. Only a Lightning reads
+/// the target.
+///
+/// # Panics
+///
+/// Any other orb.
+pub(crate) fn passive_at<F: Fight<V>>(
+    orb: &Channelled<V>,
+    target: sts2_core::CombatId,
+    fight: &mut F,
+) {
+    match orb.orb {
+        // Its passive number at the target, while any enemy can be hit.
+        Orb::LightningOrb => {
+            let value = passive_val(orb, |n| fight.orb_value(orb.orb, n));
+            if !fight.hittable_opponents().is_empty() {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Number(value),
+                    scaling: Scaling::Static,
+                });
+                fight.apply(hit);
+            }
+        }
+        orb => unimplemented!("{orb:?}'s passive aimed at a creature"),
+    }
+}
+
 /// `AfterTurnStartOrbTrigger`, which the base orb leaves empty.
 pub(crate) fn turn_start<F: Fight<V>>(orb: &Channelled<V>, fight: &mut F) {
     match orb.orb {

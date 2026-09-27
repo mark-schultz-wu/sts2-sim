@@ -1,0 +1,8 @@
+# Daughter of the Wind gives one block, unpowered, after each attack its owner
+# plays, and nothing after a skill. Dexterity leaves its point alone.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"DAUGHTER_OF_THE_WIND"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":2,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":1}

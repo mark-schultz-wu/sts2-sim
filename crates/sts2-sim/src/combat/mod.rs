@@ -26,7 +26,7 @@ pub(crate) use play::{answer, apply_power, enchant, grant_card, play, resolve};
 pub(crate) use potion::drink;
 pub(crate) use relic::obtained;
 pub(crate) use start::Entering;
-pub(crate) use start::{Entered, enter};
+pub(crate) use start::{Entered, enter, roll_layout};
 pub(crate) use turn::end as end_turn;
 pub mod pile;
 

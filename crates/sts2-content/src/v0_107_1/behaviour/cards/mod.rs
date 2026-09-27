@@ -17,9 +17,10 @@ use sts2_core::{CardVars, Fight, Played};
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
 use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, RegentCard,
+    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, QuestCard, RegentCard,
     SilentCard, TokenCard,
 };
+use super::super::generated::events::Event;
 use super::super::generated::powers::Power;
 
 /// What the run holds a card's numbers as.
@@ -122,6 +123,21 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                 Number::try_from(owner.draw).expect("a draw pile's size fits the game's numbers");
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * draw
         }
+        // `LunarBlast`: a base, and one more hit for each Skill its owner's
+        // plays finished this turn. A fight here has one player.
+        (Cards::Regent(RegentCard::LunarBlast), CardVar::CalculatedHits) => {
+            let skills = owner
+                .history
+                .finished_this_turn()
+                .filter(|&card| {
+                    <V0_107_1 as sts2_core::Rules>::card_kind(card)
+                        == Some(sts2_core::CardKind::Skill)
+                })
+                .count();
+            let skills = Number::try_from(skills).expect("a turn's plays fit the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * skills
+        }
         // `Radiate`: a base, and one more hit for each star its owner gained
         // this turn. A fight here has one player.
         (Cards::Regent(RegentCard::Radiate), CardVar::CalculatedHits) => {
@@ -140,6 +156,7 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 /// Where a card's own play stops to ask something, under its card grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
+    Colorless(colorless::Resume),
     Event(event::Resume),
     Necrobinder(necrobinder::Resume),
     Regent(regent::Resume),
@@ -159,7 +176,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
         Cards::Event(card) => event::on_play(card, fight),
         Cards::Quest(card) => card_plays::quest::on_play(card, fight),
-        Cards::Status(card) => card_plays::status::on_play(card, fight),
+        Cards::Status(card) => status::on_play(card, fight),
         Cards::Token(card) => token::on_play(card, fight),
         Cards::Deprecated(card) => card_plays::deprecated::on_play(card, fight),
     }
@@ -289,9 +306,40 @@ pub(crate) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
+        Resume::Colorless(at) => colorless::resume_play(fight, at, chosen),
         Resume::Event(at) => event::resume_play(fight, at, chosen),
         Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),
+    }
+}
+
+/// The act, counted from zero, in which the Lantern Key answers.
+const LANTERN_KEY_ACT: usize = 2;
+
+/// `ModifyUnknownMapPointRoomTypes` for a card in the deck. The Lantern Key
+/// leaves nothing but an event in its act.
+///
+/// # Panics
+///
+/// Any other card, which the run asks only when its class overrides the hook.
+pub(crate) fn narrows_unknown_rooms(card: Cards, act: usize) -> bool {
+    match card {
+        Cards::Quest(QuestCard::LanternKey) => act == LANTERN_KEY_ACT,
+        card => unimplemented!("what {card:?} does to an unknown room"),
+    }
+}
+
+/// `ModifyNextEvent` for a card in the deck. The Lantern Key sends its act's
+/// next event to War Historian Repy.
+///
+/// # Panics
+///
+/// Any other card, which the run asks only when its class overrides the hook.
+pub(crate) fn next_event(card: Cards, act: usize, event: Event) -> Event {
+    match card {
+        Cards::Quest(QuestCard::LanternKey) if act == LANTERN_KEY_ACT => Event::WarHistorianRepy,
+        Cards::Quest(QuestCard::LanternKey) => event,
+        card => unimplemented!("what {card:?} does to the next event"),
     }
 }

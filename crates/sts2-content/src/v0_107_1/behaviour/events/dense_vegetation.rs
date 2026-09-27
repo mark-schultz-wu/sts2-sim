@@ -89,9 +89,10 @@ impl EventBehavior<V> for DenseVegetation {
             }
             (Page::Rest, _) => {
                 state.chosen = NonMaxU8::new(option);
-                smallvec::smallvec![HookEffect::FightInEvent(
-                    Encounter::DenseVegetationEventEncounter
-                )]
+                smallvec::smallvec![HookEffect::FightInEvent {
+                    encounter: Encounter::DenseVegetationEventEncounter,
+                    reward: None,
+                }]
             }
         }
     }

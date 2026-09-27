@@ -8,7 +8,7 @@ use crate::rng::MegaRng;
 use smallvec::SmallVec;
 use sts2_core::{CombatId, Pile, PowerAmount, Rules, SideKinds, TurnPhaseKinds};
 
-use super::board::{Board, draw};
+use super::board::Board;
 use super::listen::{self, Listener};
 use super::live::{CREATURES, Face, Landing, Live, Setup, Skips, Then};
 use super::pile::MAX_CARDS_IN_HAND;
@@ -635,6 +635,53 @@ pub(super) fn carry_setup<V: Rules>(
                                 );
                             }
                         }
+                        sts2_core::HookEffect::ExhaustFromDrawTop { passing_innate } => {
+                            let passed = passing_innate
+                                .then(|| {
+                                    live.cards
+                                        .iter(Pile::Draw)
+                                        .position(|card| !card.face.innate())
+                                })
+                                .flatten();
+                            let top =
+                                passed.or_else(|| (!live.cards.is_empty(Pile::Draw)).then_some(0));
+                            if let Some(at) = top {
+                                let card = live
+                                    .cards
+                                    .get(Pile::Draw, at)
+                                    .expect("a card stands where the walk found it");
+                                let index = num_traits::NumCast::from(at).unwrap_or_else(|| {
+                                    unimplemented!("a pile deeper than a fight can number")
+                                });
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                sts2_core::Fight::act_on(
+                                    &mut board,
+                                    sts2_core::PileAct::Exhaust,
+                                    &[sts2_core::CardAt::new(card.id, Pile::Draw, index)],
+                                );
+                            }
+                        }
+                        // `PowerCmd.Apply` on the player, from a relic.
+                        sts2_core::HookEffect::ApplyToOwner(power, amount)
+                            if matches!(listener, Listener::Relic { .. }) =>
+                        {
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            sts2_core::Fight::apply_to_actor(&mut board, power, amount);
+                        }
                         sts2_core::HookEffect::ShuffleIfNecessary => {
                             if live.cards.is_empty(Pile::Draw) {
                                 super::board::shuffle::<V>(
@@ -693,14 +740,63 @@ pub(super) fn carry_setup<V: Rules>(
                         ),
                     }
                 }
-                let drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
-                // A card auto-played as it is drawn can end the fight, and an
-                // ending fight hands the hooks after it no listeners.
-                if let Some(ended) = draw(live, rngs.reborrow(), relics, ascension, drawn, true) {
-                    return Carried::Done(Some(ended));
+                let mut drawn = hand_size::<V>(listen::Walk { live, relics }, live.turn);
+                super::start::after_modifying_hand_draw::<V>(live, relics);
+                // On turn one the innate cards go on top and are all drawn, up
+                // to a full hand. The game sinks a card whose enchantment says
+                // `ShouldStartAtBottomOfDrawPile` first, and `Rules::enchant`
+                // puts no such enchantment on a card.
+                if live.turn == num_traits::one() {
+                    let innate = live.cards.innate_to_top();
+                    drawn = drawn.max(innate).min(MAX_CARDS_IN_HAND);
                 }
-                let hook = sts2_core::EventHook::PlayerTurnStart { player };
-                Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
+                Setup::Drawing {
+                    left: drawn,
+                    resumed: false,
+                }
+            }
+            // The hand's draw. A shuffle inside it can ask for a selection,
+            // which the setup parks on and then draws the rest.
+            Setup::Drawing { left, resumed } => {
+                match super::board::draw_pausing::<V>(
+                    live,
+                    rngs.reborrow(),
+                    relics,
+                    ascension,
+                    left,
+                    true,
+                    resumed,
+                ) {
+                    // A card auto-played as it is drawn can end the fight, and
+                    // an ending fight hands the hooks after it no listeners.
+                    super::board::Drawn::Done(Some(ended)) => return Carried::Done(Some(ended)),
+                    super::board::Drawn::Done(None) => {
+                        let hook = sts2_core::EventHook::PlayerTurnStart {
+                            player,
+                            turn: live.turn,
+                        };
+                        Setup::PlayerTurnStart(listen::notify::<V>(live, relics, hook))
+                    }
+                    super::board::Drawn::Paused {
+                        left,
+                        asks: (pile, count, act),
+                    } => {
+                        let rest = Setup::Drawing {
+                            left,
+                            resumed: true,
+                        };
+                        match select::<V>(live, rngs.reborrow(), relics, pile, count, act) {
+                            Err(question) => {
+                                return Carried::Parked(super::live::Asking {
+                                    then: Then::Setup { act, stage: rest },
+                                    question,
+                                });
+                            }
+                            Ok(Some(ended)) => return Carried::Done(Some(ended)),
+                            Ok(None) => rest,
+                        }
+                    }
+                }
             }
             // `Hook.AfterPlayerTurnStart`, the last of the setup. A relic's
             // damage here can end the fight.
@@ -830,19 +926,9 @@ fn generate_from_pool<V: Rules>(
     count: V::Number,
     keyword: Option<V::CardKeyword>,
 ) {
-    use sts2_core::CardTable as _;
-
     let count: usize = num_traits::cast(count)
         .unwrap_or_else(|| unimplemented!("making {count:?} cards from a pool"));
-    let keeps = |card: V::Card| match filter {
-        sts2_core::PoolFilter::OfKind(kind) => V::card_kind(card) == Some(kind),
-        sts2_core::PoolFilter::NotBasicOrAncient => {
-            let rarity = card.rarity();
-            rarity != <<V::Card as sts2_core::CardTable>::Rarity as sts2_core::CardRarityKinds>::BASIC
-                && rarity
-                    != <<V::Card as sts2_core::CardTable>::Rarity as sts2_core::CardRarityKinds>::ANCIENT
-        }
-    };
+    let keeps = |card: V::Card| crate::reward::card::keeps::<V>(filter, card);
     for _ in 0..count {
         let mut cards: Vec<V::Card> = V::combat_cards(live.character)
             .iter()
@@ -1222,7 +1308,39 @@ pub(super) fn side_turn_started<V: Rules>(
                 }
                 ended = ended.or(board.ended);
             }
+            // `PlayerCmd.GainStars`.
+            sts2_core::HookEffect::GainStars(amount) => live.modify_stars(amount),
+            // `OrbCmd.Channel` on the player, which evokes an orb to make room.
+            sts2_core::HookEffect::Channel(orb) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::channel(&mut board, orb);
+                ended = ended.or(board.ended);
+            }
+            // `OstyCmd.Summon` for the player.
+            sts2_core::HookEffect::Summon(amount) => {
+                super::board::summon_osty::<V>(live, rngs.reborrow(), relics, ascension, amount);
+            }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
+        }
+    }
+    if ended.is_some() {
+        return ended;
+    }
+    // `Hook.AfterSideTurnStartLate`.
+    let hook = sts2_core::EventHook::SideTurnStartLate { side };
+    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        match (listener, effect) {
+            // `PowerCmd.Decrement(this)`.
+            (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                ended = ended.or(board.ended);
+            }
+            (listener, effect) => {
+                unimplemented!("{listener:?} asking for {effect:?} late as a side turn starts")
+            }
         }
     }
     ended

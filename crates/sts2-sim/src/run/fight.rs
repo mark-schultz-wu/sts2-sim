@@ -97,7 +97,7 @@ impl<V: Rules> State<V> {
                 takes: held
                     .potion
                     .target()
-                    .unwrap_or_else(|| unimplemented!("a potion that decides its own target")),
+                    .unwrap_or_else(|| V::computed_potion_target(held.potion, true)),
             });
         }
 
@@ -159,7 +159,7 @@ impl<V: Rules> State<V> {
             }
             Some(combat::Ended::Won) => {
                 let (live, relics) = self.left_fight();
-                let returned = live.returned().to_vec();
+                let extra_cards = live.extra_cards().to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
                 let (extra, leaving): (Vec<_>, Vec<_>) = live
                     .leaving()
@@ -179,7 +179,7 @@ impl<V: Rules> State<V> {
                 }
                 let mut offered = self.combat_rewards(&combat, proportion);
                 offered.extend(
-                    returned
+                    extra_cards
                         .into_iter()
                         .map(|card| crate::reward::Offer::SpecialCard { card, taken: false }),
                 );
@@ -251,6 +251,7 @@ impl<V: Rules> State<V> {
             let relic = self.pull_relic(rarity);
             offered.push(crate::reward::Offer::Relic {
                 relic,
+                rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                 taken: false,
             });
         }

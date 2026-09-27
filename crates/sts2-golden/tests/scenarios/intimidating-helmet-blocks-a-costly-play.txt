@@ -1,0 +1,7 @@
+# Intimidating Helmet gives four block before a play that spends two energy or
+# more. Bash spends two and sets it off, and a Strike spends one and does not.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"INTIMIDATING_HELMET"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":0,"target":1}

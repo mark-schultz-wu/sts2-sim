@@ -410,7 +410,7 @@ pub(super) static ROWS: [CardData; 88] = [
                 id: CardVar::Damage,
                 base: 3,
                 calculated: false,
-                modifier: Some(CardNumberModifier::Damage),
+                modifier: Some(CardNumberModifier::UnpoweredDamage),
             },
         ],
         max_upgrade: 1,

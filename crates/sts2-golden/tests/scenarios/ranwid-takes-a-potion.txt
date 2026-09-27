@@ -1,0 +1,9 @@
+# Ranwid asks for a potion and a tradable relic, each drawn with `NextItem`
+# off the event's stream. Giving the potion pulls one relic from the bag.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"ANCHOR"}
+{"cmd":"grant","relic":"GORGET"}
+{"cmd":"grant","potion":"FIRE_POTION"}
+{"cmd":"grant","potion":"BLOCK_POTION"}
+{"cmd":"event","event":"RANWID_THE_ELDER"}
+{"cmd":"choose_option","index":0}

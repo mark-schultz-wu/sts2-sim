@@ -1,0 +1,7 @@
+# Colorful Philosophers lists every pool but the character's own in
+# `CardPoolColorOrder`, then removes one at a `NextInt` place until three
+# stay. The first option offers three card rewards of three from its pool,
+# Common, Uncommon and Rare, at uniform odds.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"COLORFUL_PHILOSOPHERS"}
+{"cmd":"choose_option","index":0}

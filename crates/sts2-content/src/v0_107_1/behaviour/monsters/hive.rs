@@ -50,6 +50,16 @@ pub(super) fn starting_powers(
         Monster::BowlbugEgg | Monster::SpinyToad | Monster::Ovicopter => Vec::new(),
         Monster::Chomper => vec![(Power::ArtifactPower, PowerAmount::Counted(2))],
         Monster::Entomancer => vec![(Power::PersonalHivePower, PowerAmount::Counted(1))],
+        // The Rocket's `AfterAddedToRoom` also surrounds its opponents, which
+        // `starting_opponent_powers` names.
+        Monster::Crusher => vec![
+            (Power::BackAttackLeftPower, PowerAmount::Counted(1)),
+            (Power::CrabRagePower, PowerAmount::Counted(1)),
+        ],
+        Monster::Rocket => vec![
+            (Power::BackAttackRightPower, PowerAmount::Counted(1)),
+            (Power::CrabRagePower, PowerAmount::Counted(1)),
+        ],
         Monster::InfestedPrism => {
             let spark = match ascension.has(AscensionLevel::DeadlyEnemies) {
                 true => 3,
@@ -258,6 +268,61 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
                 None => unimplemented!("an Entomancer spitting with no Personal Hive"),
             }
         }
+        // The Kaiser Crab's arms. The rest of each move is its background's
+        // animation.
+        (Monster::Crusher, MoveId::ThrashMove | MoveId::EnlargingStrikeMove) => {
+            fight.attack_opponents()
+        }
+        // `BugStingMove`: its two hits, then Weak and Frail at two on each
+        // target.
+        (Monster::Crusher, MoveId::BugStingMove) => {
+            fight.attack_opponents();
+            fight.apply_to_opponents(Power::WeakPower, PowerAmount::Counted(2));
+            fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(2));
+        }
+        (Monster::Crusher, MoveId::AdaptMove) => {
+            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => 3,
+                false => 2,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
+        // `GuardedStrikeMove`: its hit, then eighteen block as a move.
+        (Monster::Crusher, MoveId::GuardedStrikeMove) => {
+            fight.attack_opponents();
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(GUARDED_BLOCK),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+        }
+        (
+            Monster::Rocket,
+            MoveId::TargetingReticleMove | MoveId::PrecisionBeamMove | MoveId::LaserMove,
+        ) => fight.attack_opponents(),
+        (Monster::Rocket, MoveId::ChargeUpMove) => {
+            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => 3,
+                false => 2,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
+        (Monster::Rocket, MoveId::RechargeMove) => {}
+        // `LiquifyMove`: Sandpit at four on itself, aimed at the player, then
+        // six Frantic Escapes at random places: three into the draw pile and
+        // three into the discard pile. `HasLiquified` picks its animations
+        // alone. A fight here has one player.
+        (Monster::TheInsatiable, MoveId::LiquifyGroundMove) => {
+            fight.apply_to_actor(Power::SandpitPower, PowerAmount::Counted(SANDPIT));
+            for escape in 0..ESCAPES {
+                let pile = match escape < ESCAPES / 2 {
+                    true => Pile::Draw,
+                    false => Pile::Discard,
+                };
+                fight.add_at_random(Cards::Status(StatusCard::FranticEscape), pile);
+            }
+        }
         (Monster::Myte, MoveId::ToxicMove) => {
             fight.add_generated_cards(
                 sts2_core::CardIdent::new(Cards::Status(StatusCard::Toxic)),
@@ -369,6 +434,15 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
     });
     fight.heal(actor, amount);
 }
+
+/// `LiquifyMove`'s Sandpit, `PowerCmd.Apply(…, 4m, …)`.
+const SANDPIT: Number = 4;
+
+/// `LiquifyMove`'s six Frantic Escapes.
+const ESCAPES: usize = 6;
+
+/// `GuardedStrikeMove`'s `CreatureCmd.GainBlock(…, 18m, ValueProp.Move, …)`.
+const GUARDED_BLOCK: Number = 18;
 
 /// The Personal Hive `SpitMove` stops growing at.
 const HIVE_CAP: Number = 3;

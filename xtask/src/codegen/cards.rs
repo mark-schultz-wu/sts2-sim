@@ -180,6 +180,7 @@ fn previewed(class: &str) -> Option<&'static str> {
     Some(match class {
         "DamageVar" | "CalculatedDamageVar" => "Some(CardNumberModifier::Damage)",
         "OstyDamageVar" | "CalculatedDamageVar+FromOsty" => "Some(CardNumberModifier::OstyDamage)",
+        "DamageVar+Unpowered" => "Some(CardNumberModifier::UnpoweredDamage)",
         "BlockVar" | "CalculatedBlockVar" => "Some(CardNumberModifier::Block)",
         "CalculationBaseVar"
         | "CalculationExtraVar"
@@ -1515,6 +1516,10 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         out,
         "    fn overrides(self) -> sts2_core::Overrides {{\n\
          \x20       OVERRIDES[usize::from(<Self as sts2_core::CardTable>::order(self))]\n\
+         \x20   }}\n\
+         \n\
+         \x20   fn heard_by_any() -> sts2_core::Overrides {{\n\
+         \x20       HEARD_BY_ANY\n\
          \x20   }}"
     )
     .unwrap();
@@ -1523,12 +1528,32 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     // Indexed by rank, which `order` is, so one flat table serves every pool.
     let mut ranked: Vec<(&u16, &&str)> = ranks.iter().map(|(id, rank)| (rank, id)).collect();
     ranked.sort_unstable();
+    let overrides = super::overrides(&build)?;
+    let ranked: Vec<&str> = ranked.into_iter().map(|(_, id)| *id).collect();
     super::emit_overrides(
         &mut out,
         "indexed by the card's place in the build's id order.",
-        ranked.into_iter().map(|(_, id)| *id),
-        &super::overrides(&build)?,
+        ranked.iter().copied(),
+        &overrides,
     );
+    // Every hook some card's class overrides, so a question no card can hear
+    // skips the walk over the deck.
+    let mut heard = String::from("sts2_core::Overrides::from_bits(0)");
+    let mut seen: Vec<sts2_core::ModelHook> = Vec::new();
+    for id in &ranked {
+        for hook in overrides.get(*id).into_iter().flatten() {
+            if !seen.contains(hook) {
+                seen.push(*hook);
+                write!(heard, ".with(sts2_core::ModelHook::{hook:?})").unwrap();
+            }
+        }
+    }
+    writeln!(
+        out,
+        "\n/// Every hook some card's class overrides.\n\
+         static HEARD_BY_ANY: sts2_core::Overrides = {heard};"
+    )
+    .unwrap();
 
     split.finish(
         &out,

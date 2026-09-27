@@ -68,6 +68,12 @@ pub enum State {
     Gigantification {
         bound: Option<(sts2_core::AttackId, sts2_core::CardId<V>)>,
     },
+    /// `PanachePower`'s `CardsLeft`, and its `alreadyApplied`, which passes
+    /// over the play that applied it.
+    Panache {
+        cards_left: u8,
+        applied: bool,
+    },
     /// `AutomationPower`'s `cardsLeft`.
     Automation {
         cards_left: u8,
@@ -75,6 +81,11 @@ pub enum State {
     /// `CurlUpPower`'s `playedCard`: the copy whose play it waits on.
     CurlUp {
         played: Option<sts2_core::CardId<V>>,
+    },
+    /// `SurroundedPower.Facing`: whether its owner faces left, where it
+    /// starts facing right.
+    Surrounded {
+        facing_left: bool,
     },
 }
 
@@ -101,10 +112,15 @@ impl sts2_core::PowerModel<V> for State {
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
             Power::GigantificationPower => Self::Gigantification { bound: None },
+            Power::PanachePower => Self::Panache {
+                cards_left: PANACHE_CARDS,
+                applied: false,
+            },
             Power::AutomationPower => Self::Automation {
                 cards_left: AUTOMATION_CARDS,
             },
             Power::CurlUpPower => Self::CurlUp { played: None },
+            Power::SurroundedPower => Self::Surrounded { facing_left: false },
             power => Self::Stateless(power),
         }
     }
@@ -123,7 +139,9 @@ impl sts2_core::PowerModel<V> for State {
             Self::Feral { .. } => Power::FeralPower,
             Self::Gigantification { .. } => Power::GigantificationPower,
             Self::Automation { .. } => Power::AutomationPower,
+            Self::Panache { .. } => Power::PanachePower,
             Self::CurlUp { .. } => Power::CurlUpPower,
+            Self::Surrounded { .. } => Power::SurroundedPower,
         }
     }
 
@@ -186,6 +204,29 @@ impl State {
                 *counted
             }
             _ => 0,
+        }
+    }
+
+    /// `SurroundedPower.Facing`, as whether it faces left.
+    fn facing_left(&self) -> bool {
+        match self {
+            Self::Surrounded { facing_left } => *facing_left,
+            state => unreachable!("facing state for {:?}", state.power()),
+        }
+    }
+
+    /// `SurroundedPower.UpdateDirection`: facing right, a target with
+    /// Back Attack Left turns its owner left, and the other way round.
+    fn turn_toward(&mut self, fight: &dyn sts2_core::FightView<V>, target: sts2_core::CombatId) {
+        let Self::Surrounded { facing_left } = self else {
+            unreachable!("facing state for {:?}", self.power())
+        };
+        let behind = match *facing_left {
+            false => Power::BackAttackLeftPower,
+            true => Power::BackAttackRightPower,
+        };
+        if fight.power(target, behind).is_some() {
+            *facing_left = !*facing_left;
         }
     }
 
@@ -334,6 +375,15 @@ const PHROG: i32 = 25;
 /// `PaperKrane.ModifyWeakMultiplier`'s `0.15m`, in hundredths.
 const KRANE: i32 = 15;
 
+/// `SurroundedPower`'s `1.5m` on a hit from behind.
+const SURROUNDED: f64 = 1.5;
+
+/// `CrabRagePower`'s `PowerVar<StrengthPower>(6m)`.
+const CRAB_RAGE: Number = 6;
+
+/// `CrabRagePower`'s `BlockVar(99m, ValueProp.Unpowered)`.
+const CRAB_BLOCK: Number = 99;
+
 /// `FlutterPower`'s `DamageDecrease` of 50, as the share left.
 const FLUTTER: f64 = 0.5;
 
@@ -342,6 +392,9 @@ const FRAIL: f64 = 0.75;
 
 /// `ColossusPower`'s `DamageDecrease`.
 const COLOSSAL: f64 = 0.5;
+
+/// `PanachePower._baseCardsLeft`: the plays for each payout.
+const PANACHE_CARDS: u8 = 5;
 
 /// `AutomationPower._baseCardsLeft`: the cards its owner draws for each
 /// payout.
@@ -651,7 +704,9 @@ pub(crate) fn modify_hook(
         {
             Modify::AtMost(one)
         }
-        (Power::IntangiblePower, _, ModifyHook::HpLostAfterOsty { target }) if target == holder => {
+        (Power::IntangiblePower, _, ModifyHook::HpLostAfterOsty { target, .. })
+            if target == holder =>
+        {
             Modify::AtMost(one)
         }
         (
@@ -671,6 +726,28 @@ pub(crate) fn modify_hook(
             },
         ) if target == Some(holder) => Modify::Scaled(FLUTTER),
         (Power::FlutterPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
+        // `SurroundedPower.ModifyDamageMultiplicative`: half again on a hit
+        // on its owner from behind, which is from a dealer with Back Attack
+        // Left while it faces right, and the other way round.
+        (
+            Power::SurroundedPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                dealer: Some(dealer),
+                ..
+            },
+        ) if target == Some(holder) => {
+            let behind = match state.facing_left() {
+                false => Power::BackAttackLeftPower,
+                true => Power::BackAttackRightPower,
+            };
+            match fight.power(dealer, behind) {
+                Some(_) => Modify::Scaled(SURROUNDED),
+                None => Modify::Nothing,
+            }
+        }
+        (Power::SurroundedPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `TaintedPower.ModifyDamageAdditive`: its stack onto a powered attack
         // on its owner.
         (
@@ -997,7 +1074,7 @@ pub(crate) fn modify_hook(
             ModifyHook::BlockMultiplicative {
                 target,
                 powered: true,
-                card: true,
+                card: Some(_),
                 ..
             },
         ) if target == holder => Modify::Scaled(0.0),
@@ -1038,7 +1115,9 @@ pub(crate) fn modify_hook(
         ) if target == holder => unimplemented!("an endless Unmovable"),
         (Power::UnmovablePower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
         // `BufferPower.ModifyHpLostAfterOstyLate`: its holder loses nothing.
-        (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target }) if target == holder => {
+        (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target, .. })
+            if target == holder =>
+        {
             Modify::AtMost(num_traits::zero())
         }
         (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { .. }) => Modify::Nothing,
@@ -1058,7 +1137,9 @@ pub(crate) fn modify_hook(
         // `SlipperyPower.ModifyHpLostAfterOsty`, which hands back one however
         // much its owner was about to lose. A hit that the block took whole
         // loses nothing, and this leaves that where it is.
-        (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { target }) if target == holder => {
+        (Power::SlipperyPower, _, ModifyHook::HpLostAfterOsty { target, .. })
+            if target == holder =>
+        {
             Modify::AtMost(one)
         }
         // `DexterityPower.ModifyBlockAdditive` pays powered block from a card
@@ -1085,6 +1166,20 @@ pub(crate) fn modify_hook(
         ) if target == holder => {
             unimplemented!("an endless Dexterity")
         }
+        // `FastenPower.ModifyBlockAdditive`: its stack on powered block its
+        // owner gains, from a Defend or from no card at all.
+        (
+            Power::FastenPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::BlockAdditive {
+                target,
+                powered: true,
+                card,
+            },
+        ) if target == holder && card.is_none_or(|card| card.tagged(CardTag::Defend)) => {
+            Modify::Added(amount)
+        }
+        (Power::FastenPower, _, ModifyHook::BlockAdditive { .. }) => Modify::Nothing,
         // `FrailPower.ModifyBlockMultiplicative`: a quarter off the block a
         // card or a move gives its owner.
         (
@@ -1450,6 +1545,8 @@ pub(crate) fn event_hook(
     let one: Number = num_traits::one();
 
     let effect = match (power, amount, hook) {
+        // Its `AfterModifyingHandDraw` only flashes.
+        (Power::PaleBlueDotPower, _, EventHook::HandDrawModified) => return,
         (
             Power::ImbalancedPower,
             _,
@@ -1818,6 +1915,88 @@ pub(crate) fn event_hook(
             EventHook::DamageReceived { target, .. },
         ) if target == holder => unimplemented!("an endless Personal Hive"),
         (Power::PersonalHivePower, _, EventHook::DamageReceived { .. }) => None,
+        // `SurroundedPower.BeforeCardPlayed` and `BeforePotionUsed`: its owner
+        // turns toward a target behind it. A fight here has one player, whose
+        // every card and potion is its owner's.
+        (
+            Power::SurroundedPower,
+            _,
+            EventHook::CardPlaying {
+                target: Some(target),
+                ..
+            }
+            | EventHook::PotionUsing {
+                target: Some(target),
+            },
+        ) => {
+            state.turn_toward(fight, target);
+            None
+        }
+        (Power::SurroundedPower, _, EventHook::CardPlaying { .. } | EventHook::PotionUsing { .. }) => {
+            None
+        }
+        // `SurroundedPower.AfterDeath`: once an enemy dies, its owner turns
+        // toward the first enemy left where every one left stands on the
+        // same side of it.
+        (
+            Power::SurroundedPower,
+            _,
+            EventHook::AfterDeath {
+                side,
+                removal_prevented: false,
+                ..
+            },
+        ) if side != owner => {
+            let hittable = fight.living_opponents(holder);
+            let all = |power| hittable.iter().all(|&enemy| fight.power(enemy, power).is_some());
+            if let Some(&first) = hittable.first()
+                && (all(Power::BackAttackLeftPower) || all(Power::BackAttackRightPower))
+            {
+                state.turn_toward(fight, first);
+            }
+            None
+        }
+        (Power::SurroundedPower, _, EventHook::AfterDeath { .. }) => None,
+        // `CrabRagePower.AfterDeath`: when another on its side dies, six
+        // Strength, ninety-nine unpowered block, and then it goes.
+        (
+            Power::CrabRagePower,
+            _,
+            EventHook::AfterDeath {
+                creature, side, ..
+            },
+        ) if creature != holder && side == owner => {
+            asked.extend([
+                HookEffect::ApplyToOwner(Power::StrengthPower, PowerAmount::Counted(CRAB_RAGE)),
+                HookEffect::GainBlock(CRAB_BLOCK),
+                HookEffect::Remove,
+            ]);
+            return;
+        }
+        (Power::CrabRagePower, _, EventHook::AfterDeath { .. }) => None,
+        // `SandpitPower.AfterSideTurnStartLate`: one off as the enemies' turn
+        // starts.
+        (Power::SandpitPower, _, EventHook::SideTurnStartLate { side: CombatSide::Enemy }) => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::SandpitPower, _, EventHook::SideTurnStartLate { .. }) => None,
+        // `SandpitPower.AfterRemoved`: while its owner and its target both
+        // live, `CreatureCmd.Kill` on the target, forced. A fight here has one
+        // player, who is the target, and the player's death ends the fight
+        // before any pet's matters.
+        (Power::SandpitPower, _, EventHook::Removed) => {
+            let player = fight.player();
+            let alive = |creature| fight.current_hp(creature).is_some_and(|hp| hp > 0);
+            (alive(holder) && alive(player)).then_some(HookEffect::KillCreature(player))
+        }
+        // Its other overrides move the player's figure and the music.
+        (
+            Power::SandpitPower,
+            _,
+            EventHook::Applied
+            | EventHook::PowerAmountChanged { .. }
+            | EventHook::BeforeSideTurnEnd { .. },
+        ) => None,
         // `VitalSparkPower.BeforeCombatStart`: Tainted by its stack on every
         // Skill the player holds.
         (Power::VitalSparkPower, _, EventHook::CombatStarting) => Some(HookEffect::Afflict {
@@ -2422,6 +2601,57 @@ pub(crate) fn event_hook(
         (Power::AutomationPower, PowerAmount::Endless, EventHook::CardDrawn { .. }) => {
             unimplemented!("an endless Automation")
         }
+        // `PanachePower.AfterCardPlayed`: each play after the one that
+        // applied it counts down, and the fifth hits every enemy for its
+        // stack, unpowered. A fight here has one player, whose cards are all
+        // its holder's.
+        (Power::PanachePower, PowerAmount::Counted(amount), EventHook::CardPlayed { .. }) => {
+            let State::Panache {
+                cards_left,
+                applied,
+            } = state
+            else {
+                unreachable!("cards left for {:?}", state.power())
+            };
+            let hit = *applied && {
+                *cards_left -= 1;
+                *cards_left == 0
+            };
+            *applied = true;
+            if hit {
+                *cards_left = PANACHE_CARDS;
+                Some(HookEffect::DamageOpponents(amount))
+            } else {
+                None
+            }
+        }
+        // `PanachePower.AfterSideTurnEnd`: the count starts again as its
+        // owner's side ends a turn.
+        (Power::PanachePower, _, EventHook::SideTurnEnd { side }) => {
+            if side == owner {
+                let State::Panache { cards_left, .. } = state else {
+                    unreachable!("cards left for {:?}", state.power())
+                };
+                *cards_left = PANACHE_CARDS;
+            }
+            None
+        }
+        (Power::PanachePower, PowerAmount::Endless, EventHook::CardPlayed { .. }) => {
+            unimplemented!("an endless Panache")
+        }
+        // `StratagemPower.AfterShuffle`: `FromCombatPile` over the draw pile
+        // for its stack of cards, each into hand. A fight here has one
+        // player, whose shuffle is its holder's.
+        (Power::StratagemPower, PowerAmount::Counted(amount), EventHook::Shuffled) => {
+            Some(HookEffect::SelectFromPile {
+                pile: sts2_core::Pile::Draw,
+                count: amount,
+                act: sts2_core::PileAct::IntoHand,
+            })
+        }
+        (Power::StratagemPower, PowerAmount::Endless, EventHook::Shuffled) => {
+            unimplemented!("an endless Stratagem")
+        }
         // `ReflectPower.AfterDamageReceived`: what the block took off a
         // powered attack on its owner goes back at the attacker, unpowered.
         (
@@ -2807,12 +3037,12 @@ pub(crate) fn event_hook(
         (Power::CoolantPower, _, EventHook::SideTurnStart { .. }) => None,
         // `LoopPower.AfterPlayerTurnStart`: the first orb's passive, its stack
         // of times.
-        (Power::LoopPower, PowerAmount::Counted(amount), EventHook::PlayerTurnStart { player })
+        (Power::LoopPower, PowerAmount::Counted(amount), EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             Some(HookEffect::FirstOrbPassive(amount))
         }
-        (Power::LoopPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+        (Power::LoopPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Loop")
@@ -2891,7 +3121,7 @@ pub(crate) fn event_hook(
         (
             Power::SummonNextTurnPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder && held.on_turn_start != PowerAmount::Counted(0) => {
             asked.extend([HookEffect::Summon(amount), HookEffect::Remove]);
             return;
@@ -2939,7 +3169,7 @@ pub(crate) fn event_hook(
         (
             Power::TyrannyPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
             count: amount,
@@ -2980,13 +3210,13 @@ pub(crate) fn event_hook(
         (
             Power::EntropyPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
             count: amount,
             act: sts2_core::PileAct::TransformToRandom,
         }),
-        (Power::EntropyPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+        (Power::EntropyPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Entropy")
@@ -2998,7 +3228,7 @@ pub(crate) fn event_hook(
         (
             Power::RollingBoulderPower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => {
             asked.extend([
                 HookEffect::DamageOpponents(amount),
@@ -3006,7 +3236,7 @@ pub(crate) fn event_hook(
             ]);
             return;
         }
-        (Power::RollingBoulderPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+        (Power::RollingBoulderPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Rolling Boulder")
@@ -3016,7 +3246,7 @@ pub(crate) fn event_hook(
         (
             Power::ToolsOfTheTradePower,
             PowerAmount::Counted(amount),
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => Some(HookEffect::SelectFromPile {
             pile: sts2_core::Pile::Hand,
             count: amount,
@@ -3025,7 +3255,7 @@ pub(crate) fn event_hook(
         (
             Power::TyrannyPower | Power::ToolsOfTheTradePower,
             PowerAmount::Endless,
-            EventHook::PlayerTurnStart { player },
+            EventHook::PlayerTurnStart { player, .. },
         ) if player == holder => unimplemented!("an endless {power:?}"),
         (
             Power::TyrannyPower | Power::ToolsOfTheTradePower,

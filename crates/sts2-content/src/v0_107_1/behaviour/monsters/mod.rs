@@ -20,6 +20,7 @@ pub(crate) type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
 mod hive;
 mod overgrowth;
+mod summoned;
 
 type V = V0_107_1;
 
@@ -63,12 +64,30 @@ pub(crate) fn starting_powers(
 
     match overgrowth::starting_powers(monster, ascension)
         .or_else(|| hive::starting_powers(monster, ascension, side))
+        .or_else(|| summoned::starting_powers(monster))
     {
         Some(applied) => applied,
         None if !monster.overrides_virtual(sts2_core::MonsterVirtual::AfterAddedToRoom) => {
             Vec::new()
         }
         None => unimplemented!("what {monster:?} does as it enters the fight"),
+    }
+}
+
+/// Powers a monster's `AfterAddedToRoom` applies to each of its opponents.
+/// The Rocket surrounds the player.
+pub(crate) fn starting_opponent_powers(
+    monster: Monster,
+) -> Vec<(
+    super::super::generated::powers::Power,
+    sts2_core::PowerAmount<Number>,
+)> {
+    match monster {
+        Monster::Rocket => vec![(
+            super::super::generated::powers::Power::SurroundedPower,
+            sts2_core::PowerAmount::Counted(1),
+        )],
+        _ => Vec::new(),
     }
 }
 
@@ -170,6 +189,14 @@ pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
             | Monster::KinPriest,
             EventHook::AfterDeath { .. },
         ) => {}
+        // The Kaiser Crab's arms move its background as their health falls,
+        // and move the music on as one dies.
+        (
+            Monster::Crusher | Monster::Rocket,
+            EventHook::CurrentHpChanged { .. } | EventHook::BeforeDeath { .. },
+        ) => {}
+        // The Insatiable's own death does nothing but return.
+        (Monster::TheInsatiable, EventHook::AfterDeath { .. }) => {}
         (monster, hook) => unimplemented!("what {monster:?} does for {hook:?}"),
     }
 }
@@ -198,6 +225,9 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::ToughEgg
         | Monster::TheObscura
         | Monster::Entomancer
+        | Monster::Crusher
+        | Monster::Rocket
+        | Monster::TheInsatiable
         | Monster::BowlbugRock
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront
