@@ -1,0 +1,5 @@
+# Shared Fate takes two Strength off its owner and two off its target.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SHARED_FATE"}
+{"cmd":"play_card","index":5,"target":1}

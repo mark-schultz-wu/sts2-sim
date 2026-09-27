@@ -19,6 +19,8 @@ pub enum Resume {
     TrueGritExhaust,
     /// `Armaments`, after its owner picked the card to upgrade.
     ArmamentsUpgrade,
+    /// `Brand`, after its owner picked the card to exhaust.
+    BrandExhaust,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -35,6 +37,13 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardCmd.Exhaust` of the one taken.
         Resume::TrueGritExhaust => {
             fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.Exhaust` of the one taken, then its Strength.
+        Resume::BrandExhaust => {
+            fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            let strength = fight.var(CardVar::StrengthPower);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
             Played::Done
         }
         // `CardCmd.Upgrade` of the one taken.
@@ -85,6 +94,17 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
         IroncladCard::Pillage => pillage(fight),
         IroncladCard::TrueGrit => true_grit(fight),
         IroncladCard::Dismantle => dismantle(fight),
+        // `Brand`: its `HpLoss` off its owner, unblockable, then one card of
+        // the hand exhausted, then its Strength.
+        IroncladCard::Brand => {
+            fight.damage_unblockable(fight.actor(), fight.var(CardVar::HpLoss));
+            Played::Asking {
+                pile: Pile::Hand,
+                selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Ironclad(Resume::BrandExhaust)),
+            }
+        }
+        IroncladCard::PrimalForce => primal_force(fight),
         // `Hemokinesis`: its `HpLoss` off its owner, unblockable, then its
         // damage to the target.
         IroncladCard::Hemokinesis => {
@@ -151,6 +171,25 @@ fn dismantle<F: Fight<V>>(fight: &mut F) -> Played<V> {
     });
     for _ in 0..1 + u8::from(vulnerable) {
         strike(fight, target);
+    }
+    Played::Done
+}
+
+/// `PrimalForce`: each Attack in hand transformed into a Giant Rock,
+/// upgraded where Primal Force is. A card in a fight is always
+/// transformable.
+fn primal_force<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+
+    let attacks: Vec<_> = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| V::card_kind(fight.card_ident(card).card) == Some(CardKind::Attack))
+        .collect();
+    for card in attacks {
+        let mut into = sts2_core::CardIdent::new(Cards::Token(TokenCard::GiantRock));
+        into.upgrade = u8::from(fight.upgraded());
+        fight.transform(card, into);
     }
     Played::Done
 }
