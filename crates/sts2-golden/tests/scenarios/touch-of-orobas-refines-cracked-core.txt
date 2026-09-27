@@ -1,0 +1,7 @@
+# Cracked Core becomes Infused Core, which channels three Lightning as the
+# first turn starts and adds one to each Lightning's numbers.
+{"cmd":"start","seed":"C000000001","character":"DEFECT","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

@@ -1216,6 +1216,19 @@ pub(super) fn side_turn_started<V: Rules>(
                 }
                 ended = ended.or(board.ended);
             }
+            // `PlayerCmd.GainStars`.
+            sts2_core::HookEffect::GainStars(amount) => live.modify_stars(amount),
+            // `OrbCmd.Channel` on the player, which evokes an orb to make room.
+            sts2_core::HookEffect::Channel(orb) => {
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::channel(&mut board, orb);
+                ended = ended.or(board.ended);
+            }
+            // `OstyCmd.Summon` for the player.
+            sts2_core::HookEffect::Summon(amount) => {
+                super::board::summon_osty::<V>(live, rngs.reborrow(), relics, ascension, amount);
+            }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }

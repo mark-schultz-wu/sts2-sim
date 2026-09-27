@@ -1405,6 +1405,10 @@ pub trait RarityKinds: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
     /// slot picks no rarity of its own. A screen reports it as the slot's
     /// rarity.
     const UNDRAFTED: Self;
+
+    /// `RelicRarity.Starter`, a character's own relic, which a bag never
+    /// deals.
+    const STARTER: Self;
 }
 
 /// The ascension ladder, as much of it as a rule needs to ask about.
@@ -3440,6 +3444,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// and is removable, each into `CreateRandomCardForTransform` off the
     /// named stream, in deck order.
     TransformBasicStrikesAndDefends(Stream<V>),
+    /// `RelicCmd.Replace` on the first starter relic the player holds, with
+    /// the relic `upgrades` pairs it with, or `fallback` for one it names
+    /// nowhere. The replacement takes the starter's slot.
+    ReplaceStarterRelic {
+        upgrades: &'static [(V::Relic, V::Relic)],
+        fallback: V::Relic,
+    },
     /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
     /// the deck's bottom, cloned by the listener.
     CloneIntoDeck,

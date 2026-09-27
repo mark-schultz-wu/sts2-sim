@@ -265,6 +265,17 @@ impl<V: Rules> Belt<V> {
         held
     }
 
+    /// Put `held` in `slot` in place of what was there, as `RelicCmd.Replace`
+    /// obtains the replacement at the original's index.
+    pub(crate) fn replace(&mut self, slot: usize, held: HeldRelic<V>) {
+        *self = self
+            .held
+            .iter()
+            .enumerate()
+            .map(|(at, &was)| if at == slot { held } else { was })
+            .collect();
+    }
+
     pub(crate) fn copy_from(&mut self, source: &Self) {
         self.held.copy_from(&source.held);
         self.heard = source.heard;
@@ -1380,6 +1391,32 @@ impl<V: Rules> State<V> {
                 HookEffect::AddUniformCard { rarity } => {
                     for card in self.uniform_cards(1, rarity) {
                         self.add_to_deck(sts2_core::DeckCard::new(CardIdent::new(card)));
+                    }
+                    continue;
+                }
+                HookEffect::ReplaceStarterRelic { upgrades, fallback } => {
+                    use sts2_core::{RarityKinds, RelicTable as _};
+
+                    let Some(slot) = self
+                        .player
+                        .relics
+                        .iter()
+                        .position(|held| held.relic.rarity() == <_ as RarityKinds>::STARTER)
+                    else {
+                        unimplemented!("replacing a starter relic the run does not carry");
+                    };
+                    let starter = self.player.relics[slot].relic;
+                    let upgraded = upgrades
+                        .iter()
+                        .find(|&&(from, _)| from == starter)
+                        .map_or(fallback, |&(_, to)| to);
+                    let mut held = HeldRelic::new(upgraded);
+                    let effects = crate::combat::obtained::<V>(&mut held);
+                    self.player.relics.replace(slot, held);
+                    if let Some(effect) = effects.first() {
+                        unimplemented!(
+                            "{upgraded:?} asking for {effect:?} as it replaces {starter:?}"
+                        );
                     }
                     continue;
                 }

@@ -1,0 +1,7 @@
+# Bound Phylactery becomes Phylactery Unbound, which summons five as the fight
+# opens and two more as each of its owner's turns starts.
+{"cmd":"start","seed":"C000000001","character":"NECROBINDER","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
