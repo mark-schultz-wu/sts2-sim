@@ -750,6 +750,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     },
                     ascension,
                     played_card,
+                    card,
                     ethereal,
                 );
                 if effect.plays.done >= effect.plays.count {
@@ -868,6 +869,7 @@ fn finished<V: Rules, S: LendsCombat>(
     fighting: Fighting<'_, V, S>,
     ascension: V::AscensionLevel,
     card: V::Card,
+    id: sts2_core::CardId<V>,
     ethereal: bool,
 ) {
     let Fighting {
@@ -875,7 +877,7 @@ fn finished<V: Rules, S: LendsCombat>(
         streams,
         relics,
     } = fighting;
-    next.history.finish(card);
+    next.history.finish(card, id);
     let asked = super::listen::notify::<V>(
         next,
         relics,

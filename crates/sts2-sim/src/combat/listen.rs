@@ -362,7 +362,14 @@ fn raise<V: Rules>(
                 // The card's own override, then its enchantment's, which is
                 // the order the combat state lists them in.
                 if card.face.ident.card.overrides().contains(model_hook) {
-                    V::card_event_hook(card.face.ident.card, id, &card, hook, &mut answer);
+                    V::card_event_hook(
+                        card.face.ident.card,
+                        id,
+                        &card,
+                        live.history(),
+                        hook,
+                        &mut answer,
+                    );
                 }
                 if let Some(enchanted) = card.face.ident.enchantment
                     && <V::Enchantment as sts2_core::EnchantmentTable>::overrides(

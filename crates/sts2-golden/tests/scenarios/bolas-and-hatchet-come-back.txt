@@ -1,0 +1,13 @@
+# Bolas and Thrumming Hatchet each come back into hand before the hand draw
+# when that copy finished a play in the player's last turn. Bolas played on
+# turn one is back for turn two. On turn two only the Hatchet is played, so
+# turn three brings the Hatchet back first, and Bolas comes only as the draw
+# deals it, last.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"BOLAS"}
+{"cmd":"grant","card":"THRUMMING_HATCHET"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":3,"target":1}
+{"cmd":"end_turn"}

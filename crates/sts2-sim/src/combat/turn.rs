@@ -174,7 +174,10 @@ pub(crate) fn end<V: Rules>(
     }
     energy_reset_late::<V>(next, streams.combat(), relics, ascension);
     let player = next.player().id;
-    let hook = sts2_core::EventHook::BeforeHandDraw { player };
+    let hook = sts2_core::EventHook::BeforeHandDraw {
+        player,
+        turn: next.turn,
+    };
     let asked = listen::notify::<V>(next, relics, hook);
     // A setup that stops on a question lets the turn go on around it:
     // `StartTurn` waits for it to finish or to pause. A relic's damage can
@@ -646,6 +649,28 @@ pub(super) fn carry_setup<V: Rules>(
                                 unimplemented!("{listener:?} removing itself before the draw")
                             };
                             live.remove_power(owner, power);
+                        }
+                        // `CardPileCmd.Add(this, PileType.Hand)`, which sends a
+                        // card past a full hand to the discard pile.
+                        sts2_core::HookEffect::ToHand => {
+                            let Listener::Card { id } = listener else {
+                                unimplemented!("{listener:?} moving itself to the hand")
+                            };
+                            let found = [Pile::Hand, Pile::Draw, Pile::Discard, Pile::Exhaust]
+                                .into_iter()
+                                .find_map(|pile| live.cards.find(pile, id).map(|at| (pile, at)));
+                            let to = match live.cards.len(Pile::Hand) >= MAX_CARDS_IN_HAND {
+                                true => Pile::Discard,
+                                false => Pile::Hand,
+                            };
+                            match found {
+                                Some((Pile::Hand, _)) => {}
+                                Some((from, at)) if from != to => live.cards.move_to(from, at, to),
+                                Some(_) => {}
+                                None => unimplemented!(
+                                    "a card moving to the hand from outside the piles"
+                                ),
+                            }
                         }
                         effect => unimplemented!(
                             "a listener asking for {effect:?} before the hand is drawn"
