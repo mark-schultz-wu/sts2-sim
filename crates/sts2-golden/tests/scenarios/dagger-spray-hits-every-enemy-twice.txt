@@ -1,0 +1,5 @@
+# `DaggerSpray` hits every enemy twice.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"DAGGER_SPRAY"}
+{"cmd":"play_card","index":7}

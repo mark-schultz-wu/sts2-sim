@@ -1,0 +1,5 @@
+# `Putrefy` applies its two as Weak, then as Vulnerable, to the target.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"PUTREFY"}
+{"cmd":"play_card","index":5,"target":1}

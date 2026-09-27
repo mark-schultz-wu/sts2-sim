@@ -25,6 +25,9 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
     match card {
         SilentCard::Survivor => survivor(fight),
         SilentCard::Prepared => prepared(fight),
+        SilentCard::DaggerSpray => dagger_spray(fight),
+        SilentCard::LeadingStrike => leading_strike(fight),
+        SilentCard::Skewer => skewer(fight),
         SilentCard::DaggerThrow => dagger_throw(fight),
         SilentCard::Haze => haze(fight),
         SilentCard::Malaise => malaise(fight),
@@ -88,6 +91,57 @@ fn dagger_throw<F: Fight<V>>(fight: &mut F) -> Played<V> {
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
         at: super::super::Resume::Card(super::Resume::Silent(Resume::DaggerThrow)),
     }
+}
+
+/// Its damage to the target, `hits` times, as one attack.
+fn hit_target<F: Fight<V>>(fight: &mut F, hits: super::Number) {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+}
+
+/// `DaggerSpray`: its damage to every enemy, twice.
+fn dagger_spray<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..2 {
+            for target in fight.opponents() {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            }
+        }
+    });
+    Played::Done
+}
+
+/// `LeadingStrike`: its damage to the target, then its `Shivs` into hand one
+/// at a time.
+fn leading_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    hit_target(fight, 1);
+    for _ in 0..fight.var(CardVar::Shivs) {
+        fight.add_generated_cards(CardIdent::new(Cards::Token(TokenCard::Shiv)), Pile::Hand, 1);
+    }
+    Played::Done
+}
+
+/// `Skewer`: its damage to the target, once for each energy its X spent.
+fn skewer<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let hits = fight.x_value();
+    hit_target(fight, hits);
+    Played::Done
 }
 
 /// `Prepared`: its `Cards` drawn, then as many from hand to discard.

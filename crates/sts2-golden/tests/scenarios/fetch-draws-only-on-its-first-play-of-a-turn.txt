@@ -1,0 +1,8 @@
+# `Fetch` has Osty hit the target, then draws a card unless this copy has
+# finished a play already this turn. Duplication plays it twice. The first
+# play draws, and the second does not.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DUPLICATION_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"FETCH"}
+{"cmd":"play_card","index":5,"target":1}

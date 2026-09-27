@@ -1852,6 +1852,16 @@ pub trait Fight<V: ContentVersion> {
     /// prints no number at all.
     fn upgraded(&self) -> bool;
 
+    /// `CombatManager.History`, as it stands.
+    fn history(&self) -> History<'_, V> {
+        unimplemented!("reading the fight's history")
+    }
+
+    /// The copy of the card whose play is running, which is `this` to it.
+    fn playing(&self) -> crate::CardId<V> {
+        unimplemented!("naming the card being played")
+    }
+
     /// `CardCmd.Transform(original, replacement)`.
     ///
     /// The replacement takes the original's place: the same pile, at the same

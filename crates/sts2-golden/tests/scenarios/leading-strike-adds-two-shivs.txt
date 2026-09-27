@@ -1,0 +1,5 @@
+# `LeadingStrike` hits, then adds two Shivs to the hand one at a time.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"LEADING_STRIKE"}
+{"cmd":"play_card","index":7,"target":1}
