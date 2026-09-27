@@ -106,8 +106,8 @@ mod tests {
         fn relics(&self) -> impl Iterator<Item = Relic> + '_ {
             self.relics.iter().copied()
         }
-        fn deck(&self) -> &[CardIdent<V>] {
-            &[]
+        fn deck(&self) -> Vec<CardIdent<V>> {
+            Vec::new()
         }
         fn relics_left(&self) -> bool {
             unreachable!("Tea Master does not inspect the relic bag")
