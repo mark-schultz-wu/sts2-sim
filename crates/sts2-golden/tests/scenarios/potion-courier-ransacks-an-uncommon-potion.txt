@@ -1,0 +1,5 @@
+# `Ransack` offers one potion by `NextItem` over the uncommon potions of the
+# character's pool and the shared one, off the rewards stream.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"POTION_COURIER"}
+{"cmd":"choose_option","index":1}
