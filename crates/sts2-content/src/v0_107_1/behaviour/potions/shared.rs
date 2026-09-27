@@ -2,7 +2,7 @@
 
 use sts2_core::{
     Amount, CardTable as _, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile,
-    Played, PowerAmount, RunStreamKinds as _, Scaling, Table as _,
+    PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling, Table as _,
 };
 
 use super::super::super::V0_107_1 as V;
@@ -85,6 +85,10 @@ pub enum Resume {
     /// A potion offering three cards, one of which goes into hand free this
     /// turn.
     FreeCardChoice,
+    /// `LiquidMemories`, after the card picked from the discard pile.
+    LiquidMemories,
+    /// `DropletOfPrecognition`, after the card picked from the draw pile.
+    DropletOfPrecognition,
 }
 
 /// What one of the shared potions does when it is drunk.
@@ -295,6 +299,18 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             Played::Done
         }
+        // One card from the discard pile, free this turn, into hand.
+        Potion::LiquidMemories => Played::Asking {
+            pile: Pile::Discard,
+            selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Potion(super::Resume::Shared(Resume::LiquidMemories)),
+        },
+        // One card from the draw pile into hand.
+        Potion::DropletOfPrecognition => Played::Asking {
+            pile: Pile::Draw,
+            selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Potion(super::Resume::Shared(Resume::DropletOfPrecognition)),
+        },
         // `HittableEnemies`, taken once: Weak on every one, then Vulnerable
         // on every one. The game reads each amount off the other's var, and
         // both are one.
@@ -313,6 +329,18 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
+    }
+}
+
+/// `CardModel.SetToFreeThisTurn`: energy and stars at nothing this turn or
+/// until played.
+fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {
+    for pool in [CostPool::Energy, CostPool::Star] {
+        fight.modify_card(
+            at,
+            Change::SetCost(pool, num_traits::zero()),
+            Lasting::ThisTurnOrUntilPlayed,
+        );
     }
 }
 
@@ -352,15 +380,21 @@ pub(super) fn resume<F: Fight<V>>(
         (Resume::FreeCardChoice, sts2_core::Taken::Chosen(chosen)) => {
             if let Some(card) = chosen {
                 for at in fight.add_generated_cards(card, Pile::Hand, 1) {
-                    for pool in [CostPool::Energy, CostPool::Star] {
-                        fight.modify_card(
-                            at,
-                            Change::SetCost(pool, num_traits::zero()),
-                            Lasting::ThisTurnOrUntilPlayed,
-                        );
-                    }
+                    free_this_turn(fight, at);
                 }
             }
+            Played::Done
+        }
+        // `SetToFreeThisTurn`, then `CardPileCmd.Add` into hand.
+        (Resume::LiquidMemories, sts2_core::Taken::Selected(picked)) => {
+            for &at in picked.as_slice() {
+                free_this_turn(fight, at);
+            }
+            fight.act_on(PileAct::IntoHand, picked.as_slice());
+            Played::Done
+        }
+        (Resume::DropletOfPrecognition, sts2_core::Taken::Selected(picked)) => {
+            fight.act_on(PileAct::IntoHand, picked.as_slice());
             Played::Done
         }
         (at, answer) => unimplemented!("{at:?} resumed with {answer:?}"),

@@ -7,7 +7,7 @@ use super::super::super::generated::potions::Potion;
 use super::Number;
 
 /// `BloodPotion`'s `DynamicVar("HealPercent", 20)`.
-const HEAL_PERCENT: Number = 20;
+pub(super) const HEAL_PERCENT: Number = 20;
 
 /// What one of the Ironclad's potions does when it is drunk.
 ///

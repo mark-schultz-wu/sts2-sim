@@ -42,6 +42,30 @@ pub(crate) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
     }
 }
 
+/// What a potion drunk outside a fight asks the run for.
+///
+/// # Panics
+///
+/// A potion nobody has ported outside a fight.
+pub(crate) fn on_use_outside_fight(
+    potion: Potion,
+    run: &impl sts2_core::EventView<V>,
+) -> sts2_core::HookEffects<V> {
+    match potion {
+        // `CreatureCmd.Heal` for a fifth of the maximum, which
+        // `SetCurrentHpInternal` truncates.
+        Potion::BloodPotion => smallvec::smallvec![sts2_core::HookEffect::Heal(
+            Number::from(run.max_hp()) * ironclad::HEAL_PERCENT / 100
+        )],
+        // `CreatureCmd.GainMaxHp` by its `MaxHpVar(5)`.
+        Potion::FruitJuice => smallvec::smallvec![sts2_core::HookEffect::GainMaxHp(FRUIT_JUICE)],
+        potion => unimplemented!("what {potion:?} does when it is drunk outside a fight"),
+    }
+}
+
+/// `FruitJuice`'s `MaxHpVar(5)`.
+const FRUIT_JUICE: Number = 5;
+
 pub(crate) fn resume<F: Fight<V>>(fight: &mut F, at: Resume, answer: Taken<V>) -> Played<V> {
     match at {
         Resume::Shared(at) => shared::resume(fight, at, answer),
