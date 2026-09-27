@@ -49,6 +49,7 @@ pub(super) fn starting_powers(
         // loop beside it.
         Monster::BowlbugEgg | Monster::SpinyToad | Monster::Ovicopter => Vec::new(),
         Monster::Chomper => vec![(Power::ArtifactPower, PowerAmount::Counted(2))],
+        Monster::Entomancer => vec![(Power::PersonalHivePower, PowerAmount::Counted(1))],
         Monster::Parafright => vec![(Power::IllusionPower, PowerAmount::Counted(1))],
         // `ToughEgg.AfterAddedToRoom`, for an egg not yet hatched: Hatch at
         // two while the enemies take their turn, and at one otherwise.
@@ -228,6 +229,28 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
                 fight.apply_power(creature, Power::StrengthPower, PowerAmount::Counted(3));
             }
         }
+        // `SpitMove`: below three Personal Hive, one more of it and one
+        // Strength. At three, two Strength.
+        (Monster::Entomancer, MoveId::PheromoneSpitMove) => {
+            use sts2_core::CreatureView as _;
+
+            let actor = fight.actor();
+            let hive = fight
+                .creatures()
+                .find(|creature| creature.id() == actor)
+                .and_then(|creature| creature.power(Power::PersonalHivePower));
+            match hive {
+                Some(PowerAmount::Counted(amount)) if amount < HIVE_CAP => {
+                    fight.apply_to_actor(Power::PersonalHivePower, PowerAmount::Counted(1));
+                    fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(1));
+                }
+                Some(PowerAmount::Counted(_)) => {
+                    fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(2))
+                }
+                Some(PowerAmount::Endless) => unimplemented!("an endless Personal Hive"),
+                None => unimplemented!("an Entomancer spitting with no Personal Hive"),
+            }
+        }
         (Monster::Myte, MoveId::ToxicMove) => {
             fight.add_generated_cards(
                 sts2_core::CardIdent::new(Cards::Status(StatusCard::Toxic)),
@@ -339,6 +362,9 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
     });
     fight.heal(actor, amount);
 }
+
+/// The Personal Hive `SpitMove` stops growing at.
+const HIVE_CAP: Number = 3;
 
 /// `illusion`, the first of `TheObscuraNormal.Slots`.
 const ILLUSION_SLOT: u8 = 0;

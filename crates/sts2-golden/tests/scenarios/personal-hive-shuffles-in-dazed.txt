@@ -1,0 +1,12 @@
+# The Entomancer enters with Personal Hive at one. Each powered attack on it
+# puts a Dazed per stack into the player's draw pile, at the place
+# `Rng.Shuffle.NextInt` names. Pheromone Spit adds a stack and a Strength
+# while the Hive is under three.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"ENTOMANCER_ELITE"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

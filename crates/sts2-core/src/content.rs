@@ -3509,6 +3509,13 @@ pub enum HookEffect<V: ContentVersion> {
     AddToDeck(V::Card),
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
+    /// `CardPileCmd.AddGeneratedCardToCombat` of `count` new copies into
+    /// the player's draw pile, each at `CardPilePosition.Random`: the place
+    /// `Rng.Shuffle.NextInt(count + 1)` names, from the top.
+    AddToDrawAtRandom {
+        card: V::Card,
+        count: V::Number,
+    },
     /// `PlayerCmd.GainEnergy`.
     GainEnergy(V::Number),
     /// `PlayerCmd.LoseEnergy`.

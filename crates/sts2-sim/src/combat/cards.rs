@@ -251,6 +251,13 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         self.counts.add(self.overrides(number(card.id)));
     }
 
+    /// Put `card` into `pile` at `at`, counting from the front.
+    pub(crate) fn insert(&mut self, pile: Pile, at: usize, card: CardInstance<V>) {
+        self.push(pile, card);
+        self.piles
+            .arrange(pile.into(), |cards| cards[at..].rotate_right(1));
+    }
+
     /// Take the copy at `at` out of `pile`.
     pub(crate) fn remove(&mut self, pile: Pile, at: usize) -> CardInstance<V> {
         let card = self.piles.remove_at(pile.into(), at);
