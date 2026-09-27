@@ -3,7 +3,7 @@
 use sts2_core::{Fight, PowerAmount};
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::CurseCard;
+use super::super::super::generated::cards::{CardVar, CurseCard};
 use super::super::super::generated::powers::Power;
 use super::V;
 
@@ -14,6 +14,7 @@ const SHAME_FRAIL: super::Number = 1;
 pub(super) fn on_turn_end<F: Fight<V>>(card: CurseCard, fight: &mut F) {
     match card {
         CurseCard::Shame => shame(fight),
+        CurseCard::Debt => debt(fight),
         card => card_plays::curse::on_turn_end(card, fight),
     }
 }
@@ -23,5 +24,12 @@ pub(super) fn on_turn_end<F: Fight<V>>(card: CurseCard, fight: &mut F) {
 /// on a fresh one.
 fn shame<F: Fight<V>>(fight: &mut F) {
     fight.apply_to_actor(Power::FrailPower, PowerAmount::Counted(SHAME_FRAIL));
+    fight.discard_this();
+}
+
+/// `Debt`: `PlayerCmd.LoseGold` of its `Gold`, or of what its owner holds
+/// where that is less. Then it goes to the discard pile.
+fn debt<F: Fight<V>>(fight: &mut F) {
+    fight.lose_gold(fight.var(CardVar::Gold));
     fight.discard_this();
 }

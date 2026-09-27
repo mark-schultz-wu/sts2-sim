@@ -391,9 +391,7 @@ pub(super) fn before_side_turn_start<V: Rules>(
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
-                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
-                    creature.block = creature.block + amount;
-                }
+                live.gain_unpowered_block(owner, amount);
             }
             (_, sts2_core::HookEffect::AttacksFromDiscard(count)) => {
                 attacks_from_discard::<V>(live, rngs.reborrow(), count)
@@ -467,9 +465,7 @@ fn before_turn_end<V: Rules>(
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
             (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
-                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
-                    creature.block = creature.block + amount;
-                }
+                live.gain_unpowered_block(owner, amount);
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
@@ -1166,9 +1162,7 @@ pub(super) fn side_turn_started<V: Rules>(
                 }
                 let count: V::Number = num_traits::cast(kinds.len())
                     .expect("a queue's kinds of orb fit a game number");
-                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
-                    creature.block = creature.block + amount * count;
-                }
+                live.gain_unpowered_block(owner, amount * count);
             }
             // `PoisonPower.AfterSideTurnStart`: each round hits the owner for
             // the stack it holds then, and takes one off while it lives. An
@@ -1269,11 +1263,7 @@ pub(super) fn energy_reset<V: Rules>(
                 live.remove_power(owner, power);
             }
             // `PlayerCmd.GainStars`.
-            (_, sts2_core::HookEffect::GainStars(amount)) => {
-                let gained: V::Count = num_traits::cast(amount)
-                    .unwrap_or_else(|| unimplemented!("gaining {amount:?} stars"));
-                live.stars = live.stars + gained;
-            }
+            (_, sts2_core::HookEffect::GainStars(amount)) => live.modify_stars(amount),
             // `PowerCmd.Remove(this)`.
             (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Remove) => {
                 live.remove_power(owner, power)
@@ -1372,9 +1362,7 @@ fn clear_block<V: Rules>(
                     Listener::Power { owner, power, .. },
                     sts2_core::HookEffect::GainBlockAndRemove(amount),
                 ) => {
-                    if let Some(holder) = live.creatures.iter_mut().find(|c| c.id == owner) {
-                        holder.block = holder.block + amount;
-                    }
+                    live.gain_unpowered_block(owner, amount);
                     live.remove_power(owner, power);
                 }
                 (_, effect) => {

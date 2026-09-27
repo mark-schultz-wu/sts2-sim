@@ -1,0 +1,6 @@
+# `Debt` in hand as the turn ends takes ten gold, or what the player holds
+# where that is less. The fight holds the gold while it runs.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DEBT"}
+{"cmd":"end_turn"}

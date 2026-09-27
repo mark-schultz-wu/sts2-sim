@@ -1763,6 +1763,12 @@ pub trait Fight<V: ContentVersion> {
     /// this each time.
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number;
 
+    /// `PlayerCmd.LoseGold`: the player's gold down by `amount`, stopping at
+    /// none.
+    fn lose_gold(&mut self, _amount: V::Number) {
+        unimplemented!("losing gold in a fight")
+    }
+
     /// `OrbCmd.Channel`: the orb joins the end of the player's queue.
     ///
     /// A player with no slots of their own gains one first. A full queue
@@ -2222,6 +2228,8 @@ pub enum ModifyHook<V: ContentVersion> {
         powered: bool,
         /// `cardSource != null`, as [`ModifyHook::BlockAdditive`] carries it.
         card: bool,
+        /// `cardPlay`, as the play's [`PlayAt`].
+        play: Option<PlayAt>,
     },
     /// `ModifyHpLostBeforeOsty`, over what the block did not take.
     HpLostBeforeOsty {
@@ -2847,6 +2855,8 @@ pub enum Writing<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayStarted<V: ContentVersion> {
     pub card: V::Card,
+    /// Which copy it is, which `CardPlay.Card` is.
+    pub id: crate::CardId<V>,
     /// `CardPlay.Resources.EnergyValue`.
     pub energy: V::Count,
     /// `CardPlay.IsFirstInSeries`: not a replay of the play before it.
@@ -2877,7 +2887,29 @@ pub enum HistoryEntry<V: ContentVersion> {
     /// A `CreatureAttackedEntry`, by the attacker's `Monster`: nothing for
     /// the player.
     Attacked(Option<V::Monster>),
+    BlockGained(BlockGained),
+    /// A `StarsModifiedEntry`, by its `Amount`: the change to the player's
+    /// stars.
+    StarsModified(V::Number),
 }
+
+/// One `BlockGainedEntry` in `CombatManager.History`, as far as a listener
+/// reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockGained {
+    /// `Receiver`.
+    pub receiver: crate::CombatId,
+    /// `Props.IsPoweredCardOrMonsterMoveBlock()`.
+    pub powered: bool,
+    /// `CardPlay`, as the play's [`PlayAt`].
+    pub play: Option<PlayAt>,
+}
+
+/// One card play, by where its `CardPlayStartedEntry` stands in the turn's
+/// entries. The game compares `CardPlay` objects, and each play and replay
+/// starts once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PlayAt(pub u32);
 
 /// The entries of one turn now over, and the turns before it.
 ///
@@ -2973,6 +3005,22 @@ impl<V: ContentVersion> History<'_, V> {
     pub fn drawn_this_turn(&self) -> impl Iterator<Item = V::Card> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
             HistoryEntry::Drawn(card) => Some(*card),
+            _ => None,
+        })
+    }
+
+    /// Each `BlockGainedEntry` where `HappenedThisTurn`.
+    pub fn block_gained_this_turn(&self) -> impl Iterator<Item = BlockGained> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::BlockGained(gained) => Some(*gained),
+            _ => None,
+        })
+    }
+
+    /// Each `StarsModifiedEntry` where `HappenedThisTurn`, by its `Amount`.
+    pub fn stars_modified_this_turn(&self) -> impl Iterator<Item = V::Number> + '_ {
+        self.this_turn.iter().filter_map(|entry| match entry {
+            HistoryEntry::StarsModified(amount) => Some(*amount),
             _ => None,
         })
     }
@@ -3564,6 +3612,8 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// The powers of the creature the card is pointed at, where it is pointed
     /// at one.
     pub target: Option<&'a [crate::Stack<V>]>,
+    /// `CombatManager.History`.
+    pub history: History<'a, V>,
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -4421,6 +4471,20 @@ pub trait Rules: Hooks {
 
     /// `OrbModel.Passive` with no target named, which `OrbCmd.Passive` runs.
     fn orb_passive<F: Fight<Self>>(orb: &crate::Channelled<Self>, fight: &mut F);
+
+    /// `OrbModel.PassiveVal`: the passive number the orb shows and uses.
+    /// `modify` is `ModifyOrbValue`, which the getter runs or leaves out.
+    fn orb_passive_val(
+        orb: &crate::Channelled<Self>,
+        modify: impl FnOnce(Self::Number) -> Self::Number,
+    ) -> Self::Number;
+
+    /// `OrbModel.EvokeVal`: the evoke number the orb shows and uses.
+    /// `modify` is `ModifyOrbValue`, which the getter runs or leaves out.
+    fn orb_evoke_val(
+        orb: &crate::Channelled<Self>,
+        modify: impl FnOnce(Self::Number) -> Self::Number,
+    ) -> Self::Number;
 
     /// Neow's event id, which the opening room reports.
     fn neow_event() -> Self::Event;

@@ -44,3 +44,23 @@ pub(super) fn kingly_punch<P: sts2_core::Printed<V> + ?Sized>(
         hook => unimplemented!("what Kingly Punch does for {hook:?}"),
     }
 }
+
+/// `Radiate`: its damage to every enemy, once for each of its calculated
+/// hits.
+pub(super) fn radiate<F: sts2_core::Fight<V>>(fight: &mut F) -> sts2_core::Played<V> {
+    let hits = fight.var(CardVar::CalculatedHits);
+    fight.attack(sts2_core::Scaling::Dynamic, |fight| {
+        for _ in 0..hits {
+            for target in fight.opponents() {
+                let attack = fight.resolve(sts2_core::Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: sts2_core::Amount::Var(CardVar::Damage),
+                    scaling: sts2_core::Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            }
+        }
+    });
+    sts2_core::Played::Done
+}

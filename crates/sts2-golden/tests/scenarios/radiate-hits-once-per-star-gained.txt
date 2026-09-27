@@ -1,0 +1,12 @@
+# `Radiate` hits every enemy once for each star its owner gained this turn,
+# which `StarsModifiedEntry` records. On turn one the Regent's three opening
+# stars count, so it hits three times. On turn two Genesis gives two stars,
+# so it hits twice.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"power","power":"GENESIS_POWER","amount":2,"target":0}
+{"cmd":"grant","card":"RADIATE"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"RADIATE"}
+{"cmd":"play_card","index":5}

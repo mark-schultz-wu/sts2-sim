@@ -1,0 +1,12 @@
+# A Plasma orb gives an energy as the turn starts, and two when evoked. Its
+# numbers pass through no power. Dualcast spends Cracked Core's Lightning,
+# Fusion channels a Plasma, and on turn two a second Dualcast evokes it twice.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"FOCUS_POWER","amount":2,"target":0}
+{"cmd":"play_card","index":1}
+{"cmd":"grant","card":"FUSION"}
+{"cmd":"play_card","index":4}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"DUALCAST"}
+{"cmd":"play_card","index":5}

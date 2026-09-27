@@ -1,0 +1,16 @@
+# `UnmovablePower` doubles a card's block on its owner while fewer such gains
+# than its stack came this turn. A stack of one from the power command and one
+# from the card makes two. One Defend on turn one doubles. On turn two the
+# first two Defends double and the third does not.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"UNMOVABLE_POWER","amount":1,"target":0}
+{"cmd":"grant","card":"UNMOVABLE"}
+{"cmd":"play_card","index":5}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"DEFEND_IRONCLAD"}
+{"cmd":"grant","card":"DEFEND_IRONCLAD"}
+{"cmd":"play_card","index":1}
+{"cmd":"play_card","index":4}
+{"cmd":"play_card","index":4}
