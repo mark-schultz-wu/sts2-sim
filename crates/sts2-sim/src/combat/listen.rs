@@ -509,6 +509,8 @@ pub(crate) fn each<V: Rules>(
                     card: card.face.ident.card,
                     id,
                     printed: &card,
+                    pile: live.cards.pile_of(id),
+                    history: live.history(),
                 };
                 ask(listener, overrides);
             }

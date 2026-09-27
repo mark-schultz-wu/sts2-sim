@@ -1485,6 +1485,10 @@ pub trait CreatureView<V: ContentVersion> {
     /// Both of the questions the game asks a power from outside: whether the
     /// creature carries it, and the stack it carries it at.
     fn power(&self, power: V::Power) -> Option<PowerAmount<V::Number>>;
+
+    /// `Monster.NextMove.Intents`, in the order the move declares them.
+    /// Nothing for a creature with no move.
+    fn intents(&self) -> impl Iterator<Item = V::IntentKind> + '_;
 }
 
 /// The creatures in a fight, as a hook reads ones it does not own.
@@ -1692,6 +1696,19 @@ pub trait Fight<V: ContentVersion> {
     /// One copy per count, into the discard pile of every creature on the
     /// other side.
     fn give_cards(&mut self, card: V::Card, count: usize);
+
+    /// `CardPileCmd.Shuffle`: the discard pile and the draw pile shuffled
+    /// together into a new draw pile, then `AfterShuffle`.
+    fn shuffle(&mut self) {
+        unimplemented!("a shuffle asked for outside a draw")
+    }
+
+    /// `CardPileCmd.AddGeneratedCardToCombat(CreateClone(), pile)` for the
+    /// card being played: a copy of all it holds now, marked a clone. Nothing
+    /// once the fight is over.
+    fn clone_this(&mut self, _pile: crate::Pile) -> Option<crate::CardAt<V>> {
+        unimplemented!("a card cloning itself")
+    }
 
     /// Add copies of a generated card to one combat pile.
     fn add_generated_cards(
@@ -3414,6 +3431,10 @@ pub enum PileAct {
     Discard,
     /// `CardPileCmd.Add(cards, PileType.Hand)`.
     IntoHand,
+    /// `CardPileCmd.Add(card, PileType.Draw, CardPilePosition.Top)`.
+    OntoDrawTop,
+    /// `CardPileCmd.Add(cards, PileType.Draw)`, which is its bottom.
+    IntoDraw,
     /// `CardCmd.TransformToRandom` off `CombatCardSelection`, one card at a
     /// time.
     TransformToRandom,
@@ -3968,6 +3989,10 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub target: Option<&'a [crate::Stack<V>]>,
     /// `CombatManager.History`.
     pub history: History<'a, V>,
+    /// `Owner.Creature.Block`.
+    pub block: V::Number,
+    /// `PlayerCombatState.OrbQueue.Orbs`, in queue order.
+    pub orbs: &'a [crate::Channelled<V>],
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -4034,6 +4059,10 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// Which copy this is.
         id: crate::CardId<V>,
         printed: &'a P,
+        /// `Pile.Type`, and nothing for the play pile.
+        pile: Option<crate::Pile>,
+        /// `CombatManager.History`.
+        history: History<'a, V>,
     },
 }
 

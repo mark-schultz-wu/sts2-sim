@@ -1,0 +1,7 @@
+# `CompileDriver` draws one card for each kind of orb its owner holds, not
+# for each orb. Two Lightnings are one kind, so it draws one.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"SHRINKER_BEETLE_WEAK"}
+{"cmd":"play_card","index":2}
+{"cmd":"grant","card":"COMPILE_DRIVER"}
+{"cmd":"play_card","index":4,"target":1}

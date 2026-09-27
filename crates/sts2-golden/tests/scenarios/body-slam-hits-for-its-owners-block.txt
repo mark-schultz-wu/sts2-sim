@@ -1,0 +1,6 @@
+# `BodySlam` hits for its owner's block. A Defend first gives it five.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":2}
+{"cmd":"grant","card":"BODY_SLAM"}
+{"cmd":"play_card","index":4,"target":1}

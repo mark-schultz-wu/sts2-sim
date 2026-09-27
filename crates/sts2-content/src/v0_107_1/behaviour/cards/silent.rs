@@ -14,12 +14,18 @@ use super::V;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     /// `Survivor`, after its owner picked the card to discard.
-    SurvivorDiscard,
+    Survivor,
+    /// `Prepared`, after its owner picked the cards to discard.
+    Prepared,
+    /// `DaggerThrow`, after its owner picked the card to discard.
+    DaggerThrow,
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V> {
     match card {
         SilentCard::Survivor => survivor(fight),
+        SilentCard::Prepared => prepared(fight),
+        SilentCard::DaggerThrow => dagger_throw(fight),
         SilentCard::Haze => haze(fight),
         SilentCard::Malaise => malaise(fight),
         SilentCard::UpMySleeve => up_my_sleeve(fight),
@@ -56,10 +62,46 @@ pub(super) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         // `CardCmd.Discard` of the one taken.
-        Resume::SurvivorDiscard => {
+        Resume::Survivor | Resume::Prepared | Resume::DaggerThrow => {
             fight.act_on(sts2_core::PileAct::Discard, chosen.as_slice());
             Played::Done
         }
+    }
+}
+
+/// `DaggerThrow`: its damage to the target, one card drawn, then one card
+/// from hand to discard.
+fn dagger_throw<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    fight.draw(1);
+    Played::Asking {
+        pile: Pile::Hand,
+        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Silent(Resume::DaggerThrow)),
+    }
+}
+
+/// `Prepared`: its `Cards` drawn, then as many from hand to discard.
+fn prepared<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let cards = fight.var(CardVar::Cards);
+    fight.draw(cards);
+    let count = usize::try_from(cards)
+        .ok()
+        .and_then(nonmax::NonMaxUsize::new)
+        .unwrap_or_else(|| unimplemented!("Prepared discarding {cards} cards"));
+    Played::Asking {
+        pile: Pile::Hand,
+        selection: Selection::Exactly(count),
+        at: super::super::Resume::Card(super::Resume::Silent(Resume::Prepared)),
     }
 }
 
@@ -74,7 +116,7 @@ fn survivor<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Asking {
         pile: Pile::Hand,
         selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
-        at: super::super::Resume::Card(super::Resume::Silent(Resume::SurvivorDiscard)),
+        at: super::super::Resume::Card(super::Resume::Silent(Resume::Survivor)),
     }
 }
 

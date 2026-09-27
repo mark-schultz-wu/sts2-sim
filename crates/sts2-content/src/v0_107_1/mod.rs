@@ -180,14 +180,18 @@ impl sts2_core::Hooks for V0_107_1 {
                 behaviour::powers::decide_hook(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic(state) => behaviour::relics::decide_hook(state, hook),
+            sts2_core::Listener::Card {
+                card,
+                pile,
+                history,
+                ..
+            } => behaviour::cards::decide_hook(card, pile, history, hook),
             // A raised hook reaches only a listener that overrides it, and no
-            // monster or card this build ports overrides one of these.
-            sts2_core::Listener::Monster { .. } | sts2_core::Listener::Card { .. } => {
-                match hook.model_hook() {
-                    Some(_) => unimplemented!("a relic, a monster or a card deciding {hook:?}"),
-                    None => sts2_core::HookResponse::DoesNotImplement,
-                }
-            }
+            // monster this build ports overrides one of these.
+            sts2_core::Listener::Monster { .. } => match hook.model_hook() {
+                Some(_) => unimplemented!("a relic, a monster or a card deciding {hook:?}"),
+                None => sts2_core::HookResponse::DoesNotImplement,
+            },
         }
     }
 

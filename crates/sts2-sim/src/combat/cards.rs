@@ -335,16 +335,28 @@ impl<V: Rules, P: Piles> Cards<V, P> {
         }
     }
 
-    /// Write on the card being played that `id` names.
-    ///
-    /// # Panics
-    ///
-    /// A card that is not being played.
+    /// The pile the copy `id` stands in, and nothing for the play pile or a
+    /// copy the fight does not hold.
+    pub(crate) fn pile_of(&self, id: CardId<V>) -> Option<Pile> {
+        match self.piles.place(number(id))? {
+            Place::Hand => Some(Pile::Hand),
+            Place::Draw => Some(Pile::Draw),
+            Place::Discard => Some(Pile::Discard),
+            Place::Exhaust => Some(Pile::Exhaust),
+            Place::Play => None,
+        }
+    }
+
     /// Whether the copy `id` stands in the play pile.
     pub(crate) fn in_play(&self, id: CardId<V>) -> bool {
         self.piles.place(number(id)) == Some(Place::Play)
     }
 
+    /// Write on the card being played that `id` names.
+    ///
+    /// # Panics
+    ///
+    /// A card that is not being played.
     pub(crate) fn write_in_play(
         &mut self,
         id: CardId<V>,

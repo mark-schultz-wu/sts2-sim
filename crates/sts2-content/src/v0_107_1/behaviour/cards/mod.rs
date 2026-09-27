@@ -17,8 +17,8 @@ use sts2_core::{CardVars, Fight, Played};
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
 use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, QuestCard, RegentCard,
-    SilentCard, TokenCard,
+    CardVar, Cards, ColorlessCard, CurseCard, DefectCard, IroncladCard, NecrobinderCard, QuestCard,
+    RegentCard, SilentCard, TokenCard,
 };
 use super::super::generated::events::Event;
 use super::super::generated::powers::Power;
@@ -80,6 +80,36 @@ pub(crate) fn computed_target(
     }
 }
 
+/// `Normality`'s number of plays a turn.
+const NORMALITY_PLAYS: usize = 3;
+
+/// Answer a yes-or-no hook for one card in the fight.
+///
+/// # Panics
+///
+/// A card nobody has ported answering one.
+pub(crate) fn decide_hook(
+    card: Cards,
+    pile: Option<sts2_core::Pile>,
+    history: sts2_core::History<'_, V0_107_1>,
+    hook: sts2_core::DecisionHook<V>,
+) -> sts2_core::HookResponse<bool> {
+    use sts2_core::{DecisionHook, HookResponse};
+
+    match (card, hook) {
+        // `Normality.ShouldPlay`: from the hand, no play once its owner has
+        // started three this turn. A fight here has one player, whose plays
+        // are all its owner's.
+        (Cards::Curse(CurseCard::Normality), DecisionHook::ShouldPlay { .. }) => {
+            HookResponse::Decision(
+                pile != Some(sts2_core::Pile::Hand)
+                    || history.started_this_turn().count() < NORMALITY_PLAYS,
+            )
+        }
+        (card, hook) => unimplemented!("what {card:?} answers for {hook:?}"),
+    }
+}
+
 /// What a card works out from the fight for a number it prints.
 pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
@@ -109,6 +139,42 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
                     sts2_core::PowerAmount::Endless => unimplemented!("an endless Vulnerable"),
                 });
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * vulnerable
+        }
+        // `Normality`: a base, and one fewer card for each play its owner
+        // started this turn, up to three.
+        (Cards::Curse(CurseCard::Normality), CardVar::CalculatedCards) => {
+            let started = owner
+                .history
+                .started_this_turn()
+                .count()
+                .min(NORMALITY_PLAYS);
+            let started = Number::try_from(started).expect("three fits the game's numbers");
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * started
+        }
+        // `BodySlam`: a base, and more for each point of its owner's block.
+        (Cards::Ironclad(IroncladCard::BodySlam), CardVar::CalculatedDamage) => {
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::ExtraDamage) * owner.block
+        }
+        // `Barrage`: a base, and one more hit for each orb its owner holds.
+        (Cards::Defect(DefectCard::Barrage), CardVar::CalculatedHits) => {
+            let orbs =
+                Number::try_from(owner.orbs.len()).expect("an orb queue fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * orbs
+        }
+        // `CompileDriver`: a base, and one more card for each kind of orb its
+        // owner holds.
+        (Cards::Defect(DefectCard::CompileDriver), CardVar::CalculatedCards) => {
+            let mut kinds: smallvec::SmallVec<[_; 10]> = smallvec::SmallVec::new();
+            for held in owner.orbs {
+                if !kinds.contains(&held.orb) {
+                    kinds.push(held.orb);
+                }
+            }
+            let kinds =
+                Number::try_from(kinds.len()).expect("an orb queue fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * kinds
         }
         // `PerfectedStrike`: a base, and more for each of its owner's cards in
         // the fight tagged Strike, itself included.
@@ -157,7 +223,9 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Colorless(colorless::Resume),
+    Defect(defect::Resume),
     Event(event::Resume),
+    Ironclad(ironclad::Resume),
     Necrobinder(necrobinder::Resume),
     Regent(regent::Resume),
     Silent(silent::Resume),
@@ -307,7 +375,9 @@ pub(crate) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::Colorless(at) => colorless::resume_play(fight, at, chosen),
+        Resume::Defect(at) => defect::resume_play(fight, at, chosen),
         Resume::Event(at) => event::resume_play(fight, at, chosen),
+        Resume::Ironclad(at) => ironclad::resume_play(fight, at, chosen),
         Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),

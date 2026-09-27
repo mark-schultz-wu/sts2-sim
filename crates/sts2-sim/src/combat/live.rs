@@ -887,6 +887,13 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
             .find(|held| held.power() == power)
             .map(|held| held.amount.amount())
     }
+
+    fn intents(&self) -> impl Iterator<Item = V::IntentKind> + '_ {
+        self.fighter
+            .next_move
+            .iter()
+            .flat_map(|next| next.intents().map(|intent| intent.kind))
+    }
 }
 
 /// The fight's creatures and their powers, as a listener reads ones it does
