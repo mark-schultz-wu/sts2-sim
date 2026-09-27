@@ -312,6 +312,11 @@ impl<V: Rules, P: Piles> Cards<V, P> {
     /// # Panics
     ///
     /// A card that is not being played.
+    /// Whether the copy `id` stands in the play pile.
+    pub(crate) fn in_play(&self, id: CardId<V>) -> bool {
+        self.piles.place(number(id)) == Some(Place::Play)
+    }
+
     pub(crate) fn write_in_play(
         &mut self,
         id: CardId<V>,

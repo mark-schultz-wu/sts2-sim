@@ -613,6 +613,37 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::MaxEnergy { .. },
         ) => Modify::Nothing,
+        // `LethalityPower.ModifyDamageMultiplicative`: its stack in hundredths
+        // onto a powered hit from its owner's first attack of the turn. A
+        // card being played has started its own play, and a replay starts
+        // another, so the first attack's first play is the one that counts
+        // one. A fight here has one player, whose cards are its owner's.
+        (
+            Power::LethalityPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::DamageMultiplicative {
+                card: Some(source),
+                powered: true,
+                ..
+            },
+        ) if owner == CombatSide::Player => {
+            use sts2_core::{CardKind, Rules as _};
+
+            let attacks = history
+                .started_this_turn()
+                .filter(|started| V::card_kind(started.card) == Some(CardKind::Attack))
+                .count();
+            match attacks > usize::from(source.playing) {
+                true => Modify::Nothing,
+                false => Modify::Scaled(f64::from(100 + amount) / 100.0),
+            }
+        }
+        (
+            Power::LethalityPower,
+            PowerAmount::Endless,
+            ModifyHook::DamageMultiplicative { card: Some(_), .. },
+        ) => unimplemented!("an endless Lethality"),
+        (Power::LethalityPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `ColossusPower.ModifyDamageMultiplicative`: half of a powered hit on
         // its owner, from a dealer that is vulnerable.
         (
@@ -637,7 +668,7 @@ pub(crate) fn modify_hook(
             Power::GigantificationPower,
             _,
             ModifyHook::DamageMultiplicative {
-                card: Some((id, _)),
+                card: Some(sts2_core::CardSource { id, .. }),
                 powered: true,
                 ..
             },
@@ -679,7 +710,7 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == holder => {
-            let other = |bound: Bound| card.is_some_and(|(id, _)| Some(id) != bound.source);
+            let other = |bound: Bound| card.is_some_and(|source| Some(source.id) != bound.source);
             match state.bound().is_some_and(other) {
                 true => Modify::Nothing,
                 false => Modify::Added(amount),
@@ -691,7 +722,7 @@ pub(crate) fn modify_hook(
             PowerAmount::Counted(amount),
             ModifyHook::DamageAdditive {
                 dealer,
-                card: Some((_, card)),
+                card: Some(sts2_core::CardSource { card, .. }),
                 powered: true,
                 ..
             },
@@ -705,7 +736,7 @@ pub(crate) fn modify_hook(
             PowerAmount::Counted(amount),
             ModifyHook::DamageAdditive {
                 dealer,
-                card: Some((_, card)),
+                card: Some(sts2_core::CardSource { card, .. }),
                 powered: true,
                 ..
             },

@@ -835,6 +835,17 @@ pub enum EnchantmentStatus {
     Disabled,
 }
 
+/// `cardSource`, the card whose number a damage hook is working out: which
+/// copy, which card, and whether it is being played.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CardSource<V: ContentVersion> {
+    pub id: crate::CardId<V>,
+    pub card: V::Card,
+    /// `Pile.Type == PileType.Play`: the card stands in the play pile, as it
+    /// does while it is played. A card in hand is being previewed.
+    pub playing: bool,
+}
+
 /// A number an enchantment works out for the card it is on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnchantHook {
@@ -2013,7 +2024,7 @@ pub enum ModifyHook<V: ContentVersion> {
         dealer: crate::CombatId,
         /// `cardSource`: the card whose number this is, and which card it
         /// is. Nothing for a monster's move.
-        card: Option<(crate::CardId<V>, V::Card)>,
+        card: Option<CardSource<V>>,
         /// `props.IsPoweredAttack()`.
         powered: bool,
     },
@@ -2022,7 +2033,7 @@ pub enum ModifyHook<V: ContentVersion> {
         target: Option<crate::CombatId>,
         dealer: crate::CombatId,
         /// `cardSource`, as [`ModifyHook::DamageAdditive`] carries it.
-        card: Option<(crate::CardId<V>, V::Card)>,
+        card: Option<CardSource<V>>,
         /// `props.IsPoweredAttack()`.
         powered: bool,
     },
