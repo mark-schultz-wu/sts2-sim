@@ -173,6 +173,14 @@ pub(super) enum Setup<V: Rules> {
     Drawing { left: usize, resumed: bool },
     /// Inside `AfterPlayerTurnStart`, the last of the setup.
     PlayerTurnStart(super::listen::Answers<V>),
+    /// Drawing for a listener inside `AfterPlayerTurnStart`, with this many
+    /// cards still to draw and the listeners after it still to run.
+    /// `resumed` for a draw that a shuffle's question paused.
+    TurnStartDrawing {
+        left: usize,
+        resumed: bool,
+        rest: super::listen::Answers<V>,
+    },
 }
 
 /// Mints the ids a fight names its cards by.

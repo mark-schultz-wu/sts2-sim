@@ -1,0 +1,16 @@
+# `Pendulum` draws on the third turn after the hand is drawn. Fifteen cards
+# leave the draw pile empty by then, so its draw shuffles, and Stratagem
+# asks for a card of the new draw pile. The draw waits on the answer.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","relic":"PENDULUM"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"grant","card":"STRIKE_REGENT"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"STRATAGEM"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

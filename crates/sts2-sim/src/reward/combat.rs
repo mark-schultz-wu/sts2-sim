@@ -12,7 +12,7 @@ use crate::run::Rarity;
 use super::{Odds, Offer, card};
 
 /// How many cards a fight's card reward offers.
-const CARDS_OFFERED: usize = 3;
+pub(crate) const CARDS_OFFERED: usize = 3;
 
 /// The kind of room a won fight was in, which `GenerateRewardsFor` switches on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub(crate) enum Room {
 impl Room {
     /// `CardCreationOptions.ForRoom`, which is the odds its card reward rolls
     /// its rarities against.
-    fn card_odds(self) -> card::RarityOdds {
+    pub(crate) fn card_odds(self) -> card::RarityOdds {
         match self {
             Room::Monster => card::RarityOdds::Regular,
             Room::Elite => card::RarityOdds::Elite,
