@@ -1,0 +1,25 @@
+# `ForbiddenGrimoirePower` adds a card removal reward as the fight ends.
+# Taking it asks for one card of the deck, which leaves the deck, and the
+# reward is then taken. Fourteen Mercury Hourglasses leave the Nibbit one
+# turn to play the Grimoire in.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"FORBIDDEN_GRIMOIRE"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"answer","take":[{"index":2}]}
+{"cmd":"answer","cards":[0]}

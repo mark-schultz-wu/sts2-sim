@@ -3799,6 +3799,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CombatRoom.AddExtraReward` with a `GoldReward` of this much, which
     /// the fight's rewards offer beside its own.
     AddGoldReward(V::Number),
+    /// `CombatRoom.AddExtraReward` of a `CardRemovalReward`.
+    AddCardRemovalReward,
     /// `PlayerCmd.LoseGold`, which stops at none.
     LoseGold(V::Number),
     /// `SealOfGold.AfterSideTurnStart`: while the player holds at least

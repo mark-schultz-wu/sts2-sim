@@ -161,10 +161,14 @@ impl<V: Rules> State<V> {
                 let (live, relics) = self.left_fight();
                 let extra_cards = live.extra_cards().to_vec();
                 // `AddExtraReward`, which the room's own rewards come before.
-                let (extra, leaving): (Vec<_>, Vec<_>) = live
-                    .leaving()
-                    .iter()
-                    .partition(|effect| matches!(effect, sts2_core::HookEffect::AddGoldReward(_)));
+                let (extra, leaving): (Vec<_>, Vec<_>) =
+                    live.leaving().iter().partition(|effect| {
+                        matches!(
+                            effect,
+                            sts2_core::HookEffect::AddGoldReward(_)
+                                | sts2_core::HookEffect::AddCardRemovalReward
+                        )
+                    });
                 let proportion = live.gold_proportion();
                 let combat = live.finish(relics);
                 // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
@@ -186,19 +190,20 @@ impl<V: Rules> State<V> {
                 // `GoldReward.Populate` draws `NextInt(min, max + 1)` off the
                 // rewards stream, after the room's own, even for a gold
                 // reward whose two bounds are the one amount.
+                // A card removal's own `Populate` draws nothing.
                 for effect in extra {
-                    let sts2_core::HookEffect::AddGoldReward(amount) = effect else {
-                        unreachable!("the extra rewards are gold")
-                    };
-                    let (rng, _) = self.rewarding();
-                    let bound =
-                        |n| num_traits::cast(n).expect("a gold amount fits the RNG integer");
-                    let span = sts2_core::rng::Span::new(bound(amount), bound(amount) + 1)
-                        .expect("a fixed amount spans itself");
-                    let _drawn = sts2_core::rng::GameRng::next_int_range(rng, span);
-                    offered.push(crate::reward::Offer::Gold {
-                        amount,
-                        taken: false,
+                    offered.push(match effect {
+                        sts2_core::HookEffect::AddGoldReward(amount) => {
+                            let (rng, _) = self.rewarding();
+                            crate::reward::Offer::Gold {
+                                amount: crate::reward::fixed_gold::<V, _>(rng, amount),
+                                taken: false,
+                            }
+                        }
+                        sts2_core::HookEffect::AddCardRemovalReward => {
+                            crate::reward::Offer::CardRemoval { taken: false }
+                        }
+                        _ => unreachable!("the extra rewards are gold and card removals"),
                     });
                 }
                 crate::reward::sort(&mut offered);

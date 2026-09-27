@@ -466,6 +466,9 @@ pub(super) enum Phase<V: Rules> {
     Rewards {
         combat: Combat<V>,
         offered: Vec<Offer<V>>,
+        /// The card removal taken and waiting on the card to remove, by its
+        /// place on the screen.
+        removing: Option<usize>,
     },
     Event {
         state: V::EventState,
@@ -669,6 +672,9 @@ impl<V: Rules> State<V> {
                     _ => sts2_core::QuestionKind::SelectCards,
                 })
             }
+            Phase::Rewards {
+                removing: Some(_), ..
+            } => Some(sts2_core::QuestionKind::SelectCards),
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
                 Some(sts2_core::QuestionKind::Rewards)
             }
@@ -1126,7 +1132,11 @@ impl<V: Rules> State<V> {
             self.player.hp = player.hp;
             self.player.max_hp = player.max_hp;
         }
-        self.phase = Phase::Rewards { combat, offered };
+        self.phase = Phase::Rewards {
+            combat,
+            offered,
+            removing: None,
+        };
     }
 
     /// Park the run on the fight it died in.
@@ -3363,9 +3373,38 @@ impl<V: Rules> State<V> {
     /// reward stays in the set once it is taken, because the indices an answer
     /// names never renumber.
     fn take(&mut self, answer: &Answer) -> Result<Decided, Error> {
-        let Phase::Rewards { offered, .. } = &mut self.phase else {
+        let Phase::Rewards {
+            offered, removing, ..
+        } = &mut self.phase
+        else {
             unreachable!("the phase was a reward screen when this began");
         };
+        // The removal a card removal reward waits on.
+        if let Some(at) = *removing {
+            let Answer::Cards(picks) = answer else {
+                unimplemented!("a card removal answered with other than a card");
+            };
+            let Some(pick) = picks.only() else {
+                unimplemented!("a card removal answered with other than one card");
+            };
+            *removing = None;
+            let Some(&(in_deck, _)) = self.offered(sts2_core::DeckAct::Remove).get(pick) else {
+                unimplemented!("a removal naming a card the selection did not offer");
+            };
+            self.act_on_deck(sts2_core::DeckAct::Remove, &[in_deck]);
+            let Phase::Rewards { offered, .. } = &mut self.phase else {
+                unreachable!("removing a deck card leaves the reward screen up");
+            };
+            offered[at] = Offer::CardRemoval { taken: true };
+            return Ok(self.decided());
+        }
+        // `DoUnsyncedCardRemoval`, which is taken once a card comes back.
+        if let Answer::Take(take) = *answer
+            && let Some(Offer::CardRemoval { taken: false }) = offered.get(take.index())
+        {
+            *removing = Some(take.index());
+            return Ok(self.decided());
+        }
         let mut offered = std::mem::take(offered);
         self.take_reward(&mut offered, answer);
         let Phase::Rewards { offered: back, .. } = &mut self.phase else {
@@ -3388,7 +3427,8 @@ impl<V: Rules> State<V> {
                     | Offer::Card { taken, .. }
                     | Offer::SpecialCard { taken, .. }
                     | Offer::Potion { taken, .. }
-                    | Offer::Relic { taken, .. } => *taken = true,
+                    | Offer::Relic { taken, .. }
+                    | Offer::CardRemoval { taken } => *taken = true,
                 }
             }
             return;
@@ -3582,6 +3622,9 @@ impl<V: Rules> State<V> {
                 };
                 selections(1, 1, offered, moves);
             }
+            Phase::Rewards {
+                removing: Some(_), ..
+            } => selections(1, 1, self.offered(sts2_core::DeckAct::Remove).len(), moves),
             Phase::Rewards { offered, .. } if offered.iter().any(|offer| !offer.taken()) => {
                 reward_moves(offered, moves)
             }
@@ -3882,6 +3925,25 @@ impl<V: Rules> State<V> {
                 }
             }),
             Phase::Combat(live) => live.question(),
+            // `CardSelectCmd.FromDeckForRemoval`: one card of the deck less
+            // its `Eternal` ones, curses first.
+            Phase::Rewards {
+                removing: Some(_), ..
+            } => Some(Question::SelectCards {
+                min: 1,
+                max: 1,
+                asker: None,
+                options: self
+                    .offered(sts2_core::DeckAct::Remove)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (_, card))| CardOption {
+                        index,
+                        card,
+                        text: None,
+                    })
+                    .collect(),
+            }),
             Phase::Rewards { offered, .. } => offered
                 .iter()
                 .any(|offer| !offer.taken())
@@ -4239,6 +4301,9 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                             .collect(),
                     },
                     Offer::SpecialCard { .. } => RewardKind::SpecialCard { card: None },
+                    Offer::CardRemoval { .. } => RewardKind::Other {
+                        kind: "CardRemovalReward".into(),
+                    },
                 },
             })
             .collect(),

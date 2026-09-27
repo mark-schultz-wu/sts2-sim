@@ -3463,6 +3463,20 @@ pub(crate) fn event_hook(
         (Power::RoyaltiesPower, PowerAmount::Endless, EventHook::CombatEnd { .. }) => {
             unimplemented!("an endless Royalties")
         }
+        // `ForbiddenGrimoirePower.AfterCombatEnd`: a card removal reward for
+        // each of its stack.
+        (
+            Power::ForbiddenGrimoirePower,
+            PowerAmount::Counted(amount),
+            EventHook::CombatEnd { .. },
+        ) => {
+            let count = usize::try_from(amount).expect("a stack is not negative");
+            asked.extend(std::iter::repeat_n(HookEffect::AddCardRemovalReward, count));
+            return;
+        }
+        (Power::ForbiddenGrimoirePower, PowerAmount::Endless, EventHook::CombatEnd { .. }) => {
+            unimplemented!("an endless Forbidden Grimoire")
+        }
         // `DrawCardsNextTurnPower.AfterSideTurnStart` goes once the turn it
         // drew for has begun.
         (Power::DrawCardsNextTurnPower, _, EventHook::SideTurnStart { side, .. })
