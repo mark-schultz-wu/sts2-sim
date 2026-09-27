@@ -2309,6 +2309,43 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.rngs.targets.choose(&hittable).ok().copied()
     }
 
+    fn auto_play_from_draw(&mut self, count: usize, force_exhaust: bool) {
+        if self.ended.is_some() || self.ending() {
+            return;
+        }
+        let mut taken: SmallVec<[CardInstance<V>; 4]> = SmallVec::new();
+        for _ in 0..count {
+            // `ShuffleIfNecessary`.
+            if self.live.cards.is_empty(Pile::Draw) {
+                shuffle::<V>(self.live, self.rngs.shuffle, self.relics);
+            }
+            if self.live.cards.is_empty(Pile::Draw) {
+                break;
+            }
+            taken.push(self.live.cards.play(Pile::Draw, 0));
+        }
+        for card in taken {
+            if !self.live.player().alive {
+                continue;
+            }
+            // `ExhaustOnNextPlay = forceExhaust`, which clears it as well.
+            self.live.exhaust_next.retain(|id| *id != card.id);
+            if force_exhaust {
+                self.live.exhaust_next.push(card.id);
+            }
+            let ended = super::play::auto_play_in_play::<V>(
+                self.live,
+                self.rngs.reborrow(),
+                self.relics,
+                card,
+            );
+            if ended.is_some() {
+                self.ended = ended;
+                return;
+            }
+        }
+    }
+
     fn damage_unblockable(&mut self, target: CombatId, amount: V::Number) {
         self.hit_unpowered(Some(self.actor), target, amount, true);
     }

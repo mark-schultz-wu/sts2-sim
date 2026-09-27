@@ -75,6 +75,7 @@ pub(crate) fn enter<V: Rules>(
         cards: Cards::with_cards(0),
         removed_from_deck: Vec::new(),
         returned: Vec::new(),
+        exhaust_next: smallvec::SmallVec::new(),
         leaving: Vec::new(),
         creatures: super::live::Creatures::new(),
         powers: PowerStore::new(),

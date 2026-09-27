@@ -1,0 +1,10 @@
+# Havoc auto-plays the top card of the draw pile and exhausts it. Distilled
+# Chaos auto-plays the next three: the Dazed, which is unplayable, goes to the
+# discard pile unplayed, then a Defend and a Strike play.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAVOC"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","potion":"DISTILLED_CHAOS"}
+{"cmd":"use_potion","index":0,"target":null}

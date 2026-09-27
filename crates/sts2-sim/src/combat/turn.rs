@@ -352,6 +352,8 @@ pub(super) fn orb_triggers<V: Rules>(
 fn end_of_turn_cleanup<V: Rules>(live: &mut Live<V>) {
     live.cards
         .write_all_cards(Face::lasts_the_turn, Face::turn_ended);
+    // `CardModel.EndOfTurnCleanup` clears `ExhaustOnNextPlay`.
+    live.exhaust_next.clear();
 }
 
 /// `BeforeSideTurnStart`, raised on every listener before the side draws.

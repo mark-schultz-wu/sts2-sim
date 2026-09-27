@@ -55,6 +55,8 @@ const STABLE_SERUM: Number = 2;
 const STRENGTH: Number = 2;
 /// `SwiftPotion`'s `CardsVar(3)`.
 const SWIFT: Number = 3;
+/// `DistilledChaos`'s `RepeatVar(3)`.
+const DISTILLED_CHAOS: usize = 3;
 /// `Duplicator`'s one stack of `DuplicationPower`.
 const DUPLICATION: Number = 1;
 /// `FyshOil`'s `PowerVar<StrengthPower>(1)` and `PowerVar<DexterityPower>(1)`.
@@ -276,6 +278,11 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         }
         Potion::RegenPotion => {
             fight.apply_to_actor(Power::RegenPower, PowerAmount::Counted(REGEN));
+            Played::Done
+        }
+        // The top three cards of the draw pile, auto-played.
+        Potion::DistilledChaos => {
+            fight.auto_play_from_draw(DISTILLED_CHAOS, false);
             Played::Done
         }
         Potion::Duplicator => {
