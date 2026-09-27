@@ -1,0 +1,16 @@
+# `Stomp.BeforeCardPlayed` takes one off its cost this turn for each Attack
+# its owner plays, itself included, from whichever pile it is in. Two Strikes
+# take the Stomp in hand from three to one, and it plays for the last energy.
+# The Stomp in the draw pile heard all three, and turn two deals it at three.
+# There a Defend leaves it at three, and a Strike takes it to two.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"STOMP"}
+{"cmd":"grant","card":"STOMP"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
