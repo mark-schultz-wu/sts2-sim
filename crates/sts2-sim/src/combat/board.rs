@@ -2328,7 +2328,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn act_on(&mut self, act: sts2_core::PileAct, cards: &[CardAt<V>]) {
-        let sly = super::turn::act_on::<V>(self.live, self.relics, act, cards);
+        let (sly, ended) =
+            super::turn::act_on::<V>(self.live, self.rngs.reborrow(), self.relics, act, cards);
+        self.ended = self.ended.or(ended);
         if self.ended.is_none() {
             self.ended =
                 super::turn::play_sly::<V>(self.live, self.rngs.reborrow(), self.relics, sly);

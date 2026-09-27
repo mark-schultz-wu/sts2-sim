@@ -31,6 +31,12 @@ pub(super) fn event_hook(
                 unimplemented!("a Stomp entering the fight, which counts the turn's Attacks")
             }
         }
+        // `DrumOfBattle.AfterCardExhausted`, for its own exhaust alone.
+        (IroncladCard::DrumOfBattle, EventHook::CardExhausted { id: exhausted, .. }) => {
+            if exhausted == id {
+                unimplemented!("a Drum of Battle exhausted, which gains energy for each play")
+            }
+        }
         (card, hook) => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

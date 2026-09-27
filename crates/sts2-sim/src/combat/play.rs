@@ -816,11 +816,19 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
         }
         pile => pile,
     };
-    // `CardCmd.Exhaust` for a card that exhausts as it is played.
-    if to == Some(sts2_core::Pile::Exhaust) {
-        super::turn::unheard::<V>(next, relics, sts2_core::ModelHook::AfterCardExhausted);
-    }
+    let exhausting = match to {
+        Some(sts2_core::Pile::Exhaust) => next.cards.named(play.id),
+        _ => None,
+    };
     next.cards.leave_play(play.id, to, play.position);
+    // `CardCmd.Exhaust` for a card that exhausts as it is played, whose hook
+    // follows the card into the pile. A fight already over exhausts nothing.
+    let ended = match (ended, exhausting) {
+        (None, Some(card)) => {
+            super::turn::exhausted::<V>(next, streams.combat(), relics, &card, false)
+        }
+        (ended, _) => ended,
+    };
 
     if outermost && ended == Some(super::Ended::Won) {
         super::listen::combat_ended::<V>(next, relics);

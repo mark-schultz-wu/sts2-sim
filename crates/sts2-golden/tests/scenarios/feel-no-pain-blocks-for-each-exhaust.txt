@@ -1,0 +1,13 @@
+# `FeelNoPainPower.AfterCardExhausted` gains its stack as block, unpowered,
+# for each of its owner's cards exhausted. Tremble exhausts as it is played,
+# and the Dazed as turn two ends, three block each. Drum of Battle hears both
+# and does nothing, since neither is itself.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"TREMBLE"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"grant","card":"DRUM_OF_BATTLE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"FEEL_NO_PAIN_POWER","amount":3,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"end_turn"}
