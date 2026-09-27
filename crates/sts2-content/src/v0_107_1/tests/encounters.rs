@@ -499,7 +499,14 @@ fn roster_kind_is_not_an_option() {
     let EncounterRoster::Fixed(monsters) = Encounter::MockMonsterEncounter.roster() else {
         panic!("the mock encounter has a fixed roster");
     };
-    assert_eq!(monsters.collect::<Vec<_>>(), [(Monster::BigDummy, None)]);
+    assert_eq!(
+        monsters.collect::<Vec<_>>(),
+        [sts2_core::RosterEntry {
+            monster: Monster::BigDummy,
+            opens: None,
+            slot: None
+        }]
+    );
     assert!(matches!(
         Encounter::SlimesWeak.roster(),
         EncounterRoster::Random

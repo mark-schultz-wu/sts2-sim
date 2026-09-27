@@ -1637,6 +1637,15 @@ fn roll_moves<V: Rules>(
 ) -> Result<(), Error> {
     live.machines
         .retain(|held| live.creatures.iter().any(|c| c.id == held.creature));
+    // `GetTeammatesOf(Creature).Count(IsAlive)`. Every creature with a move
+    // graph is an enemy.
+    let standing: u8 = live
+        .creatures
+        .iter()
+        .filter(|c| c.side == <V::CombatSide as SideKinds>::ENEMY && c.alive)
+        .count()
+        .try_into()
+        .expect("a side's creatures fit a byte");
     for held in live.machines.iter_mut() {
         let rolled = {
             // Field by field, because the machines are borrowed.
@@ -1657,7 +1666,10 @@ fn roll_moves<V: Rules>(
             V::roll_monster_move(
                 held.monster,
                 ascension,
-                held.spawn,
+                sts2_core::MonsterSpawn {
+                    standing,
+                    ..held.spawn
+                },
                 powers,
                 &mut held.machine,
                 ai,

@@ -50,6 +50,9 @@ pub(crate) struct Machine<V: Rules> {
     /// What the encounter fixed when it built this one, which a conditional
     /// state in the graph asks about.
     pub(crate) spawn: sts2_core::MonsterSpawn<V::Encounter>,
+    /// `SlotName`, as its place in `Encounter.Slots`, for a monster that
+    /// stands in one.
+    pub(crate) slot: Option<u8>,
     pub(crate) machine: MoveMachine,
 }
 
@@ -83,7 +86,15 @@ pub(crate) fn initialize<V: Rules>(
     // The monsters follow whoever the fight already holds, and a health is
     // rolled against theirs alone.
     let first = creatures.len();
-    for (index, &sts2_core::Spawned { monster, opens_on }) in monsters.iter().enumerate() {
+    for (
+        index,
+        &sts2_core::Spawned {
+            monster,
+            opens_on,
+            slot,
+        },
+    ) in monsters.iter().enumerate()
+    {
         let hp = health::<V>(monster, ascension, &creatures[first..], rngs.niche);
 
         let position = u8::try_from(index)
@@ -97,10 +108,12 @@ pub(crate) fn initialize<V: Rules>(
             .and_then(nonmax::NonMaxU8::new)
             .map(CombatId::new)
             .ok_or(Error::CreatureIdOverflow)?;
+        // The whole roster stands as each opening rolls.
         let spawn = sts2_core::MonsterSpawn {
             encounter,
             position,
             roster_size,
+            standing: roster_size.get(),
         };
         let mut machine = V::opening_move_machine(monster, opens_on);
         let opening = V::roll_monster_move(
@@ -115,6 +128,7 @@ pub(crate) fn initialize<V: Rules>(
             creature: id,
             monster,
             spawn,
+            slot,
             machine,
         });
         creatures.push(Fighter {
@@ -130,7 +144,9 @@ pub(crate) fn initialize<V: Rules>(
             next_move: opening.as_ref().map(Into::into),
             owner: None,
         });
-        for (power, amount) in V::monster_starting_powers(monster, ascension) {
+        // A fight opens on the player's side.
+        let side = <V::CombatSide as SideKinds>::PLAYER;
+        for (power, amount) in V::monster_starting_powers(monster, ascension, side) {
             powers.push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
         }
     }
@@ -174,6 +190,7 @@ pub(super) fn summon<V: Rules>(
     relics: &crate::run::Belt<V>,
     monster: V::Monster,
     position: usize,
+    slot: Option<u8>,
     niche: &mut MegaRng,
 ) -> CombatId {
     let encounter = live.encounter;
@@ -202,14 +219,6 @@ pub(super) fn summon<V: Rules>(
     else {
         panic!("combat has too many creatures to assign an id");
     };
-    // `AfterAddedToRoom` runs for a summoned creature too, and nothing here
-    // carries it out.
-    if V::monster_starting_powers(monster, live.ascension)
-        .next()
-        .is_some()
-    {
-        unimplemented!("{monster:?} summoned, with what it gains as it enters");
-    }
     let hp = health::<V>(monster, live.ascension, &live.creatures, niche);
     let creature_at = live
         .creatures
@@ -243,7 +252,9 @@ pub(super) fn summon<V: Rules>(
                 encounter,
                 position: spawn_position,
                 roster_size,
+                standing: roster_size.get(),
             },
+            slot,
             // Nothing writes onto a monster a fight summons: the
             // roster that could have is long built.
             machine: V::opening_move_machine(monster, None),
@@ -255,6 +266,11 @@ pub(super) fn summon<V: Rules>(
         };
         held.spawn.position = position;
         held.spawn.roster_size = roster_size;
+    }
+    // `AfterAddedToRoom`, which applies what the monster enters with.
+    for (power, amount) in V::monster_starting_powers(monster, live.ascension, live.side) {
+        live.powers
+            .push(id, HeldPower::new(power, Stacked::from(amount), Some(id)));
     }
     if super::listen::heard::<V>(
         live,

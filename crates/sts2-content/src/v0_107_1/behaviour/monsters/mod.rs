@@ -54,6 +54,7 @@ fn revive<F: Fight<V>>(fight: &mut F) {
 pub(crate) fn starting_powers(
     monster: Monster,
     ascension: <V0_107_1 as sts2_core::ContentVersion>::AscensionLevel,
+    side: super::super::generated::runstate::CombatSide,
 ) -> Vec<(
     super::super::generated::powers::Power,
     sts2_core::PowerAmount<Number>,
@@ -61,7 +62,7 @@ pub(crate) fn starting_powers(
     use sts2_core::MonsterTable as _;
 
     match overgrowth::starting_powers(monster, ascension)
-        .or_else(|| hive::starting_powers(monster, ascension))
+        .or_else(|| hive::starting_powers(monster, ascension, side))
     {
         Some(applied) => applied,
         None if !monster.overrides_virtual(sts2_core::MonsterVirtual::AfterAddedToRoom) => {
@@ -99,7 +100,9 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
     powers: &[sts2_core::Listener<'_, V, P>],
 ) -> Result<u8, ContentError> {
     match monster {
-        Monster::BowlbugRock | Monster::SlumberingBeetle => hive::conditional(monster, at, powers),
+        Monster::BowlbugRock | Monster::SlumberingBeetle | Monster::Ovicopter => {
+            hive::conditional(monster, at, spawn, powers)
+        }
         Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
         _ => overgrowth::conditional(monster, at, spawn),
     }
@@ -191,6 +194,8 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::LouseProgenitor
         | Monster::SpinyToad
         | Monster::Myte
+        | Monster::Ovicopter
+        | Monster::ToughEgg
         | Monster::BowlbugRock
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront
