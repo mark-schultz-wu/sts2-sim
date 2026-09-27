@@ -9,13 +9,15 @@ use super::V;
 /// A status card's effect while it remains in the hand at turn end.
 pub(super) fn on_turn_end<F: Fight<V>>(card: StatusCard, fight: &mut F) {
     match card {
-        StatusCard::Infection | StatusCard::Burn | StatusCard::Wither => infection(fight),
+        StatusCard::Infection | StatusCard::Burn | StatusCard::Wither | StatusCard::Toxic => {
+            infection(fight)
+        }
         card => card_plays::status::on_turn_end(card, fight),
     }
 }
 
-/// `Infection`, `Burn` and `Wither`, each of which hurts its holder by its
-/// damage and goes to the discard pile.
+/// `Infection`, `Burn`, `Wither` and `Toxic`, each of which hurts its holder
+/// by its damage and goes to the discard pile.
 fn infection<F: Fight<V>>(fight: &mut F) {
     let damage = fight.resolve(Effect::Attack {
         dealer: fight.actor(),

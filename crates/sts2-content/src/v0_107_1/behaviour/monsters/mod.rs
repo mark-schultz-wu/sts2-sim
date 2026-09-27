@@ -100,26 +100,30 @@ pub(crate) fn conditional<P: sts2_core::Printed<V> + ?Sized>(
 ) -> Result<u8, ContentError> {
     match monster {
         Monster::BowlbugRock | Monster::SlumberingBeetle => hive::conditional(monster, at, powers),
-        Monster::Exoskeleton => exoskeleton_opens(at, spawn),
+        Monster::Exoskeleton | Monster::Myte => opens_by_slot(monster, at, spawn),
         _ => overgrowth::conditional(monster, at, spawn),
     }
 }
 
-/// `Exoskeleton`'s `INIT_MOVE`, which reads its `SlotName`. Both of its
-/// encounters name their slots `first` to `fourth` in roster order, and the
-/// state adds a branch for each slot in that order.
-fn exoskeleton_opens(at: u8, spawn: MonsterSpawn<Encounter>) -> Result<u8, ContentError> {
+/// An `INIT_MOVE` that reads the monster's `SlotName`. The Exoskeleton's and
+/// the Myte's encounters name their slots `first` onwards in roster order.
+/// The state adds a branch for each slot in that order.
+fn opens_by_slot(
+    monster: Monster,
+    at: u8,
+    spawn: MonsterSpawn<Encounter>,
+) -> Result<u8, ContentError> {
     if !matches!(
-        spawn.encounter,
-        Encounter::ExoskeletonsWeak | Encounter::ExoskeletonsNormal
+        (monster, spawn.encounter),
+        (
+            Monster::Exoskeleton,
+            Encounter::ExoskeletonsWeak | Encounter::ExoskeletonsNormal
+        ) | (Monster::Myte, Encounter::MytesNormal)
     ) {
-        unimplemented!("an Exoskeleton spawned {spawn:?}");
+        unimplemented!("a {monster:?} spawned {spawn:?}");
     }
     let invalid = ContentError::InvalidMonsterState { index: at };
-    match sts2_core::Table::data(Monster::Exoskeleton)
-        .states
-        .get(usize::from(at))
-    {
+    match sts2_core::Table::data(monster).states.get(usize::from(at)) {
         Some(State::Conditional(branches)) => branches
             .get(usize::from(spawn.position.get()))
             .copied()
@@ -186,6 +190,7 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         Monster::ThievingHopper
         | Monster::LouseProgenitor
         | Monster::SpinyToad
+        | Monster::Myte
         | Monster::BowlbugRock
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront
