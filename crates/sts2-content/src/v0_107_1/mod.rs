@@ -359,6 +359,20 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::orbs::passive(orb, fight);
     }
 
+    fn orb_passive_val(
+        orb: &sts2_core::Channelled<Self>,
+        modify: impl FnOnce(Self::Number) -> Self::Number,
+    ) -> Self::Number {
+        behaviour::orbs::passive_val(orb, modify)
+    }
+
+    fn orb_evoke_val(
+        orb: &sts2_core::Channelled<Self>,
+        modify: impl FnOnce(Self::Number) -> Self::Number,
+    ) -> Self::Number {
+        behaviour::orbs::evoke_val(orb, modify)
+    }
+
     fn starting_potion_slots() -> usize {
         3
     }

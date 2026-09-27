@@ -17,7 +17,8 @@ use sts2_core::{CardVars, Fight, Played};
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
 use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, SilentCard, TokenCard,
+    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, RegentCard,
+    SilentCard, TokenCard,
 };
 use super::super::generated::powers::Power;
 
@@ -120,6 +121,17 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             let draw =
                 Number::try_from(owner.draw).expect("a draw pile's size fits the game's numbers");
             printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * draw
+        }
+        // `Radiate`: a base, and one more hit for each star its owner gained
+        // this turn. A fight here has one player.
+        (Cards::Regent(RegentCard::Radiate), CardVar::CalculatedHits) => {
+            let gained: Number = owner
+                .history
+                .stars_modified_this_turn()
+                .filter(|&amount| amount > 0)
+                .sum();
+            printed.face(CardVar::CalculationBase)
+                + printed.face(CardVar::CalculationExtra) * gained
         }
         (card, key) => unimplemented!("the {} {card:?} works out", key.name()),
     }

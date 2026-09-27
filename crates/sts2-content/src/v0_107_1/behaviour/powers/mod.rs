@@ -933,9 +933,45 @@ pub(crate) fn modify_hook(
                 target,
                 powered: true,
                 card: true,
+                ..
             },
         ) if target == holder => Modify::Scaled(0.0),
         (Power::NoBlockPower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
+        // `UnmovablePower.ModifyBlockMultiplicative`: double a card's or a
+        // move's block on its owner, while fewer such gains than its stack
+        // came this turn from other plays. A fight here has one player, who
+        // alone plays Unmovable. The entry's `powered` stands for
+        // `IsCardOrMonsterMove`: the two part only on a Move block that is
+        // Unpowered, which no block here is.
+        (
+            Power::UnmovablePower,
+            PowerAmount::Counted(amount),
+            ModifyHook::BlockMultiplicative {
+                target,
+                powered: true,
+                play,
+                ..
+            },
+        ) if target == holder => {
+            let gained = history
+                .block_gained_this_turn()
+                .filter(|entry| entry.receiver == target && entry.powered && entry.play != play)
+                .count();
+            match gained >= usize::try_from(amount).unwrap_or(0) {
+                true => Modify::Nothing,
+                false => Modify::Scaled(2.0),
+            }
+        }
+        (
+            Power::UnmovablePower,
+            PowerAmount::Endless,
+            ModifyHook::BlockMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == holder => unimplemented!("an endless Unmovable"),
+        (Power::UnmovablePower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
         // `BufferPower.ModifyHpLostAfterOstyLate`: its holder loses nothing.
         (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target }) if target == holder => {
             Modify::AtMost(num_traits::zero())

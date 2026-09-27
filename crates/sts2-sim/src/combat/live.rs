@@ -1433,6 +1433,9 @@ pub(crate) struct Live<V: Rules> {
     pub(super) phase: V::PlayerTurnPhase,
     pub(super) energy: V::Count,
     pub(super) stars: V::Count,
+    /// The player's `Gold`, which the fight holds while it runs. The run
+    /// takes it back after each step.
+    pub(super) gold: V::Number,
     pub(super) round: V::Count,
     /// `ICombatState.CurrentSide`: whose turn it is.
     pub(super) side: V::CombatSide,
@@ -1498,9 +1501,10 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardPlayStarted`, in the turn the fight stands in.
-    pub(super) fn start(&mut self, card: V::Card, energy: V::Count, first: bool) {
+    pub(super) fn start(&mut self, card: V::Card, id: CardId<V>, energy: V::Count, first: bool) {
         let started = sts2_core::PlayStarted {
             card,
+            id,
             energy,
             first,
         };
@@ -1524,6 +1528,29 @@ impl<V: Rules> CombatHistory<V> {
     /// `History.CardDrawn`, in the turn the fight stands in.
     pub(super) fn draw(&mut self, card: V::Card) {
         self.this_turn.push(sts2_core::HistoryEntry::Drawn(card));
+    }
+
+    /// `History.BlockGained`, in the turn the fight stands in.
+    pub(super) fn block_gained(&mut self, gained: sts2_core::BlockGained) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::BlockGained(gained));
+    }
+
+    /// `History.StarsModified`, in the turn the fight stands in.
+    pub(super) fn stars_modified(&mut self, amount: V::Number) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::StarsModified(amount));
+    }
+
+    /// The play of `id` under way: the latest `CardPlayStartedEntry` of that
+    /// copy this turn. A play runs inside one turn.
+    pub(super) fn play_at(&self, id: CardId<V>) -> Option<sts2_core::PlayAt> {
+        let at = self.this_turn.iter().rposition(
+            |entry| matches!(entry, sts2_core::HistoryEntry::Started(started) if started.id == id),
+        )?;
+        Some(sts2_core::PlayAt(
+            at.try_into().expect("a turn's entries fit a play's place"),
+        ))
     }
 
     /// The turn at `round` on `side`, in the player's turn `player_turn`, is
@@ -1600,6 +1627,7 @@ impl<V: Rules> Clone for Live<V> {
             phase,
             energy,
             stars,
+            gold,
             round,
             side,
             history,
@@ -1624,6 +1652,7 @@ impl<V: Rules> Clone for Live<V> {
         *phase = source.phase;
         *energy = source.energy;
         *stars = source.stars;
+        *gold = source.gold;
         *round = source.round;
         *side = source.side;
         history.clone_from(&source.history);
@@ -1645,6 +1674,43 @@ impl<V: Rules> Clone for Live<V> {
 }
 
 impl<V: Rules> Live<V> {
+    /// `GainBlockInternal` and `History.BlockGained` for `amount` of
+    /// unpowered block on `owner`, which no play gives. Nothing for a
+    /// creature gone from the fight, or for no block.
+    pub(super) fn gain_unpowered_block(&mut self, owner: CombatId, amount: V::Number) {
+        let Some(creature) = self.creatures.iter_mut().find(|c| c.id == owner) else {
+            return;
+        };
+        if amount > num_traits::zero() {
+            creature.block = creature.block + amount;
+            self.history.block_gained(sts2_core::BlockGained {
+                receiver: owner,
+                powered: false,
+                play: None,
+            });
+        }
+    }
+
+    /// `PlayerCombatState.Stars` moved by `amount`. The setter writes a
+    /// `StarsModifiedEntry` for any change.
+    pub(super) fn modify_stars(&mut self, amount: V::Number) {
+        let count = |amount: V::Number| -> V::Count {
+            num_traits::cast(amount).unwrap_or_else(|| unimplemented!("{amount:?} stars"))
+        };
+        match amount < num_traits::zero() {
+            true => self.stars = self.stars - count(-amount),
+            false => self.stars = self.stars + count(amount),
+        }
+        if amount != num_traits::zero() {
+            self.history.stars_modified(amount);
+        }
+    }
+
+    /// The player's `Gold` as the fight left it.
+    pub(crate) fn gold(&self) -> V::Number {
+        self.gold
+    }
+
     pub(crate) fn removed_from_deck(&self) -> &[CardIdent<V>] {
         &self.removed_from_deck
     }
@@ -1781,8 +1847,8 @@ impl<V: Rules> Live<V> {
     }
 
     /// The player, which every fight has one of.
-    /// The orb queue as the game reports it, each number through
-    /// `ModifyOrbValue`. The queue itself, while nothing listens.
+    /// The orb queue as the game reports it, each number its getter's
+    /// `PassiveVal` or `EvokeVal`. The queue itself, while nothing listens.
     pub(crate) fn reported_orbs(
         &self,
         relics: &crate::run::Belt<V>,
@@ -1794,8 +1860,10 @@ impl<V: Rules> Live<V> {
         let walk = || super::listen::Walk { live: self, relics };
         let mut reported = orbs.clone();
         for held in &mut reported.queue {
-            held.passive = super::board::orb_value::<V>(walk(), held.orb, held.passive);
-            held.evoke = super::board::orb_value::<V>(walk(), held.orb, held.evoke);
+            let modify = |base| super::board::orb_value::<V>(walk(), held.orb, base);
+            let passive = V::orb_passive_val(held, modify);
+            held.evoke = V::orb_evoke_val(held, modify);
+            held.passive = passive;
         }
         Some(std::borrow::Cow::Owned(reported))
     }
@@ -2192,6 +2260,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             phase: PlayerTurnPhase::Play,
             energy: 3,
             stars: 0,
+            gold: 0,
             round: 1,
             side: CombatSide::Player,
             history: CombatHistory::new(),

@@ -27,6 +27,7 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) floor: V::Count,
     pub(crate) hp: V::Health,
     pub(crate) max_hp: V::Health,
+    pub(crate) gold: V::Number,
     pub(crate) alive: bool,
     pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.
@@ -68,6 +69,7 @@ pub(crate) fn enter<V: Rules>(
         phase: <V::PlayerTurnPhase as TurnPhaseKinds>::PLAY,
         energy,
         stars: num_traits::zero(),
+        gold: entering.gold,
         round: num_traits::one(),
         side: <V::CombatSide as SideKinds>::PLAYER,
         history: super::live::CombatHistory::new(),
@@ -149,7 +151,7 @@ pub(crate) fn enter<V: Rules>(
     };
     for (_, effect) in super::listen::notify::<V>(&mut live, relics, entered) {
         match effect {
-            HookEffect::GainStars(gained) => live.stars = live.stars + count::<V>(gained),
+            HookEffect::GainStars(gained) => live.modify_stars(gained),
             // `PowerCmd.Apply` on the relic's owner, which is the player.
             HookEffect::ApplyToOwner(power, amount) => {
                 let mut board =
@@ -173,9 +175,7 @@ pub(crate) fn enter<V: Rules>(
                     super::listen::Listener::Power { owner, .. } => owner,
                     _ => live.player().id,
                 };
-                if let Some(creature) = live.creatures.iter_mut().find(|c| c.id == owner) {
-                    creature.block = creature.block + block;
-                }
+                live.gain_unpowered_block(owner, block);
             }
             // `PlayerCmd.AddPet`.
             (_, HookEffect::AddPet(monster)) => {
@@ -354,9 +354,4 @@ pub(super) fn hand_size<V: Rules>(fight: Walk<'_, V>, turn: V::Count) -> usize {
     ];
     let drawn = super::board::modified_by::<V>(fight, base, &phases);
     num_traits::cast(drawn).unwrap_or_else(|| unimplemented!("a hand of {drawn:?} cards"))
-}
-
-/// One number a relic gave, as the count the fight keeps it in.
-fn count<V: Rules>(amount: V::Number) -> V::Count {
-    num_traits::cast(amount).unwrap_or_else(|| unimplemented!("a relic worth {amount:?}"))
 }

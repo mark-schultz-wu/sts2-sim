@@ -12,8 +12,29 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         DefectCard::Dualcast => dualcast(fight),
         DefectCard::Tempest => tempest(fight),
         DefectCard::Scrape => scrape(fight),
+        DefectCard::MomentumStrike => momentum_strike(fight),
         card => card_plays::defect::on_play(card, fight),
     }
+}
+
+/// `MomentumStrike`: its damage to the target, then its own cost set to
+/// nothing for the rest of the fight.
+fn momentum_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    fight.modify_this(
+        sts2_core::Change::SetCost(sts2_core::CostPool::Energy, 0),
+        sts2_core::Lasting::ThisFight,
+    );
+    Played::Done
 }
 
 /// `Scrape`: its damage to the target, then its `Cards` drawn, and each drawn

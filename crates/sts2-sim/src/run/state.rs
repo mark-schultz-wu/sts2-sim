@@ -1039,6 +1039,13 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// The player's gold, back from the fight that held it.
+    pub(super) fn gold_from_fight(&mut self) {
+        if let Phase::Combat(live) = &self.phase {
+            self.player.gold = live.gold();
+        }
+    }
+
     /// Park the run on the rewards a won fight left it.
     ///
     /// What the fight did to the player comes out with it. The creature was
@@ -2260,6 +2267,7 @@ impl<V: Rules> State<V> {
             floor,
             hp: standing.hp,
             max_hp: standing.max_hp,
+            gold: self.player.gold,
             alive: standing.alive,
             deck: &self.player.deck,
             strayed: self.strays(at),

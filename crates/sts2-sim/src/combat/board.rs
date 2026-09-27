@@ -86,6 +86,10 @@ enum Resolved<V: Rules> {
     GainBlock {
         recipient: CombatId,
         amount: V::Number,
+        /// `IsPoweredCardOrMonsterMoveBlock`.
+        powered: bool,
+        /// The play that gives it.
+        play: Option<sts2_core::PlayAt>,
     },
 }
 
@@ -1515,13 +1519,14 @@ pub(crate) fn orb_value<V: Rules>(fight: Walk<'_, V>, orb: V::Orb, base: V::Numb
 ///
 /// The same hook whether the block is previewed or gained, as damage's is.
 /// `powered` is `IsPoweredCardOrMonsterMoveBlock`, and `card` is whether a
-/// card's own play gives it.
+/// card's own play gives it. `play` is that play, while one is under way.
 pub(super) fn blocked<V: Rules>(
     fight: Walk<'_, V>,
     recipient: CombatId,
     amount: V::Number,
     powered: bool,
     card: bool,
+    play: Option<sts2_core::PlayAt>,
 ) -> V::Number {
     let phases = [
         ModifyHook::BlockAdditive {
@@ -1533,6 +1538,7 @@ pub(super) fn blocked<V: Rules>(
             target: recipient,
             powered,
             card,
+            play,
         },
     ];
     modified_by::<V>(fight, amount, &phases)
@@ -1646,17 +1652,15 @@ pub(crate) fn resolve<V: Rules>(
                 Some(enchanted) => enchanted_by::<V>(enchanted, EnchantHook::BlockAdditive, amount),
                 None => amount,
             };
+            let powered = scaling == Scaling::Dynamic;
+            let play = playing.and_then(|held| fight.live.history.play_at(held.id));
             Resolved::GainBlock {
                 recipient,
                 // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A
                 // card's block and a monster move's are the powered ones.
-                amount: blocked::<V>(
-                    fight,
-                    recipient,
-                    amount,
-                    scaling == Scaling::Dynamic,
-                    playing.is_some(),
-                ),
+                amount: blocked::<V>(fight, recipient, amount, powered, playing.is_some(), play),
+                powered,
+                play,
             }
         }
     };
@@ -1713,6 +1717,7 @@ pub(crate) fn var<V: Rules>(
                     )
                 }),
                 target: targeted.as_deref(),
+                history: live.history(),
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -1990,21 +1995,36 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 powered,
                 card,
             } => self.hit(Some(dealer), target, damage, powered, false, card),
-            Resolved::GainBlock { recipient, amount } => {
+            Resolved::GainBlock {
+                recipient,
+                amount,
+                powered,
+                play,
+            } => {
                 let Some(at) = self.at(recipient) else { return };
                 if amount > V::Number::zero() {
                     self.live.creatures[at].block = self.live.creatures[at].block + amount;
+                    self.live.history.block_gained(sts2_core::BlockGained {
+                        receiver: recipient,
+                        powered,
+                        play,
+                    });
                 }
             }
         }
     }
 
+    fn lose_gold(&mut self, amount: V::Number) {
+        self.live.gold = (self.live.gold - amount).max(V::Number::zero());
+    }
+
     fn gain_stars(&mut self, amount: V::Number) {
         // The pool is a count, so a card printing a negative one is spending
         // rather than gaining. No card on this build does.
-        let amount = num_traits::NumCast::from(amount)
-            .unwrap_or_else(|| unimplemented!("a card spending stars as it plays"));
-        self.live.stars = self.live.stars + amount;
+        if amount < V::Number::zero() {
+            unimplemented!("a card spending stars as it plays");
+        }
+        self.live.modify_stars(amount);
     }
 
     fn modify_energy(&mut self, amount: V::Number) {

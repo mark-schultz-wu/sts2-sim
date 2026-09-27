@@ -227,7 +227,8 @@ pub(crate) fn play<V: Rules>(
 
     // `SpendResources`, before the card leaves the hand.
     live.energy = live.energy - play.energy;
-    live.stars = live.stars - play.stars;
+    let spent: V::Number = num_traits::cast(play.stars).expect("a star cost fits a game number");
+    live.modify_stars(-spent);
 
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
@@ -236,7 +237,8 @@ pub(crate) fn play<V: Rules>(
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
     before_played::<V, _>(live, streams, relics, &card, play.energy);
-    live.history.start(card.face.ident.card, play.energy, true);
+    live.history
+        .start(card.face.ident.card, card.id, play.energy, true);
     let mut board = Board::for_card(
         live,
         streams.combat(),
@@ -353,7 +355,8 @@ pub(super) fn auto_play_in_play<V: Rules>(
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
     before_played::<V, _>(live, &mut rngs, relics, &card, energy);
-    live.history.start(card.face.ident.card, energy, true);
+    live.history
+        .start(card.face.ident.card, card.id, energy, true);
     let mut board = Board::for_card(
         live,
         rngs.reborrow(),
@@ -829,7 +832,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .named(card)
                     .expect("a card replaying stands in the play pile");
                 before_played::<V, _>(next, streams, relics, &replaying, play.energy);
-                next.history.start(played_card, play.energy, false);
+                next.history.start(played_card, card, play.energy, false);
                 let mut board = Board::for_card(
                     next,
                     streams.combat(),
