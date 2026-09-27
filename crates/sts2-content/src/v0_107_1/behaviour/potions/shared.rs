@@ -6,27 +6,55 @@ use sts2_core::{
 };
 
 use super::super::super::V0_107_1 as V;
-use super::super::super::generated::cards::{CardType, Cards, combat_cards};
+use super::super::super::generated::cards::{
+    CardType, Cards, combat_cards, combat_colorless_cards,
+};
 use super::super::super::generated::potions::Potion;
 use super::super::super::generated::powers::Power;
 use super::Number;
 
+/// `BeetleJuice`'s `RepeatVar(4)`, the hits Shrink lasts.
+const BEETLE_JUICE: Number = 4;
 /// `BlockPotion`'s `BlockVar(12, ValueProp.Unpowered)`.
 const BLOCK: Number = 12;
 /// `LuckyTonic`'s `PowerVar<BufferPower>(1)`.
 const BUFFER: Number = 1;
+/// `Clarity`'s `CardsVar(1)`.
+const CLARITY_CARDS: Number = 1;
+/// `Clarity`'s `PowerVar<ClarityPower>(3)`.
+const CLARITY: Number = 3;
+/// `CureAll`'s `CardsVar(2)`.
+const CURE_ALL_CARDS: Number = 2;
+/// `CureAll`'s `EnergyVar(1)`.
+const CURE_ALL_ENERGY: Number = 1;
 /// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
 const DEXTERITY: Number = 2;
+/// `EnergyPotion`'s `EnergyVar(2)`.
+const ENERGY: Number = 2;
 
 /// `ExplosiveAmpoule`'s `DamageVar(10, ValueProp.Unpowered)`.
 const EXPLOSIVE: Number = 10;
+/// `FirePotion`'s `DamageVar(20, ValueProp.Unpowered)`.
+const FIRE: Number = 20;
+/// `FlexPotion`'s `PowerVar<StrengthPower>(5)`, lent until the turn ends.
+const FLEX: Number = 5;
+/// `HeartOfIron`'s `PowerVar<PlatingPower>(7)`.
+const HEART_OF_IRON: Number = 7;
+/// `LiquidBronze`'s `PowerVar<ThornsPower>(3)`.
+const LIQUID_BRONZE: Number = 3;
+/// `PowderedDemise`'s `Demise` var.
+const POWDERED_DEMISE: Number = 9;
 /// `GigantificationPotion`'s `PowerVar<GigantificationPower>(1)`.
 const GIGANTIFICATION: Number = 1;
 /// `SpeedPotion`'s `PowerVar<DexterityPower>(5)`, lent until the turn ends.
 const SPEED: Number = 5;
+/// `StableSerum`'s `RepeatVar(2)`, the turns the hand is kept.
+const STABLE_SERUM: Number = 2;
 
 /// `StrengthPotion`'s `PowerVar<StrengthPower>(2)`.
 const STRENGTH: Number = 2;
+/// `SwiftPotion`'s `CardsVar(3)`.
+const SWIFT: Number = 3;
 
 /// `VulnerablePotion`'s `PowerVar<VulnerablePower>(3)`.
 const VULNERABLE: Number = 3;
@@ -35,8 +63,9 @@ const WEAK: Number = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
-    PowerPotionChoice,
-    AttackPotionChoice,
+    /// A potion offering three cards, one of which goes into hand free this
+    /// turn.
+    FreeCardChoice,
 }
 
 /// What one of the shared potions does when it is drunk.
@@ -123,32 +152,102 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             Played::Done
         }
-        Potion::PowerPotion => free_card_of(fight, CardType::Power, Resume::PowerPotionChoice),
-        Potion::AttackPotion => free_card_of(fight, CardType::Attack, Resume::AttackPotionChoice),
+        Potion::PowerPotion => free_card_of(fight, character_cards(fight, CardType::Power)),
+        Potion::AttackPotion => free_card_of(fight, character_cards(fight, CardType::Attack)),
+        Potion::SkillPotion => free_card_of(fight, character_cards(fight, CardType::Skill)),
+        Potion::ColorlessPotion => free_card_of(fight, combat_colorless_cards().to_vec()),
+        // `CreatureCmd.Damage` on the target, unpowered and from the player.
+        Potion::FirePotion => {
+            let target = fight.target();
+            let hit = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Number(FIRE),
+                scaling: Scaling::Static,
+            });
+            fight.apply(hit);
+            Played::Done
+        }
+        // `AnyPlayer` again, for each of these.
+        Potion::SwiftPotion => {
+            fight.draw(SWIFT);
+            Played::Done
+        }
+        Potion::EnergyPotion => {
+            fight.modify_energy(ENERGY);
+            Played::Done
+        }
+        Potion::CureAll => {
+            fight.modify_energy(CURE_ALL_ENERGY);
+            fight.draw(CURE_ALL_CARDS);
+            Played::Done
+        }
+        Potion::Clarity => {
+            fight.draw(CLARITY_CARDS);
+            fight.apply_to_actor(Power::ClarityPower, PowerAmount::Counted(CLARITY));
+            Played::Done
+        }
+        // `FlexPotionPower` lends the Strength.
+        Potion::FlexPotion => {
+            fight.apply_to_actor(Power::FlexPotionPower, PowerAmount::Counted(FLEX));
+            Played::Done
+        }
+        Potion::StableSerum => {
+            fight.apply_to_actor(Power::RetainHandPower, PowerAmount::Counted(STABLE_SERUM));
+            Played::Done
+        }
+        Potion::HeartOfIron => {
+            fight.apply_to_actor(Power::PlatingPower, PowerAmount::Counted(HEART_OF_IRON));
+            Played::Done
+        }
+        Potion::LiquidBronze => {
+            fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(LIQUID_BRONZE));
+            Played::Done
+        }
+        Potion::BeetleJuice => {
+            fight.apply_power(
+                fight.target(),
+                Power::ShrinkPower,
+                PowerAmount::Counted(BEETLE_JUICE),
+            );
+            Played::Done
+        }
+        Potion::PowderedDemise => {
+            fight.apply_power(
+                fight.target(),
+                Power::DemisePower,
+                PowerAmount::Counted(POWDERED_DEMISE),
+            );
+            Played::Done
+        }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }
 
-/// `PowerPotion` and `AttackPotion`: three distinct cards of `kind` from the
-/// character's pool, off `CombatCardGeneration`. The player takes one into
-/// hand, free this turn, or none.
-fn free_card_of<F: Fight<V>>(fight: &mut F, kind: CardType, at: Resume) -> Played<V> {
+/// The character's combat pool, narrowed to the cards of `kind`.
+fn character_cards<F: Fight<V>>(fight: &F, kind: CardType) -> Vec<Cards> {
     let pool = fight.character().data().card_pool;
-    let mut cards: Vec<Cards> = combat_cards(pool)
+    combat_cards(pool)
         .iter()
         .copied()
         .filter(|card| card.data().kind == crate::Field::Constant(kind))
-        .collect();
+        .collect()
+}
+
+/// `PowerPotion`, `AttackPotion`, `SkillPotion` and `ColorlessPotion`: three
+/// distinct cards of `cards`, off `CombatCardGeneration`. The player takes one
+/// into hand, free this turn, or none.
+fn free_card_of<F: Fight<V>>(fight: &mut F, mut cards: Vec<Cards>) -> Played<V> {
     let offered = fight
         .generate_cards(
             &mut cards,
             <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_GENERATION,
         )
-        .unwrap_or_else(|_| unimplemented!("a character pool with too few {kind:?} cards"));
+        .unwrap_or_else(|_| unimplemented!("a pool of {} cards offering three", cards.len()));
     Played::Choosing {
         offered,
         skippable: true,
-        at: super::super::Resume::Potion(super::Resume::Shared(at)),
+        at: super::super::Resume::Potion(super::Resume::Shared(Resume::FreeCardChoice)),
     }
 }
 
@@ -158,10 +257,7 @@ pub(super) fn resume<F: Fight<V>>(
     answer: sts2_core::Taken<V>,
 ) -> Played<V> {
     match (at, answer) {
-        (
-            Resume::PowerPotionChoice | Resume::AttackPotionChoice,
-            sts2_core::Taken::Chosen(chosen),
-        ) => {
+        (Resume::FreeCardChoice, sts2_core::Taken::Chosen(chosen)) => {
             if let Some(card) = chosen {
                 for at in fight.add_generated_cards(card, Pile::Hand, 1) {
                     for pool in [CostPool::Energy, CostPool::Star] {

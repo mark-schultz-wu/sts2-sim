@@ -80,6 +80,8 @@ enum Resolved<V: Rules> {
         damage: V::Number,
         /// `IsPoweredAttack`, which is what a redirect of the damage asks.
         powered: bool,
+        /// The card that deals it, if a card does.
+        card: Option<V::Card>,
     },
     GainBlock {
         recipient: CombatId,
@@ -240,6 +242,11 @@ impl<'a, V: Rules> Board<'a, V> {
         // what happens. Everything below to the stacking itself is the other
         // branch, the one that builds an instance.
         let fresh = !self.live.powers.of(id).any(|held| held.power() == power);
+        // An instanced power builds another instance beside the one there,
+        // which a creature here holds only one of.
+        if !fresh && sts2_core::PowerTable::instanced(power) {
+            unimplemented!("a second instance of {power:?}")
+        }
         if fresh {
             self.apply_fresh(at, power, amount, applier);
             // The hook can take the creature out of the fight.
@@ -337,9 +344,10 @@ impl<'a, V: Rules> Board<'a, V> {
         self.write_cards(asked.into_iter().map(|(_, effect)| effect));
     }
 
-    /// `CreatureCmd.Damage` on `target` once hooks worked `damage` out: block
-    /// first, then hit points, then the deaths the hit caused. `dealer` is
-    /// nothing for damage no creature deals. A target that has left the fight
+    /// `CreatureCmd.Damage` on `target` once hooks worked `damage` out:
+    /// `BeforeDamageReceived`, block, then hit points, then the deaths the
+    /// hit caused. `dealer` is nothing for damage no creature deals, and
+    /// `card` for damage no card deals. A target that has left the fight
     /// takes nothing, which is what the command does against a creature with
     /// no combat state.
     pub(super) fn hit(
@@ -349,11 +357,26 @@ impl<'a, V: Rules> Board<'a, V> {
         damage: V::Number,
         powered: bool,
         unblockable: bool,
+        card: Option<V::Card>,
     ) {
         let Some(at) = self.at(target) else { return };
         if !self.live.creatures[at].alive {
             return;
         }
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::DamageReceiving {
+                target,
+                amount: damage,
+                dealer,
+                powered,
+                card,
+            },
+        );
+        self.after_hit(asked);
+        // What answered can have moved the creatures.
+        let Some(at) = self.at(target) else { return };
         let zero = V::Number::zero();
         // `PetOwner?.Creature ?? originalTarget`: a pet's hit meets its
         // owner's block.
@@ -466,6 +489,13 @@ impl<'a, V: Rules> Board<'a, V> {
                 self.kill(at);
             }
         }
+    }
+
+    /// `CreatureCmd.Damage` on `target` for `amount`, unblockable and
+    /// unpowered and from nobody, once the damage hooks worked it out.
+    pub(super) fn hit_from_nobody(&mut self, target: CombatId, amount: V::Number) {
+        let damage = modified::<V>(self.walk(), None, Some(target), None, amount, false);
+        self.hit(None, target, damage, false, true, None);
     }
 
     /// `HittableEnemies`: the opponents alive, less any a listener refuses a
@@ -1289,6 +1319,7 @@ pub(crate) fn resolve<V: Rules>(
         } => Resolved::Attack {
             dealer,
             target,
+            card: playing.map(|held| held.face.ident.card),
             powered: scaling == Scaling::Dynamic,
             damage: {
                 let damage = carried::<V>(playing, fight.live, damage);
@@ -1351,6 +1382,7 @@ pub(crate) fn var<V: Rules>(held: &CardInstance<V>, key: V::CardVar, live: &Live
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live),
                 osty,
+                draw: live.cards.len(Pile::Draw),
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -1623,7 +1655,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 target,
                 damage,
                 powered,
-            } => self.hit(Some(dealer), target, damage, powered, false),
+                card,
+            } => self.hit(Some(dealer), target, damage, powered, false, card),
             Resolved::GainBlock { recipient, amount } => {
                 let Some(at) = self.at(recipient) else { return };
                 if amount > V::Number::zero() {

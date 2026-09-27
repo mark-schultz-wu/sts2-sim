@@ -557,6 +557,10 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), Error> {
          \x20   fn overrides(self) -> sts2_core::Overrides {{\n\
          \x20       OVERRIDES[self as usize]\n\
          \x20   }}\n\
+         \n\
+         \x20   fn instanced(self) -> bool {{\n\
+         \x20       <Self as sts2_core::Table>::data(self).instance.is_some()\n\
+         \x20   }}\n\
          }}"
     )
     .unwrap();
