@@ -2593,6 +2593,7 @@ impl sts2_core::RarityKinds for RelicRarity {
     const RARE: RelicRarity = RelicRarity::Rare;
     const SHOP: RelicRarity = RelicRarity::Shop;
     const UNDRAFTED: RelicRarity = RelicRarity::Undrafted;
+    const STARTER: RelicRarity = RelicRarity::Starter;
 }
 mod crossover;
 mod defect;

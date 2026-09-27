@@ -1,0 +1,9 @@
+# Ring of the Snake becomes Ring of the Drake, which draws two more on each of
+# the first three turns and none on the fourth.
+{"cmd":"start","seed":"C000000001","character":"SILENT","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

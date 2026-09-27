@@ -18,6 +18,7 @@ mod archaic_tooth;
 mod astrolabe;
 mod biiig_hug;
 mod bing_bong;
+mod black_blood;
 mod black_star;
 mod bone_tea;
 mod booming_conch;
@@ -29,6 +30,7 @@ mod chosen_cheese;
 mod cracked_core;
 mod cursed_pearl;
 mod daughter_of_the_wind;
+mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
 mod empty_cage;
@@ -38,6 +40,7 @@ mod golden_pearl;
 mod gorget;
 mod gremlin_horn;
 mod hefty_tablet;
+mod infused_core;
 mod intimidating_helmet;
 mod lava_rock;
 mod lead_paperweight;
@@ -57,11 +60,13 @@ mod paels_tears;
 mod pandoras_box;
 mod permafrost;
 mod phial_holster;
+mod phylactery_unbound;
 mod pocketwatch;
 mod pollinous_core;
 mod pomander;
 mod precarious_shears;
 mod precise_scissors;
+mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod runic_pyramid;
 mod sand_castle;
@@ -71,6 +76,7 @@ mod stone_humidifier;
 mod storybook;
 mod strike_dummy;
 mod sword_of_stone;
+mod touch_of_orobas;
 mod tungsten_rod;
 mod very_hot_cocoa;
 mod winged_boots;
@@ -135,6 +141,13 @@ pub enum State {
     IntimidatingHelmet,
     RunicPyramid,
     TungstenRod,
+    TouchOfOrobas,
+    BlackBlood,
+    RingOfTheDrake,
+    DivineDestiny,
+    PhylacteryUnbound,
+    InfusedCore,
+    Circlet,
     EmptyCage,
     Astrolabe,
     PandorasBox,
@@ -260,6 +273,21 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what Sozu does for {hook:?}"),
         },
         State::TungstenRod => tungsten_rod::event_hook(hook),
+        State::TouchOfOrobas => touch_of_orobas::event_hook(hook, asked),
+        State::BlackBlood => black_blood::event_hook(hook, asked),
+        State::DivineDestiny => divine_destiny::event_hook(hook, asked),
+        State::PhylacteryUnbound => phylactery_unbound::event_hook(hook, asked),
+        State::InfusedCore => infused_core::event_hook(hook, asked),
+        // Its one hook is `ModifyHandDraw`, which the fight asks of it.
+        State::RingOfTheDrake => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what RingOfTheDrake does for {hook:?}"),
+        },
+        // It overrides nothing.
+        State::Circlet => match hook {
+            EventHook::Obtained => {}
+            hook => unimplemented!("what Circlet does for {hook:?}"),
+        },
         // Its one hook is `ShouldFlush`, which the fight asks of it.
         State::RunicPyramid => match hook {
             EventHook::Obtained => {}
@@ -333,6 +361,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
         State::Sozu => sozu::modify_hook(hook),
         State::TungstenRod => tungsten_rod::modify_hook(hook),
+        State::RingOfTheDrake => ring_of_the_drake::modify_hook(hook),
+        State::InfusedCore => infused_core::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -367,6 +397,11 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::BingBong
         | State::IntimidatingHelmet
         | State::RunicPyramid
+        | State::TouchOfOrobas
+        | State::BlackBlood
+        | State::DivineDestiny
+        | State::PhylacteryUnbound
+        | State::Circlet
         | State::EmptyCage
         | State::Astrolabe
         | State::PandorasBox
@@ -436,6 +471,13 @@ impl sts2_core::RelicModel<V> for State {
             Relic::IntimidatingHelmet => State::IntimidatingHelmet,
             Relic::RunicPyramid => State::RunicPyramid,
             Relic::TungstenRod => State::TungstenRod,
+            Relic::TouchOfOrobas => State::TouchOfOrobas,
+            Relic::BlackBlood => State::BlackBlood,
+            Relic::RingOfTheDrake => State::RingOfTheDrake,
+            Relic::DivineDestiny => State::DivineDestiny,
+            Relic::PhylacteryUnbound => State::PhylacteryUnbound,
+            Relic::InfusedCore => State::InfusedCore,
+            Relic::Circlet => State::Circlet,
             Relic::EmptyCage => State::EmptyCage,
             Relic::Astrolabe => State::Astrolabe,
             Relic::PandorasBox => State::PandorasBox,

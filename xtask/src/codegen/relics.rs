@@ -578,7 +578,7 @@ fn emit_bridges(
     let rarities = enums.get("RelicRarity").ok_or(Error::NoRarity)?;
     // `RelicRarity.None` under the name the rename gives it, which a reward
     // slot carries when it picks no rarity of its own.
-    for rarity in DRAFTED.iter().copied().chain(["None"]) {
+    for rarity in DRAFTED.iter().copied().chain(["None", "Starter"]) {
         if !rarities.iter().any(|(_, have)| have == rarity) {
             return Err(Error::Unreflected(rarity));
         }
@@ -605,6 +605,11 @@ fn emit_bridges(
     writeln!(
         out,
         "    const UNDRAFTED: RelicRarity = RelicRarity::Undrafted;"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const STARTER: RelicRarity = RelicRarity::Starter;"
     )
     .unwrap();
     writeln!(out, "}}").unwrap();

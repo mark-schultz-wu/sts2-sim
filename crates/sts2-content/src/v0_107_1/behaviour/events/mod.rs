@@ -38,6 +38,7 @@ mod this_or_that;
 mod wellspring;
 mod whispering_hollow;
 mod wood_carvings;
+mod zen_weaver;
 
 use nonmax::NonMaxU8;
 use sts2_core::{
@@ -58,6 +59,7 @@ use super::relics::tradable;
 pub enum State {
     InfestedAutomaton(infested_automaton::State),
     Symbiote(symbiote::State),
+    ZenWeaver(zen_weaver::State),
     RanwidTheElder(ranwid_the_elder::State),
     RelicTrader(relic_trader::State),
     DollRoom(doll_room::State),
@@ -240,6 +242,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::InfestedAutomaton(infested_automaton::InfestedAutomaton.enter(run, rng))
         }
         Event::Symbiote => State::Symbiote(symbiote::Symbiote.enter(run, rng)),
+        Event::ZenWeaver => State::ZenWeaver(zen_weaver::ZenWeaver.enter(run, rng)),
         Event::RanwidTheElder => {
             State::RanwidTheElder(ranwid_the_elder::RanwidTheElder.enter(run, rng))
         }
@@ -349,6 +352,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
             infested_automaton::InfestedAutomaton.observe(state, run)
         }
         State::Symbiote(state) => symbiote::Symbiote.observe(state, run),
+        State::ZenWeaver(state) => zen_weaver::ZenWeaver.observe(state, run),
         State::RanwidTheElder(state) => ranwid_the_elder::RanwidTheElder.observe(state, run),
         State::RelicTrader(state) => relic_trader::RelicTrader.observe(state, run),
         State::DollRoom(state) => doll_room::DollRoom.observe(state, run),
@@ -410,6 +414,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             infested_automaton::InfestedAutomaton.choose(state, option, run, rng)
         }
         State::Symbiote(state) => symbiote::Symbiote.choose(state, option, run, rng),
+        State::ZenWeaver(state) => zen_weaver::ZenWeaver.choose(state, option, run, rng),
         State::RanwidTheElder(state) => {
             ranwid_the_elder::RanwidTheElder.choose(state, option, run, rng)
         }

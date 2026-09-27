@@ -1,0 +1,5 @@
+# With 99 gold, Zen Weaver locks both removals. `BreathingTechniques` costs
+# fifty and adds two Enlightenments.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"ZEN_WEAVER"}
+{"cmd":"choose_option","index":0}
