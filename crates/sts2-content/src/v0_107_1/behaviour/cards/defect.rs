@@ -28,9 +28,50 @@ pub(super) fn resume_play<F: Fight<V>>(
     }
 }
 
+/// `Compact`: its block, then each Status in hand transformed into a Fuel,
+/// upgraded where Compact is. A card in a fight is always transformable.
+fn compact<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+    use sts2_core::Rules as _;
+
+    let block = fight.resolve(Effect::GainBlock {
+        recipient: fight.actor(),
+        amount: Amount::Var(CardVar::Block),
+        scaling: Scaling::Dynamic,
+    });
+    fight.apply(block);
+    let statuses: Vec<_> = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| {
+            V::card_kind(fight.card_ident(card).card) == Some(sts2_core::CardKind::Status)
+        })
+        .collect();
+    for card in statuses {
+        let mut into = sts2_core::CardIdent::new(Cards::Token(TokenCard::Fuel));
+        into.upgrade = u8::from(fight.upgraded());
+        fight.transform(card, into);
+    }
+    Played::Done
+}
+
 pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V> {
     match card {
         DefectCard::Barrage => barrage(fight),
+        // `DoubleEnergy`: as much energy again as its owner has left.
+        DefectCard::DoubleEnergy => {
+            fight.modify_energy(fight.energy());
+            Played::Done
+        }
+        // `Chill`: a Frost channelled for each enemy that can be hit, the
+        // enemies counted once.
+        DefectCard::Chill => {
+            for _ in fight.hittable_opponents() {
+                fight.channel(Orb::FrostOrb);
+            }
+            Played::Done
+        }
+        DefectCard::Compact => compact(fight),
         DefectCard::Claw => claw(fight),
         DefectCard::CompileDriver => compile_driver(fight),
         DefectCard::GoForTheEyes => go_for_the_eyes(fight),

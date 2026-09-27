@@ -1920,11 +1920,21 @@ pub(crate) fn var<V: Rules>(
             let osty_max_hp = standing.map(|osty| osty.max_hp);
             let targeted: Option<SmallVec<[Stack<V>; 8]>> =
                 target.map(|target| live.powers.of(target).map(HeldPower::stack).collect());
+            let enemy_powers: SmallVec<[Stack<V>; 16]> = live
+                .creatures
+                .iter()
+                .filter(|creature| {
+                    creature.alive && creature.side != <V::CombatSide as SideKinds>::PLAYER
+                })
+                .flat_map(|creature| live.powers.of(creature.id).map(HeldPower::stack))
+                .collect();
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live),
                 osty,
                 osty_max_hp,
                 draw: live.cards.len(Pile::Draw),
+                exhaust: live.cards.len(Pile::Exhaust),
+                enemy_powers: &enemy_powers,
                 strikes: live.cards.count_all(|face| {
                     sts2_core::CardTable::tagged(
                         face.ident.card,
@@ -2293,6 +2303,23 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn add_replays(&mut self, to: sts2_core::Writing<V>, amount: V::Number) {
         self.write_cards([HookEffect::AddReplays { to, amount }]);
+    }
+
+    fn energy(&self) -> V::Number {
+        num_traits::cast(self.live.energy).expect("energy fits a game number")
+    }
+
+    fn lose_max_hp(&mut self, creature: CombatId, amount: V::Number) {
+        let Some(at) = self.at(creature) else { return };
+        let held = &self.live.creatures[at];
+        let max_hp = V::Number::from(held.max_hp) - amount;
+        let hp = V::Number::from(held.hp);
+        if max_hp < hp {
+            self.hit_unpowered(None, creature, hp - max_hp, true);
+        }
+        let Some(at) = self.at(creature) else { return };
+        self.live.creatures[at].max_hp = num_traits::cast(max_hp.max(num_traits::one()))
+            .expect("a maximum health fits the build's health");
     }
 
     fn lose_gold(&mut self, amount: V::Number) {

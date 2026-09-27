@@ -1,0 +1,7 @@
+# Compact gives its block and turns each Status in hand into a Fuel.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SLIMED"}
+{"cmd":"grant","card":"SLIMED"}
+{"cmd":"grant","card":"COMPACT"}
+{"cmd":"play_card","index":7}

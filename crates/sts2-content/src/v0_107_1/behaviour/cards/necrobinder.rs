@@ -175,6 +175,27 @@ fn grave_warden<F: Fight<V>>(fight: &mut F) -> Played<V> {
     Played::Done
 }
 
+/// `Dirge`: its `Summon` of Osty once for each energy its X spent. Then as
+/// many Souls go into the draw pile at random, upgraded where Dirge is.
+fn dirge<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+
+    let x = fight.x_value();
+    for _ in 0..x {
+        fight.summon_osty(fight.var(CardVar::Summon));
+    }
+    let upgraded = fight.upgraded();
+    for _ in 0..x {
+        let Some(soul) = fight.add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw) else {
+            break;
+        };
+        if upgraded {
+            fight.modify_card(soul, Change::Upgrade, Lasting::ThisFight);
+        }
+    }
+    Played::Done
+}
+
 /// `SculptingStrike`: its damage to the target, then one card of the hand
 /// that is not Ethereal of its own made Ethereal.
 fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -216,6 +237,24 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Sacrifice => sacrifice(fight),
         NecrobinderCard::Eradicate => eradicate(fight),
         NecrobinderCard::GraveWarden => grave_warden(fight),
+        NecrobinderCard::Dirge => dirge(fight),
+        // `Friendship`: its Strength off its owner, then its Energy as
+        // Friendship.
+        NecrobinderCard::Friendship => {
+            use super::super::super::generated::powers::Power;
+
+            let strength = fight.var(CardVar::StrengthPower);
+            fight.apply_to_actor(
+                Power::StrengthPower,
+                sts2_core::PowerAmount::Counted(-strength),
+            );
+            let energy = fight.var(CardVar::Energy);
+            fight.apply_to_actor(
+                Power::FriendshipPower,
+                sts2_core::PowerAmount::Counted(energy),
+            );
+            Played::Done
+        }
         card => card_plays::necrobinder::on_play(card, fight),
     }
 }

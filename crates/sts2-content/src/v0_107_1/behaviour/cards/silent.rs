@@ -35,6 +35,23 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `CalculatedGamble`: the whole hand discarded, then as many drawn.
+        SilentCard::CalculatedGamble => {
+            let hand = fight.cards_in(Pile::Hand);
+            let count = super::Number::try_from(hand.len()).expect("a hand fits a game number");
+            fight.discard_and_draw(&hand, count);
+            Played::Done
+        }
+        // `Mirage`: its calculated block.
+        SilentCard::Mirage => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::CalculatedBlock),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
         card => card_plays::silent::on_play(card, fight),
     }
 }

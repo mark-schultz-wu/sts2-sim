@@ -1,0 +1,6 @@
+# Brightest Flame gives two energy and two cards, and takes one off the
+# maximum health.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BRIGHTEST_FLAME"}
+{"cmd":"play_card","index":5}

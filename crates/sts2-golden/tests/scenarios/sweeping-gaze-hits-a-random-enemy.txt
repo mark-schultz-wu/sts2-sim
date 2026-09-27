@@ -1,0 +1,5 @@
+# Sweeping Gaze has Osty hit an enemy drawn at random.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"SWEEPING_GAZE"}
+{"cmd":"play_card","index":5}

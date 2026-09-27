@@ -1,0 +1,5 @@
+# Calculated Gamble discards the whole hand and draws as many.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CALCULATED_GAMBLE"}
+{"cmd":"play_card","index":7}

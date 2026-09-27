@@ -1,0 +1,9 @@
+# Dismantle hits once, and twice on a target carrying Vulnerable.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DISMANTLE"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"DISMANTLE"}
+{"cmd":"play_card","index":5,"target":1}
