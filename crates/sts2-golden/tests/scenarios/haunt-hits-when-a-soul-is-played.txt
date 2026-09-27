@@ -1,0 +1,8 @@
+# Haunt hits an enemy drawn at random for its stack, unblockable, each
+# time its owner plays a Soul.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"HAUNT"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"play_card","index":5}

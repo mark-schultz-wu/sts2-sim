@@ -57,16 +57,15 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
                 }
             }
             // `CreatureCmd.Damage` on one of `HittableEnemies` drawn off
-            // `CombatTargets`, unpowered and from the owner.
-            HookEffect::DamageRandomOpponent(amount) => {
+            // `CombatTargets`, unpowered.
+            HookEffect::DamageRandomOpponent {
+                amount,
+                unblockable,
+                from_owner,
+            } => {
                 if let Some(target) = fight.random_opponent() {
-                    let hit = fight.resolve(sts2_core::Effect::Attack {
-                        dealer: fight.actor(),
-                        target,
-                        damage: sts2_core::Amount::Number(amount),
-                        scaling: sts2_core::Scaling::Static,
-                    });
-                    fight.apply(hit);
+                    let dealer = from_owner.then(|| fight.actor());
+                    fight.damage_unpowered(dealer, target, amount, unblockable);
                 }
             }
             other => unimplemented!("a model asking for {other:?} inside a fight"),

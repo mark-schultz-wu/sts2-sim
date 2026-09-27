@@ -32,7 +32,11 @@ pub(super) fn event_hook(
         {
             state.attacks_played_this_turn += 1;
             if state.attacks_played_this_turn.is_multiple_of(CARDS) {
-                asked.push(HookEffect::DamageRandomOpponent(DAMAGE));
+                asked.push(HookEffect::DamageRandomOpponent {
+                    amount: DAMAGE,
+                    unblockable: false,
+                    from_owner: true,
+                });
             }
         }
         EventHook::CombatStarting { .. }

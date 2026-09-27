@@ -1,0 +1,5 @@
+# Adrenaline gives an energy and draws two cards.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"ADRENALINE"}
+{"cmd":"play_card","index":7}

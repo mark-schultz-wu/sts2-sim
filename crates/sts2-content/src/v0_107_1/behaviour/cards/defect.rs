@@ -12,6 +12,8 @@ use super::V;
 pub enum Resume {
     /// `Hologram`, after its owner picked the card to take back.
     HologramIntoHand,
+    /// `Scavenge`, after its owner picked the card to exhaust.
+    ScavengeExhaust,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -23,6 +25,16 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardPileCmd.Add(cardModel, PileType.Hand)`.
         Resume::HologramIntoHand => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.Exhaust` of the one taken, then its `Energy` as Energy
+        // Next Turn.
+        Resume::ScavengeExhaust => {
+            use super::super::super::generated::powers::Power;
+
+            fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            let energy = sts2_core::PowerAmount::Counted(fight.var(CardVar::Energy));
+            fight.apply_to_actor(Power::EnergyNextTurnPower, energy);
             Played::Done
         }
     }
@@ -107,6 +119,19 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         }
         DefectCard::Compact => compact(fight),
         DefectCard::Ftl => ftl(fight),
+        // `Scavenge`: one card of the hand exhausted, then energy next turn.
+        DefectCard::Scavenge => Played::Asking {
+            pile: Pile::Hand,
+            selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Card(super::Resume::Defect(Resume::ScavengeExhaust)),
+        },
+        // `Glacier`: its block, then two Frosts channelled.
+        DefectCard::Glacier => {
+            block(fight);
+            fight.channel(Orb::FrostOrb);
+            fight.channel(Orb::FrostOrb);
+            Played::Done
+        }
         // `Overclock`: its `Cards` drawn, then a Burn into the discard pile.
         DefectCard::Overclock => {
             fight.draw(fight.var(CardVar::Cards));
