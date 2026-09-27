@@ -209,7 +209,7 @@ pub(crate) fn play<V: Rules>(
 
     // `AddDuringManualCardPlay`: the card is in the play pile, and so out of
     // the hand, while its own effect runs.
-    let card = live.cards.play(play.index);
+    let card = live.cards.play(sts2_core::Pile::Hand, play.index);
     let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
@@ -271,16 +271,17 @@ pub(super) fn auto_play<V: Rules>(
     mut rngs: crate::stream::CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     id: sts2_core::CardId<V>,
+    from: sts2_core::Pile,
 ) -> Option<super::Ended> {
     use sts2_core::{CardTable as _, TargetKinds as _};
 
-    let Some(at) = live.cards.find(sts2_core::Pile::Hand, id) else {
-        unimplemented!("auto-playing {id:?} from anywhere but the hand");
+    let Some(at) = live.cards.find(from, id) else {
+        unimplemented!("auto-playing {id:?}, which left the {from:?} pile");
     };
     let ident = live
         .cards
-        .get(sts2_core::Pile::Hand, at)
-        .expect("a card found in hand is in hand")
+        .get(from, at)
+        .expect("a card found in a pile is in it")
         .face
         .ident;
     if ident.card.unplayable() {
@@ -317,7 +318,7 @@ pub(super) fn auto_play<V: Rules>(
     super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardAutoPlayed);
 
     // `CardPileCmd.Add` to the play pile, where it stands while it runs.
-    let card = live.cards.play(at);
+    let card = live.cards.play(from, at);
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);

@@ -1,0 +1,9 @@
+# `CardCmd.Discard` puts every card down, then auto-plays each Sly one with
+# `SlyDiscard`. Survivor discards Flick-Flack, which then hits every enemy for
+# its damage from the discard pile, and costs nothing.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","card":"SURVIVOR"}
+{"cmd":"grant","card":"FLICK_FLACK"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1}
+{"cmd":"answer","cards":[3]}
