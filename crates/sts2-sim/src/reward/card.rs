@@ -50,6 +50,21 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
     drawn
 }
 
+/// Whether `filter` keeps `card`.
+pub(crate) fn keeps<V: Rules>(filter: sts2_core::PoolFilter, card: V::Card) -> bool {
+    use sts2_core::CardRarityKinds as _;
+
+    match filter {
+        sts2_core::PoolFilter::OfKind(kind) => V::card_kind(card) == Some(kind),
+        sts2_core::PoolFilter::NotBasicOrAncient => {
+            let rarity = card.rarity();
+            rarity != <<V::Card as sts2_core::CardTable>::Rarity>::BASIC
+                && rarity != <<V::Card as sts2_core::CardTable>::Rarity>::ANCIENT
+        }
+        sts2_core::PoolFilter::FreeFixedCost => card.cost() == sts2_core::Cost::fixed(0),
+    }
+}
+
 /// A uniform reward: `count` distinct cards, each one `NextItem` over what is
 /// left of `pool`. `pool` is `GetPossibleCards`, in pool order.
 /// `ForNonCombatWithUniformOdds` rolls no upgrade.

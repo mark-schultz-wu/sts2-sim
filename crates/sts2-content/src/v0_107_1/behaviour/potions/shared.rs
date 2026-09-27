@@ -2,13 +2,11 @@
 
 use sts2_core::{
     Amount, CardTable as _, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile,
-    PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling, Table as _,
+    PileAct, Played, PowerAmount, RunStreamKinds as _, Scaling,
 };
 
 use super::super::super::V0_107_1 as V;
-use super::super::super::generated::cards::{
-    CardType, Cards, combat_cards, combat_colorless_cards,
-};
+use super::super::super::generated::cards::{CardType, Cards, combat_colorless_cards};
 use super::super::super::generated::potions::Potion;
 use super::super::super::generated::powers::Power;
 use super::Number;
@@ -181,9 +179,16 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             }
             Played::Done
         }
-        Potion::PowerPotion => free_card_of(fight, character_cards(fight, CardType::Power)),
-        Potion::AttackPotion => free_card_of(fight, character_cards(fight, CardType::Attack)),
-        Potion::SkillPotion => free_card_of(fight, character_cards(fight, CardType::Skill)),
+        Potion::PowerPotion => {
+            free_card_of(fight, super::super::character_cards(fight, CardType::Power))
+        }
+        Potion::AttackPotion => free_card_of(
+            fight,
+            super::super::character_cards(fight, CardType::Attack),
+        ),
+        Potion::SkillPotion => {
+            free_card_of(fight, super::super::character_cards(fight, CardType::Skill))
+        }
         Potion::ColorlessPotion => free_card_of(fight, combat_colorless_cards().to_vec()),
         // `CreatureCmd.Damage` on the target, unpowered and from the player.
         Potion::FirePotion => {
@@ -363,16 +368,6 @@ fn free_this_turn<F: Fight<V>>(fight: &mut F, at: sts2_core::CardAt<V>) {
             Lasting::ThisTurnOrUntilPlayed,
         );
     }
-}
-
-/// The character's combat pool, narrowed to the cards of `kind`.
-fn character_cards<F: Fight<V>>(fight: &F, kind: CardType) -> Vec<Cards> {
-    let pool = fight.character().data().card_pool;
-    combat_cards(pool)
-        .iter()
-        .copied()
-        .filter(|card| card.data().kind == crate::Field::Constant(kind))
-        .collect()
 }
 
 /// `PowerPotion`, `AttackPotion`, `SkillPotion` and `ColorlessPotion`: three

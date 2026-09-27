@@ -1511,6 +1511,8 @@ pub(crate) fn event_hook(
     let one: Number = num_traits::one();
 
     let effect = match (power, amount, hook) {
+        // Its `AfterModifyingHandDraw` only flashes.
+        (Power::PaleBlueDotPower, _, EventHook::HandDrawModified) => return,
         (
             Power::ImbalancedPower,
             _,

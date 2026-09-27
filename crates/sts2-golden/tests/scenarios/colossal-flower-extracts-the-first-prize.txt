@@ -1,0 +1,4 @@
+# `ExtractCurrentPrize` before any dig pays thirty-five gold and finishes.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"COLOSSAL_FLOWER"}
+{"cmd":"choose_option","index":0}

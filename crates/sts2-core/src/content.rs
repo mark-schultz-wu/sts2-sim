@@ -566,6 +566,7 @@ pub enum ModelHook {
     ModifyHandDrawLate,
     ModifyShuffleOrder,
     AfterShuffle,
+    AfterModifyingHandDraw,
     BeforePotionUsed,
     AfterSideTurnStartLate,
     ShouldDraw,
@@ -638,7 +639,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 98] = [
+    pub const ALL: [ModelHook; 99] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -668,6 +669,7 @@ impl ModelHook {
         ModelHook::ModifyHandDrawLate,
         ModelHook::ModifyShuffleOrder,
         ModelHook::AfterShuffle,
+        ModelHook::AfterModifyingHandDraw,
         ModelHook::BeforePotionUsed,
         ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
@@ -771,6 +773,7 @@ impl ModelHook {
             ModelHook::ModifyHandDrawLate => "ModifyHandDrawLate",
             ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
             ModelHook::AfterShuffle => "AfterShuffle",
+            ModelHook::AfterModifyingHandDraw => "AfterModifyingHandDraw",
             ModelHook::BeforePotionUsed => "BeforePotionUsed",
             ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
@@ -937,6 +940,9 @@ pub enum EnchantHook {
     /// `EnchantDamageAdditive`, for a hit the card deals. `powered` is
     /// `props.IsPoweredAttack()`.
     DamageAdditive { powered: bool },
+    /// `EnchantDamageMultiplicative`, over the hit after
+    /// [`EnchantHook::DamageAdditive`].
+    DamageMultiplicative { powered: bool },
     /// `EnchantBlockAdditive`, for block the card gives.
     BlockAdditive,
     /// `EnchantPlayCount`, over how many times the card's play runs.
@@ -1810,8 +1816,9 @@ pub trait Fight<V: ContentVersion> {
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number;
 
     /// `CardPileCmd.AddGeneratedCardToCombat` of a new copy into `pile` at
-    /// `CardPilePosition.Random`.
-    fn add_at_random(&mut self, _card: V::Card, _pile: crate::Pile) {
+    /// `CardPilePosition.Random`, and where it landed. Nothing, in a fight
+    /// already over.
+    fn add_at_random(&mut self, _card: V::Card, _pile: crate::Pile) -> Option<crate::CardAt<V>> {
         unimplemented!("a card added at a random place")
     }
 
@@ -1957,6 +1964,13 @@ pub trait Fight<V: ContentVersion> {
     /// The character whose pool combat generation reads.
     fn character(&self) -> V::Character {
         unimplemented!("the character in this fight")
+    }
+
+    /// One card of a combat-ready pool, `NextItem` off
+    /// `CombatCardGeneration`, which is each draw `CardFactory.GetForCombat`
+    /// makes. Nothing, for an empty pool.
+    fn generate_card(&mut self, _cards: &[V::Card]) -> Option<V::Card> {
+        unimplemented!("generating a card for combat")
     }
 
     /// Generate distinct cards from a combat-ready pool.
@@ -2520,6 +2534,10 @@ pub enum EventHook<V: ContentVersion> {
         /// The creature it is aimed at, where it aims.
         target: Option<crate::CombatId>,
     },
+    /// `AfterModifyingHandDraw`, to each listener whose `ModifyHandDraw`
+    /// changed the turn's hand, before it is drawn. The listener reads for
+    /// itself whether it did.
+    HandDrawModified,
     /// `AfterShuffle`, once the discard pile is shuffled into the draw pile.
     /// A fight here has one player, who is the shuffler.
     Shuffled,
@@ -2866,6 +2884,7 @@ impl<V: ContentVersion> EventHook<V> {
         Some(match self {
             EventHook::ShuffleOrder { .. } => ModelHook::ModifyShuffleOrder,
             EventHook::Shuffled => ModelHook::AfterShuffle,
+            EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
@@ -3180,6 +3199,8 @@ pub enum PoolFilter {
     OfKind(CardKind),
     /// Every card but the `Basic` and `Ancient` ones.
     NotBasicOrAncient,
+    /// The cards whose canonical cost is nothing, and not X.
+    FreeFixedCost,
 }
 
 /// `CardPilePosition`: which end of a pile a card goes to.
@@ -3576,6 +3597,10 @@ pub enum HookEffect<V: ContentVersion> {
     AddToDeck(V::Card),
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
+    /// `CardFactory.CreateForReward` of one card from the character's pool,
+    /// narrowed by the filter, at `RegularEncounter` odds with no upgrade
+    /// roll, into the deck.
+    AddRegularCard(PoolFilter),
     /// `CreatureCmd.Kill(creature, force: true)`.
     KillCreature(crate::CombatId),
     /// `CardPileCmd.AddGeneratedCardToCombat` of `count` new copies into

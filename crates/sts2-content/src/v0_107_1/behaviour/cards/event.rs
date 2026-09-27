@@ -1,9 +1,11 @@
 //! The event cards the generator leaves to a hand port.
 
-use sts2_core::{Amount, Effect, Fight, Pile, PileAct, Played, Scaling, Selection};
+use sts2_core::{
+    Amount, Change, CostPool, Effect, Fight, Lasting, Pile, PileAct, Played, Scaling, Selection,
+};
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardVar, EventCard};
+use super::super::super::generated::cards::{CardType, CardVar, EventCard};
 use super::V;
 
 /// Where an event card stopped inside its own play.
@@ -16,6 +18,7 @@ pub enum Resume {
 pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> {
     match card {
         EventCard::NeowsFury => neows_fury(fight),
+        EventCard::Metamorphosis => metamorphosis(fight),
         // Its damage to the target. The Byrdpip pet only animates the hit.
         EventCard::ByrdSwoop => {
             let target = fight.target();
@@ -72,4 +75,26 @@ fn neows_fury<F: Fight<V>>(fight: &mut F) -> Played<V> {
         },
         _ => Played::Done,
     }
+}
+
+/// `Metamorphosis`: its `Cards` attacks from the character's pool, each
+/// `NextItem` off `CombatCardGeneration`, free this fight and into the draw
+/// pile at a random place.
+fn metamorphosis<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let attacks = super::super::character_cards(fight, CardType::Attack);
+    for _ in 0..fight.var(CardVar::Cards) {
+        let Some(card) = fight.generate_card(&attacks) else {
+            unimplemented!("a character pool with no attack")
+        };
+        if let Some(at) = fight.add_at_random(card, Pile::Draw) {
+            for pool in [CostPool::Energy, CostPool::Star] {
+                fight.modify_card(
+                    at,
+                    Change::SetCost(pool, num_traits::zero()),
+                    Lasting::ThisFight,
+                );
+            }
+        }
+    }
+    Played::Done
 }

@@ -1286,6 +1286,39 @@ impl<V: Rules> State<V> {
                         .push(sts2_core::DeckCard::new(CardIdent::new(card)));
                     continue;
                 }
+                HookEffect::AddRegularCard(filter) => {
+                    self.card_reward_unheard();
+                    let character = self.character();
+                    let pool = V::reward_cards(character);
+                    let narrow = |cards: &[V::Card]| -> Vec<V::Card> {
+                        cards
+                            .iter()
+                            .copied()
+                            .filter(|&card| crate::reward::card::keeps::<V>(filter, card))
+                            .collect()
+                    };
+                    let (common, uncommon, rare) = (
+                        narrow(pool.common),
+                        narrow(pool.uncommon),
+                        narrow(pool.rare),
+                    );
+                    let drawn = crate::reward::card::regular::<V, _>(
+                        self.streams.player(V::PlayerRngType::REWARDS),
+                        sts2_core::Drafted {
+                            common: &common,
+                            uncommon: &uncommon,
+                            rare: &rare,
+                        },
+                        1,
+                        false,
+                    );
+                    for card in drawn {
+                        self.player
+                            .deck_mut()
+                            .push(sts2_core::DeckCard::new(CardIdent::new(card)));
+                    }
+                    continue;
+                }
                 HookEffect::AddUpgradedToDeck(card) => {
                     let mut ident = CardIdent::new(card);
                     if sts2_core::CardTable::max_upgrade(card) > 0 {

@@ -1,0 +1,5 @@
+# `TouchCore` adds one card whose canonical cost is nothing, and not X, the
+# same way.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"event","event":"INFESTED_AUTOMATON"}
+{"cmd":"choose_option","index":1}

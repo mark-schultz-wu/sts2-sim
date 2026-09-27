@@ -1781,7 +1781,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // MAYHEM_POWER
     sts2_core::Overrides::from_bits(0),
     // MIND_ROT_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHandDraw)
+        .with(sts2_core::ModelHook::ModifyHandDraw),
     // MINION_POWER
     sts2_core::Overrides::from_bits(0),
     // MOCK_CLONE_CARDS_ON_PLAY_POWER
@@ -1885,7 +1887,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
         .with(sts2_core::ModelHook::AfterAttack)
         .with(sts2_core::ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath),
     // PALE_BLUE_DOT_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyHandDraw),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingHandDraw)
+        .with(sts2_core::ModelHook::ModifyHandDraw),
     // PANACHE_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)

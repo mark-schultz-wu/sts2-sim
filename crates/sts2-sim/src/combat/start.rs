@@ -249,6 +249,7 @@ pub(crate) fn enter<V: Rules>(
         },
         turn,
     );
+    after_modifying_hand_draw::<V>(&mut live, relics);
     let piles = pile::shuffle(streams.combat().shuffle, deck).deal_opening(drawn);
 
     // The whole deck into the draw pile in the order the deal left it, then
@@ -336,6 +337,18 @@ pub(crate) fn enter<V: Rules>(
         streams,
         ended,
     })
+}
+
+/// `Hook.AfterModifyingHandDraw`, once the turn's hand size is worked out.
+/// A listener's own hook reads whether it changed the size.
+pub(super) fn after_modifying_hand_draw<V: Rules>(
+    live: &mut super::live::Live<V>,
+    relics: &mut Belt<V>,
+) {
+    let hook = sts2_core::EventHook::HandDrawModified;
+    if let Some((listener, effect)) = super::listen::notify::<V>(live, relics, hook).first() {
+        unimplemented!("{listener:?} asking for {effect:?} after the hand size is worked out")
+    }
 }
 
 /// How many cards a turn's hand is drawn to.
