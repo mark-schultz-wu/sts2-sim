@@ -1,0 +1,7 @@
+# `PaelsFlesh.ModifyMaxEnergy` adds one energy once the player's turn number
+# reaches three: three energy on turns one and two, four on turn three.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAELS_FLESH"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

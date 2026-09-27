@@ -1503,7 +1503,14 @@ pub(super) fn enchanted_by<V: Rules>(
 pub(crate) fn max_energy<V: Rules>(fight: Walk<'_, V>, base: V::Count) -> V::Count {
     let player = player::<V>(&fight.live.creatures);
     let base: V::Number = num_traits::cast(base).expect("an energy fits a game number");
-    let energy = modified_by::<V>(fight, base, &[ModifyHook::MaxEnergy { player }]);
+    let energy = modified_by::<V>(
+        fight,
+        base,
+        &[ModifyHook::MaxEnergy {
+            player,
+            turn: fight.live.turn,
+        }],
+    );
     num_traits::cast(energy).expect("a max energy fits the build's count type")
 }
 

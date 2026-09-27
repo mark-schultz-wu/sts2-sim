@@ -1,0 +1,7 @@
+# Pael draws one relic from each of its three pools off the event's stream.
+# The second pool doubles once Claw and Tooth join it, then adds Growth. The
+# third adds Legion for a run with no event pet. On this seed it offers
+# Horn, Wing and Legion. Taking Horn adds two Relax to the deck.
+{"cmd":"start","seed":"0RACLE6","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"PAEL"}
+{"cmd":"choose_option","index":0}

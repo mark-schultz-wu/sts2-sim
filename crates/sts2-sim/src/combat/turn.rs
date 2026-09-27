@@ -470,7 +470,10 @@ fn before_turn_end<V: Rules>(
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
     }
-    let hook = sts2_core::EventHook::BeforeSideTurnEnd { side };
+    let hook = sts2_core::EventHook::BeforeSideTurnEnd {
+        side,
+        energy: live.energy,
+    };
     let mut ended = None;
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {

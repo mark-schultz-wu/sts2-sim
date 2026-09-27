@@ -32,6 +32,7 @@ pub(crate) fn can_enchant(enchantment: Enchantment, card: &CardIdent<V>) -> bool
         // `CanEnchantCardType`, which takes an attack alone.
         Enchantment::Sharp => base && V::card_kind(card.card) == Some(CardKind::Attack),
         Enchantment::Nimble => base && card.card.gains_block(),
+        Enchantment::Goopy => base && card.card.tagged(CardTag::Defend),
         _ => unimplemented!("which cards {enchantment:?} can enchant"),
     }
 }

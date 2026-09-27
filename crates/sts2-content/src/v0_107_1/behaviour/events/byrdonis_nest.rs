@@ -22,11 +22,7 @@ impl EventBehavior<V> for ByrdonisNest {
     type State = State;
 
     fn allowed(&self, run: &impl EventView<V>) -> bool {
-        !run.relics().any(super::adds_pet)
-            && !run
-                .deck()
-                .iter()
-                .any(|card| card.card == Cards::Quest(QuestCard::ByrdonisEgg))
+        !super::has_event_pet(run)
     }
 
     fn enter<R: sts2_core::rng::GameRng>(&self, _run: &impl EventView<V>, _rng: &mut R) -> State {
