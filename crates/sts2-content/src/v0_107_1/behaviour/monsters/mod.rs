@@ -159,7 +159,8 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::Fogmog
         | Monster::SnappingJaxfruit
         | Monster::Flyconid
-        | Monster::CubexConstruct => overgrowth::perform(monster, move_id, fight),
+        | Monster::CubexConstruct
+        | Monster::CrossbowRubyRaider => overgrowth::perform(monster, move_id, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
 }

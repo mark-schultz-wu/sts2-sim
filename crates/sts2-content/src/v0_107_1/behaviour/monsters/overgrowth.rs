@@ -1,6 +1,6 @@
 //! The first act's monsters.
 
-use sts2_core::{ContentError, Fight, MonsterSpawn, PowerAmount};
+use sts2_core::{Amount, ContentError, Effect, Fight, MonsterSpawn, PowerAmount, Scaling};
 
 use super::super::super::generated::powers::Power;
 
@@ -87,6 +87,17 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
                 PowerAmount::Counted(CHARGE_UP_STRENGTH),
             );
         }
+        // `IsCrossbowReloaded`, which each of these two sets last, picks its
+        // animation.
+        (Monster::CrossbowRubyRaider, MoveId::FireMove) => fight.attack_opponents(),
+        (Monster::CrossbowRubyRaider, MoveId::ReloadMove) => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(RELOAD_BLOCK),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+        }
         (Monster::Flyconid, MoveId::VulnerableSporesMove) => {
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(SPORES));
         }
@@ -97,6 +108,10 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         (monster, move_id) => monster_moves::perform(monster, move_id, fight),
     }
 }
+
+/// The block the Crossbow Ruby Raider's Reload gives it, a constant in the
+/// move.
+const RELOAD_BLOCK: Number = 3;
 
 /// What the Cubex Construct's Charge Up adds to it, a constant in the move.
 const CHARGE_UP_STRENGTH: Number = 2;
