@@ -567,6 +567,7 @@ pub enum ModelHook {
     ModifyShuffleOrder,
     AfterShuffle,
     AfterModifyingHandDraw,
+    ShouldProcurePotion,
     BeforePotionUsed,
     AfterSideTurnStartLate,
     ShouldDraw,
@@ -639,7 +640,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 99] = [
+    pub const ALL: [ModelHook; 100] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -670,6 +671,7 @@ impl ModelHook {
         ModelHook::ModifyShuffleOrder,
         ModelHook::AfterShuffle,
         ModelHook::AfterModifyingHandDraw,
+        ModelHook::ShouldProcurePotion,
         ModelHook::BeforePotionUsed,
         ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
@@ -774,6 +776,7 @@ impl ModelHook {
             ModelHook::ModifyShuffleOrder => "ModifyShuffleOrder",
             ModelHook::AfterShuffle => "AfterShuffle",
             ModelHook::AfterModifyingHandDraw => "AfterModifyingHandDraw",
+            ModelHook::ShouldProcurePotion => "ShouldProcurePotion",
             ModelHook::BeforePotionUsed => "BeforePotionUsed",
             ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
@@ -2338,9 +2341,12 @@ pub enum ModifyHook<V: ContentVersion> {
     },
     HpLostAfterOsty {
         target: crate::CombatId,
+        /// The fight's player, which a relic's owner is.
+        player: crate::CombatId,
     },
     HpLostAfterOstyLate {
         target: crate::CombatId,
+        player: crate::CombatId,
     },
     /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
     /// `target`, as an application or a change to one it carries.
@@ -2493,6 +2499,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldAllowFreeTravel`: whether the run can go on to any point of
     /// the next row, rather than only those its point leads on to.
     ShouldAllowFreeTravel,
+    /// `ShouldProcurePotion`: whether the player takes `potion`. One no
+    /// refuses it.
+    ShouldProcurePotion { potion: V::Potion },
 }
 
 impl<V: ContentVersion> DecisionHook<V> {
@@ -2513,6 +2522,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
             DecisionHook::ShouldAllowFreeTravel => ModelHook::ShouldAllowFreeTravel,
+            DecisionHook::ShouldProcurePotion { .. } => ModelHook::ShouldProcurePotion,
             DecisionHook::ShouldDraw { .. } => ModelHook::ShouldDraw,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
@@ -3251,6 +3261,9 @@ pub enum DeckAct<V: ContentVersion> {
     /// `FromDeckForTransformation`, then `CardCmd.TransformToRandom` off the
     /// named stream. It offers the cards that can be transformed.
     Transform(Stream<V>),
+    /// The same, with each replacement upgraded before it lands, as
+    /// `CardCmd.Upgrade` then `CardCmd.Transform`.
+    TransformUpgraded(Stream<V>),
     /// `FromDeckForRemoval` over the deck's basic cards with this tag that
     /// can be removed, then `CardPileCmd.RemoveFromDeck`.
     RemoveBasicTagged(V::CardTag),
@@ -3281,6 +3294,9 @@ pub enum Stream<V: ContentVersion> {
 /// handed it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CustomReward<V: ContentVersion> {
+    /// `RelicReward(rarity)`: the next relic of that rarity from the front
+    /// of the player's bag, pulled as the reward fills in.
+    Relic(<V::Relic as crate::RelicTable>::Rarity),
     /// `CardReward` over the character's own pool at `RegularEncounter` odds,
     /// from `CardCreationSource.Other`, offering this many cards.
     CharacterCards(usize),
@@ -3420,6 +3436,10 @@ pub enum HookEffect<V: ContentVersion> {
         min: usize,
         max: usize,
     },
+    /// `CardCmd.Transform` on every deck card that `IsBasicStrikeOrDefend`
+    /// and is removable, each into `CreateRandomCardForTransform` off the
+    /// named stream, in deck order.
+    TransformBasicStrikesAndDefends(Stream<V>),
     /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
     /// the deck's bottom, cloned by the listener.
     CloneIntoDeck,

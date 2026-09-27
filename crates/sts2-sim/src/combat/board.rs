@@ -1267,9 +1267,10 @@ impl<'a, V: Rules> Board<'a, V> {
         };
         let mut number = float(amount);
         let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
+        let player = self.live.player().id;
         for phase in [
-            ModifyHook::HpLostAfterOsty { target },
-            ModifyHook::HpLostAfterOstyLate { target },
+            ModifyHook::HpLostAfterOsty { target, player },
+            ModifyHook::HpLostAfterOstyLate { target, player },
         ] {
             super::listen::each::<V>(
                 self.walk(),
@@ -1288,6 +1289,9 @@ impl<'a, V: Rules> Board<'a, V> {
                             sts2_core::Listener::Power { holder, power, .. } => {
                                 modifiers.push((holder, power))
                             }
+                            // Every relic's `AfterModifyingHpLostAfterOsty`
+                            // only flashes.
+                            sts2_core::Listener::Relic(_) => {}
                             _ => unimplemented!(
                                 "a listener other than a power changing what a hit takes"
                             ),
@@ -1539,12 +1543,13 @@ fn modified_from<V: Rules>(fight: Walk<'_, V>, amount: f64, phases: &[ModifyHook
 
 /// `ModifyHpLost` in the phases after a hit found who takes it.
 fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number) -> V::Number {
+    let player = fight.live.player().id;
     modified_by::<V>(
         fight,
         amount,
         &[
-            ModifyHook::HpLostAfterOsty { target },
-            ModifyHook::HpLostAfterOstyLate { target },
+            ModifyHook::HpLostAfterOsty { target, player },
+            ModifyHook::HpLostAfterOstyLate { target, player },
         ],
     )
 }

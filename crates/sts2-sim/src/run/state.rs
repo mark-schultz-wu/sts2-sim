@@ -848,7 +848,7 @@ impl<V: Rules> State<V> {
             sts2_core::DeckAct::Upgrade => self.upgradable().collect(),
             // `IsTransformable` in the deck is `IsRemovable`, and a quest
             // card is never offered.
-            sts2_core::DeckAct::Transform(_) => deck
+            sts2_core::DeckAct::Transform(_) | sts2_core::DeckAct::TransformUpgraded(_) => deck
                 .filter(|(_, card)| {
                     !card.card.eternal()
                         && V::card_kind(card.card) != Some(sts2_core::CardKind::Quest)
@@ -941,7 +941,9 @@ impl<V: Rules> State<V> {
             // `CardCmd.Transform`: every replacement is drawn first, in the
             // order the cards were taken. The originals leave the deck, and
             // the replacements join its end in the originals' deck order.
-            sts2_core::DeckAct::Transform(stream) => {
+            sts2_core::DeckAct::Transform(stream)
+            | sts2_core::DeckAct::TransformUpgraded(stream) => {
+                let upgrade = matches!(act, sts2_core::DeckAct::TransformUpgraded(_));
                 let rng = stream_of(&mut self.phase, &mut self.streams, stream);
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
@@ -950,7 +952,11 @@ impl<V: Rules> State<V> {
                         let card = *rng
                             .choose(&options)
                             .unwrap_or_else(|_| unimplemented!("a transform with no option"));
-                        (at, CardIdent::new(card))
+                        let mut ident = CardIdent::new(card);
+                        if upgrade && sts2_core::CardTable::max_upgrade(card) > 0 {
+                            ident.upgrade = 1;
+                        }
+                        (at, ident)
                     })
                     .collect();
                 replaced.sort_by_key(|(at, _)| *at);
@@ -994,12 +1000,11 @@ impl<V: Rules> State<V> {
         self.player.potion_positions.remove(at);
     }
 
-    /// Put a potion in the first empty physical belt slot.
     /// `PotionCmd.TryToProcure` into the slot at `slot`, which lands while
-    /// that slot is open.
+    /// that slot is open and no relic refuses it.
     fn procure_into(&mut self, potion: V::Potion, slot: usize) -> bool {
         let slot = u8::try_from(slot).expect("a belt slot fits a byte");
-        if self.player.potion_positions.contains(&slot) {
+        if self.procure_refused(potion) || self.player.potion_positions.contains(&slot) {
             return false;
         }
         let at = self
@@ -1011,7 +1016,12 @@ impl<V: Rules> State<V> {
         true
     }
 
+    /// `PotionCmd.TryToProcure`: the potion in the first empty physical belt
+    /// slot, unless a relic refuses it.
     fn procure(&mut self, potion: V::Potion) -> bool {
+        if self.procure_refused(potion) {
+            return false;
+        }
         let slots: usize = num_traits::cast(self.player.potion_slots)
             .expect("the belt has an addressable number of slots");
         let Some(slot) = (0..slots)
@@ -1497,6 +1507,26 @@ impl<V: Rules> State<V> {
                 // `CardSelectCmd` takes the whole list without asking when it
                 // holds no more than it must take, and returns nothing from an
                 // empty one.
+                HookEffect::TransformBasicStrikesAndDefends(stream) => {
+                    use sts2_core::{CardRarityKinds, CardTable as _, CardTagKinds};
+
+                    let taken: Vec<usize> = self
+                        .player
+                        .deck
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, held)| {
+                            let card = held.ident.card;
+                            card.rarity() == <_ as CardRarityKinds>::BASIC
+                                && (card.tagged(<_ as CardTagKinds>::STRIKE)
+                                    || card.tagged(<_ as CardTagKinds>::DEFEND))
+                                && !card.eternal()
+                        })
+                        .map(|(at, _)| at)
+                        .collect();
+                    self.act_on_deck(sts2_core::DeckAct::Transform(stream), &taken);
+                    continue;
+                }
                 HookEffect::SelectFromDeck { act, count } => {
                     let offered = self.offered(act);
                     if offered.len() <= count {
@@ -1686,11 +1716,29 @@ impl<V: Rules> State<V> {
         }) {
             self.card_reward_unheard();
         }
+        // A relic reward draws nothing, so its pulls can come first.
+        let mut relics = rewards
+            .iter()
+            .filter_map(|reward| match *reward {
+                CustomReward::Relic(rarity) => Some(rarity),
+                _ => None,
+            })
+            .map(|rarity| (self.pull_relic(rarity), rarity))
+            .collect::<SmallVec<[(V::Relic, Rarity<V>); 4]>>()
+            .into_iter();
         let mut offered: Vec<Offer<V>> = rewards
             .iter()
             .map(|reward| {
                 let rng = self.streams.player(V::PlayerRngType::REWARDS);
                 match *reward {
+                    CustomReward::Relic(_) => {
+                        let (relic, rarity) = relics.next().expect("each relic reward was pulled");
+                        Offer::Relic {
+                            relic,
+                            rarity,
+                            taken: false,
+                        }
+                    }
                     CustomReward::CharacterCards(count) => Offer::Card {
                         cards: crate::reward::card::regular::<V, _>(
                             rng,
@@ -1802,6 +1850,7 @@ impl<V: Rules> State<V> {
                         let relic = self.pull_relic(rarity);
                         offered.push(Offer::Relic {
                             relic,
+                            rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                             taken: false,
                         });
                     }
@@ -2986,7 +3035,7 @@ impl<V: Rules> State<V> {
                 *taken = true;
                 self.add_to_deck(sts2_core::DeckCard::new(card));
             }
-            (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
+            (Offer::Relic { relic, taken, .. }, TakeReward::NonCard { .. }) => {
                 let relic = *relic;
                 *taken = true;
                 self.obtain_here(relic);
@@ -3254,6 +3303,24 @@ impl<V: Rules> State<V> {
                 kind: map.at(at).expect("a map edge leads to a node").kind,
             })
             .collect()
+    }
+
+    /// `Hook.ShouldProcurePotion`, which any relic on the belt can answer no
+    /// to. A fight's other listeners never answer it.
+    fn procure_refused(&self, potion: V::Potion) -> bool {
+        let hook = sts2_core::DecisionHook::ShouldProcurePotion { potion };
+        let hooks = sts2_core::Overrides::of(sts2_core::ModelHook::ShouldProcurePotion);
+        let mut left = self.player.relics.hearing(hooks);
+        while left != 0 {
+            let held = &self.player.relics[left.trailing_zeros() as usize];
+            left &= left - 1;
+            if V::decide_hook(crate::combat::Heard::<V>::Relic(&held.state), hook)
+                .is_decision_and(|allowed| !allowed)
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// `Hook.ShouldAllowFreeTravel`, which any relic on the belt can answer
@@ -3715,9 +3782,9 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                     },
                     // The slot picks no rarity of its own, so it reports
                     // `RelicRarity.None` whatever the relic in it is.
-                    Offer::Relic { relic, .. } => RewardKind::Relic {
+                    Offer::Relic { relic, rarity, .. } => RewardKind::Relic {
                         relic: Some(*relic),
-                        rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
+                        rarity: *rarity,
                     },
                     Offer::Card { cards, .. } => RewardKind::Card {
                         cards: cards

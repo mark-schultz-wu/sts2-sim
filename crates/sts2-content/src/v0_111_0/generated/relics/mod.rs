@@ -2130,7 +2130,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterModifyingPowerAmountGiven)
         .with(sts2_core::ModelHook::ModifyPowerAmountGivenAdditive),
     // SOZU
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyMaxEnergy)
+        .with(sts2_core::ModelHook::ShouldProcurePotion),
     // SPARKLING_ROUGE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
     // SPIKED_GAUNTLETS

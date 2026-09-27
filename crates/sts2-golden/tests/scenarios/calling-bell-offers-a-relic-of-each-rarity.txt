@@ -1,0 +1,7 @@
+# Calling Bell adds Curse of the Bell, then offers a common, an uncommon and a
+# rare relic, each pulled from the front of the bag. Taking the rare one
+# obtains it. Darv offers the bell third on this seed.
+{"cmd":"start","seed":"C000000002","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"DARV"}
+{"cmd":"choose_option","index":2}
+{"cmd":"answer","take":[{"index":2}]}

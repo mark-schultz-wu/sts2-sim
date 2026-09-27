@@ -1,0 +1,6 @@
+# Empty Cage asks for two deck cards as it is picked up and removes them.
+# Darv offers it first on this seed.
+{"cmd":"start","seed":"C000000002","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"DARV"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0,5]}

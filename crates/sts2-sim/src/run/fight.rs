@@ -251,6 +251,7 @@ impl<V: Rules> State<V> {
             let relic = self.pull_relic(rarity);
             offered.push(crate::reward::Offer::Relic {
                 relic,
+                rarity: <_ as sts2_core::RarityKinds>::UNDRAFTED,
                 taken: false,
             });
         }

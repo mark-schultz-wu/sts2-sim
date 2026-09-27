@@ -44,10 +44,14 @@ pub(crate) enum Offer<V: Rules> {
         potion: V::Potion,
         taken: bool,
     },
-    /// An elite's relic. The slot picks no rarity of its own, so what it
-    /// reports is `RelicRarity.None`, whatever the relic in it is.
+    /// A relic, which is what an elite gives. An elite's slot picks no
+    /// rarity of its own, so what it reports is `RelicRarity.None`, whatever
+    /// the relic in it is.
     Relic {
         relic: V::Relic,
+        /// `RelicReward.Rarity`: the rarity the reward was asked for, and
+        /// `Undrafted` for one that rolled its own.
+        rarity: crate::run::Rarity<V>,
         taken: bool,
     },
 }

@@ -1,0 +1,7 @@
+# Astrolabe asks for three deck cards as it is picked up. Each becomes a
+# random card off the niche stream, upgraded before it lands. Darv offers it
+# first on this seed.
+{"cmd":"start","seed":"C000000001","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"DARV"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","cards":[0,5,9]}
