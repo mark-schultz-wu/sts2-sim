@@ -585,6 +585,9 @@ pub enum ModelHook {
     ModifyNextEvent,
     BeforePotionUsed,
     AfterPotionUsed,
+    TryModifyCardBeingAddedToDeck,
+    TryModifyCardBeingAddedToDeckLate,
+    ModifyMerchantCardCreationResults,
     AfterSideTurnStartLate,
     ShouldDraw,
     AfterPreventingDraw,
@@ -657,7 +660,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 104] = [
+    pub const ALL: [ModelHook; 107] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -693,6 +696,9 @@ impl ModelHook {
         ModelHook::ModifyNextEvent,
         ModelHook::BeforePotionUsed,
         ModelHook::AfterPotionUsed,
+        ModelHook::TryModifyCardBeingAddedToDeck,
+        ModelHook::TryModifyCardBeingAddedToDeckLate,
+        ModelHook::ModifyMerchantCardCreationResults,
         ModelHook::AfterSideTurnStartLate,
         ModelHook::ShouldDraw,
         ModelHook::AfterPreventingDraw,
@@ -802,6 +808,9 @@ impl ModelHook {
             ModelHook::ModifyNextEvent => "ModifyNextEvent",
             ModelHook::BeforePotionUsed => "BeforePotionUsed",
             ModelHook::AfterPotionUsed => "AfterPotionUsed",
+            ModelHook::TryModifyCardBeingAddedToDeck => "TryModifyCardBeingAddedToDeck",
+            ModelHook::TryModifyCardBeingAddedToDeckLate => "TryModifyCardBeingAddedToDeckLate",
+            ModelHook::ModifyMerchantCardCreationResults => "ModifyMerchantCardCreationResults",
             ModelHook::AfterSideTurnStartLate => "AfterSideTurnStartLate",
             ModelHook::ShouldDraw => "ShouldDraw",
             ModelHook::AfterPreventingDraw => "AfterPreventingDraw",
@@ -2711,6 +2720,19 @@ pub enum EventHook<V: ContentVersion> {
     PotionUsed {
         in_fight: bool,
     },
+    /// `TryModifyCardRewardOptionsLate`, for one card `CardFactory` made for
+    /// a reward. A listener answers with what it does to the card.
+    CardRewardOption {
+        card: crate::CardIdent<V>,
+    },
+    /// `TryModifyCardBeingAddedToDeck`, for a card about to join the deck.
+    CardBeingAddedToDeck {
+        card: crate::CardIdent<V>,
+    },
+    /// `ModifyMerchantCardCreationResults`, for one card a merchant stocks.
+    MerchantCardCreated {
+        card: crate::CardIdent<V>,
+    },
     /// `AfterModifyingHandDraw`, to each listener whose `ModifyHandDraw`
     /// changed the turn's hand, before it is drawn. The listener reads for
     /// itself whether it did.
@@ -3122,6 +3144,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::HandDrawModified => ModelHook::AfterModifyingHandDraw,
             EventHook::PotionUsing { .. } => ModelHook::BeforePotionUsed,
             EventHook::PotionUsed { .. } => ModelHook::AfterPotionUsed,
+            EventHook::CardRewardOption { .. } => ModelHook::TryModifyCardRewardOptionsLate,
+            EventHook::CardBeingAddedToDeck { .. } => ModelHook::TryModifyCardBeingAddedToDeck,
+            EventHook::MerchantCardCreated { .. } => ModelHook::ModifyMerchantCardCreationResults,
             EventHook::SideTurnStartLate { .. } => ModelHook::AfterSideTurnStartLate,
             EventHook::RoomEntered { .. } => ModelHook::AfterRoomEntered,
             EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,
@@ -3989,6 +4014,9 @@ pub enum HookEffect<V: ContentVersion> {
     GainBlock(V::Number),
     /// `CardCmd.Upgrade` over every card in the hand.
     UpgradeHand,
+    /// `CardCmd.Upgrade` on a clone of the card the hook names, which takes
+    /// its place.
+    UpgradeCard,
     /// `PowerCmd.Apply<P>(Owner, amount, Owner)`, on the creature the listener
     /// is carried by.
     ApplyToOwner(V::Power, PowerAmount<V::Number>),

@@ -58,6 +58,7 @@ mod fake_strike_dummy;
 mod fake_venerable_tea_set;
 mod festive_popper;
 mod fishing_rod;
+mod frozen_egg;
 mod glass_eye;
 mod golden_pearl;
 mod gorget;
@@ -81,6 +82,7 @@ mod mango;
 mod meal_ticket;
 mod mercury_hourglass;
 mod miniature_cannon;
+mod molten_egg;
 mod mr_struggles;
 mod neows_talisman;
 mod neows_torment;
@@ -127,6 +129,7 @@ mod sword_of_stone;
 mod tiny_mailbox;
 mod toasty_mittens;
 mod touch_of_orobas;
+mod toxic_egg;
 mod tungsten_rod;
 mod twisted_funnel;
 mod vajra;
@@ -154,6 +157,22 @@ fn combat_room(room: super::super::generated::encounters::RoomType) -> bool {
     use super::super::generated::encounters::RoomType;
 
     matches!(room, RoomType::Monster | RoomType::Elite | RoomType::Boss)
+}
+
+/// `EggRelicHelper.UpgradeValidCards`, and the egg's own check as a card
+/// joins the deck: an upgraded clone of an upgradable card of `kind`. A run
+/// here has one player, whose cards are all the owner's.
+fn egg(kind: sts2_core::CardKind, hook: EventHook<V>, asked: &mut sts2_core::HookEffects<V>) {
+    use sts2_core::CardTable as _;
+
+    if let EventHook::CardRewardOption { card }
+    | EventHook::MerchantCardCreated { card }
+    | EventHook::CardBeingAddedToDeck { card } = hook
+        && <V as sts2_core::Rules>::card_kind(card.card) == Some(kind)
+        && card.upgrade < card.card.max_upgrade()
+    {
+        asked.push(sts2_core::HookEffect::UpgradeCard);
+    }
 }
 
 /// One relic's own model, as the run carries it.
@@ -291,6 +310,9 @@ pub enum State {
     WhiteStar,
     RedSkull(red_skull::State),
     TinyMailbox,
+    FrozenEgg,
+    MoltenEgg,
+    ToxicEgg,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -504,6 +526,9 @@ pub(crate) fn event_hook(
         State::WhiteStar => white_star::event_hook(hook, asked),
         State::RedSkull(state) => red_skull::event_hook(state, hook, asked),
         State::TinyMailbox => tiny_mailbox::event_hook(hook, asked),
+        State::FrozenEgg => frozen_egg::event_hook(hook, asked),
+        State::MoltenEgg => molten_egg::event_hook(hook, asked),
+        State::ToxicEgg => toxic_egg::event_hook(hook, asked),
     }
 }
 
@@ -657,7 +682,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PrayerWheel
         | State::WhiteStar
         | State::RedSkull(_)
-        | State::TinyMailbox => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::TinyMailbox
+        | State::FrozenEgg
+        | State::MoltenEgg
+        | State::ToxicEgg => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -801,6 +829,9 @@ impl sts2_core::RelicModel<V> for State {
             Relic::WhiteStar => State::WhiteStar,
             Relic::RedSkull => State::RedSkull(red_skull::State::default()),
             Relic::TinyMailbox => State::TinyMailbox,
+            Relic::FrozenEgg => State::FrozenEgg,
+            Relic::MoltenEgg => State::MoltenEgg,
+            Relic::ToxicEgg => State::ToxicEgg,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
