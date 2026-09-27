@@ -303,6 +303,9 @@ const PHROG: i32 = 25;
 /// `PaperKrane.ModifyWeakMultiplier`'s `0.15m`, in hundredths.
 const KRANE: i32 = 15;
 
+/// `FrailPower.ModifyBlockMultiplicative`'s `0.75m`.
+const FRAIL: f64 = 0.75;
+
 /// `ColossusPower`'s `DamageDecrease`.
 const COLOSSAL: f64 = 0.5;
 
@@ -851,6 +854,17 @@ pub(crate) fn modify_hook(
         ) if target == holder => {
             unimplemented!("an endless Dexterity")
         }
+        // `FrailPower.ModifyBlockMultiplicative`: a quarter off the block a
+        // card or a move gives its owner.
+        (
+            Power::FrailPower,
+            _,
+            ModifyHook::BlockMultiplicative {
+                target,
+                powered: true,
+            },
+        ) if target == holder => Modify::Scaled(FRAIL),
+        (Power::FrailPower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
         // `ModifyHandDraw`: its stack more cards for its owner.
         (
             Power::MachineLearningPower
@@ -1142,7 +1156,7 @@ pub(crate) fn event_hook(
             None
         }
         (
-            Power::VulnerablePower | Power::WeakPower,
+            Power::VulnerablePower | Power::WeakPower | Power::FrailPower,
             _,
             EventHook::SideTurnEnd {
                 side: CombatSide::Enemy,
@@ -1361,6 +1375,7 @@ pub(crate) fn event_hook(
         (
             Power::VulnerablePower
             | Power::WeakPower
+            | Power::FrailPower
             | Power::EnergyNextTurnPower
             | Power::BlockNextTurnPower
             | Power::StrengthPower
