@@ -76,7 +76,7 @@ pub(super) fn event_hook(
     match (card, hook) {
         // `Pinpoint.AfterCardPlayed`: one off its cost this turn for each
         // Skill its owner plays. A fight here has one player.
-        (SilentCard::Pinpoint, EventHook::CardPlayed { card }) => {
+        (SilentCard::Pinpoint, EventHook::CardPlayed { card, .. }) => {
             if skill(card) {
                 asked.push(HookEffect::ModifySelf {
                     change: Change::ChangeCost(CostPool::Energy, -1),
