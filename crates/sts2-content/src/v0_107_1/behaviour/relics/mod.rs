@@ -38,6 +38,14 @@ mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
 mod empty_cage;
+mod fake_anchor;
+mod fake_blood_vial;
+mod fake_happy_flower;
+mod fake_lees_waffle;
+mod fake_mango;
+mod fake_orichalcum;
+mod fake_strike_dummy;
+mod fake_venerable_tea_set;
 mod festive_popper;
 mod fishing_rod;
 mod glass_eye;
@@ -137,6 +145,9 @@ pub enum State {
     DollysMirror,
     DustyTome,
     FishingRod(fishing_rod::State),
+    FakeHappyFlower(fake_happy_flower::State),
+    FakeOrichalcum(fake_orichalcum::State),
+    FakeVenerableTeaSet(fake_venerable_tea_set::State),
     WongosMysteryTicket(wongos_mystery_ticket::State),
     GlassEye,
     GoldenPearl,
@@ -193,6 +204,11 @@ pub enum State {
     StrikeDummy,
     SwordOfStone(sword_of_stone::State),
     VeryHotCocoa,
+    FakeAnchor,
+    FakeMango,
+    FakeLeesWaffle,
+    FakeBloodVial,
+    FakeStrikeDummy,
     BagOfMarbles,
     Akabeko,
     FestivePopper,
@@ -272,6 +288,9 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what DustyTome does for {hook:?}"),
         },
         State::FishingRod(state) => fishing_rod::event_hook(state, hook, asked),
+        State::FakeHappyFlower(state) => fake_happy_flower::event_hook(state, hook, asked),
+        State::FakeOrichalcum(state) => fake_orichalcum::event_hook(state, hook, asked),
+        State::FakeVenerableTeaSet(state) => fake_venerable_tea_set::event_hook(state, hook, asked),
         State::WongosMysteryTicket(state) => wongos_mystery_ticket::event_hook(state, hook, asked),
         State::GlassEye => glass_eye::event_hook(hook, asked),
         State::GoldenPearl => golden_pearl::event_hook(hook, asked),
@@ -353,6 +372,11 @@ pub(crate) fn event_hook(
         State::StoneHumidifier => stone_humidifier::event_hook(hook, asked),
         State::Storybook => storybook::event_hook(hook, asked),
         State::StrikeDummy => strike_dummy::event_hook(hook),
+        State::FakeStrikeDummy => fake_strike_dummy::event_hook(hook),
+        State::FakeAnchor => fake_anchor::event_hook(hook, asked),
+        State::FakeMango => fake_mango::event_hook(hook, asked),
+        State::FakeLeesWaffle => fake_lees_waffle::event_hook(hook, asked),
+        State::FakeBloodVial => fake_blood_vial::event_hook(hook, asked),
         State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
         State::VeryHotCocoa => very_hot_cocoa::event_hook(hook, asked),
         State::BagOfMarbles => bag_of_marbles::event_hook(hook, asked),
@@ -403,6 +427,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::BoomingConch => booming_conch::modify_hook(hook),
         State::BagOfPreparation => bag_of_preparation::modify_hook(hook),
         State::StrikeDummy => strike_dummy::modify_hook(hook),
+        State::FakeStrikeDummy => fake_strike_dummy::modify_hook(hook),
         State::PaelsBlood => paels_blood::modify_hook(hook),
         State::PaelsFlesh(_) => paels_flesh::modify_hook(hook),
         State::Sozu => sozu::modify_hook(hook),
@@ -427,6 +452,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::DollysMirror
         | State::DustyTome
         | State::FishingRod(_)
+        | State::FakeHappyFlower(_)
+        | State::FakeOrichalcum(_)
+        | State::FakeVenerableTeaSet(_)
         | State::WongosMysteryTicket(_)
         | State::GlassEye
         | State::GoldenPearl
@@ -473,6 +501,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::Storybook
         | State::SwordOfStone(_)
         | State::VeryHotCocoa
+        | State::FakeAnchor
+        | State::FakeMango
+        | State::FakeLeesWaffle
+        | State::FakeBloodVial
         | State::BagOfMarbles
         | State::Akabeko
         | State::FestivePopper
@@ -568,6 +600,16 @@ impl sts2_core::RelicModel<V> for State {
             Relic::StoneHumidifier => State::StoneHumidifier,
             Relic::Storybook => State::Storybook,
             Relic::StrikeDummy => State::StrikeDummy,
+            Relic::FakeStrikeDummy => State::FakeStrikeDummy,
+            Relic::FakeAnchor => State::FakeAnchor,
+            Relic::FakeMango => State::FakeMango,
+            Relic::FakeLeesWaffle => State::FakeLeesWaffle,
+            Relic::FakeBloodVial => State::FakeBloodVial,
+            Relic::FakeOrichalcum => State::FakeOrichalcum(fake_orichalcum::State::default()),
+            Relic::FakeHappyFlower => State::FakeHappyFlower(fake_happy_flower::State::default()),
+            Relic::FakeVenerableTeaSet => {
+                State::FakeVenerableTeaSet(fake_venerable_tea_set::State::default())
+            }
             Relic::SwordOfStone => State::SwordOfStone(sword_of_stone::State::default()),
             Relic::VeryHotCocoa => State::VeryHotCocoa,
             Relic::BagOfMarbles => State::BagOfMarbles,
@@ -601,6 +643,7 @@ impl sts2_core::RelicModel<V> for State {
             Field::Computed => match self {
                 State::BoneTea(state) => bone_tea::display_amount(state),
                 State::FishingRod(state) => fishing_rod::display_amount(state),
+                State::FakeHappyFlower(state) => fake_happy_flower::display_amount(state),
                 State::WongosMysteryTicket(state) => wongos_mystery_ticket::display_amount(state),
                 State::SwordOfStone(state) => sword_of_stone::display_amount(state),
                 State::WingedBoots(state) => winged_boots::display_amount(state),

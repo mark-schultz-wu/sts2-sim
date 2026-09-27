@@ -812,6 +812,14 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::choose(state, option, run, rng)
     }
 
+    fn stock_event<R: sts2_core::rng::GameRng>(state: &mut Self::EventState, shops: &mut R) {
+        behaviour::events::stock(state, shops)
+    }
+
+    fn buy_in_event(state: &mut Self::EventState, index: u8) -> sts2_core::HookEffects<Self> {
+        behaviour::events::buy(state, index)
+    }
+
     fn event_question(state: &Self::EventState) -> Option<sts2_core::Question<Self>> {
         behaviour::events::question(state)
     }

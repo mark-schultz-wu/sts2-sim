@@ -603,6 +603,7 @@ pub enum ModelHook {
     AfterBlockBroken,
     AfterCombatVictory,
     AfterPlayerTurnStart,
+    AfterPlayerTurnStartLate,
     AfterOrbChanneled,
     AfterOrbEvoked,
     ModifyOrbValue,
@@ -655,7 +656,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 102] = [
+    pub const ALL: [ModelHook; 103] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -709,6 +710,7 @@ impl ModelHook {
         ModelHook::AfterBlockBroken,
         ModelHook::AfterCombatVictory,
         ModelHook::AfterPlayerTurnStart,
+        ModelHook::AfterPlayerTurnStartLate,
         ModelHook::AfterOrbChanneled,
         ModelHook::AfterOrbEvoked,
         ModelHook::ModifyOrbValue,
@@ -818,6 +820,7 @@ impl ModelHook {
             ModelHook::AfterBlockBroken => "AfterBlockBroken",
             ModelHook::AfterCombatVictory => "AfterCombatVictory",
             ModelHook::AfterPlayerTurnStart => "AfterPlayerTurnStart",
+            ModelHook::AfterPlayerTurnStartLate => "AfterPlayerTurnStartLate",
             ModelHook::AfterOrbChanneled => "AfterOrbChanneled",
             ModelHook::AfterOrbEvoked => "AfterOrbEvoked",
             ModelHook::ModifyOrbValue => "ModifyOrbValue",
@@ -2697,6 +2700,19 @@ pub enum EventHook<V: ContentVersion> {
         /// The player's `TurnNumber`.
         turn: V::Count,
     },
+    /// `AfterPlayerTurnStartLate`, once every `AfterPlayerTurnStart` has run.
+    PlayerTurnStartLate {
+        player: crate::CombatId,
+        /// The player's `TurnNumber`.
+        turn: V::Count,
+    },
+    /// `BeforeSideTurnEndVeryEarly`, the first of the three before a side's
+    /// turn ends.
+    BeforeSideTurnEndVeryEarly {
+        side: V::CombatSide,
+        /// The player's `Block`, which a relic reads off its owner.
+        block: V::Number,
+    },
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
     /// `AfterCardChangedPiles` for a card that joined the deck, outside a
@@ -3009,6 +3025,8 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RestSiteHeal { .. } => ModelHook::AfterRestSiteHeal,
             EventHook::CombatVictory { .. } => ModelHook::AfterCombatVictory,
             EventHook::PlayerTurnStart { .. } => ModelHook::AfterPlayerTurnStart,
+            EventHook::PlayerTurnStartLate { .. } => ModelHook::AfterPlayerTurnStartLate,
+            EventHook::BeforeSideTurnEndVeryEarly { .. } => ModelHook::BeforeSideTurnEndVeryEarly,
             EventHook::BeforeHandDraw { .. } => ModelHook::BeforeHandDraw,
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
@@ -3614,6 +3632,9 @@ pub enum HookEffect<V: ContentVersion> {
     GainStars(V::Number),
     /// `CreatureCmd.Heal` on the listener's owner.
     Heal(V::Number),
+    /// `CreatureCmd.Heal` on the listener's owner for this many hundredths of
+    /// its maximum health. The health keeps the whole part.
+    HealPercent(V::Number),
     /// `OrbCmd.Channel` for the listener's owner.
     Channel(V::Orb),
     /// `OstyCmd.Summon` for the listener's owner.
@@ -5305,6 +5326,14 @@ pub trait Rules: Hooks {
         run: &impl crate::EventView<Self>,
         rng: &mut R,
     ) -> crate::HookEffects<Self>;
+
+    /// [`crate::EventBehavior::stock`] for the event entered.
+    fn stock_event<R: crate::rng::GameRng>(_state: &mut Self::EventState, _shops: &mut R) {}
+
+    /// [`crate::EventBehavior::buy`] for the event entered.
+    fn buy_in_event(_state: &mut Self::EventState, index: u8) -> crate::HookEffects<Self> {
+        unimplemented!("buying entry {index} from an event")
+    }
 
     /// [`crate::EventBehavior::question`] for the event entered.
     fn event_question(_state: &Self::EventState) -> Option<crate::Question<Self>> {

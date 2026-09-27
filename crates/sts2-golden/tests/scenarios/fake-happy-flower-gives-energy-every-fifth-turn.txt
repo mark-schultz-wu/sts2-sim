@@ -1,0 +1,10 @@
+# `FakeHappyFlower` counts each of its owner's turns and gives an energy on
+# every fifth.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"FAKE_HAPPY_FLOWER"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

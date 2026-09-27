@@ -564,11 +564,11 @@ fn before_turn_end<V: Rules>(
     ascension: V::AscensionLevel,
     side: V::CombatSide,
 ) -> Option<super::Ended> {
-    unheard::<V>(
-        live,
-        relics,
-        sts2_core::ModelHook::BeforeSideTurnEndVeryEarly,
-    );
+    let block = live.player().block;
+    let hook = sts2_core::EventHook::BeforeSideTurnEndVeryEarly { side, block };
+    if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).first() {
+        unimplemented!("{listener:?} asking for {effect:?} as a turn is about to end");
+    }
     let hook = sts2_core::EventHook::BeforeSideTurnEndEarly { side };
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
         match (listener, effect) {
@@ -628,6 +628,12 @@ fn before_turn_end<V: Rules>(
                     sts2_core::Fight::apply(&mut board, hit);
                 }
                 ended = board.ended;
+            }
+            // `CreatureCmd.GainBlock`, unpowered, on the player who carries
+            // the relic.
+            (Listener::Relic { .. }, sts2_core::HookEffect::GainBlock(amount)) => {
+                let player = live.player().id;
+                live.gain_unpowered_block(player, amount);
             }
             (_, effect) => unimplemented!("a listener asking for {effect:?} before a turn ends"),
         }
@@ -1013,6 +1019,35 @@ pub(super) fn carry_setup<V: Rules>(
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),
+                    }
+                }
+                // `AfterPlayerTurnStartLate`, once every listener above has
+                // run.
+                if ended.is_none() {
+                    let player = live.player().id;
+                    let hook = sts2_core::EventHook::PlayerTurnStartLate {
+                        player,
+                        turn: live.turn,
+                    };
+                    for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+                        match effect {
+                            // `CreatureCmd.Heal` on the player who carries
+                            // the relic.
+                            sts2_core::HookEffect::Heal(amount) => {
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                sts2_core::Fight::heal(&mut board, player, amount);
+                            }
+                            effect => unimplemented!(
+                                "{listener:?} asking for {effect:?} late as the turn starts"
+                            ),
+                        }
                     }
                 }
                 return Carried::Done(ended);

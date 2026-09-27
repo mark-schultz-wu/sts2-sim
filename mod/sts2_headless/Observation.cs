@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
@@ -839,6 +840,14 @@ public static class Observation
             case EventRoom eventRoom:
             {
                 EventModel ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
+                // The Fake Merchant is an event whose whole room is a shop. Its
+                // `NFakeMerchant` screen sells from the event's own inventory,
+                // and headless there is no screen, so the room is reported as
+                // the shop it is and `buy` sells from it.
+                if (ev is FakeMerchant { Inventory: { } fakeInventory })
+                {
+                    return Shop(fakeInventory, me);
+                }
                 return new Dictionary<string, object?>
                 {
                     ["type"] = "Event",
@@ -871,33 +880,34 @@ public static class Observation
             }
 
             case MerchantRoom shop:
-            {
-                MerchantInventory inventory = shop.GetLocalInventory();
-                return new Dictionary<string, object?>
-                {
-                    ["type"] = "Shop",
-                    ["entries"] = inventory.AllEntries.Select((e, i) => new Dictionary<string, object?>
-                    {
-                        ["index"] = i,
-                        ["kind"] = e.GetType().Name,
-                        ["id"] = EntryId(e),
-                        ["cost"] = e.Cost,
-                        // What a card on the shelf costs to play, which is a
-                        // different question from what it costs to buy. Absent
-                        // for every other kind of entry, which `kind` says.
-                        ["cardCost"] = EntryCardCost(e, static c => EnergyCost(c)),
-                        ["cardStarCost"] = EntryCardCost(e, static c => StarCost(c)),
-                        ["stocked"] = e.IsStocked,
-                        ["affordable"] = e.EnoughGold,
-                        ["blocked"] = Blocked(e, me),
-                    }).ToList(),
-                };
-            }
+                return Shop(shop.GetLocalInventory(), me);
 
             default:
                 return null;
         }
     }
+
+    /// <summary>A merchant's inventory, as the shop room reports it.</summary>
+    private static Dictionary<string, object?> Shop(MerchantInventory inventory, Player me) =>
+        new()
+        {
+            ["type"] = "Shop",
+            ["entries"] = inventory.AllEntries.Select((e, i) => new Dictionary<string, object?>
+            {
+                ["index"] = i,
+                ["kind"] = e.GetType().Name,
+                ["id"] = EntryId(e),
+                ["cost"] = e.Cost,
+                // What a card on the shelf costs to play, which is a
+                // different question from what it costs to buy. Absent
+                // for every other kind of entry, which `kind` says.
+                ["cardCost"] = EntryCardCost(e, static c => EnergyCost(c)),
+                ["cardStarCost"] = EntryCardCost(e, static c => StarCost(c)),
+                ["stocked"] = e.IsStocked,
+                ["affordable"] = e.EnoughGold,
+                ["blocked"] = Blocked(e, me),
+            }).ToList(),
+        };
 
     /// <summary>Why this entry cannot be bought, beyond stock and gold.</summary>
     /// <remarks>

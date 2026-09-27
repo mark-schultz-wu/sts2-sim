@@ -21,6 +21,7 @@ using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Entities.TreasureRelicPicking;
 using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Rewards;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -827,7 +828,16 @@ internal static class Protocol
     /// </remarks>
     private static async Task Buy(JsonElement req)
     {
-        if (_state.CurrentRoom is not MerchantRoom shop)
+        // A merchant's room, or the Fake Merchant's event, which sells from an
+        // inventory of its own.
+        MerchantInventory? inventory = _state.CurrentRoom switch
+        {
+            MerchantRoom shop => shop.GetLocalInventory(),
+            EventRoom when RunManager.Instance.EventSynchronizer.GetLocalEvent()
+                is FakeMerchant { Inventory: { } fake } => fake,
+            _ => null,
+        };
+        if (inventory == null)
         {
             await Error("buy", Refusals.WrongRoom(RoomType.Shop, _state.CurrentRoom));
             return;
@@ -839,7 +849,6 @@ internal static class Protocol
             return;
         }
 
-        MerchantInventory inventory = shop.GetLocalInventory();
         List<MerchantEntry> entries = inventory.AllEntries.ToList();
         if (index < 0 || index >= entries.Count)
         {
