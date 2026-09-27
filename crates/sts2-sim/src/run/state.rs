@@ -1842,6 +1842,7 @@ impl<V: Rules> State<V> {
             sts2_core::ModifyHook::HpLostAfterOsty {
                 target: player,
                 player,
+                in_fight: false,
             },
             sts2_core::ModifyHook::HpLostAfterOstyLate {
                 target: player,
@@ -1869,22 +1870,39 @@ impl<V: Rules> State<V> {
         num_traits::cast(lost.max(num_traits::zero())).expect("a loss fits the build's health")
     }
 
-    /// `HealRestSiteOption.ExecuteRestSiteHeal`: three tenths of the maximum,
-    /// `AfterRestSiteHeal`, then the rewards a relic adds. `mimicked` for an
-    /// event's heal.
+    /// `HealRestSiteOption.ExecuteRestSiteHeal`: three tenths of the maximum
+    /// after `ModifyRestSiteHealAmount`, `AfterRestSiteHeal`, then the rewards
+    /// a relic adds. `mimicked` for an event's heal.
     ///
     /// # Panics
     ///
-    /// A relic changing the amount or adding a reward, or one asking for
-    /// something the run cannot carry out here.
+    /// A relic changing the amount other than by adding to it, adding a
+    /// reward, or asking for something the run cannot carry out here.
     fn rest_site_heal(&mut self, mimicked: bool) {
         use sts2_core::ModelHook;
 
-        self.unheard(ModelHook::ModifyRestSiteHealAmount);
         let max_hp: u64 = num_traits::cast(self.player.max_hp)
             .expect("maximum health fits an unsigned rest calculation");
+        let mut healed: V::Number =
+            num_traits::cast(max_hp * 3 / 10).expect("rest healing fits a game number");
+        let hook = sts2_core::ModifyHook::RestSiteHealAmount;
+        let mut left = self
+            .player
+            .relics
+            .hearing(sts2_core::Overrides::of(hook.model_hook()));
+        while left != 0 {
+            let slot = left.trailing_zeros() as usize;
+            left &= left - 1;
+            let listener: crate::combat::Heard<'_, V> =
+                sts2_core::Listener::Relic(&self.player.relics[slot].state);
+            match V::modify_hook(listener, hook) {
+                sts2_core::Modify::Nothing => {}
+                sts2_core::Modify::Added(more) => healed = healed + more,
+                answer => unimplemented!("a relic answering {hook:?} with {answer:?}"),
+            }
+        }
         let healed: V::Health =
-            num_traits::cast(max_hp * 3 / 10).expect("rest healing fits the build's health type");
+            num_traits::cast(healed).expect("rest healing fits the build's health type");
         self.heal(healed);
         let asked = self.notify_belt(sts2_core::EventHook::RestSiteHeal { mimicked });
         if let Some(asked) = self.carry_out(asked) {
@@ -2103,17 +2121,29 @@ impl<V: Rules> State<V> {
                         cloned: true,
                     };
                     for effect in self.notify_belt(hook) {
-                        match effect {
-                            HookEffect::GainGold(amount) => self.gain_gold(amount),
-                            effect => unimplemented!(
-                                "a relic asking for {effect:?} as a clone joins the deck"
-                            ),
-                        }
+                        self.card_joined_deck(effect);
                     }
                 }
-                HookEffect::GainGold(amount) => self.gain_gold(amount),
-                effect => unimplemented!("a relic asking for {effect:?} as a card joins the deck"),
+                effect => self.card_joined_deck(effect),
             }
+        }
+    }
+
+    /// What a relic asks for as a card joins the deck, other than a copy of
+    /// it.
+    ///
+    /// # Panics
+    ///
+    /// Anything but gold or a heal.
+    fn card_joined_deck(&mut self, effect: sts2_core::HookEffect<V>) {
+        match effect {
+            sts2_core::HookEffect::GainGold(amount) => self.gain_gold(amount),
+            sts2_core::HookEffect::Heal(amount) => {
+                let healed: V::Health =
+                    num_traits::cast(amount).expect("a relic's heal fits the build's health");
+                self.heal(healed);
+            }
+            effect => unimplemented!("a relic asking for {effect:?} as a card joins the deck"),
         }
     }
 

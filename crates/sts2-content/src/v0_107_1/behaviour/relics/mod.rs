@@ -20,12 +20,14 @@ mod archaic_tooth;
 mod astrolabe;
 mod bag_of_marbles;
 mod bag_of_preparation;
+mod beating_remnant;
 mod biiig_hug;
 mod bing_bong;
 mod black_blood;
 mod black_star;
 mod blood_vial;
 mod bone_tea;
+mod book_of_five_rings;
 mod booming_conch;
 mod bound_phylactery;
 mod bowler_hat;
@@ -63,6 +65,7 @@ mod horn_cleat;
 mod infused_core;
 mod intimidating_helmet;
 mod juzu_bracelet;
+mod kusarigama;
 mod lantern;
 mod lava_rock;
 mod lead_paperweight;
@@ -70,8 +73,10 @@ mod leafy_poultice;
 mod lost_coffer;
 mod lost_wisp;
 mod lucky_fysh;
+mod mango;
 mod meal_ticket;
 mod mercury_hourglass;
+mod miniature_cannon;
 mod mr_struggles;
 mod neows_talisman;
 mod neows_torment;
@@ -95,6 +100,7 @@ mod precarious_shears;
 mod precise_scissors;
 mod radiant_pearl;
 mod red_mask;
+mod regal_pillow;
 mod ring_of_the_drake;
 mod ring_of_the_snake;
 mod runic_pyramid;
@@ -249,6 +255,12 @@ pub enum State {
     FakeSneckoEye,
     CentennialPuzzle(centennial_puzzle::State),
     PenNib(pen_nib::State),
+    Mango,
+    MiniatureCannon,
+    RegalPillow,
+    BookOfFiveRings(book_of_five_rings::State),
+    Kusarigama(kusarigama::State),
+    BeatingRemnant(beating_remnant::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -439,6 +451,14 @@ pub(crate) fn event_hook(
         State::FakeSneckoEye => fake_snecko_eye::event_hook(hook, asked),
         State::CentennialPuzzle(state) => centennial_puzzle::event_hook(state, hook, asked),
         State::PenNib(state) => pen_nib::event_hook(state, hook),
+        State::Mango => mango::event_hook(hook, asked),
+        State::MiniatureCannon => miniature_cannon::event_hook(hook),
+        // Its `AfterRoomEntered` and `AfterRestSiteHeal` set only how the
+        // relic is drawn.
+        State::RegalPillow => {}
+        State::BookOfFiveRings(state) => book_of_five_rings::event_hook(state, hook, asked),
+        State::Kusarigama(state) => kusarigama::event_hook(state, hook, asked),
+        State::BeatingRemnant(state) => beating_remnant::event_hook(state, hook),
     }
 }
 
@@ -478,6 +498,9 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::RingOfTheDrake => ring_of_the_drake::modify_hook(hook),
         State::InfusedCore => infused_core::modify_hook(hook),
         State::PenNib(state) => pen_nib::modify_hook(state, hook),
+        State::MiniatureCannon => miniature_cannon::modify_hook(hook),
+        State::RegalPillow => regal_pillow::modify_hook(hook),
+        State::BeatingRemnant(state) => beating_remnant::modify_hook(state, hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -571,7 +594,10 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::EternalFeather
         | State::Pantograph
         | State::FakeSneckoEye
-        | State::CentennialPuzzle(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::CentennialPuzzle(_)
+        | State::Mango
+        | State::BookOfFiveRings(_)
+        | State::Kusarigama(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -694,6 +720,12 @@ impl sts2_core::RelicModel<V> for State {
             Relic::FakeSneckoEye => State::FakeSneckoEye,
             Relic::CentennialPuzzle => State::CentennialPuzzle(centennial_puzzle::State::default()),
             Relic::PenNib => State::PenNib(pen_nib::State::default()),
+            Relic::Mango => State::Mango,
+            Relic::MiniatureCannon => State::MiniatureCannon,
+            Relic::RegalPillow => State::RegalPillow,
+            Relic::BookOfFiveRings => State::BookOfFiveRings(book_of_five_rings::State::default()),
+            Relic::Kusarigama => State::Kusarigama(kusarigama::State::default()),
+            Relic::BeatingRemnant => State::BeatingRemnant(beating_remnant::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -721,6 +753,8 @@ impl sts2_core::RelicModel<V> for State {
                 State::PollinousCore(state) => pollinous_core::display_amount(state),
                 State::PaelsFlesh(state) => paels_flesh::display_amount(state),
                 State::PenNib(state) => pen_nib::display_amount(state),
+                State::BookOfFiveRings(state) => book_of_five_rings::display_amount(state),
+                State::Kusarigama(state) => kusarigama::display_amount(state),
                 _ => unimplemented!("the number {relic:?} shows"),
             },
         }
