@@ -529,7 +529,7 @@ fn previewed<V: Rules>(
                     // A card's `DamageVar` is a powered attack's.
                     Some(super::board::modified::<V>(
                         fight,
-                        dealer,
+                        Some(dealer),
                         None,
                         Some(held),
                         printed(),

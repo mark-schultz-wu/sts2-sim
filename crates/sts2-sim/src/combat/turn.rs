@@ -81,14 +81,14 @@ pub(crate) fn end<V: Rules>(
     // `AfterSideTurnStart` for the enemy, which the block clear comes before
     // and the moves come after. A power counting the cards played against its
     // owner forgets the count here.
-    side_turn_started::<V>(
+    let ended = side_turn_started::<V>(
         next,
         streams.combat(),
         relics,
         ascension,
         <V::CombatSide as SideKinds>::ENEMY,
-    );
-    let ended = enemy_turn(next, streams.combat(), relics, &mut skipping);
+    )
+    .or_else(|| enemy_turn(next, streams.combat(), relics, &mut skipping));
     // `EndEnemyTurn` is gated on `IsInProgress`, which both endings clear:
     // `ProcessPendingLoss` for a death and `EndCombatInternal` for a win. So
     // a fight that ended during the enemy turn ends the turn with it, and
@@ -182,13 +182,19 @@ pub(crate) fn end<V: Rules>(
         Carried::Done(None) => None,
         Carried::Parked(asking) => Some(asking),
     };
-    side_turn_started::<V>(
+    if let Some(ended) = side_turn_started::<V>(
         next,
         streams.combat(),
         relics,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
-    );
+    ) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
     // `OrbQueue.AfterTurnStart`, once the side's turn has started.
     if let Some(ended) = orb_triggers::<V>(
         next,
@@ -783,7 +789,7 @@ fn select<V: Rules>(
 }
 
 /// Carry `act` out on the cards a selection took, in the order it took them.
-fn act_on<V: Rules>(
+pub(super) fn act_on<V: Rules>(
     live: &mut Live<V>,
     relics: &crate::run::Belt<V>,
     act: sts2_core::PileAct,
@@ -886,8 +892,9 @@ pub(super) fn side_turn_started<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     side: V::CombatSide,
-) {
+) -> Option<super::Ended> {
     let turn = live.turn;
+    let mut ended = None;
     let hook = sts2_core::EventHook::SideTurnStart {
         side,
         turn,
@@ -956,9 +963,60 @@ pub(super) fn side_turn_started<V: Rules>(
                     creature.block = creature.block + amount * count;
                 }
             }
+            // `PoisonPower.AfterSideTurnStart`: each round hits the owner for
+            // the stack it holds then, and takes one off while it lives. An
+            // ending fight runs no more commands.
+            sts2_core::HookEffect::DamageSelfByStack { times } => {
+                let Listener::Power { owner, power, .. } = listener else {
+                    unimplemented!("{listener:?} damaging itself by its stack")
+                };
+                let mut round = num_traits::zero::<V::Number>();
+                while round < times && ended.is_none() {
+                    round = round + num_traits::one();
+                    let Some(PowerAmount::Counted(stack)) = live
+                        .powers
+                        .of(owner)
+                        .find(|held| held.power() == power)
+                        .map(|held| held.amount.amount())
+                    else {
+                        break;
+                    };
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    let damage = super::board::modified::<V>(
+                        board.walk(),
+                        None,
+                        Some(owner),
+                        None,
+                        stack,
+                        false,
+                    );
+                    board.hit(None, owner, damage, false, true);
+                    let alive = board
+                        .at(owner)
+                        .is_some_and(|at| board.live.creatures[at].alive);
+                    if alive {
+                        board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                    }
+                    ended = ended.or(board.ended);
+                }
+            }
+            // `PowerCmd.Apply<P>(HittableEnemies, amount, Owner)`.
+            sts2_core::HookEffect::ApplyToOpponents(power, amount) => {
+                let Listener::Power { owner, .. } = listener else {
+                    unimplemented!("{listener:?} applying a power to its opponents")
+                };
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                for target in board.hittable_opponents() {
+                    board.land(target, power, amount, Some(owner));
+                }
+                ended = ended.or(board.ended);
+            }
             effect => unimplemented!("a listener asking for {effect:?} as a side turn starts"),
         }
     }
+    ended
 }
 
 /// `FlushPlayerHand`: what is left in hand goes to the discard pile, unless
@@ -1272,20 +1330,9 @@ fn enemy_turn<V: Rules>(
 fn move_performed<V: Rules>(live: &mut Live<V>, creature: CombatId, move_id: V::MoveId) {
     let hook = sts2_core::EventHook::MonsterMovePerformed { move_id };
     let mut asked = sts2_core::HookEffects::new();
-    let Some(carrier) = live
-        .creatures
-        .iter()
-        .find(|c| c.id == creature)
-        .map(|performer| performer.carrier())
-    else {
-        return;
-    };
-    for held in live.powers.of_mut(creature) {
-        <V as sts2_core::Hooks>::power_event_hook(
-            held.event_power(carrier, live.history.view()),
-            hook,
-            &mut asked,
-        );
+    // No belt is lent here: a monster's move reads no relic.
+    for at in 0..live.powers.of(creature).count() {
+        live.ask_power(None, creature, at, hook, &mut asked);
     }
     if let Some(effect) = asked.first() {
         unimplemented!("a power asking for {effect:?} after a monster move")
@@ -1309,7 +1356,7 @@ fn roll_moves<V: Rules>(
             let fight = super::live::Onlookers {
                 creatures: &live.creatures,
                 powers: &live.powers,
-                relics,
+                relics: Some(relics),
             };
             let creature = live
                 .creatures

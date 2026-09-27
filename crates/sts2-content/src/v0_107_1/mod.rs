@@ -129,8 +129,10 @@ impl sts2_core::Hooks for V0_107_1 {
                     applier,
                     monster,
                     on_turn_start,
+                    history,
+                    fight,
                 };
-                behaviour::powers::modify_hook(power, amount, held, state, history, fight, hook)
+                behaviour::powers::modify_hook(power, amount, held, state, hook)
             }
             sts2_core::Listener::Relic(state) => behaviour::relics::modify_hook(state, hook),
             // The fight asks only a monster whose class overrides the hook,
@@ -159,6 +161,8 @@ impl sts2_core::Hooks for V0_107_1 {
                 monster,
                 on_turn_start,
                 state,
+                history,
+                fight,
                 ..
             } => {
                 let held = behaviour::powers::Held {
@@ -167,6 +171,8 @@ impl sts2_core::Hooks for V0_107_1 {
                     applier,
                     monster,
                     on_turn_start,
+                    history,
+                    fight,
                 };
                 behaviour::powers::decide_hook(power, held, state, hook)
             }
@@ -197,6 +203,7 @@ impl sts2_core::Hooks for V0_107_1 {
             on_turn_start,
             state,
             history,
+            fight,
         } = power;
         let held = behaviour::powers::Held {
             owner,
@@ -204,8 +211,10 @@ impl sts2_core::Hooks for V0_107_1 {
             applier,
             monster,
             on_turn_start,
+            history,
+            fight,
         };
-        behaviour::powers::event_hook(power, amount, held, state, history, hook, asked)
+        behaviour::powers::event_hook(power, amount, held, state, hook, asked)
     }
 
     fn result_pile<P: sts2_core::Printed<Self> + ?Sized>(

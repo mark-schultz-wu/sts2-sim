@@ -8,6 +8,7 @@
 //! list of what a run can drink.
 
 mod shared;
+mod silent;
 
 use sts2_core::{Fight, Played, PotionTable, Taken};
 
@@ -30,6 +31,7 @@ pub enum Resume {
 pub(crate) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
     match potion.pool() {
         PotionPool::Shared => shared::on_use(potion, fight),
+        PotionPool::Silent => silent::on_use(potion, fight),
         _ => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

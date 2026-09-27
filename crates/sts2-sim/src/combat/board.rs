@@ -187,7 +187,7 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// Where a creature sits, or nothing for one no longer in the fight.
-    fn at(&self, at: CombatId) -> Option<usize> {
+    pub(super) fn at(&self, at: CombatId) -> Option<usize> {
         self.live
             .creatures
             .iter()
@@ -273,19 +273,19 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `PowerModel.AfterApplied`, asked of the instance of `power` that `id`
     /// has just taken on, and of nothing else.
     fn applied(&mut self, id: CombatId, power: V::Power) {
-        let Some(at) = self.at(id) else { return };
-        let carrier = self.live.creatures[at].carrier();
-        let Some(held) = self
+        let Some(at) = self
             .live
             .powers
-            .of_mut(id)
-            .find(|held| held.power() == power)
+            .of(id)
+            .position(|held| held.power() == power)
         else {
             return;
         };
         let mut asked = sts2_core::HookEffects::new();
-        <V as sts2_core::Hooks>::power_event_hook(
-            held.event_power(carrier, self.live.history.view()),
+        self.live.ask_power(
+            Some(self.relics),
+            id,
+            at,
             sts2_core::EventHook::Applied,
             &mut asked,
         );
@@ -337,6 +337,152 @@ impl<'a, V: Rules> Board<'a, V> {
         self.write_cards(asked.into_iter().map(|(_, effect)| effect));
     }
 
+    /// `CreatureCmd.Damage` on `target` once hooks worked `damage` out: block
+    /// first, then hit points, then the deaths the hit caused. `dealer` is
+    /// nothing for damage no creature deals. A target that has left the fight
+    /// takes nothing, which is what the command does against a creature with
+    /// no combat state.
+    pub(super) fn hit(
+        &mut self,
+        dealer: Option<CombatId>,
+        target: CombatId,
+        damage: V::Number,
+        powered: bool,
+        unblockable: bool,
+    ) {
+        let Some(at) = self.at(target) else { return };
+        if !self.live.creatures[at].alive {
+            return;
+        }
+        let zero = V::Number::zero();
+        // `PetOwner?.Creature ?? originalTarget`: a pet's hit meets its
+        // owner's block.
+        let shield = self.live.creatures[at].owner.unwrap_or(target);
+        let Some(shield_at) = self.at(shield) else {
+            return;
+        };
+        // `ValueProp.Unblockable` meets no block at all.
+        let blocked = match unblockable {
+            true => zero,
+            false => self.live.creatures[shield_at].block.min(damage).max(zero),
+        };
+        self.live.creatures[shield_at].block = self.live.creatures[shield_at].block - blocked;
+        // `ModifyHpLost` over what the block left, before and after the
+        // damage finds who takes it. A power that caps a hit rather
+        // than shrinks it acts here.
+        let before = modified_by::<V>(
+            self.walk(),
+            (damage - blocked).max(zero),
+            &[
+                ModifyHook::HpLostBeforeOsty { target },
+                ModifyHook::HpLostBeforeOstyLate { target },
+            ],
+        );
+        let taker = super::listen::unblocked_damage_target::<V>(self.walk(), target, powered);
+        let unblocked = self.hp_lost_after_osty(taker, before);
+        // `WasBlockBroken` and `WasFullyBlocked`, as the command works
+        // them out, on the creature the hit was aimed at. A hit a hook
+        // takes to nothing is fully blocked by whatever block it met.
+        let block = self.live.creatures[at].block;
+        let block_broken = block <= zero && blocked > zero;
+        let fully_blocked = !unblockable && (blocked > zero || block > zero) && unblocked == zero;
+
+        // The taker loses what reached it. Anything past its health
+        // goes back to the creature the hit was aimed at.
+        let mut results: SmallVec<[(CombatId, V::Number, bool); 2]> = SmallVec::new();
+        let (lost, overkill, killed) = self.lose_hp(taker, unblocked);
+        results.push((taker, lost, killed));
+        if taker != target {
+            let rest = self.hp_lost_after_osty(target, overkill);
+            let (lost, _, killed) = match rest > zero {
+                true => self.lose_hp(target, rest),
+                false => (zero, zero, false),
+            };
+            results.push((target, lost, killed));
+        }
+        // Each result's hooks, in the command's order. A creature the
+        // hit killed is not told it was hit: it dies once they are
+        // done.
+        let mut dying: SmallVec<[CombatId; 2]> = SmallVec::new();
+        let pet_of = dealer
+            .and_then(|dealer| self.at(dealer))
+            .and_then(|at| self.live.creatures[at].owner);
+        for (receiver, lost, killed) in results {
+            let aimed = receiver == target;
+            // `TotalDamage`, whose blocked part is the aimed
+            // creature's alone.
+            let total = match aimed {
+                true => blocked + lost,
+                false => lost,
+            };
+            if aimed && block_broken {
+                let asked = super::listen::notify::<V>(
+                    self.live,
+                    self.relics,
+                    sts2_core::EventHook::BlockBroken { creature: target },
+                );
+                self.after_hit(asked);
+            }
+            let asked = super::listen::notify::<V>(
+                self.live,
+                self.relics,
+                sts2_core::EventHook::DamageGiven {
+                    dealer,
+                    pet_of,
+                    target: receiver,
+                    total,
+                    unblocked: lost,
+                    powered,
+                    fully_blocked: aimed && fully_blocked,
+                },
+            );
+            self.after_hit(asked);
+            // `AfterDamageReceived` carries the `DamageResult`, so this
+            // is what the hit took off rather than what it was swung
+            // for.
+            match killed {
+                false => {
+                    let asked = super::listen::notify::<V>(
+                        self.live,
+                        self.relics,
+                        sts2_core::EventHook::DamageReceived {
+                            target: receiver,
+                            unblocked: lost,
+                            dealer,
+                            powered,
+                        },
+                    );
+                    self.after_hit(asked);
+                }
+                true => dying.push(receiver),
+            }
+        }
+        for creature in dying {
+            if let Some(at) = self.at(creature) {
+                self.kill(at);
+            }
+        }
+    }
+
+    /// `HittableEnemies`: the opponents alive, less any a listener refuses a
+    /// hit on.
+    pub(super) fn hittable_opponents(&self) -> SmallVec<[CombatId; 8]> {
+        sts2_core::Fight::opponents(self)
+            .into_iter()
+            .filter(|&creature| {
+                !super::listen::any_decides::<V>(
+                    self.walk(),
+                    // Every opponent listed is alive.
+                    sts2_core::DecisionHook::ShouldAllowHitting {
+                        creature,
+                        alive: true,
+                    },
+                    false,
+                )
+            })
+            .collect()
+    }
+
     /// What `PowerCmd.Apply` does that `ModifyAmount` does not.
     ///
     /// The instance half of the command: the hook a power runs before it
@@ -359,6 +505,11 @@ impl<'a, V: Rules> Board<'a, V> {
         // about to have.
         let mut state = <V::PowerState as sts2_core::PowerModel<V>>::new(power);
         let carrier = self.live.creatures[at].carrier();
+        let fight = super::live::Onlookers {
+            creatures: &self.live.creatures,
+            powers: &self.live.powers,
+            relics: Some(&*self.relics),
+        };
         let listener = sts2_core::EventPower {
             power,
             amount,
@@ -369,6 +520,7 @@ impl<'a, V: Rules> Board<'a, V> {
             on_turn_start: sts2_core::PowerAmount::Counted(num_traits::zero()),
             state: &mut state,
             history: self.live.history.view(),
+            fight: &fight,
         };
         let mut asked = sts2_core::HookEffects::new();
         <V as sts2_core::Hooks>::power_event_hook(
@@ -519,7 +671,7 @@ impl<'a, V: Rules> Board<'a, V> {
                             &super::live::Onlookers {
                                 creatures: &self.live.creatures,
                                 powers: &self.live.powers,
-                                relics: &*self.relics,
+                                relics: Some(&*self.relics),
                             },
                         ),
                         sts2_core::DecisionHook::ShouldCountForCombatEnd,
@@ -536,7 +688,7 @@ impl<'a, V: Rules> Board<'a, V> {
     }
 
     /// The fight and the belt, as a walk reads them.
-    fn walk(&self) -> Walk<'_, V> {
+    pub(super) fn walk(&self) -> Walk<'_, V> {
         Walk {
             live: self.live,
             relics: self.relics,
@@ -699,7 +851,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         &super::live::Onlookers {
                             creatures: &self.live.creatures,
                             powers: &self.live.powers,
-                            relics: &*self.relics,
+                            relics: Some(&*self.relics),
                         },
                     ),
                     sts2_core::DecisionHook::ShouldRemoveSelfAfterOwnerDeath,
@@ -817,19 +969,19 @@ impl<'a, V: Rules> Board<'a, V> {
             );
         }
         for (holder, power) in modifiers {
-            let Some(at) = self.at(holder) else { continue };
-            let carrier = self.live.creatures[at].carrier();
-            let Some(held) = self
+            let Some(at) = self
                 .live
                 .powers
-                .of_mut(holder)
-                .find(|held| held.power() == power)
+                .of(holder)
+                .position(|held| held.power() == power)
             else {
                 continue;
             };
             let mut asked = sts2_core::HookEffects::new();
-            <V as sts2_core::Hooks>::power_event_hook(
-                held.event_power(carrier, self.live.history.view()),
+            self.live.ask_power(
+                Some(self.relics),
+                holder,
+                at,
                 sts2_core::EventHook::HpLostModified,
                 &mut asked,
             );
@@ -1013,7 +1165,7 @@ fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number)
 /// runs anyway. `powered` is `IsPoweredAttack`, which each listener reads.
 pub(crate) fn modified<V: Rules>(
     fight: Walk<'_, V>,
-    dealer: CombatId,
+    dealer: Option<CombatId>,
     target: Option<CombatId>,
     card: Option<&CardInstance<V>>,
     damage: V::Number,
@@ -1137,7 +1289,7 @@ pub(crate) fn resolve<V: Rules>(
             damage: {
                 let damage = carried::<V>(playing, fight.live, damage);
                 let powered = scaling == Scaling::Dynamic;
-                modified::<V>(fight, dealer, Some(target), playing, damage, powered)
+                modified::<V>(fight, Some(dealer), Some(target), playing, damage, powered)
             },
         },
         Effect::GainBlock {
@@ -1467,119 +1619,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 target,
                 damage,
                 powered,
-            } => {
-                // `CreatureCmd.Damage`: block first, then hit points, then the
-                // deaths the hit caused. Resolution already ran hooks. A target
-                // that has left the fight takes nothing, which is what the
-                // command does against a creature with no combat state.
-                let Some(at) = self.at(target) else { return };
-                if !self.live.creatures[at].alive {
-                    return;
-                }
-                let zero = V::Number::zero();
-                // `PetOwner?.Creature ?? originalTarget`: a pet's hit meets its
-                // owner's block.
-                let shield = self.live.creatures[at].owner.unwrap_or(target);
-                let Some(shield_at) = self.at(shield) else {
-                    return;
-                };
-                let blocked = self.live.creatures[shield_at].block.min(damage).max(zero);
-                self.live.creatures[shield_at].block =
-                    self.live.creatures[shield_at].block - blocked;
-                // `ModifyHpLost` over what the block left, before and after the
-                // damage finds who takes it. A power that caps a hit rather
-                // than shrinks it acts here.
-                let before = modified_by::<V>(
-                    self.walk(),
-                    (damage - blocked).max(zero),
-                    &[
-                        ModifyHook::HpLostBeforeOsty { target },
-                        ModifyHook::HpLostBeforeOstyLate { target },
-                    ],
-                );
-                let taker =
-                    super::listen::unblocked_damage_target::<V>(self.walk(), target, powered);
-                let unblocked = self.hp_lost_after_osty(taker, before);
-                // `WasBlockBroken` and `WasFullyBlocked`, as the command works
-                // them out, on the creature the hit was aimed at. A hit a hook
-                // takes to nothing is fully blocked by whatever block it met.
-                let block = self.live.creatures[at].block;
-                let block_broken = block <= zero && blocked > zero;
-                let fully_blocked = (blocked > zero || block > zero) && unblocked == zero;
-
-                // The taker loses what reached it. Anything past its health
-                // goes back to the creature the hit was aimed at.
-                let mut results: SmallVec<[(CombatId, V::Number, bool); 2]> = SmallVec::new();
-                let (lost, overkill, killed) = self.lose_hp(taker, unblocked);
-                results.push((taker, lost, killed));
-                if taker != target {
-                    let rest = self.hp_lost_after_osty(target, overkill);
-                    let (lost, _, killed) = match rest > zero {
-                        true => self.lose_hp(target, rest),
-                        false => (zero, zero, false),
-                    };
-                    results.push((target, lost, killed));
-                }
-                // Each result's hooks, in the command's order. A creature the
-                // hit killed is not told it was hit: it dies once they are
-                // done.
-                let mut dying: SmallVec<[CombatId; 2]> = SmallVec::new();
-                let pet_of = self.at(dealer).and_then(|at| self.live.creatures[at].owner);
-                for (receiver, lost, killed) in results {
-                    let aimed = receiver == target;
-                    // `TotalDamage`, whose blocked part is the aimed
-                    // creature's alone.
-                    let total = match aimed {
-                        true => blocked + lost,
-                        false => lost,
-                    };
-                    if aimed && block_broken {
-                        let asked = super::listen::notify::<V>(
-                            self.live,
-                            self.relics,
-                            sts2_core::EventHook::BlockBroken { creature: target },
-                        );
-                        self.after_hit(asked);
-                    }
-                    let asked = super::listen::notify::<V>(
-                        self.live,
-                        self.relics,
-                        sts2_core::EventHook::DamageGiven {
-                            dealer,
-                            pet_of,
-                            target: receiver,
-                            total,
-                            powered,
-                            fully_blocked: aimed && fully_blocked,
-                        },
-                    );
-                    self.after_hit(asked);
-                    // `AfterDamageReceived` carries the `DamageResult`, so this
-                    // is what the hit took off rather than what it was swung
-                    // for.
-                    match killed {
-                        false => {
-                            let asked = super::listen::notify::<V>(
-                                self.live,
-                                self.relics,
-                                sts2_core::EventHook::DamageReceived {
-                                    target: receiver,
-                                    unblocked: lost,
-                                    dealer: Some(dealer),
-                                    powered,
-                                },
-                            );
-                            self.after_hit(asked);
-                        }
-                        true => dying.push(receiver),
-                    }
-                }
-                for creature in dying {
-                    if let Some(at) = self.at(creature) {
-                        self.kill(at);
-                    }
-                }
-            }
+            } => self.hit(Some(dealer), target, damage, powered, false),
             Resolved::GainBlock { recipient, amount } => {
                 let Some(at) = self.at(recipient) else { return };
                 if amount > V::Number::zero() {
@@ -1855,21 +1895,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     fn random_opponent(&mut self) -> Option<CombatId> {
         use sts2_core::rng::GameRng as _;
 
-        let hittable: SmallVec<[CombatId; 8]> = self
-            .opponents()
-            .into_iter()
-            .filter(|&creature| {
-                !super::listen::any_decides::<V>(
-                    self.walk(),
-                    // Every opponent listed is alive.
-                    sts2_core::DecisionHook::ShouldAllowHitting {
-                        creature,
-                        alive: true,
-                    },
-                    false,
-                )
-            })
-            .collect();
+        let hittable = self.hittable_opponents();
         self.rngs.targets.choose(&hittable).ok().copied()
     }
 
@@ -2022,6 +2048,21 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             held.modify(change, lasting);
             true
         });
+    }
+
+    fn discard(&mut self, card: CardAt<V>) {
+        super::turn::act_on::<V>(self.live, self.relics, sts2_core::PileAct::Discard, &[card]);
+    }
+
+    fn modify_this(&mut self, change: sts2_core::Change<V>, lasting: sts2_core::Lasting) {
+        let playing = self
+            .playing
+            .unwrap_or_else(|| unimplemented!("a card writing on itself with none being played"));
+        self.live.modify_self(playing, change, lasting);
+    }
+
+    fn hittable_opponents(&self) -> sts2_core::Opponents {
+        Board::hittable_opponents(self).into_iter().collect()
     }
 
     fn discard_this(&mut self) {

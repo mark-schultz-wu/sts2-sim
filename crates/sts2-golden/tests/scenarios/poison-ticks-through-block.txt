@@ -1,0 +1,13 @@
+# `PoisonPower.AfterSideTurnStart` hits its owner for its stack as the
+# owner's side begins, unblockable and from no one, then loses one. Poison at
+# five takes the Nibbit from forty-three to thirty-eight, and leaves four.
+# Block clears before the side begins, so Barricade keeps the Nibbit's: the
+# third tick finds five block on it, takes three hit points anyway, and leaves
+# the block where it was.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"BARRICADE_POWER","amount":1,"target":1}
+{"cmd":"power","power":"POISON_POWER","amount":5,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

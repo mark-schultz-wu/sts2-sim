@@ -16,6 +16,8 @@ const BLOCK: Number = 12;
 /// `DexterityPotion`'s `PowerVar<DexterityPower>(2)`.
 const DEXTERITY: Number = 2;
 
+/// `ExplosiveAmpoule`'s `DamageVar(10, ValueProp.Unpowered)`.
+const EXPLOSIVE: Number = 10;
 /// `GigantificationPotion`'s `PowerVar<GigantificationPower>(1)`.
 const GIGANTIFICATION: Number = 1;
 /// `SpeedPotion`'s `PowerVar<DexterityPower>(5)`, lent until the turn ends.
@@ -72,6 +74,20 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         // `AnyPlayer`, and `SpeedPotionPower` lends the Dexterity.
         Potion::SpeedPotion => {
             fight.apply_to_actor(Power::SpeedPotionPower, PowerAmount::Counted(SPEED));
+            Played::Done
+        }
+        // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and from the
+        // player.
+        Potion::ExplosiveAmpoule => {
+            for target in fight.hittable_opponents() {
+                let hit = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Number(EXPLOSIVE),
+                    scaling: Scaling::Static,
+                });
+                fight.apply(hit);
+            }
             Played::Done
         }
         Potion::VulnerablePotion => {

@@ -1,0 +1,8 @@
+# Survivor gains its eight block, then asks for one card from hand and
+# discards it. It comes back on turn two, and the Defend picked goes to the
+# discard pile ahead of Survivor itself.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0}
+{"cmd":"answer","cards":[0]}

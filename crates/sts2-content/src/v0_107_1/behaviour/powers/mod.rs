@@ -335,11 +335,14 @@ fn frees(power: Power, card: Cards, ethereal: bool) -> bool {
 fn vulnerable(
     fight: &dyn sts2_core::FightView<V>,
     holder: sts2_core::CombatId,
-    dealer: sts2_core::CombatId,
+    dealer: Option<sts2_core::CombatId>,
 ) -> f64 {
     let mut by = DAMAGE_INCREASE;
-    // Both answer the dealer hitting itself with nothing.
-    if dealer != holder {
+    // `if (dealer != null)`, and both answer the dealer hitting itself with
+    // nothing.
+    if let Some(dealer) = dealer
+        && dealer != holder
+    {
         if fight.relic(dealer, Relic::PaperPhrog) {
             by += PHROG;
         }
@@ -388,7 +391,7 @@ fn temporary(
     lent: Power,
     positive: bool,
     amount: PowerAmount<Number>,
-    held: Held,
+    held: Held<'_>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -453,12 +456,11 @@ fn temporary(
 pub(crate) fn modify_hook(
     power: Power,
     amount: PowerAmount<Number>,
-    held: Held,
+    held: Held<'_>,
     state: &State,
-    history: sts2_core::History<'_, V>,
-    fight: &dyn sts2_core::FightView<V>,
     hook: sts2_core::ModifyHook<V>,
 ) -> Modify<Number> {
+    let Held { history, fight, .. } = held;
     let one: Number = num_traits::one();
     debug_assert_eq!(state.power(), power);
     let counted = state.counted();
@@ -501,7 +503,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder => Modify::Scaled(weak(fight, holder, target)),
+        ) if dealer == Some(holder) => Modify::Scaled(weak(fight, holder, target)),
         (
             Power::ShrinkPower,
             _,
@@ -510,7 +512,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder => Modify::Scaled(SHRUNK),
+        ) if dealer == Some(holder) => Modify::Scaled(SHRUNK),
         // `TryModifyEnergyCostInCombatLate`: nothing for a card of its kind
         // that its owner holds or is playing, which is every card whose cost
         // the fight reads. A fight here has one player, so its owner's cards
@@ -580,13 +582,13 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if fight.monster(dealer) == Some(Monster::Osty)
-            && fight.pet_owner(dealer) == Some(holder) =>
+        ) if dealer.and_then(|dealer| fight.monster(dealer)) == Some(Monster::Osty)
+            && dealer.and_then(|dealer| fight.pet_owner(dealer)) == Some(holder) =>
         {
             Modify::Added(amount)
         }
         (Power::CalcifyPower, PowerAmount::Endless, ModifyHook::DamageAdditive { dealer, .. })
-            if fight.pet_owner(dealer) == Some(holder) =>
+            if dealer.and_then(|dealer| fight.pet_owner(dealer)) == Some(holder) =>
         {
             unimplemented!("an endless Calcify")
         }
@@ -655,7 +657,10 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if target == Some(holder) && fight.power(dealer, Power::VulnerablePower).is_some() => {
+        ) if target == Some(holder)
+            && dealer
+                .is_some_and(|dealer| fight.power(dealer, Power::VulnerablePower).is_some()) =>
+        {
             Modify::Scaled(COLOSSAL)
         }
         (Power::ColossusPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
@@ -684,7 +689,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder => Modify::Added(amount),
+        ) if dealer == Some(holder) => Modify::Added(amount),
         (
             Power::StrengthPower,
             PowerAmount::Endless,
@@ -693,7 +698,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder => {
+        ) if dealer == Some(holder) => {
             unimplemented!("an endless Strength")
         }
         // `VigorPower.ModifyDamageAdditive`. Once bound, it pays the card
@@ -709,7 +714,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder => {
+        ) if dealer == Some(holder) => {
             let other = |bound: Bound| card.is_some_and(|source| Some(source.id) != bound.source);
             match state.bound().is_some_and(other) {
                 true => Modify::Nothing,
@@ -726,7 +731,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder && card.tagged(CardTag::Shiv) => Modify::Added(amount),
+        ) if dealer == Some(holder) && card.tagged(CardTag::Shiv) => Modify::Added(amount),
         // `PhantomBladesPower.ModifyDamageAdditive`: the first Shiv its owner
         // plays in a turn, and no other. A play counts once it has finished,
         // so the Shiv being played is not one of them. A fight here has one
@@ -740,7 +745,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder
+        ) if dealer == Some(holder)
             && card.tagged(CardTag::Shiv)
             && !history
                 .finished_this_turn()
@@ -756,7 +761,7 @@ pub(crate) fn modify_hook(
                 powered: true,
                 ..
             },
-        ) if dealer == holder => unimplemented!("an endless {power:?}"),
+        ) if dealer == Some(holder) => unimplemented!("an endless {power:?}"),
         // `OneTwoPunchPower.ModifyCardPlayCount`: one more play of an attack
         // its owner plays.
         (Power::OneTwoPunchPower, _, ModifyHook::CardPlayCount { player, card })
@@ -918,7 +923,7 @@ pub(crate) fn result_pile(
 /// no override does not implement it.
 pub(crate) fn decide_hook(
     power: Power,
-    held: Held,
+    held: Held<'_>,
     state: &State,
     hook: sts2_core::DecisionHook<V>,
 ) -> sts2_core::HookResponse<bool> {
@@ -1001,9 +1006,10 @@ pub(crate) fn decide_hook(
     }
 }
 
-/// Whose a power is, as a hook reaching it reads that.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Held {
+/// Whose a power is, and what of the fight it can read, as a hook reaching
+/// it reads that.
+#[derive(Clone, Copy)]
+pub(crate) struct Held<'a> {
     /// The side of the creature carrying it.
     pub(crate) owner: CombatSide,
     /// The creature carrying it, which is `PowerModel.Owner`.
@@ -1014,6 +1020,11 @@ pub(crate) struct Held {
     pub(crate) monster: Option<Monster>,
     /// `PowerModel.AmountOnTurnStart`.
     pub(crate) on_turn_start: PowerAmount<Number>,
+    /// What the fight has done so far.
+    pub(crate) history: sts2_core::History<'a, V>,
+    /// The fight's creatures, for a power that asks about one other than its
+    /// own.
+    pub(crate) fight: &'a dyn sts2_core::FightView<V>,
 }
 
 /// Dispatch one of the event hooks the simulator currently supports.
@@ -1022,12 +1033,12 @@ pub(crate) struct Held {
 pub(crate) fn event_hook(
     power: Power,
     amount: PowerAmount<Number>,
-    held: Held,
+    held: Held<'_>,
     state: &mut State,
-    history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
+    let Held { history, fight, .. } = held;
     use sts2_core::{EventHook, HookEffect};
 
     debug_assert_eq!(state.power(), power);
@@ -1057,7 +1068,7 @@ pub(crate) fn event_hook(
                 fully_blocked: true,
                 ..
             },
-        ) if dealer == holder => {
+        ) if dealer == Some(holder) => {
             state.set_off_balance(true);
             asked.push(stunned(None));
             return;
@@ -1126,6 +1137,70 @@ pub(crate) fn event_hook(
             Some(HookEffect::Remove)
         }
         (Power::BorrowedTimePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `PoisonPower.AfterSideTurnStart`, for its owner's side: `TriggerCount`
+        // rounds, which is its stack or one more than the Accelerant its
+        // owner's living opponents carry, whichever is fewer.
+        (Power::PoisonPower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            let accelerant: Number = fight
+                .living_opponents(holder)
+                .into_iter()
+                .filter_map(|opponent| match fight.power(opponent, Power::AccelerantPower) {
+                    Some(PowerAmount::Counted(amount)) => Some(amount),
+                    Some(PowerAmount::Endless) => unimplemented!("an endless Accelerant"),
+                    None => None,
+                })
+                .sum();
+            Some(HookEffect::DamageSelfByStack {
+                times: amount.min(1 + accelerant),
+            })
+        }
+        (Power::PoisonPower, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Poison")
+        }
+        (Power::PoisonPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `NoxiousFumesPower.AfterSideTurnStart`: its stack of Poison onto
+        // every enemy that can be hit, from its owner.
+        (
+            Power::NoxiousFumesPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnStart { side, .. },
+        ) if side == owner => Some(HookEffect::ApplyToOpponents(
+            Power::PoisonPower,
+            PowerAmount::Counted(amount),
+        )),
+        (Power::NoxiousFumesPower, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Noxious Fumes")
+        }
+        (Power::NoxiousFumesPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `EnvenomPower.AfterDamageGiven`: its stack of Poison onto whoever a
+        // powered hit from its owner took hit points from.
+        (
+            Power::EnvenomPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageGiven {
+                dealer,
+                target,
+                unblocked,
+                powered: true,
+                ..
+            },
+        ) if dealer == Some(holder) && unblocked > 0 => Some(HookEffect::ApplyPower {
+            target,
+            power: Power::PoisonPower,
+            amount: PowerAmount::Counted(amount),
+        }),
+        (Power::EnvenomPower, PowerAmount::Endless, EventHook::DamageGiven { dealer, .. })
+            if dealer == Some(holder) =>
+        {
+            unimplemented!("an endless Envenom")
+        }
+        (Power::EnvenomPower, _, EventHook::DamageGiven { .. }) => None,
         // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
         (Power::NoDrawPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
             Some(HookEffect::Remove)
@@ -1640,7 +1715,7 @@ pub(crate) fn event_hook(
                 powered: true,
                 ..
             },
-        ) if (dealer == holder || pet_of == Some(holder)) && total > 0 => {
+        ) if (dealer == Some(holder) || pet_of == Some(holder)) && total > 0 => {
             Some(HookEffect::ApplyPower {
                 target,
                 power: Power::DoomPower,
