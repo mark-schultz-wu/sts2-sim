@@ -1,0 +1,7 @@
+# `GlassEye.AfterObtained` offers five card rewards of three: two Common,
+# two Uncommon and a Rare, each drawn at uniform odds over the character's
+# pool at that rarity. Taking the first card of the Rare adds it to the deck.
+{"cmd":"start","seed":"0RACLE9","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"OROBAS"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","take":[{"index":4,"card":0}]}

@@ -20,6 +20,7 @@ pub(super) fn event_hook(hook: EventHook<V>, asked: &mut sts2_core::HookEffects<
             HookEffect::ProcureRandomPotions {
                 count: POTIONS,
                 stream: RunRngType::CombatPotionGeneration,
+                into_gained: false,
             },
         ]);
     }

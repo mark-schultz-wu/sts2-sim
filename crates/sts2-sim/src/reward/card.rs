@@ -50,15 +50,14 @@ pub(crate) fn regular<V: Rules, R: GameRng>(
     drawn
 }
 
-/// The Future of Potions' reward: `count` distinct cards, each one
-/// `NextItem` over what is left of `pool`, and then every card upgraded.
-/// `pool` is `GetPossibleCards`: the unlocked pool at one rarity and type, in
-/// pool order. `ForNonCombatWithUniformOdds` rolls no upgrade.
-pub(crate) fn upgraded_of<V: Rules, R: GameRng>(
+/// A uniform reward: `count` distinct cards, each one `NextItem` over what is
+/// left of `pool`. `pool` is `GetPossibleCards`, in pool order.
+/// `ForNonCombatWithUniformOdds` rolls no upgrade.
+pub(crate) fn uniform_of<V: Rules, R: GameRng>(
     rng: &mut R,
     pool: &[V::Card],
     count: usize,
-) -> Vec<CardIdent<V>> {
+) -> Vec<V::Card> {
     let mut drawn: Vec<V::Card> = Vec::with_capacity(count);
     for _ in 0..count {
         let left: Vec<V::Card> = pool
@@ -71,8 +70,18 @@ pub(crate) fn upgraded_of<V: Rules, R: GameRng>(
             .unwrap_or_else(|_| unimplemented!("a reward pool with no card left"));
         drawn.push(card);
     }
-    // `UpgradeCardsInReward`, which a card with no upgrade passes over.
     drawn
+}
+
+/// The Future of Potions' reward: [`uniform_of`] over the unlocked pool at one
+/// rarity and type, and then every card upgraded.
+pub(crate) fn upgraded_of<V: Rules, R: GameRng>(
+    rng: &mut R,
+    pool: &[V::Card],
+    count: usize,
+) -> Vec<CardIdent<V>> {
+    // `UpgradeCardsInReward`, which a card with no upgrade passes over.
+    uniform_of::<V, R>(rng, pool, count)
         .into_iter()
         .map(|card| {
             let mut ident = CardIdent::new(card);
