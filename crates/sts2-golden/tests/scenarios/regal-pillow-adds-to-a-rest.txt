@@ -1,0 +1,24 @@
+# `RegalPillow` adds fifteen to a rest site's heal. A Nibbit with fifty
+# Strength leaves room for the whole of it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":50,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"answer","skip":true}
+{"cmd":"grant","relic":"REGAL_PILLOW"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":0}

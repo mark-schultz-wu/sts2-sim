@@ -1,0 +1,10 @@
+# `MiniatureCannon` adds three to each powered hit from an upgraded card,
+# and nothing to one from a card that is not upgraded.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MINIATURE_CANNON"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"STRIKE_IRONCLAD"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"grant","potion":"BLESSING_OF_THE_FORGE"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0,"target":1}

@@ -1283,7 +1283,11 @@ impl<'a, V: Rules> Board<'a, V> {
         let mut modifiers: SmallVec<[(CombatId, V::Power); 2]> = SmallVec::new();
         let player = self.live.player().id;
         for phase in [
-            ModifyHook::HpLostAfterOsty { target, player },
+            ModifyHook::HpLostAfterOsty {
+                target,
+                player,
+                in_fight: true,
+            },
             ModifyHook::HpLostAfterOstyLate { target, player },
         ] {
             super::listen::each::<V>(
@@ -1586,7 +1590,11 @@ fn after_osty<V: Rules>(fight: Walk<'_, V>, target: CombatId, amount: V::Number)
         fight,
         amount,
         &[
-            ModifyHook::HpLostAfterOsty { target, player },
+            ModifyHook::HpLostAfterOsty {
+                target,
+                player,
+                in_fight: true,
+            },
             ModifyHook::HpLostAfterOstyLate { target, player },
         ],
     )
@@ -1640,6 +1648,7 @@ pub(crate) fn modified<V: Rules>(
         id: held.id,
         card: held.face.ident.card,
         playing: fight.live.cards.in_play(held.id),
+        upgraded: held.face.ident.upgrade > 0,
     });
     let phases = [
         ModifyHook::DamageAdditive {

@@ -957,6 +957,8 @@ pub struct CardSource<V: ContentVersion> {
     /// `Pile.Type == PileType.Play`: the card stands in the play pile, as it
     /// does while it is played. A card in hand is being previewed.
     pub playing: bool,
+    /// `IsUpgraded`.
+    pub upgraded: bool,
 }
 
 /// A number an enchantment works out for the card it is on.
@@ -2389,6 +2391,8 @@ pub enum ModifyHook<V: ContentVersion> {
     /// `ModifyGoldGained`: the gold the player is about to gain, outside a
     /// fight.
     GoldGained,
+    /// `ModifyRestSiteHealAmount`: what a rest site's heal gives the player.
+    RestSiteHealAmount,
     /// `ModifyDamageAdditive`. The target is absent for a hit previewed
     /// against nobody.
     DamageAdditive {
@@ -2451,6 +2455,8 @@ pub enum ModifyHook<V: ContentVersion> {
         target: crate::CombatId,
         /// The fight's player, which a relic's owner is.
         player: crate::CombatId,
+        /// `CombatManager.IsInProgress`.
+        in_fight: bool,
     },
     HpLostAfterOstyLate {
         target: crate::CombatId,
@@ -2532,6 +2538,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
+            ModifyHook::RestSiteHealAmount => ModelHook::ModifyRestSiteHealAmount,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
             ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
             ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
@@ -3694,6 +3701,10 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, unblockable and unpowered.
     DamageOpponentsUnblockable(V::Number),
+    /// `CreatureCmd.Damage` on one enemy that can be hit, drawn by `NextItem`
+    /// off `CombatTargets`, from the listener's owner, unpowered. Nothing
+    /// with no such enemy.
+    DamageRandomOpponent(V::Number),
     /// `CreatureCmd.Damage` on the living creatures the event hit, from the
     /// listener's owner, unpowered.
     DamageTargets(V::Number),

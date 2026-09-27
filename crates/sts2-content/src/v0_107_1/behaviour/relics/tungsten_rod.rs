@@ -13,7 +13,7 @@ const REDUCTION: Number = 1;
 /// every listener is done, which is the same while no later one adds to it.
 pub(super) fn modify_hook(hook: ModifyHook<V>) -> Modify<Number> {
     match hook {
-        ModifyHook::HpLostAfterOsty { target, player } if target == player => {
+        ModifyHook::HpLostAfterOsty { target, player, .. } if target == player => {
             Modify::Added(-REDUCTION)
         }
         ModifyHook::HpLostAfterOsty { .. } => Modify::Nothing,
