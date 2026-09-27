@@ -166,8 +166,7 @@ pub fn upgrade(card: EventCard) -> &'static [Change<V>] {
     match card {
         EventCard::Abundance => &[Change::ChangeCost(CostPool::Energy, -1)],
         EventCard::Apotheosis => &[Change::ChangeCost(CostPool::Energy, -1)],
-        // `call RemoveKeyword`
-        EventCard::Apparition => unimplemented!("card upgrade: {card:?}"),
+        EventCard::Apparition => &[Change::RemoveKeyword(CardKeyword::Ethereal)],
         EventCard::BrightestFlame => &[
             Change::Raise(CardVar::Energy, 1),
             Change::Raise(CardVar::Cards, 1),

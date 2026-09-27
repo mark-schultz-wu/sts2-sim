@@ -4490,7 +4490,9 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // STOKE
     sts2_core::Overrides::from_bits(0),
     // STOMP
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardEnteredCombat),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+        .with(sts2_core::ModelHook::BeforeCardPlayed),
     // STONE_ARMOR
     sts2_core::Overrides::from_bits(0),
     // STORM

@@ -376,8 +376,7 @@ pub fn upgrade(card: ColorlessCard) -> &'static [Change<V>] {
         ColorlessCard::Catastrophe => &[Change::Raise(CardVar::Cards, 1)],
         ColorlessCard::Coordinate => &[Change::Raise(CardVar::StrengthPower, 3)],
         ColorlessCard::DarkShackles => &[Change::Raise(CardVar::StrengthLoss, 6)],
-        // `call RemoveKeyword`
-        ColorlessCard::Discovery => unimplemented!("card upgrade: {card:?}"),
+        ColorlessCard::Discovery => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         ColorlessCard::DramaticEntrance => &[Change::Raise(CardVar::Damage, 4)],
         ColorlessCard::Entropy => &[Change::AddKeyword(CardKeyword::Innate)],
         ColorlessCard::Equilibrium => &[Change::Raise(CardVar::Block, 3)],
@@ -405,8 +404,7 @@ pub fn upgrade(card: ColorlessCard) -> &'static [Change<V>] {
         ColorlessCard::Lift => &[Change::Raise(CardVar::Block, 5)],
         ColorlessCard::MasterOfStrategy => &[Change::Raise(CardVar::Cards, 1)],
         ColorlessCard::Mayhem => &[Change::ChangeCost(CostPool::Energy, -1)],
-        // `call RemoveKeyword`
-        ColorlessCard::Mimic => unimplemented!("card upgrade: {card:?}"),
+        ColorlessCard::Mimic => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         ColorlessCard::MindBlast => &[Change::ChangeCost(CostPool::Energy, -1)],
         ColorlessCard::Nostalgia => &[Change::ChangeCost(CostPool::Energy, -1)],
         ColorlessCard::Omnislice => &[Change::Raise(CardVar::Damage, 3)],
@@ -414,8 +412,7 @@ pub fn upgrade(card: ColorlessCard) -> &'static [Change<V>] {
         ColorlessCard::PanicButton => &[Change::Raise(CardVar::Block, 10)],
         ColorlessCard::PrepTime => &[Change::Raise(CardVar::PrepTimePower, 2)],
         ColorlessCard::Production => &[Change::Raise(CardVar::Energy, 1)],
-        // `call RemoveKeyword`
-        ColorlessCard::Prolong => unimplemented!("card upgrade: {card:?}"),
+        ColorlessCard::Prolong => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         ColorlessCard::Prowess => &[
             Change::Raise(CardVar::DexterityPower, 1),
             Change::Raise(CardVar::StrengthPower, 1),
@@ -433,10 +430,8 @@ pub fn upgrade(card: ColorlessCard) -> &'static [Change<V>] {
         ColorlessCard::RollingBoulder => &[Change::Raise(CardVar::RollingBoulderPower, 5)],
         ColorlessCard::Salvo => &[Change::Raise(CardVar::Damage, 4)],
         ColorlessCard::Scrawl => &[Change::AddKeyword(CardKeyword::Retain)],
-        // `call RemoveKeyword`
-        ColorlessCard::SecretTechnique => unimplemented!("card upgrade: {card:?}"),
-        // `call RemoveKeyword`
-        ColorlessCard::SecretWeapon => unimplemented!("card upgrade: {card:?}"),
+        ColorlessCard::SecretTechnique => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
+        ColorlessCard::SecretWeapon => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         ColorlessCard::SeekerStrike => &[Change::Raise(CardVar::Damage, 3)],
         ColorlessCard::Shockwave => &[Change::Raise(CardVar::Power, 2)],
         ColorlessCard::Splash => &[],
@@ -444,8 +439,7 @@ pub fn upgrade(card: ColorlessCard) -> &'static [Change<V>] {
         ColorlessCard::TagTeam => &[Change::Raise(CardVar::Damage, 4)],
         ColorlessCard::TheBomb => &[Change::Raise(CardVar::BombDamage, 10)],
         ColorlessCard::TheGambit => &[Change::Raise(CardVar::Block, 25)],
-        // `call RemoveKeyword`
-        ColorlessCard::ThinkingAhead => unimplemented!("card upgrade: {card:?}"),
+        ColorlessCard::ThinkingAhead => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         ColorlessCard::ThrummingHatchet => &[Change::Raise(CardVar::Damage, 3)],
         ColorlessCard::UltimateDefend => &[Change::Raise(CardVar::Block, 4)],
         ColorlessCard::UltimateStrike => &[Change::Raise(CardVar::Damage, 6)],

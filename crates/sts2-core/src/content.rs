@@ -530,6 +530,10 @@ pub enum ModelHook {
     AfterCardDrawnEarly,
     ShouldPlay,
     BeforeCardAutoPlayed,
+    ModifyMaxEnergy,
+    TryModifyEnergyCostInCombat,
+    TryModifyEnergyCostInCombatLate,
+    BeforeCardPlayed,
     ShouldCreatureBeRemovedFromCombatAfterDeath,
     ShouldPowerBeRemovedOnDeath,
     ShouldClearBlock,
@@ -583,7 +587,7 @@ pub enum ModelHook {
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 83] = [
+    pub const ALL: [ModelHook; 87] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -617,6 +621,10 @@ impl ModelHook {
         ModelHook::AfterCardDrawnEarly,
         ModelHook::ShouldPlay,
         ModelHook::BeforeCardAutoPlayed,
+        ModelHook::ModifyMaxEnergy,
+        ModelHook::TryModifyEnergyCostInCombat,
+        ModelHook::TryModifyEnergyCostInCombatLate,
+        ModelHook::BeforeCardPlayed,
         ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath,
         ModelHook::ShouldPowerBeRemovedOnDeath,
         ModelHook::ShouldClearBlock,
@@ -705,6 +713,10 @@ impl ModelHook {
             ModelHook::AfterCardDrawnEarly => "AfterCardDrawnEarly",
             ModelHook::ShouldPlay => "ShouldPlay",
             ModelHook::BeforeCardAutoPlayed => "BeforeCardAutoPlayed",
+            ModelHook::ModifyMaxEnergy => "ModifyMaxEnergy",
+            ModelHook::TryModifyEnergyCostInCombat => "TryModifyEnergyCostInCombat",
+            ModelHook::TryModifyEnergyCostInCombatLate => "TryModifyEnergyCostInCombatLate",
+            ModelHook::BeforeCardPlayed => "BeforeCardPlayed",
             ModelHook::ShouldCreatureBeRemovedFromCombatAfterDeath => {
                 "ShouldCreatureBeRemovedFromCombatAfterDeath"
             }
@@ -958,6 +970,16 @@ pub trait FlagSet: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'static {
             .collect();
         Self::from_members(&held)
     }
+
+    /// This set, less one member, the way [`FlagSet::with`] adds one.
+    fn without(self, member: Self::Member) -> Self {
+        let held: smallvec::SmallVec<[Self::Member; MEMBERS_HELD]> = Self::MEMBERS
+            .iter()
+            .copied()
+            .filter(|&held| held != member && self.contains(held))
+            .collect();
+        Self::from_members(&held)
+    }
 }
 
 /// How many members one set holds while it is being rebuilt.
@@ -1141,6 +1163,8 @@ pub trait KeywordKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static
     /// Exhausts from hand as the turn ends, which a power writes onto cards
     /// it makes.
     const ETHEREAL: Self;
+    /// Goes to the exhaust pile once played, which an upgrade can take off.
+    const EXHAUST: Self;
 }
 
 /// The things a rest site can offer, as consts a rule can name.
@@ -1322,14 +1346,25 @@ pub trait CreatureView<V: ContentVersion> {
     fn power(&self, power: V::Power) -> Option<PowerAmount<V::Number>>;
 }
 
-/// The powers the creatures in a fight carry, as a hook reads them.
+/// The creatures in a fight, as a hook reads ones it does not own.
 ///
-/// `Creature.GetPower<T>()` on a creature a listener does not own, which is
-/// how a power asks about a dealer or a target. A narrowing like
-/// [`CreatureView`], and just as small.
-pub trait PowerView<V: ContentVersion> {
-    /// The stack `creature` carries `power` at, or `None` without it.
+/// How a power asks about a dealer or a target. A narrowing like
+/// [`CreatureView`], and just as small: a member is added when a rule asks.
+pub trait FightView<V: ContentVersion> {
+    /// `Creature.GetPower<T>()?.Amount`: the stack `creature` carries `power`
+    /// at, or `None` without it.
     fn power(&self, creature: crate::CombatId, power: V::Power) -> Option<PowerAmount<V::Number>>;
+
+    /// `Creature.PetOwner`: the player `creature` stands beside, or nothing
+    /// for a creature that is no pet.
+    fn pet_owner(&self, creature: crate::CombatId) -> Option<crate::CombatId>;
+
+    /// `Creature.Monster`, or nothing for a player.
+    fn monster(&self, creature: crate::CombatId) -> Option<V::Monster>;
+
+    /// `Creature.Player?.GetRelic<T>() != null`: whether `creature` is a player
+    /// holding `relic`. A pet is no player, so it holds none.
+    fn relic(&self, creature: crate::CombatId, relic: V::Relic) -> bool;
 }
 
 /// The fight, as a card's own behaviour reaches it.
@@ -1443,6 +1478,20 @@ pub trait Fight<V: ContentVersion> {
     fn attack(&mut self, scaling: Scaling, hits: impl FnOnce(&mut Self))
     where
         Self: Sized;
+
+    /// [`Fight::attack`] with `attacker` in place of the acting creature,
+    /// which is `DamageCmd.Attack(...).FromOsty` for an attack Osty makes
+    /// for a card.
+    fn attack_from(
+        &mut self,
+        _attacker: crate::CombatId,
+        _scaling: Scaling,
+        _hits: impl FnOnce(&mut Self),
+    ) where
+        Self: Sized,
+    {
+        unimplemented!("an attack from a creature other than the one acting")
+    }
 
     /// Perform the acting monster's advertised attack against every opponent.
     ///
@@ -1708,11 +1757,11 @@ pub enum Change<V: ContentVersion> {
     /// zero on both pools, for [`Lasting::ThisTurn`].
     SetCost(CostPool, V::Number),
     /// `CardModel.AddKeyword`: the copy carries a word its table does not.
-    ///
-    /// The word is on the copy for as long as the copy lasts. `RemoveKeyword`
-    /// has no variant: only Know Thy Place's upgrade calls it, and that
-    /// upgrade panics until someone ports it.
+    /// The word is on the copy for as long as the copy lasts.
     AddKeyword(V::CardKeyword),
+    /// `CardModel.RemoveKeyword`: the copy no longer carries a word, whether
+    /// its table prints it or something wrote it on.
+    RemoveKeyword(V::CardKeyword),
 }
 
 /// How long a [`Change`] lasts.
@@ -2023,6 +2072,11 @@ pub enum ModifyHook<V: ContentVersion> {
         turn: V::Count,
         room: V::RoomType,
     },
+    /// `ModifyMaxEnergy`: the energy `player`'s turn resets to, which
+    /// `PlayerCombatState.MaxEnergy` asks every time it is read.
+    MaxEnergy {
+        player: crate::CombatId,
+    },
     /// `ModifyOrbValue`: a number `player`'s orb shows, as its passive or its
     /// evoke reads it.
     OrbValue {
@@ -2052,6 +2106,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HpLostAfterOstyLate { .. } => ModelHook::ModifyHpLostAfterOstyLate,
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
+            ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
             ModifyHook::OrbValue { .. } => ModelHook::ModifyOrbValue,
         }
@@ -3051,9 +3106,9 @@ pub enum Listener<'a, V: Hooks, P: Printed<V> + ?Sized> {
         /// What the fight has done so far, which a power reads rather than
         /// counts for itself.
         history: History<'a, V>,
-        /// Every creature's powers, for a power that asks about a creature
-        /// other than its own.
-        powers: &'a dyn PowerView<V>,
+        /// The fight's creatures, for a power that asks about one other than
+        /// its own.
+        fight: &'a dyn FightView<V>,
     },
     Relic(&'a V::RelicState),
     /// A monster's own model, which the fight asks after the powers on its

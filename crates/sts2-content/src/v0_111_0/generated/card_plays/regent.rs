@@ -775,8 +775,7 @@ pub fn upgrade(card: RegentCard) -> &'static [Change<V>] {
             Change::Raise(CardVar::Increase, 2),
         ],
         RegentCard::KnockoutBlow => &[Change::Raise(CardVar::Damage, 8)],
-        // `call RemoveKeyword`
-        RegentCard::KnowThyPlace => unimplemented!("card upgrade: {card:?}"),
+        RegentCard::KnowThyPlace => &[Change::RemoveKeyword(CardKeyword::Exhaust)],
         RegentCard::Largesse => &[],
         RegentCard::LunarBlast => &[Change::Raise(CardVar::Damage, 1)],
         RegentCard::MakeItSo => &[Change::Raise(CardVar::Damage, 3)],
@@ -827,8 +826,7 @@ pub fn upgrade(card: RegentCard) -> &'static [Change<V>] {
         RegentCard::Tutor => &[Change::ChangeCost(CostPool::Energy, -1)],
         RegentCard::Tyranny => &[Change::AddKeyword(CardKeyword::Innate)],
         RegentCard::Venerate => &[Change::Raise(CardVar::Stars, 1)],
-        // `call RemoveKeyword`
-        RegentCard::VoidForm => unimplemented!("card upgrade: {card:?}"),
+        RegentCard::VoidForm => &[Change::RemoveKeyword(CardKeyword::Ethereal)],
         RegentCard::WroughtInWar => &[
             Change::Raise(CardVar::Damage, 2),
             Change::Raise(CardVar::Forge, 2),

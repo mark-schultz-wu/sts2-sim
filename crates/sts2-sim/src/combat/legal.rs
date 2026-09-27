@@ -27,8 +27,7 @@ pub(super) fn hand<V: Rules>(
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<Playable<V>> {
-    // `CardModel.CanPlay` asks `Hook.ShouldPlay` of every card.
-    super::turn::unheard::<V>(fight.live, fight.relics, sts2_core::ModelHook::ShouldPlay);
+    unheard_by_the_hand::<V>(fight.live, fight.relics);
     hand.map(|card| InHand::new(card, fight, energy, stars).playable())
         .collect()
 }
@@ -43,6 +42,19 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::Ta
     card.card
         .target()
         .unwrap_or_else(|| V::computed_card_target(card.card, &super::board::powers::<V>(live)))
+}
+
+/// `CardModel.CanPlay` asks `Hook.ShouldPlay` of every card, and every cost it
+/// reads runs the two `TryModifyEnergyCostInCombat` hooks. No ported model
+/// answers these, so a fight where one listens stops by name.
+fn unheard_by_the_hand<V: Rules>(live: &Live<V>, relics: &crate::run::Belt<V>) {
+    for hook in [
+        sts2_core::ModelHook::ShouldPlay,
+        sts2_core::ModelHook::TryModifyEnergyCostInCombat,
+        sts2_core::ModelHook::TryModifyEnergyCostInCombatLate,
+    ] {
+        super::turn::unheard::<V>(live, relics, hook);
+    }
 }
 
 /// Why this card cannot be played, or nothing for one that can.
@@ -237,7 +249,12 @@ pub(super) type Previews<V> = SmallVec<[Preview<V>; 4]>;
 /// fight instead. The rules are the ones the report runs: the belt's reasons,
 /// and each card's reasons and targets. Nothing computes a preview, and
 /// nothing is collected but the moves.
-pub(crate) fn moves<V: Rules>(live: &Live<V>, potions: &[V::Potion], alive: bool) -> Legal<V> {
+pub(crate) fn moves<V: Rules>(
+    live: &Live<V>,
+    relics: &crate::run::Belt<V>,
+    potions: &[V::Potion],
+    alive: bool,
+) -> Legal<V> {
     let mut moves = Legal::new();
     if let Some((min, max, offered)) = live.selecting() {
         selections(min as usize, max as usize, offered, &mut moves);
@@ -246,6 +263,7 @@ pub(crate) fn moves<V: Rules>(live: &Live<V>, potions: &[V::Potion], alive: bool
 
     drinks::<V>(potions, Some(live), alive, &mut moves);
 
+    unheard_by_the_hand::<V>(live, relics);
     for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
         let (cost, star_cost) = card.face.costs();
         let refused = reasons::<V>(

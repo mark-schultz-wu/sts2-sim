@@ -1,0 +1,10 @@
+# `Flatten.AfterAttack` sets its own cost to nothing for the turn once Osty
+# attacks. The opening hand holds Unleash and one of two Flattens. Osty's
+# attack for Unleash makes that Flatten free, so it prints nothing, and
+# playing it leaves the two energy Unleash left. Osty deals its twelve.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"FLATTEN"}
+{"cmd":"grant","card":"FLATTEN"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"play_card","index":3,"target":1}

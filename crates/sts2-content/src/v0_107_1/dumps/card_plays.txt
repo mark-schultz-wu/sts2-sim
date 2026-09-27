@@ -12,6 +12,7 @@
 # upgrade <card> raise <var> <by>
 # upgrade <card> cost <by>
 # upgrade <card> keyword <keyword>
+# upgrade <card> unkeyword <keyword>
 # unupgraded <card> <what the first statement no change matches is>
 # turnend <card>, which acts when a turn ends with it in hand
 # An amount is `var <key>` or `number <n>`.
@@ -66,7 +67,7 @@ unplayed APOTHEOSIS foreach
 upgrade APOTHEOSIS cost -1
 card APPARITION
 play APPARITION power self INTANGIBLE_POWER var IntangiblePower
-unupgraded APPARITION call RemoveKeyword
+upgrade APPARITION unkeyword Ethereal
 card ARMAMENTS
 unplayed ARMAMENTS if
 card ARSENAL
@@ -303,7 +304,7 @@ play CHILD_OF_THE_STARS power self CHILD_OF_THE_STARS_POWER var BlockForStars
 upgrade CHILD_OF_THE_STARS raise BlockForStars 1
 card CHILL
 unplayed CHILL foreach
-unupgraded CHILL call RemoveKeyword
+upgrade CHILL unkeyword Exhaust
 card CINDER
 unplayed CINDER call PileType.Hand.GetPile
 upgrade CINDER raise Damage 6
@@ -494,7 +495,7 @@ play DEMESNE power self DEMESNE_POWER var Cards
 upgrade DEMESNE cost -1
 card DEMONIC_SHIELD
 unplayed DEMONIC_SHIELD call CreatureCmd.Damage
-unupgraded DEMONIC_SHIELD call RemoveKeyword
+upgrade DEMONIC_SHIELD unkeyword Exhaust
 card DEMON_FORM
 play DEMON_FORM power self DEMON_FORM_POWER var StrengthPower
 upgrade DEMON_FORM raise StrengthPower 1
@@ -511,7 +512,7 @@ unplayed DIRGE call ResolveEnergyXValue
 upgrade DIRGE raise Summon 1
 card DISCOVERY
 unplayed DISCOVERY if
-unupgraded DISCOVERY call RemoveKeyword
+upgrade DISCOVERY unkeyword Exhaust
 card DISINTEGRATION
 card DISMANTLE
 unplayed DISMANTLE call cardPlay.Target.HasPower
@@ -558,7 +559,7 @@ unplayed ECHOING_SLASH call AttackCommand.CreateContextAsync
 upgrade ECHOING_SLASH raise Damage 3
 card ECHO_FORM
 play ECHO_FORM power self ECHO_FORM_POWER var EchoForm
-unupgraded ECHO_FORM call RemoveKeyword
+upgrade ECHO_FORM unkeyword Ethereal
 card EIDOLON
 unplayed EIDOLON call Owner.PlayerCombatState.Hand.Cards.ToList
 upgrade EIDOLON cost -1
@@ -725,7 +726,7 @@ play FURNACE power self FURNACE_POWER var Forge
 upgrade FURNACE raise Forge 2
 card FUSION
 play FUSION channel PLASMA_ORB
-unupgraded FUSION call RemoveKeyword
+upgrade FUSION unkeyword Exhaust
 card GAMMA_BLAST
 play GAMMA_BLAST attack chosen Damage Move number 1
 play GAMMA_BLAST power chosen WEAK_POWER var WeakPower
@@ -781,7 +782,8 @@ unplayed GRAND_FINALE overrides IsPlayable
 upgrade GRAND_FINALE raise Damage 15
 card GRAVEBLAST
 unplayed GRAVEBLAST call CardSelectCmd.FromCombatPile
-unupgraded GRAVEBLAST call RemoveKeyword
+upgrade GRAVEBLAST raise Damage 2
+upgrade GRAVEBLAST unkeyword Exhaust
 card GRAVE_WARDEN
 unplayed GRAVE_WARDEN call CardCmd.PreviewCardPileAdd
 upgrade GRAVE_WARDEN raise Block 3
@@ -863,10 +865,11 @@ upgrade HIGH_FIVE raise OstyDamage 2
 upgrade HIGH_FIVE raise VulnerablePower 1
 card HOLOGRAM
 unplayed HOLOGRAM call CardSelectCmd.FromCombatPile
-unupgraded HOLOGRAM call RemoveKeyword
+upgrade HOLOGRAM raise Block 2
+upgrade HOLOGRAM unkeyword Exhaust
 card HOTFIX
 play HOTFIX power self HOTFIX_POWER var FocusPower
-unupgraded HOTFIX call RemoveKeyword
+upgrade HOTFIX unkeyword Exhaust
 card HOWL_FROM_BEYOND
 play HOWL_FROM_BEYOND attack opponents Damage Move number 1
 upgrade HOWL_FROM_BEYOND raise Damage 5
@@ -881,7 +884,7 @@ unplayed ICE_LANCE for
 upgrade ICE_LANCE raise Damage 5
 card IGNITION
 unplayed IGNITION call OrbCmd.Channel
-unupgraded IGNITION call RemoveKeyword
+upgrade IGNITION unkeyword Exhaust
 card IMPATIENCE
 unplayed IMPATIENCE if
 upgrade IMPATIENCE raise Cards 1
@@ -955,7 +958,7 @@ upgrade KNOCKOUT_BLOW raise Damage 8
 card KNOW_THY_PLACE
 play KNOW_THY_PLACE power chosen WEAK_POWER var WeakPower
 play KNOW_THY_PLACE power chosen VULNERABLE_POWER var VulnerablePower
-unupgraded KNOW_THY_PLACE call RemoveKeyword
+upgrade KNOW_THY_PLACE unkeyword Exhaust
 card LANTERN_KEY
 card LARGESSE
 unplayed LARGESSE call CardFactory.GetDistinctForCombat
@@ -1044,7 +1047,7 @@ unplayed METEOR_STRIKE for
 upgrade METEOR_STRIKE raise Damage 6
 card MIMIC
 unplayed MIMIC call CreatureCmd.GainBlock
-unupgraded MIMIC call RemoveKeyword
+upgrade MIMIC unkeyword Exhaust
 card MIND_BLAST
 unplayed MIND_BLAST call DamageCmd.Attack
 upgrade MIND_BLAST cost -1
@@ -1250,7 +1253,7 @@ play PRODUCTION energy var Energy
 upgrade PRODUCTION raise Energy 1
 card PROLONG
 unplayed PROLONG call PowerCmd.Apply
-unupgraded PROLONG call RemoveKeyword
+upgrade PROLONG unkeyword Exhaust
 card PROPHESIZE
 play PROPHESIZE draw var Cards
 upgrade PROPHESIZE raise Cards 3
@@ -1295,7 +1298,7 @@ card RAINBOW
 play RAINBOW channel LIGHTNING_ORB
 play RAINBOW channel FROST_ORB
 play RAINBOW channel DARK_ORB
-unupgraded RAINBOW call RemoveKeyword
+upgrade RAINBOW unkeyword Exhaust
 card RALLY
 unplayed RALLY call CombatState.GetTeammatesOf
 upgrade RALLY raise Block 5
@@ -1393,7 +1396,7 @@ play SALVO power self RETAIN_HAND_POWER number 1
 upgrade SALVO raise Damage 4
 card SCARE
 unplayed SCARE foreach
-unupgraded SCARE call RemoveKeyword
+upgrade SCARE unkeyword Exhaust
 card SCAVENGE
 unplayed SCAVENGE call CardSelectCmd.FromHand
 upgrade SCAVENGE raise Energy 1
@@ -1420,10 +1423,10 @@ unplayed SECOND_WIND foreach
 upgrade SECOND_WIND raise Block 2
 card SECRET_TECHNIQUE
 unplayed SECRET_TECHNIQUE call CardSelectCmd.FromCombatPile
-unupgraded SECRET_TECHNIQUE call RemoveKeyword
+upgrade SECRET_TECHNIQUE unkeyword Exhaust
 card SECRET_WEAPON
 unplayed SECRET_WEAPON call CardSelectCmd.FromCombatPile
-unupgraded SECRET_WEAPON call RemoveKeyword
+upgrade SECRET_WEAPON unkeyword Exhaust
 card SEEKER_STRIKE
 unplayed SEEKER_STRIKE call PileType.Draw.GetPile
 upgrade SEEKER_STRIKE raise Damage 3
@@ -1656,7 +1659,7 @@ play SWORD_SAGE power self SWORD_SAGE_POWER var SwordSagePower
 upgrade SWORD_SAGE cost -1
 card SYNCHRONIZE
 unplayed SYNCHRONIZE call PowerCmd.Apply
-unupgraded SYNCHRONIZE call RemoveKeyword
+upgrade SYNCHRONIZE unkeyword Exhaust
 card SYNTHESIS
 play SYNTHESIS attack chosen Damage Move number 1
 play SYNTHESIS power self FREE_POWER_POWER number 1
@@ -1708,7 +1711,7 @@ play THE_SMITH forge var Forge
 upgrade THE_SMITH raise Forge 10
 card THINKING_AHEAD
 unplayed THINKING_AHEAD call CardSelectCmd.FromHand
-unupgraded THINKING_AHEAD call RemoveKeyword
+upgrade THINKING_AHEAD unkeyword Exhaust
 card THRASH
 unplayed THRASH call PileType.Hand.GetPile
 upgrade THRASH raise Damage 2
@@ -1738,7 +1741,7 @@ unplayed TRACKING if
 upgrade TRACKING cost -1
 card TRANSFIGURE
 unplayed TRANSFIGURE call CardSelectCmd.FromHand
-unupgraded TRANSFIGURE call RemoveKeyword
+upgrade TRANSFIGURE unkeyword Exhaust
 card TRASH_TO_TREASURE
 play TRASH_TO_TREASURE power self TRASH_TO_TREASURE_POWER number 1
 upgrade TRASH_TO_TREASURE keyword Innate
@@ -1801,13 +1804,13 @@ upgrade VICIOUS raise Cards 1
 card VOID
 card VOID_FORM
 unplayed VOID_FORM call PlayerCmd.EndTurn
-unupgraded VOID_FORM call RemoveKeyword
+upgrade VOID_FORM unkeyword Ethereal
 card VOLLEY
 unplayed VOLLEY call DamageCmd.Attack
 upgrade VOLLEY raise Damage 4
 card VOLTAIC
 unplayed VOLTAIC call Calculate
-unupgraded VOLTAIC call RemoveKeyword
+upgrade VOLTAIC unkeyword Exhaust
 card WASTE_AWAY
 card WELL_LAID_PLANS
 play WELL_LAID_PLANS power self WELL_LAID_PLANS_POWER var RetainAmount

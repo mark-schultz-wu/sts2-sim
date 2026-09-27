@@ -2649,7 +2649,12 @@ impl<V: Rules> State<V> {
     pub(crate) fn legal(&self) -> Legal<V> {
         let alive = self.standing().alive;
         if let Phase::Combat(live) = &self.phase {
-            return crate::combat::legal_moves::<V>(live, &self.player.potions, alive);
+            return crate::combat::legal_moves::<V>(
+                live,
+                &self.player.relics,
+                &self.player.potions,
+                alive,
+            );
         }
 
         let mut moves = Legal::new();

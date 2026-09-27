@@ -206,6 +206,8 @@ pub(crate) fn play<V: Rules>(
     let ascension = live.ascension;
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
+    // `Hook.BeforeCardPlayed`, which no ported model answers.
+    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed);
     live.history.start(card.face.ident.card, play.energy);
     let mut board = Board::for_card(
         live,
@@ -303,6 +305,7 @@ pub(super) fn auto_play<V: Rules>(
     let energy = num_traits::zero();
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
+    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::BeforeCardPlayed);
     live.history.start(card.face.ident.card, energy);
     let mut board = Board::for_card(
         live,
@@ -372,7 +375,7 @@ fn result_pile<V: Rules>(
         .unwrap_or_else(|| unimplemented!("a card that works its own type out from the fight"))
     {
         true => None,
-        false if played.exhausts() => Some(sts2_core::Pile::Exhaust),
+        false if card.face.exhausts() => Some(sts2_core::Pile::Exhaust),
         false => Some(sts2_core::Pile::Discard),
     };
     let player = live.player().id;
