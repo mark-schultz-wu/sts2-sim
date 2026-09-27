@@ -3358,10 +3358,16 @@ pub enum CustomReward<V: ContentVersion> {
     Potion,
     /// `PotionReward(potion, player)` for this potion.
     SpecificPotion(V::Potion),
-    /// `PotionReward(potion, player)` for one `Rng.NextItem` over the
-    /// uncommon potions of the character's pool and the shared one, off the
-    /// rewards stream.
-    UncommonPotion,
+    /// `PotionReward(potion, player)` for one `Rng.NextItem` over the potions
+    /// of one rarity in the character's pool and the shared one. The potion
+    /// is drawn as the reward is made, before any reward fills in.
+    PotionOf(RewardRarity),
+    /// `GoldReward(amount, player)`, whose `Populate` still draws once, over
+    /// the range from the amount to the amount.
+    Gold(V::Number),
+    /// `RelicReward(player)`: the next relic from the front of the player's
+    /// bag, at a rarity it rolls as it fills in.
+    RolledRelic,
     /// `PotionReward(potion, player)` for one `Rng.NextItem` over
     /// [`Rules::unlocked_potions`] off the rewards stream.
     UnlockedPotion,
@@ -3450,6 +3456,13 @@ pub enum HookEffect<V: ContentVersion> {
     /// `RewardsCmd.OfferCustom`: a screen of these rewards, filled in in this
     /// order, which the player takes from or skips.
     OfferRewards(&'static [CustomReward<V>]),
+    /// `RewardsCmd.OfferCustom` over the rewards the event built for itself,
+    /// which [`Rules::event_rewards`] names. Each draws off the event's own
+    /// stream.
+    OfferEventRewards,
+    /// The event parks on a question of its own, which
+    /// [`Rules::event_question`] asks.
+    AskEvent,
     /// `NextItem` over the deck's upgradable cards off `stream`, then
     /// `CardCmd.Upgrade` on the one it draws.
     UpgradeRandomDeckCard {
@@ -5218,6 +5231,24 @@ pub trait Rules: Hooks {
         run: &impl crate::EventView<Self>,
         rng: &mut R,
     ) -> crate::HookEffects<Self>;
+
+    /// [`crate::EventBehavior::question`] for the event entered.
+    fn event_question(_state: &Self::EventState) -> Option<crate::Question<Self>> {
+        None
+    }
+
+    /// [`crate::EventBehavior::answer`] for the event entered.
+    fn answer_event(
+        _state: &mut Self::EventState,
+        answer: &crate::Answer,
+    ) -> crate::HookEffects<Self> {
+        unimplemented!("an event answered with {answer:?}")
+    }
+
+    /// [`crate::EventBehavior::rewards`] for the event entered.
+    fn event_rewards(_state: &Self::EventState) -> Vec<CustomReward<Self>> {
+        unimplemented!("an event with rewards of its own")
+    }
 
     /// The curses Neow offers, in the game's own order.
     fn neow_curses() -> &'static [Self::Relic];

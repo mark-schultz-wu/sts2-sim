@@ -54,7 +54,7 @@ impl EventBehavior<V> for PotionCourier {
         state.chosen = NonMaxU8::new(option);
         let offered: &'static [CustomReward<V>] = match option {
             0 => &FOUL,
-            _ => &[CustomReward::UncommonPotion],
+            _ => &[CustomReward::PotionOf(sts2_core::RewardRarity::Uncommon)],
         };
         smallvec::smallvec![HookEffect::OfferRewards(offered), HookEffect::FinishEvent]
     }

@@ -808,6 +808,21 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::choose(state, option, run, rng)
     }
 
+    fn event_question(state: &Self::EventState) -> Option<sts2_core::Question<Self>> {
+        behaviour::events::question(state)
+    }
+
+    fn answer_event(
+        state: &mut Self::EventState,
+        answer: &sts2_core::Answer,
+    ) -> sts2_core::HookEffects<Self> {
+        behaviour::events::answer(state, answer)
+    }
+
+    fn event_rewards(state: &Self::EventState) -> Vec<sts2_core::CustomReward<Self>> {
+        behaviour::events::rewards(state)
+    }
+
     fn neow_curses() -> &'static [Self::Relic] {
         &generated::events::NEOW_CURSES
     }

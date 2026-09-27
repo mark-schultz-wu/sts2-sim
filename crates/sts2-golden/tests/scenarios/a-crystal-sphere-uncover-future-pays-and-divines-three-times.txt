@@ -1,0 +1,16 @@
+# `CrystalSphere.UncoverFuture` costs fifty and one to forty-nine more,
+# drawn off the event's stream as it opens. Three divinations follow on the
+# same grid the Payment Plan would build.
+#
+# The card rewards draw their cards off the event's stream too, with an
+# upgrade roll for each, in the order the divinations uncovered them. The
+# potion comes to light after the common cards, but its reward draws it
+# before any reward fills in.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"CRYSTAL_SPHERE"}
+{"cmd":"choose_option","index":0}
+{"cmd":"answer","divine":{"x":9,"y":5,"tool":"Big"}}
+{"cmd":"answer","divine":{"x":9,"y":8,"tool":"Big"}}
+{"cmd":"answer","divine":{"x":4,"y":9,"tool":"Big"}}
+{"cmd":"answer","take":[{"index":5,"card":0}]}
+{"cmd":"answer","skip":true}
