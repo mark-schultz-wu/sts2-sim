@@ -68,7 +68,7 @@ impl EventBehavior<V> for ThisOrThat {
                 HookEffect::FinishEvent,
             ],
             _ => smallvec::smallvec![
-                HookEffect::ObtainNextRelic,
+                HookEffect::ObtainNextRelic(sts2_core::RelicPull::Rolled),
                 HookEffect::AddToDeck(Cards::Curse(CurseCard::Clumsy)),
                 HookEffect::FinishEvent,
             ],

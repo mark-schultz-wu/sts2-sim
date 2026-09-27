@@ -76,7 +76,7 @@ impl EventBehavior<V> for LuminousChoir {
             ],
             _ => smallvec::smallvec![
                 HookEffect::LoseGold(state.gold),
-                HookEffect::ObtainNextRelic,
+                HookEffect::ObtainNextRelic(sts2_core::RelicPull::Rolled),
                 HookEffect::FinishEvent,
             ],
         }

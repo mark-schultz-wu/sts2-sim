@@ -38,6 +38,7 @@ mod the_future_of_potions;
 mod the_lantern_key;
 mod the_legends_were_true;
 mod this_or_that;
+mod welcome_to_wongos;
 mod wellspring;
 mod whispering_hollow;
 mod wood_carvings;
@@ -98,6 +99,7 @@ pub enum State {
     TheFutureOfPotions(the_future_of_potions::State),
     TheLegendsWereTrue(the_legends_were_true::State),
     ThisOrThat(this_or_that::State),
+    WelcomeToWongos(welcome_to_wongos::State),
     Wellspring(wellspring::State),
     WhisperingHollow(whispering_hollow::State),
     WoodCarvings(wood_carvings::State),
@@ -305,6 +307,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         }
         Event::ThisOrThat => State::ThisOrThat(this_or_that::ThisOrThat.enter(run, rng)),
         Event::Wellspring => State::Wellspring(wellspring::Wellspring.enter(run, rng)),
+        Event::WelcomeToWongos => {
+            State::WelcomeToWongos(welcome_to_wongos::WelcomeToWongos.enter(run, rng))
+        }
         Event::CrystalSphere => State::CrystalSphere(crystal_sphere::CrystalSphere.enter(run, rng)),
         Event::WhisperingHollow => {
             State::WhisperingHollow(whispering_hollow::WhisperingHollow.enter(run, rng))
@@ -327,10 +332,11 @@ pub(crate) fn set_up<R: sts2_core::rng::GameRng>(
 }
 
 /// [`EventBehavior::relics_pulled`] for the event entered.
-pub(crate) fn relics_pulled(state: &State) -> usize {
+pub(crate) fn relics_pulled(state: &State) -> &'static [sts2_core::RelicPull<V>] {
     match state {
         State::RelicTrader(state) => relic_trader::RelicTrader.relics_pulled(state),
-        _ => 0,
+        State::WelcomeToWongos(state) => welcome_to_wongos::WelcomeToWongos.relics_pulled(state),
+        _ => &[],
     }
 }
 
@@ -341,6 +347,9 @@ pub(crate) fn hand_pulled_relics(
 ) {
     match state {
         State::RelicTrader(state) => relic_trader::RelicTrader.hand_pulled_relics(state, relics),
+        State::WelcomeToWongos(state) => {
+            welcome_to_wongos::WelcomeToWongos.hand_pulled_relics(state, relics)
+        }
         state => unreachable!("{state:?} pulls no relics"),
     }
 }
@@ -407,6 +416,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         }
         State::ThisOrThat(state) => this_or_that::ThisOrThat.observe(state, run),
         State::Wellspring(state) => wellspring::Wellspring.observe(state, run),
+        State::WelcomeToWongos(state) => welcome_to_wongos::WelcomeToWongos.observe(state, run),
         State::WhisperingHollow(state) => whispering_hollow::WhisperingHollow.observe(state, run),
         State::WoodCarvings(state) => wood_carvings::WoodCarvings.observe(state, run),
     }
@@ -494,6 +504,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         }
         State::ThisOrThat(state) => this_or_that::ThisOrThat.choose(state, option, run, rng),
         State::Wellspring(state) => wellspring::Wellspring.choose(state, option, run, rng),
+        State::WelcomeToWongos(state) => {
+            welcome_to_wongos::WelcomeToWongos.choose(state, option, run, rng)
+        }
         State::WhisperingHollow(state) => {
             whispering_hollow::WhisperingHollow.choose(state, option, run, rng)
         }

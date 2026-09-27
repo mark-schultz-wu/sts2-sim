@@ -1,0 +1,7 @@
+# `WelcomeToWongos.BuyBargainBin` spends a hundred on the next common from
+# the front of the bag that a merchant stocks. The featured rare is
+# pulled as the options generate, and the Cursed Pearl pays for the visit.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CURSED_PEARL"}
+{"cmd":"event","event":"WELCOME_TO_WONGOS"}
+{"cmd":"choose_option","index":0}

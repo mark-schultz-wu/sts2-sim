@@ -1,0 +1,7 @@
+# A run opens on ninety-nine gold, so each of Wongos' purchases shows its
+# locked twin. Leaving downgrades one of the six cards Sand Castle upgraded,
+# drawn off the event's stream.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"SAND_CASTLE"}
+{"cmd":"event","event":"WELCOME_TO_WONGOS"}
+{"cmd":"choose_option","index":3}

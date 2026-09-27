@@ -20,6 +20,7 @@ using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.Rewards;
+using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
@@ -462,6 +463,28 @@ internal static class CauldronRewards
         {
             __result.Add(new PotionReward(__instance.Owner));
         }
+        return false;
+    }
+}
+
+/// <summary>A profile with no Wongo points, whatever the saved one holds.</summary>
+/// <remarks>
+/// <c>WelcomeToWongos.CheckObtainWongoBadge</c> reads
+/// <c>SaveManager.Instance.Progress.WongoPoints</c>, which is the profile's and
+/// not the run's. A purchase that takes the total past a multiple of two
+/// thousand hands over a badge. The oracle's profile keeps what every run it
+/// finishes earned, so the same seed would record a badge one day and none
+/// the next.
+///
+/// So the profile reads as a fresh one, which is what the simulator models.
+/// Besides the event, only the progress save reads the property.
+/// </remarks>
+[HarmonyPatch(typeof(ProgressState), nameof(ProgressState.WongoPoints), MethodType.Getter)]
+internal static class FreshWongoPoints
+{
+    private static bool Prefix(ref int __result)
+    {
+        __result = 0;
         return false;
     }
 }

@@ -1159,6 +1159,27 @@ impl<V: Rules> State<V> {
         )
     }
 
+    /// `RelicFactory.PullNextRelicFromFront` at `rarity`, through the shop
+    /// filter for a stocked pull. [`pulled_rarity`] is the rarity it deals at.
+    pub(super) fn pull_relic_as(
+        &mut self,
+        pull: sts2_core::RelicPull<V>,
+        rarity: Rarity<V>,
+    ) -> V::Relic {
+        use sts2_core::RelicTable as _;
+
+        let relic = match pull {
+            sts2_core::RelicPull::Rolled => return self.pull_relic(rarity),
+            sts2_core::RelicPull::Stocked(_) => self.shared.opening.player_relics.front_where(
+                rarity,
+                &self.dealt_relics,
+                V::Relic::allowed_in_shops,
+            ),
+        };
+        Arc::make_mut(&mut self.dealt_relics).push(relic);
+        relic
+    }
+
     /// The run's two relic bags: the player's own, then the shared one.
     ///
     /// A relic dealt out of the first leaves the second with it, so whoever
@@ -1305,15 +1326,15 @@ impl<V: Rules> State<V> {
                 }
                 // The relic's own pickup asks first, and the effects after
                 // it wait behind what it asked.
-                HookEffect::ObtainRelic(_) | HookEffect::ObtainNextRelic => {
+                HookEffect::ObtainRelic(_) | HookEffect::ObtainNextRelic(_) => {
                     let relic = match effect {
                         HookEffect::ObtainRelic(relic) => relic,
-                        _ => {
-                            let rarity = crate::reward::relic_rarity::<V, _>(
-                                self.streams.player(V::PlayerRngType::REWARDS),
-                            );
-                            self.pull_relic(rarity)
+                        HookEffect::ObtainNextRelic(pull) => {
+                            let rarity =
+                                pulled_rarity(pull, self.streams.player(V::PlayerRngType::REWARDS));
+                            self.pull_relic_as(pull, rarity)
                         }
+                        _ => unreachable!("matched above"),
                     };
                     match self.obtain(relic) {
                         None => continue,
@@ -1512,6 +1533,25 @@ impl<V: Rules> State<V> {
                     let rng = stream_of(&mut self.phase, &mut self.streams, stream);
                     if let Ok(&at) = rng.choose(&upgradable) {
                         self.act_on_deck(sts2_core::DeckAct::Upgrade, &[at]);
+                    }
+                    continue;
+                }
+                // `NextItem` again. What the card saved stays, and its numbers
+                // are worked out from it at the new level.
+                HookEffect::DowngradeRandomDeckCard { stream } => {
+                    use sts2_core::rng::GameRng as _;
+
+                    let upgraded: Vec<usize> = self
+                        .player
+                        .deck
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, held)| held.ident.upgrade > 0)
+                        .map(|(at, _)| at)
+                        .collect();
+                    let rng = stream_of(&mut self.phase, &mut self.streams, stream);
+                    if let Ok(&at) = rng.choose(&upgraded) {
+                        self.player.deck_mut()[at].ident.upgrade = 0;
                     }
                     continue;
                 }
@@ -2311,11 +2351,11 @@ impl<V: Rules> State<V> {
         };
         let mut state = V::enter_event(event, self, rng);
         V::set_up_event(&mut state, self, streams.player(V::PlayerRngType::REWARDS));
-        let pulled: SmallVec<[V::Relic; 4]> = (0..V::event_relics_pulled(&state))
-            .map(|_| {
-                let rarity =
-                    crate::reward::relic_rarity::<V, _>(streams.player(V::PlayerRngType::REWARDS));
-                self.pull_relic(rarity)
+        let pulled: SmallVec<[V::Relic; 4]> = V::event_relics_pulled(&state)
+            .iter()
+            .map(|&pull| {
+                let rarity = pulled_rarity(pull, streams.player(V::PlayerRngType::REWARDS));
+                self.pull_relic_as(pull, rarity)
             })
             .collect();
         if !pulled.is_empty() {
@@ -4096,6 +4136,14 @@ fn asked<V: Rules>(offered: &[Offer<V>]) -> Question<V> {
                 },
             })
             .collect(),
+    }
+}
+
+/// The rarity a pull deals at: its own, or one rolled off `rewards`.
+fn pulled_rarity<V: Rules>(pull: sts2_core::RelicPull<V>, rewards: &mut MegaRng) -> Rarity<V> {
+    match pull {
+        sts2_core::RelicPull::Rolled => crate::reward::relic_rarity::<V, _>(rewards),
+        sts2_core::RelicPull::Stocked(rarity) => rarity,
     }
 }
 

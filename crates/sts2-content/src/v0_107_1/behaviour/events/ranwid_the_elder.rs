@@ -77,18 +77,18 @@ impl EventBehavior<V> for RanwidTheElder {
         match option {
             0 => smallvec::smallvec![
                 HookEffect::DiscardPotion(state.potion),
-                HookEffect::ObtainNextRelic,
+                HookEffect::ObtainNextRelic(sts2_core::RelicPull::Rolled),
                 HookEffect::FinishEvent,
             ],
             1 => smallvec::smallvec![
                 HookEffect::LoseGold(GOLD),
-                HookEffect::ObtainNextRelic,
+                HookEffect::ObtainNextRelic(sts2_core::RelicPull::Rolled),
                 HookEffect::FinishEvent,
             ],
             _ => smallvec::smallvec![
                 HookEffect::RemoveRelic(state.relic),
-                HookEffect::ObtainNextRelic,
-                HookEffect::ObtainNextRelic,
+                HookEffect::ObtainNextRelic(sts2_core::RelicPull::Rolled),
+                HookEffect::ObtainNextRelic(sts2_core::RelicPull::Rolled),
                 HookEffect::FinishEvent,
             ],
         }

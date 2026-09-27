@@ -1,0 +1,6 @@
+# `WelcomeToWongos.BuyFeaturedItem` spends two hundred on the rare pulled as
+# the options generated, the next a merchant stocks.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"CURSED_PEARL"}
+{"cmd":"event","event":"WELCOME_TO_WONGOS"}
+{"cmd":"choose_option","index":1}

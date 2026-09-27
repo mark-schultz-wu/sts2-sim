@@ -780,7 +780,7 @@ impl sts2_core::Rules for V0_107_1 {
         behaviour::events::set_up(state, run, rewards);
     }
 
-    fn event_relics_pulled(state: &Self::EventState) -> usize {
+    fn event_relics_pulled(state: &Self::EventState) -> &'static [sts2_core::RelicPull<Self>] {
         behaviour::events::relics_pulled(state)
     }
 
