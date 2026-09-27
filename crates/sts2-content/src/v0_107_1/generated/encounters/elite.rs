@@ -30,6 +30,7 @@ pub(super) const BYGONE_EFFIGY_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BygoneEffigy,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -53,6 +54,7 @@ pub(super) const BYRDONIS_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Byrdonis,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -100,6 +102,7 @@ pub(super) const ENTOMANCER_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::Entomancer,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -123,6 +126,7 @@ pub(super) const INFESTED_PRISMS_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::InfestedPrism,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -151,14 +155,17 @@ pub(super) const KNIGHTS_ELITE: EncounterData = EncounterData {
         Spawn {
             monster: Monster::FlailKnight,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::SpectralKnight,
             slot: Some(Slot::Second),
+            opens: None,
         },
         Spawn {
             monster: Monster::MagiKnight,
             slot: Some(Slot::Third),
+            opens: None,
         },
     ])),
 };
@@ -183,6 +190,7 @@ pub(super) const MECHA_KNIGHT_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::MechaKnight,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -206,6 +214,7 @@ pub(super) const MOCK_ELITE_ENCOUNTER: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::BigDummy,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -230,18 +239,22 @@ pub(super) const PHANTASMAL_GARDENERS_ELITE: EncounterData = EncounterData {
         Spawn {
             monster: Monster::PhantasmalGardener,
             slot: Some(Slot::First),
+            opens: None,
         },
         Spawn {
             monster: Monster::PhantasmalGardener,
             slot: Some(Slot::Second),
+            opens: None,
         },
         Spawn {
             monster: Monster::PhantasmalGardener,
             slot: Some(Slot::Third),
+            opens: None,
         },
         Spawn {
             monster: Monster::PhantasmalGardener,
             slot: Some(Slot::Fourth),
+            opens: None,
         },
     ])),
 };
@@ -266,6 +279,7 @@ pub(super) const PHROG_PARASITE_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::PhrogParasite,
         slot: Some(Slot::First),
+        opens: None,
     }])),
 };
 
@@ -289,6 +303,7 @@ pub(super) const SKULKING_COLONY_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::SkulkingColony,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -312,6 +327,7 @@ pub(super) const SOUL_NEXUS_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::SoulNexus,
         slot: None,
+        opens: None,
     }])),
 };
 
@@ -335,5 +351,6 @@ pub(super) const TERROR_EEL_ELITE: EncounterData = EncounterData {
     roster: Roster::Fixed(Spawns::new(&[Spawn {
         monster: Monster::TerrorEel,
         slot: None,
+        opens: None,
     }])),
 };

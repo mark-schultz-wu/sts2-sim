@@ -169,7 +169,7 @@ struct Encounter {
     slots: Vec<String>,
     possible: Vec<String>,
     roster: String,
-    spawns: Vec<(String, String)>,
+    spawns: Vec<(String, String, String)>,
 }
 
 /// A value at ascension 0 plus the level it steps at, which for gold is Poverty
@@ -266,11 +266,11 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     }
     for row in dump.of("spawn") {
         get(&row[1], &mut encounters)?;
-        encounters
-            .get_mut(&row[1])
-            .unwrap()
-            .spawns
-            .push((row[3].clone(), row[4].clone()));
+        encounters.get_mut(&row[1]).unwrap().spawns.push((
+            row[3].clone(),
+            row[4].clone(),
+            row[5].clone(),
+        ));
     }
     for row in dump.of("scalegold") {
         get(&row[1], &mut encounters)?;
@@ -339,7 +339,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
         &build,
     );
     writeln!(out, "\nuse super::acts::Act;").unwrap();
-    writeln!(out, "use super::monsters::Monster;").unwrap();
+    writeln!(out, "use super::monsters::{{Monster, MoveId}};").unwrap();
     writeln!(out, "use crate::{{Few, Scaled}};\nuse sts2_core::Table;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
 
@@ -443,7 +443,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
                     "Spawns",
                 ],
             ),
-            ("super::super::monsters", &["Monster"]),
+            ("super::super::monsters", &["Monster", "MoveId"]),
             ("crate", &["Few", "Scaled"]),
         ],
     )?;
@@ -567,6 +567,9 @@ fn emit_shape(out: &mut String) {
          \x20   /// Which of the encounter's slots it stands in, or `None` for\n\
          \x20   /// an encounter that positions nothing.\n\
          \x20   pub slot: Option<Slot>,\n\
+         \x20   /// The move it opens on where the encounter wrote one onto it,\n\
+         \x20   /// or `None` for the one its own graph starts on.\n\
+         \x20   pub opens: Option<MoveId>,\n\
          }}\n\
          \n\
          /// The monsters a fight opens with, in order.\n\
@@ -634,7 +637,7 @@ fn emit_shape(out: &mut String) {
 /// encounters need that second half.
 fn vocabulary(e: &Encounter) -> Vec<&str> {
     let mut vocabulary: Vec<&str> = e.slots.iter().map(String::as_str).collect();
-    for (_, slot) in &e.spawns {
+    for (_, slot, _) in &e.spawns {
         if slot != "-" && !vocabulary.contains(&slot.as_str()) {
             vocabulary.push(slot);
         }
@@ -696,7 +699,7 @@ fn literal(id: &str, e: &Encounter) -> Result<String, Error> {
             let spawns = e
                 .spawns
                 .iter()
-                .map(|(monster, slot)| {
+                .map(|(monster, slot, opens)| {
                     let slot = match slot.as_str() {
                         "-" => "None".to_string(),
                         name => format!(
@@ -707,8 +710,12 @@ fn literal(id: &str, e: &Encounter) -> Result<String, Error> {
                                 .expect("just interned")]
                         ),
                     };
+                    let opens = match opens.as_str() {
+                        "-" => "None".to_string(),
+                        id => format!("Some(MoveId::{})", camel(id)),
+                    };
                     format!(
-                        "Spawn {{ monster: Monster::{}, slot: {slot} }}",
+                        "Spawn {{ monster: Monster::{}, slot: {slot}, opens: {opens} }}",
                         camel(monster)
                     )
                 })
@@ -842,9 +849,13 @@ fn emit_encounters(
          \x20   }}\n\
          \n\
          \x20   /// How the encounter chooses its opening roster.\n\
-         \x20   fn roster(self) -> sts2_core::EncounterRoster<impl Iterator<Item = Monster>> {{\n\
+         \x20   fn roster(\n\
+         \x20       self,\n\
+         \x20   ) -> sts2_core::EncounterRoster<impl Iterator<Item = (Monster, Option<MoveId>)>> {{\n\
          \x20       match self.data().roster {{\n\
-         \x20           Roster::Fixed(spawns) => sts2_core::EncounterRoster::Fixed(spawns.iter().map(|spawn| spawn.monster)),\n\
+         \x20           Roster::Fixed(spawns) => sts2_core::EncounterRoster::Fixed(\n\
+         \x20               spawns.iter().map(|spawn| (spawn.monster, spawn.opens)),\n\
+         \x20           ),\n\
          \x20           Roster::Random => sts2_core::EncounterRoster::Random,\n\
          \x20           Roster::Configured => sts2_core::EncounterRoster::Configured,\n\
          \x20       }}\n\
@@ -860,7 +871,12 @@ fn emit_encounters(
     writeln!(out, "impl sts2_core::EncounterTable for Encounter {{").unwrap();
     writeln!(out, "    type Act = Act;").unwrap();
     writeln!(out, "    type Room = RoomType;")
-        .and_then(|_| writeln!(out, "    type Monster = Monster;\n"))
+        .and_then(|_| {
+            writeln!(
+                out,
+                "    type Monster = Monster;\n    type MoveId = MoveId;\n"
+            )
+        })
         .unwrap();
     out.push_str(&extras);
     writeln!(out, "}}\n").unwrap();

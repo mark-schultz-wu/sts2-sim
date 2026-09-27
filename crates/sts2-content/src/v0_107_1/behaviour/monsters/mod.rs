@@ -47,7 +47,8 @@ fn revive<F: Fight<V>>(fight: &mut F) {
 /// Powers a monster applies to itself as it enters combat.
 ///
 /// `AfterAddedToRoom`, where a monster that has one `PowerCmd.Apply`s on its
-/// own creature. Most monsters do not override it, and enter with none.
+/// own creature. Most monsters do not override it, and enter with none. One
+/// that does and has no port stops by name.
 ///
 /// Filed by act beside the moves, so a monster's whole port is one file.
 pub(crate) fn starting_powers(
@@ -57,9 +58,17 @@ pub(crate) fn starting_powers(
     super::super::generated::powers::Power,
     sts2_core::PowerAmount<Number>,
 )> {
-    let mut applied = overgrowth::starting_powers(monster, ascension);
-    applied.extend(hive::starting_powers(monster, ascension));
-    applied
+    use sts2_core::MonsterTable as _;
+
+    match overgrowth::starting_powers(monster, ascension)
+        .or_else(|| hive::starting_powers(monster, ascension))
+    {
+        Some(applied) => applied,
+        None if !monster.overrides_virtual(sts2_core::MonsterVirtual::AfterAddedToRoom) => {
+            Vec::new()
+        }
+        None => unimplemented!("what {monster:?} does as it enters the fight"),
+    }
 }
 
 /// What `AfterAddedToRoom` writes over the health a monster was built with.
@@ -119,13 +128,15 @@ pub(crate) fn state_of(monster: Monster, wanted: MoveId, at: u8) -> Result<u8, C
 /// An override nobody has ported.
 pub(crate) fn event_hook(monster: Monster, hook: EventHook<V>) {
     match (monster, hook) {
-        // A Decimillipede segment swaps its texture as it dies, and the
-        // Vantom moves the music on. Neither touches the fight.
+        // A Decimillipede segment swaps its texture as it dies, the Vantom
+        // moves the music on, and the Kin Priest talks and moves the music
+        // on as its followers die. None of them touches the fight.
         (
             Monster::DecimillipedeSegmentFront
             | Monster::DecimillipedeSegmentMiddle
             | Monster::DecimillipedeSegmentBack
-            | Monster::Vantom,
+            | Monster::Vantom
+            | Monster::KinPriest,
             EventHook::AfterDeath { .. },
         ) => {}
         (monster, hook) => unimplemented!("what {monster:?} does for {hook:?}"),
@@ -161,7 +172,8 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::Flyconid
         | Monster::CubexConstruct
         | Monster::CrossbowRubyRaider
-        | Monster::CeremonialBeast => overgrowth::perform(monster, move_id, fight),
+        | Monster::CeremonialBeast
+        | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
 }

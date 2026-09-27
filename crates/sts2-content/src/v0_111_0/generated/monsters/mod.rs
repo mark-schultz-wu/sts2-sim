@@ -2079,6 +2079,82 @@ impl sts2_core::MonsterTable for Monster {
     fn overrides(self) -> sts2_core::Overrides {
         OVERRIDES[self as usize]
     }
+
+    fn overrides_virtual(self, method: sts2_core::MonsterVirtual) -> bool {
+        match method {
+            sts2_core::MonsterVirtual::AfterAddedToRoom => {
+                matches!(
+                    self,
+                    Self::Aeonglass
+                        | Self::Axebot
+                        | Self::BattleFriendV1
+                        | Self::BattleFriendV2
+                        | Self::BattleFriendV3
+                        | Self::BowlbugEgg
+                        | Self::BowlbugRock
+                        | Self::BygoneEffigy
+                        | Self::Byrdonis
+                        | Self::Chomper
+                        | Self::CorpseSlug
+                        | Self::Crusher
+                        | Self::CubexConstruct
+                        | Self::DecimillipedeSegmentBack
+                        | Self::DecimillipedeSegmentFront
+                        | Self::DecimillipedeSegmentMiddle
+                        | Self::Entomancer
+                        | Self::Exoskeleton
+                        | Self::EyeWithTeeth
+                        | Self::FossilStalker
+                        | Self::FrogKnight
+                        | Self::GasBomb
+                        | Self::GlobeHead
+                        | Self::GremlinMerc
+                        | Self::Guardbot
+                        | Self::InfestedPrism
+                        | Self::Inklet
+                        | Self::KinFollower
+                        | Self::LagavulinMatriarch
+                        | Self::LivingShield
+                        | Self::LouseProgenitor
+                        | Self::MechaKnight
+                        | Self::MockArtifactMonster
+                        | Self::MockPlatingMonster
+                        | Self::MockReattachMonster
+                        | Self::MysteriousKnight
+                        | Self::Noisebot
+                        | Self::Ovicopter
+                        | Self::Parafright
+                        | Self::PhantasmalGardener
+                        | Self::PhrogParasite
+                        | Self::PunchConstruct
+                        | Self::Queen
+                        | Self::Rocket
+                        | Self::ScrollOfBiting
+                        | Self::Seapunk
+                        | Self::SewerClam
+                        | Self::SkulkingColony
+                        | Self::SlumberingBeetle
+                        | Self::SnappingJaxfruit
+                        | Self::SoulNexus
+                        | Self::Stabbot
+                        | Self::TerrorEel
+                        | Self::TestSubject
+                        | Self::TheAdversaryMkOne
+                        | Self::TheAdversaryMkThree
+                        | Self::TheAdversaryMkTwo
+                        | Self::TheForgotten
+                        | Self::TheLost
+                        | Self::ThievingHopper
+                        | Self::TorchHeadAmalgam
+                        | Self::ToughEgg
+                        | Self::TwoTailedRat
+                        | Self::Vantom
+                        | Self::WaterfallGiant
+                        | Self::Zapbot
+                )
+            }
+        }
+    }
 }
 mod glory;
 mod hive;

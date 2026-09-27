@@ -17,7 +17,7 @@ type Health = <V as sts2_core::ContentVersion>::Health;
 pub(super) fn starting_powers(
     monster: Monster,
     ascension: AscensionLevel,
-) -> Vec<(Power, PowerAmount<Number>)> {
+) -> Option<Vec<(Power, PowerAmount<Number>)>> {
     // `PlatingPower`'s own amount, which is also the block it opens with.
     const PLATING: Number = 15;
     const TOUGH_PLATING: Number = 18;
@@ -29,7 +29,7 @@ pub(super) fn starting_powers(
     // the health its reattach gives back.
     const REATTACH: Number = 25;
 
-    match monster {
+    Some(match monster {
         Monster::ThievingHopper => vec![(Power::EscapeArtistPower, PowerAmount::Counted(5))],
         Monster::DecimillipedeSegmentFront
         | Monster::DecimillipedeSegmentMiddle
@@ -47,8 +47,8 @@ pub(super) fn starting_powers(
                 (Power::SlumberPower, PowerAmount::Counted(SLUMBER)),
             ]
         }
-        _ => Vec::new(),
-    }
+        _ => return None,
+    })
 }
 
 /// What a Hive monster's `AfterAddedToRoom` writes over its rolled health.

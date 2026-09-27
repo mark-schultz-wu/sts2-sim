@@ -9,15 +9,20 @@ use super::Error;
 /// Resolve a static roster without RNG, or run the build-specific generator
 /// from the encounter's private stream.
 ///
-/// A fixed roster writes nothing onto the monsters it names, so each opens on
-/// the state its own table entry carries.
+/// A fixed roster opens each monster on the state its own table entry
+/// carries, or on the one the encounter writes onto it.
 pub(crate) fn opening<V: Rules>(
     raw_seed: u64,
     floor: V::Count,
     encounter: V::Encounter,
 ) -> Result<Vec<Spawned<V>>, Error> {
     match encounter.roster() {
-        EncounterRoster::Fixed(monsters) => Ok(monsters.map(Spawned::new).collect()),
+        EncounterRoster::Fixed(monsters) => Ok(monsters
+            .map(|(monster, opens)| match opens {
+                Some(opens) => Spawned::opening_on(monster, opens),
+                None => Spawned::new(monster),
+            })
+            .collect()),
         EncounterRoster::Random => {
             let floor: u64 = num_traits::cast(floor)
                 .expect("a floor number fits the seed the game mixes it into");

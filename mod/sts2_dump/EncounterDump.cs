@@ -48,7 +48,7 @@ public static class EncounterDump
         output.Append("# slot <encounter> <index> <name>\n");
         output.Append("# tag <encounter> <tag>\n");
         output.Append("# possible <encounter> <monster>\n");
-        output.Append("# spawn <encounter> <index> <monster> <slot>\n");
+        output.Append("# spawn <encounter> <index> <monster> <slot> <opens>\n");
         output.Append("# scalegold <encounter> <ascension> <minGold> <maxGold>\n");
         output.Append("# rows above are ascension 0; a scale* row is the level at which a value changes\n");
 
@@ -90,7 +90,7 @@ public static class EncounterDump
         {
             EncounterModel encounter = encounters[i];
             string id = encounter.Id.Entry;
-            string spawns = Spawns(encounter, out List<(string Monster, string Slot)> spawned);
+            string spawns = Spawns(encounter, out List<(string Monster, string Slot, string Opens)> spawned);
 
             output.Append(string.Join(" ", new[]
             {
@@ -133,7 +133,7 @@ public static class EncounterDump
 
             for (int s = 0; s < spawned.Count; s++)
             {
-                output.Append($"spawn {id} {s} {spawned[s].Monster} {spawned[s].Slot}\n");
+                output.Append($"spawn {id} {s} {spawned[s].Monster} {spawned[s].Slot} {spawned[s].Opens}\n");
             }
 
             // A row per level at which gold moves, not per level that differs
@@ -197,7 +197,7 @@ public static class EncounterDump
     /// </remarks>
     private static string Spawns(
         EncounterModel encounter,
-        out List<(string Monster, string Slot)> spawned)
+        out List<(string Monster, string Slot, string Opens)> spawned)
     {
         MethodInfo generate = typeof(EncounterModel).GetMethod(
             "GenerateMonsters",
@@ -211,7 +211,7 @@ public static class EncounterDump
             ?? throw new InvalidOperationException(
                 "EncounterModel._rng is gone; this dump can no longer tell a roll from a list");
 
-        spawned = new List<(string, string)>();
+        spawned = new List<(string, string, string)>();
         string? first = null;
         bool drew = false;
 
@@ -236,12 +236,12 @@ public static class EncounterDump
                 // chooses. One encounter does this — the Battleworn Dummy
                 // event picks which of three friends turns up — and the Rust
                 // side pins that it is still only one.
-                spawned = new List<(string, string)>();
+                spawned = new List<(string, string, string)>();
                 return "configured";
             }
 
             var got = monsters
-                .Select(m => (Monster: m.Monster.Id.Entry, Slot: m.Slot ?? "-"))
+                .Select(m => (Monster: m.Monster.Id.Entry, Slot: m.Slot ?? "-", Opens: Opens(m.Monster)))
                 .ToList();
 
             string spelled = string.Join(",", got.Select(m => $"{m.Monster}@{m.Slot}"));
@@ -262,11 +262,45 @@ public static class EncounterDump
 
         if (drew)
         {
-            spawned = new List<(string, string)>();
+            spawned = new List<(string, string, string)>();
             return "random";
         }
 
         return "fixed";
+    }
+
+    /// <summary>
+    /// The move a spawned monster opens on, where the encounter wrote something
+    /// onto it that changes it, or <c>-</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>TheKinBoss</c> sets <c>StartsWithDance</c> on one of its followers,
+    /// which moves where its graph starts. The graph is built on the monster
+    /// the encounter returned, and on a fresh clone of the same model, and the
+    /// two starting states compared.
+    /// </remarks>
+    private static string Opens(MonsterModel monster)
+    {
+        string? written = Initial(monster);
+        string? own = Initial(ModelDb.GetById<MonsterModel>(monster.Id).ToMutable());
+        return written == own ? "-" : written ?? "-";
+    }
+
+    private static string? Initial(MonsterModel monster)
+    {
+        MethodInfo generate = monster
+            .GetType()
+            .GetMethod(
+                "GenerateMoveStateMachine",
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            ?? throw new InvalidOperationException(
+                "MonsterModel.GenerateMoveStateMachine is gone; this dump needs rewriting");
+        object machine = generate.Invoke(monster, null)!;
+        object? initial = machine
+            .GetType()
+            .GetField("_initialState", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            ?.GetValue(machine);
+        return (string?)initial?.GetType().GetProperty("Id")?.GetValue(initial);
     }
 
     /// <summary>

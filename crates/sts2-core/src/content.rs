@@ -110,6 +110,8 @@ pub trait EncounterTable: Table {
     type Room: RoomKinds + serde::Serialize;
     /// A creature the encounter can place in combat.
     type Monster: Copy + serde::Serialize + 'static;
+    /// A move one of those creatures can open on.
+    type MoveId: Copy + 'static;
 
     /// The acts whose map can roll this encounter.
     ///
@@ -135,8 +137,10 @@ pub trait EncounterTable: Table {
     /// The monsters this encounter can field, in table order.
     fn possible_monsters(self) -> impl Iterator<Item = Self::Monster>;
 
-    /// How the encounter chooses its opening roster.
-    fn roster(self) -> EncounterRoster<impl Iterator<Item = Self::Monster>>;
+    /// How the encounter chooses its opening roster. A fixed one names each
+    /// creature, and the move it opens on where the encounter writes one.
+    fn roster(self)
+    -> EncounterRoster<impl Iterator<Item = (Self::Monster, Option<Self::MoveId>)>>;
 
     /// The encounter entry’s hash, already cast for wrapping seed arithmetic.
     fn seed_name(self) -> &'static str;
@@ -177,6 +181,18 @@ pub trait MonsterTable: Table {
     /// The hooks this monster's class overrides, as the hook dump measured
     /// them. See [`PowerTable::overrides`].
     fn overrides(self) -> Overrides;
+
+    /// Whether this monster's class overrides `method`, as the monster dump
+    /// measured it.
+    fn overrides_virtual(self, method: MonsterVirtual) -> bool;
+}
+
+/// A virtual `MonsterModel` declares for itself, which the fight runs on a
+/// monster. A monster whose class overrides one answers for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MonsterVirtual {
+    /// As the monster enters the fight.
+    AfterAddedToRoom,
 }
 
 /// A pool a reward draws from, already split the way a rarity roll asks.
@@ -3900,8 +3916,12 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned
-        + EncounterTable<Act = Self::Act, Room = Self::RoomType, Monster = Self::Monster>
-        + 'static;
+        + EncounterTable<
+            Act = Self::Act,
+            Room = Self::RoomType,
+            Monster = Self::Monster,
+            MoveId = Self::MoveId,
+        > + 'static;
 
     /// A room that is a decision rather than a fight.
     ///
