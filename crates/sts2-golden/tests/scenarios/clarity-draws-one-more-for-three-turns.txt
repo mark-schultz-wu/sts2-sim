@@ -1,0 +1,12 @@
+# Clarity draws one, then puts three Clarity on the drinker.
+# `ClarityPower.ModifyHandDraw` adds one card whatever its stack, and the
+# stack loses one as its owner's side starts a turn, after the draw. So turns
+# two to four draw six, and turn five draws five.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"CLARITY"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

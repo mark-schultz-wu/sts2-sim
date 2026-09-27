@@ -487,6 +487,10 @@ pub trait PowerTable: Table {
     /// `AbstractModel`'s, which does nothing. So an event raised as that hook
     /// has nothing to ask it.
     fn overrides(self) -> Overrides;
+
+    /// Whether `PowerInstanceType` is set: a creature can carry more than one
+    /// instance of it, each with its own amount.
+    fn instanced(self) -> bool;
 }
 
 /// A hook `AbstractModel` declares, which a fight raises on its listeners.
@@ -2322,6 +2326,19 @@ pub enum EventHook<V: ContentVersion> {
     CardPlayed {
         card: V::Card,
     },
+    /// `BeforeDamageReceived`, once the damage hooks worked the hit out and
+    /// before it meets block.
+    DamageReceiving {
+        target: crate::CombatId,
+        amount: V::Number,
+        /// The creature that deals it, which is nothing for damage from
+        /// nobody.
+        dealer: Option<crate::CombatId>,
+        /// `IsPoweredAttack`.
+        powered: bool,
+        /// The card that deals it, if a card does.
+        card: Option<V::Card>,
+    },
     /// `AfterDamageReceived`, carrying the creature that has just been hit.
     ///
     /// `unblocked` is the `DamageResult`'s own, which is what came off the hit
@@ -2541,6 +2558,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BeforeHandDraw { .. } => ModelHook::BeforeHandDraw,
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
+            EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
             EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
             EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
             EventHook::CardDrawn { .. } => ModelHook::AfterCardDrawn,
@@ -2871,6 +2889,9 @@ pub enum HookEffect<V: ContentVersion> {
     LoseMaxHp(V::Number),
     /// `CreatureCmd.Damage` on the owner, unpowered and from nobody.
     DamageOwner(V::Number),
+    /// `CreatureCmd.Damage` on the listener's owner in a fight, unblockable
+    /// and unpowered and from nobody.
+    DamageOwnerUnblockable(V::Number),
     /// `CardFactory.CreateForReward` for one card of `rarity` from the
     /// character's pool, at `Uniform` odds and with no upgrade roll, into the
     /// deck.
@@ -3174,6 +3195,8 @@ pub struct CardOwner<'a, V: ContentVersion> {
     pub powers: &'a [crate::Stack<V>],
     /// `Owner.Osty.CurrentHp`, while Osty is alive.
     pub osty: Option<V::Health>,
+    /// How many cards the owner's draw pile holds.
+    pub draw: usize,
 }
 
 /// What one copy of a card prints, as a rule reads it.

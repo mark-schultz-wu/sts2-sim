@@ -1,0 +1,13 @@
+# Flex Potion lends five Strength for the turn, so a Strike deals eleven.
+# Stable Serum keeps the hand for two turns, and Heart of Iron gives seven
+# Plating, which blocks seven of the Nibbit's twelve.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"FLEX_POTION"}
+{"cmd":"grant","potion":"STABLE_SERUM"}
+{"cmd":"grant","potion":"HEART_OF_IRON"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}

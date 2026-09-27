@@ -16,11 +16,12 @@ use sts2_core::{CardVars, Fight, Played};
 
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
-use super::super::generated::cards::{CardVar, Cards, NecrobinderCard};
+use super::super::generated::cards::{CardVar, Cards, ColorlessCard, NecrobinderCard};
 
 /// What the run holds a card's numbers as.
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
+mod colorless;
 mod defect;
 mod event;
 mod necrobinder;
@@ -85,6 +86,12 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::ExtraDamage) * owner.osty.map_or(0, Number::from)
         }
+        // `MindBlast`: a base, and one more for each card in the draw pile.
+        (Cards::Colorless(ColorlessCard::MindBlast), CardVar::CalculatedDamage) => {
+            let draw =
+                Number::try_from(owner.draw).expect("a draw pile's size fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * draw
+        }
         (card, key) => unimplemented!("the {} {card:?} works out", key.name()),
     }
 }
@@ -106,7 +113,7 @@ pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
         Cards::Regent(card) => regent::on_play(card, fight),
         Cards::Necrobinder(card) => necrobinder::on_play(card, fight),
         Cards::Defect(card) => defect::on_play(card, fight),
-        Cards::Colorless(card) => card_plays::colorless::on_play(card, fight),
+        Cards::Colorless(card) => colorless::on_play(card, fight),
         Cards::Curse(card) => card_plays::curse::on_play(card, fight),
         Cards::Event(card) => event::on_play(card, fight),
         Cards::Quest(card) => card_plays::quest::on_play(card, fight),

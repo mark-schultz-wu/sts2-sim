@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 use sts2_core::{CardTable as _, Modify, ModifyHook, PowerAmount, PowerModel as _};
 
 use super::super::V0_107_1 as V;
-use super::super::generated::cards::{CardKeyword, CardTag, Cards, TokenCard};
+use super::super::generated::cards::{CardKeyword, CardTag, Cards, ColorlessCard, TokenCard};
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::orbs::Orb;
 use super::super::generated::powers::Power;
@@ -59,6 +59,10 @@ pub enum State {
     Gigantification {
         bound: Option<(sts2_core::AttackId, sts2_core::CardId<V>)>,
     },
+    /// `AutomationPower`'s `cardsLeft`.
+    Automation {
+        cards_left: u8,
+    },
 }
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
@@ -83,6 +87,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::VigorPower => Self::Vigor { bound: None },
             Power::FeralPower => Self::Feral { played: 0 },
             Power::GigantificationPower => Self::Gigantification { bound: None },
+            Power::AutomationPower => Self::Automation {
+                cards_left: AUTOMATION_CARDS,
+            },
             power => Self::Stateless(power),
         }
     }
@@ -99,6 +106,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Vigor { .. } => Power::VigorPower,
             Self::Feral { .. } => Power::FeralPower,
             Self::Gigantification { .. } => Power::GigantificationPower,
+            Self::Automation { .. } => Power::AutomationPower,
         }
     }
 
@@ -297,6 +305,10 @@ const KRANE: i32 = 15;
 
 /// `ColossusPower`'s `DamageDecrease`.
 const COLOSSAL: f64 = 0.5;
+
+/// `AutomationPower._baseCardsLeft`: the cards its owner draws for each
+/// payout.
+const AUTOMATION_CARDS: u8 = 10;
 
 /// `PaleBlueDotPower.cardPlayThresholdValue`: the plays its owner finishes in
 /// one turn for the next turn's hand to grow.
@@ -848,6 +860,11 @@ pub(crate) fn modify_hook(
             PowerAmount::Counted(amount),
             ModifyHook::HandDraw { player, .. },
         ) if player == holder => Modify::Added(amount),
+        // `ClarityPower.ModifyHandDraw`: one more card for its owner, whatever
+        // its stack.
+        (Power::ClarityPower, _, ModifyHook::HandDraw { player, .. }) if player == holder => {
+            Modify::Added(one)
+        }
         // `PaleBlueDotPower.ModifyHandDraw`: its stack more cards for its
         // owner, once it finished enough plays in its last turn. A fight here
         // has one player, whose plays are all its holder's.
@@ -906,7 +923,8 @@ pub(crate) fn modify_hook(
             | Power::TyrannyPower
             | Power::ToolsOfTheTradePower
             | Power::DemesnePower
-            | Power::PaleBlueDotPower,
+            | Power::PaleBlueDotPower
+            | Power::ClarityPower,
             _,
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
@@ -1156,6 +1174,19 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Conqueror")
         }
         (Power::ConquerorPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `DemisePower.AfterSideTurnEnd`: its stack off its owner as its
+        // owner's side's turn ends.
+        (Power::DemisePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            Some(HookEffect::DamageOwnerUnblockable(amount))
+        }
+        (Power::DemisePower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless Demise")
+        }
+        (Power::DemisePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `BeforeCardPlayed`: one off the stack for each card of its kind its
         // owner plays, which stands in the play pile.
         (
@@ -1677,6 +1708,52 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Flame Barrier")
         }
         (Power::FlameBarrierPower, _, EventHook::DamageReceived { .. }) => None,
+        // `ThornsPower.BeforeDamageReceived`: its stack at whoever hits its
+        // owner with a powered attack or an Omnislice, unpowered, before the
+        // hit meets block.
+        (
+            Power::ThornsPower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceiving {
+                target,
+                dealer: Some(dealer),
+                powered,
+                card,
+                ..
+            },
+        ) if target == holder
+            && (powered || card == Some(Cards::Colorless(ColorlessCard::Omnislice))) =>
+        {
+            Some(HookEffect::Damage {
+                target: dealer,
+                amount,
+            })
+        }
+        (Power::ThornsPower, PowerAmount::Endless, EventHook::DamageReceiving { target, .. })
+            if target == holder =>
+        {
+            unimplemented!("an endless Thorns")
+        }
+        (Power::ThornsPower, _, EventHook::DamageReceiving { .. }) => None,
+        // `AutomationPower.AfterCardDrawn`: its stack of energy each tenth
+        // card its owner draws. A fight here has one player, whose cards are
+        // all its holder's.
+        (Power::AutomationPower, PowerAmount::Counted(amount), EventHook::CardDrawn { .. }) => {
+            let State::Automation { cards_left } = state else {
+                unreachable!("cards left for {:?}", state.power())
+            };
+            *cards_left -= 1;
+            match *cards_left {
+                0 => {
+                    *cards_left = AUTOMATION_CARDS;
+                    Some(HookEffect::GainEnergy(amount))
+                }
+                _ => None,
+            }
+        }
+        (Power::AutomationPower, PowerAmount::Endless, EventHook::CardDrawn { .. }) => {
+            unimplemented!("an endless Automation")
+        }
         // `ReflectPower.AfterDamageReceived`: what the block took off a
         // powered attack on its owner goes back at the attacker, unpowered.
         (
@@ -1707,6 +1784,19 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Reflect")
         }
         (Power::ReflectPower, _, EventHook::SideTurnStart { .. }) => None,
+        // `ClarityPower.AfterSideTurnStart`: one off its stack as its owner's
+        // side's turn starts.
+        (Power::ClarityPower, PowerAmount::Counted(_), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            Some(HookEffect::Decrement)
+        }
+        (Power::ClarityPower, PowerAmount::Endless, EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            unimplemented!("an endless Clarity")
+        }
+        (Power::ClarityPower, _, EventHook::SideTurnStart { .. }) => None,
         // `FlameBarrierPower.AfterSideTurnEnd`, which goes once the other side
         // has had its turn.
         (Power::FlameBarrierPower, _, EventHook::SideTurnEnd { side }) if side != owner => {

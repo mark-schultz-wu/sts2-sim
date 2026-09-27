@@ -1,0 +1,9 @@
+# Powdered Demise puts nine Demise on its target. `DemisePower.AfterSideTurnEnd`
+# hits its owner for its stack, unblockable, as the owner's side ends a turn.
+# On turn two the nine goes through the Nibbit's five block.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"POWDERED_DEMISE"}
+{"cmd":"use_potion","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

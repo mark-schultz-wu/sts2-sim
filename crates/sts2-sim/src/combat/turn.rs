@@ -67,7 +67,13 @@ pub(crate) fn end<V: Rules>(
         &mut skipping,
         <V::CombatSide as SideKinds>::PLAYER,
     );
-    applied::<V>(next, streams.combat(), relics, ascension, asked);
+    if let Some(ended) = applied::<V>(next, streams.combat(), relics, ascension, asked) {
+        next.skip_tick = skipping;
+        if ended == super::Ended::Won {
+            listen::combat_ended::<V>(next, relics);
+        }
+        return Ok(Some(ended));
+    }
 
     // `SwitchSides` to the enemy, then `StartTurn` for it: block clears, and
     // every enemy still in the fight performs the move it advertised.
@@ -100,33 +106,42 @@ pub(crate) fn end<V: Rules>(
         }
         return Ok(Some(ended));
     }
-    if let Some(ended) = before_turn_end::<V>(
+    // `EndEnemyTurnInternal`.
+    let ended = match before_turn_end::<V>(
         next,
         streams.combat(),
         relics,
         ascension,
         <V::CombatSide as SideKinds>::ENEMY,
     ) {
+        Some(ended) => Some(ended),
+        None => {
+            let asked = tick_powers::<V>(
+                next,
+                relics,
+                &mut skipping,
+                <V::CombatSide as SideKinds>::ENEMY,
+            );
+            applied::<V>(next, streams.combat(), relics, ascension, asked)
+        }
+    };
+    if let Some(ended) = ended {
         next.skip_tick = skipping;
         if ended == super::Ended::Won {
             listen::combat_ended::<V>(next, relics);
         }
-        return Ok(Some(ended));
     }
 
-    let asked = tick_powers::<V>(
-        next,
-        relics,
-        &mut skipping,
-        <V::CombatSide as SideKinds>::ENEMY,
-    );
-    applied::<V>(next, streams.combat(), relics, ascension, asked);
-
     // `SwitchSides` back. The round and the turn both count up, because this
-    // is not an extra turn.
+    // is not an extra turn. A fight that ended above switches too: its win
+    // check clears `IsInProgress`, which `IsEnding` then reads as not
+    // ending.
     next.switch_side(<V::CombatSide as SideKinds>::PLAYER);
     next.round = next.round + num_traits::one();
     next.turn = next.turn + num_traits::one();
+    if let Some(ended) = ended {
+        return Ok(Some(ended));
+    }
 
     // `StartTurn` opens on `BeforeSideTurnStart`, which is where a relic
     // counting a turn's plays moves the count on for the draw to read.
@@ -1015,15 +1030,7 @@ pub(super) fn side_turn_started<V: Rules>(
                     };
                     let mut board =
                         Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-                    let damage = super::board::modified::<V>(
-                        board.walk(),
-                        None,
-                        Some(owner),
-                        None,
-                        stack,
-                        false,
-                    );
-                    board.hit(None, owner, damage, false, true);
+                    board.hit_from_nobody(owner, stack);
                     let alive = board
                         .at(owner)
                         .is_some_and(|at| board.live.creatures[at].alive);
@@ -1234,7 +1241,10 @@ fn tick_powers<V: Rules>(
             // `PowerCmd.Apply` on the creature carrying the power, which is
             // what a power that grows its owner asks for.
             sts2_core::HookEffect::ApplyToOwner(power, amount) => {
-                applying.push((owner, power, amount));
+                applying.push(TurnEndAsk::Apply(owner, power, amount));
+            }
+            sts2_core::HookEffect::DamageOwnerUnblockable(amount) => {
+                applying.push(TurnEndAsk::Damage(owner, amount));
             }
             // `PowerCmd.Remove(this)`, taken after the ticks for the same
             // reason a power it applies is.
@@ -1266,21 +1276,23 @@ fn tick_powers<V: Rules>(
     applying
 }
 
-/// The powers a turn end's listeners asked to apply, each beside the creature
-/// that asked, inline to one for each creature a fight holds.
-type Applying<V> = SmallVec<
-    [(
-        CombatId,
-        <V as sts2_core::ContentVersion>::Power,
-        PowerAmount<<V as sts2_core::ContentVersion>::Number>,
-    ); CREATURES],
->;
+/// What a turn end's listeners asked for on the creature carrying them,
+/// inline to one for each creature a fight holds.
+type Applying<V> = SmallVec<[TurnEndAsk<V>; CREATURES]>;
 
-/// `PowerCmd.Apply` for what the powers that just ticked asked for.
+/// One thing a power asked for as a turn ended, on the creature carrying it.
+enum TurnEndAsk<V: Rules> {
+    /// `PowerCmd.Apply`.
+    Apply(CombatId, V::Power, PowerAmount<V::Number>),
+    /// `CreatureCmd.Damage`, unblockable and unpowered and from nobody.
+    Damage(CombatId, V::Number),
+}
+
+/// What the powers that just ticked asked for, and whatever that ended.
 ///
 /// After the tick rather than inside it, because a power applying one is
 /// holding the creature it sits on. The order is the belt's, which is the
-/// order they were asked in.
+/// order they were asked in. A fight that ends runs no more of them.
 #[tracing::instrument(level = "trace", skip_all)]
 fn applied<V: Rules>(
     live: &mut Live<V>,
@@ -1288,11 +1300,20 @@ fn applied<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     ascension: V::AscensionLevel,
     asked: Applying<V>,
-) {
-    for (at, power, amount) in asked {
+) -> Option<super::Ended> {
+    for ask in asked {
         let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
-        sts2_core::Fight::apply_power(&mut board, at, power, amount);
+        match ask {
+            TurnEndAsk::Apply(at, power, amount) => {
+                sts2_core::Fight::apply_power(&mut board, at, power, amount);
+            }
+            TurnEndAsk::Damage(at, amount) => board.hit_from_nobody(at, amount),
+        }
+        if let Some(ended) = board.ended {
+            return Some(ended);
+        }
     }
+    None
 }
 
 /// `ExecuteEnemyTurn`: each enemy performs what it advertised.

@@ -1,0 +1,13 @@
+# Skill Potion offers three distinct Skills from the character's pool, and
+# Colorless Potion three from the colorless pool, each off
+# `CombatCardGeneration`. The one taken goes to hand, free this turn. Mind
+# Blast, taken from the second, deals one for each card in the draw pile.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"SKILL_POTION"}
+{"cmd":"grant","potion":"COLORLESS_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[0]}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"answer","cards":[1]}
+{"cmd":"play_card","index":8,"target":1}

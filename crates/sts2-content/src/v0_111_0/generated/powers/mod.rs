@@ -1377,6 +1377,10 @@ impl sts2_core::PowerTable for Power {
     fn overrides(self) -> sts2_core::Overrides {
         OVERRIDES[self as usize]
     }
+
+    fn instanced(self) -> bool {
+        <Self as sts2_core::Table>::data(self).instance.is_some()
+    }
 }
 
 impl sts2_core::PowerKinds for Power {

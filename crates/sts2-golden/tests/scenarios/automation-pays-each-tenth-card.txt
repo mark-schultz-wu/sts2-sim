@@ -1,0 +1,14 @@
+# `AutomationPower.AfterCardDrawn` gives its stack of energy for each tenth
+# card its owner draws, counting from when it lands. Swift Potion draws three
+# after it lands, so the tenth card is turn three's second, and the twentieth
+# is turn five's second. Turns three and five have four energy, and turn four
+# has three.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"SWIFT_POTION"}
+{"cmd":"power","power":"AUTOMATION_POWER","amount":1,"target":0}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
