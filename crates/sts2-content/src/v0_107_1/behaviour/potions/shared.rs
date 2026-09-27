@@ -55,6 +55,8 @@ const STABLE_SERUM: Number = 2;
 const STRENGTH: Number = 2;
 /// `SwiftPotion`'s `CardsVar(3)`.
 const SWIFT: Number = 3;
+/// `CardSelectorPrefs(prompt, 0, 999999999)`: any number of cards.
+const ANY_NUMBER: usize = 999_999_999;
 /// `DistilledChaos`'s `RepeatVar(3)`.
 const DISTILLED_CHAOS: usize = 3;
 /// `Duplicator`'s one stack of `DuplicationPower`.
@@ -91,6 +93,8 @@ pub enum Resume {
     LiquidMemories,
     /// `DropletOfPrecognition`, after the card picked from the draw pile.
     DropletOfPrecognition,
+    /// `GamblersBrew`, after the cards picked from hand to discard.
+    GamblersBrew,
 }
 
 /// What one of the shared potions does when it is drunk.
@@ -314,6 +318,14 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
             selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
             at: super::super::Resume::Potion(super::Resume::Shared(Resume::LiquidMemories)),
         },
+        // Any number of cards from hand, discarded, and as many drawn.
+        Potion::GamblersBrew => Played::Asking {
+            pile: Pile::Hand,
+            selection: sts2_core::Selection::UpTo(
+                nonmax::NonMaxUsize::new(ANY_NUMBER).expect("a count below the maximum"),
+            ),
+            at: super::super::Resume::Potion(super::Resume::Shared(Resume::GamblersBrew)),
+        },
         // One card from the draw pile into hand.
         Potion::DropletOfPrecognition => Played::Asking {
             pile: Pile::Draw,
@@ -400,6 +412,13 @@ pub(super) fn resume<F: Fight<V>>(
                 free_this_turn(fight, at);
             }
             fight.act_on(PileAct::IntoHand, picked.as_slice());
+            Played::Done
+        }
+        // `CardCmd.DiscardAndDraw` for as many as were picked.
+        (Resume::GamblersBrew, sts2_core::Taken::Selected(picked)) => {
+            let count = Number::try_from(picked.as_slice().len())
+                .expect("a hand's size fits a game number");
+            fight.discard_and_draw(picked.as_slice(), count);
             Played::Done
         }
         (Resume::DropletOfPrecognition, sts2_core::Taken::Selected(picked)) => {

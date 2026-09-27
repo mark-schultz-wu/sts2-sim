@@ -1,0 +1,9 @@
+# Scrape hits, draws four, and discards each drawn card whose own cost is
+# anything but nothing.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"grant","card":"CLAW"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SCRAPE"}
+{"cmd":"play_card","index":5,"target":1}

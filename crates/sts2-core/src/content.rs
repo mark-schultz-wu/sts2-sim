@@ -1788,6 +1788,19 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("unblockable damage")
     }
 
+    /// `CardCmd.DiscardAndDraw(cards, draw)`: every card discarded, then the
+    /// draw, and only then the Sly cards among them auto-played. Nothing, for
+    /// no card.
+    fn discard_and_draw(&mut self, _cards: &[crate::CardAt<V>], _draw: V::Number) {
+        unimplemented!("discarding and drawing")
+    }
+
+    /// `EnergyCost.GetWithModifiers(CostModifiers.Local)` for a card: its own
+    /// cost modifiers over what it prints, and no listener's.
+    fn local_cost(&self, _card: crate::CardAt<V>) -> crate::Cost {
+        unimplemented!("a card's own cost")
+    }
+
     /// `CombatCardSelection.NextItem` over the cards in `pile`, or nothing for
     /// an empty one.
     fn random_card_in(&mut self, _pile: crate::Pile) -> Option<crate::CardAt<V>> {

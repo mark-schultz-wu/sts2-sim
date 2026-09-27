@@ -2309,6 +2309,38 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.rngs.targets.choose(&hittable).ok().copied()
     }
 
+    fn discard_and_draw(&mut self, cards: &[CardAt<V>], draw: V::Number) {
+        if cards.is_empty() || self.ended.is_some() || self.ending() {
+            return;
+        }
+        let (sly, ended) = super::turn::act_on::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            sts2_core::PileAct::Discard,
+            cards,
+        );
+        self.ended = self.ended.or(ended);
+        if self.ended.is_none() && draw > V::Number::zero() {
+            sts2_core::Fight::draw(self, draw);
+        }
+        if self.ended.is_none() {
+            self.ended =
+                super::turn::play_sly::<V>(self.live, self.rngs.reborrow(), self.relics, sly);
+        }
+    }
+
+    fn local_cost(&self, card: CardAt<V>) -> sts2_core::Cost {
+        let at = self.standing(card);
+        self.live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found")
+            .face
+            .costs(|cost| cost)
+            .0
+    }
+
     fn random_card_in(&mut self, pile: Pile) -> Option<CardAt<V>> {
         use sts2_core::rng::GameRng as _;
 
