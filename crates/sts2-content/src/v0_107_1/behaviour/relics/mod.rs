@@ -45,9 +45,12 @@ mod precarious_shears;
 mod precise_scissors;
 mod ring_of_the_snake;
 mod sand_castle;
+mod seal_of_gold;
 mod stone_humidifier;
+mod storybook;
 mod strike_dummy;
 mod sword_of_stone;
+mod very_hot_cocoa;
 mod winged_boots;
 
 use sts2_core::{EventHook, Modify, ModifyHook, Table};
@@ -107,9 +110,12 @@ pub enum State {
     PreciseScissors,
     RingOfTheSnake,
     SandCastle,
+    SealOfGold,
     StoneHumidifier,
+    Storybook,
     StrikeDummy,
     SwordOfStone(sword_of_stone::State),
+    VeryHotCocoa,
     WingedBoots(winged_boots::State),
 }
 
@@ -165,9 +171,12 @@ pub(crate) fn event_hook(
             hook => unimplemented!("what RingOfTheSnake does for {hook:?}"),
         },
         State::SandCastle => sand_castle::event_hook(hook, asked),
+        State::SealOfGold => seal_of_gold::event_hook(hook, asked),
         State::StoneHumidifier => stone_humidifier::event_hook(hook, asked),
+        State::Storybook => storybook::event_hook(hook, asked),
         State::StrikeDummy => strike_dummy::event_hook(hook),
         State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
+        State::VeryHotCocoa => very_hot_cocoa::event_hook(hook, asked),
         State::WingedBoots(state) => winged_boots::event_hook(state, hook),
     }
 }
@@ -228,8 +237,11 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::PrecariousShears
         | State::PreciseScissors
         | State::SandCastle
+        | State::SealOfGold
         | State::StoneHumidifier
+        | State::Storybook
         | State::SwordOfStone(_)
+        | State::VeryHotCocoa
         | State::WingedBoots(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
@@ -276,9 +288,12 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreciseScissors => State::PreciseScissors,
             Relic::RingOfTheSnake => State::RingOfTheSnake,
             Relic::SandCastle => State::SandCastle,
+            Relic::SealOfGold => State::SealOfGold,
             Relic::StoneHumidifier => State::StoneHumidifier,
+            Relic::Storybook => State::Storybook,
             Relic::StrikeDummy => State::StrikeDummy,
             Relic::SwordOfStone => State::SwordOfStone(sword_of_stone::State::default()),
+            Relic::VeryHotCocoa => State::VeryHotCocoa,
             Relic::WingedBoots => State::WingedBoots(winged_boots::State::default()),
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }

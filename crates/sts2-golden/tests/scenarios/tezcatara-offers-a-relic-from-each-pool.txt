@@ -1,0 +1,7 @@
+# Tezcatara draws one relic from each of its three pools off the event's
+# stream. The Ironclad's deck holds a basic Strike, so Nutritious Soup joins
+# the first pool, and on this seed it is the one drawn. Taking Storybook
+# obtains it, which adds a Brightest Flame to the deck, and ends the event.
+{"cmd":"start","seed":"0RACLE5","character":"IRONCLAD","ascension":"None"}
+{"cmd":"event","event":"TEZCATARA"}
+{"cmd":"choose_option","index":1}

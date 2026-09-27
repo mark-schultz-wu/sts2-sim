@@ -3396,6 +3396,13 @@ pub enum HookEffect<V: ContentVersion> {
     AddGoldReward(V::Number),
     /// `PlayerCmd.LoseGold`, which stops at none.
     LoseGold(V::Number),
+    /// `SealOfGold.AfterSideTurnStart`: while the player holds at least
+    /// `gold`, `PlayerCmd.GainEnergy` by `energy` and then
+    /// `PlayerCmd.LoseGold` by `gold`.
+    GainEnergyForGold {
+        energy: V::Number,
+        gold: V::Number,
+    },
     /// `RelicCmd.Obtain`, and whatever the relic's pickup asks.
     ObtainRelic(V::Relic),
     /// `RelicFactory.PullNextRelicFromFront(player)`: a rarity rolled off the

@@ -4,14 +4,9 @@
 //! first pool. The third pool holds the relics that inspect the run before
 //! they are offered.
 
-use nonmax::NonMaxU8;
-use sts2_core::rng::{GameRng, Span};
-use sts2_core::{
-    EventBehavior, EventOption, EventOptionKey, EventView, HookEffect, HookEffects,
-    RelicTable as _, Room,
-};
+use sts2_core::rng::GameRng;
+use sts2_core::{EventBehavior, EventView, HookEffects, RelicTable as _, Room};
 
-use super::super::super::EventOptionId;
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::cards::{
     Cards, DefectCard, IroncladCard, NecrobinderCard, RegentCard, SilentCard,
@@ -19,6 +14,7 @@ use super::super::super::generated::cards::{
 use super::super::super::generated::characters::Character;
 use super::super::super::generated::events::Event;
 use super::super::super::generated::relics::{Relic, RelicRarity};
+use super::ancient::{Offered, next_item};
 
 /// `Orobas._prismaticOdds`, which the Sea Glass takes the other side of.
 const PRISMATIC: f32 = 0.3333333;
@@ -57,18 +53,10 @@ const TRANSCENDS: [Cards; 5] = [
     Cards::Defect(DefectCard::Dualcast),
 ];
 
-/// What one copy of this event offers.
-#[derive(Debug, Clone)]
-pub struct State {
-    offered: Vec<Relic>,
-    /// The option taken.
-    chosen: Option<NonMaxU8>,
-}
-
 pub struct Orobas;
 
 impl EventBehavior<V> for Orobas {
-    type State = State;
+    type State = Offered;
 
     /// An ancient is the node its act opens on, and is never rolled as an
     /// unknown room.
@@ -76,7 +64,7 @@ impl EventBehavior<V> for Orobas {
         false
     }
 
-    fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> State {
+    fn enter<R: GameRng>(&self, run: &impl EventView<V>, rng: &mut R) -> Offered {
         // One of the other characters, drawn whether or not the sea glass that
         // would name it is the option taken. The relic offered is the one
         // relic either way, so which character it was does not show here.
@@ -92,8 +80,8 @@ impl EventBehavior<V> for Orobas {
         };
         let first: Vec<Relic> = POOL_ONE.into_iter().chain([paired]).collect();
         let third = pool_three(run);
-        State {
-            offered: [
+        Offered::new(
+            [
                 next_item(rng, &first),
                 next_item(rng, &POOL_TWO),
                 next_item(rng, &third),
@@ -101,48 +89,21 @@ impl EventBehavior<V> for Orobas {
             .into_iter()
             .flatten()
             .collect(),
-            chosen: None,
-        }
+        )
     }
 
-    fn observe(&self, state: &State, _run: &impl EventView<V>) -> Room<V> {
-        let options = state
-            .offered
-            .iter()
-            .enumerate()
-            .map(|(index, &relic)| EventOption {
-                index: index as u8,
-                key: EventOptionKey {
-                    event: Event::Orobas,
-                    option: EventOptionId::Relic(relic),
-                },
-                title: None,
-                text: None,
-                locked: false,
-                proceed: false,
-                chosen: state.chosen == NonMaxU8::new(index as u8),
-                relic: Some(relic),
-            })
-            .collect();
-        Room::Event {
-            event: Event::Orobas,
-            finished: false,
-            title: None,
-            text: None,
-            options,
-        }
+    fn observe(&self, state: &Offered, _run: &impl EventView<V>) -> Room<V> {
+        state.observe(Event::Orobas)
     }
 
     fn choose<R: GameRng>(
         &self,
-        state: &mut State,
+        state: &mut Offered,
         option: u8,
         _run: &impl EventView<V>,
         _rng: &mut R,
     ) -> HookEffects<V> {
-        let relic = state.offered[usize::from(option)];
-        state.chosen = NonMaxU8::new(option);
-        smallvec::smallvec![HookEffect::ObtainRelic(relic), HookEffect::FinishEvent]
+        state.choose(option)
     }
 }
 
@@ -168,15 +129,4 @@ fn pool_three(run: &impl EventView<V>) -> Vec<Relic> {
         pool.push(Relic::ArchaicTooth);
     }
     pool
-}
-
-/// One item of a list, which is `Rng.NextItem`.
-///
-/// A two-argument `NextInt`, which is a different draw from the one-argument
-/// one even over the same range. An empty list costs no draw at all.
-fn next_item<T: Copy, R: GameRng>(rng: &mut R, items: &[T]) -> Option<T> {
-    let count: R::Int = num_traits::cast(items.len())?;
-    let span = Span::new(num_traits::zero(), count).ok()?;
-    let at: usize = num_traits::cast(rng.next_int_range(span))?;
-    items.get(at).copied()
 }
