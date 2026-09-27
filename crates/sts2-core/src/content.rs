@@ -3122,6 +3122,8 @@ pub enum HookEffect<V: ContentVersion> {
     ClearAffliction(Writing<V>),
     /// `CardPileCmd.RemoveFromDeck` on the deck card that asked.
     RemoveFromDeck,
+    /// `CardPileCmd.RemoveFromDeck` on the card at this place in the deck.
+    RemoveDeckCardAt(usize),
     /// `CardCmd.TransformTo(into)` on each card of the deck that is `from`.
     /// Each leaves its place, and its replacement joins the deck's end.
     TransformInDeck {

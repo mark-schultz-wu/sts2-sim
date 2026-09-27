@@ -1,0 +1,8 @@
+# Slippery Bridge names its first card among those that are not Basic, off
+# the event's own stream. Overcome at once removes it: here Anger, of Inflame
+# and Anger.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"INFLAME"}
+{"cmd":"grant","card":"ANGER"}
+{"cmd":"event","event":"SLIPPERY_BRIDGE"}
+{"cmd":"choose_option","index":0}
