@@ -1261,6 +1261,13 @@ fn tick_powers<V: Rules>(
             skipping.remove(at);
             continue;
         }
+        // `PowerCmd.Decrement`, which is `ModifyAmount` by one down.
+        let fight = listen::Walk { live, relics };
+        let (_, modifiers) =
+            super::board::received_by::<V>(fight, owner, power, -num_traits::one::<V::Number>());
+        if !modifiers.is_empty() {
+            unimplemented!("a listener changing a {power:?} tick");
+        }
         for held in live
             .powers
             .of_mut(owner)
@@ -1268,7 +1275,24 @@ fn tick_powers<V: Rules>(
         {
             held.amount = held.amount.ticked();
         }
-        live.powers.retain(owner, |held| !held.amount.spent());
+        // `AfterPowerAmountChanged` for the one it took.
+        let hook = sts2_core::EventHook::PowerAmountChanged {
+            creature: owner,
+            power,
+            delta: -num_traits::one::<V::Number>(),
+        };
+        if let Some((listener, effect)) = listen::notify::<V>(live, relics, hook).into_iter().next()
+        {
+            unimplemented!("{listener:?} asking for {effect:?} as {power:?} ticks down");
+        }
+        // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove`.
+        if live
+            .powers
+            .of(owner)
+            .any(|held| held.power() == power && held.amount.spent())
+        {
+            live.remove_power(owner, power);
+        }
     }
     for (owner, power) in leaving {
         live.remove_power(owner, power);

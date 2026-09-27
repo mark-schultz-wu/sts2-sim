@@ -592,10 +592,16 @@ pub enum ModelHook {
     BeforeSideTurnEndVeryEarly,
     BeforeSideTurnEnd,
     AfterDiedToDoom,
+    BeforePowerAmountChanged,
+    ModifyPowerAmountGivenAdditive,
+    ModifyPowerAmountGivenMultiplicative,
+    TryModifyPowerAmountReceived,
+    AfterModifyingPowerAmountGiven,
+    AfterModifyingPowerAmountReceived,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 87] = [
+    pub const ALL: [ModelHook; 93] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -683,6 +689,12 @@ impl ModelHook {
         ModelHook::BeforeSideTurnEndVeryEarly,
         ModelHook::BeforeSideTurnEnd,
         ModelHook::AfterDiedToDoom,
+        ModelHook::BeforePowerAmountChanged,
+        ModelHook::ModifyPowerAmountGivenAdditive,
+        ModelHook::ModifyPowerAmountGivenMultiplicative,
+        ModelHook::TryModifyPowerAmountReceived,
+        ModelHook::AfterModifyingPowerAmountGiven,
+        ModelHook::AfterModifyingPowerAmountReceived,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -785,6 +797,14 @@ impl ModelHook {
             ModelHook::BeforeSideTurnEndVeryEarly => "BeforeSideTurnEndVeryEarly",
             ModelHook::BeforeSideTurnEnd => "BeforeSideTurnEnd",
             ModelHook::AfterDiedToDoom => "AfterDiedToDoom",
+            ModelHook::BeforePowerAmountChanged => "BeforePowerAmountChanged",
+            ModelHook::ModifyPowerAmountGivenAdditive => "ModifyPowerAmountGivenAdditive",
+            ModelHook::ModifyPowerAmountGivenMultiplicative => {
+                "ModifyPowerAmountGivenMultiplicative"
+            }
+            ModelHook::TryModifyPowerAmountReceived => "TryModifyPowerAmountReceived",
+            ModelHook::AfterModifyingPowerAmountGiven => "AfterModifyingPowerAmountGiven",
+            ModelHook::AfterModifyingPowerAmountReceived => "AfterModifyingPowerAmountReceived",
         }
     }
 }
@@ -2057,6 +2077,9 @@ pub enum Modify<N> {
     /// `ModifyHpLost` is folded that way: each listener is handed what the one
     /// before it returned. Slippery hands back one, whatever it was given.
     AtMost(N),
+    /// The whole number, which a `TryModify` hook that returns true hands
+    /// back in place of the one it was handed.
+    Replaced(N),
 }
 
 /// A value-producing hook the simulator asks one content model to apply.
@@ -2123,6 +2146,13 @@ pub enum ModifyHook<V: ContentVersion> {
     HpLostAfterOstyLate {
         target: crate::CombatId,
     },
+    /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
+    /// `target`, as an application or a change to one it carries.
+    PowerAmountReceived {
+        power: V::Power,
+        target: crate::CombatId,
+        amount: V::Number,
+    },
     /// `ModifyHandDraw`: how many cards the player draws to open a turn, in a
     /// room of this type.
     HandDraw {
@@ -2187,6 +2217,7 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HpLostAfterOsty { .. } => ModelHook::ModifyHpLostAfterOsty,
             ModifyHook::HpLostAfterOstyLate { .. } => ModelHook::ModifyHpLostAfterOstyLate,
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
+            ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
             ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
@@ -2355,6 +2386,11 @@ pub enum EventHook<V: ContentVersion> {
         powered: bool,
         /// The card that deals it, if a card does.
         card: Option<V::Card>,
+    },
+    /// `AfterModifyingPowerAmountReceived`, asked of each listener whose
+    /// `TryModifyPowerAmountReceived` changed what `power` landed with.
+    PowerAmountReceivedModified {
+        power: V::Power,
     },
     /// `AfterDamageReceived`, carrying the creature that has just been hit.
     ///
@@ -2576,6 +2612,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
+            EventHook::PowerAmountReceivedModified { .. } => {
+                ModelHook::AfterModifyingPowerAmountReceived
+            }
             EventHook::DamageReceived { .. } => ModelHook::AfterDamageReceived,
             EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
             EventHook::CardDrawn { .. } => ModelHook::AfterCardDrawn,

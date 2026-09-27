@@ -2074,7 +2074,10 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // ROYAL_STAMP
     sts2_core::Overrides::from_bits(0),
     // RUINED_HELMET
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCombatEnd)
+        .with(sts2_core::ModelHook::AfterModifyingPowerAmountReceived)
+        .with(sts2_core::ModelHook::TryModifyPowerAmountReceived),
     // RUNIC_CAPACITOR
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnStart),
     // RUNIC_PYRAMID
@@ -2119,7 +2122,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::BeforeCombatStart)
         .with(sts2_core::ModelHook::ModifyHandDraw),
     // SNECKO_SKULL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingPowerAmountGiven)
+        .with(sts2_core::ModelHook::ModifyPowerAmountGivenAdditive),
     // SOZU
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyMaxEnergy),
     // SPARKLING_ROUGE
@@ -2204,7 +2209,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterCombatEnd)
-        .with(sts2_core::ModelHook::BeforeCombatStart),
+        .with(sts2_core::ModelHook::BeforeCombatStart)
+        .with(sts2_core::ModelHook::BeforePowerAmountChanged)
+        .with(sts2_core::ModelHook::ModifyPowerAmountGivenMultiplicative),
     // VAJRA
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // VAMBRACE

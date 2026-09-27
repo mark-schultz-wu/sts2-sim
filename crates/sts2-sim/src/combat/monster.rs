@@ -202,6 +202,14 @@ pub(super) fn summon<V: Rules>(
     else {
         panic!("combat has too many creatures to assign an id");
     };
+    // `AfterAddedToRoom` runs for a summoned creature too, and nothing here
+    // carries it out.
+    if V::monster_starting_powers(monster, live.ascension)
+        .next()
+        .is_some()
+    {
+        unimplemented!("{monster:?} summoned, with what it gains as it enters");
+    }
     let hp = health::<V>(monster, live.ascension, &live.creatures, niche);
     let creature_at = live
         .creatures

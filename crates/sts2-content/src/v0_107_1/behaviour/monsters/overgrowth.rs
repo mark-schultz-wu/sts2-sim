@@ -12,9 +12,11 @@ use super::{Number, V};
 
 /// The powers an Overgrowth monster applies to itself as it spawns.
 ///
-/// Four monsters of this act have an `AfterAddedToRoom`. Byrdonis opens
-/// territorial, the Phrog Parasite opens infested, the Bygone Effigy opens
-/// slow, and the Vantom opens slippery.
+/// Five monsters of this act have an `AfterAddedToRoom` that applies one.
+/// Byrdonis opens territorial, the Phrog Parasite opens infested, the Bygone
+/// Effigy opens slow, the Vantom opens slippery, and the Cubex Construct opens
+/// with Artifact. The Cubex gains block first, which `CreatureCmd.GainBlock`
+/// refuses while the fight is not yet in progress.
 pub(super) fn starting_powers(
     monster: Monster,
     ascension: AscensionLevel,
@@ -23,6 +25,7 @@ pub(super) fn starting_powers(
         Monster::Byrdonis => vec![(Power::TerritorialPower, PowerAmount::Counted(1))],
         Monster::PhrogParasite => vec![(Power::InfestedPower, PowerAmount::Counted(4))],
         Monster::BygoneEffigy => vec![(Power::SlowPower, PowerAmount::Counted(1))],
+        Monster::CubexConstruct => vec![(Power::ArtifactPower, PowerAmount::Counted(1))],
         Monster::Vantom => vec![(
             Power::SlipperyPower,
             PowerAmount::Counted(slippery(ascension)),
@@ -76,6 +79,14 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
                 PowerAmount::Counted(ENERGY_ORB_STRENGTH),
             );
         }
+        // `IsBurrowed` and `IsCharging`, which it sets first, pick its
+        // animation.
+        (Monster::CubexConstruct, MoveId::ChargeUpMove) => {
+            fight.apply_to_actor(
+                Power::StrengthPower,
+                PowerAmount::Counted(CHARGE_UP_STRENGTH),
+            );
+        }
         (Monster::Flyconid, MoveId::VulnerableSporesMove) => {
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(SPORES));
         }
@@ -86,6 +97,9 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         (monster, move_id) => monster_moves::perform(monster, move_id, fight),
     }
 }
+
+/// What the Cubex Construct's Charge Up adds to it, a constant in the move.
+const CHARGE_UP_STRENGTH: Number = 2;
 
 /// What the Snapping Jaxfruit's Energy Orb adds to it, a constant in the move.
 const ENERGY_ORB_STRENGTH: Number = 2;

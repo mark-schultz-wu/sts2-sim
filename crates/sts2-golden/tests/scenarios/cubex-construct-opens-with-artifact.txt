@@ -1,0 +1,13 @@
+# The Cubex Construct opens with one Artifact. It gains thirteen block first,
+# which `CreatureCmd.GainBlock` refuses while the fight is not yet in
+# progress, so it opens with none. Bash's Vulnerable is its first debuff:
+# Artifact takes it to nothing and loses one. The second Bash, on turn three,
+# lands two Vulnerable. Charge Up and each Repeater Blast give it two Strength.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"CUBEX_CONSTRUCT_NORMAL"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":4,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

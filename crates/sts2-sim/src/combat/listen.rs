@@ -214,7 +214,12 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
 /// For a hook the fight raises nowhere yet. A listener that answers one is a
 /// path nobody has ported, and asking this is how it stops by name.
 pub(crate) fn heard<V: Rules>(live: &Live<V>, relics: &Belt<V>, hook: ModelHook) -> bool {
-    Kinds::hearing(live, relics, Overrides::of(hook)).is_some()
+    heard_any::<V>(live, relics, Overrides::of(hook))
+}
+
+/// Whether anything in the fight overrides any of `hooks`.
+pub(crate) fn heard_any<V: Rules>(live: &Live<V>, relics: &Belt<V>, hooks: Overrides) -> bool {
+    Kinds::hearing(live, relics, hooks).is_some()
 }
 
 /// A model in the fight that overrides a hook, as a panic names it.
