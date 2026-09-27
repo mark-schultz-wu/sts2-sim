@@ -2325,6 +2325,15 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         var::<V>(&held, key, self.live, self.target)
     }
 
+    fn history(&self) -> sts2_core::History<'_, V> {
+        self.live.history()
+    }
+
+    fn playing(&self) -> CardId<V> {
+        self.playing
+            .unwrap_or_else(|| unimplemented!("naming the card being played with none played"))
+    }
+
     fn upgraded(&self) -> bool {
         self.acting()
             .unwrap_or_else(|| unimplemented!("the upgrade of no card being played"))

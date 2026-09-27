@@ -1,0 +1,8 @@
+# `Snap` has Osty hit the target, then makes one card of the hand that does
+# not Retain do so. The Strike taken stays in hand as the turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SNAP"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"answer","cards":[0]}
+{"cmd":"end_turn"}

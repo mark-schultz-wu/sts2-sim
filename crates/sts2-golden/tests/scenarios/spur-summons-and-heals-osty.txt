@@ -1,0 +1,9 @@
+# `Spur` summons three of Osty, then heals Osty five. Bone Brew grows Osty
+# first, and the Nibbit's hit leaves Osty hurt but standing.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","potion":"BONE_BREW"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"SPUR"}
+{"cmd":"play_card","index":5}

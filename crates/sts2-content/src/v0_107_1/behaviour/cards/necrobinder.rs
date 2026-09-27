@@ -10,6 +10,114 @@ use super::super::super::generated::cards::{CardKeyword, CardVar, NecrobinderCar
 use super::super::super::generated::monsters::Monster;
 use super::V;
 
+/// Its damage to the target, as one attack.
+fn strike<F: Fight<V>>(fight: &mut F) {
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+}
+
+/// `Snap`: Osty's damage to the target, where Osty stands, then one card of
+/// the hand that does not Retain made to.
+fn snap<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    osty_hit(fight, CardVar::OstyDamage);
+    let cards = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| !fight.card_keyword(card, CardKeyword::Retain))
+        .collect();
+    Played::AskingAmong {
+        cards,
+        selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::SnapRetain)),
+    }
+}
+
+/// `Fetch`: where Osty stands, its damage to the target, then its `Cards`
+/// drawn unless this copy finished a play already this turn.
+fn fetch<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    if fight.osty().is_none() {
+        return Played::Done;
+    }
+    osty_hit(fight, CardVar::OstyDamage);
+    let this = fight.playing();
+    let played =
+        fight.history().this_turn.iter().any(
+            |entry| matches!(entry, sts2_core::HistoryEntry::Finished(done) if done.id == this),
+        );
+    if !played {
+        fight.draw(fight.var(CardVar::Cards));
+    }
+    Played::Done
+}
+
+/// `DrainPower`: its damage to the target, then its `Cards` of the discard
+/// pile's upgradable cards taken at random off `CombatCardSelection`, each
+/// upgraded.
+fn drain_power<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CardTable as _;
+
+    strike(fight);
+    let mut upgradable: Vec<_> = fight
+        .cards_in(Pile::Discard)
+        .into_iter()
+        .filter(|&card| {
+            let ident = fight.card_ident(card);
+            ident.upgrade < ident.card.max_upgrade()
+        })
+        .collect();
+    let count = usize::try_from(fight.var(CardVar::Cards)).expect("a count is not negative");
+    for card in fight.take_random_cards(&mut upgradable, count) {
+        fight.modify_card(card, Change::Upgrade, Lasting::ThisFight);
+    }
+    Played::Done
+}
+
+/// `Reave`: its damage to the target, then its `Cards` of Souls into the
+/// draw pile at random, each upgraded where Reave is.
+fn reave<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::cards::{Cards, TokenCard};
+
+    strike(fight);
+    let upgraded = fight.upgraded();
+    for _ in 0..fight.var(CardVar::Cards) {
+        let Some(soul) = fight.add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw) else {
+            break;
+        };
+        if upgraded {
+            fight.modify_card(soul, Change::Upgrade, Lasting::ThisFight);
+        }
+    }
+    Played::Done
+}
+
+/// `Putrefy`: its `Power` as Weak, then as Vulnerable, on the target.
+fn putrefy<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use super::super::super::generated::powers::Power;
+
+    let target = fight.target();
+    let amount = sts2_core::PowerAmount::Counted(fight.var(CardVar::Power));
+    fight.apply_power(target, Power::WeakPower, amount);
+    fight.apply_power(target, Power::VulnerablePower, amount);
+    Played::Done
+}
+
+/// `Spur`: its `Summon` of Osty, then its `Heal` on Osty.
+fn spur<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.summon_osty(fight.var(CardVar::Summon));
+    if let Some(osty) = fight.osty() {
+        fight.heal(osty, fight.var(CardVar::Heal));
+    }
+    Played::Done
+}
+
 /// `SculptingStrike`: its damage to the target, then one card of the hand
 /// that is not Ethereal of its own made Ethereal.
 fn sculpting_strike<F: Fight<V>>(fight: &mut F) -> Played<V> {
@@ -42,6 +150,12 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Poke | NecrobinderCard::Flatten => osty_attack(fight, CardVar::OstyDamage),
         NecrobinderCard::Graveblast => graveblast(fight),
         NecrobinderCard::SculptingStrike => sculpting_strike(fight),
+        NecrobinderCard::Snap => snap(fight),
+        NecrobinderCard::Fetch => fetch(fight),
+        NecrobinderCard::DrainPower => drain_power(fight),
+        NecrobinderCard::Reave => reave(fight),
+        NecrobinderCard::Putrefy => putrefy(fight),
+        NecrobinderCard::Spur => spur(fight),
         card => card_plays::necrobinder::on_play(card, fight),
     }
 }
@@ -53,6 +167,8 @@ pub enum Resume {
     GraveblastTakeBack,
     /// `SculptingStrike`, after its owner picked the card to make Ethereal.
     SculptingStrikeEthereal,
+    /// `Snap`, after its owner picked the card to Retain.
+    SnapRetain,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -64,6 +180,14 @@ pub(super) fn resume_play<F: Fight<V>>(
         // `CardPileCmd.Add` of the one taken, into hand.
         Resume::GraveblastTakeBack => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
+            Played::Done
+        }
+        // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Retain)`.
+        Resume::SnapRetain => {
+            for &card in chosen.as_slice() {
+                let retain = Change::AddKeyword(CardKeyword::Retain);
+                fight.modify_card(card, retain, Lasting::ThisFight);
+            }
             Played::Done
         }
         // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Ethereal)`.
@@ -102,8 +226,14 @@ fn graveblast<F: Fight<V>>(fight: &mut F) -> Played<V> {
 /// the hooks an attack raises name Osty, and the card is what they read as
 /// the source.
 fn osty_attack<F: Fight<V>>(fight: &mut F, damage: CardVar) -> Played<V> {
+    osty_hit(fight, damage);
+    Played::Done
+}
+
+/// Osty's damage to the target, where Osty stands.
+fn osty_hit<F: Fight<V>>(fight: &mut F, damage: CardVar) {
     let Some(osty) = fight.osty() else {
-        return Played::Done;
+        return;
     };
     let target = fight.target();
     fight.attack_from(osty, Scaling::Dynamic, |fight| {
@@ -115,7 +245,6 @@ fn osty_attack<F: Fight<V>>(fight: &mut F, damage: CardVar) -> Played<V> {
         });
         fight.apply(hit);
     });
-    Played::Done
 }
 
 /// Deliver a notification to one Necrobinder card in the fight.
