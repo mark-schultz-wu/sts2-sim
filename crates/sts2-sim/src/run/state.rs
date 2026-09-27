@@ -925,7 +925,7 @@ impl<V: Rules> State<V> {
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
                     .map(|&at| {
-                        let options = V::transform_options(self.player.deck[at].ident.card);
+                        let options = V::transform_options(self.player.deck[at].ident.card, false);
                         let card = *rng
                             .choose(&options)
                             .unwrap_or_else(|_| unimplemented!("a transform with no option"));

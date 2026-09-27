@@ -1,0 +1,14 @@
+# Sovereign Blade hears `AfterCardChangedPiles` as a transform lands its
+# replacement, and its answer only plays effects. So one Begone turns the
+# Defend into a Minion Strike beside it, and the other turns the Sovereign
+# Blade itself, whose `AfterTransformedFrom` only removes its node.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"grant","card":"BEGONE"}
+{"cmd":"grant","card":"BEGONE"}
+{"cmd":"grant","card":"SOVEREIGN_BLADE"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0}
+{"cmd":"answer","cards":[0]}
+{"cmd":"play_card","index":1}
+{"cmd":"answer","cards":[1]}

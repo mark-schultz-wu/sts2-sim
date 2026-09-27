@@ -704,7 +704,7 @@ pub(super) fn carry_setup<V: Rules>(
                                 None,
                                 None,
                             );
-                            for target in sts2_core::Fight::opponents(&board) {
+                            for target in board.hittable_opponents() {
                                 let hit = sts2_core::Fight::resolve(
                                     &board,
                                     sts2_core::Effect::Attack {
@@ -749,6 +749,17 @@ pub(super) fn carry_setup<V: Rules>(
                                 unimplemented!("{listener:?} removing itself as the turn starts")
                             };
                             live.remove_power(owner, power);
+                        }
+                        // `PowerModel.SetAmount`, which no hook hears.
+                        sts2_core::HookEffect::SetAmount(amount) => {
+                            let Listener::Power { owner, power, .. } = listener else {
+                                unimplemented!("{listener:?} setting its amount as the turn starts")
+                            };
+                            for held in live.powers.of_mut(owner) {
+                                if held.power() == power {
+                                    held.amount = super::live::Stacked::counted(amount);
+                                }
+                            }
                         }
                         // `OrbCmd.Passive` on whichever orb is first each
                         // time, which returns once the fight is ending.
@@ -917,6 +928,26 @@ pub(super) fn act_on<V: Rules>(
                 }
                 unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardDiscarded);
                 Pile::Discard
+            }
+            // `CardCmd.TransformToRandom`, one card at a time, each drawn off
+            // `CombatCardSelection` before it replaces the original where it
+            // stood.
+            sts2_core::PileAct::TransformToRandom => {
+                let held = live
+                    .cards
+                    .get(from, at)
+                    .expect("a card stands where it was found");
+                let options = V::transform_options(held.face.ident.card, true);
+                let into = *sts2_core::rng::GameRng::choose(&mut *rngs.selection, &options)
+                    .unwrap_or_else(|_| unimplemented!("a transform with no option"));
+                let ascension = live.ascension;
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                sts2_core::Fight::transform(&mut board, *card, sts2_core::CardIdent::new(into));
+                if let Some(ended) = board.ended {
+                    return (sly, Some(ended));
+                }
+                continue;
             }
             // `CardPileCmd.Add(cards, PileType.Hand)`, which sends a card past
             // a full hand to the discard pile.

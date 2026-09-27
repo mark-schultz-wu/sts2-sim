@@ -615,10 +615,11 @@ pub enum ModelHook {
     AfterModifyingPowerAmountGiven,
     AfterModifyingPowerAmountReceived,
     ModifyXValue,
+    AfterCardChangedPiles,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 94] = [
+    pub const ALL: [ModelHook; 95] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -713,6 +714,7 @@ impl ModelHook {
         ModelHook::AfterModifyingPowerAmountGiven,
         ModelHook::AfterModifyingPowerAmountReceived,
         ModelHook::ModifyXValue,
+        ModelHook::AfterCardChangedPiles,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -824,6 +826,7 @@ impl ModelHook {
             ModelHook::AfterModifyingPowerAmountGiven => "AfterModifyingPowerAmountGiven",
             ModelHook::AfterModifyingPowerAmountReceived => "AfterModifyingPowerAmountReceived",
             ModelHook::ModifyXValue => "ModifyXValue",
+            ModelHook::AfterCardChangedPiles => "AfterCardChangedPiles",
         }
     }
 }
@@ -2431,6 +2434,14 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
+    /// `AfterCardChangedPiles`, once a card lands in the pile it moved to.
+    /// The fight raises it where a transform lands the replacement.
+    CardChangedPiles {
+        card: V::Card,
+        id: crate::CardId<V>,
+        /// `oldPileType`, nothing for a card that came from no pile.
+        from: Option<crate::Pile>,
+    },
     /// `AfterCardExhausted`, once the card lies in the exhaust pile.
     CardExhausted {
         card: V::Card,
@@ -2693,6 +2704,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
             EventHook::CardExhausted { .. } => ModelHook::AfterCardExhausted,
+            EventHook::CardChangedPiles { .. } => ModelHook::AfterCardChangedPiles,
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
             EventHook::PowerAmountReceivedModified { .. } => {
                 ModelHook::AfterModifyingPowerAmountReceived
@@ -2781,6 +2793,8 @@ pub struct PlayStarted<V: ContentVersion> {
     pub card: V::Card,
     /// `CardPlay.Resources.EnergyValue`.
     pub energy: V::Count,
+    /// `CardPlay.IsFirstInSeries`: not a replay of the play before it.
+    pub first: bool,
 }
 
 /// One `CardPlayFinishedEntry` in `CombatManager.History`: a card's play
@@ -2995,6 +3009,9 @@ pub enum PileAct {
     Discard,
     /// `CardPileCmd.Add(cards, PileType.Hand)`.
     IntoHand,
+    /// `CardCmd.TransformToRandom` off `CombatCardSelection`, one card at a
+    /// time.
+    TransformToRandom,
 }
 
 /// How [`HookEffect::ChooseCards`] draws each card.
@@ -3300,6 +3317,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// `PowerCmd.ModifyAmount(this, offset)`, by a signed offset. The instance
     /// goes once it reaches zero.
     ModifyAmount(V::Number),
+    /// `PowerModel.SetAmount` on this instance, which no hook hears.
+    SetAmount(V::Number),
     GainEnergyAndRemove(V::Number),
     GainBlockAndRemove(V::Number),
     /// `PowerCmd.Remove(this)`: the power takes itself off its owner.
@@ -4373,8 +4392,9 @@ pub trait Rules: Hooks {
     ///
     /// `CardFactory.GetDefaultTransformationOptions`, which is the card's own
     /// pool, unlocked. It keeps common, uncommon and rare cards unless the card
-    /// is a status or a curse, and it leaves the card itself out.
-    fn transform_options(card: Self::Card) -> Vec<Self::Card>;
+    /// is a status or a curse, and it leaves the card itself out. `in_combat`
+    /// keeps the cards `CanBeGeneratedInCombat`.
+    fn transform_options(card: Self::Card, in_combat: bool) -> Vec<Self::Card>;
 
     /// `EnchantmentModel.CanEnchant`, for a card in the deck.
     fn can_enchant(enchantment: Self::Enchantment, card: &crate::CardIdent<Self>) -> bool;
