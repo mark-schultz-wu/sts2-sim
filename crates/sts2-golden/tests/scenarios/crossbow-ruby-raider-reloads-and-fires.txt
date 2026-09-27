@@ -1,0 +1,7 @@
+# The Crossbow Ruby Raider opens on Reload, three block, then Fire for
+# fourteen, and back. The generator left both to a hand port for the
+# `IsCrossbowReloaded` each sets, which picks its animation.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"RUBY_RAIDERS_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
