@@ -2336,10 +2336,15 @@ impl<V: Rules> State<V> {
     /// hooks, so it cannot answer for one.
     pub(crate) fn grant(&mut self, gift: &Gift<V>) -> Result<Decided, Error> {
         match gift {
-            Gift::Card(card) => self
-                .player
-                .deck_mut()
-                .push(sts2_core::DeckCard::new(CardIdent::new(*card))),
+            // `GrantCard` in a fight in progress: the fight's own card, into
+            // hand, and the deck as it was.
+            Gift::Card(card) => match self.fighting() {
+                Some(fighting) => crate::combat::grant_card(fighting, *card),
+                None => self
+                    .player
+                    .deck_mut()
+                    .push(sts2_core::DeckCard::new(CardIdent::new(*card))),
+            },
             Gift::Potion(potion) => {
                 // `TryToProcure` refuses a full belt rather than growing one,
                 // and the belt in the next observation says whether it landed.

@@ -145,6 +145,28 @@ pub(crate) fn apply_power<V: Rules>(
     ended
 }
 
+/// `Driver.GrantCard` in a fight: `CombatState.AddCard`, then
+/// `CardPileCmd.Add` into hand, which raises `AfterCardEnteredCombat`.
+///
+/// Scenario construction, as [`apply_power`] is.
+pub(crate) fn grant_card<V: Rules>(fighting: Fighting<'_, V>, card: V::Card) {
+    let Fighting {
+        live,
+        streams,
+        relics,
+    } = fighting;
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, streams.combat(), relics, ascension, None, None);
+    sts2_core::Fight::add_generated_cards(
+        &mut board,
+        sts2_core::CardIdent::new(card),
+        sts2_core::Pile::Hand,
+        1,
+    );
+    let skipped = std::mem::take(&mut board.skipped);
+    merge::<V>(&mut live.skip_tick, skipped);
+}
+
 /// Enchant the copy at `index` in hand, which is `EnchantConsoleCmd`.
 ///
 /// Scenario construction. `CardCmd.Enchant` on the fight's copy, so the deck
@@ -877,7 +899,7 @@ fn finished<V: Rules, S: LendsCombat>(
         streams,
         relics,
     } = fighting;
-    next.history.finish(card, id);
+    next.history.finish(card, id, ethereal);
     let asked = super::listen::notify::<V>(
         next,
         relics,

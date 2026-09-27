@@ -83,6 +83,7 @@ fn up_my_sleeve<F: Fight<V>>(fight: &mut F) -> Played<V> {
 pub(super) fn event_hook(
     card: SilentCard,
     id: sts2_core::CardId<V>,
+    history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -98,11 +99,23 @@ pub(super) fn event_hook(
                 });
             }
         }
-        // `Pinpoint.AfterCardEnteredCombat`, for its own entry alone: one off
-        // for each Skill played this turn before it came.
-        (SilentCard::Pinpoint, EventHook::CardEnteredCombat { at, .. }) => {
-            if at.id() == id {
-                unimplemented!("a Pinpoint entering the fight, which counts the turn's Skills")
+        // `Pinpoint.AfterCardEnteredCombat`, for its own entry alone and not
+        // a clone's: one off this turn for each Skill play finished this turn
+        // before it came.
+        (SilentCard::Pinpoint, EventHook::CardEnteredCombat { at, clone, .. }) => {
+            if at.id() == id && !clone {
+                let skills: super::Number = history
+                    .finished_this_turn()
+                    .filter(|&card| skill(card))
+                    .count()
+                    .try_into()
+                    .expect("a turn's plays fit a game number");
+                if skills != 0 {
+                    asked.push(HookEffect::ModifySelf {
+                        change: Change::ChangeCost(CostPool::Energy, -skills),
+                        lasting: Lasting::ThisTurn,
+                    });
+                }
             }
         }
         (card, hook) => unimplemented!("what {card:?} does for {hook:?}"),

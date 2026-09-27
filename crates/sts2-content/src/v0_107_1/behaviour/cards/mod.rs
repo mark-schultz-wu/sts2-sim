@@ -25,6 +25,7 @@ use super::super::generated::powers::Power;
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
 mod colorless;
+mod curse;
 mod defect;
 mod event;
 mod ironclad;
@@ -151,7 +152,7 @@ pub(crate) fn on_turn_end<F: Fight<V>>(card: Cards, fight: &mut F) {
         Cards::Necrobinder(card) => card_plays::necrobinder::on_turn_end(card, fight),
         Cards::Defect(card) => card_plays::defect::on_turn_end(card, fight),
         Cards::Colorless(card) => card_plays::colorless::on_turn_end(card, fight),
-        Cards::Curse(card) => card_plays::curse::on_turn_end(card, fight),
+        Cards::Curse(card) => curse::on_turn_end(card, fight),
         Cards::Event(card) => card_plays::event::on_turn_end(card, fight),
         Cards::Quest(card) => card_plays::quest::on_turn_end(card, fight),
         Cards::Status(card) => status::on_turn_end(card, fight),
@@ -179,16 +180,18 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         Cards::Curse(CurseCard::Guilty)
             if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
-        Cards::Ironclad(card) => ironclad::event_hook(card, id, hook, asked),
+        Cards::Ironclad(card) => ironclad::event_hook(card, id, history, hook, asked),
         Cards::Colorless(card) => colorless::event_hook(card, id, history, hook, asked),
         // `SovereignBlade.AfterCardChangedPiles` plays the forge's effects and
         // removes its node, and its `AfterTransformedFrom` removes the node
         // too. Neither touches the fight.
         Cards::Token(TokenCard::SovereignBlade)
             if matches!(hook, sts2_core::EventHook::CardChangedPiles { .. }) => {}
-        Cards::Necrobinder(card) => necrobinder::event_hook(card, id, printed, hook, asked),
+        Cards::Necrobinder(card) => {
+            necrobinder::event_hook(card, id, printed, history, hook, asked)
+        }
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
-        Cards::Silent(card) => silent::event_hook(card, id, hook, asked),
+        Cards::Silent(card) => silent::event_hook(card, id, history, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }

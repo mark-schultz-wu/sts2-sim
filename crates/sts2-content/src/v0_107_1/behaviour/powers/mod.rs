@@ -1443,7 +1443,7 @@ pub(crate) fn event_hook(
         }),
         // `TangledPower.AfterCardEnteredCombat`: Entangled on an Attack that
         // arrives with no affliction.
-        (Power::TangledPower, _, EventHook::CardEnteredCombat { at, card })
+        (Power::TangledPower, _, EventHook::CardEnteredCombat { at, card, .. })
             if <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Attack) =>
         {
             Some(HookEffect::Afflict {
@@ -1913,6 +1913,7 @@ pub(crate) fn event_hook(
             EventHook::CardEnteredCombat {
                 at,
                 card: Cards::Token(TokenCard::SovereignBlade),
+                ..
             },
         ) => Some(HookEffect::AddReplays {
             to: sts2_core::Writing::One(at),
@@ -2794,7 +2795,7 @@ pub(crate) fn event_hook(
         // `PhantomBladesPower.AfterCardEnteredCombat`, which gives a Shiv that
         // joins later the same. A fight here has one player, so the Shiv is
         // its owner's.
-        (Power::PhantomBladesPower, _, EventHook::CardEnteredCombat { at, card })
+        (Power::PhantomBladesPower, _, EventHook::CardEnteredCombat { at, card, .. })
             if card.tagged(CardTag::Shiv) =>
         {
             Some(HookEffect::AddKeyword {

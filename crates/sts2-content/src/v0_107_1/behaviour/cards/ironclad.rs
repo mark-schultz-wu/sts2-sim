@@ -39,6 +39,7 @@ fn whirlwind<F: Fight<V>>(fight: &mut F) -> Played<V> {
 pub(super) fn event_hook(
     card: IroncladCard,
     id: sts2_core::CardId<V>,
+    history: sts2_core::History<'_, V>,
     hook: EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -54,11 +55,23 @@ pub(super) fn event_hook(
                 });
             }
         }
-        // `Stomp.AfterCardEnteredCombat`, for its own entry alone: one off
-        // for each Attack played this turn before it came.
-        (IroncladCard::Stomp, EventHook::CardEnteredCombat { at, .. }) => {
-            if at.id() == id {
-                unimplemented!("a Stomp entering the fight, which counts the turn's Attacks")
+        // `Stomp.AfterCardEnteredCombat`, for its own entry alone and not a
+        // clone's: one off this turn for each Attack play finished this turn
+        // before it came.
+        (IroncladCard::Stomp, EventHook::CardEnteredCombat { at, clone, .. }) => {
+            if at.id() == id && !clone {
+                let attacks: super::Number = history
+                    .finished_this_turn()
+                    .filter(|&card| V::card_kind(card) == Some(CardKind::Attack))
+                    .count()
+                    .try_into()
+                    .expect("a turn's plays fit a game number");
+                if attacks != 0 {
+                    asked.push(HookEffect::ModifySelf {
+                        change: Change::ChangeCost(CostPool::Energy, -attacks),
+                        lasting: Lasting::ThisTurn,
+                    });
+                }
             }
         }
         // `DrumOfBattle.AfterCardExhausted`, for its own exhaust alone.

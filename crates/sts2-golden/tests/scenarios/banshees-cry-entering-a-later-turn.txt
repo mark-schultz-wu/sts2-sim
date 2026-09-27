@@ -1,0 +1,12 @@
+# `BansheesCry.AfterCardEnteredCombat` takes its two off for the rest of the
+# fight for each Ethereal play finished this fight before it came, whatever
+# the turn. A Defile on turn two, then a Banshee's Cry granted on turn three,
+# which enters at seven.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"grant","card":"FEAR"}
+{"cmd":"grant","card":"DEFILE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"BANSHEES_CRY"}
