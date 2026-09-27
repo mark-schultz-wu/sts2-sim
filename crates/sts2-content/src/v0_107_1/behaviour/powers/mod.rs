@@ -10,7 +10,9 @@
 
 use std::sync::LazyLock;
 
-use sts2_core::{CardTable as _, Modify, ModifyHook, PowerAmount, PowerModel as _};
+use sts2_core::{
+    CardTable as _, Modify, ModifyHook, PowerAmount, PowerModel as _, PowerTable as _,
+};
 
 use super::super::V0_107_1 as V;
 use super::super::generated::cards::{CardKeyword, CardTag, Cards, ColorlessCard, TokenCard};
@@ -458,7 +460,11 @@ fn temporary(
         }
         (_, EventHook::PowerAmountChanged { .. }) => {}
         // Asked of every power, and not ones this class overrides.
-        (_, EventHook::MonsterMovePerformed { .. } | EventHook::Removed | EventHook::Applied) => {}
+        (_, EventHook::MonsterMovePerformed { .. }) => {}
+        (_, hook)
+            if hook
+                .power_virtual()
+                .is_some_and(|method| !power.overrides_virtual(method)) => {}
         (_, hook) => unimplemented!("what a temporary {lent:?} does for {hook:?}"),
     }
 }
@@ -2241,17 +2247,33 @@ pub(crate) fn event_hook(
             _,
             EventHook::PowerAmountChanged { .. } | EventHook::CardEnteredCombat { .. },
         ) => None,
-        // `BeforeApplied`, `AfterApplied` and `AfterRemoved` are a power's
-        // own, and a move being performed is the move state's. Every power is asked these,
-        // and one whose class does not override them does nothing.
+        // `AfterApplied` and `AfterRemoved` where the class overrides them for
+        // what it shows: a name in its text, a size, a sound.
         (
+            Power::BarricadePower | Power::ShrinkPower | Power::PlatingPower,
             _,
-            _,
-            EventHook::BeforeApplied { .. }
-            | EventHook::Applied
-            | EventHook::Removed
-            | EventHook::MonsterMovePerformed { .. },
-        ) => None,
+            EventHook::Applied,
+        )
+        | (Power::ShrinkPower | Power::SlumberPower, _, EventHook::Removed) => None,
+        // `IllusionPower.AfterApplied` applies Minion to its owner, unless it
+        // has Minion already. The Fogmog's illusion is the one creature this
+        // build puts Illusion on, and it applies Minion right after.
+        (Power::IllusionPower, _, EventHook::Applied) => None,
+        (Power::SwordSagePower, _, EventHook::Removed) => {
+            unimplemented!("the replays Sword Sage takes back off the blades as it goes")
+        }
+        // `BeforeApplied`, `AfterApplied` and `AfterRemoved` are a power's
+        // own, and a move being performed is the move state's. Every power is
+        // asked these, and one whose class does not override them does
+        // nothing.
+        (_, _, EventHook::MonsterMovePerformed { .. }) => None,
+        (_, _, hook)
+            if hook
+                .power_virtual()
+                .is_some_and(|method| !power.overrides_virtual(method)) =>
+        {
+            None
+        }
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
     };
     asked.extend(effect);

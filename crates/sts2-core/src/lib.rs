@@ -46,10 +46,11 @@ pub use content::{
     Modify, ModifyHook, MonsterKinds, MonsterSpawn, MonsterTable, MoveKinds, MoveLog, MoveMachine,
     MovePinned, Opponents, Overrides, Picked, PileAct, PilePosition, PlayFinished, PlayStarted,
     Played, PlayerStreamKinds, PoolFilter, PotionTable, PotionUsage, PowerAmount, PowerKinds,
-    PowerModel, PowerTable, Printed, RarityKinds, RelicModel, RelicPoolKinds, RelicTable,
-    RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, Rules, RunStreamKinds, Scaling,
-    SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned, Stream, StreamKinds, Table, Taken,
-    TargetKinds, Temporary, TurnHistory, TurnPhaseKinds, UnplayableReasonKinds, Version, Writing,
+    PowerModel, PowerTable, PowerVirtual, Printed, RarityKinds, RelicModel, RelicPoolKinds,
+    RelicTable, RestKinds, Rests, ResultPile, RewardRarity, RoomKinds, Rules, RunStreamKinds,
+    Scaling, SelectedCards, Selection, SideKinds, SideTurnEnd, Spawned, Stream, StreamKinds, Table,
+    Taken, TargetKinds, Temporary, TurnHistory, TurnPhaseKinds, UnplayableReasonKinds, Version,
+    Writing,
 };
 pub use event::{EventBehavior, EventView};
 pub use hook_response::HookResponse;

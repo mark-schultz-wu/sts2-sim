@@ -262,6 +262,20 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     // The hooks each power's class overrides.
     let overrides = super::overrides(&build)?;
 
+    // The `PowerModel` virtuals each power's class overrides, for the ones a
+    // fight asks a power about itself. The dump lists every virtual, and the
+    // rest are the columns above or no event at all.
+    let mut virtuals: BTreeMap<&str, u8> = BTreeMap::new();
+    for row in dump.of("virtual") {
+        let bit = match row[2].as_str() {
+            "BeforeApplied" => 1,
+            "AfterApplied" => 2,
+            "AfterRemoved" => 4,
+            _ => continue,
+        };
+        *virtuals.entry(row[1].as_str()).or_default() |= bit;
+    }
+
     let mut out = banner("Every power's static data.", "powers.txt", &build);
     writeln!(out, "\nuse crate::Field;").unwrap();
     writeln!(out, "use serde::{{Deserialize, Serialize}};\n").unwrap();
@@ -290,7 +304,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
     }
 
     emit_shape(&mut out)?;
-    emit_powers(&mut out, &powers)?;
+    emit_powers(&mut out, &powers, &virtuals)?;
     super::emit_overrides(
         &mut out,
         "indexed by the power's discriminant.",
@@ -465,7 +479,11 @@ fn cell(power: &str, field: &str, ty: &str, wrap: Wrap, raw: &str) -> Result<Str
     })
 }
 
-fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), Error> {
+fn emit_powers(
+    out: &mut String,
+    powers: &[&Vec<String>],
+    virtuals: &BTreeMap<&str, u8>,
+) -> Result<(), Error> {
     writeln!(out, "/// Every power in the build.").unwrap();
     writeln!(
         out,
@@ -561,9 +579,37 @@ fn emit_powers(out: &mut String, powers: &[&Vec<String>]) -> Result<(), Error> {
          \x20   fn instanced(self) -> bool {{\n\
          \x20       <Self as sts2_core::Table>::data(self).instance.is_some()\n\
          \x20   }}\n\
+         \n\
+         \x20   fn overrides_virtual(self, method: sts2_core::PowerVirtual) -> bool {{\n\
+         \x20       let bit = match method {{\n\
+         \x20           sts2_core::PowerVirtual::BeforeApplied => 1,\n\
+         \x20           sts2_core::PowerVirtual::AfterApplied => 2,\n\
+         \x20           sts2_core::PowerVirtual::AfterRemoved => 4,\n\
+         \x20       }};\n\
+         \x20       VIRTUALS[self as usize] & bit != 0\n\
+         \x20   }}\n\
          }}"
     )
     .unwrap();
+
+    writeln!(
+        out,
+        "\n/// Which of `BeforeApplied`, `AfterApplied` and `AfterRemoved` each\n\
+         /// power's class overrides, as bits one, two and four, indexed by the\n\
+         /// power's discriminant.\n\
+         static VIRTUALS: [u8; {}] = [",
+        powers.len()
+    )
+    .unwrap();
+    for row in powers {
+        writeln!(
+            out,
+            "    {},",
+            virtuals.get(row[1].as_str()).copied().unwrap_or(0)
+        )
+        .unwrap();
+    }
+    writeln!(out, "];").unwrap();
 
     // The one power the simulator applies by name, as it summons Osty.
     if !powers.iter().any(|row| row[1] == "DIE_FOR_YOU_POWER") {

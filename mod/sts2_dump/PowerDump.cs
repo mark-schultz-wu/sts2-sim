@@ -51,6 +51,7 @@ public static class PowerDump
         output.Append(Stamp.Header("power"));
         output.Append("# id type instance stack allowNegative removedOnOwnerDeath ");
         output.Append("ownerDeathIsFatal scalesInMultiplayer ownerIsSecondaryEnemy\n");
+        output.Append("# virtual <id> <method>\n");
 
         List<PowerModel> powers = ModelDb.AllPowers
             .OrderBy(p => p.Id.Entry, StringComparer.Ordinal)
@@ -76,6 +77,19 @@ public static class PowerDump
 
         output.Append($"# {powers.Count} powers\n");
 
+        // The virtual methods `PowerModel` itself declares, and which of them
+        // each power's class overrides. `HookDump` covers the hooks
+        // `AbstractModel` declares. These are a power's own, like
+        // `AfterApplied` and `AfterRemoved`, and the simulator asks every power
+        // them. So a power that overrides one has to say what it does.
+        foreach (PowerModel power in powers)
+        {
+            foreach (string method in OwnVirtuals(power.GetType()))
+            {
+                output.Append($"virtual {power.Id.Entry} {method}\n");
+            }
+        }
+
         // The enums the power fields draw from, in declaration order.
         //
         // Reflected rather than inferred from the values above, for the same
@@ -95,6 +109,25 @@ public static class PowerDump
 
         Log.Info("[powerdump] begin\n" + output);
         Log.Info("[powerdump] end");
+    }
+
+    /// <summary>
+    /// The methods <c>PowerModel</c> declares virtual that <paramref name="type"/>
+    /// or a base between it and <c>PowerModel</c> overrides, by name.
+    /// </summary>
+    /// <remarks>
+    /// Property accessors are left out, since the columns above read those.
+    /// </remarks>
+    private static IEnumerable<string> OwnVirtuals(Type type)
+    {
+        return type
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(m => !m.IsSpecialName
+                && m.DeclaringType != typeof(PowerModel)
+                && m.GetBaseDefinition().DeclaringType == typeof(PowerModel))
+            .Select(m => m.Name)
+            .Distinct()
+            .OrderBy(name => name, StringComparer.Ordinal);
     }
 
     /// <summary>
