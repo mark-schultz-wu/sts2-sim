@@ -1453,10 +1453,30 @@ impl<V: Rules> State<V> {
     fn damage_owner(&mut self, amount: V::Health) {
         use sts2_core::ModelHook;
 
+        // `Hook.ModifyDamage` asks each relic, for damage no creature deals,
+        // from no card, and unpowered. A run with no fight names no target.
         for hook in [
-            ModelHook::ModifyDamageAdditive,
-            ModelHook::ModifyDamageMultiplicative,
-            ModelHook::ModifyDamageCap,
+            sts2_core::ModifyHook::DamageAdditive {
+                target: None,
+                dealer: None,
+                card: None,
+                powered: false,
+            },
+            sts2_core::ModifyHook::DamageMultiplicative {
+                target: None,
+                dealer: None,
+                card: None,
+                powered: false,
+            },
+            sts2_core::ModifyHook::DamageCap {
+                target: None,
+                dealer: None,
+                powered: false,
+            },
+        ] {
+            self.belt_leaves(hook);
+        }
+        for hook in [
             ModelHook::BeforeDamageReceived,
             ModelHook::ModifyHpLostBeforeOsty,
             ModelHook::ModifyHpLostBeforeOstyLate,
@@ -1617,6 +1637,31 @@ impl<V: Rules> State<V> {
             V::relic_event_hook(&mut self.player.relics[slot].state, hook, &mut asked);
         }
         asked
+    }
+
+    /// `hook`, asked of each relic on the belt that overrides it, outside a
+    /// fight.
+    ///
+    /// # Panics
+    ///
+    /// A relic that changes the value.
+    fn belt_leaves(&self, hook: sts2_core::ModifyHook<V>) {
+        let mut left = self
+            .player
+            .relics
+            .hearing(sts2_core::Overrides::of(hook.model_hook()));
+        while left != 0 {
+            let slot = left.trailing_zeros() as usize;
+            left &= left - 1;
+            let listener: crate::combat::Heard<'_, V> =
+                sts2_core::Listener::Relic(&self.player.relics[slot].state);
+            match V::modify_hook(listener, hook) {
+                sts2_core::Modify::Nothing => {}
+                answer => {
+                    unimplemented!("a relic answering {hook:?} outside a fight with {answer:?}")
+                }
+            }
+        }
     }
 
     /// A hook the run raises outside a fight and no ported relic answers.

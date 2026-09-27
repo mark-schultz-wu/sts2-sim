@@ -361,6 +361,9 @@ fn frees(power: Power, card: Cards, ethereal: bool) -> bool {
     }
 }
 
+/// `RadiancePower`'s `EnergyVar(1)`.
+const RADIANCE_ENERGY: Number = 1;
+
 /// What Vulnerable on `holder` multiplies a powered hit from `dealer` by.
 ///
 /// # Panics
@@ -848,6 +851,14 @@ pub(crate) fn modify_hook(
             Modify::Added(one)
         }
         (Power::OneTwoPunchPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
+        // `DuplicationPower.ModifyCardPlayCount`: one more play of any card
+        // its owner plays.
+        (Power::DuplicationPower, _, ModifyHook::CardPlayCount { player, .. })
+            if player == holder =>
+        {
+            Modify::Added(one)
+        }
+        (Power::DuplicationPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
         // `BufferPower.ModifyHpLostAfterOstyLate`: its holder loses nothing.
         (Power::BufferPower, _, ModifyHook::HpLostAfterOstyLate { target }) if target == holder => {
             Modify::AtMost(num_traits::zero())
@@ -2093,6 +2104,58 @@ pub(crate) fn event_hook(
         (Power::FlameBarrierPower, _, EventHook::SideTurnEnd { side }) if side != owner => {
             Some(HookEffect::Remove)
         }
+        // `DuplicationPower.AfterModifyingCardPlayCount`, and its
+        // `AfterSideTurnEnd` for its owner's own side, the same as One-Two
+        // Punch's.
+        (Power::DuplicationPower, _, EventHook::PlayCountModified { .. }) => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::DuplicationPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::DuplicationPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `RegenPower.AfterSideTurnEnd`: its stack healed, then one off, as
+        // its owner's side ends a turn.
+        (Power::RegenPower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            asked.extend([HookEffect::Heal(amount), HookEffect::Decrement]);
+            return;
+        }
+        (Power::RegenPower, PowerAmount::Endless, EventHook::SideTurnEnd { side }) if side == owner => {
+            unimplemented!("an endless Regen")
+        }
+        (Power::RegenPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `RitualPower.AfterSideTurnEnd`: its stack of Strength as its
+        // owner's side ends a turn. A monster's skips the turn it was applied
+        // in, through `AfterApplied`.
+        (Power::RitualPower, amount, EventHook::SideTurnEnd { side })
+            if side == owner && owner == CombatSide::Player =>
+        {
+            Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount))
+        }
+        (Power::RitualPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            unimplemented!("a monster's Ritual, which skips the turn it was applied in")
+        }
+        (Power::RitualPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `RitualPower.AfterApplied`, which marks a monster's alone.
+        (Power::RitualPower, _, EventHook::Applied) if owner == CombatSide::Player => None,
+        (Power::RitualPower, _, EventHook::Applied) => {
+            unimplemented!("a monster's Ritual, which skips the turn it was applied in")
+        }
+        // `RadiancePower.AfterEnergyReset`: its `Energy`, then one off.
+        (Power::RadiancePower, PowerAmount::Counted(_), EventHook::EnergyReset { player })
+            if player == holder =>
+        {
+            asked.extend([HookEffect::GainEnergy(RADIANCE_ENERGY), HookEffect::Decrement]);
+            return;
+        }
+        (Power::RadiancePower, PowerAmount::Endless, EventHook::EnergyReset { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless Radiance")
+        }
+        (Power::RadiancePower, _, EventHook::EnergyReset { .. }) => None,
         // `OneTwoPunchPower.AfterModifyingCardPlayCount`, and its
         // `AfterSideTurnEnd` for its owner's own side.
         (Power::OneTwoPunchPower, _, EventHook::PlayCountModified { .. }) => {

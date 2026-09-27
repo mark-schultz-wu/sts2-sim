@@ -1202,6 +1202,18 @@ pub(super) fn energy_reset<V: Rules>(
             (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Remove) => {
                 live.remove_power(owner, power)
             }
+            // `PlayerCmd.GainEnergy`.
+            (_, sts2_core::HookEffect::GainEnergy(amount)) => {
+                let gained: V::Count = num_traits::cast(amount)
+                    .unwrap_or_else(|| unimplemented!("gaining {amount:?} energy"));
+                live.energy = live.energy + gained;
+            }
+            // `PowerCmd.Decrement(this)`.
+            (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
+                let mut board =
+                    Board::for_card(live, streams.combat(), relics, ascension, None, None);
+                board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+            }
             // `OrbCmd.Channel` on the player, which evokes an orb to make room.
             // The streams are lent only here, which most turns never reach.
             (_, sts2_core::HookEffect::Channel(orb)) => {
@@ -1343,6 +1355,10 @@ fn tick_powers<V: Rules>(
             sts2_core::HookEffect::RemoveFromOwner(power) => leaving.push((owner, power)),
             // `CardPileCmd.Draw` for the player, once the hand is flushed.
             sts2_core::HookEffect::Draw(amount) => applying.push(TurnEndAsk::Draw(amount)),
+            // `CreatureCmd.Heal` on the creature carrying the power.
+            sts2_core::HookEffect::Heal(amount) => applying.push(TurnEndAsk::Heal(owner, amount)),
+            // `PowerCmd.Decrement(this)`.
+            sts2_core::HookEffect::Decrement => applying.push(TurnEndAsk::Decrement(owner, power)),
             other => unimplemented!("a power asking for {other:?} as a turn ends"),
         }
     }
@@ -1410,6 +1426,10 @@ enum TurnEndAsk<V: Rules> {
     },
     /// `CardPileCmd.Draw`.
     Draw(V::Number),
+    /// `CreatureCmd.Heal`.
+    Heal(CombatId, V::Number),
+    /// `PowerCmd.Decrement`.
+    Decrement(CombatId, V::Power),
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -1438,6 +1458,10 @@ fn applied<V: Rules>(
                 dealer,
             } => board.hit_unpowered(dealer, owner, amount, unblockable),
             TurnEndAsk::Draw(amount) => sts2_core::Fight::draw(&mut board, amount),
+            TurnEndAsk::Heal(at, amount) => sts2_core::Fight::heal(&mut board, at, amount),
+            TurnEndAsk::Decrement(at, power) => {
+                board.modify_amount(at, power, -num_traits::one::<V::Number>())
+            }
         }
         if let Some(ended) = board.ended {
             return Some(ended);

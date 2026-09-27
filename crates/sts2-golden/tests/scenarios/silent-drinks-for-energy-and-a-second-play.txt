@@ -1,0 +1,18 @@
+# Radiant Tincture gives an energy now, and Radiance an energy at each of the
+# next three energy resets. Duplicator plays the next card twice, then leaves.
+# Fysh Oil adds a Strength and a Dexterity. Cunning Potion makes three
+# upgraded Shivs in hand.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"RADIANT_TINCTURE"}
+{"cmd":"grant","potion":"DUPLICATOR"}
+{"cmd":"grant","potion":"FYSH_OIL"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":0}
+{"cmd":"grant","potion":"CUNNING_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
