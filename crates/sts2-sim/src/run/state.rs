@@ -1428,6 +1428,17 @@ impl<V: Rules> State<V> {
                     }
                     continue;
                 }
+                HookEffect::DrawFromStream { stream, below } => {
+                    use sts2_core::rng::GameRng as _;
+
+                    let bound = sts2_core::rng::Bound::try_new(
+                        num_traits::cast(below).expect("a bound fits the RNG integer"),
+                    )
+                    .expect("a draw has somewhere to land");
+                    let _drawn =
+                        stream_of(&mut self.phase, &mut self.streams, stream).next_int(bound);
+                    continue;
+                }
                 HookEffect::RemoveRelic(relic) => {
                     let Some(slot) = self
                         .player
@@ -2074,7 +2085,16 @@ impl<V: Rules> State<V> {
             unimplemented!("a relic listening to {} outside a fight", hook.name());
         }
         // `IterateHookListeners` walks the deck's cards and their
-        // enchantments ahead of the relics.
+        // enchantments ahead of the relics. Most hooks no card hears.
+        if !V::Card::heard_by_any().intersects(hooks)
+            && self
+                .player
+                .deck
+                .iter()
+                .all(|held| held.ident.enchantment.is_none())
+        {
+            return;
+        }
         let heard = self.player.deck.iter().find(|held| {
             held.ident.card.overrides().intersects(hooks)
                 || held

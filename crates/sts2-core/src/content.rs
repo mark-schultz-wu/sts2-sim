@@ -377,6 +377,9 @@ pub trait CardTable: Table {
     /// The hooks this card's class overrides, as the hook dump measured them.
     /// See [`PowerTable::overrides`].
     fn overrides(self) -> Overrides;
+
+    /// Every hook some card's class in the build overrides.
+    fn heard_by_any() -> Overrides;
 }
 
 /// An exact finite decimal as the game writes it.
@@ -3475,6 +3478,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.Add` of a clone of the card that just joined the deck, at
     /// the deck's bottom, cloned by the listener.
     CloneIntoDeck,
+    /// `Rng.NextInt(below)` off a stream, drawn for its place in the stream
+    /// alone, which a flavour line makes.
+    DrawFromStream {
+        stream: Stream<V>,
+        below: u32,
+    },
     /// `RelicCmd.Remove` on the first of the player's relics that is this
     /// one.
     RemoveRelic(V::Relic),
@@ -3619,6 +3628,9 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardCmd.AutoPlay` of this copy, with no target named: the card plays
     /// for free, and one that targets an enemy picks it off `CombatTargets`.
     AutoPlay(crate::CardId<V>),
+    /// `EnchantmentModel.Status = Disabled` on the enchantment of the card
+    /// that asked.
+    DisableOwnEnchantment,
     /// `Card.EnergyCost.SetThisCombat` to a draw of `NextInt(below)` off
     /// `CombatEnergyCosts`, on the card whose enchantment asked. Slither's.
     RandomSelfCost {
@@ -3700,6 +3712,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// `CardPileCmd.ShuffleIfNecessary`: the discard pile shuffled into an
     /// empty draw pile.
     ShuffleIfNecessary,
+    /// `CardCmd.Exhaust` on the top card of the draw pile, or with
+    /// `passing_innate` on the first there that is not innate, falling back
+    /// to the top. Nothing, for an empty pile.
+    ExhaustFromDrawTop {
+        passing_innate: bool,
+    },
     /// `CardPileCmd.AddGeneratedCardsToCombat`: this many new copies of a
     /// card into the player's hand, the way `Shiv.CreateInHand` makes them.
     GenerateInHand {
@@ -4012,10 +4030,13 @@ pub trait Hooks: ContentVersion {
     ) -> crate::HookResponse<bool>;
 
     /// `EnchantDamageAdditive` and its kin, answered by the enchantment on a
-    /// card. [`Modify::Nothing`] for one whose class does not override the
-    /// hook.
-    fn enchant_modify(enchanted: crate::Enchanted<Self>, hook: EnchantHook)
-    -> Modify<Self::Number>;
+    /// card, whose `Status` is `status`. [`Modify::Nothing`] for one whose
+    /// class does not override the hook.
+    fn enchant_modify(
+        enchanted: crate::Enchanted<Self>,
+        status: crate::EnchantmentStatus,
+        hook: EnchantHook,
+    ) -> Modify<Self::Number>;
 
     /// What an enchantment asks for when `hook` reaches the card `id` it is
     /// on, pushed onto `asked`. Asked only of an enchantment whose class

@@ -1,0 +1,12 @@
+# On the first turn Toasty Mittens passes over the innate cards on top of the
+# shuffled draw pile and exhausts the first that is not innate. Six Mind
+# Blasts put an innate card on top on this seed.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"TOASTY_MITTENS"}
+{"cmd":"grant","card":"MIND_BLAST"}
+{"cmd":"grant","card":"MIND_BLAST"}
+{"cmd":"grant","card":"MIND_BLAST"}
+{"cmd":"grant","card":"MIND_BLAST"}
+{"cmd":"grant","card":"MIND_BLAST"}
+{"cmd":"grant","card":"MIND_BLAST"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}

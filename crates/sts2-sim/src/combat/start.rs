@@ -237,56 +237,24 @@ pub(crate) fn enter<V: Rules>(
         unimplemented!("a fight that ends {ended:?} as its first energy resets");
     }
     super::turn::energy_reset_late::<V>(&mut live, streams.combat(), relics, ascension);
-    // `BeforeHandDraw`. The opening hand is dealt below rather than drawn onto
-    // what is already there, so nothing may be made in hand here.
-    let player = live.player().id;
-    let hook = sts2_core::EventHook::BeforeHandDraw {
-        player,
-        turn: live.turn,
-    };
-    if let Some((listener, effect)) = super::listen::notify::<V>(&mut live, relics, hook).first() {
-        unimplemented!("{listener:?} asking for {effect:?} before the opening hand")
-    }
-
-    let drawn = hand_size::<V>(
-        Walk {
-            live: &live,
-            relics,
-        },
-        turn,
-    );
-    after_modifying_hand_draw::<V>(&mut live, relics);
-    let piles = pile::shuffle(streams.combat().shuffle, deck).deal_opening(drawn);
-
-    // The whole deck into the draw pile in the order the deal left it, then
-    // the hand drawn off its top, which is `CardPileCmd.Draw` raising each
-    // card's hooks and history in turn.
-    let order: Vec<_> = piles.hand().iter().chain(piles.draw()).copied().collect();
+    // The whole deck into the draw pile in the order the shuffle left it.
+    let order = pile::shuffle(streams.combat().shuffle, deck).into_cards();
     live.cards = Cards::dealt(&[], &order);
     if !afflicting.is_empty() {
         super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)
             .write_cards(afflicting);
     }
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
-    // cards move. The same cards are in the draw pile here, and no listener
-    // answers it.
+    // cards move. No listener answers it.
     let hook = sts2_core::EventHook::ShuffleOrder { initial: true };
     if let Some((listener, effect)) = super::listen::notify::<V>(&mut live, relics, hook).first() {
         unimplemented!("{listener:?} asking for {effect:?} over the opening shuffle")
     }
-    if let Some(ended) = super::board::draw(
-        &mut live,
-        streams.combat(),
-        relics,
-        ascension,
-        piles.hand().len(),
-        true,
-    ) {
-        unimplemented!("a fight that ends {ended:?} as its opening hand is drawn");
-    }
-    // `SetupPlayerTurn` ends on `AfterPlayerTurnStart`, which can end the
-    // fight before the player takes a turn in it.
-    let hook = sts2_core::EventHook::PlayerTurnStart {
+    // `BeforeHandDraw`, then the hand, then `AfterPlayerTurnStart`: the first
+    // turn's `SetupPlayerTurn` runs as every other turn's does, with the
+    // innate cards put on top first.
+    let player = live.player().id;
+    let hook = sts2_core::EventHook::BeforeHandDraw {
         player,
         turn: live.turn,
     };
@@ -296,7 +264,7 @@ pub(crate) fn enter<V: Rules>(
         streams.combat(),
         relics,
         ascension,
-        super::live::Setup::PlayerTurnStart(asked),
+        super::live::Setup::BeforeHandDraw(asked),
     ) {
         super::turn::Carried::Done(ended) => ended,
         super::turn::Carried::Parked(_) => {

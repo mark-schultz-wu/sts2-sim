@@ -265,9 +265,10 @@ impl sts2_core::Hooks for V0_107_1 {
 
     fn enchant_modify(
         enchanted: sts2_core::Enchanted<Self>,
+        status: sts2_core::EnchantmentStatus,
         hook: sts2_core::EnchantHook,
     ) -> sts2_core::Modify<Self::Number> {
-        behaviour::enchantments::modify(enchanted, hook)
+        behaviour::enchantments::modify(enchanted, status, hook)
     }
 
     fn enchantment_event_hook(

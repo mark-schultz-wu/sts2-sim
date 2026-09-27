@@ -3603,6 +3603,10 @@ impl sts2_core::CardTable for Cards {
     fn overrides(self) -> sts2_core::Overrides {
         OVERRIDES[usize::from(<Self as sts2_core::CardTable>::order(self))]
     }
+
+    fn heard_by_any() -> sts2_core::Overrides {
+        HEARD_BY_ANY
+    }
 }
 
 /// The hooks each class overrides, from `hooks.txt`, indexed by the card's place in the build's id order.
@@ -4812,3 +4816,20 @@ static OVERRIDES: [sts2_core::Overrides; 596] = [
     // ZAP
     sts2_core::Overrides::from_bits(0),
 ];
+
+/// Every hook some card's class overrides.
+static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::from_bits(0)
+    .with(sts2_core::ModelHook::AfterCardEnteredCombat)
+    .with(sts2_core::ModelHook::AfterCardPlayed)
+    .with(sts2_core::ModelHook::BeforeHandDraw)
+    .with(sts2_core::ModelHook::AfterCardExhausted)
+    .with(sts2_core::ModelHook::ShouldPlay)
+    .with(sts2_core::ModelHook::AfterAttack)
+    .with(sts2_core::ModelHook::AfterCombatEnd)
+    .with(sts2_core::ModelHook::AfterCardDrawn)
+    .with(sts2_core::ModelHook::ModifyNextEvent)
+    .with(sts2_core::ModelHook::ModifyUnknownMapPointRoomTypes)
+    .with(sts2_core::ModelHook::AfterDeath)
+    .with(sts2_core::ModelHook::BeforeSideTurnEnd)
+    .with(sts2_core::ModelHook::AfterCardChangedPiles)
+    .with(sts2_core::ModelHook::BeforeCardPlayed);

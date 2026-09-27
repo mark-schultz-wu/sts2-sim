@@ -1475,16 +1475,22 @@ pub(super) fn modified_by<V: Rules>(
     amount: V::Number,
     phases: &[ModifyHook<V>],
 ) -> V::Number {
-    modified_from::<V>(fight, float::<V>(amount), phases)
+    scaled_by::<V>(fight, amount, None, phases)
 }
 
 fn float<V: Rules>(number: V::Number) -> f64 {
     num_traits::cast(number).expect("a number a fight works out fits a float")
 }
 
-/// [`modified_by`] from a number the game holds as a decimal, which is one an
-/// enchantment scaled before any listener.
-fn modified_from<V: Rules>(fight: Walk<'_, V>, amount: f64, phases: &[ModifyHook<V>]) -> V::Number {
+/// [`modified_by`] over a number an enchantment scaled first, where `scale`
+/// says so. The game holds the scaled number as a decimal until the
+/// listeners are done.
+fn scaled_by<V: Rules>(
+    fight: Walk<'_, V>,
+    amount: V::Number,
+    scale: Option<f64>,
+    phases: &[ModifyHook<V>],
+) -> V::Number {
     let hooks = phases
         .iter()
         .fold(sts2_core::Overrides::default(), |hooks, phase| {
@@ -1503,15 +1509,18 @@ fn modified_from<V: Rules>(fight: Walk<'_, V>, amount: f64, phases: &[ModifyHook
     });
     // A number nothing changes is only floored.
     if answers.is_empty() {
-        return num_traits::cast(amount.max(0.0).trunc())
-            .expect("a modified number is a game number");
+        return match scale {
+            None => amount.max(V::Number::zero()),
+            Some(by) => num_traits::cast((float::<V>(amount) * by).max(0.0).trunc())
+                .expect("a modified number is a game number"),
+        };
     }
 
     let float = float::<V>;
     // Phase by phase, and within a phase in the order the walk asked. The
     // sort is stable, so it keeps that order.
     answers.sort_by_key(|&(at, _)| at);
-    let mut number = amount;
+    let mut number = float(amount) * scale.unwrap_or(1.0);
     let mut share = 1.0f64;
     let mut phase = answers[0].0;
     for &(at, answer) in &answers {
@@ -1575,20 +1584,31 @@ pub(crate) fn modified<V: Rules>(
 ) -> V::Number {
     // The card's enchantment has its say first, and only when a card deals
     // the hit. Its scale stays a decimal until the listeners are done.
-    let damage = match card.and_then(|held| held.face.ident.enchantment) {
-        Some(enchanted) => {
-            let added =
-                enchanted_by::<V>(enchanted, EnchantHook::DamageAdditive { powered }, damage);
+    let enchanted = card.and_then(|held| {
+        held.face
+            .ident
+            .enchantment
+            .map(|enchanted| (enchanted, held.face.enchantment_status()))
+    });
+    let (damage, scale) = match enchanted {
+        Some((enchanted, status)) => {
+            let added = enchanted_by::<V>(
+                enchanted,
+                status,
+                EnchantHook::DamageAdditive { powered },
+                damage,
+            );
             match <V as sts2_core::Hooks>::enchant_modify(
                 enchanted,
+                status,
                 EnchantHook::DamageMultiplicative { powered },
             ) {
-                Modify::Nothing => float::<V>(added),
-                Modify::Scaled(by) => float::<V>(added) * by,
+                Modify::Nothing => (added, None),
+                Modify::Scaled(by) => (added, Some(by)),
                 answer => unimplemented!("an enchantment scaling a hit with {answer:?}"),
             }
         }
-        None => float::<V>(damage),
+        None => (damage, None),
     };
     let card = card.map(|held| sts2_core::CardSource {
         id: held.id,
@@ -1614,7 +1634,7 @@ pub(crate) fn modified<V: Rules>(
             powered,
         },
     ];
-    modified_from::<V>(fight, damage, &phases)
+    scaled_by::<V>(fight, damage, scale, &phases)
 }
 
 /// `amount` after an enchantment's `hook`, which the game asks before any
@@ -1625,10 +1645,11 @@ pub(crate) fn modified<V: Rules>(
 /// An enchantment that does more to the number than add to it.
 pub(super) fn enchanted_by<V: Rules>(
     enchanted: sts2_core::Enchanted<V>,
+    status: sts2_core::EnchantmentStatus,
     hook: EnchantHook,
     amount: V::Number,
 ) -> V::Number {
-    match <V as sts2_core::Hooks>::enchant_modify(enchanted, hook) {
+    match <V as sts2_core::Hooks>::enchant_modify(enchanted, status, hook) {
         Modify::Nothing => amount,
         Modify::Added(more) => amount + more,
         answer => unimplemented!("an enchantment answering {hook:?} with {answer:?}"),
@@ -1792,8 +1813,15 @@ pub(crate) fn resolve<V: Rules>(
             let amount = carried::<V>(playing, fight.live, amount, None);
             // `Hook.ModifyBlock` asks the played card's enchantment whatever
             // the block's props, since `GainBlock` always runs it.
-            let amount = match playing.and_then(|held| held.face.ident.enchantment) {
-                Some(enchanted) => enchanted_by::<V>(enchanted, EnchantHook::BlockAdditive, amount),
+            let amount = match playing.and_then(|held| {
+                held.face
+                    .ident
+                    .enchantment
+                    .map(|e| (e, held.face.enchantment_status()))
+            }) {
+                Some((enchanted, status)) => {
+                    enchanted_by::<V>(enchanted, status, EnchantHook::BlockAdditive, amount)
+                }
                 None => amount,
             };
             let powered = scaling == Scaling::Dynamic;
