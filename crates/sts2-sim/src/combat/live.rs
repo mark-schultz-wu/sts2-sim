@@ -687,11 +687,38 @@ impl<V: Rules> Face<V> {
         if printed == sts2_core::Cost::None {
             return;
         }
+        let held = CostModifier::held(pool, change, lasting);
+        // `LocalCostModifier.Modify` returns a set's amount whatever the cost
+        // before it, and one that lasts the fight never leaves the list. So
+        // nothing reads an energy modifier ahead of it again. Stars differ:
+        // `GetStarCostThisCombat` reads the first such cost, not the last.
+        if pool == sts2_core::CostPool::Energy
+            && matches!(held.change(), CostChange::Absolute(_))
+            && !lasting.clears_when_turn_ends()
+            && !lasting.clears_when_played()
+        {
+            self.kept(|modifier| modifier.pool() == sts2_core::CostPool::Energy);
+        }
         let at = usize::from(self.modifiers);
+        // A shift right after another on the same pool, which wears off when
+        // it does, is one shift of their sum. The fold clamps nothing between
+        // them, and `UpgradeBy` lowers sets alone.
+        if let Some(&last) = at.checked_sub(1).map(|last| &self.cost_modifiers[last])
+            && let (CostChange::Relative(before), CostChange::Relative(more)) =
+                (last.change(), held.change())
+            && last.pool() == held.pool()
+            && last.clears_when_turn_ends() == held.clears_when_turn_ends()
+            && last.clears_when_played() == held.clears_when_played()
+            && SHIFT_WITHIN.contains(&(before + more))
+        {
+            self.cost_modifiers[at - 1] =
+                CostModifier::held(pool, CostChange::Relative(before + more), lasting);
+            return;
+        }
         if at == MODIFIERS {
             unimplemented!("a card carrying more than {MODIFIERS} cost modifiers");
         }
-        self.cost_modifiers[at] = CostModifier::held(pool, change, lasting);
+        self.cost_modifiers[at] = held;
         self.modifiers += 1;
     }
 
@@ -2049,7 +2076,7 @@ mod tests {
         for (change, lasting) in [
             (CostChange::Relative(-1), Lasting::ThisFight),
             (CostChange::Relative(-2), Lasting::ThisTurn),
-            (CostChange::Absolute(3), Lasting::ThisFight),
+            (CostChange::Relative(1), Lasting::ThisFight),
         ] {
             card.face.modify_cost(CostPool::Energy, change, lasting);
         }
@@ -2065,7 +2092,7 @@ mod tests {
             .collect();
         assert_eq!(
             kept,
-            [CostChange::Relative(-1), CostChange::Absolute(3)],
+            [CostChange::Relative(-1), CostChange::Relative(1)],
             "the turn's own goes, and the two around it close up",
         );
     }
