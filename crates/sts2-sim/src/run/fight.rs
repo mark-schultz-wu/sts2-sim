@@ -41,7 +41,7 @@ impl<V: Rules> State<V> {
         let Some(fighting) = self.fighting() else {
             return refused(Reason::NotInCombat);
         };
-        let play = match combat::resolve(fighting.live, index, target) {
+        let play = match combat::resolve(fighting.live, fighting.relics, index, target) {
             Ok(play) => play,
             Err(reason) => return refused(reason),
         };

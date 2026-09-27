@@ -1,0 +1,10 @@
+# `Hook.ModifyEnergyCostInCombat` asks every listener's
+# `TryModifyEnergyCostInCombat` before any listener's `Late`. Borrowed Time
+# adds one in the first pass and Free Attack sets attacks to nothing in the
+# second. So the Defends print two and the attacks still print zero. Borrowed
+# Time goes as its owner's turn ends, and on turn two the Defend prints one.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"BORROWED_TIME_POWER","amount":1,"target":0}
+{"cmd":"power","power":"FREE_ATTACK_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

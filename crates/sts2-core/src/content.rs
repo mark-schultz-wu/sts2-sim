@@ -2077,6 +2077,20 @@ pub enum ModifyHook<V: ContentVersion> {
     MaxEnergy {
         player: crate::CombatId,
     },
+    /// `TryModifyEnergyCostInCombat`, over a card's cost once its own
+    /// modifiers are folded in. Every cost the fight reads is of a card in
+    /// hand or being played.
+    EnergyCost {
+        card: (crate::CardId<V>, V::Card),
+        /// `Keywords.Contains(Ethereal)` for the copy.
+        ethereal: bool,
+    },
+    /// `TryModifyEnergyCostInCombatLate`, over what [`ModifyHook::EnergyCost`]
+    /// left.
+    EnergyCostLate {
+        card: (crate::CardId<V>, V::Card),
+        ethereal: bool,
+    },
     /// `ModifyOrbValue`: a number `player`'s orb shows, as its passive or its
     /// evoke reads it.
     OrbValue {
@@ -2107,6 +2121,8 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::MaxEnergy { .. } => ModelHook::ModifyMaxEnergy,
+            ModifyHook::EnergyCost { .. } => ModelHook::TryModifyEnergyCostInCombat,
+            ModifyHook::EnergyCostLate { .. } => ModelHook::TryModifyEnergyCostInCombatLate,
             ModifyHook::CardPlayCount { .. } => ModelHook::ModifyCardPlayCount,
             ModifyHook::OrbValue { .. } => ModelHook::ModifyOrbValue,
         }
@@ -2292,6 +2308,14 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterCardDrawn`, carrying the card that has just reached the hand.
     ///
+    /// `BeforeCardPlayed`, before each play of a card, replays included. The
+    /// card stands in the play pile.
+    CardPlaying {
+        card: V::Card,
+        id: crate::CardId<V>,
+        /// `Keywords.Contains(Ethereal)` for the copy.
+        ethereal: bool,
+    },
     /// `AfterCardDrawnEarly`, the pass `Hook.AfterCardDrawn` makes over every
     /// listener before the one [`EventHook::CardDrawn`] names.
     CardDrawnEarly {
@@ -2466,6 +2490,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::DamageGiven { .. } => ModelHook::AfterDamageGiven,
             EventHook::CardDrawn { .. } => ModelHook::AfterCardDrawn,
             EventHook::CardDrawnEarly { .. } => ModelHook::AfterCardDrawnEarly,
+            EventHook::CardPlaying { .. } => ModelHook::BeforeCardPlayed,
             EventHook::BeforeSideTurnStart { .. } => ModelHook::BeforeSideTurnStart,
             EventHook::SideTurnStart { .. } => ModelHook::AfterSideTurnStart,
             EventHook::BeforeSideTurnEndEarly { .. } => ModelHook::BeforeSideTurnEndEarly,

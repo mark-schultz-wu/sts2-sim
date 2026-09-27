@@ -312,6 +312,21 @@ const SHRUNK: f64 = 1.0 - 30.0 / 100.0;
 /// one, and truncates to the same whole number.
 const SLOW_PER_CARD: f64 = 0.1;
 
+/// Whether a power that makes a card free takes `card`. The three `Free`
+/// powers take an Attack, a Skill or a Power, and Veilpiercer an Ethereal card.
+fn frees(power: Power, card: Cards, ethereal: bool) -> bool {
+    use sts2_core::{CardKind, Rules as _};
+
+    let kind = V::card_kind(card);
+    match power {
+        Power::FreeAttackPower => kind == Some(CardKind::Attack),
+        Power::FreeSkillPower => kind == Some(CardKind::Skill),
+        Power::FreePowerPower => kind == Some(CardKind::Power),
+        Power::VeilpiercerPower => ethereal,
+        power => unreachable!("{power:?} makes no card free"),
+    }
+}
+
 /// What Vulnerable on `holder` multiplies a powered hit from `dealer` by.
 ///
 /// # Panics
@@ -448,6 +463,7 @@ pub(crate) fn modify_hook(
     debug_assert_eq!(state.power(), power);
     let counted = state.counted();
     let holder = held.holder;
+    let owner = held.owner;
     match (power, amount, hook) {
         // `SlowPower.ModifyDamageMultiplicative`, which reads the cards played
         // since its owner's turn began and takes a tenth more for each.
@@ -495,6 +511,65 @@ pub(crate) fn modify_hook(
                 ..
             },
         ) if dealer == holder => Modify::Scaled(SHRUNK),
+        // `TryModifyEnergyCostInCombatLate`: nothing for a card of its kind
+        // that its owner holds or is playing, which is every card whose cost
+        // the fight reads. A fight here has one player, so its owner's cards
+        // are the player's.
+        (
+            Power::FreeAttackPower
+            | Power::FreeSkillPower
+            | Power::FreePowerPower
+            | Power::VeilpiercerPower,
+            PowerAmount::Counted(_),
+            ModifyHook::EnergyCostLate {
+                card: (_, card),
+                ethereal,
+            },
+        ) if owner == CombatSide::Player && frees(power, card, ethereal) => {
+            Modify::AtMost(num_traits::zero())
+        }
+        (
+            Power::FreeAttackPower
+            | Power::FreeSkillPower
+            | Power::FreePowerPower
+            | Power::VeilpiercerPower,
+            PowerAmount::Endless,
+            ModifyHook::EnergyCostLate { .. },
+        ) => unimplemented!("an endless {power:?}"),
+        (
+            Power::FreeAttackPower
+            | Power::FreeSkillPower
+            | Power::FreePowerPower
+            | Power::VeilpiercerPower,
+            _,
+            ModifyHook::EnergyCostLate { .. },
+        ) => Modify::Nothing,
+        // `BorrowedTimePower.TryModifyEnergyCostInCombat`: its stack onto
+        // every card its owner holds.
+        (Power::BorrowedTimePower, PowerAmount::Counted(amount), ModifyHook::EnergyCost { .. })
+            if owner == CombatSide::Player =>
+        {
+            Modify::Added(amount)
+        }
+        (Power::BorrowedTimePower, PowerAmount::Endless, ModifyHook::EnergyCost { .. }) => {
+            unimplemented!("an endless Borrowed Time")
+        }
+        (Power::BorrowedTimePower, _, ModifyHook::EnergyCost { .. }) => Modify::Nothing,
+        // `IntangiblePower`: a hit on its owner capped at one, and the hit
+        // points it loses capped the same, whatever the hit's props.
+        (Power::IntangiblePower, _, ModifyHook::DamageCap { target, .. })
+            if target == Some(holder) =>
+        {
+            Modify::AtMost(one)
+        }
+        (Power::IntangiblePower, _, ModifyHook::HpLostAfterOsty { target }) if target == holder => {
+            Modify::AtMost(one)
+        }
+        (
+            Power::IntangiblePower,
+            _,
+            ModifyHook::DamageCap { .. } | ModifyHook::HpLostAfterOsty { .. },
+        ) => Modify::Nothing,
         // `CalcifyPower.ModifyDamageAdditive`: its stack onto a powered hit
         // from Osty, where its holder is the player Osty stands beside.
         (
@@ -986,6 +1061,40 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Debilitate")
         }
         (Power::DebilitatePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `BeforeCardPlayed`: one off the stack for each card of its kind its
+        // owner plays, which stands in the play pile.
+        (
+            Power::FreeAttackPower
+            | Power::FreeSkillPower
+            | Power::FreePowerPower
+            | Power::VeilpiercerPower,
+            _,
+            EventHook::CardPlaying { card, ethereal, .. },
+        ) => (owner == CombatSide::Player && frees(power, card, ethereal))
+            .then_some(HookEffect::Decrement),
+        // `IntangiblePower.AfterSideTurnEnd`: one off its stack as the
+        // enemies' turn ends.
+        (
+            Power::IntangiblePower,
+            PowerAmount::Counted(_),
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+            },
+        ) => Some(HookEffect::Decrement),
+        (
+            Power::IntangiblePower,
+            PowerAmount::Endless,
+            EventHook::SideTurnEnd {
+                side: CombatSide::Enemy,
+            },
+        ) => unimplemented!("an endless Intangible"),
+        (Power::IntangiblePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `BorrowedTimePower.AfterSideTurnEnd`: gone once its owner's turn
+        // ends.
+        (Power::BorrowedTimePower, _, EventHook::SideTurnEnd { side }) if side == owner => {
+            Some(HookEffect::Remove)
+        }
+        (Power::BorrowedTimePower, _, EventHook::SideTurnEnd { .. }) => None,
         // `NoDrawPower.AfterSideTurnEnd`: gone once its owner's turn ends.
         (Power::NoDrawPower, _, EventHook::SideTurnEnd { side }) if side == owner => {
             Some(HookEffect::Remove)
@@ -1514,6 +1623,9 @@ pub(crate) fn event_hook(
         // `BufferPower.AfterModifyingHpLostAfterOsty`: one spent on each hit it
         // took to nothing.
         (Power::BufferPower, _, EventHook::HpLostModified) => Some(HookEffect::Decrement),
+        // `IntangiblePower.AfterModifyingHpLostAfterOsty` flashes, which is
+        // all it does.
+        (Power::IntangiblePower, _, EventHook::HpLostModified) => None,
         // `IterationPower.AfterCardDrawn`: the first Status card its owner
         // draws in a turn draws its stack more. The draw is in the history
         // before the hook, so the first is a count of one. A fight here has
