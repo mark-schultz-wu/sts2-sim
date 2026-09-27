@@ -1891,6 +1891,9 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             unimplemented!("{listener:?} asking for {effect:?} before an attack")
         }
         hits(self);
+        // `History.CreatureAttacked`, before `AfterAttack` and whether or not
+        // the fight is ending.
+        self.live.history.attacked(monster);
         // `IterateCombatHookListeners` hands a fight that is ending no
         // listeners.
         if self.ended.is_some() || self.ending() {

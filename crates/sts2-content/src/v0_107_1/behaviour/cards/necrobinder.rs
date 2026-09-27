@@ -62,10 +62,18 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         }),
         (NecrobinderCard::Flatten, EventHook::AfterAttack { .. }) => {}
         // `Flatten.AfterCardEnteredCombat`, which answers its own entry
-        // alone, and then only once Osty has attacked this turn.
+        // alone, and then only once Osty has attacked this turn. A fight here
+        // has one player, so any Osty is theirs.
         (NecrobinderCard::Flatten, EventHook::CardEnteredCombat { at, .. }) => {
-            if at.id() == id {
-                unimplemented!("a Flatten entering the fight, which reads whether Osty attacked")
+            if at.id() == id
+                && history
+                    .attacked_this_turn()
+                    .any(|monster| monster == Some(Monster::Osty))
+            {
+                asked.push(HookEffect::ModifySelf {
+                    change: Change::SetCost(CostPool::Energy, 0),
+                    lasting: Lasting::ThisTurn,
+                });
             }
         }
         // `Melancholy.AfterDeath`: any creature's death takes its `Energy` off

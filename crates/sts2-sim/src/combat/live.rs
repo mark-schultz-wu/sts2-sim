@@ -1512,6 +1512,12 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Finished(finished));
     }
 
+    /// `History.CreatureAttacked`, in the turn the fight stands in.
+    pub(super) fn attacked(&mut self, monster: Option<V::Monster>) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Attacked(monster));
+    }
+
     /// `History.CardDrawn`, in the turn the fight stands in.
     pub(super) fn draw(&mut self, card: V::Card) {
         self.this_turn.push(sts2_core::HistoryEntry::Drawn(card));

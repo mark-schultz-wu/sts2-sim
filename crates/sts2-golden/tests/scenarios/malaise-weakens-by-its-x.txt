@@ -1,0 +1,6 @@
+# Malaise takes its X off the target's Strength, then puts that much Weak on
+# it. All three energy make it three.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"MALAISE"}
+{"cmd":"play_card","index":7,"target":1}

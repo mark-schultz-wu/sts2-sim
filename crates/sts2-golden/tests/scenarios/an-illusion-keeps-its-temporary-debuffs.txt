@@ -1,0 +1,10 @@
+# `IllusionPower.ShouldPowerBeRemovedOnDeath` takes a debuff off the dying eye
+# unless it is an `ITemporaryPower`. Vulnerable goes, and Dark Shackles, which
+# lends a Strength loss, stays.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"FOGMOG_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"DARK_SHACKLES_POWER","amount":5,"target":2}
+{"cmd":"power","power":"VULNERABLE_POWER","amount":1,"target":2}
+{"cmd":"power","power":"STRENGTH_POWER","amount":200,"target":0}
+{"cmd":"play_card","index":0,"target":2}
