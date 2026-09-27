@@ -493,13 +493,13 @@ pub struct NextMove<V: ContentVersion> {
     /// A move carries a list, so an attack that also blocks reports two, in the
     /// order the game draws them.
     ///
-    /// Inline, because two is the longest any ported move draws, and a fight
+    /// Inline, because three is the longest any move draws, and a fight
     /// carries one of these per monster.
     pub intents: SmallVec<[Intent<V>; INTENTS_INLINE]>,
 }
 
 /// How many intents one move telegraphs, before reaching the heap.
-const INTENTS_INLINE: usize = 2;
+const INTENTS_INLINE: usize = 3;
 
 impl<V: ContentVersion> Clone for NextMove<V> {
     /// Copies the intents rather than walking them.

@@ -807,7 +807,10 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// Replays and keywords, which are the effects a fight carries out
     /// against its own cards rather than against a creature.
-    fn write_cards(&mut self, asked: impl IntoIterator<Item = sts2_core::HookEffect<V>>) {
+    pub(super) fn write_cards(
+        &mut self,
+        asked: impl IntoIterator<Item = sts2_core::HookEffect<V>>,
+    ) {
         for effect in asked {
             match effect {
                 sts2_core::HookEffect::AddReplays { to, amount } => {

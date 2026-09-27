@@ -164,6 +164,11 @@ pub(crate) fn enter<V: Rules>(
     // `BeforeCombatStart`, after the room and before the fight opens. The
     // player carries no power yet, so block gained here is what was asked for
     // and passes no modifier.
+    //
+    // The game's piles hold the deck by now, and the ones here are dealt
+    // below. So an affliction asked for here lands once they are, before
+    // anything draws.
+    let mut afflicting: Vec<HookEffect<V>> = Vec::new();
     for (listener, effect) in
         super::listen::notify::<V>(&mut live, relics, EventHook::CombatStarting)
     {
@@ -198,6 +203,7 @@ pub(crate) fn enter<V: Rules>(
                     amount,
                 );
             }
+            (_, afflict @ HookEffect::Afflict { .. }) => afflicting.push(afflict),
             (_, other) => unimplemented!("a listener asking for {other:?} as a fight starts"),
         }
     }
@@ -250,6 +256,10 @@ pub(crate) fn enter<V: Rules>(
     // card's hooks and history in turn.
     let order: Vec<_> = piles.hand().iter().chain(piles.draw()).copied().collect();
     live.cards = Cards::dealt(&[], &order);
+    if !afflicting.is_empty() {
+        super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)
+            .write_cards(afflicting);
+    }
     // `RandomizeOrderInternal` raises `ModifyShuffleOrder` before the innate
     // cards move. The same cards are in the draw pile here, and no listener
     // answers it.

@@ -1460,6 +1460,10 @@ pub trait FightView<V: ContentVersion> {
     /// `Creature.Monster`, or nothing for a player.
     fn monster(&self, creature: crate::CombatId) -> Option<V::Monster>;
 
+    /// The player's creature, which a card's `Owner.Creature` is. A fight
+    /// here has one player.
+    fn player(&self) -> crate::CombatId;
+
     /// `Creature.CurrentHp`, or nothing for a creature not in the fight.
     fn current_hp(&self, creature: crate::CombatId) -> Option<V::Health>;
 
@@ -2570,6 +2574,8 @@ pub enum EventHook<V: ContentVersion> {
         card: V::Card,
         /// `CardPlay.Card`: which copy.
         id: crate::CardId<V>,
+        /// `CardPlay.Card.Affliction`.
+        affliction: Option<V::Affliction>,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
     },
