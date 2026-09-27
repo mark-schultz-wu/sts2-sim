@@ -1,0 +1,6 @@
+# `VeryHotCocoa.AfterSideTurnStart` gives four energy while the player's turn
+# number is one, and nothing on turn two.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"VERY_HOT_COCOA"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}

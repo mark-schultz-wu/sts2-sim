@@ -1,5 +1,6 @@
 //! Event behavior dispatch for this build.
 
+mod ancient;
 mod aroma_of_chaos;
 mod brain_leech;
 mod byrdonis_nest;
@@ -15,6 +16,7 @@ mod slippery_bridge;
 mod sunken_statue;
 mod tablet_of_truth;
 mod tea_master;
+mod tezcatara;
 mod the_future_of_potions;
 mod the_legends_were_true;
 mod this_or_that;
@@ -45,7 +47,7 @@ pub enum State {
     JungleMazeAdventure(jungle_maze_adventure::State),
     LuminousChoir(luminous_choir::State),
     MorphicGrove(morphic_grove::State),
-    Orobas(orobas::State),
+    Orobas(ancient::Offered),
     RoomFullOfCheese(room_full_of_cheese::State),
     SapphireSeed(sapphire_seed::State),
     SelfHelpBook(self_help_book::State),
@@ -53,6 +55,7 @@ pub enum State {
     SunkenStatue(sunken_statue::State),
     TabletOfTruth(tablet_of_truth::State),
     TeaMaster(tea_master::State),
+    Tezcatara(ancient::Offered),
     TheFutureOfPotions(the_future_of_potions::State),
     TheLegendsWereTrue(the_legends_were_true::State),
     ThisOrThat(this_or_that::State),
@@ -118,6 +121,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::RoomFullOfCheese => room_full_of_cheese::RoomFullOfCheese.allowed(run),
         Event::SunkenStatue => sunken_statue::SunkenStatue.allowed(run),
         Event::TeaMaster => tea_master::TeaMaster.allowed(run),
+        Event::Tezcatara => tezcatara::Tezcatara.allowed(run),
         Event::TheLegendsWereTrue => the_legends_were_true::TheLegendsWereTrue.allowed(run),
         Event::ThisOrThat => this_or_that::ThisOrThat.allowed(run),
         Event::Wellspring => wellspring::Wellspring.allowed(run),
@@ -208,6 +212,7 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
             State::TabletOfTruth(tablet_of_truth::TabletOfTruth.enter(run, rng))
         }
         Event::TeaMaster => State::TeaMaster(tea_master::TeaMaster.enter(run, rng)),
+        Event::Tezcatara => State::Tezcatara(tezcatara::Tezcatara.enter(run, rng)),
         Event::TheFutureOfPotions => {
             State::TheFutureOfPotions(the_future_of_potions::TheFutureOfPotions.enter(run, rng))
         }
@@ -249,6 +254,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::SunkenStatue(state) => sunken_statue::SunkenStatue.observe(state, run),
         State::TabletOfTruth(state) => tablet_of_truth::TabletOfTruth.observe(state, run),
         State::TeaMaster(state) => tea_master::TeaMaster.observe(state, run),
+        State::Tezcatara(state) => tezcatara::Tezcatara.observe(state, run),
         State::TheFutureOfPotions(state) => {
             the_future_of_potions::TheFutureOfPotions.observe(state, run)
         }
@@ -299,6 +305,7 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
             the_future_of_potions::TheFutureOfPotions.choose(state, option, run, rng)
         }
         State::TeaMaster(state) => tea_master::TeaMaster.choose(state, option, run, rng),
+        State::Tezcatara(state) => tezcatara::Tezcatara.choose(state, option, run, rng),
         State::TheLegendsWereTrue(state) => {
             the_legends_were_true::TheLegendsWereTrue.choose(state, option, run, rng)
         }

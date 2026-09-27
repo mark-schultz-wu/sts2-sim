@@ -1149,6 +1149,14 @@ pub(super) fn side_turn_started<V: Rules>(
                     .unwrap_or_else(|| unimplemented!("{amount:?} energy at once"));
                 live.energy = live.energy + gained;
             }
+            sts2_core::HookEffect::GainEnergyForGold { energy, gold } => {
+                if live.gold >= gold {
+                    let gained: V::Count = num_traits::cast(energy)
+                        .unwrap_or_else(|| unimplemented!("{energy:?} energy at once"));
+                    live.energy = live.energy + gained;
+                    live.gold = live.gold - gold;
+                }
+            }
             // `CreatureCmd.GainBlock`, unpowered, on the power's owner.
             sts2_core::HookEffect::GainBlockPerOrbKind(amount) => {
                 let Listener::Power { owner, .. } = listener else {
