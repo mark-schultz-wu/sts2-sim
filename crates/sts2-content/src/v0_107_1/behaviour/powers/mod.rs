@@ -1097,6 +1097,7 @@ pub(crate) fn result_pile(
     amount: PowerAmount<Number>,
     holder: sts2_core::CombatId,
     state: &State,
+    history: sts2_core::History<'_, V>,
     hook: sts2_core::ResultPile<V>,
 ) -> sts2_core::HookResponse<(Option<sts2_core::Pile>, sts2_core::PilePosition)> {
     use sts2_core::HookResponse;
@@ -1119,6 +1120,36 @@ pub(crate) fn result_pile(
             }
         }
         (Power::FeralPower, PowerAmount::Endless) => unimplemented!("an endless Feral"),
+        // `NostalgiaPower`: an attack or skill of its owner's bound for the
+        // discard pile goes to the top of the draw pile instead, while the
+        // turn has started fewer such plays than its stack. The play itself
+        // is not started yet. A fight here has one player.
+        (Power::NostalgiaPower, PowerAmount::Counted(amount)) => {
+            let counted = |card| {
+                matches!(
+                    <V as sts2_core::Rules>::card_kind(card),
+                    Some(sts2_core::CardKind::Attack | sts2_core::CardKind::Skill)
+                )
+            };
+            let started: Number = history
+                .started_this_turn()
+                .filter(|started| counted(started.card))
+                .count()
+                .try_into()
+                .expect("a turn's plays fit a game number");
+            match hook.player == holder
+                && counted(hook.card)
+                && hook.pile == Some(sts2_core::Pile::Discard)
+                && started < amount
+            {
+                true => HookResponse::Decision((
+                    Some(sts2_core::Pile::Draw),
+                    sts2_core::PilePosition::Top,
+                )),
+                false => unchanged,
+            }
+        }
+        (Power::NostalgiaPower, PowerAmount::Endless) => unimplemented!("an endless Nostalgia"),
         (power, _) => unimplemented!("where {power:?} sends a played card"),
     }
 }
@@ -2434,6 +2465,9 @@ pub(crate) fn event_hook(
         // `FeralPower.AfterModifyingCardPlayResultPileOrPosition` counts the
         // one it sent back, and `AfterSideTurnStart` for its owner's side
         // forgets the count.
+        // `NostalgiaPower.AfterModifyingCardPlayResultPileOrPosition` only
+        // flashes.
+        (Power::NostalgiaPower, _, EventHook::ResultPileModified { .. }) => None,
         (Power::FeralPower, _, EventHook::ResultPileModified { .. }) => {
             state.set_feral_played(state.feral_played() + one);
             None
@@ -2475,13 +2509,13 @@ pub(crate) fn event_hook(
         (
             Power::CreativeAiPower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => Some(HookEffect::GenerateFromPool {
             filter: sts2_core::PoolFilter::OfKind(sts2_core::CardKind::Power),
             count: amount,
             keyword: None,
         }),
-        (Power::CreativeAiPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player })
+        (Power::CreativeAiPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Creative AI")
@@ -2492,9 +2526,9 @@ pub(crate) fn event_hook(
         (
             Power::SpectrumShiftPower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => Some(HookEffect::GenerateDistinctColorless { count: amount }),
-        (Power::SpectrumShiftPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player })
+        (Power::SpectrumShiftPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Spectrum Shift")
@@ -2505,7 +2539,7 @@ pub(crate) fn event_hook(
         (
             Power::CallOfTheVoidPower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => Some(HookEffect::GenerateFromPool {
             filter: sts2_core::PoolFilter::NotBasicOrAncient,
             count: amount,
@@ -2515,7 +2549,7 @@ pub(crate) fn event_hook(
         (
             Power::SentryModePower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => Some(HookEffect::GenerateInHand {
             card: Cards::Token(TokenCard::SweepingGaze),
             count: amount,
@@ -2523,7 +2557,7 @@ pub(crate) fn event_hook(
         (
             Power::CallOfTheVoidPower | Power::SentryModePower,
             PowerAmount::Endless,
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => unimplemented!("an endless {power:?}"),
         (Power::CallOfTheVoidPower | Power::SentryModePower, _, EventHook::BeforeHandDraw { .. }) => {
             None
@@ -2622,7 +2656,7 @@ pub(crate) fn event_hook(
         (
             Power::ForegoneConclusionPower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => {
             asked.extend([
                 HookEffect::ShuffleIfNecessary,
@@ -2638,7 +2672,7 @@ pub(crate) fn event_hook(
         (
             Power::ForegoneConclusionPower,
             PowerAmount::Endless,
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => unimplemented!("an endless Foregone Conclusion"),
         (Power::ForegoneConclusionPower, _, EventHook::BeforeHandDraw { .. }) => None,
         // `InfiniteBladesPower.BeforeHandDraw`: its stack of Shivs into its
@@ -2646,12 +2680,12 @@ pub(crate) fn event_hook(
         (
             Power::InfiniteBladesPower,
             PowerAmount::Counted(amount),
-            EventHook::BeforeHandDraw { player },
+            EventHook::BeforeHandDraw { player, .. },
         ) if player == holder => Some(HookEffect::GenerateInHand {
             card: Cards::Token(TokenCard::Shiv),
             count: amount,
         }),
-        (Power::InfiniteBladesPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player })
+        (Power::InfiniteBladesPower, PowerAmount::Endless, EventHook::BeforeHandDraw { player, .. })
             if player == holder =>
         {
             unimplemented!("an endless Infinite Blades")

@@ -2411,6 +2411,9 @@ pub enum EventHook<V: ContentVersion> {
     /// turn's hand is drawn.
     BeforeHandDraw {
         player: crate::CombatId,
+        /// The player's `TurnNumber`, which the turn about to be drawn for
+        /// already carries.
+        turn: V::Count,
     },
     /// `AfterPlayerTurnStart`, once the player has drawn and before the side
     /// turn starts.
@@ -2776,6 +2779,8 @@ pub struct PlayStarted<V: ContentVersion> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayFinished<V: ContentVersion> {
     pub card: V::Card,
+    /// Which copy it was, which `CardPlay.Card` is.
+    pub id: crate::CardId<V>,
 }
 
 /// One entry in `CombatManager.History`, of the kinds a listener reads.
@@ -2834,14 +2839,17 @@ impl<V: ContentVersion> History<'_, V> {
     /// in its turn `turn`: the player's turn before, and the enemies' turn
     /// after it. The turn the fight stands in is the player's `turn` or later,
     /// so none of its entries is one.
-    pub fn finished_last_player_turn(&self, turn: V::Count) -> impl Iterator<Item = V::Card> + '_ {
+    pub fn finished_last_player_turn(
+        &self,
+        turn: V::Count,
+    ) -> impl Iterator<Item = PlayFinished<V>> + '_ {
         let last = turn - num_traits::one::<V::Count>();
         std::iter::successors(self.before, |before| before.before.as_deref())
             .take_while(move |before| before.player_turn >= last)
             .filter(move |before| before.player_turn == last)
             .flat_map(|before| before.entries.iter())
             .filter_map(|entry| match entry {
-                HistoryEntry::Finished(finished) => Some(finished.card),
+                HistoryEntry::Finished(finished) => Some(*finished),
                 _ => None,
             })
     }
@@ -3106,6 +3114,9 @@ pub enum HookEffect<V: ContentVersion> {
         power: V::Power,
         amount: PowerAmount<V::Number>,
     },
+    /// `CardPileCmd.Add(this, PileType.Hand)` for the card listening, from
+    /// whichever pile it stands in.
+    ToHand,
     /// `CreatureCmd.Kill` on the listener's owner: what hit points it has
     /// are lost, and it dies.
     KillOwner,
@@ -3603,10 +3614,13 @@ pub trait Hooks: ContentVersion {
 
     /// [`Hooks::power_event_hook`] for the copy `id` of `card`, printed as
     /// `printed`.
+    ///
+    /// `history` is the fight's, which a card reads the way a power does.
     fn card_event_hook<P: Printed<Self> + ?Sized>(
         card: Self::Card,
         id: crate::CardId<Self>,
         printed: &P,
+        history: History<'_, Self>,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

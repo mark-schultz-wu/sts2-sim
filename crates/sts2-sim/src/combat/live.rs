@@ -1502,8 +1502,8 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardPlayFinished`, in the turn the fight stands in.
-    pub(super) fn finish(&mut self, card: V::Card) {
-        let finished = sts2_core::PlayFinished { card };
+    pub(super) fn finish(&mut self, card: V::Card, id: CardId<V>) {
+        let finished = sts2_core::PlayFinished { card, id };
         self.this_turn
             .push(sts2_core::HistoryEntry::Finished(finished));
     }

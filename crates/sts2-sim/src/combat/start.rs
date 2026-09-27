@@ -227,7 +227,10 @@ pub(crate) fn enter<V: Rules>(
     // `BeforeHandDraw`. The opening hand is dealt below rather than drawn onto
     // what is already there, so nothing may be made in hand here.
     let player = live.player().id;
-    let hook = sts2_core::EventHook::BeforeHandDraw { player };
+    let hook = sts2_core::EventHook::BeforeHandDraw {
+        player,
+        turn: live.turn,
+    };
     if let Some((listener, effect)) = super::listen::notify::<V>(&mut live, relics, hook).first() {
         unimplemented!("{listener:?} asking for {effect:?} before the opening hand")
     }

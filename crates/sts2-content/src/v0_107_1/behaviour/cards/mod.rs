@@ -24,6 +24,7 @@ use super::super::generated::powers::Power;
 /// What the run holds a card's numbers as.
 type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 
+mod colorless;
 mod defect;
 mod event;
 mod ironclad;
@@ -167,6 +168,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     card: Cards,
     id: sts2_core::CardId<V>,
     printed: &P,
+    history: sts2_core::History<'_, V>,
     hook: sts2_core::EventHook<V>,
     asked: &mut sts2_core::HookEffects<V>,
 ) {
@@ -178,6 +180,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
             if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
         Cards::Ironclad(card) => ironclad::event_hook(card, id, hook, asked),
+        Cards::Colorless(card) => colorless::event_hook(card, id, history, hook, asked),
         Cards::Necrobinder(card) => necrobinder::event_hook(card, id, printed, hook, asked),
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
         Cards::Silent(card) => silent::event_hook(card, id, hook, asked),

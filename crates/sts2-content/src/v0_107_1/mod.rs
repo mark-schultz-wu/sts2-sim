@@ -228,8 +228,9 @@ impl sts2_core::Hooks for V0_107_1 {
                 amount,
                 holder,
                 state,
+                history,
                 ..
-            } => behaviour::powers::result_pile(power, amount, holder, state, hook),
+            } => behaviour::powers::result_pile(power, amount, holder, state, history, hook),
             // The fight asks only a listener whose class overrides the hook,
             // and no relic, monster or card this build ports does.
             _ => unimplemented!("a listener other than a power moving a played card"),
@@ -282,10 +283,11 @@ impl sts2_core::Hooks for V0_107_1 {
         card: Self::Card,
         id: sts2_core::CardId<Self>,
         printed: &P,
+        history: sts2_core::History<'_, Self>,
         hook: sts2_core::EventHook<Self>,
         asked: &mut sts2_core::HookEffects<Self>,
     ) {
-        behaviour::cards::event_hook(card, id, printed, hook, asked)
+        behaviour::cards::event_hook(card, id, printed, history, hook, asked)
     }
 }
 /// Nothing yet. The rules land here as they are ported, one pool at a time.
