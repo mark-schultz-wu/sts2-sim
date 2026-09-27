@@ -1403,7 +1403,9 @@ impl<V: Rules> State<V> {
                         false,
                     );
                     for card in drawn {
-                        self.add_to_deck(sts2_core::DeckCard::new(CardIdent::new(card)));
+                        let mut card = [CardIdent::new(card)];
+                        self.reward_options(&mut card);
+                        self.add_to_deck(sts2_core::DeckCard::new(card[0]));
                     }
                     continue;
                 }
@@ -1704,11 +1706,9 @@ impl<V: Rules> State<V> {
                             )
                         }
                     };
-                    Pickup::Cards {
-                        offered: drawn.into_iter().map(CardIdent::new).collect(),
-                        min,
-                        max,
-                    }
+                    let mut offered: Vec<_> = drawn.into_iter().map(CardIdent::new).collect();
+                    self.reward_options(&mut offered);
+                    Pickup::Cards { offered, min, max }
                 }
                 effect => unimplemented!("a run-level relic effect: {effect:?}"),
             };
@@ -2083,6 +2083,7 @@ impl<V: Rules> State<V> {
                 },
             });
         }
+        self.reward_offers(&mut offered);
         self.modify_rewards(&mut offered, None);
         crate::reward::sort(&mut offered);
         offered
@@ -2132,17 +2133,20 @@ impl<V: Rules> State<V> {
                     let ascension = self.ascension();
                     let character = self.character();
                     let act = self.act();
+                    self.card_reward_unheard();
                     let (rng, odds) = self.rewarding();
+                    let mut cards = crate::reward::card::encounter::<V, _>(
+                        rng,
+                        odds,
+                        ascension,
+                        character,
+                        CARDS_OFFERED,
+                        act,
+                        room.card_odds(),
+                    );
+                    self.reward_options(&mut cards);
                     offered.push(Offer::Card {
-                        cards: crate::reward::card::encounter::<V, _>(
-                            rng,
-                            odds,
-                            ascension,
-                            character,
-                            CARDS_OFFERED,
-                            act,
-                            room.card_odds(),
-                        ),
+                        cards,
                         taken: false,
                     });
                 }
@@ -2164,8 +2168,12 @@ impl<V: Rules> State<V> {
     /// # Panics
     ///
     /// A relic asking for anything but a clone of the card.
-    pub(super) fn add_to_deck(&mut self, card: sts2_core::DeckCard<V>) {
+    pub(super) fn add_to_deck(&mut self, mut card: sts2_core::DeckCard<V>) {
         use sts2_core::{EventHook, HookEffect};
+
+        // `Hook.ModifyCardBeingAddedToDeck`, both passes.
+        card.ident = self.rewritten(card.ident, |card| EventHook::CardBeingAddedToDeck { card });
+        self.unheard(sts2_core::ModelHook::TryModifyCardBeingAddedToDeckLate);
 
         self.player.deck_mut().push(card);
         let hook = EventHook::AddedToDeck {
@@ -2373,8 +2381,9 @@ impl<V: Rules> State<V> {
             .unwrap_or_else(|_| unimplemented!("a reward pool with no {rarity:?} card left"))
     }
 
-    /// `CardFactory.CreateForReward`'s hooks: the upgrade odds, and the two
-    /// passes over the cards it made.
+    /// `CardFactory.CreateForReward`'s hooks that no relic here answers: the
+    /// upgrade odds, and the first pass over the cards it made. The late pass
+    /// is [`State::reward_options`].
     ///
     /// # Panics
     ///
@@ -2385,10 +2394,47 @@ impl<V: Rules> State<V> {
         for hook in [
             ModelHook::ModifyCardRewardUpgradeOdds,
             ModelHook::TryModifyCardRewardOptions,
-            ModelHook::TryModifyCardRewardOptionsLate,
         ] {
             self.unheard(hook);
         }
+    }
+
+    /// `TryModifyCardRewardOptionsLate` over each card a reward offers.
+    pub(super) fn reward_options(&mut self, cards: &mut [CardIdent<V>]) {
+        for card in cards {
+            *card = self.rewritten(*card, |card| sts2_core::EventHook::CardRewardOption {
+                card,
+            });
+        }
+    }
+
+    /// [`State::reward_options`] over every card reward in `offered`.
+    pub(super) fn reward_offers(&mut self, offered: &mut [Offer<V>]) {
+        for offer in offered {
+            if let Offer::Card { cards, .. } = offer {
+                self.reward_options(cards);
+            }
+        }
+    }
+
+    /// `card` after each relic's answer to `hook`: a clone upgraded, which
+    /// takes its place.
+    ///
+    /// # Panics
+    ///
+    /// A relic asking for anything else.
+    pub(super) fn rewritten(
+        &mut self,
+        mut card: CardIdent<V>,
+        hook: impl Fn(CardIdent<V>) -> sts2_core::EventHook<V>,
+    ) -> CardIdent<V> {
+        for effect in self.notify_belt(hook(card)) {
+            match effect {
+                sts2_core::HookEffect::UpgradeCard => card.upgrade += 1,
+                effect => unimplemented!("a relic asking for {effect:?} of a card it rewrites"),
+            }
+        }
+        card
     }
 
     /// Pick a relic up where nothing can park on what its pickup asks.
@@ -2794,6 +2840,18 @@ impl<V: Rules> State<V> {
 
         self.streams = streams;
         self.dealt_relics = Arc::new(dealt);
+        // `Hook.ModifyMerchantCardCreationResults` over the cards it stocked.
+        let entries = entries
+            .into_iter()
+            .map(|mut entry| {
+                if let sts2_core::Stock::Card(Some(on_sale)) = &mut entry.stock {
+                    on_sale.card = self.rewritten(on_sale.card, |card| {
+                        sts2_core::EventHook::MerchantCardCreated { card }
+                    });
+                }
+                entry
+            })
+            .collect();
         Phase::Shop {
             entries,
             unfinished: None,
@@ -3296,9 +3354,11 @@ impl<V: Rules> State<V> {
             2,
             true,
         );
+        let mut offered: Vec<_> = offered.into_iter().map(CardIdent::new).collect();
+        self.reward_options(&mut offered);
         Ok(self.park(Asked {
             pickup: Pickup::Cards {
-                offered: offered.into_iter().map(CardIdent::new).collect(),
+                offered,
                 min: 0,
                 max: 1,
             },

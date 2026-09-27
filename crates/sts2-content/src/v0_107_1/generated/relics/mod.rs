@@ -1702,9 +1702,15 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // FRAGRANT_MUSHROOM
     sts2_core::Overrides::from_bits(0),
     // FRESNEL_LENS
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
+        .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
+        .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // FROZEN_EGG
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
+        .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
+        .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // FUNERARY_MASK
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeHandDraw),
     // FUR_COAT
@@ -1865,7 +1871,10 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
         .with(sts2_core::ModelHook::AfterCombatEnd)
         .with(sts2_core::ModelHook::BeforeSideTurnStart),
     // MOLTEN_EGG
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
+        .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
+        .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // MR_STRUGGLES
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterPlayerTurnStart),
     // MUMMIFIED_HAND
@@ -2185,7 +2194,10 @@ static OVERRIDES: [sts2_core::Overrides; 297] = [
     // TOUGH_BANDAGES
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDiscarded),
     // TOXIC_EGG
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::ModifyMerchantCardCreationResults)
+        .with(sts2_core::ModelHook::TryModifyCardBeingAddedToDeck)
+        .with(sts2_core::ModelHook::TryModifyCardRewardOptionsLate),
     // TOY_BOX
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatEnd),
     // TRI_BOOMERANG

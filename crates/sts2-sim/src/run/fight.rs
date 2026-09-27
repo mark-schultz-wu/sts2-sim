@@ -264,6 +264,7 @@ impl<V: Rules> State<V> {
                 taken: false,
             });
         }
+        self.reward_offers(&mut offered);
         let room = Some(<_ as sts2_core::EncounterTable>::room(encounter));
         self.modify_rewards(&mut offered, room);
         offered

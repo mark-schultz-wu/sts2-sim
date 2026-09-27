@@ -1,0 +1,6 @@
+# The eggs upgrade the cards of their types a merchant stocks.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"FROZEN_EGG"}
+{"cmd":"grant","relic":"MOLTEN_EGG"}
+{"cmd":"grant","relic":"TOXIC_EGG"}
+{"cmd":"enter_room","type":"Shop"}

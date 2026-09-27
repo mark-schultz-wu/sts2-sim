@@ -1,0 +1,34 @@
+# `MoltenEgg` upgrades the Attacks a fight's card reward offers. The
+# upgraded card taken joins the deck as it is.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MOLTEN_EGG"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"grant","relic":"MERCURY_HOURGLASS"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"answer","take":[{"index":1,"card":1}]}
