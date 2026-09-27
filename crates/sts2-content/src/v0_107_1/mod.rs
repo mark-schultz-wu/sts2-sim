@@ -583,6 +583,24 @@ impl sts2_core::Rules for V0_107_1 {
         roll_monster_move(monster, ascension as u8, spawn, powers, machine, rng)
     }
 
+    fn follow_up(monster: Self::Monster, machine: &sts2_core::MoveMachine) -> u8 {
+        use generated::monsters::{FollowUp, State};
+
+        if machine.built {
+            unimplemented!("the state after {monster:?}'s built state");
+        }
+        match sts2_core::Table::data(monster)
+            .states
+            .get(usize::from(machine.at))
+        {
+            Some(State::Move(held)) => match held.follow_up {
+                FollowUp::Next(next) | FollowUp::OncePerformed(next) => next,
+                FollowUp::Never => unimplemented!("the state after {monster:?}'s last move"),
+            },
+            _ => unimplemented!("the state after {monster:?}'s branch"),
+        }
+    }
+
     fn can_leave_current_move(monster: Self::Monster, machine: &sts2_core::MoveMachine) -> bool {
         use generated::monsters::{FollowUp, State};
 

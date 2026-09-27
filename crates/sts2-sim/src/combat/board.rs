@@ -853,6 +853,12 @@ impl<'a, V: Rules> Board<'a, V> {
 
     fn kill(&mut self, at: usize) {
         self.die(at);
+        self.end_if_ending();
+    }
+
+    /// `CheckWinCondition` once a creature leaves: a fight with no primary
+    /// enemy left ends, won.
+    fn end_if_ending(&mut self) {
         if !self.ending() {
             return;
         }
@@ -1333,8 +1339,12 @@ impl<'a, V: Rules> Board<'a, V> {
                         continue;
                     }
                     match then {
-                        Some(then) => machine.machine.interpose_to(then),
-                        None => machine.machine.interpose(),
+                        sts2_core::StunResume::Interrupted => machine.machine.interpose(),
+                        sts2_core::StunResume::AfterInterrupted => {
+                            let after = V::follow_up(machine.monster, &machine.machine);
+                            machine.machine.interpose_to(after);
+                        }
+                        sts2_core::StunResume::At(then) => machine.machine.interpose_to(then),
                     }
                     if let Some(at) = self.at(owner) {
                         self.live.creatures[at].next_move = Some(stun.into());
@@ -2019,6 +2029,19 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 }
             }
         }
+    }
+
+    fn escape(&mut self) {
+        let id = self.actor;
+        let Some(at) = self.at(id) else { return };
+        if !self.live.creatures[at].alive {
+            return;
+        }
+        // `RemoveAllPowersInternalExcept`, which asks no power anything.
+        self.live.powers.clear(id);
+        self.live.machines.retain(|held| held.creature != id);
+        self.live.creatures.escape(id);
+        self.end_if_ending();
     }
 
     fn lose_gold(&mut self, amount: V::Number) {

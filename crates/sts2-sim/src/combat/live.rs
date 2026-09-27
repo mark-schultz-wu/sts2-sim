@@ -1337,6 +1337,11 @@ impl<V: Rules> Fighter<V> {
 pub(crate) struct Creatures<V: Rules> {
     list: Bounded<Fighter<V>, CREATURES>,
     counts: super::listen::HookCounts,
+    /// `EncounterModel.SpawnedEnemies`, as how many: every enemy that joined
+    /// the fight.
+    spawned_enemies: u8,
+    /// `CombatState.EscapedCreatures`, as how many.
+    escaped: u8,
 }
 
 impl<V: Rules> Clone for Creatures<V> {
@@ -1376,6 +1381,8 @@ impl<V: Rules> Creatures<V> {
         Self {
             list: Bounded::new(),
             counts: super::listen::HookCounts::default(),
+            spawned_enemies: 0,
+            escaped: 0,
         }
     }
 
@@ -1391,13 +1398,34 @@ impl<V: Rules> Creatures<V> {
     }
 
     pub(crate) fn push(&mut self, fighter: Fighter<V>) {
-        self.counts.add(Self::overrides(&fighter));
+        self.joined(&fighter);
         self.list.push(fighter);
     }
 
     pub(crate) fn insert(&mut self, at: usize, fighter: Fighter<V>) {
-        self.counts.add(Self::overrides(&fighter));
+        self.joined(&fighter);
         self.list.insert(at, fighter);
+    }
+
+    /// The counts a creature joining the fight moves.
+    fn joined(&mut self, fighter: &Fighter<V>) {
+        self.counts.add(Self::overrides(fighter));
+        if fighter.side == <V::CombatSide as SideKinds>::ENEMY {
+            self.spawned_enemies += 1;
+        }
+    }
+
+    /// `CombatState.CreatureEscaped`: the creature leaves, and counts as
+    /// escaped.
+    pub(crate) fn escape(&mut self, id: CombatId) {
+        self.retain(|creature| creature.id != id);
+        self.escaped += 1;
+    }
+
+    /// `EncounterModel.CalculateGoldProportion`: the share of the enemies
+    /// that joined the fight and did not escape.
+    pub(crate) fn gold_proportion(&self) -> f32 {
+        1.0 - f32::from(self.escaped) / f32::from(self.spawned_enemies)
     }
 
     pub(crate) fn retain(&mut self, mut keep: impl FnMut(&Fighter<V>) -> bool) {
@@ -1414,6 +1442,8 @@ impl<V: Rules> Creatures<V> {
     pub(crate) fn copy_from(&mut self, source: &Self) {
         self.list.copy_from(&source.list);
         self.counts = source.counts;
+        self.spawned_enemies = source.spawned_enemies;
+        self.escaped = source.escaped;
     }
 
     /// Whether any monster model in the fight overrides a hook in `hooks`.
@@ -1709,6 +1739,12 @@ impl<V: Rules> Live<V> {
     /// The player's `Gold` as the fight left it.
     pub(crate) fn gold(&self) -> V::Number {
         self.gold
+    }
+
+    /// `CombatRoom.GoldProportion`, which `CalculateGoldProportion` sets as
+    /// the fight ends.
+    pub(crate) fn gold_proportion(&self) -> f32 {
+        self.creatures.gold_proportion()
     }
 
     pub(crate) fn removed_from_deck(&self) -> &[CardIdent<V>] {

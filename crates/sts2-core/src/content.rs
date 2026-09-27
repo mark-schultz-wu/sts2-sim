@@ -1763,6 +1763,12 @@ pub trait Fight<V: ContentVersion> {
     /// this each time.
     fn orb_value(&self, orb: V::Orb, base: V::Number) -> V::Number;
 
+    /// `CreatureCmd.Escape` on the actor: its powers go with no hook, and it
+    /// leaves the fight without dying.
+    fn escape(&mut self) {
+        unimplemented!("a creature escaping")
+    }
+
     /// `PlayerCmd.LoseGold`: the player's gold down by `amount`, stopping at
     /// none.
     fn lose_gold(&mut self, _amount: V::Number) {
@@ -3030,6 +3036,19 @@ impl<V: ContentVersion> History<'_, V> {
     }
 }
 
+/// Where a stunned monster goes once its stunned turn is over, which is
+/// `CreatureCmd.Stun`'s `nextMoveId`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StunResume {
+    /// None named: the state the stun interrupted.
+    Interrupted,
+    /// `StateLog.Last().GetNextState`: the state the interrupted move leaves
+    /// for.
+    AfterInterrupted,
+    /// This state of the owner's graph.
+    At(u8),
+}
+
 /// What the listeners an event reaches ask for, in the order they ask.
 ///
 /// Inline to four. One notification rarely draws more than one answer from
@@ -3511,7 +3530,7 @@ pub enum HookEffect<V: ContentVersion> {
     /// graph. Nothing is the state the stun interrupted.
     StunOwner {
         stun: &'static crate::NextMove<V>,
-        then: Option<u8>,
+        then: StunResume,
     },
     /// `CreatureCmd.LoseBlock` on the owner, for all of it.
     LoseBlock,
@@ -4645,6 +4664,15 @@ pub trait Rules: Hooks {
         machine: &mut MoveMachine,
         rng: &mut R,
     ) -> Result<Option<crate::NextMove<Self>>, ContentError>;
+
+    /// `StateLog.Last().GetNextState`: the state the move the machine stands
+    /// on leaves for.
+    ///
+    /// # Panics
+    ///
+    /// A machine on a branch or a built state, whose next state no port has
+    /// asked for.
+    fn follow_up(monster: Self::Monster, machine: &MoveMachine) -> u8;
 
     /// `NextMove.CanTransitionAway` for the state the machine stands on.
     ///
