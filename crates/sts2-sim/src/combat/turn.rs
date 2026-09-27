@@ -263,8 +263,14 @@ fn turn_end<V: Rules>(
         .collect();
     for at in ethereal.into_iter().rev() {
         // `CardCmd.Exhaust`, which ethereal causes.
-        unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardExhausted);
+        let card = live
+            .cards
+            .get(Pile::Hand, at)
+            .expect("an Ethereal card stands where it was found");
         live.cards.move_to(Pile::Hand, at, Pile::Exhaust);
+        if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &card, true) {
+            return Some(ended);
+        }
     }
     for card in held.iter().filter(|card| !card.face.ethereal()) {
         let mut board = Board::for_card(
@@ -831,7 +837,11 @@ fn select<V: Rules>(
     let selection = sts2_core::Selection::Exactly(count);
     match super::play::taken(live, pile, selection) {
         Some(picked) => {
-            let sly = act_on::<V>(live, relics, act, picked.as_slice());
+            let mut rngs = rngs;
+            let (sly, ended) = act_on::<V>(live, rngs.reborrow(), relics, act, picked.as_slice());
+            if ended.is_some() {
+                return Ok(ended);
+            }
             Ok(play_sly::<V>(live, rngs, relics, sly))
         }
         None => Err(super::live::Asked::Pile { pile, selection }),
@@ -844,10 +854,11 @@ fn select<V: Rules>(
 /// once every card is down.
 pub(super) fn act_on<V: Rules>(
     live: &mut Live<V>,
-    relics: &crate::run::Belt<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
     act: sts2_core::PileAct,
     picked: &[sts2_core::CardAt<V>],
-) -> SmallVec<[sts2_core::CardId<V>; 2]> {
+) -> (SmallVec<[sts2_core::CardId<V>; 2]>, Option<super::Ended>) {
     let mut sly = SmallVec::new();
     for card in picked {
         let from = card.pile();
@@ -856,10 +867,18 @@ pub(super) fn act_on<V: Rules>(
             .find(from, card.id())
             .unwrap_or_else(|| unimplemented!("a picked card that left its pile"));
         let to = match act {
-            // `CardCmd.Exhaust`.
+            // `CardCmd.Exhaust`, which raises its hook once the card is
+            // down.
             sts2_core::PileAct::Exhaust => {
-                unheard::<V>(live, relics, sts2_core::ModelHook::AfterCardExhausted);
-                Pile::Exhaust
+                let held = live
+                    .cards
+                    .get(from, at)
+                    .expect("a card stands where it was found");
+                live.cards.move_to(from, at, Pile::Exhaust);
+                if let Some(ended) = exhausted::<V>(live, rngs.reborrow(), relics, &held, false) {
+                    return (sly, Some(ended));
+                }
+                continue;
             }
             // `CardCmd.Discard`, which plays a Sly card once every card is
             // down.
@@ -883,7 +902,7 @@ pub(super) fn act_on<V: Rules>(
         };
         live.cards.move_to(from, at, to);
     }
-    sly
+    (sly, None)
 }
 
 /// `CardCmd.AutoPlay` with `SlyDiscard` for each Sly card a discard took, in
@@ -919,6 +938,33 @@ pub(super) fn unheard<V: Rules>(
     }
 }
 
+/// `Hook.AfterCardExhausted`, once `card` lies in the exhaust pile, and
+/// whatever the answers ended.
+pub(super) fn exhausted<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    card: &super::live::CardInstance<V>,
+    ethereal: bool,
+) -> Option<super::Ended> {
+    let hook = sts2_core::EventHook::CardExhausted {
+        card: card.face.ident.card,
+        id: card.id,
+        ethereal,
+    };
+    let asked = listen::notify::<V>(live, relics, hook);
+    if asked.is_empty() {
+        return None;
+    }
+    let ascension = live.ascension;
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    super::hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+    let skipped = std::mem::take(&mut board.skipped);
+    let ended = board.ended;
+    super::play::merge::<V>(&mut live.skip_tick, skipped);
+    ended
+}
+
 /// Answer the question `SetupPlayerTurn` stopped on: `act` on the cards
 /// picked, then the rest of the setup from where it stopped.
 #[tracing::instrument(level = "trace", skip_all)]
@@ -933,9 +979,9 @@ pub(super) fn resume_setup<V: Rules>(
         streams,
         relics,
     } = fighting;
-    let sly = act_on::<V>(live, relics, act, picked.as_slice());
+    let (sly, ended) = act_on::<V>(live, streams.combat(), relics, act, picked.as_slice());
     let ascension = live.ascension;
-    let carried = match play_sly::<V>(live, streams.combat(), relics, sly) {
+    let carried = match ended.or_else(|| play_sly::<V>(live, streams.combat(), relics, sly)) {
         Some(ended) => Carried::Done(Some(ended)),
         None => carry_setup(live, streams.combat(), relics, ascension, stage),
     };
@@ -1295,6 +1341,8 @@ fn tick_powers<V: Rules>(
             // reason a power it applies is.
             sts2_core::HookEffect::Remove => leaving.push((owner, power)),
             sts2_core::HookEffect::RemoveFromOwner(power) => leaving.push((owner, power)),
+            // `CardPileCmd.Draw` for the player, once the hand is flushed.
+            sts2_core::HookEffect::Draw(amount) => applying.push(TurnEndAsk::Draw(amount)),
             other => unimplemented!("a power asking for {other:?} as a turn ends"),
         }
     }
@@ -1360,6 +1408,8 @@ enum TurnEndAsk<V: Rules> {
         unblockable: bool,
         dealer: Option<CombatId>,
     },
+    /// `CardPileCmd.Draw`.
+    Draw(V::Number),
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -1387,6 +1437,7 @@ fn applied<V: Rules>(
                 unblockable,
                 dealer,
             } => board.hit_unpowered(dealer, owner, amount, unblockable),
+            TurnEndAsk::Draw(amount) => sts2_core::Fight::draw(&mut board, amount),
         }
         if let Some(ended) = board.ended {
             return Some(ended);

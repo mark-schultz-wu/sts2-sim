@@ -33,6 +33,10 @@ pub enum State {
     Tender {
         counted: Number,
     },
+    /// `DarkEmbracePower`'s `etherealCount`.
+    DarkEmbrace {
+        counted: Number,
+    },
     Imbalanced {
         off_balance: bool,
     },
@@ -83,6 +87,7 @@ impl sts2_core::PowerModel<V> for State {
         match power {
             Power::SlowPower => Self::Slow { counted: 0 },
             Power::TenderPower => Self::Tender { counted: 0 },
+            Power::DarkEmbracePower => Self::DarkEmbrace { counted: 0 },
             Power::ImbalancedPower => Self::Imbalanced { off_balance: false },
             Power::IllusionPower => Self::Illusion { reviving: false },
             Power::ReattachPower => Self::Reattach { reviving: false },
@@ -102,6 +107,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Stateless(power) => *power,
             Self::Slow { .. } => Power::SlowPower,
             Self::Tender { .. } => Power::TenderPower,
+            Self::DarkEmbrace { .. } => Power::DarkEmbracePower,
             Self::Imbalanced { .. } => Power::ImbalancedPower,
             Self::Illusion { .. } => Power::IllusionPower,
             Self::Reattach { .. } => Power::ReattachPower,
@@ -168,21 +174,27 @@ fn lends(power: Power) -> Option<(Power, bool)> {
 impl State {
     fn counted(&self) -> Number {
         match self {
-            Self::Slow { counted } | Self::Tender { counted } => *counted,
+            Self::Slow { counted } | Self::Tender { counted } | Self::DarkEmbrace { counted } => {
+                *counted
+            }
             _ => 0,
         }
     }
 
     fn count(&mut self, amount: Number) {
         match self {
-            Self::Slow { counted } | Self::Tender { counted } => *counted += amount,
+            Self::Slow { counted } | Self::Tender { counted } | Self::DarkEmbrace { counted } => {
+                *counted += amount
+            }
             state => unreachable!("counted state for {:?}", state.power()),
         }
     }
 
     fn clear(&mut self) {
         match self {
-            Self::Slow { counted } | Self::Tender { counted } => *counted = 0,
+            Self::Slow { counted } | Self::Tender { counted } | Self::DarkEmbrace { counted } => {
+                *counted = 0
+            }
             state => unreachable!("counted state for {:?}", state.power()),
         }
     }
@@ -1680,6 +1692,43 @@ pub(crate) fn event_hook(
         (Power::FurnacePower, PowerAmount::Endless, EventHook::SideTurnStart { .. }) => {
             unimplemented!("an endless Furnace")
         }
+        // `DarkEmbracePower.AfterCardExhausted`: its stack of cards for each
+        // of its owner's cards exhausted, and a count of those Ethereal
+        // exhausted, which its `AfterSideTurnEnd` draws for once the hand is
+        // flushed. A fight here has one player, whose every card is.
+        (Power::DarkEmbracePower, _, EventHook::CardExhausted { ethereal: true, .. })
+            if owner == CombatSide::Player =>
+        {
+            state.count(one);
+            None
+        }
+        (Power::DarkEmbracePower, PowerAmount::Counted(amount), EventHook::CardExhausted { .. })
+            if owner == CombatSide::Player =>
+        {
+            Some(HookEffect::Draw(amount))
+        }
+        (Power::DarkEmbracePower, PowerAmount::Counted(amount), EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            let counted = state.counted();
+            state.clear();
+            Some(HookEffect::Draw(amount * counted))
+        }
+        (Power::DarkEmbracePower, PowerAmount::Endless, _) => unimplemented!("an endless Dark Embrace"),
+        (Power::DarkEmbracePower, _, EventHook::CardExhausted { .. } | EventHook::SideTurnEnd { .. }) => {
+            None
+        }
+        // `FeelNoPainPower.AfterCardExhausted`: its stack as block, unpowered,
+        // for each of its owner's cards exhausted.
+        (
+            Power::FeelNoPainPower,
+            PowerAmount::Counted(amount),
+            EventHook::CardExhausted { .. },
+        ) if owner == CombatSide::Player => Some(HookEffect::GainBlock(amount)),
+        (Power::FeelNoPainPower, PowerAmount::Endless, EventHook::CardExhausted { .. }) => {
+            unimplemented!("an endless Feel No Pain")
+        }
+        (Power::FeelNoPainPower, _, EventHook::CardExhausted { .. }) => None,
         // `SlowPower.AfterCardPlayed` counts every card anyone plays, and its
         // `AfterSideTurnStart` forgets the count when the side its owner is
         // among takes its turn.

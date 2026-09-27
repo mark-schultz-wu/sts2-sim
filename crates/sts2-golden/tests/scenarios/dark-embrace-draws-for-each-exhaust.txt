@@ -1,0 +1,18 @@
+# `DarkEmbracePower.AfterCardExhausted` draws its stack for each of its
+# owner's cards exhausted, except one Ethereal exhausts as the turn ends: that
+# one it counts, and its `AfterSideTurnEnd` draws for it once the hand is
+# flushed. Impervious exhausts as it is played and draws a Defend. Tyranny
+# exhausts a picked Strike as turn two starts, and the draw shuffles the
+# discard back. The Dazed exhausts as turn two ends, and turn three opens with
+# its card on top of the hand draw.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","card":"IMPERVIOUS"}
+{"cmd":"grant","card":"DAZED"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"DARK_EMBRACE_POWER","amount":1,"target":0}
+{"cmd":"play_card","index":4}
+{"cmd":"power","power":"TYRANNY_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}
+{"cmd":"end_turn"}
+{"cmd":"answer","cards":[0]}

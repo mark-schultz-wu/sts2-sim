@@ -2412,6 +2412,13 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterObtained`, as the run picks the model up.
     Obtained,
+    /// `AfterCardExhausted`, once the card lies in the exhaust pile.
+    CardExhausted {
+        card: V::Card,
+        id: crate::CardId<V>,
+        /// `causedByEthereal`: Ethereal exhausted it as its turn ended.
+        ethereal: bool,
+    },
     /// `AfterCardPlayed`, carrying the card its owner just played.
     CardPlayed {
         card: V::Card,
@@ -2659,6 +2666,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::BeforeHandDraw { .. } => ModelHook::BeforeHandDraw,
             EventHook::EnergyResetLate { .. } => ModelHook::AfterEnergyResetLate,
             EventHook::CardPlayed { .. } => ModelHook::AfterCardPlayed,
+            EventHook::CardExhausted { .. } => ModelHook::AfterCardExhausted,
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
             EventHook::PowerAmountReceivedModified { .. } => {
                 ModelHook::AfterModifyingPowerAmountReceived
