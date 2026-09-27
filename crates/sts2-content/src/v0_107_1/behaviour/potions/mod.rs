@@ -7,6 +7,9 @@
 //! [`on_use`] panics for a potion nobody has ported, so this tree is also the
 //! list of what a run can drink.
 
+mod defect;
+mod ironclad;
+mod necrobinder;
 mod shared;
 mod silent;
 
@@ -32,6 +35,9 @@ pub(crate) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
     match potion.pool() {
         PotionPool::Shared => shared::on_use(potion, fight),
         PotionPool::Silent => silent::on_use(potion, fight),
+        PotionPool::Ironclad => ironclad::on_use(potion, fight),
+        PotionPool::Defect => defect::on_use(potion, fight),
+        PotionPool::Necrobinder => necrobinder::on_use(potion, fight),
         _ => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

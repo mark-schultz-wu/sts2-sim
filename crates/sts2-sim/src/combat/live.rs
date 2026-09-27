@@ -853,6 +853,10 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
         self.fighter.max_hp
     }
 
+    fn block(&self) -> V::Number {
+        self.fighter.block
+    }
+
     fn owner(&self) -> Option<CombatId> {
         self.fighter.owner
     }

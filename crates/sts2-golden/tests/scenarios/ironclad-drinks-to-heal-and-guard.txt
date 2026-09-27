@@ -1,0 +1,15 @@
+# Regen heals its stack as the player's turn ends, then loses one. Fortifier
+# doubles the block that stands. Two turns of Nibbit hits leave room for the
+# heals to show.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"grant","potion":"REGEN_POTION"}
+{"cmd":"grant","potion":"FORTIFIER"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":2}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

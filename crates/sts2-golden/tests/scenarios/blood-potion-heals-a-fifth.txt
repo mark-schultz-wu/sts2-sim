@@ -1,0 +1,8 @@
+# Blood Potion heals a fifth of the maximum, which `SetCurrentHpInternal`
+# truncates: sixteen of eighty, from the 62 two Nibbit hits leave.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"grant","potion":"BLOOD_POTION"}
+{"cmd":"use_potion","index":0,"target":null}

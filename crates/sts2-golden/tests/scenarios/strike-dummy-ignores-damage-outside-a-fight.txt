@@ -1,0 +1,6 @@
+# This or That's plain option deals six outside a fight, unpowered and from no
+# card. Strike Dummy's `ModifyDamageAdditive` hears it and adds nothing.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"STRIKE_DUMMY"}
+{"cmd":"event","event":"THIS_OR_THAT"}
+{"cmd":"choose_option","index":0}

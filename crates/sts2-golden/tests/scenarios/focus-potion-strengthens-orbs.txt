@@ -1,0 +1,8 @@
+# Focus Potion gives two Focus, which the Lightning a Zap channels reads as
+# the turn ends.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","potion":"FOCUS_POTION"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":2}
+{"cmd":"end_turn"}

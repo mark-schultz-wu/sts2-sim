@@ -1408,6 +1408,9 @@ pub trait CreatureView<V: ContentVersion> {
 
     fn max_hp(&self) -> V::Health;
 
+    /// `Block`, as it stands.
+    fn block(&self) -> V::Number;
+
     /// `PetOwner`: the player a pet stands beside. Nothing for a player or a
     /// monster.
     fn owner(&self) -> Option<crate::CombatId>;

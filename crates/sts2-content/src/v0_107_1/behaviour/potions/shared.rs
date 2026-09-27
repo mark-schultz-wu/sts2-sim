@@ -1,7 +1,7 @@
 //! The potions every character's pool draws from.
 
 use sts2_core::{
-    Amount, Change, CostPool, Effect, Fight, Lasting, Pile, Played, PowerAmount,
+    Amount, Change, CostPool, CreatureView as _, Effect, Fight, Lasting, Pile, Played, PowerAmount,
     RunStreamKinds as _, Scaling, Table as _,
 };
 
@@ -55,6 +55,21 @@ const STABLE_SERUM: Number = 2;
 const STRENGTH: Number = 2;
 /// `SwiftPotion`'s `CardsVar(3)`.
 const SWIFT: Number = 3;
+/// `Duplicator`'s one stack of `DuplicationPower`.
+const DUPLICATION: Number = 1;
+/// `FyshOil`'s `PowerVar<StrengthPower>(1)` and `PowerVar<DexterityPower>(1)`.
+const FYSH_OIL: Number = 1;
+/// `MazalethsGift`'s `PowerVar<RitualPower>(1)`.
+const MAZALETHS_GIFT: Number = 1;
+/// `PotionOfBinding`'s `PowerVar<WeakPower>(1)` and
+/// `PowerVar<VulnerablePower>(1)`.
+const BINDING: Number = 1;
+/// `RadiantTincture`'s `EnergyVar(1)`.
+const RADIANT_ENERGY: Number = 1;
+/// `RadiantTincture`'s `PowerVar<RadiancePower>(3)`.
+const RADIANCE: Number = 3;
+/// `RegenPotion`'s `PowerVar<RegenPower>(5)`.
+const REGEN: Number = 5;
 
 /// `VulnerablePotion`'s `PowerVar<VulnerablePower>(3)`.
 const VULNERABLE: Number = 3;
@@ -218,6 +233,62 @@ pub(super) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
                 Power::DemisePower,
                 PowerAmount::Counted(POWDERED_DEMISE),
             );
+            Played::Done
+        }
+        // `AnyPlayer`: twice what its block stands at, unpowered.
+        Potion::Fortifier => {
+            let actor = fight.actor();
+            let block = fight
+                .creatures()
+                .find(|creature| creature.id() == actor)
+                .map(|creature| creature.block())
+                .expect("the player drinking stands in the fight");
+            let gained = fight.resolve(Effect::GainBlock {
+                recipient: actor,
+                amount: Amount::Number(block * 2),
+                scaling: Scaling::Static,
+            });
+            fight.apply(gained);
+            Played::Done
+        }
+        // `AnyPlayer` again, for each of these.
+        Potion::FyshOil => {
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(FYSH_OIL));
+            fight.apply_to_actor(Power::DexterityPower, PowerAmount::Counted(FYSH_OIL));
+            Played::Done
+        }
+        Potion::MazalethsGift => {
+            fight.apply_to_actor(Power::RitualPower, PowerAmount::Counted(MAZALETHS_GIFT));
+            Played::Done
+        }
+        Potion::RadiantTincture => {
+            fight.modify_energy(RADIANT_ENERGY);
+            fight.apply_to_actor(Power::RadiancePower, PowerAmount::Counted(RADIANCE));
+            Played::Done
+        }
+        Potion::RegenPotion => {
+            fight.apply_to_actor(Power::RegenPower, PowerAmount::Counted(REGEN));
+            Played::Done
+        }
+        Potion::Duplicator => {
+            fight.apply_to_actor(Power::DuplicationPower, PowerAmount::Counted(DUPLICATION));
+            Played::Done
+        }
+        // `HittableEnemies`, taken once: Weak on every one, then Vulnerable
+        // on every one. The game reads each amount off the other's var, and
+        // both are one.
+        Potion::PotionOfBinding => {
+            let targets = fight.hittable_opponents();
+            for &target in &targets {
+                fight.apply_power(target, Power::WeakPower, PowerAmount::Counted(BINDING));
+            }
+            for &target in &targets {
+                fight.apply_power(
+                    target,
+                    Power::VulnerablePower,
+                    PowerAmount::Counted(BINDING),
+                );
+            }
             Played::Done
         }
         potion => unimplemented!("what {potion:?} does when it is drunk"),
