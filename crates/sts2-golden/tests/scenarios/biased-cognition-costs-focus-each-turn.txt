@@ -1,0 +1,8 @@
+# `BiasedCognition` gives Focus, then its power takes one Focus off as each
+# of its owner's turns begins. The enemy's turn takes nothing.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BIASED_COGNITION"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

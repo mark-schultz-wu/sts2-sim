@@ -97,11 +97,26 @@ fn a_defend_gains_block_without_naming_a_creature() {
 
 #[test]
 fn a_refused_play_leaves_the_fight_where_it_stood() {
+    use sts2_content::v0_107_1::cards::TargetType;
+    use sts2_core::CardIdent;
+
     let mut sim = fighting();
     let before = sim.observe().expect("the run reports");
+    let fight = before.observation.fight().expect("the run is in a fight");
+    let find = |card| {
+        let at = fight
+            .legal
+            .iter()
+            .position(|play| play.card.card == Cards::Regent(card))
+            .expect("the opening hand holds the card");
+        hand(u8::try_from(at).expect("a hand index fits a byte"))
+    };
+    let (strike, defend) = (find(RegentCard::Strike), find(RegentCard::Defend));
 
-    // An index past the hand, a creature that is not in the fight, and an
-    // attack pointed at nobody. Each is refused for its own reason.
+    // An index past the hand, a creature that is not in the fight, an attack
+    // pointed at nobody, and a Defend pointed at a creature. Each is refused
+    // for its own reason: `IsValidTarget` wants a creature for a card that
+    // names one, and nothing for a card that names none.
     let refusals = [
         (
             Decision::PlayCard {
@@ -116,6 +131,28 @@ fn a_refused_play_leaves_the_fight_where_it_stood() {
                 target: Some(at(9)),
             },
             Reason::NoSuchCreature { id: at(9) },
+        ),
+        (
+            Decision::PlayCard {
+                index: strike,
+                target: None,
+            },
+            Reason::WrongTarget {
+                card: CardIdent::new(Cards::Regent(RegentCard::Strike)),
+                target: None,
+                takes: TargetType::AnyEnemy,
+            },
+        ),
+        (
+            Decision::PlayCard {
+                index: defend,
+                target: Some(at(1)),
+            },
+            Reason::WrongTarget {
+                card: CardIdent::new(Cards::Regent(RegentCard::Defend)),
+                target: Some(at(1)),
+                takes: TargetType::SelfTarget,
+            },
         ),
     ];
 

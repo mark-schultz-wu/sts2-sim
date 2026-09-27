@@ -2072,7 +2072,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn target(&self) -> CombatId {
         // `resolve` refuses a play whose card names a creature and was pointed
-        // at none, so a card that reads this was pointed at one.
+        // at none, so a card that reads this was pointed at one. An auto-play
+        // picks one where one stands.
         self.target
             .expect("a card that names a target is played at one")
     }
