@@ -155,7 +155,11 @@ impl<V: Rules> State<V> {
                     .partition(|effect| matches!(effect, sts2_core::HookEffect::AddGoldReward(_)));
                 let combat = live.finish(relics);
                 // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
-                // rewards.
+                // rewards. It walks the deck's cards ahead of the fight's
+                // listeners.
+                if let Some(encounter) = combat.encounter {
+                    self.deck_combat_ended(sts2_core::EncounterTable::room(encounter));
+                }
                 if let Some(asked) = self.carry_out(leaving) {
                     let pickup = asked.pickup;
                     unimplemented!("a fight's end asking for {pickup:?}");

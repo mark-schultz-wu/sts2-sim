@@ -286,7 +286,7 @@ struct Player<V: Rules> {
     /// Shared until one is written. Every write is a room's: a shop, a
     /// reward, a rest site. Nothing inside a fight moves the deck, so a
     /// search expanding a fight copies the pointer and not the cards.
-    deck: Arc<Vec<CardIdent<V>>>,
+    deck: Arc<Vec<sts2_core::DeckCard<V>>>,
     /// What the run carries between fights.
     ///
     /// The game keeps one number. Here the player's creature holds its own
@@ -392,7 +392,7 @@ impl<V: Rules> Player<V> {
     ///
     /// The copy the writer gets is its own, and every other branch of the run
     /// keeps the one they shared. See [`Player::deck`].
-    fn deck_mut(&mut self) -> &mut Vec<CardIdent<V>> {
+    fn deck_mut(&mut self) -> &mut Vec<sts2_core::DeckCard<V>> {
         Arc::make_mut(&mut self.deck)
     }
 }
@@ -721,7 +721,7 @@ impl<V: Rules> State<V> {
                 deck: Arc::new(
                     V::starting_deck(character)
                         .into_iter()
-                        .map(CardIdent::new)
+                        .map(|card| sts2_core::DeckCard::new(CardIdent::new(card)))
                         .collect(),
                 ),
                 hp: V::starting_hp(character),
@@ -801,7 +801,7 @@ impl<V: Rules> State<V> {
         self.player
             .deck
             .iter()
-            .copied()
+            .map(|held| held.ident)
             .enumerate()
             .filter(|(_, card)| card.upgrade < card.card.max_upgrade())
     }
@@ -815,7 +815,7 @@ impl<V: Rules> State<V> {
     fn offered(&self, act: sts2_core::DeckAct<V>) -> Vec<(usize, CardIdent<V>)> {
         use sts2_core::CardTable as _;
 
-        let deck = self.player.deck.iter().copied().enumerate();
+        let deck = self.player.deck.iter().map(|held| held.ident).enumerate();
         match act {
             sts2_core::DeckAct::Remove => {
                 let mut offered: Vec<_> = deck.filter(|(_, card)| !card.card.eternal()).collect();
@@ -849,6 +849,50 @@ impl<V: Rules> State<V> {
         }
     }
 
+    /// `Hook.AfterCombatEnd` for the deck's own cards, each by what it
+    /// saves. A card that asks to leave the deck leaves it.
+    ///
+    /// # Panics
+    ///
+    /// A card asking for anything else.
+    pub(super) fn deck_combat_ended(&mut self, room: V::RoomType) {
+        use sts2_core::CardTable as _;
+
+        let hook = sts2_core::EventHook::CombatEnd { room };
+        let mut at = 0;
+        while at < self.player.deck.len() {
+            let card = self.player.deck[at].ident.card;
+            if !card
+                .overrides()
+                .contains(sts2_core::ModelHook::AfterCombatEnd)
+            {
+                at += 1;
+                continue;
+            }
+            let mut asked = sts2_core::HookEffects::new();
+            V::deck_card_event_hook(
+                card,
+                &mut self.player.deck_mut()[at].state,
+                hook,
+                &mut asked,
+            );
+            let mut leaves = false;
+            for effect in asked {
+                match effect {
+                    // `CardPileCmd.RemoveFromDeck`.
+                    sts2_core::HookEffect::RemoveFromDeck => leaves = true,
+                    effect => unimplemented!("{card:?} in the deck asking for {effect:?}"),
+                }
+            }
+            match leaves {
+                true => {
+                    self.player.deck_mut().remove(at);
+                }
+                false => at += 1,
+            }
+        }
+    }
+
     /// Carry `act` out on the deck cards at `taken`, in the order they were
     /// taken.
     fn act_on_deck(&mut self, act: sts2_core::DeckAct<V>, taken: &[usize]) {
@@ -867,7 +911,7 @@ impl<V: Rules> State<V> {
                 use sts2_core::CardTable as _;
 
                 for &at in taken {
-                    let card = &mut self.player.deck_mut()[at];
+                    let card = &mut self.player.deck_mut()[at].ident;
                     if card.upgrade < card.card.max_upgrade() {
                         card.upgrade += 1;
                     }
@@ -881,7 +925,7 @@ impl<V: Rules> State<V> {
                 let mut replaced: Vec<(usize, CardIdent<V>)> = taken
                     .iter()
                     .map(|&at| {
-                        let options = V::transform_options(self.player.deck[at].card);
+                        let options = V::transform_options(self.player.deck[at].ident.card);
                         let card = *rng
                             .choose(&options)
                             .unwrap_or_else(|_| unimplemented!("a transform with no option"));
@@ -894,9 +938,11 @@ impl<V: Rules> State<V> {
                 for at in gone {
                     self.player.deck_mut().remove(at);
                 }
-                self.player
-                    .deck_mut()
-                    .extend(replaced.into_iter().map(|(_, card)| card));
+                self.player.deck_mut().extend(
+                    replaced
+                        .into_iter()
+                        .map(|(_, card)| sts2_core::DeckCard::new(card)),
+                );
             }
             // `CardCmd.TransformTo`, which lands the named card where
             // `CardCmd.Transform` lands a drawn one.
@@ -906,9 +952,10 @@ impl<V: Rules> State<V> {
                 for &at in &gone {
                     self.player.deck_mut().remove(at);
                 }
-                self.player
-                    .deck_mut()
-                    .extend(gone.iter().map(|_| CardIdent::new(into)));
+                self.player.deck_mut().extend(
+                    gone.iter()
+                        .map(|_| sts2_core::DeckCard::new(CardIdent::new(into))),
+                );
             }
             sts2_core::DeckAct::Enchant {
                 enchantment,
@@ -916,7 +963,7 @@ impl<V: Rules> State<V> {
                 ..
             } => {
                 for &at in taken {
-                    V::enchant(enchantment, amount, &mut self.player.deck_mut()[at]);
+                    V::enchant(enchantment, amount, &mut self.player.deck_mut()[at].ident);
                 }
             }
         }
@@ -985,7 +1032,7 @@ impl<V: Rules> State<V> {
             return;
         };
         for card in &live.removed_from_deck()[since..] {
-            let Some(at) = self.player.deck.iter().position(|held| held == card) else {
+            let Some(at) = self.player.deck.iter().position(|held| held.ident == *card) else {
                 continue;
             };
             self.player.deck_mut().remove(at);
@@ -1187,12 +1234,16 @@ impl<V: Rules> State<V> {
                     }
                 }
                 HookEffect::AddToDeck(card) => {
-                    self.player.deck_mut().push(CardIdent::new(card));
+                    self.player
+                        .deck_mut()
+                        .push(sts2_core::DeckCard::new(CardIdent::new(card)));
                     continue;
                 }
                 HookEffect::AddUniformCard { rarity } => {
                     for card in self.uniform_cards(1, rarity) {
-                        self.player.deck_mut().push(CardIdent::new(card));
+                        self.player
+                            .deck_mut()
+                            .push(sts2_core::DeckCard::new(CardIdent::new(card)));
                     }
                     continue;
                 }
@@ -1331,7 +1382,7 @@ impl<V: Rules> State<V> {
                 card.card.rarity() == CardRarityKinds::BASIC && card.card.tagged(tag)
             }
         };
-        let mut deck = self.player.deck.iter().enumerate();
+        let mut deck = self.player.deck.iter().map(|held| &held.ident).enumerate();
         let found = match pick {
             sts2_core::DeckPick::FirstBasic(tag) => deck.find(basic(tag)),
             sts2_core::DeckPick::LastBasic(tag) => deck.rev().find(basic(tag)),
@@ -1772,7 +1823,9 @@ impl<V: Rules> State<V> {
         self.player.gold = self.player.gold - cost;
         let asking = match stock {
             sts2_core::Stock::Card(Some(on_sale)) => {
-                self.player.deck_mut().push(on_sale.card);
+                self.player
+                    .deck_mut()
+                    .push(sts2_core::DeckCard::new(on_sale.card));
                 None
             }
             sts2_core::Stock::Relic(Some(relic)) => {
@@ -1858,7 +1911,7 @@ impl<V: Rules> State<V> {
         let Some(card) = offered.get(index).copied() else {
             unimplemented!("a clone naming a card that was not offered");
         };
-        self.player.deck_mut().push(card);
+        self.player.deck_mut().push(sts2_core::DeckCard::new(card));
         // `OnTryPurchaseWrapper` has returned now, so `ClearAfterPurchase`
         // runs and the shelf the relic came off empties.
         let Phase::Shop { entries, .. } = &mut self.phase else {
@@ -1892,7 +1945,7 @@ impl<V: Rules> State<V> {
         self.player
             .deck
             .iter()
-            .copied()
+            .map(|held| held.ident)
             .filter(|card| V::card_kind(card.card) != Some(excluding))
             .collect()
     }
@@ -1946,7 +1999,7 @@ impl<V: Rules> State<V> {
 
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, at: Location) {
-        let deck = self.player.deck.to_vec();
+        let deck: Vec<CardIdent<V>> = self.player.deck.iter().map(|held| held.ident).collect();
         let options =
             <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&self.held_relics(), &deck);
         self.enter(
@@ -2200,7 +2253,10 @@ impl<V: Rules> State<V> {
     /// hooks, so it cannot answer for one.
     pub(crate) fn grant(&mut self, gift: &Gift<V>) -> Result<Decided, Error> {
         match gift {
-            Gift::Card(card) => self.player.deck_mut().push(CardIdent::new(*card)),
+            Gift::Card(card) => self
+                .player
+                .deck_mut()
+                .push(sts2_core::DeckCard::new(CardIdent::new(*card))),
             Gift::Potion(potion) => {
                 // `TryToProcure` refuses a full belt rather than growing one,
                 // and the belt in the next observation says whether it landed.
@@ -2441,7 +2497,9 @@ impl<V: Rules> State<V> {
                 let Some(chosen) = chosen else {
                     unimplemented!("a card selection naming a card that was not offered");
                 };
-                self.player.deck_mut().extend(chosen);
+                self.player
+                    .deck_mut()
+                    .extend(chosen.into_iter().map(sts2_core::DeckCard::new));
             }
             Pickup::FromDeck { act, count } => {
                 let offered = self.offered(act);
@@ -2489,7 +2547,7 @@ impl<V: Rules> State<V> {
             .upgradable()
             .nth(index)
             .unwrap_or_else(|| unimplemented!("upgrading a card the selection did not offer"));
-        self.player.deck_mut()[at].upgrade += 1;
+        self.player.deck_mut()[at].ident.upgrade += 1;
 
         let Phase::RestSite {
             options, upgrading, ..
@@ -2571,12 +2629,14 @@ impl<V: Rules> State<V> {
                 }
                 let chosen = cards.remove(at);
                 *taken = true;
-                self.player.deck_mut().push(chosen);
+                self.player
+                    .deck_mut()
+                    .push(sts2_core::DeckCard::new(chosen));
             }
             (Offer::SpecialCard { card, taken }, TakeReward::NonCard { .. }) => {
                 let card = *card;
                 *taken = true;
-                self.player.deck_mut().push(card);
+                self.player.deck_mut().push(sts2_core::DeckCard::new(card));
             }
             (Offer::Relic { relic, taken }, TakeReward::NonCard { .. }) => {
                 let relic = *relic;
@@ -2875,7 +2935,7 @@ impl<V: Rules> State<V> {
                 relics: self.carried().collect(),
                 potions: self.belt(),
                 potion_slots: self.player.potion_slots,
-                deck: self.player.deck.to_vec(),
+                deck: self.player.deck.iter().map(|held| held.ident).collect(),
                 in_combat: self.in_combat(),
                 map: Map {
                     at: self.visited.last().copied(),
@@ -3172,10 +3232,10 @@ impl<V: Rules> State<V> {
         self.streams
             .run(stream)
             .stable_shuffle_by_key(&mut upgradable, |&at| {
-                (deck[at].card.order(), deck[at].upgrade)
+                (deck[at].ident.card.order(), deck[at].ident.upgrade)
             });
         for at in upgradable.into_iter().take(count) {
-            self.player.deck_mut()[at].upgrade += 1;
+            self.player.deck_mut()[at].ident.upgrade += 1;
         }
     }
 }
@@ -3213,8 +3273,8 @@ impl<V: Rules> sts2_core::EventView<V> for State<V> {
         self.player.relics.iter().map(|held| held.relic)
     }
 
-    fn deck(&self) -> &[CardIdent<V>] {
-        &self.player.deck
+    fn deck(&self) -> Vec<CardIdent<V>> {
+        self.player.deck.iter().map(|held| held.ident).collect()
     }
 
     fn relics_left(&self) -> bool {
@@ -3412,7 +3472,12 @@ mod tests {
             ..CardIdent::new(Cards::Regent(RegentCard::BigBang))
         };
         let big_bang = CardIdent::new(Cards::Regent(RegentCard::BigBang));
-        run.player.deck = Arc::new(vec![strike, upgraded, big_bang]);
+        run.player.deck = Arc::new(
+            [strike, upgraded, big_bang]
+                .into_iter()
+                .map(sts2_core::DeckCard::new)
+                .collect(),
+        );
         run.phase = Phase::RestSite {
             options: vec![
                 <V as sts2_core::ContentVersion>::RestSiteOption::HEAL,
@@ -3435,7 +3500,11 @@ mod tests {
         run.answer(&Answer::Cards([1].into()))
             .expect("the second offered card can be upgraded");
         assert_eq!(
-            *run.player.deck,
+            run.player
+                .deck
+                .iter()
+                .map(|held| held.ident)
+                .collect::<Vec<_>>(),
             vec![
                 strike,
                 upgraded,
@@ -3505,7 +3574,9 @@ mod tests {
         // to a card is the card's own rule, and this is about the relic that
         // asks for it.
         run.player.deck = Arc::new(
-            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 10).collect(),
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 10)
+                .map(sts2_core::DeckCard::new)
+                .collect(),
         );
 
         let mut opening_hands = Vec::new();
@@ -3560,7 +3631,9 @@ mod tests {
         let mut run = opened();
         run.player.relics.push(HeldRelic::new(Relic::Pocketwatch));
         run.player.deck = Arc::new(
-            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20).collect(),
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20)
+                .map(sts2_core::DeckCard::new)
+                .collect(),
         );
         run.fight_here(Encounter::SlimesWeak)
             .expect("the simulator can build this fight");
@@ -3611,7 +3684,9 @@ mod tests {
 
         let mut run = opened();
         run.player.deck = Arc::new(
-            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20).collect(),
+            std::iter::repeat_n(CardIdent::new(Cards::Regent(RegentCard::Strike)), 20)
+                .map(sts2_core::DeckCard::new)
+                .collect(),
         );
         // The hopper's graph opens on `ThieveryMove`.
         run.fight_here(Encounter::ThievingHopperWeak)

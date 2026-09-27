@@ -105,6 +105,7 @@ impl sts2_core::ContentVersion for V0_107_1 {
 impl sts2_core::Hooks for V0_107_1 {
     type RelicState = behaviour::relics::State;
     type PowerState = behaviour::powers::State;
+    type CardState = behaviour::cards::State;
 
     fn modify_hook<P: sts2_core::Printed<Self> + ?Sized>(
         listener: sts2_core::Listener<'_, Self, P>,
@@ -233,6 +234,15 @@ impl sts2_core::Hooks for V0_107_1 {
             // and no relic, monster or card this build ports does.
             _ => unimplemented!("a listener other than a power moving a played card"),
         }
+    }
+
+    fn deck_card_event_hook(
+        card: Self::Card,
+        state: &mut Self::CardState,
+        hook: sts2_core::EventHook<Self>,
+        asked: &mut sts2_core::HookEffects<Self>,
+    ) {
+        behaviour::cards::deck_event_hook(card, state, hook, asked)
     }
 
     fn relic_event_hook(

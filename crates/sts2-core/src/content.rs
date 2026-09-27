@@ -3112,6 +3112,8 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `CardCmd.ClearAffliction` on each card `to` names.
     ClearAffliction(Writing<V>),
+    /// `CardPileCmd.RemoveFromDeck` on the deck card that asked.
+    RemoveFromDeck,
     /// The card that asked, moved to the top of the draw pile it was
     /// shuffled into.
     ToTopOfDrawPile,
@@ -3291,6 +3293,40 @@ pub trait RelicModel<V: ContentVersion>: Copy + std::fmt::Debug + PartialEq + Eq
     fn display_amount(&self, relic: V::Relic) -> V::Number;
 }
 
+/// One deck card's own model, as the run's deck holds one.
+///
+/// A card saves a few fields between fights, like Guilty's `CombatsSeen`. No
+/// observation shows them, so they sit beside a card's identity rather than
+/// in it.
+pub trait CardModel<V: ContentVersion>:
+    Copy + std::fmt::Debug + PartialEq + Eq + std::hash::Hash + Sized
+{
+    /// The model as a card joins the deck, with nothing saved yet.
+    fn new(card: V::Card) -> Self;
+
+    /// What its saved fields write onto the copy a fight makes of it, where
+    /// they write something. A copy carries its saved fields, and their
+    /// setters write numbers the card prints.
+    fn written(&self) -> Option<Change<V>>;
+}
+
+/// A card in the run's deck: what it is, and what its own model saves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DeckCard<V: Hooks> {
+    pub ident: crate::CardIdent<V>,
+    pub state: V::CardState,
+}
+
+impl<V: Hooks> DeckCard<V> {
+    /// `ident` as it joins the deck.
+    pub fn new(ident: crate::CardIdent<V>) -> Self {
+        Self {
+            ident,
+            state: <V::CardState as CardModel<V>>::new(ident.card),
+        }
+    }
+}
+
 /// One power's own model, as the creature carrying it holds one.
 ///
 /// `PowerModel`'s subclasses read their own fields off `this`, the way a
@@ -3439,6 +3475,10 @@ pub trait Hooks: ContentVersion {
     /// What one power's own model saves, which the creature carries for it.
     type PowerState: PowerModel<Self>;
 
+    /// What one deck card's own model saves, its `[SavedProperty]` fields,
+    /// which the run carries for it between fights.
+    type CardState: CardModel<Self>;
+
     fn modify_hook<P: Printed<Self> + ?Sized>(
         listener: Listener<'_, Self, P>,
         hook: ModifyHook<Self>,
@@ -3480,6 +3520,16 @@ pub trait Hooks: ContentVersion {
     /// nothing.
     fn power_event_hook(
         power: EventPower<'_, Self>,
+        hook: EventHook<Self>,
+        asked: &mut HookEffects<Self>,
+    );
+
+    /// [`Hooks::power_event_hook`] for a card in the run's deck, by what its
+    /// model saves. `RunState.IterateHookListeners` walks the deck's cards
+    /// ahead of the fight's.
+    fn deck_card_event_hook(
+        card: Self::Card,
+        state: &mut Self::CardState,
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );

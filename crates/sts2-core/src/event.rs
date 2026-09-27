@@ -20,8 +20,8 @@ pub trait EventView<V: ContentVersion> {
     fn character(&self) -> V::Character;
     /// The relics the run carries, in panel order.
     fn relics(&self) -> impl Iterator<Item = V::Relic> + '_;
-    /// The deck as it stands, in deck order.
-    fn deck(&self) -> &[crate::CardIdent<V>];
+    /// The deck as it stands, in deck order, by what each card is.
+    fn deck(&self) -> Vec<crate::CardIdent<V>>;
     /// `RelicGrabBag.HasAvailableRelics` on the player's own bag: whether a
     /// relic reward still has a relic to deal.
     fn relics_left(&self) -> bool;

@@ -60,7 +60,7 @@ impl<V: Rules> Observed<V> for State<V> {
     }
 
     fn deck(&self) -> impl ExactSizeIterator<Item = CardIdent<V>> + '_ {
-        self.player.deck.iter().copied()
+        self.player.deck.iter().map(|held| held.ident)
     }
 
     fn in_combat(&self) -> bool {

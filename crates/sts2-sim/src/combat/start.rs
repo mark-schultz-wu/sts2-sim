@@ -1,8 +1,7 @@
 //! Building the fight a run walks into.
 
 use sts2_core::{
-    CardIdent, CombatId, EventHook, HookEffect, ModelId, ModifyHook, Rules, SideKinds,
-    TurnPhaseKinds,
+    CombatId, EventHook, HookEffect, ModelId, ModifyHook, Rules, SideKinds, TurnPhaseKinds,
 };
 
 use super::board::Board;
@@ -29,7 +28,7 @@ pub(crate) struct Entering<'a, V: Rules> {
     pub(crate) hp: V::Health,
     pub(crate) max_hp: V::Health,
     pub(crate) alive: bool,
-    pub(crate) deck: &'a [CardIdent<V>],
+    pub(crate) deck: &'a [sts2_core::DeckCard<V>],
     /// Whether the run reached this room off the map's lines.
     pub(crate) strayed: bool,
 }
@@ -132,7 +131,13 @@ pub(crate) fn enter<V: Rules>(
     let deck: Vec<CardInstance<V>> = entering
         .deck
         .iter()
-        .map(|card| CardInstance::new(*card, live.card_ids.mint()))
+        .map(|card| {
+            let mut copy = CardInstance::new(card.ident, live.card_ids.mint());
+            if let Some(change) = sts2_core::CardModel::written(&card.state) {
+                copy.face.modify(change, sts2_core::Lasting::ThisFight);
+            }
+            copy
+        })
         .collect();
     // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
     // turn the fight is about to begin on. Both run before anything is drawn.

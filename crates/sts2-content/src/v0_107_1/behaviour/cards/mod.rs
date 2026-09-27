@@ -17,7 +17,7 @@ use sts2_core::{CardVars, Fight, Played};
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
 use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, IroncladCard, NecrobinderCard,
+    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard,
 };
 use super::super::generated::powers::Power;
 
@@ -171,11 +171,79 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
 ) {
     // The fight asks only a card whose class overrides the hook.
     match card {
+        // `Guilty.AfterCombatEnd` counts on the copy in the deck, and a copy
+        // in the fight's piles does nothing.
+        Cards::Curse(CurseCard::Guilty)
+            if matches!(hook, sts2_core::EventHook::CombatEnd { .. }) => {}
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
         Cards::Necrobinder(card) => necrobinder::event_hook(card, id, printed, hook, asked),
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
         Cards::Silent(card) => silent::event_hook(card, id, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
+    }
+}
+
+/// What a deck card's own model saves between fights: its `[SavedProperty]`
+/// fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum State {
+    Stateless,
+    /// `Guilty.CombatsSeen`.
+    Guilty {
+        combats_seen: u8,
+    },
+}
+
+impl sts2_core::CardModel<V> for State {
+    fn new(card: Cards) -> Self {
+        match card {
+            Cards::Curse(CurseCard::Guilty) => Self::Guilty { combats_seen: 0 },
+            _ => Self::Stateless,
+        }
+    }
+
+    /// `Guilty.CombatsSeen`'s setter prints `Combats` as the fights it has
+    /// left.
+    fn written(&self) -> Option<Change> {
+        match *self {
+            Self::Guilty { combats_seen } if combats_seen > 0 => {
+                Some(Change::Raise(CardVar::Combats, -Number::from(combats_seen)))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// `Guilty.maxCombats`: the fights it stays in the deck for.
+const GUILTY_COMBATS: u8 = 5;
+
+/// What a card in the run's deck asks for when `hook` reaches it.
+///
+/// The run asks only a card whose class overrides the hook.
+///
+/// # Panics
+///
+/// An override nobody has ported.
+pub(crate) fn deck_event_hook(
+    card: Cards,
+    state: &mut State,
+    hook: sts2_core::EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
+    match (card, state, hook) {
+        // `Guilty.AfterCombatEnd`: one more fight seen, and out of the deck at
+        // five.
+        (
+            Cards::Curse(CurseCard::Guilty),
+            State::Guilty { combats_seen },
+            sts2_core::EventHook::CombatEnd { .. },
+        ) => {
+            *combats_seen += 1;
+            if *combats_seen >= GUILTY_COMBATS {
+                asked.push(sts2_core::HookEffect::RemoveFromDeck);
+            }
+        }
+        (card, _, hook) => unimplemented!("what {card:?} in the deck does for {hook:?}"),
     }
 }
 
