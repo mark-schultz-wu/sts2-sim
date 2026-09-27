@@ -3,11 +3,8 @@
 //! `CardModel.CanPlay` starts at no reasons and adds one per rule it fails.
 //! So this reports a set, rather than the first refusal.
 //!
-//! Two of the game's six rules are not decided here. `BlockedByHook` is what
-//! every listener in the fight says through `Hook.ShouldPlay`, which no
-//! ported model answers, so a fight where one listens stops by name.
-//! `BlockedByCardLogic` is the card's own `IsPlayable` override, which no
-//! ported card has.
+//! One of the game's six rules is not decided here. `BlockedByCardLogic` is
+//! the card's own `IsPlayable` override, which no ported card has.
 
 use crate::legal::{Legal, aimed, belt_index, hand_index, selections};
 use smallvec::{SmallVec, smallvec};
@@ -27,8 +24,8 @@ pub(super) fn hand<V: Rules>(
     energy: V::Count,
     stars: V::Count,
 ) -> Vec<Playable<V>> {
-    unheard_by_the_hand::<V>(fight.live, fight.relics);
-    hand.map(|card| InHand::new(card, fight, energy, stars).playable())
+    let asks = asks_should_play::<V>(fight);
+    hand.map(|card| InHand::new(card, fight, energy, stars, asks).playable())
         .collect()
 }
 
@@ -41,10 +38,10 @@ pub(super) fn target_type<V: Rules>(card: CardIdent<V>, live: &Live<V>) -> V::Ta
         .unwrap_or_else(|| V::computed_card_target(card.card, &super::board::powers::<V>(live)))
 }
 
-/// `CardModel.CanPlay` asks `Hook.ShouldPlay` of every card. No ported model
-/// answers it, so a fight where one listens stops by name.
-fn unheard_by_the_hand<V: Rules>(live: &Live<V>, relics: &crate::run::Belt<V>) {
-    super::turn::unheard::<V>(live, relics, sts2_core::ModelHook::ShouldPlay);
+/// Whether anything in the fight answers `ShouldPlay`, asked once for a hand
+/// rather than once for each card in it.
+pub(super) fn asks_should_play<V: Rules>(fight: Walk<'_, V>) -> bool {
+    super::listen::heard::<V>(fight.live, fight.relics, sts2_core::ModelHook::ShouldPlay)
 }
 
 /// `EnergyCost.GetWithModifiers` for a copy in hand or being played, which
@@ -82,14 +79,18 @@ pub(super) fn costs<V: Rules>(
 /// The set itself rather than a list to fold into one. Six reasons fit a byte
 /// the build already generates, and a card in hand is asked this on every
 /// report.
+///
+/// Beside it, the model that answered `ShouldPlay` with no, which is
+/// `preventer`. `asks` is [`asks_should_play`].
 pub(super) fn reasons<V: Rules>(
     card: CardIdent<V>,
-    live: &Live<V>,
-    cost: Cost,
-    star_cost: Cost,
+    fight: Walk<'_, V>,
+    (cost, star_cost): (Cost, Cost),
     energy: V::Count,
     stars: V::Count,
-) -> Option<V::UnplayableReasons> {
+    asks: bool,
+) -> (Option<V::UnplayableReasons>, Option<sts2_core::ModelId<V>>) {
+    let live = fight.live;
     let creatures = &live.creatures;
     let target = target_type::<V>(card, live);
     let mut why = None;
@@ -125,7 +126,26 @@ pub(super) fn reasons<V: Rules>(
             <V::UnplayableReason as UnplayableReasonKinds>::NO_LIVING_ALLIES,
         );
     }
-    why
+    // `Hook.ShouldPlay`, whose first no names the preventer.
+    let preventer = asks
+        .then(|| {
+            super::listen::first_deciding::<V>(
+                fight,
+                sts2_core::DecisionHook::ShouldPlay {
+                    card: card.card,
+                    affliction: card.affliction,
+                },
+                false,
+            )
+        })
+        .flatten();
+    if preventer.is_some() {
+        why = refused::<V>(
+            why,
+            <V::UnplayableReason as UnplayableReasonKinds>::BLOCKED_BY_HOOK,
+        );
+    }
+    (why, preventer)
 }
 
 /// That set with one more reason in it, starting one where there is none.
@@ -169,6 +189,7 @@ pub(crate) struct InHand<'a, V: Rules> {
     star_cost: Cost,
     target: V::TargetType,
     reason: Option<V::UnplayableReasons>,
+    preventer: Option<sts2_core::ModelId<V>>,
     targets: Targets,
 }
 
@@ -178,11 +199,19 @@ impl<'a, V: Rules> InHand<'a, V> {
         fight: Walk<'a, V>,
         energy: V::Count,
         stars: V::Count,
+        asks: bool,
     ) -> Self {
         let creatures = &fight.live.creatures;
         let target = target_type::<V>(held.face.ident, fight.live);
         let (cost, star_cost) = costs::<V>(&held, fight);
-        let reason = reasons::<V>(held.face.ident, fight.live, cost, star_cost, energy, stars);
+        let (reason, preventer) = reasons::<V>(
+            held.face.ident,
+            fight,
+            (cost, star_cost),
+            energy,
+            stars,
+            asks,
+        );
         Self {
             held,
             fight,
@@ -190,6 +219,7 @@ impl<'a, V: Rules> InHand<'a, V> {
             star_cost,
             target,
             reason,
+            preventer,
             targets: targets::<V>(target, creatures, reason.is_some()),
         }
     }
@@ -213,9 +243,7 @@ impl<'a, V: Rules> InHand<'a, V> {
             star_cost: self.star_cost,
             target: self.target,
             reason: self.reason,
-            // `BlockedByHook` is the only reason that names one, and no
-            // ported model answers `ShouldPlay`.
-            preventer: None,
+            preventer: self.preventer,
             effect,
             targets: self.targets.clone(),
         }
@@ -244,7 +272,7 @@ impl<V: Rules> sts2_core::ObservedPlayable<V> for InHand<'_, V> {
     }
 
     fn preventer(&self) -> Option<sts2_core::ModelId<V>> {
-        None
+        self.preventer
     }
 
     fn targets(&self) -> &[CombatId] {
@@ -283,16 +311,16 @@ pub(crate) fn moves<V: Rules>(
 
     drinks::<V>(potions, Some(live), alive, &mut moves);
 
-    unheard_by_the_hand::<V>(live, relics);
+    let asks = asks_should_play::<V>(Walk { live, relics });
     for (at, card) in live.cards.iter(Pile::Hand).enumerate() {
-        let (cost, star_cost) = costs::<V>(&card, Walk { live, relics });
-        let refused = reasons::<V>(
+        let costs = costs::<V>(&card, Walk { live, relics });
+        let (refused, _) = reasons::<V>(
             card.face.ident,
-            live,
-            cost,
-            star_cost,
+            Walk { live, relics },
+            costs,
             live.energy,
             live.stars,
+            asks,
         );
         if refused.is_none() {
             let target = target_type::<V>(card.face.ident, live);

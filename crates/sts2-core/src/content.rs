@@ -1411,6 +1411,9 @@ pub trait FightView<V: ContentVersion> {
     /// `Creature.Monster`, or nothing for a player.
     fn monster(&self, creature: crate::CombatId) -> Option<V::Monster>;
 
+    /// `Creature.CurrentHp`, or nothing for a creature not in the fight.
+    fn current_hp(&self, creature: crate::CombatId) -> Option<V::Health>;
+
     /// `CombatState.GetOpponentsOf(creature)` that are alive, in fight order.
     fn living_opponents(
         &self,
@@ -2242,6 +2245,13 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldFlush`, as `player`'s turn ends. A hand any listener answers no
     /// for keeps every card.
     ShouldFlush { player: crate::CombatId },
+    /// `ShouldPlay`, asked of a card in hand as `CanPlay` looks it over. The
+    /// first listener to answer no is the preventer, and the card is
+    /// `BlockedByHook`.
+    ShouldPlay {
+        card: V::Card,
+        affliction: Option<V::Affliction>,
+    },
     /// `ShouldStopCombatFromEnding`, which any listener can answer yes to.
     ShouldStopCombatFromEnding,
     /// `ShouldDraw`, once for each `CardPileCmd.Draw`. A draw any listener
@@ -2303,6 +2313,7 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldRemovePowerOnDeath { .. } => ModelHook::ShouldPowerBeRemovedOnDeath,
             DecisionHook::ShouldClearBlock { .. } => ModelHook::ShouldClearBlock,
             DecisionHook::ShouldFlush { .. } => ModelHook::ShouldFlush,
+            DecisionHook::ShouldPlay { .. } => ModelHook::ShouldPlay,
             DecisionHook::TakesUnblockedDamage { .. } => ModelHook::ModifyUnblockedDamageTarget,
             DecisionHook::ShouldStopCombatFromEnding => ModelHook::ShouldStopCombatFromEnding,
             DecisionHook::ShouldAllowHitting { .. } => ModelHook::ShouldAllowHitting,
@@ -2689,6 +2700,8 @@ pub enum Writing<V: ContentVersion> {
     EveryTagged(V::CardTag),
     /// Every card the fight holds of this type, in every pile.
     EveryOfKind(CardKind),
+    /// Every card the fight holds, in every pile.
+    Every,
     /// Every card the fight holds that carries this affliction, in every
     /// pile.
     EveryAfflictedWith(V::Affliction),

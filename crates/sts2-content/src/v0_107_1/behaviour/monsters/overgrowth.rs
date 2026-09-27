@@ -98,6 +98,21 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
             });
             fight.apply(block);
         }
+        // The Ceremonial Beast's moves set flags that pick its animation.
+        (Monster::CeremonialBeast, MoveId::PlowMove) => {
+            fight.attack_opponents();
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(PLOW_STRENGTH));
+        }
+        (Monster::CeremonialBeast, MoveId::StompMove) => fight.attack_opponents(),
+        (Monster::CeremonialBeast, MoveId::CrushMove) => {
+            fight.attack_opponents();
+            let strength = match fight.ascension().has(AscensionLevel::DeadlyEnemies) {
+                true => CRUSH_STRENGTH_DEADLY,
+                false => CRUSH_STRENGTH,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+        }
+        (Monster::CeremonialBeast, MoveId::StunMove) => {}
         (Monster::Flyconid, MoveId::VulnerableSporesMove) => {
             fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(SPORES));
         }
@@ -112,6 +127,13 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
 /// The block the Crossbow Ruby Raider's Reload gives it, a constant in the
 /// move.
 const RELOAD_BLOCK: Number = 3;
+
+/// `CeremonialBeast.PlowStrength`.
+const PLOW_STRENGTH: Number = 2;
+
+/// `CeremonialBeast.CrushStrength`, either side of `DeadlyEnemies`.
+const CRUSH_STRENGTH: Number = 3;
+const CRUSH_STRENGTH_DEADLY: Number = 4;
 
 /// What the Cubex Construct's Charge Up adds to it, a constant in the move.
 const CHARGE_UP_STRENGTH: Number = 2;

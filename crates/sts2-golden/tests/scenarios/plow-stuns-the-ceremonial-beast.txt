@@ -1,0 +1,18 @@
+# The Ceremonial Beast opens on Stamp, 150 Plow. `PlowPower.AfterDamageReceived`
+# stuns it once a hit takes hit points and leaves it at 150 or below. On turn
+# three, after its Plow gave it two Strength, a Strike with a hundred Strength
+# takes it to 146. The Strength goes, and the stun comes back with Beast Cry,
+# whose Ringing goes on every card. `RingingPower.ShouldPlay` then lets one
+# card through a turn, so after one Strike the rest of the hand is blocked by
+# the power. Stomp and Crush follow.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"CEREMONIAL_BEAST_BOSS"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":100,"target":0}
+{"cmd":"play_card","index":0,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":2,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
