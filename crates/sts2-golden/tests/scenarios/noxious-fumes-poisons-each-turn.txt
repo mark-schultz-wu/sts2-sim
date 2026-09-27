@@ -1,0 +1,9 @@
+# `NoxiousFumesPower.AfterSideTurnStart` puts its stack of Poison on every
+# enemy that can be hit as its owner's turn starts. Turn two's Nibbit carries
+# two. It ticks for two as the enemies' turn starts, and turn three adds two
+# more, to three.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"NOXIOUS_FUMES_POWER","amount":2,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

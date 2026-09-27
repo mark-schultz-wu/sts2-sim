@@ -272,13 +272,22 @@ pub(crate) fn enter<V: Rules>(
             ended: Some(ended),
         });
     }
-    super::turn::side_turn_started::<V>(
+    if let Some(ended) = super::turn::side_turn_started::<V>(
         &mut live,
         streams.combat(),
         relics,
         ascension,
         <V::CombatSide as SideKinds>::PLAYER,
-    );
+    ) {
+        if ended == super::Ended::Won {
+            super::listen::combat_ended::<V>(&mut live, relics);
+        }
+        return Ok(Entered {
+            live,
+            streams,
+            ended: Some(ended),
+        });
+    }
     // `OrbQueue.AfterTurnStart`, which a fight's opening turn runs too.
     let ended = super::turn::orb_triggers::<V>(
         &mut live,

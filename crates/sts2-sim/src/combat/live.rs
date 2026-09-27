@@ -844,7 +844,9 @@ impl<V: Rules> sts2_core::CreatureView<V> for Seen<'_, V> {
 pub(crate) struct Onlookers<'a, V: Rules> {
     pub(crate) creatures: &'a Creatures<V>,
     pub(crate) powers: &'a PowerStore<V>,
-    pub(crate) relics: &'a crate::run::Belt<V>,
+    /// The belt, where the caller has one to lend. A relic asked about with
+    /// none lent panics by name.
+    pub(crate) relics: Option<&'a crate::run::Belt<V>>,
 }
 
 impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
@@ -873,6 +875,23 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
             .and_then(|fighter| fighter.carrier().monster)
     }
 
+    /// The other side's creatures, a pet among them.
+    fn living_opponents(&self, creature: CombatId) -> smallvec::SmallVec<[CombatId; 8]> {
+        let Some(side) = self
+            .creatures
+            .iter()
+            .find(|fighter| fighter.id == creature)
+            .map(|fighter| fighter.side)
+        else {
+            return smallvec::SmallVec::new();
+        };
+        self.creatures
+            .iter()
+            .filter(|fighter| fighter.side != side && fighter.alive)
+            .map(|fighter| fighter.id)
+            .collect()
+    }
+
     /// The belt is the one player's, and every creature that is no monster
     /// is that player.
     fn relic(&self, creature: CombatId, relic: V::Relic) -> bool {
@@ -880,7 +899,10 @@ impl<V: Rules> sts2_core::FightView<V> for Onlookers<'_, V> {
             .creatures
             .iter()
             .any(|fighter| fighter.id == creature && fighter.carrier().monster.is_none());
-        player && self.relics.iter().any(|held| held.relic == relic)
+        let relics = self
+            .relics
+            .unwrap_or_else(|| unimplemented!("{relic:?} asked about where no belt is lent"));
+        player && relics.iter().any(|held| held.relic == relic)
     }
 }
 
@@ -1171,10 +1193,15 @@ impl<V: Rules> HeldPower<V> {
         }
     }
 
+    ///
+    /// `state` is a copy of this power's own, so the fight stays readable
+    /// while the hook writes on it. [`Live::ask_power`] keeps what it wrote.
     pub(crate) fn event_power<'a>(
-        &'a mut self,
+        &self,
+        state: &'a mut V::PowerState,
         carrier: Carrier<V>,
         history: sts2_core::History<'a, V>,
+        fight: &'a dyn sts2_core::FightView<V>,
     ) -> sts2_core::EventPower<'a, V> {
         sts2_core::EventPower {
             power: self.power(),
@@ -1184,8 +1211,9 @@ impl<V: Rules> HeldPower<V> {
             applier: self.applier,
             monster: carrier.monster,
             on_turn_start: self.on_turn_start.amount(),
-            state: &mut self.state,
+            state,
             history,
+            fight,
         }
     }
 
@@ -1684,7 +1712,7 @@ impl<V: Rules> Live<V> {
                 if let Some(attack) = &mut intent.attack {
                     attack.damage = super::board::modified::<V>(
                         super::listen::Walk { live: self, relics },
-                        fighter.id,
+                        Some(fighter.id),
                         Some(player.id),
                         None,
                         attack.damage,
@@ -1772,6 +1800,58 @@ impl<V: Rules> Live<V> {
             .expect("a fight has the player in it")
     }
 
+    /// Ask the power at `at` among `owner`'s about `hook`, with the fight in
+    /// view, and keep what its model saved. What it asks for goes on `asked`.
+    pub(crate) fn ask_power(
+        &mut self,
+        relics: Option<&crate::run::Belt<V>>,
+        owner: CombatId,
+        at: usize,
+        hook: sts2_core::EventHook<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) {
+        let Some(carrier) = self
+            .creatures
+            .iter()
+            .find(|c| c.id == owner)
+            .map(|c| c.carrier())
+        else {
+            return;
+        };
+        self.ask_power_as(relics, carrier, at, hook, asked);
+    }
+
+    /// [`Live::ask_power`] for a caller that has the power's carrier already.
+    pub(crate) fn ask_power_as(
+        &mut self,
+        relics: Option<&crate::run::Belt<V>>,
+        carrier: Carrier<V>,
+        at: usize,
+        hook: sts2_core::EventHook<V>,
+        asked: &mut sts2_core::HookEffects<V>,
+    ) {
+        let owner = carrier.id;
+        let Some(&held) = self.powers.of(owner).nth(at) else {
+            return;
+        };
+        let mut state = held.state;
+        let fight = Onlookers {
+            creatures: &self.creatures,
+            powers: &self.powers,
+            relics,
+        };
+        V::power_event_hook(
+            held.event_power(&mut state, carrier, self.history.view(), &fight),
+            hook,
+            asked,
+        );
+        if state != held.state
+            && let Some(held) = self.powers.of_mut(owner).nth(at)
+        {
+            held.state = state;
+        }
+    }
+
     /// `PowerCmd.Remove`: `power` off the creature `owner`, if it is still
     /// there to take it off, and then its `AfterRemoved`.
     ///
@@ -1780,26 +1860,42 @@ impl<V: Rules> Live<V> {
     /// A power asking for something as it comes off that nothing here carries
     /// out, or taking block that breaks as it goes.
     pub(crate) fn remove_power(&mut self, owner: CombatId, power: V::Power) {
-        let Some(creature) = self.creatures.iter_mut().find(|c| c.id == owner) else {
+        let Some(carrier) = self
+            .creatures
+            .iter()
+            .find(|c| c.id == owner)
+            .map(|c| c.carrier())
+        else {
             return;
         };
         let Some(at) = self.powers.of(owner).position(|held| held.power() == power) else {
             return;
         };
-        let carrier = creature.carrier();
-        let mut held = self.powers.remove(owner, at);
+        let held = self.powers.remove(owner, at);
         let mut asked = sts2_core::HookEffects::new();
+        // Taken off already, as `AfterRemoved` finds it. No belt is lent here.
+        let mut state = held.state;
+        let fight = Onlookers {
+            creatures: &self.creatures,
+            powers: &self.powers,
+            relics: None,
+        };
         V::power_event_hook(
-            held.event_power(carrier, self.history.view()),
+            held.event_power(&mut state, carrier, self.history.view(), &fight),
             sts2_core::EventHook::Removed,
             &mut asked,
         );
+        let block = self
+            .creatures
+            .iter()
+            .find(|c| c.id == owner)
+            .map_or_else(num_traits::zero, |c| c.block);
         for effect in asked {
             match effect {
                 // `CreatureCmd.LoseBlock` for all of it. Block it takes raises
                 // `AfterBlockBroken`, which a power coming off has no fight to
                 // raise it on.
-                sts2_core::HookEffect::LoseBlock if creature.block > num_traits::zero() => {
+                sts2_core::HookEffect::LoseBlock if block > num_traits::zero() => {
                     unimplemented!("{power:?} taking block as it comes off")
                 }
                 sts2_core::HookEffect::LoseBlock => {}

@@ -1,0 +1,6 @@
+# Poison at fifty kills the Nibbit as the enemy turn starts. The fight ends
+# there, before any move, and the Silent takes no hit.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"POISON_POWER","amount":50,"target":1}
+{"cmd":"end_turn"}

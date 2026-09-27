@@ -198,7 +198,7 @@ pub(crate) fn unblocked_damage_target<V: Rules>(
             let onlookers = super::live::Onlookers {
                 creatures: &fight.live.creatures,
                 powers: &fight.live.powers,
-                relics: fight.relics,
+                relics: Some(fight.relics),
             };
             let listener = held.listener(creature.carrier(), fight.live.history(), &onlookers);
             if V::decide_hook(listener, hook).is_decision_and(|takes| takes) {
@@ -301,14 +301,14 @@ fn raise<V: Rules>(
             (fighter.id, fighter.carrier(), fighter.model)
         };
         if powers {
-            for (at, held) in live.powers.of_mut(id).enumerate() {
-                let power = held.power();
+            // By position, since asking lends the whole fight and takes the
+            // power's own state back after.
+            for at in 0..live.powers.of(id).count() {
+                let Some(power) = live.powers.of(id).nth(at).map(|held| held.power()) else {
+                    break;
+                };
                 if power.overrides().contains(model_hook) {
-                    V::power_event_hook(
-                        held.event_power(carrier, live.history.view()),
-                        hook,
-                        &mut answer,
-                    );
+                    live.ask_power_as(Some(&*relics), carrier, at, hook, &mut answer);
                     let listener = Listener::Power {
                         owner: id,
                         at: at as u8,
@@ -441,7 +441,7 @@ pub(crate) fn each<V: Rules>(
     let onlookers = super::live::Onlookers {
         creatures: &live.creatures,
         powers: &live.powers,
-        relics,
+        relics: Some(relics),
     };
     for creature in live.creatures.iter() {
         if powers {

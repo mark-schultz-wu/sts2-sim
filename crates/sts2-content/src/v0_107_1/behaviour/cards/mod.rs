@@ -24,6 +24,7 @@ type Number = <V0_107_1 as sts2_core::ContentVersion>::Number;
 mod defect;
 mod necrobinder;
 mod regent;
+mod silent;
 mod status;
 mod token;
 
@@ -91,6 +92,7 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
     Regent(regent::Resume),
+    Silent(silent::Resume),
 }
 
 /// What a card does when it is played.
@@ -98,7 +100,7 @@ pub enum Resume {
 pub(crate) fn on_play<F: Fight<V>>(card: Cards, fight: &mut F) -> Played<V> {
     match card {
         Cards::Ironclad(card) => card_plays::ironclad::on_play(card, fight),
-        Cards::Silent(card) => card_plays::silent::on_play(card, fight),
+        Cards::Silent(card) => silent::on_play(card, fight),
         Cards::Regent(card) => regent::on_play(card, fight),
         Cards::Necrobinder(card) => necrobinder::on_play(card, fight),
         Cards::Defect(card) => defect::on_play(card, fight),
@@ -146,6 +148,7 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
         Cards::Necrobinder(card) => necrobinder::event_hook(card, id, printed, hook, asked),
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
+        Cards::Silent(card) => silent::event_hook(card, id, hook, asked),
         card => unimplemented!("what {card:?} does for {hook:?}"),
     }
 }
@@ -158,5 +161,6 @@ pub(crate) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
+        Resume::Silent(at) => silent::resume_play(fight, at, chosen),
     }
 }

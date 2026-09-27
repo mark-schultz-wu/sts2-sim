@@ -1373,6 +1373,12 @@ pub trait FightView<V: ContentVersion> {
     /// `Creature.Monster`, or nothing for a player.
     fn monster(&self, creature: crate::CombatId) -> Option<V::Monster>;
 
+    /// `CombatState.GetOpponentsOf(creature)` that are alive, in fight order.
+    fn living_opponents(
+        &self,
+        creature: crate::CombatId,
+    ) -> smallvec::SmallVec<[crate::CombatId; 8]>;
+
     /// `Creature.Player?.GetRelic<T>() != null`: whether `creature` is a player
     /// holding `relic`. A pet is no player, so it holds none.
     fn relic(&self, creature: crate::CombatId, relic: V::Relic) -> bool;
@@ -1562,6 +1568,24 @@ pub trait Fight<V: ContentVersion> {
 
     /// `CardCmd.Discard(this)`, for the card whose behavior is running.
     fn discard_this(&mut self);
+
+    /// `CardCmd.Discard` of one card in hand, which a Sly card answers by
+    /// playing itself.
+    fn discard(&mut self, _card: crate::CardAt<V>) {
+        unimplemented!("discarding a card")
+    }
+
+    /// Write `change` on the card being played, which stands in the play pile.
+    /// `EnergyCost.AddThisCombat` on itself, for one.
+    fn modify_this(&mut self, _change: Change<V>, _lasting: Lasting) {
+        unimplemented!("a card writing on itself as it is played")
+    }
+
+    /// `CombatState.HittableEnemies`: the opponents alive, less any a
+    /// listener refuses a hit on, in command order.
+    fn hittable_opponents(&self) -> Opponents {
+        unimplemented!("the hittable opponents")
+    }
 
     /// `PileType.<pile>.GetPile(Owner).Cards`, as it holds them now.
     ///
@@ -2021,7 +2045,9 @@ pub enum ModifyHook<V: ContentVersion> {
     /// against nobody.
     DamageAdditive {
         target: Option<crate::CombatId>,
-        dealer: crate::CombatId,
+        /// `dealer`: the creature swinging, or nothing for damage no creature
+        /// deals, such as Poison's.
+        dealer: Option<crate::CombatId>,
         /// `cardSource`: the card whose number this is, and which card it
         /// is. Nothing for a monster's move.
         card: Option<CardSource<V>>,
@@ -2031,7 +2057,9 @@ pub enum ModifyHook<V: ContentVersion> {
     /// `ModifyDamageMultiplicative`, over what the additions left.
     DamageMultiplicative {
         target: Option<crate::CombatId>,
-        dealer: crate::CombatId,
+        /// `dealer`: the creature swinging, or nothing for damage no creature
+        /// deals, such as Poison's.
+        dealer: Option<crate::CombatId>,
         /// `cardSource`, as [`ModifyHook::DamageAdditive`] carries it.
         card: Option<CardSource<V>>,
         /// `props.IsPoweredAttack()`.
@@ -2040,7 +2068,9 @@ pub enum ModifyHook<V: ContentVersion> {
     /// `ModifyDamageCap`, the most a hit can do.
     DamageCap {
         target: Option<crate::CombatId>,
-        dealer: crate::CombatId,
+        /// `dealer`: the creature swinging, or nothing for damage no creature
+        /// deals, such as Poison's.
+        dealer: Option<crate::CombatId>,
         /// `props.IsPoweredAttack()`.
         powered: bool,
     },
@@ -2301,7 +2331,9 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
-        dealer: crate::CombatId,
+        /// The creature that dealt it, or nothing for damage no creature
+        /// deals.
+        dealer: Option<crate::CombatId>,
         /// `Dealer.PetOwner.Creature`, for a pet's hit.
         pet_of: Option<crate::CombatId>,
         /// The creature this result is for.
@@ -2309,6 +2341,8 @@ pub enum EventHook<V: ContentVersion> {
         /// `DamageResult.TotalDamage`: what its block took and what its hit
         /// points lost.
         total: V::Number,
+        /// `DamageResult.UnblockedDamage`: what its hit points lost.
+        unblocked: V::Number,
         /// `IsPoweredAttack`.
         powered: bool,
         fully_blocked: bool,
@@ -2317,8 +2351,6 @@ pub enum EventHook<V: ContentVersion> {
     MonsterMovePerformed {
         move_id: V::MoveId,
     },
-    /// `AfterCardDrawn`, carrying the card that has just reached the hand.
-    ///
     /// `BeforeCardPlayed`, before each play of a card, replays included. The
     /// card stands in the play pile.
     CardPlaying {
@@ -2335,6 +2367,8 @@ pub enum EventHook<V: ContentVersion> {
         /// `fromHandDraw`.
         hand_draw: bool,
     },
+    /// `AfterCardDrawn`, carrying the card that has just reached the hand.
+    ///
     /// Raised once per card, inside the draw loop, on every listener. A card
     /// answering for its own draw compares `id` with its own, which is what
     /// every card that answers this hook does.
@@ -2896,6 +2930,16 @@ pub enum HookEffect<V: ContentVersion> {
     /// The card that asked, moved to the top of the draw pile it was
     /// shuffled into.
     ToTopOfDrawPile,
+    /// `times` rounds of `CreatureCmd.Damage` on the listener's owner, each
+    /// for its own stack as that round starts, unblockable and unpowered and
+    /// from no creature. After each, one off the stack while the owner lives.
+    /// `PoisonPower.AfterSideTurnStart`.
+    DamageSelfByStack {
+        times: V::Number,
+    },
+    /// `PowerCmd.Apply` on every hittable opponent of the listener's owner,
+    /// from that owner.
+    ApplyToOpponents(V::Power, PowerAmount<V::Number>),
     /// `CardCmd.AutoPlay` of this copy, with no target named: the card plays
     /// for free, and one that targets an enemy picks it off `CombatTargets`.
     AutoPlay(crate::CardId<V>),
@@ -3186,6 +3230,9 @@ pub struct EventPower<'a, V: Hooks> {
     pub state: &'a mut V::PowerState,
     /// What the fight has done so far.
     pub history: History<'a, V>,
+    /// The fight's creatures, for a power that asks about one other than its
+    /// own.
+    pub fight: &'a dyn FightView<V>,
 }
 
 /// The build-specific behavior behind the game's hook dispatcher.

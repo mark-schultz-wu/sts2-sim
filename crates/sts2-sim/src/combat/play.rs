@@ -429,24 +429,18 @@ fn result_pile<V: Rules>(
         },
     );
     for (holder, power) in modifiers {
-        let Some(carrier) = live
-            .creatures
-            .iter()
-            .find(|c| c.id == holder)
-            .map(|c| c.carrier())
-        else {
-            continue;
-        };
-        let Some(held) = live
+        let Some(at) = live
             .powers
-            .of_mut(holder)
-            .find(|held| held.power() == power)
+            .of(holder)
+            .position(|held| held.power() == power)
         else {
             continue;
         };
         let mut asked = sts2_core::HookEffects::new();
-        <V as sts2_core::Hooks>::power_event_hook(
-            held.event_power(carrier, live.history.view()),
+        live.ask_power(
+            Some(relics),
+            holder,
+            at,
             sts2_core::EventHook::ResultPileModified { card: played },
             &mut asked,
         );
@@ -501,20 +495,18 @@ fn play_count<V: Rules, S: LendsCombat>(
         },
     );
     for (holder, power) in modifiers {
-        let Some(at) = live.creatures.iter().position(|c| c.id == holder) else {
-            continue;
-        };
-        let carrier = live.creatures[at].carrier();
-        let Some(held) = live
+        let Some(at) = live
             .powers
-            .of_mut(holder)
-            .find(|held| held.power() == power)
+            .of(holder)
+            .position(|held| held.power() == power)
         else {
             continue;
         };
         let mut asked = sts2_core::HookEffects::new();
-        <V as sts2_core::Hooks>::power_event_hook(
-            held.event_power(carrier, live.history.view()),
+        live.ask_power(
+            Some(relics),
+            holder,
+            at,
             sts2_core::EventHook::PlayCountModified {
                 card: card.face.ident.card,
             },
@@ -826,8 +818,19 @@ fn finished<V: Rules, S: LendsCombat>(
     next.history.finish(card);
     let asked = super::listen::notify::<V>(next, relics, sts2_core::EventHook::CardPlayed { card });
     if !asked.is_empty() {
+        let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // Written on the card that asked, wherever it stands.
+                (
+                    super::listen::Listener::Card { id },
+                    sts2_core::HookEffect::ModifySelf { change, lasting },
+                ) => next.modify_self(id, change, lasting),
+                (_, effect) => rest.push(effect),
+            }
+        }
         let mut board = Board::for_card(next, streams.combat(), relics, ascension, None, None);
-        hook::apply::<V, _>(&mut board, asked.into_iter().map(|(_, effect)| effect));
+        hook::apply::<V, _>(&mut board, rest);
         let skipped = std::mem::take(&mut board.skipped);
         merge::<V>(&mut next.skip_tick, skipped);
     }
