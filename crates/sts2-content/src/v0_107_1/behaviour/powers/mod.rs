@@ -1140,9 +1140,10 @@ pub(crate) fn decide_hook(
         (Power::RetainHandPower, DecisionHook::ShouldFlush { player }) => {
             HookResponse::Decision(player != held.holder)
         }
-        // `ShouldClearBlock`, which keeps its own holder's.
+        // `ShouldClearBlock`, which keeps its own holder's. Blur's
+        // `AfterPreventingBlockClear` only flashes.
         (
-            Power::BurrowedPower | Power::BarricadePower,
+            Power::BurrowedPower | Power::BarricadePower | Power::BlurPower,
             DecisionHook::ShouldClearBlock { creature },
         ) => HookResponse::Decision(creature != held.holder),
         // `InfestedPower.ShouldStopCombatFromEnding`, for as long as it is on
@@ -1661,6 +1662,12 @@ pub(crate) fn event_hook(
             Some(HookEffect::Decrement)
         }
         (Power::SlumberPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `BlurPower.AfterSideTurnStart`: one off, as its owner's side starts
+        // a turn.
+        (Power::BlurPower, _, EventHook::SideTurnStart { side, .. }) if side == owner => {
+            Some(HookEffect::Decrement)
+        }
+        (Power::BlurPower, _, EventHook::SideTurnStart { .. }) => None,
         (Power::FurnacePower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
             if side == owner =>
         {
