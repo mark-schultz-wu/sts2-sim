@@ -1,0 +1,6 @@
+# Echoing Slash hits every enemy, and hits them all again for each one a
+# round killed.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"ECHOING_SLASH"}
+{"cmd":"play_card","index":7}

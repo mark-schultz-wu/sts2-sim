@@ -298,7 +298,7 @@ impl<'a, V: Rules> Board<'a, V> {
             // An endless power lands no number, so the hook that reads one has
             // nothing to read.
             if let PowerAmount::Counted(delta) = amount {
-                self.amount_changed(id, power, delta);
+                self.amount_changed(id, power, delta, applier);
             }
         }
     }
@@ -465,7 +465,7 @@ impl<'a, V: Rules> Board<'a, V> {
         held.amount = super::live::Stacked::counted(had + more);
         let spent = held.amount.spent();
         self.power_received(modifiers, power);
-        self.amount_changed(id, power, offset);
+        self.amount_changed(id, power, offset, applier);
         // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove` for a power it
         // says is done.
         if spent {
@@ -486,7 +486,16 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `AfterPowerAmountChanged`, once the amount has moved. It carries the
     /// offset rather than the stack the creature now holds, and an offset of
     /// zero raises nothing.
-    fn amount_changed(&mut self, id: CombatId, power: V::Power, delta: V::Number) {
+    ///
+    /// A power asking for more of a power on its own holder lands it from
+    /// `applier`, whose command moved the amount.
+    fn amount_changed(
+        &mut self,
+        id: CombatId,
+        power: V::Power,
+        delta: V::Number,
+        applier: Option<CombatId>,
+    ) {
         if delta.is_zero() {
             return;
         }
@@ -499,7 +508,16 @@ impl<'a, V: Rules> Board<'a, V> {
                 delta,
             },
         );
-        self.write_cards(asked.into_iter().map(|(_, effect)| effect));
+        let mut cards: SmallVec<[HookEffect<V>; 4]> = SmallVec::new();
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                (Listener::Power { owner, .. }, HookEffect::ApplyToOwner(lent, amount)) => {
+                    self.land(owner, lent, amount, applier)
+                }
+                (_, effect) => cards.push(effect),
+            }
+        }
+        self.write_cards(cards);
     }
 
     /// `CreatureCmd.Damage` on `target` once hooks worked `damage` out:
@@ -1888,14 +1906,15 @@ pub(crate) fn var<V: Rules>(
     match number.calculated {
         false => number.base,
         true => {
-            let osty = osty::<V>(&live.creatures)
-                .filter(|osty| osty.alive)
-                .map(|osty| osty.hp);
+            let standing = osty::<V>(&live.creatures).filter(|osty| osty.alive);
+            let osty = standing.map(|osty| osty.hp);
+            let osty_max_hp = standing.map(|osty| osty.max_hp);
             let targeted: Option<SmallVec<[Stack<V>; 8]>> =
                 target.map(|target| live.powers.of(target).map(HeldPower::stack).collect());
             let owner = sts2_core::CardOwner {
                 powers: &powers::<V>(live),
                 osty,
+                osty_max_hp,
                 draw: live.cards.len(Pile::Draw),
                 strikes: live.cards.count_all(|face| {
                     sts2_core::CardTable::tagged(
@@ -2257,6 +2276,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live.machines.retain(|held| held.creature != id);
         self.live.creatures.escape(id);
         self.end_if_ending();
+    }
+
+    fn kill(&mut self, creature: CombatId) {
+        self.kill_outright(creature);
     }
 
     fn lose_gold(&mut self, amount: V::Number) {

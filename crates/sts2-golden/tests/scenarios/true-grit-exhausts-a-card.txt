@@ -1,0 +1,11 @@
+# True Grit exhausts a card of the hand drawn at random. Upgraded by a
+# Blessing of the Forge, its owner picks the card instead.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"TRUE_GRIT"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"TRUE_GRIT"}
+{"cmd":"grant","potion":"BLESSING_OF_THE_FORGE"}
+{"cmd":"use_potion","index":0,"target":null}
+{"cmd":"play_card","index":4}
+{"cmd":"answer","cards":[0]}

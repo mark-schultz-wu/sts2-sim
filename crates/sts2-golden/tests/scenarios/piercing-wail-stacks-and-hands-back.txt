@@ -1,0 +1,10 @@
+# Piercing Wail takes Strength off every enemy for the turn. A second one
+# on the same enemies stacks, and takes that much more off. The turn's end
+# hands it all back.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"SLIMES_WEAK"}
+{"cmd":"grant","card":"PIERCING_WAIL"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"PIERCING_WAIL"}
+{"cmd":"play_card","index":7}
+{"cmd":"end_turn"}

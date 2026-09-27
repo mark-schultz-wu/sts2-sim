@@ -1,8 +1,8 @@
 //! The Silent's cards the generator leaves to a hand port.
 
 use sts2_core::{
-    Amount, CardIdent, CardKind, Change, CostPool, Effect, EventHook, Fight, HookEffect, Lasting,
-    Pile, Played, PowerAmount, Rules as _, Scaling, Selection,
+    Amount, CardIdent, CardKind, Change, CostPool, CreatureView as _, Effect, EventHook, Fight,
+    HookEffect, Lasting, Pile, Played, PowerAmount, Rules as _, Scaling, Selection,
 };
 
 use super::super::super::generated::card_plays;
@@ -32,6 +32,9 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::Haze => haze(fight),
         SilentCard::Malaise => malaise(fight),
         SilentCard::UpMySleeve => up_my_sleeve(fight),
+        SilentCard::BladeDance => blade_dance(fight),
+        SilentCard::PiercingWail => piercing_wail(fight),
+        SilentCard::EchoingSlash => echoing_slash(fight),
         card => card_plays::silent::on_play(card, fight),
     }
 }
@@ -183,6 +186,54 @@ fn up_my_sleeve<F: Fight<V>>(fight: &mut F) -> Played<V> {
         fight.add_generated_cards(CardIdent::new(Cards::Token(TokenCard::Shiv)), Pile::Hand, 1);
     }
     fight.modify_this(Change::ChangeCost(CostPool::Energy, -1), Lasting::ThisFight);
+    Played::Done
+}
+
+/// `BladeDance`: its `Cards` of Shivs into hand one at a time.
+fn blade_dance<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let count: usize =
+        num_traits::cast(fight.var(CardVar::Cards)).expect("a count of Shivs is not negative");
+    for _ in 0..count {
+        fight.add_generated_cards(CardIdent::new(Cards::Token(TokenCard::Shiv)), Pile::Hand, 1);
+    }
+    Played::Done
+}
+
+/// `PiercingWail`: its `StrengthLoss` as Piercing Wail onto each enemy that
+/// can be hit, one at a time.
+fn piercing_wail<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let amount = PowerAmount::Counted(fight.var(CardVar::StrengthLoss));
+    for target in fight.hittable_opponents() {
+        fight.apply_power(target, Power::PiercingWailPower, amount);
+    }
+    Played::Done
+}
+
+/// `EchoingSlash`: its damage to every enemy that can be hit, and again for
+/// each one that hit killed, as one attack.
+fn echoing_slash<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    fight.attack(Scaling::Dynamic, |fight| {
+        let mut left = 1;
+        while left > 0 {
+            left -= 1;
+            for target in fight.hittable_opponents() {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+                // A creature the hit killed has left the fight's list.
+                let standing = fight
+                    .creatures()
+                    .any(|creature| creature.id() == target && creature.alive());
+                if !standing {
+                    left += 1;
+                }
+            }
+        }
+    });
     Played::Done
 }
 
