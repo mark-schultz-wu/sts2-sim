@@ -70,6 +70,10 @@ pub enum State {
     Automation {
         cards_left: u8,
     },
+    /// `CurlUpPower`'s `playedCard`: the copy whose play it waits on.
+    CurlUp {
+        played: Option<sts2_core::CardId<V>>,
+    },
 }
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
@@ -98,6 +102,7 @@ impl sts2_core::PowerModel<V> for State {
             Power::AutomationPower => Self::Automation {
                 cards_left: AUTOMATION_CARDS,
             },
+            Power::CurlUpPower => Self::CurlUp { played: None },
             power => Self::Stateless(power),
         }
     }
@@ -116,6 +121,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::Feral { .. } => Power::FeralPower,
             Self::Gigantification { .. } => Power::GigantificationPower,
             Self::Automation { .. } => Power::AutomationPower,
+            Self::CurlUp { .. } => Power::CurlUpPower,
         }
     }
 
@@ -178,6 +184,14 @@ impl State {
                 *counted
             }
             _ => 0,
+        }
+    }
+
+    /// `CurlUpPower`'s `playedCard`.
+    fn curl_played(&mut self) -> &mut Option<sts2_core::CardId<V>> {
+        match self {
+            Self::CurlUp { played } => played,
+            state => unreachable!("curl state for {:?}", state.power()),
         }
     }
 
@@ -1922,6 +1936,40 @@ pub(crate) fn event_hook(
         // `AfterSideTurnStart` forgets the count when the side its owner is
         // among takes its turn.
         (Power::SlowPower, _, EventHook::CardPlayed { .. }) => { state.count(one); None },
+        // `CurlUpPower.AfterDamageReceived`: a powered attack on its owner
+        // from a card names that card, unless another is named already.
+        (
+            Power::CurlUpPower,
+            _,
+            EventHook::DamageReceived {
+                target,
+                powered: true,
+                card: Some(card),
+                ..
+            },
+        ) if target == holder => {
+            let played = state.curl_played();
+            if played.is_none_or(|named| named == card) {
+                *played = Some(card);
+            }
+            None
+        }
+        (Power::CurlUpPower, _, EventHook::DamageReceived { .. }) => None,
+        // `CurlUpPower.AfterCardPlayed`: once the named card's play is over,
+        // `CreatureCmd.GainBlock` of its stack, unpowered, then
+        // `PowerCmd.Remove(this)`.
+        (Power::CurlUpPower, PowerAmount::Counted(amount), EventHook::CardPlayed { id, .. })
+            if *state.curl_played() == Some(id) =>
+        {
+            *state.curl_played() = None;
+            Some(HookEffect::GainBlockAndRemove(amount))
+        }
+        (Power::CurlUpPower, PowerAmount::Endless, EventHook::CardPlayed { id, .. })
+            if *state.curl_played() == Some(id) =>
+        {
+            unimplemented!("an endless Curl Up")
+        }
+        (Power::CurlUpPower, _, EventHook::CardPlayed { .. }) => None,
         (Power::SlowPower, _, EventHook::SideTurnStart { side, .. }) if side == owner => {
             { state.clear(); None }
         }

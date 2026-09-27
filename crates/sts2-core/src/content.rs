@@ -2520,6 +2520,8 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterCardPlayed`, carrying the card its owner just played.
     CardPlayed {
         card: V::Card,
+        /// `CardPlay.Card`: which copy.
+        id: crate::CardId<V>,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
     },
@@ -2557,6 +2559,8 @@ pub enum EventHook<V: ContentVersion> {
         dealer: Option<crate::CombatId>,
         /// `IsPoweredAttack`.
         powered: bool,
+        /// `cardSource`, as the copy being played that deals it.
+        card: Option<crate::CardId<V>>,
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {

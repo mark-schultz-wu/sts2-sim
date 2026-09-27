@@ -1,6 +1,8 @@
 //! The second act's monsters.
 
-use sts2_core::{CardAt, CardTable as _, Fight, Pile, PowerAmount, RunStreamKinds as _};
+use sts2_core::{
+    Amount, CardAt, CardTable as _, Effect, Fight, Pile, PowerAmount, RunStreamKinds as _, Scaling,
+};
 
 use super::super::super::generated::ascension::AscensionLevel;
 use super::super::super::generated::cards::CardRarity;
@@ -41,8 +43,16 @@ pub(super) fn starting_powers(
         }
         Monster::BowlbugRock => vec![(Power::ImbalancedPower, PowerAmount::Counted(1))],
         Monster::Exoskeleton => vec![(Power::HardToKillPower, PowerAmount::Counted(9))],
-        // `BowlbugEgg.AfterAddedToRoom` calls the base alone.
-        Monster::BowlbugEgg => Vec::new(),
+        // Each of these calls the base alone. The Ovicopter starts a sound
+        // loop beside it.
+        Monster::BowlbugEgg | Monster::SpinyToad | Monster::Ovicopter => Vec::new(),
+        Monster::Chomper => vec![(Power::ArtifactPower, PowerAmount::Counted(2))],
+        Monster::LouseProgenitor => {
+            vec![(
+                Power::CurlUpPower,
+                PowerAmount::Counted(curl_block(ascension)),
+            )]
+        }
         Monster::SlumberingBeetle => {
             let plating = match ascension.has(AscensionLevel::ToughEnemies) {
                 true => TOUGH_PLATING,
@@ -134,6 +144,34 @@ pub(super) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
     );
     match (monster, move_id) {
         (Monster::ThievingHopper, MoveId::ThieveryMove) => thievery(fight),
+        // `WebMove`: its hit, then Frail at two on each target. `Curled`
+        // picks its animations alone.
+        (Monster::LouseProgenitor, MoveId::WebCannonMove) => {
+            fight.attack_opponents();
+            fight.apply_to_opponents(Power::FrailPower, PowerAmount::Counted(2));
+        }
+        (Monster::LouseProgenitor, MoveId::PounceMove) => fight.attack_opponents(),
+        // `SpikesMove`: Thorns at five on itself. `IsSpiny` picks its
+        // animations alone.
+        (Monster::SpinyToad, MoveId::ProtrudingSpikesMove) => {
+            fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(SPINES))
+        }
+        // `ExplosionMove`: its hit, then the same Thorns taken back.
+        (Monster::SpinyToad, MoveId::SpikeExplosionMove) => {
+            fight.attack_opponents();
+            fight.apply_to_actor(Power::ThornsPower, PowerAmount::Counted(-SPINES));
+        }
+        // `CurlAndGrowMove`: `CreatureCmd.GainBlock` of its `CurlBlock` as a
+        // move, then Strength at five on itself.
+        (Monster::LouseProgenitor, MoveId::CurlAndGrowMove) => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(curl_block(fight.ascension())),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(5));
+        }
         // `FlutterMove`: `IsHovering`, which picks its sounds, then
         // `PowerCmd.Apply<FlutterPower>` of five on itself.
         (Monster::ThievingHopper, MoveId::FlutterMove) => {
@@ -216,6 +254,17 @@ fn reattach<F: Fight<V>>(fight: &mut F) {
         state.set_reviving(false)
     });
     fight.heal(actor, amount);
+}
+
+/// The Thorns `SpikesMove` applies and `ExplosionMove` takes back.
+const SPINES: Number = 5;
+
+/// `LouseProgenitor.CurlBlock`, either side of `ToughEnemies`.
+fn curl_block(ascension: <V as sts2_core::ContentVersion>::AscensionLevel) -> Number {
+    match ascension.has(AscensionLevel::ToughEnemies) {
+        true => 18,
+        false => 14,
+    }
 }
 
 /// Take the highest-priority deck card still in combat, then attack.

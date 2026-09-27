@@ -952,7 +952,7 @@ fn finished<V: Rules, S: LendsCombat>(
     let asked = super::listen::notify::<V>(
         next,
         relics,
-        sts2_core::EventHook::CardPlayed { card, ethereal },
+        sts2_core::EventHook::CardPlayed { card, id, ethereal },
     );
     if !asked.is_empty() {
         let mut rest: SmallVec<[sts2_core::HookEffect<V>; 4]> = SmallVec::new();
@@ -963,6 +963,15 @@ fn finished<V: Rules, S: LendsCombat>(
                     super::listen::Listener::Card { id },
                     sts2_core::HookEffect::ModifySelf { change, lasting },
                 ) => next.modify_self(id, change, lasting),
+                // `CreatureCmd.GainBlock`, unpowered, on the power's owner,
+                // then `PowerCmd.Remove(this)`.
+                (
+                    super::listen::Listener::Power { owner, power, .. },
+                    sts2_core::HookEffect::GainBlockAndRemove(amount),
+                ) => {
+                    next.gain_unpowered_block(owner, amount);
+                    next.remove_power(owner, power);
+                }
                 (_, effect) => rest.push(effect),
             }
         }

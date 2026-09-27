@@ -3,7 +3,7 @@
 //! Monsters more than one act's encounters can roll.
 //! Source: `dumps/monsters.txt`, build v0.107.1 (59260271), assembly 1692500715, content 3954186980.
 
-use super::{Attack, FollowUp, IntentKind, IntentSet, Intents, MonsterData, Move, MoveId, State};
+use super::{Attack, FollowUp, IntentKind, IntentList, Intents, MonsterData, Move, MoveId, State};
 use crate::{Field, Scaled};
 
 pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
@@ -21,7 +21,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
             id: MoveId::ChargeUpMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Buff]),
                 attack: None,
                 cards: None,
             },
@@ -30,7 +30,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
             id: MoveId::ExpelMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 5u16,
@@ -48,7 +48,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
             id: MoveId::RepeaterBlastMove,
             follow_up: FollowUp::Next(3),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Buff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 7u16,
@@ -66,7 +66,7 @@ pub(super) const CUBEX_CONSTRUCT: MonsterData = MonsterData {
             id: MoveId::RepeaterBlastMove2,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Buff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Buff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 7u16,
@@ -98,7 +98,7 @@ pub(super) const PUNCH_CONSTRUCT: MonsterData = MonsterData {
             id: MoveId::FastPunchMove,
             follow_up: FollowUp::Next(2),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack, IntentKind::Debuff]),
+                kinds: IntentList::new(&[IntentKind::Attack, IntentKind::Debuff]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 5u16,
@@ -116,7 +116,7 @@ pub(super) const PUNCH_CONSTRUCT: MonsterData = MonsterData {
             id: MoveId::ReadyMove,
             follow_up: FollowUp::Next(0),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Defend]),
+                kinds: IntentList::new(&[IntentKind::Defend]),
                 attack: None,
                 cards: None,
             },
@@ -125,7 +125,7 @@ pub(super) const PUNCH_CONSTRUCT: MonsterData = MonsterData {
             id: MoveId::StrongPunchMove,
             follow_up: FollowUp::Next(1),
             intents: Intents {
-                kinds: IntentSet::new(&[IntentKind::Attack]),
+                kinds: IntentList::new(&[IntentKind::Attack]),
                 attack: Some(Attack {
                     damage: Field::Constant(Scaled {
                         base: 14u16,

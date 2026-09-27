@@ -14,7 +14,6 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use super::DumpError;
-use super::sets;
 use super::split::Split;
 use super::{Build, DERIVES, Dump, banner, camel, repr, sanitize};
 use crate::error::FileError;
@@ -26,13 +25,13 @@ pub enum Error {
     #[error(transparent)]
     File(#[from] FileError),
     #[error(transparent)]
-    Set(#[from] super::sets::Error),
-    #[error(transparent)]
     Bridge(#[from] super::bridge::Error),
     #[error("{at}: {problem}")]
     At { at: String, problem: Problem },
     #[error("a monster has {0} states, past what a u8 StateIndex can hold")]
     TooManyStates(usize),
+    #[error("IntentType has {0} members, past what four bits hold beside an empty place")]
+    TooManyIntentKinds(usize),
     #[error("{0} row before any monster row")]
     Orphan(String),
     #[error("{kind} row for {monster} appeared under {under}")]
@@ -94,6 +93,8 @@ pub enum Problem {
     MaxTimes(u8),
     #[error("telegraphed twice")]
     TelegraphedTwice,
+    #[error("{0} intents, past the {INTENT_PLACES} an IntentList holds")]
+    TooManyIntents(usize),
     #[error("an attack with no damage or repeats")]
     EmptyAttack,
     #[error("a second attacking intent on one move")]
@@ -175,6 +176,13 @@ enum Limit {
 /// leaves room. Anything up to 254 serves. The build's largest is 3, and
 /// generation fails rather than truncating if one exceeds this.
 const REPEAT_CAP: u8 = 8;
+
+/// How many intents an `IntentList` holds, which is the most any move in the
+/// build declares.
+const INTENT_PLACES: usize = 3;
+
+/// The four-bit value an `IntentList` keeps for a place with no kind in it.
+const INTENT_EMPTY: u8 = 15;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Payload {
@@ -403,7 +411,7 @@ pub fn generate(root: &Path) -> Result<Build, Error> {
                     "Branch",
                     "FollowUp",
                     "IntentKind",
-                    "IntentSet",
+                    "IntentList",
                     "Intents",
                     "MonsterData",
                     "Move",
@@ -695,38 +703,71 @@ fn emit_intent(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) ->
     }
     writeln!(out, "}}\n").unwrap();
 
-    // A set rather than a list, which is what the game's own use of it makes
-    // it. `MoveState.Intents` is an ordered array, but the only two things that
-    // read it are `NCreature.UpdateIntent`, which lays icons left to right into
-    // a Godot container, and `Creature.HoverTips`, which collects tooltips —
-    // both presentation. Nothing in the rules reads them, and no move telegraphs
-    // the same kind twice, so the order is the only thing a set loses and the
-    // order is not a fact about the game.
-    sets::plain(
+    // A list, in the order the move declares them. `MoveState.Intents` is an
+    // ordered array, and the observation reports it in that order.
+    if members.len() > usize::from(INTENT_EMPTY) {
+        return Err(Error::TooManyIntentKinds(members.len()));
+    }
+    let listed = members
+        .iter()
+        .map(|(_, m)| format!("        IntentKind::{m},"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    writeln!(
         out,
-        &sets::Set {
-            flag: "IntentKind",
-            set: "IntentSet",
-            flag_doc: "",
-            set_doc: "A set of [`IntentKind`]s: one bit per kind, at its discriminant.\n\
-                      \n\
-                      A set rather than a list because the order is presentation. The\n\
-                      game stores an ordered `AbstractIntent[]`, but the only readers are\n\
-                      the node that lays out intent icons and the one that gathers hover\n\
-                      tips; nothing in the rules looks at it, and no move in the build\n\
-                      telegraphs one kind twice, so nothing else is lost.",
-            members: &members
-                .iter()
-                .map(|(bit, m)| sets::Member {
-                    name: m,
-                    bit: *bit as usize,
-                    doc: "",
-                })
-                .collect::<Vec<_>>(),
-            declare: false,
-            extras: &[],
-        },
-    )?;
+        "/// A move's [`IntentKind`]s, in the order it declares them.\n\
+         ///\n\
+         /// Up to {INTENT_PLACES}, four bits each at the kind's discriminant, the first in the\n\
+         /// low bits. {INTENT_EMPTY} marks a place left empty.\n\
+         #[derive(Clone, Copy, PartialEq, Eq, Hash)]\n\
+         pub struct IntentList(u16);\n\
+         \n\
+         impl IntentList {{\n\
+         \x20   /// Every kind, at its discriminant.\n\
+         \x20   const MEMBERS: [IntentKind; {count}] = [\n{listed}\n    ];\n\
+         \n\
+         \x20   /// How many kinds a move can declare.\n\
+         \x20   const PLACES: usize = {INTENT_PLACES};\n\
+         \n\
+         \x20   /// A place with no kind in it.\n\
+         \x20   const EMPTY: u16 = {INTENT_EMPTY};\n\
+         \n\
+         \x20   pub const fn new(members: &[IntentKind]) -> Self {{\n\
+         \x20       assert!(members.len() <= Self::PLACES, \"a move declares too many intents\");\n\
+         \x20       let mut bits = 0u16;\n\
+         \x20       let mut at = 0;\n\
+         \x20       while at < Self::PLACES {{\n\
+         \x20           let kind = match at < members.len() {{\n\
+         \x20               true => members[at] as u16,\n\
+         \x20               false => Self::EMPTY,\n\
+         \x20           }};\n\
+         \x20           bits |= kind << (4 * at);\n\
+         \x20           at += 1;\n\
+         \x20       }}\n\
+         \x20       Self(bits)\n\
+         \x20   }}\n\
+         \n\
+         \x20   /// The kinds, in the order the move declares them.\n\
+         \x20   pub fn iter(self) -> impl Iterator<Item = IntentKind> {{\n\
+         \x20       (0..Self::PLACES)\n\
+         \x20           .map(move |at| (self.0 >> (4 * at)) & 0xF)\n\
+         \x20           .take_while(|&kind| kind != Self::EMPTY)\n\
+         \x20           .map(|kind| Self::MEMBERS[usize::from(kind)])\n\
+         \x20   }}\n\
+         \n\
+         \x20   pub fn contains(self, member: IntentKind) -> bool {{\n\
+         \x20       self.iter().any(|kind| kind == member)\n\
+         \x20   }}\n\
+         }}\n\
+         \n\
+         impl std::fmt::Debug for IntentList {{\n\
+         \x20   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{\n\
+         \x20       f.debug_list().entries(self.iter()).finish()\n\
+         \x20   }}\n\
+         }}\n",
+        count = members.len(),
+    )
+    .unwrap();
 
     writeln!(
         out,
@@ -749,17 +790,17 @@ fn emit_intent(out: &mut String, enums: &BTreeMap<String, Vec<(u8, String)>>) ->
         out,
         "/// Everything a move telegraphs.\n\
          ///\n\
-         /// The kinds as a set, and beside it the numbers the three kinds that\n\
+         /// The kinds in order, and beside them the numbers the three kinds that\n\
          /// carry any actually carry. Held here rather than one payload per\n\
          /// intent because it saves the slice: a move's telegraph is now inline,\n\
          /// and the whole table lost a separate array of 433 intents.\n\
          ///\n\
-         /// The two payloads and the set agree, which codegen checks: `attack`\n\
-         /// is present exactly when the set holds `Attack` or `DeathBlow`, and\n\
+         /// The two payloads and the kinds agree, which codegen checks: `attack`\n\
+         /// is present exactly when the kinds hold `Attack` or `DeathBlow`, and\n\
          /// `cards` exactly when it holds `StatusCard`.\n\
          #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
          pub struct Intents {{\n\
-         \x20   pub kinds: IntentSet,\n\
+         \x20   pub kinds: IntentList,\n\
          \x20   /// The numbers for whichever of `Attack` or `DeathBlow` is in\n\
          \x20   /// `kinds`.\n\
          \x20   pub attack: Option<Attack>,\n\
@@ -1409,12 +1450,19 @@ fn repeat_literal(monster: &str, branch: &Branch) -> Result<String, Error> {
     })
 }
 
-/// A move's whole telegraph: the set of kinds, and the numbers beside it.
+/// A move's whole telegraph: the kinds in order, and the numbers beside them.
 ///
-/// The dump's rows are an ordered list, and this is a set plus two payloads.
-/// Every way the two fail to line up fails generation. A kind twice, a second
-/// attacking intent, or a number on a kind with nowhere to put it.
+/// The dump's rows are an ordered list, and so is this, beside two payloads.
+/// Every way the two fail to line up fails generation. Too many kinds, a kind
+/// twice, a second attacking intent, or a number on a kind with nowhere to put
+/// it.
 fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<String, Error> {
+    if intents.len() > INTENT_PLACES {
+        return Err(Error::at(
+            &format!("{monster}.{state}"),
+            Problem::TooManyIntents(intents.len()),
+        ));
+    }
     let mut kinds: Vec<&str> = Vec::new();
     let mut attack: Option<String> = None;
     let mut cards: Option<String> = None;
@@ -1423,9 +1471,8 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
         let where_ = format!("{monster}.{state} {}", intent.kind);
         let kind = intent.kind.as_str();
 
-        // A set keeps one bit per kind, so a repeat would be invisible. No move
-        // in this build telegraphs one twice, and that is what makes the set
-        // lossless rather than lucky.
+        // A payload per kind, so a repeat would lose one. No move in this
+        // build telegraphs one twice.
         if kinds.contains(&kind) {
             return Err(Error::at(&where_, Problem::TelegraphedTwice));
         }
@@ -1481,7 +1528,7 @@ fn intents_literal(monster: &str, state: &str, intents: &[Intent]) -> Result<Str
         .join(", ");
 
     Ok(format!(
-        "Intents {{ kinds: IntentSet::new(&[{set}]), attack: {}, cards: {} }}",
+        "Intents {{ kinds: IntentList::new(&[{set}]), attack: {}, cards: {} }}",
         attack.map_or("None".to_string(), |a| format!("Some({a})")),
         cards.map_or("None".to_string(), |c| format!("Some({c})")),
     ))
