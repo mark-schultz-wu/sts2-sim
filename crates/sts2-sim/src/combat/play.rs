@@ -555,7 +555,14 @@ fn result_pile<V: Rules>(
             result = next;
         },
     );
+    // `Hook.AfterModifyingCardPlayResultPileOrPosition` over the modifiers,
+    // which does nothing for one that does not override it.
     for (holder, power) in modifiers {
+        if !sts2_core::PowerTable::overrides(power)
+            .contains(sts2_core::ModelHook::AfterModifyingCardPlayResultPileOrPosition)
+        {
+            continue;
+        }
         let Some(at) = live
             .powers
             .of(holder)
@@ -621,7 +628,14 @@ fn play_count<V: Rules, S: LendsCombat>(
             }
         },
     );
+    // `Hook.AfterModifyingCardPlayCount` over the modifiers, which does
+    // nothing for one that does not override it.
     for (holder, power) in modifiers {
+        if !sts2_core::PowerTable::overrides(power)
+            .contains(sts2_core::ModelHook::AfterModifyingCardPlayCount)
+        {
+            continue;
+        }
         let Some(at) = live
             .powers
             .of(holder)

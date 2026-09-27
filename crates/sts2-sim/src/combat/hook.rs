@@ -20,6 +20,7 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
             HookEffect::GainEnergy(amount) => fight.modify_energy(amount),
             HookEffect::LoseEnergy(amount) => fight.modify_energy(-amount),
             HookEffect::Draw(amount) => fight.draw(amount),
+            HookEffect::GainStars(amount) => fight.gain_stars(amount),
             HookEffect::GainBlock(amount) => {
                 let block = fight.resolve(sts2_core::Effect::GainBlock {
                     recipient: fight.actor(),

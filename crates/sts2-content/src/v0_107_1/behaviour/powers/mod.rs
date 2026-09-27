@@ -91,16 +91,44 @@ pub enum State {
     Sloth {
         played: Number,
     },
-    /// `StranglePower`'s `amountsForPlayedCards`: each card its applier has
-    /// started to play and not finished, with the stack as it began.
-    Strangle {
-        playing: [Option<(sts2_core::CardId<V>, Number)>; STRANGLED_AT_ONCE],
+    /// `amountsForPlayedCards`, which Strangle, Oblivion and Afterimage keep:
+    /// each card started and not finished, with the stack as it began.
+    Noted {
+        power: Power,
+        playing: [Option<(sts2_core::CardId<V>, Number)>; NOTED_AT_ONCE],
     },
 }
 
-/// How many plays `StranglePower` keeps at once: one, and one played inside
-/// it.
-const STRANGLED_AT_ONCE: usize = 2;
+/// How many plays `amountsForPlayedCards` keeps at once: one, and one played
+/// inside it.
+const NOTED_AT_ONCE: usize = 2;
+
+/// `amountsForPlayedCards.Add`: `id`'s play noted with the stack as it began.
+fn note(state: &mut State, id: sts2_core::CardId<V>, amount: Number) {
+    let State::Noted { playing, .. } = state else {
+        unreachable!("plays noted for {:?}", state.power())
+    };
+    let Some(free) = playing.iter_mut().find(|slot| slot.is_none()) else {
+        unimplemented!(
+            "{:?} noting more than {NOTED_AT_ONCE} plays at once",
+            state.power()
+        )
+    };
+    *free = Some((id, amount));
+}
+
+/// `amountsForPlayedCards.Remove`: the stack noted as `id`'s play began, if
+/// it was noted.
+fn take_noted(state: &mut State, id: sts2_core::CardId<V>) -> Option<Number> {
+    let State::Noted { playing, .. } = state else {
+        unreachable!("plays noted for {:?}", state.power())
+    };
+    playing
+        .iter_mut()
+        .find(|slot| slot.is_some_and(|(noted, _)| noted == id))
+        .and_then(Option::take)
+        .map(|(_, amount)| amount)
+}
 
 /// The attack command `VigorPower` bound to, and what it held as that began.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,8 +163,9 @@ impl sts2_core::PowerModel<V> for State {
             Power::CurlUpPower => Self::CurlUp { played: None },
             Power::SurroundedPower => Self::Surrounded { facing_left: false },
             Power::SlothPower => Self::Sloth { played: 0 },
-            Power::StranglePower => Self::Strangle {
-                playing: [None; STRANGLED_AT_ONCE],
+            Power::StranglePower | Power::OblivionPower | Power::AfterimagePower => Self::Noted {
+                power,
+                playing: [None; NOTED_AT_ONCE],
             },
             power => Self::Stateless(power),
         }
@@ -160,7 +189,7 @@ impl sts2_core::PowerModel<V> for State {
             Self::CurlUp { .. } => Power::CurlUpPower,
             Self::Surrounded { .. } => Power::SurroundedPower,
             Self::Sloth { .. } => Power::SlothPower,
-            Self::Strangle { .. } => Power::StranglePower,
+            Self::Noted { power, .. } => *power,
         }
     }
 
@@ -688,6 +717,20 @@ pub(crate) fn modify_hook(
             _,
             ModifyHook::EnergyCostLate { .. },
         ) => Modify::Nothing,
+        // `CorruptionPower.TryModifyEnergyCostInCombatLate`: nothing for a
+        // Skill its owner holds or is playing. A fight here has one player.
+        (
+            Power::CorruptionPower,
+            _,
+            ModifyHook::EnergyCostLate {
+                card: (_, card), ..
+            },
+        ) if owner == CombatSide::Player
+            && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Skill) =>
+        {
+            Modify::AtMost(num_traits::zero())
+        }
+        (Power::CorruptionPower, _, ModifyHook::EnergyCostLate { .. }) => Modify::Nothing,
         // `BorrowedTimePower.TryModifyEnergyCostInCombat`: its stack onto
         // every card its owner holds.
         (Power::BorrowedTimePower, PowerAmount::Counted(amount), ModifyHook::EnergyCost { .. })
@@ -1390,6 +1433,16 @@ pub(crate) fn result_pile(
             }
         }
         (Power::FeralPower, PowerAmount::Endless) => unimplemented!("an endless Feral"),
+        // `CorruptionPower`: a Skill its owner plays goes to the exhaust pile,
+        // where it was bound.
+        (Power::CorruptionPower, _) => {
+            match hook.player == holder
+                && <V as sts2_core::Rules>::card_kind(hook.card) == Some(sts2_core::CardKind::Skill)
+            {
+                true => HookResponse::Decision((Some(sts2_core::Pile::Exhaust), hook.position)),
+                false => unchanged,
+            }
+        }
         // `NostalgiaPower`: an attack or skill of its owner's bound for the
         // discard pile goes to the top of the draw pile instead, while the
         // turn has started fewer such plays than its stack. The play itself
@@ -1746,14 +1799,8 @@ pub(crate) fn event_hook(
         // player applied it, noted with the stack as it begins. A fight here
         // has one player, whose cards are all its applier's.
         (Power::StranglePower, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. }) => {
-            let State::Strangle { playing } = state else {
-                unreachable!("plays noted for {:?}", state.power())
-            };
             if applier == Some(fight.player()) {
-                let Some(free) = playing.iter_mut().find(|slot| slot.is_none()) else {
-                    unimplemented!("a Strangle noting more than {STRANGLED_AT_ONCE} plays at once")
-                };
-                *free = Some((id, amount));
+                note(state, id, amount);
             }
             None
         }
@@ -1763,18 +1810,11 @@ pub(crate) fn event_hook(
         // `StranglePower.AfterCardPlayed`: the stack it noted off its owner,
         // unblockable, unpowered and from nobody.
         (Power::StranglePower, _, EventHook::CardPlayed { id, .. }) => {
-            let State::Strangle { playing } = state else {
-                unreachable!("plays noted for {:?}", state.power())
-            };
-            playing
-                .iter_mut()
-                .find(|slot| slot.is_some_and(|(noted, _)| noted == id))
-                .and_then(Option::take)
-                .map(|(_, amount)| HookEffect::DamageOwnerInFight {
-                    amount,
-                    unblockable: true,
-                    self_dealt: false,
-                })
+            take_noted(state, id).map(|amount| HookEffect::DamageOwnerInFight {
+                amount,
+                unblockable: true,
+                self_dealt: false,
+            })
         }
         // `StranglePower.AfterSideTurnEnd`: gone as its owner's side ends a
         // turn.
@@ -1782,6 +1822,73 @@ pub(crate) fn event_hook(
             Some(HookEffect::Remove)
         }
         (Power::StranglePower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `OblivionPower.BeforeCardPlayed`: a play by its applier, where a
+        // player applied it, noted with the stack as it begins. A fight here
+        // has one player, whose cards are all its applier's.
+        (Power::OblivionPower, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. }) => {
+            if applier == Some(fight.player()) {
+                note(state, id, amount);
+            }
+            None
+        }
+        (Power::OblivionPower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Oblivion")
+        }
+        // `OblivionPower.AfterCardPlayed`: the stack it noted as Doom on its
+        // owner.
+        (Power::OblivionPower, _, EventHook::CardPlayed { id, .. }) => {
+            take_noted(state, id).map(|amount| HookEffect::ApplyPower {
+                target: holder,
+                power: Power::DoomPower,
+                amount: PowerAmount::Counted(amount),
+            })
+        }
+        // `OblivionPower.AfterSideTurnEnd`: gone as the player's turn ends.
+        (Power::OblivionPower, _, EventHook::SideTurnEnd { side: CombatSide::Player }) => {
+            Some(HookEffect::Remove)
+        }
+        (Power::OblivionPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `AfterimagePower.BeforeCardPlayed`: a play of its owner's noted with
+        // the stack as it begins. A fight here has one player, whose cards
+        // are all the player's.
+        (Power::AfterimagePower, PowerAmount::Counted(amount), EventHook::CardPlaying { id, .. })
+            if owner == CombatSide::Player =>
+        {
+            note(state, id, amount);
+            None
+        }
+        (Power::AfterimagePower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Afterimage")
+        }
+        // `AfterimagePower.AfterCardPlayed`: the stack it noted as unpowered
+        // block, where it is more than nothing.
+        (Power::AfterimagePower, _, EventHook::CardPlayed { id, .. }) => take_noted(state, id)
+            .filter(|&amount| amount > 0)
+            .map(HookEffect::GainBlock),
+        // `TheSealedThronePower.BeforeCardPlayed`: its stack as stars for
+        // each play of its owner's. A fight here has one player.
+        (
+            Power::TheSealedThronePower,
+            PowerAmount::Counted(amount),
+            EventHook::CardPlaying { .. },
+        ) if owner == CombatSide::Player => Some(HookEffect::GainStars(amount)),
+        (Power::TheSealedThronePower, PowerAmount::Endless, EventHook::CardPlaying { .. }) => {
+            unimplemented!("an endless Sealed Throne")
+        }
+        // `WraithFormPower.AfterSideTurnStart`: its stack off its owner's
+        // Dexterity as its owner's side starts a turn.
+        (Power::WraithFormPower, PowerAmount::Counted(amount), EventHook::SideTurnStart { side, .. })
+            if side == owner =>
+        {
+            Some(HookEffect::ApplyToOwner(
+                Power::DexterityPower,
+                PowerAmount::Counted(-amount),
+            ))
+        }
+        (Power::WraithFormPower, PowerAmount::Endless, EventHook::SideTurnStart { .. }) => {
+            unimplemented!("an endless Wraith Form")
+        }
+        (Power::WraithFormPower, _, EventHook::SideTurnStart { .. }) => None,
         // `DisintegrationPower.AfterSideTurnEndLate`: its stack off its owner,
         // dealt by the owner and unpowered, as its owner's side's turn ends.
         (
