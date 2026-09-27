@@ -1397,7 +1397,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // ARSENAL_POWER
     sts2_core::Overrides::from_bits(0),
     // ARTIFACT_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingPowerAmountReceived)
+        .with(sts2_core::ModelHook::TryModifyPowerAmountReceived),
     // ASLEEP_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterDamageReceived)
@@ -1817,7 +1819,8 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative)
         .with(sts2_core::ModelHook::ShouldAllowHitting)
-        .with(sts2_core::ModelHook::ShouldStopCombatFromEnding),
+        .with(sts2_core::ModelHook::ShouldStopCombatFromEnding)
+        .with(sts2_core::ModelHook::TryModifyPowerAmountReceived),
     // MOCK_SCALE_IN_MULTIPLAYER_POWER
     sts2_core::Overrides::from_bits(0),
     // MOCK_TEMPORARY_STRENGTH_LOSS_POWER
@@ -2195,6 +2198,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // VOID_FORM_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)
+        .with(sts2_core::ModelHook::BeforePowerAmountChanged)
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::TryModifyEnergyCostInCombatLate),
     // VULNERABLE_POWER

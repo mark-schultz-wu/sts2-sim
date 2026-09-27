@@ -247,31 +247,120 @@ impl<'a, V: Rules> Board<'a, V> {
         if !fresh && sts2_core::PowerTable::instanced(power) {
             unimplemented!("a second instance of {power:?}")
         }
-        if fresh {
-            self.apply_fresh(at, power, amount, applier);
-            // The hook can take the creature out of the fight.
-            let Some(found) = self.at(id) else {
-                return;
-            };
-            debug_assert_eq!(found, at, "a power landing does not reorder the fight");
-        }
-
         // `FindExistingInstanceForStacking`: a counter stacks into the one
         // already there through `ModifyAmount`. An endless instance is one
         // instance however many times it lands.
-        let held = self.live.powers.of(id).any(|held| held.power() == power);
-        match (held, amount) {
-            (true, PowerAmount::Counted(more)) => self.modify_amount(id, power, more),
-            (true, PowerAmount::Endless) => {}
-            (false, amount) => {
-                self.live
-                    .powers
-                    .push(id, HeldPower::new(power, amount.into(), applier));
-                self.applied(id, power);
-                // An endless power lands no number, so the hook that reads
-                // one has nothing to read.
-                if let PowerAmount::Counted(delta) = amount {
-                    self.amount_changed(id, power, delta);
+        if !fresh {
+            if let PowerAmount::Counted(more) = amount {
+                self.modify_amount_from(id, power, more, applier);
+            }
+            return;
+        }
+
+        let (amount, modifiers) = match amount {
+            PowerAmount::Counted(amount) => {
+                let (amount, modifiers) = self.received(id, power, amount, applier);
+                (PowerAmount::Counted(amount), modifiers)
+            }
+            PowerAmount::Endless => {
+                if super::listen::heard::<V>(
+                    self.live,
+                    self.relics,
+                    sts2_core::ModelHook::TryModifyPowerAmountReceived,
+                ) {
+                    unimplemented!("an endless {power:?} landing where a listener changes amounts")
+                }
+                (PowerAmount::Endless, SmallVec::new())
+            }
+        };
+        self.apply_fresh(at, power, amount, applier);
+        // The hook can take the creature out of the fight.
+        let Some(found) = self.at(id) else {
+            return;
+        };
+        debug_assert_eq!(found, at, "a power landing does not reorder the fight");
+        if self.live.powers.of(id).any(|held| held.power() == power) {
+            unimplemented!("{power:?} landing during its own `BeforeApplied`")
+        }
+        // `ApplyInternal`, which puts nothing on for an amount of zero.
+        let landed = amount != PowerAmount::Counted(V::Number::zero());
+        if landed {
+            self.live
+                .powers
+                .push(id, HeldPower::new(power, amount.into(), applier));
+        }
+        self.power_received(modifiers, power);
+        if landed {
+            self.applied(id, power);
+            // An endless power lands no number, so the hook that reads one has
+            // nothing to read.
+            if let PowerAmount::Counted(delta) = amount {
+                self.amount_changed(id, power, delta);
+            }
+        }
+    }
+
+    /// `Hook.ModifyPowerAmountReceived` and the hooks `PowerCmd` asks around
+    /// it, before `amount` of `power` lands on `target`.
+    ///
+    /// What lands, and the listeners whose `TryModifyPowerAmountReceived`
+    /// changed it, which [`Board::power_received`] tells afterwards.
+    fn received(
+        &mut self,
+        target: CombatId,
+        power: V::Power,
+        amount: V::Number,
+        applier: Option<CombatId>,
+    ) -> (V::Number, Received<V>) {
+        use sts2_core::{ModelHook, Overrides};
+
+        // One look for the lot, since a fight rarely has any of them.
+        const AROUND: Overrides = Overrides::of(ModelHook::BeforePowerAmountChanged)
+            .with(ModelHook::ModifyPowerAmountGivenAdditive)
+            .with(ModelHook::ModifyPowerAmountGivenMultiplicative)
+            .with(ModelHook::AfterModifyingPowerAmountGiven)
+            .with(ModelHook::TryModifyPowerAmountReceived);
+        if !super::listen::heard_any::<V>(self.live, self.relics, AROUND) {
+            return (amount, Received::<V>::new());
+        }
+        self.unheard(sts2_core::ModelHook::BeforePowerAmountChanged);
+        // `ModifyPowerAmountGiven`, asked when the applier is in the fight.
+        if applier.is_some_and(|applier| self.at(applier).is_some()) {
+            self.unheard(sts2_core::ModelHook::ModifyPowerAmountGivenAdditive);
+            self.unheard(sts2_core::ModelHook::ModifyPowerAmountGivenMultiplicative);
+            self.unheard(sts2_core::ModelHook::AfterModifyingPowerAmountGiven);
+        }
+        received_by::<V>(self.walk(), target, power, amount)
+    }
+
+    /// `Hook.AfterModifyingPowerAmountReceived`, asked of each listener that
+    /// changed what `power` landed with.
+    fn power_received(&mut self, modifiers: Received<V>, power: V::Power) {
+        for (holder, modifier) in modifiers {
+            let Some(at) = self
+                .live
+                .powers
+                .of(holder)
+                .position(|held| held.power() == modifier)
+            else {
+                continue;
+            };
+            let mut asked = sts2_core::HookEffects::new();
+            self.live.ask_power(
+                Some(self.relics),
+                holder,
+                at,
+                sts2_core::EventHook::PowerAmountReceivedModified { power },
+                &mut asked,
+            );
+            for effect in asked {
+                match effect {
+                    HookEffect::Decrement => {
+                        self.modify_amount(holder, modifier, -num_traits::one::<V::Number>())
+                    }
+                    effect => unimplemented!(
+                        "{modifier:?} asking for {effect:?} once it changed what landed"
+                    ),
                 }
             }
         }
@@ -306,6 +395,21 @@ impl<'a, V: Rules> Board<'a, V> {
     /// returns exactly what it took, and a zero instance left behind shows a
     /// creature carrying Strength.
     pub(super) fn modify_amount(&mut self, id: CombatId, power: V::Power, offset: V::Number) {
+        self.modify_amount_from(id, power, offset, None);
+    }
+
+    /// [`Board::modify_amount`] for the creature whose command it is.
+    fn modify_amount_from(
+        &mut self,
+        id: CombatId,
+        power: V::Power,
+        offset: V::Number,
+        applier: Option<CombatId>,
+    ) {
+        if !self.live.powers.of(id).any(|held| held.power() == power) {
+            return;
+        }
+        let (offset, modifiers) = self.received(id, power, offset, applier);
         let Some(held) = self
             .live
             .powers
@@ -321,8 +425,14 @@ impl<'a, V: Rules> Board<'a, V> {
         let more: super::live::Amount = num_traits::NumCast::from(offset)
             .unwrap_or_else(|| unimplemented!("a power stacked by {offset:?}"));
         held.amount = super::live::Stacked::counted(had + more);
-        self.live.powers.retain(id, |held| !held.amount.spent());
+        let spent = held.amount.spent();
+        self.power_received(modifiers, power);
         self.amount_changed(id, power, offset);
+        // `ShouldRemoveDueToAmount`, and `PowerCmd.Remove` for a power it
+        // says is done.
+        if spent {
+            self.live.remove_power(id, power);
+        }
     }
 
     /// `AfterPowerAmountChanged`, once the amount has moved. It carries the
@@ -1008,6 +1118,7 @@ impl<'a, V: Rules> Board<'a, V> {
                         Modify::Added(more) => number + float(more),
                         Modify::Scaled(by) => number * by,
                         Modify::AtMost(most) => number.min(float(most)),
+                        Modify::Replaced(with) => float(with),
                     };
                     if before.trunc() != number.trunc() {
                         match listener {
@@ -1191,6 +1302,10 @@ pub(super) fn modified_by<V: Rules>(
                 number = (number * share).min(float(most));
                 share = 1.0;
             }
+            Modify::Replaced(with) => {
+                number = float(with);
+                share = 1.0;
+            }
         }
     }
     number *= share;
@@ -1340,6 +1455,47 @@ fn afflict<V: Rules>(held: &mut Face<V>, affliction: V::Affliction) {
         }
         Some(_) => {}
     }
+}
+
+/// The listeners whose `TryModifyPowerAmountReceived` changed an amount, by
+/// the creature carrying each and the power it is.
+pub(super) type Received<V> = SmallVec<[(CombatId, <V as sts2_core::ContentVersion>::Power); 1]>;
+
+/// `Hook.ModifyPowerAmountReceived`: `amount` of `power` handed to each
+/// listener in turn, and what each hands back.
+pub(super) fn received_by<V: Rules>(
+    fight: Walk<'_, V>,
+    target: CombatId,
+    power: V::Power,
+    amount: V::Number,
+) -> (V::Number, Received<V>) {
+    let mut modifiers = Received::<V>::new();
+    let hook = sts2_core::ModelHook::TryModifyPowerAmountReceived;
+    if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
+        return (amount, modifiers);
+    }
+    let mut amount = amount;
+    super::listen::each::<V>(fight, sts2_core::Overrides::of(hook), |listener, _| {
+        let asked = ModifyHook::PowerAmountReceived {
+            power,
+            target,
+            amount,
+        };
+        match (
+            <V as sts2_core::Hooks>::modify_hook(listener, asked),
+            listener,
+        ) {
+            (Modify::Nothing, _) => {}
+            (Modify::Replaced(with), sts2_core::Listener::Power { holder, power, .. }) => {
+                amount = with;
+                modifiers.push((holder, power));
+            }
+            (answer, _) => {
+                unimplemented!("a listener answering {answer:?} for what {power:?} lands with")
+            }
+        }
+    });
+    (amount, modifiers)
 }
 
 /// One effect after the fight's listeners have had their say.

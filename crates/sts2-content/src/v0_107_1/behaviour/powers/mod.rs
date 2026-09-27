@@ -893,6 +893,18 @@ pub(crate) fn modify_hook(
             },
         ) if target == holder => Modify::Scaled(FRAIL),
         (Power::FrailPower, _, ModifyHook::BlockMultiplicative { .. }) => Modify::Nothing,
+        // `ArtifactPower.TryModifyPowerAmountReceived`: nothing of a power
+        // that is a debuff at the amount landing on its owner.
+        (
+            Power::ArtifactPower,
+            _,
+            ModifyHook::PowerAmountReceived {
+                power: landing,
+                target,
+                amount,
+            },
+        ) if target == holder && debuff_at(landing, amount) => Modify::Replaced(0),
+        (Power::ArtifactPower, _, ModifyHook::PowerAmountReceived { .. }) => Modify::Nothing,
         // `ModifyHandDraw`: its stack more cards for its owner.
         (
             Power::MachineLearningPower
@@ -971,6 +983,36 @@ pub(crate) fn modify_hook(
             ModifyHook::HandDraw { .. },
         ) => Modify::Nothing,
         (power, _, hook) => unimplemented!("what {power:?} does for {hook:?}"),
+    }
+}
+
+/// `PowerModel.GetTypeForAmount`: whether `power` is a debuff at `amount`.
+///
+/// A counter that allows negatives is a debuff below zero, and a debuff that
+/// does not allow them is a buff there.
+fn debuff_at(power: Power, amount: Number) -> bool {
+    use sts2_core::PowerTable as _;
+
+    use super::super::generated::powers::{PowerFlag, PowerStackType};
+
+    let data = sts2_core::Table::data(power);
+    let debuff = match lends(power) {
+        Some((_, positive)) => !positive,
+        None => power
+            .debuff()
+            .unwrap_or_else(|| unimplemented!("whether {power:?} is a debuff at {amount}")),
+    };
+    let counter = match data.stack {
+        crate::Field::Constant(stack) => stack == Some(PowerStackType::Counter),
+        crate::Field::Computed => unimplemented!("how {power:?} stacks at {amount}"),
+    };
+    let crate::Field::Constant(negatives) = data.flags.get(PowerFlag::AllowNegative) else {
+        unimplemented!("whether {power:?} allows negatives at {amount}")
+    };
+    match amount < 0 {
+        true if counter && negatives => true,
+        true if !negatives && debuff => false,
+        _ => debuff,
     }
 }
 
@@ -1216,6 +1258,17 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Conqueror")
         }
         (Power::ConquerorPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `ArtifactPower.AfterModifyingPowerAmountReceived`: one used.
+        (
+            Power::ArtifactPower,
+            PowerAmount::Counted(_),
+            EventHook::PowerAmountReceivedModified { .. },
+        ) => Some(HookEffect::Decrement),
+        (
+            Power::ArtifactPower,
+            PowerAmount::Endless,
+            EventHook::PowerAmountReceivedModified { .. },
+        ) => unimplemented!("an endless Artifact"),
         // `TangledPower.AfterApplied`: Entangled on every Attack its owner has.
         (Power::TangledPower, _, EventHook::Applied) => Some(HookEffect::Afflict {
             to: sts2_core::Writing::EveryOfKind(sts2_core::CardKind::Attack),
