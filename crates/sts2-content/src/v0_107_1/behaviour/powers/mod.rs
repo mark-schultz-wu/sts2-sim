@@ -16,7 +16,9 @@ use sts2_core::{
 
 use super::super::V0_107_1 as V;
 use super::super::generated::afflictions::Affliction;
-use super::super::generated::cards::{CardKeyword, CardTag, Cards, ColorlessCard, TokenCard};
+use super::super::generated::cards::{
+    CardKeyword, CardTag, Cards, ColorlessCard, StatusCard, TokenCard,
+};
 use super::super::generated::monsters::{IntentKind, Monster, MoveId};
 use super::super::generated::orbs::Orb;
 use super::super::generated::powers::Power;
@@ -1772,6 +1774,29 @@ pub(crate) fn event_hook(
             unimplemented!("an endless Hatch")
         }
         (Power::HatchPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `PersonalHivePower.AfterDamageReceived`: a Dazed for each of its
+        // stack into the dealer's draw pile, at random places, after a
+        // powered attack on its owner. A fight here has one player, so the
+        // dealer's pile, or its Osty's owner's, is the one there is.
+        (
+            Power::PersonalHivePower,
+            PowerAmount::Counted(amount),
+            EventHook::DamageReceived {
+                target,
+                dealer: Some(_),
+                powered: true,
+                ..
+            },
+        ) if target == holder => Some(HookEffect::AddToDrawAtRandom {
+            card: Cards::Status(StatusCard::Dazed),
+            count: amount,
+        }),
+        (
+            Power::PersonalHivePower,
+            PowerAmount::Endless,
+            EventHook::DamageReceived { target, .. },
+        ) if target == holder => unimplemented!("an endless Personal Hive"),
+        (Power::PersonalHivePower, _, EventHook::DamageReceived { .. }) => None,
         (
             Power::VulnerablePower
             | Power::WeakPower

@@ -757,6 +757,28 @@ impl<'a, V: Rules> Board<'a, V> {
     ///
     /// A card moving between piles is `AfterCardChangedPiles` and does not
     /// come here.
+    /// `AddGeneratedCardToCombat` of one new copy into the draw pile at
+    /// `CardPilePosition.Random`. Nothing once the fight is over.
+    fn add_to_draw_at_random(&mut self, card: V::Card) {
+        use sts2_core::rng::GameRng as _;
+
+        if self.ended.is_some() {
+            return;
+        }
+        let places: i32 = num_traits::cast(self.live.cards.len(Pile::Draw) + 1)
+            .expect("a draw pile's places fit the RNG integer");
+        let bound = sts2_core::rng::Bound::try_new(places).expect("a pile has a place");
+        let at: usize = num_traits::cast(self.rngs.shuffle.next_int(bound))
+            .expect("a draw below the bound is a place");
+        let id = self.live.card_ids.mint();
+        self.live
+            .cards
+            .insert(Pile::Draw, at, CardInstance::new(CardIdent::new(card), id));
+        let index = num_traits::NumCast::from(at)
+            .unwrap_or_else(|| unimplemented!("a pile deeper than a fight can number"));
+        self.card_entered_combat(CardAt::new(id, Pile::Draw, index), card);
+    }
+
     fn card_entered_combat(&mut self, at: CardAt<V>, card: V::Card) {
         let asked = super::listen::notify::<V>(
             self.live,
@@ -1318,6 +1340,13 @@ impl<'a, V: Rules> Board<'a, V> {
                 HookEffect::RemoveFromOwner(power) => self.live.remove_power(owner, power),
                 // `PowerCmd.Remove(this)`.
                 HookEffect::Remove => self.live.remove_power(owner, this),
+                HookEffect::AddToDrawAtRandom { card, count } => {
+                    let count: usize = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("{count:?} cards into the draw pile"));
+                    for _ in 0..count {
+                        self.add_to_draw_at_random(card);
+                    }
+                }
                 HookEffect::KillOwner => self.kill_outright(owner),
                 // `CreatureCmd.Damage` over `HittableEnemies`, from the
                 // power's owner, unblockable and unpowered.

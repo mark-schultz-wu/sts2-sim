@@ -197,6 +197,7 @@ pub(crate) fn perform<F: Fight<V>>(monster: Monster, move_id: MoveId, fight: &mu
         | Monster::Ovicopter
         | Monster::ToughEgg
         | Monster::TheObscura
+        | Monster::Entomancer
         | Monster::BowlbugRock
         | Monster::SlumberingBeetle
         | Monster::DecimillipedeSegmentFront
