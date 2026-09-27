@@ -1597,6 +1597,11 @@ fn enemy_turn<V: Rules>(
         move_performed::<V>(board.live, id, next_move.id);
         ended = ended.or(board.ended);
         super::play::merge::<V>(skipping, std::mem::take(&mut board.skipped));
+        // `CheckWinCondition` after each enemy's turn: an ended fight gives
+        // the enemies after it no turn.
+        if ended.is_some() {
+            break;
+        }
     }
     ended
 }

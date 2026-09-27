@@ -37,6 +37,8 @@ pub(super) fn starting_powers(
             vec![(Power::ReattachPower, PowerAmount::Counted(REATTACH))]
         }
         Monster::BowlbugRock => vec![(Power::ImbalancedPower, PowerAmount::Counted(1))],
+        // `BowlbugEgg.AfterAddedToRoom` calls the base alone.
+        Monster::BowlbugEgg => Vec::new(),
         Monster::SlumberingBeetle => {
             let plating = match ascension.has(AscensionLevel::ToughEnemies) {
                 true => TOUGH_PLATING,

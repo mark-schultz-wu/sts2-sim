@@ -1,0 +1,9 @@
+# `CheckWinCondition` runs after each enemy's turn, and an ended fight gives
+# the enemies after it no turn. On turn three the Nectar kills the player,
+# so the Egg after it keeps no block: its block cleared as its side's turn
+# began, and it never bites or defends.
+{"cmd":"start","seed":"0RACLE3","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"BOWLBUGS_NORMAL"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
