@@ -361,6 +361,9 @@ fn frees(power: Power, card: Cards, ethereal: bool) -> bool {
     }
 }
 
+/// `RollingBoulderPower`'s `DamageVar(5)`, what each turn adds to it.
+const ROLLING_BOULDER_GROWTH: Number = 5;
+
 /// `DanseMacabrePower`'s `EnergyVar(2)`: the resolved cost it answers from.
 const DANSE_MACABRE_ENERGY: Number = 2;
 
@@ -871,6 +874,41 @@ pub(crate) fn modify_hook(
             Modify::Added(one)
         }
         (Power::BurstPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
+        // `SignalBoostPower.ModifyCardPlayCount`: one more play of a Power
+        // card its owner plays.
+        (Power::SignalBoostPower, _, ModifyHook::CardPlayCount { player, card })
+            if player == holder
+                && <V as sts2_core::Rules>::card_kind(card) == Some(sts2_core::CardKind::Power) =>
+        {
+            Modify::Added(one)
+        }
+        (Power::SignalBoostPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
+        // `EchoFormPower.ModifyCardPlayCount`: one more play of a card its
+        // owner plays, while the turn has started fewer first plays of a
+        // series than its stack. This play is not started yet. A fight here
+        // has one player, whose plays are all its holder's.
+        (
+            Power::EchoFormPower,
+            PowerAmount::Counted(amount),
+            ModifyHook::CardPlayCount { player, .. },
+        ) if player == holder => {
+            let first: Number = history
+                .started_this_turn()
+                .filter(|started| started.first)
+                .count()
+                .try_into()
+                .expect("a turn's plays fit a game number");
+            match first < amount {
+                true => Modify::Added(one),
+                false => Modify::Nothing,
+            }
+        }
+        (Power::EchoFormPower, PowerAmount::Endless, ModifyHook::CardPlayCount { player, .. })
+            if player == holder =>
+        {
+            unimplemented!("an endless Echo Form")
+        }
+        (Power::EchoFormPower, _, ModifyHook::CardPlayCount { .. }) => Modify::Nothing,
         // `ShadowmeldPower.ModifyBlockMultiplicative`: two to the power of
         // its stack, on its owner's block.
         (
@@ -2187,9 +2225,11 @@ pub(crate) fn event_hook(
             Some(HookEffect::Remove)
         }
         (Power::DuplicationPower, _, EventHook::SideTurnEnd { .. }) => None,
-        (Power::BurstPower, _, EventHook::PlayCountModified { .. }) => {
+        (Power::BurstPower | Power::SignalBoostPower, _, EventHook::PlayCountModified { .. }) => {
             Some(HookEffect::Decrement)
         }
+        // `EchoFormPower.AfterModifyingCardPlayCount` does nothing.
+        (Power::EchoFormPower, _, EventHook::PlayCountModified { .. }) => None,
         (Power::BurstPower | Power::ShadowmeldPower | Power::CorrosiveWavePower, _, EventHook::SideTurnEnd { side })
             if side == owner =>
         {
@@ -2241,6 +2281,12 @@ pub(crate) fn event_hook(
             Some(HookEffect::ApplyToOwner(Power::VigorPower, amount))
         }
         (Power::PrepTimePower, _, EventHook::SideTurnStart { .. }) => None,
+        // `DemonFormPower.AfterSideTurnStart`: its stack of Strength onto its
+        // owner, as its owner's side starts a turn.
+        (Power::DemonFormPower, amount, EventHook::SideTurnStart { side, .. }) if side == owner => {
+            Some(HookEffect::ApplyToOwner(Power::StrengthPower, amount))
+        }
+        (Power::DemonFormPower, _, EventHook::SideTurnStart { .. }) => None,
         // `DanseMacabrePower.BeforeCardPlayed`: its stack as block, unpowered,
         // before each of its owner's cards resolved at two or more.
         (
@@ -2631,6 +2677,43 @@ pub(crate) fn event_hook(
             count: amount,
             act: sts2_core::PileAct::Exhaust,
         }),
+        // `EntropyPower.AfterPlayerTurnStart`: its owner picks its stack of
+        // cards from hand, and each is transformed at random.
+        (
+            Power::EntropyPower,
+            PowerAmount::Counted(amount),
+            EventHook::PlayerTurnStart { player },
+        ) if player == holder => Some(HookEffect::SelectFromPile {
+            pile: sts2_core::Pile::Hand,
+            count: amount,
+            act: sts2_core::PileAct::TransformToRandom,
+        }),
+        (Power::EntropyPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless Entropy")
+        }
+        (Power::EntropyPower, _, EventHook::PlayerTurnStart { .. }) => None,
+        // `RollingBoulderPower.AfterPlayerTurnStart`: its stack to each enemy
+        // that can be hit, unpowered, then its `DamageVar(5)` more on itself.
+        // A headless game runs in `TestMode`, where the damage lands at once.
+        (
+            Power::RollingBoulderPower,
+            PowerAmount::Counted(amount),
+            EventHook::PlayerTurnStart { player },
+        ) if player == holder => {
+            asked.extend([
+                HookEffect::DamageOpponents(amount),
+                HookEffect::SetAmount(amount + ROLLING_BOULDER_GROWTH),
+            ]);
+            return;
+        }
+        (Power::RollingBoulderPower, PowerAmount::Endless, EventHook::PlayerTurnStart { player })
+            if player == holder =>
+        {
+            unimplemented!("an endless Rolling Boulder")
+        }
+        (Power::RollingBoulderPower, _, EventHook::PlayerTurnStart { .. }) => None,
         // `ToolsOfTheTradePower.AfterPlayerTurnStart`: the same, discarded.
         (
             Power::ToolsOfTheTradePower,

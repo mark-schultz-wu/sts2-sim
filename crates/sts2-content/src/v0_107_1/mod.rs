@@ -460,7 +460,7 @@ impl sts2_core::Rules for V0_107_1 {
     /// # Panics
     ///
     /// A curse or a status, whose pools the table lists nowhere yet.
-    fn transform_options(card: Self::Card) -> Vec<Self::Card> {
+    fn transform_options(card: Self::Card, in_combat: bool) -> Vec<Self::Card> {
         use generated::cards::CardRarity;
         use sts2_core::CardTable as _;
 
@@ -469,12 +469,18 @@ impl sts2_core::Rules for V0_107_1 {
             rarity,
             CardRarity::Event | CardRarity::Ancient | CardRarity::Token
         ) || Self::card_kind(card) == Some(sts2_core::CardKind::Quest);
-        let pool = match (colorless, card.pool()) {
-            (false, Some(pool)) => generated::cards::merchant_cards(pool),
+        let (pool, in_fight) = match (colorless, card.pool()) {
+            (false, Some(pool)) => (
+                generated::cards::merchant_cards(pool),
+                generated::cards::combat_cards(pool),
+            ),
             _ if matches!(rarity, CardRarity::Status | CardRarity::Curse) => {
                 unimplemented!("transforming {card:?}, whose pool the table does not list")
             }
-            _ => generated::cards::merchant_colorless_cards(),
+            _ => (
+                generated::cards::merchant_colorless_cards(),
+                generated::cards::combat_colorless_cards(),
+            ),
         };
         let any_rarity = matches!(rarity, CardRarity::Status | CardRarity::Curse);
         pool.iter()
@@ -486,6 +492,7 @@ impl sts2_core::Rules for V0_107_1 {
                         CardRarity::Common | CardRarity::Uncommon | CardRarity::Rare
                     )
             })
+            .filter(|option| !in_combat || in_fight.contains(option))
             .filter(|option| *option != card)
             .collect()
     }

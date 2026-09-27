@@ -1814,7 +1814,7 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // MOCK_REMOVE_DRAWN_CARDS_FROM_COMBAT_POWER
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardDrawn),
     // MOCK_RESET_COMBAT_ON_SHUFFLE_POWER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // MOCK_REVIVE_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::ModifyDamageMultiplicative)

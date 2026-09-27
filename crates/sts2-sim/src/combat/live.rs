@@ -1495,8 +1495,12 @@ impl<V: Rules> CombatHistory<V> {
     }
 
     /// `History.CardPlayStarted`, in the turn the fight stands in.
-    pub(super) fn start(&mut self, card: V::Card, energy: V::Count) {
-        let started = sts2_core::PlayStarted { card, energy };
+    pub(super) fn start(&mut self, card: V::Card, energy: V::Count, first: bool) {
+        let started = sts2_core::PlayStarted {
+            card,
+            energy,
+            first,
+        };
         self.this_turn
             .push(sts2_core::HistoryEntry::Started(started));
     }

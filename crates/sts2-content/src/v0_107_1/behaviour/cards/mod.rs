@@ -17,7 +17,7 @@ use sts2_core::{CardVars, Fight, Played};
 use super::super::V0_107_1;
 use super::super::generated::card_plays;
 use super::super::generated::cards::{
-    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard,
+    CardVar, Cards, ColorlessCard, CurseCard, IroncladCard, NecrobinderCard, TokenCard,
 };
 use super::super::generated::powers::Power;
 
@@ -181,6 +181,11 @@ pub(crate) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
         Cards::Status(card) => status::event_hook(card, id, printed, hook, asked),
         Cards::Ironclad(card) => ironclad::event_hook(card, id, hook, asked),
         Cards::Colorless(card) => colorless::event_hook(card, id, history, hook, asked),
+        // `SovereignBlade.AfterCardChangedPiles` plays the forge's effects and
+        // removes its node, and its `AfterTransformedFrom` removes the node
+        // too. Neither touches the fight.
+        Cards::Token(TokenCard::SovereignBlade)
+            if matches!(hook, sts2_core::EventHook::CardChangedPiles { .. }) => {}
         Cards::Necrobinder(card) => necrobinder::event_hook(card, id, printed, hook, asked),
         Cards::Regent(card) => regent::event_hook(card, id, printed, hook, asked),
         Cards::Silent(card) => silent::event_hook(card, id, hook, asked),

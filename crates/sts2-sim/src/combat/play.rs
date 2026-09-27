@@ -214,7 +214,7 @@ pub(crate) fn play<V: Rules>(
     let (pile, position) = result_pile::<V>(live, relics, &card, play.energy);
     let count = play_count::<V, _>(live, streams, relics, &card);
     before_played::<V, _>(live, streams, relics, &card, play.energy);
-    live.history.start(card.face.ident.card, play.energy);
+    live.history.start(card.face.ident.card, play.energy, true);
     let mut board = Board::for_card(
         live,
         streams.combat(),
@@ -323,7 +323,7 @@ pub(super) fn auto_play<V: Rules>(
     let (pile, position) = result_pile::<V>(live, relics, &card, energy);
     let count = play_count::<V, _>(live, &mut rngs, relics, &card);
     before_played::<V, _>(live, &mut rngs, relics, &card, energy);
-    live.history.start(card.face.ident.card, energy);
+    live.history.start(card.face.ident.card, energy, true);
     let mut board = Board::for_card(
         live,
         rngs.reborrow(),
@@ -761,7 +761,7 @@ pub(super) fn carry_on<V: Rules, S: LendsCombat>(
                     .named(card)
                     .expect("a card replaying stands in the play pile");
                 before_played::<V, _>(next, streams, relics, &replaying, play.energy);
-                next.history.start(played_card, play.energy);
+                next.history.start(played_card, play.energy, false);
                 let mut board = Board::for_card(
                     next,
                     streams.combat(),

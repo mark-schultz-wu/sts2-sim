@@ -4442,7 +4442,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // SOUL_STORM
     sts2_core::Overrides::from_bits(0),
     // SOVEREIGN_BLADE
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // SOW
     sts2_core::Overrides::from_bits(0),
     // SPECTRUM_SHIFT

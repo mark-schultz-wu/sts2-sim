@@ -1517,7 +1517,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BIIIG_HUG
     sts2_core::Overrides::from_bits(0),
     // BING_BONG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // BLACK_BLOOD
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCombatVictory),
     // BLACK_STAR
@@ -1537,7 +1537,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // BOOKMARK
     sts2_core::Overrides::from_bits(0),
     // BOOK_OF_FIVE_RINGS
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // BOOK_REPAIR_KNIFE
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterDiedToDoom),
     // BOOMING_CONCH
@@ -1612,7 +1612,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // CURSED_PEARL
     sts2_core::Overrides::from_bits(0),
     // DARKSTONE_PERIAPT
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // DATA_DISK
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // DAUGHTER_OF_THE_WIND
@@ -1834,7 +1834,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // LOST_WISP
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardPlayed),
     // LUCKY_FYSH
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterCardChangedPiles),
     // LUNAR_PASTRY
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterSideTurnEnd),
     // MANGO

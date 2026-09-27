@@ -2019,6 +2019,19 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.live
             .cards
             .replace(card.pile(), at, CardInstance::new(into, id));
+        // `AfterCardEnteredCombat` for the replacement, then
+        // `AfterCardChangedPiles` from no pile.
+        self.card_entered_combat(CardAt::new(id, card.pile(), card.index()), into.card);
+        let hook = sts2_core::EventHook::CardChangedPiles {
+            card: into.card,
+            id,
+            from: None,
+        };
+        if let Some((listener, effect)) =
+            super::listen::notify::<V>(self.live, self.relics, hook).first()
+        {
+            unimplemented!("{listener:?} asking for {effect:?} as a card changes piles")
+        }
     }
 
     fn forge(&mut self, card: V::Card, key: V::CardVar, amount: V::Number) {
