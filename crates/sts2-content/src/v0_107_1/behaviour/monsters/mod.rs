@@ -269,6 +269,7 @@ pub(crate) fn perform<F: Fight<V>>(
         | Monster::CrossbowRubyRaider
         | Monster::CeremonialBeast
         | Monster::KinPriest => overgrowth::perform(monster, move_id, fight),
+        Monster::DevotedSculptor => glory::perform(monster, move_id, fight),
         _ => monster_moves::perform(monster, move_id, fight),
     }
     Played::Done
