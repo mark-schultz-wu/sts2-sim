@@ -119,6 +119,15 @@ pub(super) fn on_play<F: Fight<V>>(card: DefectCard, fight: &mut F) -> Played<V>
         }
         DefectCard::Compact => compact(fight),
         DefectCard::Ftl => ftl(fight),
+        // `Reboot`: the whole hand into the draw pile, shuffled, then its
+        // `Cards` drawn.
+        DefectCard::Reboot => {
+            let hand = fight.cards_in(Pile::Hand);
+            fight.act_on(PileAct::IntoDraw, &hand);
+            fight.shuffle();
+            fight.draw(fight.var(CardVar::Cards));
+            Played::Done
+        }
         // `Turbo`: its energy, then a Void into the discard pile.
         DefectCard::Turbo => {
             fight.modify_energy(fight.var(CardVar::Energy));

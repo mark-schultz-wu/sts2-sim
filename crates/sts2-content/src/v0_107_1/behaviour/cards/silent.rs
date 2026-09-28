@@ -39,6 +39,36 @@ pub(super) fn on_play<F: Fight<V>>(card: SilentCard, fight: &mut F) -> Played<V>
         SilentCard::BladeDance => blade_dance(fight),
         SilentCard::PiercingWail => piercing_wail(fight),
         SilentCard::EchoingSlash => echoing_slash(fight),
+        // `CloakAndDagger`: its block, then its `Cards` of Shivs into hand
+        // one at a time.
+        SilentCard::CloakAndDagger => {
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            let count: usize = num_traits::cast(fight.var(CardVar::Cards))
+                .expect("a count of Shivs is not negative");
+            for _ in 0..count {
+                fight.add_generated_cards(
+                    CardIdent::new(Cards::Token(TokenCard::Shiv)),
+                    Pile::Hand,
+                    1,
+                );
+            }
+            Played::Done
+        }
+        // `Tracking`: Tracking on its owner, two the first time and one after.
+        SilentCard::Tracking => {
+            let actor = fight.actor();
+            let tracking = fight.creatures().any(|creature| {
+                creature.id() == actor && creature.power(Power::TrackingPower).is_some()
+            });
+            let amount = if tracking { 1 } else { 2 };
+            fight.apply_to_actor(Power::TrackingPower, PowerAmount::Counted(amount));
+            Played::Done
+        }
         // `Acrobatics`: its `Cards` drawn, then one card of the hand
         // discarded.
         SilentCard::Acrobatics => {
