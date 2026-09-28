@@ -2016,6 +2016,11 @@ fn tick_powers<V: Rules>(
     let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
     let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
+        // `CardPileCmd.Draw` for the player who carries the relic.
+        if let (Listener::Relic { .. }, sts2_core::HookEffect::Draw(amount)) = (listener, effect) {
+            applying.push(TurnEndAsk::Draw(amount));
+            continue;
+        }
         let Listener::Power { owner, power, .. } = listener else {
             unimplemented!("{listener:?} asking for {effect:?} as a turn ends")
         };
