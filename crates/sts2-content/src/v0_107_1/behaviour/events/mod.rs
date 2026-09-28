@@ -3,6 +3,7 @@
 mod amalgamator;
 mod ancient;
 mod aroma_of_chaos;
+mod battleworn_dummy;
 mod brain_leech;
 mod bugslayer;
 mod byrdonis_nest;
@@ -101,6 +102,7 @@ pub enum State {
     Nonupeipe(ancient::Offered),
     Pael(ancient::Offered),
     RoomFullOfCheese(room_full_of_cheese::State),
+    BattlewornDummy(battleworn_dummy::State),
     GraveOfTheForgotten(grave_of_the_forgotten::State),
     HungryForMushrooms(hungry_for_mushrooms::State),
     Reflections(reflections::State),
@@ -183,6 +185,7 @@ pub(crate) fn allowed(event: Event, run: &impl EventView<V>) -> bool {
         Event::Nonupeipe => nonupeipe::Nonupeipe.allowed(run),
         Event::Pael => pael::Pael.allowed(run),
         Event::RoomFullOfCheese => room_full_of_cheese::RoomFullOfCheese.allowed(run),
+        Event::BattlewornDummy => battleworn_dummy::BattlewornDummy.allowed(run),
         Event::GraveOfTheForgotten => grave_of_the_forgotten::GraveOfTheForgotten.allowed(run),
         Event::HungryForMushrooms => hungry_for_mushrooms::HungryForMushrooms.allowed(run),
         Event::Reflections => reflections::Reflections.allowed(run),
@@ -314,6 +317,9 @@ pub(crate) fn enter<R: sts2_core::rng::GameRng>(
         Event::Pael => State::Pael(pael::Pael.enter(run, rng)),
         Event::RoomFullOfCheese => {
             State::RoomFullOfCheese(room_full_of_cheese::RoomFullOfCheese.enter(run, rng))
+        }
+        Event::BattlewornDummy => {
+            State::BattlewornDummy(battleworn_dummy::BattlewornDummy.enter(run, rng))
         }
         Event::GraveOfTheForgotten => {
             State::GraveOfTheForgotten(grave_of_the_forgotten::GraveOfTheForgotten.enter(run, rng))
@@ -447,6 +453,7 @@ pub(crate) fn observe(state: &State, run: &impl EventView<V>) -> Room<V> {
         State::Nonupeipe(state) => nonupeipe::Nonupeipe.observe(state, run),
         State::Pael(state) => pael::Pael.observe(state, run),
         State::RoomFullOfCheese(state) => room_full_of_cheese::RoomFullOfCheese.observe(state, run),
+        State::BattlewornDummy(state) => battleworn_dummy::BattlewornDummy.observe(state, run),
         State::GraveOfTheForgotten(state) => {
             grave_of_the_forgotten::GraveOfTheForgotten.observe(state, run)
         }
@@ -545,6 +552,9 @@ pub(crate) fn choose<R: sts2_core::rng::GameRng>(
         State::RoomFullOfCheese(state) => {
             room_full_of_cheese::RoomFullOfCheese.choose(state, option, run, rng)
         }
+        State::BattlewornDummy(state) => {
+            battleworn_dummy::BattlewornDummy.choose(state, option, run, rng)
+        }
         State::GraveOfTheForgotten(state) => {
             grave_of_the_forgotten::GraveOfTheForgotten.choose(state, option, run, rng)
         }
@@ -611,6 +621,16 @@ pub(crate) fn resume(state: &mut State) -> HookEffects<V> {
     match state {
         State::WarHistorianRepy(state) => war_historian_repy::WarHistorianRepy.resume(state),
         state => unimplemented!("{state:?} resumed after its pickup"),
+    }
+}
+
+/// [`EventBehavior::resume_from_fight`] for the event entered.
+pub(crate) fn resume_from_fight(state: &mut State, escaped: bool) -> HookEffects<V> {
+    match state {
+        State::BattlewornDummy(state) => {
+            battleworn_dummy::BattlewornDummy.resume_from_fight(state, escaped)
+        }
+        state => unimplemented!("{state:?} resumed after its fight"),
     }
 }
 

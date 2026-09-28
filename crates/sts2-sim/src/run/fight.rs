@@ -174,7 +174,11 @@ impl<V: Rules> State<V> {
                         )
                     });
                 let proportion = live.gold_proportion();
+                let escaped = live.any_escaped();
                 let combat = live.finish(relics);
+                if let Some(resuming) = self.resuming.as_mut() {
+                    resuming.escaped = escaped;
+                }
                 // `AfterCombatEnd` runs before `RewardsCmd.Offer` builds the
                 // rewards. It walks the deck's cards ahead of the fight's
                 // listeners.

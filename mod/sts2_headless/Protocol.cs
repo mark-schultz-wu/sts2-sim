@@ -974,7 +974,11 @@ internal static class Protocol
         }
 
         ActMap map = _state.Map;
-        if (map.SecondBossMapPoint != null && _state.CurrentMapCoord == map.BossMapPoint.coord)
+        if (MapLegality.ResumesEvent(_state))
+        {
+            await RunManager.Instance.ProceedFromTerminalRewardsScreen();
+        }
+        else if (map.SecondBossMapPoint != null && _state.CurrentMapCoord == map.BossMapPoint.coord)
         {
             await RunManager.Instance.ProceedFromTerminalRewardsScreen();
         }

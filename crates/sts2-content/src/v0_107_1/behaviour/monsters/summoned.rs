@@ -17,6 +17,13 @@ pub(super) fn starting_powers(monster: Monster) -> Option<Vec<(Power, PowerAmoun
             (Power::StrengthPower, PowerAmount::Counted(KNIGHT)),
             (Power::PlatingPower, PowerAmount::Counted(KNIGHT)),
         ],
+        // Battleworn Dummy's three settings, each with three turns to fall.
+        Monster::BattleFriendV1 | Monster::BattleFriendV2 | Monster::BattleFriendV3 => {
+            vec![(
+                Power::BattlewornDummyTimeLimitPower,
+                PowerAmount::Counted(3),
+            )]
+        }
         _ => return None,
     })
 }

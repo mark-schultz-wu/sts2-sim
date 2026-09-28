@@ -1481,6 +1481,20 @@ impl<'a, V: Rules> Board<'a, V> {
         own
     }
 
+    /// `CreatureCmd.Escape` on `id`: its powers go with no hook, and it leaves
+    /// the fight without dying.
+    pub(super) fn escape_creature(&mut self, id: CombatId) {
+        let Some(at) = self.at(id) else { return };
+        if !self.live.creatures[at].alive {
+            return;
+        }
+        // `RemoveAllPowersInternalExcept`, which asks no power anything.
+        self.live.powers.clear(id);
+        self.live.machines.retain(|held| held.creature != id);
+        self.live.creatures.escape(id);
+        self.end_if_ending();
+    }
+
     /// `SetMoveImmediate(to)` on `creature`'s graph where it advertises
     /// `from`, and where the graph can leave the move it stands on.
     fn enter_move_from(&mut self, creature: CombatId, from: V::MoveId, to: V::MoveId) {
@@ -2622,16 +2636,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     }
 
     fn escape(&mut self) {
-        let id = self.actor;
-        let Some(at) = self.at(id) else { return };
-        if !self.live.creatures[at].alive {
-            return;
-        }
-        // `RemoveAllPowersInternalExcept`, which asks no power anything.
-        self.live.powers.clear(id);
-        self.live.machines.retain(|held| held.creature != id);
-        self.live.creatures.escape(id);
-        self.end_if_ending();
+        self.escape_creature(self.actor);
     }
 
     fn damage_unpowered(

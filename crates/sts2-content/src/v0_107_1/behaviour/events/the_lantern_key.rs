@@ -79,6 +79,8 @@ impl EventBehavior<V> for TheLanternKey {
                 smallvec::smallvec![HookEffect::FightInEvent {
                     encounter: Encounter::MysteriousKnightEventEncounter,
                     reward: Some(Cards::Quest(QuestCard::LanternKey)),
+                    roster: &[],
+                    resume: false,
                 }]
             }
         }

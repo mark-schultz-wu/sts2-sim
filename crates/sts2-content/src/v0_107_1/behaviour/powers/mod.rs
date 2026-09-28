@@ -2838,6 +2838,23 @@ pub(crate) fn event_hook(
             }
         }
         (Power::NemesisPower, _, EventHook::SideTurnEnd { .. }) => None,
+        // `BattlewornDummyTimeLimitPower.AfterSideTurnEnd`, as its owner's
+        // side's turn ends: one off, and at the last the dummy escapes. The
+        // escape is what the encounter's `RanOutOfTime` records.
+        (
+            Power::BattlewornDummyTimeLimitPower,
+            PowerAmount::Counted(amount),
+            EventHook::SideTurnEnd { side },
+        ) if side == owner => Some(match amount > one {
+            true => HookEffect::Decrement,
+            false => HookEffect::Escape,
+        }),
+        (Power::BattlewornDummyTimeLimitPower, PowerAmount::Endless, EventHook::SideTurnEnd { side })
+            if side == owner =>
+        {
+            unimplemented!("an endless time limit")
+        }
+        (Power::BattlewornDummyTimeLimitPower, _, EventHook::SideTurnEnd { .. }) => None,
         // `AfterCardGeneratedForCombat`, for a card its holder made: every
         // enemy hit for a Status, orbs channelled for a Status, Strength or
         // block for any card.

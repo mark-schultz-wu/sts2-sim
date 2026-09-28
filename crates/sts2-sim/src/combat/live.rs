@@ -1534,6 +1534,11 @@ impl<V: Rules> Creatures<V> {
         1.0 - f32::from(self.escaped) / f32::from(self.spawned_enemies)
     }
 
+    /// Whether any enemy escaped the fight.
+    pub(crate) fn any_escaped(&self) -> bool {
+        self.escaped > 0
+    }
+
     pub(crate) fn retain(&mut self, mut keep: impl FnMut(&Fighter<V>) -> bool) {
         let counts = &mut self.counts;
         self.list.retain(|fighter| {
@@ -1881,6 +1886,12 @@ impl<V: Rules> Live<V> {
     /// the fight ends.
     pub(crate) fn gold_proportion(&self) -> f32 {
         self.creatures.gold_proportion()
+    }
+
+    /// Whether any enemy escaped, which is what the dummy's
+    /// `RanOutOfTime` records.
+    pub(crate) fn any_escaped(&self) -> bool {
+        self.creatures.any_escaped()
     }
 
     pub(crate) fn removed_from_deck(&self) -> &[CardIdent<V>] {
