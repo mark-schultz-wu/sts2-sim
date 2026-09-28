@@ -1563,6 +1563,23 @@ impl<V: Rules> State<V> {
                     }
                     continue;
                 }
+                HookEffect::ReplaceRelic { from, to } => {
+                    let Some(slot) = self
+                        .player
+                        .relics
+                        .iter()
+                        .position(|held| held.relic == from)
+                    else {
+                        unimplemented!("replacing {from:?}, which the run does not carry");
+                    };
+                    let mut held = HeldRelic::new(to);
+                    let effects = crate::combat::obtained::<V>(&mut held);
+                    self.player.relics.replace(slot, held);
+                    if let Some(effect) = effects.first() {
+                        unimplemented!("{to:?} asking for {effect:?} as it replaces {from:?}");
+                    }
+                    continue;
+                }
                 HookEffect::ReplaceStarterRelic { upgrades, fallback } => {
                     use sts2_core::{RarityKinds, RelicTable as _};
 
@@ -1610,6 +1627,27 @@ impl<V: Rules> State<V> {
                         unimplemented!("removing {relic:?}, which the run does not carry");
                     };
                     self.player.relics.remove(slot);
+                    continue;
+                }
+                // The relic counts the lift itself.
+                HookEffect::Lift(relic) => {
+                    let Some(held) = self
+                        .player
+                        .relics
+                        .iter_mut()
+                        .find(|held| held.relic == relic)
+                    else {
+                        unimplemented!("lifting {relic:?}, which the run does not carry");
+                    };
+                    let mut asked = sts2_core::HookEffects::new();
+                    V::relic_event_hook(&mut held.state, sts2_core::EventHook::Lifted, &mut asked);
+                    if let Some(effect) = asked.first() {
+                        unimplemented!("{relic:?} asking for {effect:?} as it is lifted");
+                    }
+                    continue;
+                }
+                HookEffect::ProcurePotion(potion) => {
+                    self.procure(potion);
                     continue;
                 }
                 HookEffect::GainPotionSlots(slots) => {
@@ -2998,8 +3036,16 @@ impl<V: Rules> State<V> {
     /// Enter a rest site, with the options this run's belt and deck open it on.
     pub(super) fn enter_rest_site(&mut self, at: Location) {
         let deck: Vec<CardIdent<V>> = self.player.deck.iter().map(|held| held.ident).collect();
-        let options =
-            <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&self.held_relics(), &deck);
+        // `TryModifyRestSiteOptions`, asked of the belt ahead of the deck.
+        let from_belt: Vec<V::RestSiteOption> = self
+            .notify_belt(sts2_core::EventHook::RestSiteOptions)
+            .into_iter()
+            .map(|effect| match effect {
+                sts2_core::HookEffect::OfferRestOption(option) => option,
+                effect => unimplemented!("a relic asking for {effect:?} as a rest site opens"),
+            })
+            .collect();
+        let options = <V::RestSiteOption as sts2_core::RestKinds<V>>::offered(&from_belt, &deck);
         self.enter(
             at,
             Phase::RestSite {
@@ -3008,11 +3054,6 @@ impl<V: Rules> State<V> {
                 asking: None,
             },
         );
-    }
-
-    /// The belt as the models the hook reads, rather than what a fight writes.
-    fn held_relics(&self) -> Vec<V::Relic> {
-        self.player.relics.iter().map(|held| held.relic).collect()
     }
 
     /// Enter a fight that is already built, where the run reached it.
@@ -3423,6 +3464,8 @@ impl<V: Rules> State<V> {
             // which uses the rest site up.
             if option == <V::RestSiteOption as sts2_core::RestKinds<V>>::HATCH
                 || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::COOK
+                || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::DIG
+                || option == <V::RestSiteOption as sts2_core::RestKinds<V>>::LIFT
             {
                 if !self.rest_option_enabled(option) {
                     unimplemented!("a rest site option the run cannot take");

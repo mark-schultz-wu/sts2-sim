@@ -589,6 +589,16 @@ fn previewed<V: Rules>(
                         powered,
                     ))
                 }
+                // `PowerVar<T>.UpdateCardPreview`: `Hook.ModifyPowerAmountGiven`
+                // on `T`, from the card's owner.
+                (Some(modifier @ sts2_core::CardNumberModifier::PowerGiven), _) => {
+                    let power = sts2_core::CardVars::power(var.id)
+                        .unwrap_or_else(|| unreachable!("{:?} is a PowerVar of no power", var.id));
+                    let giver = super::board::dealer_of::<V>(modifier, creatures);
+                    let (given, _) =
+                        super::board::given_by::<V>(fight, giver, target, power, printed());
+                    Some(given)
+                }
                 (Some(modifier), _) => {
                     let dealer = super::board::dealer_of::<V>(modifier, creatures);
                     super::board::effect_of::<V>(modifier, var.id, dealer, target).map(|effect| {

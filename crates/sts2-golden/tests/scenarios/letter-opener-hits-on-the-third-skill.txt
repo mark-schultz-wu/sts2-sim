@@ -1,0 +1,17 @@
+# `LetterOpener` deals five to every enemy with the third skill its owner
+# plays in a turn. The count starts again past the first turn, so two on
+# the first turn give nothing, and the third of the next deals it.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"LETTER_OPENER"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":7}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":7}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"DEFLECT"}
+{"cmd":"play_card","index":5}

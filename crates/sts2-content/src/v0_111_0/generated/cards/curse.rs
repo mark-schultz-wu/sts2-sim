@@ -171,7 +171,7 @@ pub(super) static ROWS: [CardData; 18] = [
             id: CardVar::WeakPower,
             base: super::CardNumber::new(1, 0),
             calculated: false,
-            modifier: None,
+            modifier: Some(CardNumberModifier::PowerGiven),
         }],
         max_upgrade: 0,
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),

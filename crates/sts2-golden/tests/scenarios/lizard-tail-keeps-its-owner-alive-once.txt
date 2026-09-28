@@ -1,0 +1,9 @@
+# `LizardTail` keeps its owner alive the first time their hit points run
+# out, and heals half their maximum. Poison past their health kills them
+# as their turn starts, and they stand again at 40.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"LIZARD_TAIL"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"POISON_POWER","amount":90,"target":0}
+{"cmd":"end_turn"}
+{"cmd":"play_card","index":0,"target":1}

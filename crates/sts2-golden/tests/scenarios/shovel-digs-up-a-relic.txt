@@ -1,0 +1,7 @@
+# Shovel adds Dig to a rest site, after Meat Cleaver's Cook when the belt
+# holds the cleaver first. Digging obtains the next relic off the bag.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"MEAT_CLEAVER"}
+{"cmd":"grant","relic":"SHOVEL"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":3}

@@ -572,15 +572,40 @@ pub(crate) fn first_deciding<V: Rules>(
                     sts2_core::ModelId::Monster(monster)
                 }
                 sts2_core::Listener::Card { card, .. } => sts2_core::ModelId::Card(card),
-                sts2_core::Listener::Relic(_) => {
-                    unimplemented!(
-                        "a relic answering {hook:?}, which a relic's state does not name"
-                    )
-                }
+                // The relic whose model this is, which only its place on the
+                // belt names.
+                sts2_core::Listener::Relic(state) => sts2_core::ModelId::Relic(
+                    fight
+                        .relics
+                        .iter()
+                        .find(|held| std::ptr::eq(&held.state, state))
+                        .expect("a relic asked is on the belt")
+                        .relic,
+                ),
             });
         }
     });
     first
+}
+
+/// `hook` asked of the relic `relic` alone, the way the game asks the one
+/// model a question named, and what it asked for.
+///
+/// # Panics
+///
+/// A relic that is not on the belt.
+pub(crate) fn ask_relic<V: Rules>(
+    relics: &mut Belt<V>,
+    relic: V::Relic,
+    hook: EventHook<V>,
+) -> sts2_core::HookEffects<V> {
+    let held = relics
+        .iter_mut()
+        .find(|held| held.relic == relic)
+        .expect("the relic asked is on the belt");
+    let mut asked = sts2_core::HookEffects::new();
+    V::relic_event_hook(&mut held.state, hook, &mut asked);
+    asked
 }
 
 /// [`any_decides`] once something hears `hook`.
@@ -628,6 +653,27 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
             effect => live.leaving.push(effect),
         }
     }
+    let early = EventHook::CombatVictoryEarly {
+        room,
+        player: {
+            let player = player_of(live);
+            sts2_core::PlayerHealth {
+                hp: player.hp,
+                max_hp: player.max_hp,
+            }
+        },
+    };
+    for (_, effect) in notify::<V>(live, relics, early) {
+        match effect {
+            // `CreatureCmd.Heal`, which caps at the maximum.
+            HookEffect::Heal(amount) => {
+                let healed = health::<V>(amount);
+                let player = player_of(live);
+                player.hp = (player.hp + healed).min(player.max_hp);
+            }
+            effect => unimplemented!("a listener asking for {effect:?} as a fight is won, early"),
+        }
+    }
     for (_, effect) in notify::<V>(live, relics, EventHook::CombatVictory { room }) {
         match effect {
             // `CreatureCmd.Heal`, which caps at the maximum.
@@ -636,8 +682,10 @@ pub(crate) fn combat_ended<V: Rules>(live: &mut Live<V>, relics: &mut Belt<V>) {
                 let player = player_of(live);
                 player.hp = (player.hp + healed).min(player.max_hp);
             }
-            // The deck is the run's, which carries this out as it leaves.
-            effect @ HookEffect::UpgradeRandomDeckCards { .. } => live.leaving.push(effect),
+            // The deck and the belt are the run's, which carries these out as
+            // it leaves.
+            effect @ (HookEffect::UpgradeRandomDeckCards { .. }
+            | HookEffect::ReplaceRelic { .. }) => live.leaving.push(effect),
             effect => unimplemented!("a listener asking for {effect:?} as a fight is won"),
         }
     }

@@ -1,0 +1,10 @@
+# `SturdyClamp` keeps its owner's block as their turn starts, all but ten
+# of it lost. Impervious leaves 18 past the first hit, and ten stay.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"STURDY_CLAMP"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"IMPERVIOUS"}
+{"cmd":"play_card","index":5}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}
+{"cmd":"end_turn"}

@@ -480,6 +480,9 @@ pub enum CardNumberModifier {
     OstyDamage,
     /// `Hook.ModifyBlock`, for the creature about to gain it.
     Block,
+    /// `Hook.ModifyPowerAmountGiven`, for the power a `PowerVar` applies,
+    /// from the card's owner to the creature the card is pointed at.
+    PowerGiven,
 }
 
 /// The numbers a build's cards can print, as one set.
@@ -491,6 +494,9 @@ pub enum CardNumberModifier {
 ///
 /// `Ord`, because a preview keys its numbers by one of these.
 pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
+    /// The build's powers, which a `PowerVar` names.
+    type Power;
+
     /// `CalculatedVar.GetBaseVar`, the base a calculated number adds to.
     const CALCULATION_BASE: Self;
 
@@ -499,6 +505,11 @@ pub trait CardVars: std::fmt::Debug + Copy + Ord + 'static {
 
     /// The game's own key for it, which is what an observation carries.
     fn name(self) -> &'static str;
+
+    /// The power a `PowerVar` filed under this key applies, which is the
+    /// class's `T`. The key need not name it: Mad Science's Choking is
+    /// `ChokingDamage`. Nothing for a key no `PowerVar` is filed under.
+    fn power(self) -> Option<Self::Power>;
 }
 
 /// What a table says about a power, beyond its row.
@@ -659,10 +670,15 @@ pub enum ModelHook {
     ModifyXValue,
     AfterCardChangedPiles,
     AfterCardGeneratedForCombat,
+    ShouldDieLate,
+    AfterCombatVictoryEarly,
+    ShouldPlayerResetEnergy,
+    BeforeCombatStartLate,
+    TryModifyRestSiteOptions,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 109] = [
+    pub const ALL: [ModelHook; 114] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -772,6 +788,11 @@ impl ModelHook {
         ModelHook::ModifyXValue,
         ModelHook::AfterCardChangedPiles,
         ModelHook::AfterCardGeneratedForCombat,
+        ModelHook::ShouldDieLate,
+        ModelHook::AfterCombatVictoryEarly,
+        ModelHook::ShouldPlayerResetEnergy,
+        ModelHook::BeforeCombatStartLate,
+        ModelHook::TryModifyRestSiteOptions,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -898,6 +919,11 @@ impl ModelHook {
             ModelHook::ModifyXValue => "ModifyXValue",
             ModelHook::AfterCardChangedPiles => "AfterCardChangedPiles",
             ModelHook::AfterCardGeneratedForCombat => "AfterCardGeneratedForCombat",
+            ModelHook::ShouldDieLate => "ShouldDieLate",
+            ModelHook::AfterCombatVictoryEarly => "AfterCombatVictoryEarly",
+            ModelHook::ShouldPlayerResetEnergy => "ShouldPlayerResetEnergy",
+            ModelHook::BeforeCombatStartLate => "BeforeCombatStartLate",
+            ModelHook::TryModifyRestSiteOptions => "TryModifyRestSiteOptions",
         }
     }
 }
@@ -1367,9 +1393,9 @@ pub trait RestKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static {
     ///
     /// `RestSiteOption.Generate` opens with `HEAL` and `SMITH`, adds `MEND`
     /// for a second player, and then runs `TryModifyRestSiteOptions`. That
-    /// hook is why the list is the build's answer and not a constant. Both the
-    /// belt and the deck listen on it.
-    fn offered(relics: &[V::Relic], deck: &[crate::CardIdent<V>]) -> Vec<Self>;
+    /// hook is why the list is the build's answer and not a constant. The
+    /// belt answers it first, with `from_belt`, and then the deck.
+    fn offered(from_belt: &[Self], deck: &[crate::CardIdent<V>]) -> Vec<Self>;
 
     /// `RestSiteOption.OnSelect` for an option whose selection is something
     /// the run carries out: `HATCH` obtains Byrdpip.
@@ -2749,6 +2775,15 @@ pub enum ModifyHook<V: ContentVersion> {
         target: crate::CombatId,
         player: crate::CombatId,
     },
+    /// `ModifyPowerAmountGivenAdditive`: what `giver` adds to `power` it
+    /// applies to `target`. `player` is the player's creature, which a relic
+    /// reads its owner as.
+    PowerAmountGivenAdditive {
+        power: V::Power,
+        giver: crate::CombatId,
+        target: Option<crate::CombatId>,
+        player: crate::CombatId,
+    },
     /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
     /// `target`, as an application or a change to one it carries.
     PowerAmountReceived {
@@ -2822,6 +2857,9 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::HpLostAfterOsty { .. } => ModelHook::ModifyHpLostAfterOsty,
             ModifyHook::HpLostAfterOstyLate { .. } => ModelHook::ModifyHpLostAfterOstyLate,
             ModifyHook::HandDraw { .. } => ModelHook::ModifyHandDraw,
+            ModifyHook::PowerAmountGivenAdditive { .. } => {
+                ModelHook::ModifyPowerAmountGivenAdditive
+            }
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
@@ -2844,8 +2882,12 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `PowerModel.OwnerIsSecondaryEnemy`, which the game reads off the
     /// powers on one creature rather than raising.
     ShouldCountForCombatEnd,
-    /// `ShouldClearBlock`, as `creature` starts its turn.
-    ShouldClearBlock { creature: crate::CombatId },
+    /// `ShouldClearBlock`, as `creature` starts its turn. `player` is the
+    /// player's creature, which a relic reads its owner as.
+    ShouldClearBlock {
+        creature: crate::CombatId,
+        player: crate::CombatId,
+    },
     /// `ShouldFlush`, as `player`'s turn ends. A hand any listener answers no
     /// for keeps every card.
     ShouldFlush { player: crate::CombatId },
@@ -2863,6 +2905,19 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `ShouldDraw`, once for each `CardPileCmd.Draw`. A draw any listener
     /// answers no to draws nothing. `hand_draw` is `fromHandDraw`, which the
     /// turn's own draw is.
+    /// `ShouldDieLate`, as `creature`'s hit points are gone. `player` is the
+    /// player's creature, which a relic reads its owner as. A creature no
+    /// listener lets die stays in the fight.
+    ShouldDieLate {
+        creature: crate::CombatId,
+        player: crate::CombatId,
+    },
+    /// `ShouldPlayerResetEnergy`, as `player` sets up their turn `turn`. A
+    /// player no listener lets reset adds their maximum to what they have.
+    ShouldPlayerResetEnergy {
+        player: crate::CombatId,
+        turn: V::Count,
+    },
     ShouldDraw {
         player: crate::CombatId,
         hand_draw: bool,
@@ -2931,6 +2986,8 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldAllowFreeTravel => ModelHook::ShouldAllowFreeTravel,
             DecisionHook::ShouldProcurePotion { .. } => ModelHook::ShouldProcurePotion,
             DecisionHook::ShouldDraw { .. } => ModelHook::ShouldDraw,
+            DecisionHook::ShouldDieLate { .. } => ModelHook::ShouldDieLate,
+            DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldCountForCombatEnd
             | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
         })
@@ -3017,6 +3074,11 @@ pub enum EventHook<V: ContentVersion> {
     CombatStarting {
         room: V::RoomType,
     },
+    /// `BeforeCombatStartLate`, once every listener has heard
+    /// `BeforeCombatStart`.
+    CombatStartingLate {
+        room: V::RoomType,
+    },
     /// `AfterCombatEnd`, for the fight the run has just finished, in a room
     /// of this type.
     CombatEnd {
@@ -3031,6 +3093,13 @@ pub enum EventHook<V: ContentVersion> {
     /// listener answers with the rewards it adds.
     RestSiteHealRewards {
         mimicked: bool,
+    },
+    /// `AfterCombatVictoryEarly`, raised on every listener before any hears
+    /// `AfterCombatVictory`, with the player's hit points, which a relic reads
+    /// off its owner.
+    CombatVictoryEarly {
+        room: V::RoomType,
+        player: PlayerHealth<V>,
     },
     /// `AfterCombatVictory`, raised after `AfterCombatEnd` for a fight the
     /// run won, in a room of this type.
@@ -3141,6 +3210,11 @@ pub enum EventHook<V: ContentVersion> {
     /// `AfterModifyingPowerAmountReceived`, asked of each listener whose
     /// `TryModifyPowerAmountReceived` changed what `power` landed with.
     PowerAmountReceivedModified {
+        power: V::Power,
+    },
+    /// `AfterModifyingPowerAmountGiven`, asked of each listener whose
+    /// `ModifyPowerAmountGiven` changed what `power` was applied with.
+    PowerAmountGivenModified {
         power: V::Power,
     },
     /// `AfterDamageReceived`, carrying the creature that has just been hit.
@@ -3284,6 +3358,21 @@ pub enum EventHook<V: ContentVersion> {
     },
     /// `AfterModifyingGoldGained`, asked of the models that changed a gain.
     GoldGainModified,
+    /// `AfterPreventingBlockClear`, asked of the one model whose
+    /// `ShouldClearBlock` kept its owner's block, with the block kept.
+    BlockClearPrevented {
+        block: V::Number,
+    },
+    /// `TryModifyRestSiteOptions`, as a rest site opens. A listener answers
+    /// with each option it adds.
+    RestSiteOptions,
+    /// `LiftRestSiteOption.OnSelect`, asked of the relic it lifts.
+    Lifted,
+    /// `AfterPreventingDeath`, asked of the one model whose `ShouldDieLate`
+    /// kept its owner in the fight, with the owner's maximum hit points.
+    DeathPrevented {
+        max_hp: V::Number,
+    },
     /// `PowerModel.AfterRemoved`, asked of a power as it comes off the
     /// creature that carried it.
     Removed,
@@ -3418,6 +3507,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::UnknownRoomTypes => ModelHook::ModifyUnknownMapPointRoomTypes,
             EventHook::ModifyRewards { .. } => ModelHook::TryModifyRewards,
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
+            EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
+            EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
+            EventHook::CombatVictoryEarly { .. } => ModelHook::AfterCombatVictoryEarly,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
             EventHook::RestSiteHeal { .. } => ModelHook::AfterRestSiteHeal,
             EventHook::RestSiteHealRewards { .. } => ModelHook::TryModifyRestSiteHealRewards,
@@ -3435,6 +3527,7 @@ impl<V: ContentVersion> EventHook<V> {
                 ModelHook::AfterCardChangedPiles
             }
             EventHook::DamageReceiving { .. } => ModelHook::BeforeDamageReceived,
+            EventHook::PowerAmountGivenModified { .. } => ModelHook::AfterModifyingPowerAmountGiven,
             EventHook::PowerAmountReceivedModified { .. } => {
                 ModelHook::AfterModifyingPowerAmountReceived
             }
@@ -3469,6 +3562,9 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::Obtained
             | EventHook::Removed
             | EventHook::Applied
+            | EventHook::BlockClearPrevented { .. }
+            | EventHook::DeathPrevented { .. }
+            | EventHook::Lifted
             | EventHook::BeforeApplied { .. }
             | EventHook::MonsterMovePerformed { .. } => return None,
         })
@@ -3758,6 +3854,8 @@ pub struct AttackId(pub u32);
 /// Which of the character's combat pool a generation effect draws from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolFilter {
+    /// Every card of the pool.
+    Every,
     /// The cards of one type.
     OfKind(CardKind),
     /// Every card but the `Basic` and `Ancient` ones.
@@ -4052,6 +4150,12 @@ pub enum HookEffect<V: ContentVersion> {
     /// and is removable, each into `CreateRandomCardForTransform` off the
     /// named stream, in deck order.
     TransformBasicStrikesAndDefends(Stream<V>),
+    /// `RelicCmd.Replace` on the relic `from`, with `to` obtained into its
+    /// slot.
+    ReplaceRelic {
+        from: V::Relic,
+        to: V::Relic,
+    },
     /// `RelicCmd.Replace` on the first starter relic the player holds, with
     /// the relic `upgrades` pairs it with, or `fallback` for one it names
     /// nowhere. The replacement takes the starter's slot.
@@ -4073,6 +4177,13 @@ pub enum HookEffect<V: ContentVersion> {
     RemoveRelic(V::Relic),
     /// `PlayerCmd.GainMaxPotionCount`.
     GainPotionSlots(usize),
+    /// `PotionCmd.TryToProcure` of this potion, which a full belt refuses.
+    ProcurePotion(V::Potion),
+    /// A rest site option added to those a rest site offers.
+    OfferRestOption(V::RestSiteOption),
+    /// `LiftRestSiteOption.OnSelect`, which the relic carries out when asked
+    /// [`EventHook::Lifted`].
+    Lift(V::Relic),
     /// `PotionFactory.CreateRandomPotionsOutOfCombat` off the named stream,
     /// then `PotionCmd.TryToProcure` for each.
     ProcureRandomPotions {
@@ -4090,6 +4201,9 @@ pub enum HookEffect<V: ContentVersion> {
         stream: Stream<V>,
         kind: Option<CardKind>,
     },
+    /// The draw pile's upgradable cards, stably shuffled off
+    /// `CombatCardSelection`, and `CardCmd.Upgrade` on the first this many.
+    UpgradeRandomDrawCards(usize),
     /// Take a room type out of what an unknown map point can roll.
     RemoveRoomType(V::RoomType),
     /// `PlayerCmd.GainStars`.
@@ -4490,6 +4604,8 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `CreatureCmd.LoseBlock` on the owner, for all of it.
     LoseBlock,
+    /// `CreatureCmd.LoseBlock` on the owner, for this much of it.
+    LoseSomeBlock(V::Number),
     /// A card the fight took from the deck, handed back as a reward once the
     /// fight is won. `SwipePower.BeforeDeath`'s `SpecialCardReward`.
     ReturnCard(crate::CardIdent<V>),
@@ -5247,7 +5363,7 @@ pub trait ContentVersion: std::fmt::Debug + Copy + Eq + std::hash::Hash + 'stati
     type CardKeywordSet: FlagSet<Member = Self::CardKeyword> + PartialEq + Eq + 'static;
 
     /// One of the numbers this build's cards print, by the game's key for it.
-    type CardVar: CardVars
+    type CardVar: CardVars<Power = Self::Power>
         + std::hash::Hash
         + serde::Serialize
         + serde::de::DeserializeOwned

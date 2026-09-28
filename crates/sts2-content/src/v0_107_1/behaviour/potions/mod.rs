@@ -14,6 +14,7 @@ mod necrobinder;
 mod regent;
 mod shared;
 mod silent;
+mod token;
 
 use sts2_core::{Fight, Played, PotionTable, Taken};
 
@@ -47,6 +48,7 @@ pub(crate) fn on_use<F: Fight<V>>(potion: Potion, fight: &mut F) -> Played<V> {
         PotionPool::Necrobinder => necrobinder::on_use(potion, fight),
         PotionPool::Regent => regent::on_use(potion, fight),
         PotionPool::Event => event::on_use(potion, fight),
+        PotionPool::Token => token::on_use(potion, fight),
         _ => unimplemented!("what {potion:?} does when it is drunk"),
     }
 }

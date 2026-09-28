@@ -342,10 +342,20 @@ impl<'a, V: Rules> Board<'a, V> {
         }
         self.unheard(sts2_core::ModelHook::BeforePowerAmountChanged);
         // `ModifyPowerAmountGiven`, asked when the applier is in the fight.
-        if applier.is_some_and(|applier| self.at(applier).is_some()) {
-            self.unheard(sts2_core::ModelHook::ModifyPowerAmountGivenAdditive);
+        let mut amount = amount;
+        if let Some(giver) = applier.filter(|&applier| self.at(applier).is_some()) {
             self.unheard(sts2_core::ModelHook::ModifyPowerAmountGivenMultiplicative);
-            self.unheard(sts2_core::ModelHook::AfterModifyingPowerAmountGiven);
+            let modifying;
+            (amount, modifying) = given_by::<V>(self.walk(), giver, Some(target), power, amount);
+            // `AfterModifyingPowerAmountGiven`, asked of each relic that
+            // changed it. The game asks once the power has landed, and asking
+            // here instead is the same while none of them asks for anything.
+            for relic in modifying {
+                let hook = sts2_core::EventHook::PowerAmountGivenModified { power };
+                if let Some(effect) = super::listen::ask_relic(self.relics, relic, hook).first() {
+                    unimplemented!("{relic:?} asking for {effect:?} once it changed {power:?}")
+                }
+            }
         }
         received_by::<V>(self.walk(), target, power, amount)
     }
@@ -1255,6 +1265,19 @@ impl<'a, V: Rules> Board<'a, V> {
                 effect => unimplemented!("{listener:?} asking for {effect:?} before a death"),
             }
         }
+        // `Hook.ShouldDieLate`, and the model that kept the creature alive.
+        let player = self.live.player().id;
+        if let Some(preventer) = super::listen::first_deciding::<V>(
+            self.walk(),
+            sts2_core::DecisionHook::ShouldDieLate {
+                creature: id,
+                player,
+            },
+            false,
+        ) {
+            self.death_prevented(at, preventer);
+            return;
+        }
         self.live.creatures[at].alive = false;
         // A pet dies the way a monster does, and whether it stays is what its
         // powers say. Only a player's death can lose the fight.
@@ -1267,7 +1290,7 @@ impl<'a, V: Rules> Board<'a, V> {
             }) {
                 unimplemented!("a player dying beside a player still standing");
             }
-            if let Some(effect) = self.after_death(id, owner).first() {
+            if let Some(effect) = self.after_death(id, owner, false).first() {
                 unimplemented!("a power asking for {effect:?} over a player's death")
             }
             self.strip_powers(at);
@@ -1282,7 +1305,7 @@ impl<'a, V: Rules> Board<'a, V> {
             sts2_core::DecisionHook::ShouldRemoveCreatureAfterDeath { creature: id },
             false,
         );
-        let after_death = self.after_death(id, owner);
+        let after_death = self.after_death(id, owner, false);
         if kept {
             let ascension = self.live.ascension;
             for effect in after_death {
@@ -1457,6 +1480,36 @@ impl<'a, V: Rules> Board<'a, V> {
         }
     }
 
+    /// A death `preventer` kept from happening: `Hook.AfterDeath` with the
+    /// removal prevented, and then `AfterPreventingDeath`, asked of
+    /// `preventer` alone.
+    ///
+    /// # Panics
+    ///
+    /// A model other than a relic keeping a creature alive, or anything
+    /// asked for that nothing here carries out.
+    fn death_prevented(&mut self, at: usize, preventer: sts2_core::ModelId<V>) {
+        let creature = &self.live.creatures[at];
+        let (id, side) = (creature.id, creature.side);
+        let max_hp: V::Number =
+            num_traits::cast(creature.max_hp).expect("maximum health fits a game number");
+        if let Some(effect) = self.after_death(id, side, true).first() {
+            unimplemented!("a power asking for {effect:?} over a death kept from happening")
+        }
+        let sts2_core::ModelId::Relic(relic) = preventer else {
+            unimplemented!("{preventer:?} keeping a creature alive")
+        };
+        let hook = sts2_core::EventHook::DeathPrevented { max_hp };
+        for effect in super::listen::ask_relic(self.relics, relic, hook) {
+            match effect {
+                HookEffect::Heal(amount) => sts2_core::Fight::heal(self, id, amount),
+                effect => {
+                    unimplemented!("{relic:?} asking for {effect:?} as it keeps {id:?} alive")
+                }
+            }
+        }
+    }
+
     /// `Hook.AfterDeath` for `creature`, which fought on `side`.
     ///
     /// The belt answers ahead of every enemy's powers, and what it asks for is
@@ -1471,6 +1524,7 @@ impl<'a, V: Rules> Board<'a, V> {
         &mut self,
         creature: CombatId,
         side: V::CombatSide,
+        removal_prevented: bool,
     ) -> sts2_core::HookEffects<V> {
         let monster = self
             .at(creature)
@@ -1485,7 +1539,7 @@ impl<'a, V: Rules> Board<'a, V> {
                 creature,
                 side,
                 monster,
-                removal_prevented: false,
+                removal_prevented,
             },
         );
         let mut own = sts2_core::HookEffects::new();
@@ -2105,6 +2159,55 @@ fn afflict<V: Rules>(held: &mut Face<V>, affliction: V::Affliction) -> bool {
 /// the creature carrying each and the power it is.
 pub(super) type Received<V> = SmallVec<[(CombatId, <V as sts2_core::ContentVersion>::Power); 1]>;
 
+/// `ModifyPowerAmountGivenAdditive`, over the listeners in the fight: what
+/// `amount` of `power` from `giver` to `target` becomes, and the relics that
+/// changed it.
+///
+/// # Panics
+///
+/// A listener other than a relic changing it, which nothing ported is.
+pub(super) fn given_by<V: Rules>(
+    fight: Walk<'_, V>,
+    giver: CombatId,
+    target: Option<CombatId>,
+    power: V::Power,
+    amount: V::Number,
+) -> (V::Number, SmallVec<[V::Relic; 2]>) {
+    let mut modifying = SmallVec::new();
+    let hook = sts2_core::ModelHook::ModifyPowerAmountGivenAdditive;
+    if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
+        return (amount, modifying);
+    }
+    let asked = ModifyHook::PowerAmountGivenAdditive {
+        power,
+        giver,
+        target,
+        player: fight.live.player().id,
+    };
+    let mut amount = amount;
+    super::listen::each::<V>(fight, sts2_core::Overrides::of(hook), |listener, _| match (
+        <V as sts2_core::Hooks>::modify_hook(listener, asked),
+        listener,
+    ) {
+        (Modify::Nothing, _) => {}
+        (Modify::Added(added), sts2_core::Listener::Relic(state)) => {
+            amount = amount + added;
+            if added != V::Number::zero() {
+                let held = fight
+                    .relics
+                    .iter()
+                    .find(|held| std::ptr::eq(&held.state, state))
+                    .expect("a relic asked is on the belt");
+                modifying.push(held.relic);
+            }
+        }
+        (answer, _) => {
+            unimplemented!("a listener answering {answer:?} for what {power:?} is given with")
+        }
+    });
+    (amount, modifying)
+}
+
 /// `Hook.ModifyPowerAmountReceived`: `amount` of `power` handed to each
 /// listener in turn, and what each hands back.
 pub(super) fn received_by<V: Rules>(
@@ -2343,6 +2446,8 @@ pub(crate) fn effect_of<V: Rules>(
             // `ValueProp.Move`.
             scaling: Scaling::Dynamic,
         }),
+        // Not an effect a card resolves: the fight asks the hook itself.
+        CardNumberModifier::PowerGiven => None,
     }
 }
 
@@ -2365,7 +2470,8 @@ pub(crate) fn dealer_of<V: Rules>(
         }
         CardNumberModifier::Damage
         | CardNumberModifier::UnpoweredDamage
-        | CardNumberModifier::Block => player::<V>(creatures),
+        | CardNumberModifier::Block
+        | CardNumberModifier::PowerGiven => player::<V>(creatures),
     }
 }
 
@@ -2845,7 +2951,14 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         let held = self
             .acting()
             .unwrap_or_else(|| unimplemented!("a number printed by no card being played"));
-        if held.face.number(key).modifier.is_some() {
+        // A power's number runs its hook where the power lands, which knows
+        // the applier and the target.
+        if held
+            .face
+            .number(key)
+            .modifier
+            .is_some_and(|modifier| modifier != CardNumberModifier::PowerGiven)
+        {
             // The hooks it runs through name creatures to run against, and a
             // bare read has none. `Fight::resolve` is where both arrive.
             unimplemented!(

@@ -1745,7 +1745,7 @@ pub(crate) fn decide_hook(
         // `AfterPreventingBlockClear` only flashes.
         (
             Power::BurrowedPower | Power::BarricadePower | Power::BlurPower,
-            DecisionHook::ShouldClearBlock { creature },
+            DecisionHook::ShouldClearBlock { creature, .. },
         ) => HookResponse::Decision(creature != held.holder),
         // `InfestedPower.ShouldStopCombatFromEnding` and `StockPower`'s, for as
         // long as it is on a creature in the fight.

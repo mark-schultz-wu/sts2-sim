@@ -144,7 +144,9 @@ pub(crate) fn enter<V: Rules>(
         machines,
     )?;
 
-    // The deck's own cards, each becoming a copy the fight can write on.
+    // The deck's own cards, each becoming a copy the fight can write on, in
+    // the order `PopulateCombatState` shuffles them into the draw pile as the
+    // fight is set up. They are dealt once the first energy is in.
     let deck: Vec<CardInstance<V>> = entering
         .deck
         .iter()
@@ -156,6 +158,7 @@ pub(crate) fn enter<V: Rules>(
             copy
         })
         .collect();
+    let mut order = pile::shuffle(streams.combat().shuffle, deck).into_cards();
     // `AfterRoomEntered` as the room opens, then `BeforeSideTurnStart` for the
     // turn the fight is about to begin on. Both run before anything is drawn.
     let turn = live.turn;
@@ -176,6 +179,32 @@ pub(crate) fn enter<V: Rules>(
                 let mut board =
                     Board::for_card(&mut live, streams.combat(), relics, ascension, None, None);
                 sts2_core::Fight::apply_to_actor(&mut board, power, amount);
+            }
+            HookEffect::UpgradeRandomDrawCards(count) => {
+                use sts2_core::CardTable as _;
+                use sts2_core::rng::GameRng as _;
+
+                let mut upgradable: Vec<usize> = order
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, held)| {
+                        held.face.ident.upgrade < held.face.ident.card.max_upgrade()
+                    })
+                    .map(|(at, _)| at)
+                    .collect();
+                // `CardModel.CompareTo`: its `ModelId`, then its upgrade.
+                streams
+                    .combat()
+                    .selection
+                    .stable_shuffle_by_key(&mut upgradable, |&at| {
+                        (
+                            order[at].face.ident.card.order(),
+                            order[at].face.ident.upgrade,
+                        )
+                    });
+                for at in upgradable.into_iter().take(count) {
+                    order[at].face.upgrade();
+                }
             }
             other => unimplemented!("a listener asking for {other:?} as a room opens"),
         }
@@ -243,6 +272,19 @@ pub(crate) fn enter<V: Rules>(
             (_, other) => unimplemented!("a listener asking for {other:?} as a fight starts"),
         }
     }
+    // `BeforeCombatStartLate`, once every listener has heard the first.
+    let late = EventHook::CombatStartingLate { room: live.room() };
+    for (listener, effect) in super::listen::notify::<V>(&mut live, relics, late) {
+        match (listener, effect) {
+            // The belt is the run's.
+            (super::listen::Listener::Relic { .. }, potion @ HookEffect::ProcurePotion(_)) => {
+                arriving.push(potion)
+            }
+            (_, other) => {
+                unimplemented!("a listener asking for {other:?} as a fight is about to start")
+            }
+        }
+    }
     // `BeforeSideTurnStart`, which is where a monster that opens the fight
     // behind block gains it.
     super::turn::before_side_turn_start::<V>(
@@ -268,7 +310,6 @@ pub(crate) fn enter<V: Rules>(
     }
     super::turn::energy_reset_late::<V>(&mut live, streams.combat(), relics, ascension);
     // The whole deck into the draw pile in the order the shuffle left it.
-    let order = pile::shuffle(streams.combat().shuffle, deck).into_cards();
     live.cards = Cards::dealt(&[], &order);
     if !afflicting.is_empty() {
         super::board::Board::for_card(&mut live, streams.combat(), relics, ascension, None, None)

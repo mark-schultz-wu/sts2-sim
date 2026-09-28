@@ -274,8 +274,20 @@ fn enemies_act<V: Rules>(
         relics,
         <V::CombatSide as SideKinds>::PLAYER,
     );
-    // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`.
-    next.energy = super::board::max_energy::<V>(listen::Walk { live: next, relics }, max_energy);
+    // `ResetEnergy`, to `MaxEnergy`, which runs `Hook.ModifyMaxEnergy`. A
+    // player `Hook.ShouldPlayerResetEnergy` keeps from it adds the maximum
+    // to what they have instead.
+    let player = next.player().id;
+    let kept = listen::any_decides::<V>(
+        listen::Walk { live: next, relics },
+        sts2_core::DecisionHook::ShouldPlayerResetEnergy {
+            player,
+            turn: next.turn,
+        },
+        false,
+    );
+    let max = super::board::max_energy::<V>(listen::Walk { live: next, relics }, max_energy);
+    next.energy = if kept { next.energy + max } else { max };
     // An evoke that ends the fight ends `SetupPlayerTurn` with it, as a
     // relic's damage before the hand does below.
     if let Some(ended) = energy_reset::<V>(next, streams, relics, ascension) {
@@ -656,6 +668,17 @@ fn before_turn_end<V: Rules>(
                     Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
                 board.land(player, power, amount, Some(player));
                 ended = ended.or(board.ended);
+            }
+            // `CreatureCmd.Damage` over `HittableEnemies`, from the player who
+            // carries the relic.
+            (Listener::Relic { .. }, effect @ sts2_core::HookEffect::DamageOpponents(_)) => {
+                if ended.is_some() {
+                    continue;
+                }
+                let mut board =
+                    Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                super::hook::apply(&mut board, [effect]);
+                ended = board.ended;
             }
             // Written on the fight's cards.
             (_, effect @ sts2_core::HookEffect::ClearAffliction(_)) => {
@@ -1149,6 +1172,19 @@ pub(super) fn carry_setup<V: Rules>(
                             );
                             ended = ended.or(board.ended);
                         }
+                        sts2_core::HookEffect::GenerateFromPool {
+                            filter,
+                            count,
+                            writes,
+                        } => generate_from_pool::<V>(
+                            live,
+                            rngs.reborrow(),
+                            relics,
+                            ascension,
+                            filter,
+                            count,
+                            writes,
+                        ),
                         effect => unimplemented!(
                             "a listener asking for {effect:?} as the player's turn starts"
                         ),
@@ -1833,18 +1869,52 @@ fn clear_block<V: Rules>(
         .filter(|c| c.side == side)
         .map(|creature| creature.id)
         .collect();
+    let player = live.player().id;
     for &creature in &clearing {
-        // `Hook.ShouldClearBlock`.
-        let kept = listen::any_decides::<V>(
+        // `Hook.ShouldClearBlock`, and the model that kept the block.
+        let preventer = listen::first_deciding::<V>(
             listen::Walk { live, relics },
-            sts2_core::DecisionHook::ShouldClearBlock { creature },
+            sts2_core::DecisionHook::ShouldClearBlock { creature, player },
             false,
         );
-        if !kept && let Some(held) = live.creatures.iter_mut().find(|c| c.id == creature) {
-            held.block = num_traits::zero();
+        match preventer {
+            None => {
+                if let Some(held) = live.creatures.iter_mut().find(|c| c.id == creature) {
+                    held.block = num_traits::zero();
+                }
+            }
+            // `Hook.AfterPreventingBlockClear`, asked of that model alone. A
+            // power's only flashes.
+            Some(sts2_core::ModelId::Relic(relic)) => {
+                let block = live
+                    .creatures
+                    .iter()
+                    .find(|c| c.id == creature)
+                    .map_or_else(num_traits::zero, |held| held.block);
+                let hook = sts2_core::EventHook::BlockClearPrevented { block };
+                for effect in listen::ask_relic(relics, relic, hook) {
+                    match effect {
+                        sts2_core::HookEffect::LoseSomeBlock(amount) => {
+                            let ascension = live.ascension;
+                            let mut board = Board::for_card(
+                                live,
+                                rngs.reborrow(),
+                                relics,
+                                ascension,
+                                None,
+                                None,
+                            );
+                            sts2_core::Fight::lose_block(&mut board, creature, amount);
+                        }
+                        effect => {
+                            unimplemented!("{relic:?} asking for {effect:?} as it keeps block")
+                        }
+                    }
+                }
+            }
+            Some(_) => {}
         }
     }
-    let player = live.player().id;
     for creature in clearing {
         let hook = sts2_core::EventHook::BlockCleared {
             creature,

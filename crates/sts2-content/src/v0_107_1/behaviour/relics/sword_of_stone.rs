@@ -1,9 +1,10 @@
 //! `SwordOfStone`: the elites won, until five of them turn it to jade.
 
-use sts2_core::EventHook;
+use sts2_core::{EventHook, HookEffect};
 
 use super::super::super::V0_107_1 as V;
 use super::super::super::generated::encounters::RoomType;
+use super::super::super::generated::relics::Relic;
 use super::Number;
 
 /// `DynamicVar("Elites", 5)`.
@@ -15,19 +16,23 @@ pub struct State {
     elites_defeated: Number,
 }
 
-/// `AfterCombatVictory`: an elite room counts.
-///
-/// # Panics
-///
-/// The fifth, where `RelicCmd.Replace` swaps it for Sword of Jade.
-pub(super) fn event_hook(state: &mut State, hook: EventHook<V>) {
+/// `AfterCombatVictory`: an elite room counts, and the fifth is
+/// `RelicCmd.Replace` with Sword of Jade.
+pub(super) fn event_hook(
+    state: &mut State,
+    hook: EventHook<V>,
+    asked: &mut sts2_core::HookEffects<V>,
+) {
     if let EventHook::CombatVictory {
         room: RoomType::Elite,
     } = hook
     {
         state.elites_defeated += 1;
         if state.elites_defeated >= ELITES {
-            unimplemented!("Sword of Stone turning to Sword of Jade");
+            asked.push(HookEffect::ReplaceRelic {
+                from: Relic::SwordOfStone,
+                to: Relic::SwordOfJade,
+            });
         }
     }
 }

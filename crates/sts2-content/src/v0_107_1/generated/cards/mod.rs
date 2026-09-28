@@ -282,6 +282,8 @@ pub enum CardVar {
 }
 
 impl sts2_core::CardVars for CardVar {
+    type Power = super::powers::Power;
+
     const CALCULATION_BASE: CardVar = CardVar::CalculationBase;
 
     const ALL: &'static [CardVar] = &[
@@ -560,6 +562,78 @@ impl sts2_core::CardVars for CardVar {
             CardVar::WisdomCards => "WisdomCards",
             CardVar::WraithFormPower => "WraithFormPower",
         }
+    }
+
+    fn power(self) -> Option<super::powers::Power> {
+        Some(match self {
+            CardVar::AccuracyPower => super::powers::Power::AccuracyPower,
+            CardVar::AfterimagePower => super::powers::Power::AfterimagePower,
+            CardVar::ArsenalPower => super::powers::Power::ArsenalPower,
+            CardVar::BiasedCognitionPower => super::powers::Power::BiasedCognitionPower,
+            CardVar::BlackHolePower => super::powers::Power::BlackHolePower,
+            CardVar::BufferPower => super::powers::Power::BufferPower,
+            CardVar::CalcifyPower => super::powers::Power::CalcifyPower,
+            CardVar::ChokingDamage => super::powers::Power::StranglePower,
+            CardVar::ConsumingShadowPower => super::powers::Power::ConsumingShadowPower,
+            CardVar::CoolantPower => super::powers::Power::CoolantPower,
+            CardVar::CountdownPower => super::powers::Power::CountdownPower,
+            CardVar::CrimsonMantlePower => super::powers::Power::CrimsonMantlePower,
+            CardVar::CrueltyPower => super::powers::Power::CrueltyPower,
+            CardVar::DanseMacabrePower => super::powers::Power::DanseMacabrePower,
+            CardVar::DebilitatePower => super::powers::Power::DebilitatePower,
+            CardVar::DevourLifePower => super::powers::Power::DevourLifePower,
+            CardVar::DexterityPower => super::powers::Power::DexterityPower,
+            CardVar::DisintegrationPower => super::powers::Power::DisintegrationPower,
+            CardVar::DoomPower => super::powers::Power::DoomPower,
+            CardVar::EnvenomPower => super::powers::Power::EnvenomPower,
+            CardVar::ExpertiseDexterity => super::powers::Power::DexterityPower,
+            CardVar::ExpertiseStrength => super::powers::Power::StrengthPower,
+            CardVar::FeralPower => super::powers::Power::FeralPower,
+            CardVar::FocusPower => super::powers::Power::FocusPower,
+            CardVar::HailstormPower => super::powers::Power::HailstormPower,
+            CardVar::InfernoPower => super::powers::Power::InfernoPower,
+            CardVar::IntangiblePower => super::powers::Power::IntangiblePower,
+            CardVar::IterationPower => super::powers::Power::IterationPower,
+            CardVar::JuggernautPower => super::powers::Power::JuggernautPower,
+            CardVar::KnockdownPower => super::powers::Power::KnockdownPower,
+            CardVar::LethalityPower => super::powers::Power::LethalityPower,
+            CardVar::LightningRodPower => super::powers::Power::LightningRodPower,
+            CardVar::MindRotPower => super::powers::Power::MindRotPower,
+            CardVar::NeurosurgePower => super::powers::Power::NeurosurgePower,
+            CardVar::OutbreakPower => super::powers::Power::OutbreakPower,
+            CardVar::ParryPower => super::powers::Power::ParryPower,
+            CardVar::PhantomBladesPower => super::powers::Power::PhantomBladesPower,
+            CardVar::PlatingPower => super::powers::Power::PlatingPower,
+            CardVar::PoisonPower => super::powers::Power::PoisonPower,
+            CardVar::PrepTimePower => super::powers::Power::PrepTimePower,
+            CardVar::RollingBoulderPower => super::powers::Power::RollingBoulderPower,
+            CardVar::SappingVulnerable => super::powers::Power::VulnerablePower,
+            CardVar::SappingWeak => super::powers::Power::WeakPower,
+            CardVar::SentryModePower => super::powers::Power::SentryModePower,
+            CardVar::SerpentFormPower => super::powers::Power::SerpentFormPower,
+            CardVar::SicEmPower => super::powers::Power::SicEmPower,
+            CardVar::SignalBoostPower => super::powers::Power::SignalBoostPower,
+            CardVar::SleightOfFleshPower => super::powers::Power::SleightOfFleshPower,
+            CardVar::SlothPower => super::powers::Power::SlothPower,
+            CardVar::SmokestackPower => super::powers::Power::SmokestackPower,
+            CardVar::SneakyPower => super::powers::Power::SneakyPower,
+            CardVar::SpeedsterPower => super::powers::Power::SpeedsterPower,
+            CardVar::SpinnerPower => super::powers::Power::SpinnerPower,
+            CardVar::StarNextTurnPower => super::powers::Power::StarNextTurnPower,
+            CardVar::StormPower => super::powers::Power::StormPower,
+            CardVar::StranglePower => super::powers::Power::StranglePower,
+            CardVar::StrengthPower => super::powers::Power::StrengthPower,
+            CardVar::SwordSagePower => super::powers::Power::SwordSagePower,
+            CardVar::ThornsPower => super::powers::Power::ThornsPower,
+            CardVar::ThunderPower => super::powers::Power::ThunderPower,
+            CardVar::VigorPower => super::powers::Power::VigorPower,
+            CardVar::VoidFormPower => super::powers::Power::VoidFormPower,
+            CardVar::VulnerablePower => super::powers::Power::VulnerablePower,
+            CardVar::WasteAwayPower => super::powers::Power::WasteAwayPower,
+            CardVar::WeakPower => super::powers::Power::WeakPower,
+            CardVar::WraithFormPower => super::powers::Power::WraithFormPower,
+            _ => return None,
+        })
     }
 }
 
@@ -3732,7 +3806,7 @@ static OVERRIDES: [sts2_core::Overrides; 578] = [
     // BURY
     sts2_core::Overrides::from_bits(0),
     // BYRDONIS_EGG
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // BYRD_SWOOP
     sts2_core::Overrides::from_bits(0),
     // CALAMITY
@@ -4754,6 +4828,7 @@ static HEARD_BY_ANY: sts2_core::Overrides = sts2_core::Overrides::from_bits(0)
     .with(sts2_core::ModelHook::AfterCardEnteredCombat)
     .with(sts2_core::ModelHook::AfterCardPlayed)
     .with(sts2_core::ModelHook::BeforeHandDraw)
+    .with(sts2_core::ModelHook::TryModifyRestSiteOptions)
     .with(sts2_core::ModelHook::AfterCardExhausted)
     .with(sts2_core::ModelHook::ShouldPlay)
     .with(sts2_core::ModelHook::AfterAttack)

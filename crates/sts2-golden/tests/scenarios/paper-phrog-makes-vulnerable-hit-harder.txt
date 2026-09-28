@@ -1,0 +1,8 @@
+# `PaperPhrog` makes a Vulnerable creature take three quarters more from
+# its owner's hits, where it takes half more without it.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"PAPER_PHROG"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"BASH"}
+{"cmd":"play_card","index":5,"target":1}
+{"cmd":"play_card","index":0,"target":1}

@@ -1735,7 +1735,9 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCardEnteredCombat)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // GIRYA
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterRoomEntered)
+        .with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // GLASS_EYE
     sts2_core::Overrides::from_bits(0),
     // GLITTER
@@ -1768,7 +1770,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // HORN_CLEAT
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterBlockCleared),
     // ICE_CREAM
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldPlayerResetEnergy),
     // INFUSED_CORE
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterSideTurnStart)
@@ -1831,7 +1833,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterSideTurnStart)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // LIZARD_TAIL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ShouldDieLate),
     // LOOMING_FRUIT
     sts2_core::Overrides::from_bits(0),
     // LORDS_PARASOL
@@ -1853,9 +1855,10 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // MEAL_TICKET
     sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::AfterRoomEntered),
     // MEAT_CLEAVER
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // MEAT_ON_THE_BONE
     sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterCombatVictoryEarly)
         .with(sts2_core::ModelHook::AfterCurrentHpChanged)
         .with(sts2_core::ModelHook::BeforeCombatStart),
     // MEMBERSHIP_CARD
@@ -1946,7 +1949,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::BeforeSideTurnStart)
         .with(sts2_core::ModelHook::ModifyMaxEnergy),
     // PAELS_GROWTH
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // PAELS_HORN
     sts2_core::Overrides::from_bits(0),
     // PAELS_LEGION
@@ -1994,7 +1997,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
         .with(sts2_core::ModelHook::AfterCardPlayed)
         .with(sts2_core::ModelHook::AfterRoomEntered),
     // PETRIFIED_TOAD
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::BeforeCombatStartLate),
     // PHIAL_HOLSTER
     sts2_core::Overrides::from_bits(0),
     // PHILOSOPHERS_STONE
@@ -2041,7 +2044,8 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // PUMPKIN_CANDLE
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCombatEnd)
-        .with(sts2_core::ModelHook::ModifyMaxEnergy),
+        .with(sts2_core::ModelHook::ModifyMaxEnergy)
+        .with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // PUNCH_DAGGER
     sts2_core::Overrides::from_bits(0),
     // RADIANT_PEARL
@@ -2114,7 +2118,7 @@ static OVERRIDES: [sts2_core::Overrides; 299] = [
     // SERE_TALON
     sts2_core::Overrides::from_bits(0),
     // SHOVEL
-    sts2_core::Overrides::from_bits(0),
+    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::TryModifyRestSiteOptions),
     // SHURIKEN
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterCardPlayed)

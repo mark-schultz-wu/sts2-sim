@@ -42,8 +42,10 @@ mod byrdpip;
 mod calling_bell;
 mod centennial_puzzle;
 mod chandelier;
+mod charons_ashes;
 mod chosen_cheese;
 mod claws;
+mod cloak_clasp;
 mod cracked_core;
 mod crossbow;
 mod cursed_pearl;
@@ -72,6 +74,7 @@ mod fishing_rod;
 mod forgotten_soul;
 mod fragrant_mushroom;
 mod frozen_egg;
+mod girya;
 mod glass_eye;
 mod glitter;
 mod golden_pearl;
@@ -80,6 +83,7 @@ mod gremlin_horn;
 mod happy_flower;
 mod hefty_tablet;
 mod horn_cleat;
+mod ice_cream;
 mod infused_core;
 mod intimidating_helmet;
 mod iron_club;
@@ -92,12 +96,15 @@ mod lantern;
 mod lava_rock;
 mod lead_paperweight;
 mod leafy_poultice;
+mod letter_opener;
+mod lizard_tail;
 mod looming_fruit;
 mod lost_coffer;
 mod lost_wisp;
 mod lucky_fysh;
 mod mango;
 mod meal_ticket;
+mod meat_on_the_bone;
 mod mercury_hourglass;
 mod miniature_cannon;
 mod molten_egg;
@@ -107,28 +114,34 @@ mod neows_torment;
 mod new_leaf;
 mod nunchaku;
 mod nutritious_oyster;
+mod oddly_smooth_stone;
 mod old_coin;
 mod orichalcum;
+mod ornamental_fan;
 mod paels_blood;
 mod paels_flesh;
 mod paels_horn;
 mod paels_tears;
 mod pandoras_box;
 mod pantograph;
+mod paper_phrog;
 mod pear;
 mod pen_nib;
 mod pendulum;
 mod permafrost;
+mod petrified_toad;
 mod phial_holster;
 mod phylactery_unbound;
 mod pocketwatch;
 mod pollinous_core;
 mod pomander;
+mod potion_belt;
 mod prayer_wheel;
 mod precarious_shears;
 mod precise_scissors;
 mod preserved_fog;
 mod radiant_pearl;
+mod rainbow_ring;
 mod red_mask;
 mod red_skull;
 mod regal_pillow;
@@ -143,14 +156,21 @@ mod sand_castle;
 mod seal_of_gold;
 mod self_forming_clay;
 mod sere_talon;
+mod shovel;
+mod shuriken;
 mod signet_ring;
+mod snecko_skull;
 mod sozu;
 mod sparkling_rouge;
 mod spiked_gauntlets;
+mod stone_calendar;
+mod stone_cracker;
 mod stone_humidifier;
 mod storybook;
 mod strawberry;
 mod strike_dummy;
+mod sturdy_clamp;
+mod sword_of_jade;
 mod sword_of_stone;
 mod tanxs_whistle;
 mod throwing_axe;
@@ -160,10 +180,12 @@ mod touch_of_orobas;
 mod toxic_egg;
 mod tri_boomerang;
 mod tungsten_rod;
+mod tuning_fork;
 mod twisted_funnel;
 mod vajra;
 mod venerable_tea_set;
 mod very_hot_cocoa;
+mod vexing_puzzlebox;
 mod war_hammer;
 mod war_paint;
 mod whetstone;
@@ -376,6 +398,28 @@ pub enum State {
     PreservedFog,
     SereTalon,
     RoyalPoison,
+    PotionBelt,
+    OddlySmoothStone,
+    CharonsAshes,
+    CloakClasp,
+    StoneCalendar(stone_calendar::State),
+    Shuriken(shuriken::State),
+    OrnamentalFan(ornamental_fan::State),
+    LetterOpener(letter_opener::State),
+    TuningFork(tuning_fork::State),
+    RainbowRing(rainbow_ring::State),
+    SturdyClamp,
+    LizardTail(lizard_tail::State),
+    SneckoSkull,
+    PaperPhrog,
+    MeatOnTheBone,
+    IceCream,
+    PetrifiedToad,
+    StoneCracker,
+    VexingPuzzlebox,
+    Shovel,
+    Girya(girya::State),
+    SwordOfJade,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -537,7 +581,7 @@ pub(crate) fn event_hook(
         State::HornCleat => horn_cleat::event_hook(hook, asked),
         State::SparklingRouge => sparkling_rouge::event_hook(hook, asked),
         State::BowlerHat => bowler_hat::event_hook(hook),
-        State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook),
+        State::SwordOfStone(state) => sword_of_stone::event_hook(state, hook, asked),
         State::VeryHotCocoa => very_hot_cocoa::event_hook(hook, asked),
         State::BagOfMarbles => bag_of_marbles::event_hook(hook, asked),
         State::Akabeko => akabeko::event_hook(hook, asked),
@@ -621,6 +665,28 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::SwordOfJade => sword_of_jade::event_hook(hook, asked),
+        State::Girya(state) => girya::event_hook(state, hook, asked),
+        State::Shovel => shovel::event_hook(hook, asked),
+        State::VexingPuzzlebox => vexing_puzzlebox::event_hook(hook, asked),
+        State::StoneCracker => stone_cracker::event_hook(hook, asked),
+        State::PetrifiedToad => petrified_toad::event_hook(hook, asked),
+        State::IceCream => ice_cream::event_hook(hook, asked),
+        State::MeatOnTheBone => meat_on_the_bone::event_hook(hook, asked),
+        State::PaperPhrog => paper_phrog::event_hook(hook, asked),
+        State::SneckoSkull => snecko_skull::event_hook(hook, asked),
+        State::LizardTail(state) => lizard_tail::event_hook(state, hook, asked),
+        State::SturdyClamp => sturdy_clamp::event_hook(hook, asked),
+        State::RainbowRing(state) => rainbow_ring::event_hook(state, hook, asked),
+        State::TuningFork(state) => tuning_fork::event_hook(state, hook, asked),
+        State::LetterOpener(state) => letter_opener::event_hook(state, hook, asked),
+        State::OrnamentalFan(state) => ornamental_fan::event_hook(state, hook, asked),
+        State::Shuriken(state) => shuriken::event_hook(state, hook, asked),
+        State::StoneCalendar(state) => stone_calendar::event_hook(state, hook, asked),
+        State::CloakClasp => cloak_clasp::event_hook(hook, asked),
+        State::CharonsAshes => charons_ashes::event_hook(hook, asked),
+        State::OddlySmoothStone => oddly_smooth_stone::event_hook(hook, asked),
+        State::PotionBelt => potion_belt::event_hook(hook, asked),
         // Its hooks are `ShouldDraw` and `ModifyHandDrawLate`, which the fight
         // asks of it.
         // `AfterPreventingDraw` flashes it and does nothing else.
@@ -628,10 +694,17 @@ pub(crate) fn event_hook(
             EventHook::Obtained | EventHook::DrawPrevented => {}
             hook => unimplemented!("what Fiddle does for {hook:?}"),
         },
-        // Their hooks are ones the run and the fight ask of them:
-        // `TryModifyRestSiteOptions`, and `ModifyMaxEnergy` with
+        // `TryModifyRestSiteOptions`: `COOK`.
+        State::MeatCleaver => match hook {
+            EventHook::Obtained => {}
+            EventHook::RestSiteOptions => asked.push(sts2_core::HookEffect::OfferRestOption(
+                super::super::generated::restsite::RestSiteOption::Cook,
+            )),
+            hook => unimplemented!("what {state:?} does for {hook:?}"),
+        },
+        // Its hooks are ones the fight asks of it: `ModifyMaxEnergy` and
         // `TryModifyEnergyCostInCombat`.
-        State::MeatCleaver | State::SpikedGauntlets => match hook {
+        State::SpikedGauntlets => match hook {
             EventHook::Obtained => {}
             hook => unimplemented!("what {state:?} does for {hook:?}"),
         },
@@ -650,6 +723,9 @@ pub(crate) fn decide_hook(
         State::RunicPyramid => runic_pyramid::decide_hook(hook),
         State::Sozu => sozu::decide_hook(hook),
         State::Fiddle => fiddle::decide_hook(hook),
+        State::SturdyClamp => sturdy_clamp::decide_hook(hook),
+        State::IceCream => ice_cream::decide_hook(hook),
+        State::LizardTail(state) => lizard_tail::decide_hook(state, hook),
         _ => match hook.model_hook() {
             Some(_) => unimplemented!("what {state:?} decides for {hook:?}"),
             None => sts2_core::HookResponse::DoesNotImplement,
@@ -684,6 +760,7 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         State::BlessedAntler => blessed_antler::modify_hook(hook),
         State::BloodSoakedRose => blood_soaked_rose::modify_hook(hook),
         State::Fiddle => fiddle::modify_hook(hook),
+        State::SneckoSkull => snecko_skull::modify_hook(hook),
         // The fight asks only a relic that overrides the hook, and none of
         // the rest overrides one of these.
         State::AlchemicalCoffer
@@ -824,7 +901,28 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::JeweledMask
         | State::PreservedFog
         | State::SereTalon
-        | State::RoyalPoison => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::RoyalPoison
+        | State::PotionBelt
+        | State::OddlySmoothStone
+        | State::CharonsAshes
+        | State::CloakClasp
+        | State::StoneCalendar(_)
+        | State::Shuriken(_)
+        | State::OrnamentalFan(_)
+        | State::LetterOpener(_)
+        | State::TuningFork(_)
+        | State::RainbowRing(_)
+        | State::SturdyClamp
+        | State::LizardTail(_)
+        | State::PaperPhrog
+        | State::MeatOnTheBone
+        | State::IceCream
+        | State::PetrifiedToad
+        | State::StoneCracker
+        | State::VexingPuzzlebox
+        | State::Shovel
+        | State::Girya(_)
+        | State::SwordOfJade => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1003,6 +1101,28 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::SwordOfJade => State::SwordOfJade,
+            Relic::Girya => State::Girya(girya::State::default()),
+            Relic::Shovel => State::Shovel,
+            Relic::VexingPuzzlebox => State::VexingPuzzlebox,
+            Relic::StoneCracker => State::StoneCracker,
+            Relic::PetrifiedToad => State::PetrifiedToad,
+            Relic::IceCream => State::IceCream,
+            Relic::MeatOnTheBone => State::MeatOnTheBone,
+            Relic::PaperPhrog => State::PaperPhrog,
+            Relic::SneckoSkull => State::SneckoSkull,
+            Relic::LizardTail => State::LizardTail(lizard_tail::State::default()),
+            Relic::SturdyClamp => State::SturdyClamp,
+            Relic::RainbowRing => State::RainbowRing(rainbow_ring::State::default()),
+            Relic::TuningFork => State::TuningFork(tuning_fork::State::default()),
+            Relic::LetterOpener => State::LetterOpener(letter_opener::State::default()),
+            Relic::OrnamentalFan => State::OrnamentalFan(ornamental_fan::State::default()),
+            Relic::Shuriken => State::Shuriken(shuriken::State::default()),
+            Relic::StoneCalendar => State::StoneCalendar(stone_calendar::State::default()),
+            Relic::CloakClasp => State::CloakClasp,
+            Relic::CharonsAshes => State::CharonsAshes,
+            Relic::OddlySmoothStone => State::OddlySmoothStone,
+            Relic::PotionBelt => State::PotionBelt,
             relic => unimplemented!("what {relic:?} does in a run that carries it"),
         }
     }
@@ -1034,6 +1154,12 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::Girya(state) => girya::display_amount(state),
+                State::TuningFork(state) => tuning_fork::display_amount(state),
+                State::LetterOpener(state) => letter_opener::display_amount(state),
+                State::OrnamentalFan(state) => ornamental_fan::display_amount(state),
+                State::Shuriken(state) => shuriken::display_amount(state),
+                State::StoneCalendar(state) => stone_calendar::display_amount(state),
                 State::Nunchaku(state) => nunchaku::display_amount(state),
                 State::IronClub(state) => iron_club::display_amount(state),
                 State::DiamondDiadem(state) => diamond_diadem::display_amount(state),

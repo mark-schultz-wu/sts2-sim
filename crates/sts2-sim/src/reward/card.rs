@@ -55,6 +55,7 @@ pub(crate) fn keeps<V: Rules>(filter: sts2_core::PoolFilter, card: V::Card) -> b
     use sts2_core::CardRarityKinds as _;
 
     match filter {
+        sts2_core::PoolFilter::Every => true,
         sts2_core::PoolFilter::OfKind(kind) => V::card_kind(card) == Some(kind),
         sts2_core::PoolFilter::NotBasicOrAncient => {
             let rarity = card.rarity();

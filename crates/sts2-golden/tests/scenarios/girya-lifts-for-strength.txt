@@ -1,0 +1,8 @@
+# Girya adds Lift to a rest site. Each lift is one Strength as every
+# fight's room opens.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"GIRYA"}
+{"cmd":"enter_room","type":"RestSite"}
+{"cmd":"choose_option","index":2}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":0,"target":1}
