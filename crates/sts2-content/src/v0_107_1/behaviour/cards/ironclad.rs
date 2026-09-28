@@ -58,6 +58,7 @@ pub(super) fn resume_play<F: Fight<V>>(
 
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
+        IroncladCard::Thrash => thrash(fight),
         // `Anger`: its damage to the target, then a clone of itself into the
         // discard pile.
         IroncladCard::Anger => {
@@ -267,6 +268,51 @@ fn strike<F: Fight<V>>(fight: &mut F, target: sts2_core::CombatId) {
         });
         fight.apply(attack);
     });
+}
+
+/// `Thrash`: its damage to the target twice. Then an Attack in hand drawn
+/// off `CombatCardSelection` is exhausted. Its damage, modified as its owner
+/// deals it to nobody, joins Thrash's own for the rest of the fight.
+///
+/// The damage read is its `CalculatedDamage` worked out against nobody,
+/// else its `Damage`, else its `OstyDamage`, else nothing.
+fn thrash<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{CardTable as _, RunStreamKinds as _};
+
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        for _ in 0..2 {
+            let attack = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target,
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(attack);
+        }
+    });
+    let attacks: Vec<_> = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Attack))
+        .collect();
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::COMBAT_CARD_SELECTION;
+    let Some(chosen) = fight.random_card(&attacks, stream) else {
+        return Played::Done;
+    };
+    let vars = fight.card_ident(chosen).card.vars();
+    let printed = [
+        CardVar::CalculatedDamage,
+        CardVar::Damage,
+        CardVar::OstyDamage,
+    ]
+    .into_iter()
+    .find(|&key| vars.iter().any(|number| number.id == key));
+    let damage = printed.map_or(0, |key| fight.card_number(chosen, key));
+    let damage = fight.card_damage(chosen, damage);
+    fight.modify_this(Change::Raise(CardVar::Damage, damage), Lasting::ThisFight);
+    fight.act_on(PileAct::Exhaust, &[chosen]);
+    Played::Done
 }
 
 /// `Uppercut`: its damage to the target, then its `Power` as Weak and as

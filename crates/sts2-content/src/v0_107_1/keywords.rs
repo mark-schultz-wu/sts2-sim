@@ -14,4 +14,5 @@ impl KeywordKinds<V0_107_1> for CardKeyword {
     const SLY: CardKeyword = CardKeyword::Sly;
     const ETHEREAL: CardKeyword = CardKeyword::Ethereal;
     const EXHAUST: CardKeyword = CardKeyword::Exhaust;
+    const UNPLAYABLE: CardKeyword = CardKeyword::Unplayable;
 }

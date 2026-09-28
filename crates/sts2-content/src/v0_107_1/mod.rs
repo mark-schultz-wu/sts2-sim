@@ -224,6 +224,13 @@ impl sts2_core::Hooks for V0_107_1 {
         behaviour::powers::event_hook(power, amount, held, state, hook, asked)
     }
 
+    fn card_result_pile(
+        card: Self::Card,
+        base: Option<sts2_core::Pile>,
+    ) -> sts2_core::HookResponse<Option<sts2_core::Pile>> {
+        behaviour::cards::result_pile(card, base)
+    }
+
     fn result_pile<P: sts2_core::Printed<Self> + ?Sized>(
         listener: sts2_core::Listener<'_, Self, P>,
         hook: sts2_core::ResultPile<Self>,

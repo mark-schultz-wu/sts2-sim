@@ -1,0 +1,6 @@
+# Volley hits once for each energy its X spent, and each hit draws its
+# target off `CombatTargets` from the living enemies.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_NORMAL"}
+{"cmd":"grant","card":"VOLLEY"}
+{"cmd":"play_card","index":5}

@@ -1,0 +1,10 @@
+# Expose takes all of the target's block, then its Artifact, then gives it
+# Vulnerable. Plating gives the Nibbit block as its turn ends, and the
+# Artifact would otherwise stop the Vulnerable.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"PLATING_POWER","amount":5,"target":1}
+{"cmd":"power","power":"ARTIFACT_POWER","amount":1,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"EXPOSE"}
+{"cmd":"play_card","index":5,"target":1}

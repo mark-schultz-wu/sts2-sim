@@ -1333,6 +1333,8 @@ pub trait KeywordKinds<V: ContentVersion>: std::fmt::Debug + Copy + Eq + 'static
     const ETHEREAL: Self;
     /// Goes to the exhaust pile once played, which an upgrade can take off.
     const EXHAUST: Self;
+    /// Cannot be played, which a card picking one to play reads.
+    const UNPLAYABLE: Self;
 }
 
 /// The things a rest site can offer, as consts a rule can name.
@@ -2074,6 +2076,30 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("unblockable damage")
     }
 
+    /// `CreatureCmd.LoseBlock(creature, amount)`: at most the block it holds,
+    /// then `AfterBlockBroken` where that was the last of it. Nothing once
+    /// the fight is ending or on a dead creature.
+    fn lose_block(&mut self, _creature: crate::CombatId, _amount: V::Number) {
+        unimplemented!("losing block")
+    }
+
+    /// `DynamicVars[key]` on the card at one place: its `BaseValue`, or
+    /// `Calculate(null)` for a number the fight works out.
+    fn card_number(&self, _card: crate::CardAt<V>, _key: V::CardVar) -> V::Number {
+        unimplemented!("reading another card's number")
+    }
+
+    /// `Hook.ModifyDamage` for `damage` from the player against nobody, as a
+    /// `Move` from the card at one place, before any flooring.
+    ///
+    /// # Panics
+    ///
+    /// Where the listeners leave a fraction, which a game number cannot
+    /// carry.
+    fn card_damage(&self, _card: crate::CardAt<V>, _damage: V::Number) -> V::Number {
+        unimplemented!("another card's damage")
+    }
+
     /// `CardCmd.DiscardAndDraw(cards, draw)`: every card discarded, then the
     /// draw, and only then the Sly cards among them auto-played. Nothing, for
     /// no card.
@@ -2098,6 +2124,18 @@ pub trait Fight<V: ContentVersion> {
     /// pile is empty, then each auto-played in turn.
     fn auto_play_from_draw(&mut self, _count: usize, _force_exhaust: bool) {
         unimplemented!("auto-playing from the draw pile")
+    }
+
+    /// `CardCmd.AutoPlay` of the card at one place, with no target named.
+    /// Nothing once the fight is ending or its owner is dead.
+    fn auto_play_card(&mut self, _card: crate::CardAt<V>) {
+        unimplemented!("auto-playing a named card")
+    }
+
+    /// `StableShuffle` over `cards` off the named run stream: put in the
+    /// game's card order, then shuffled.
+    fn stable_shuffle_cards(&mut self, _cards: &mut [crate::CardAt<V>], _stream: V::RunRngType) {
+        unimplemented!("shuffling cards named in the fight")
     }
 
     /// `CombatEnergyCosts.NextInt(below)`: a cost drawn at random.
@@ -4415,6 +4453,14 @@ pub trait Hooks: ContentVersion {
         hook: EventHook<Self>,
         asked: &mut HookEffects<Self>,
     );
+
+    /// `CardModel.GetResultPileTypeForCardPlay`, for a card whose class
+    /// overrides it: where the card goes once its play is over, given what
+    /// the base class answers.
+    fn card_result_pile(
+        card: Self::Card,
+        base: Option<crate::Pile>,
+    ) -> crate::HookResponse<Option<crate::Pile>>;
 
     /// `ModifyCardPlayResultPileTypeAndPosition`: where a played card goes
     /// once its play is over, given where it goes so far.

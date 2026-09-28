@@ -501,7 +501,8 @@ fn before_played<V: Rules, S: LendsCombat>(
 /// it.
 ///
 /// A power card leaves the fight rather than going to a pile, and a card that
-/// exhausts goes to the exhaust pile. Anything else is discarded.
+/// exhausts goes to the exhaust pile. Anything else is discarded. A card whose
+/// class overrides the virtual then has its say.
 ///
 /// # Panics
 ///
@@ -526,6 +527,10 @@ fn result_pile<V: Rules>(
         true => None,
         false if marked.is_some() || card.face.exhausts() => Some(sts2_core::Pile::Exhaust),
         false => Some(sts2_core::Pile::Discard),
+    };
+    let pile = match V::card_result_pile(played, pile) {
+        sts2_core::HookResponse::Decision(pile) => pile,
+        sts2_core::HookResponse::DoesNotImplement => pile,
     };
     let player = live.player().id;
     let mut result = (pile, sts2_core::PilePosition::Bottom);

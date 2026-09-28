@@ -1574,6 +1574,18 @@ fn scaled_by<V: Rules>(
     scale: Option<f64>,
     phases: &[ModifyHook<V>],
 ) -> V::Number {
+    num_traits::cast(scaled_exactly::<V>(fight, amount, scale, phases).trunc())
+        .expect("a modified number is a game number")
+}
+
+/// [`scaled_by`] before the floor, which is the decimal the game's hook
+/// hands back. Never below nothing.
+fn scaled_exactly<V: Rules>(
+    fight: Walk<'_, V>,
+    amount: V::Number,
+    scale: Option<f64>,
+    phases: &[ModifyHook<V>],
+) -> f64 {
     let hooks = phases
         .iter()
         .fold(sts2_core::Overrides::default(), |hooks, phase| {
@@ -1592,11 +1604,7 @@ fn scaled_by<V: Rules>(
     });
     // A number nothing changes is only floored.
     if answers.is_empty() {
-        return match scale {
-            None => amount.max(V::Number::zero()),
-            Some(by) => num_traits::cast((float::<V>(amount) * by).max(0.0).trunc())
-                .expect("a modified number is a game number"),
-        };
+        return (float::<V>(amount) * scale.unwrap_or(1.0)).max(0.0);
     }
 
     let float = float::<V>;
@@ -1630,7 +1638,7 @@ fn scaled_by<V: Rules>(
         }
     }
     number *= share;
-    num_traits::cast(number.max(0.0).trunc()).expect("a modified number is a game number")
+    number.max(0.0)
 }
 
 /// The most orb slots `OrbCmd.AddSlots` gives a player.
@@ -1669,6 +1677,20 @@ pub(crate) fn modified<V: Rules>(
     damage: V::Number,
     powered: bool,
 ) -> V::Number {
+    num_traits::cast(modified_exactly::<V>(fight, dealer, target, card, damage, powered).trunc())
+        .expect("a modified number is a game number")
+}
+
+/// [`modified`] before the floor, which is the decimal `Hook.ModifyDamage`
+/// hands back.
+fn modified_exactly<V: Rules>(
+    fight: Walk<'_, V>,
+    dealer: Option<CombatId>,
+    target: Option<CombatId>,
+    card: Option<&CardInstance<V>>,
+    damage: V::Number,
+    powered: bool,
+) -> f64 {
     // The card's enchantment has its say first, and only when a card deals
     // the hit. Its scale stays a decimal until the listeners are done.
     let enchanted = card.and_then(|held| {
@@ -1722,7 +1744,7 @@ pub(crate) fn modified<V: Rules>(
             powered,
         },
     ];
-    scaled_by::<V>(fight, damage, scale, &phases)
+    scaled_exactly::<V>(fight, damage, scale, &phases)
 }
 
 /// `amount` after an enchantment's `hook`, which the game asks before any
@@ -2902,6 +2924,87 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         self.hit_unpowered(Some(self.actor), target, amount, true);
     }
 
+    fn lose_block(&mut self, creature: CombatId, amount: V::Number) {
+        let zero = V::Number::zero();
+        if self.ended.is_some() || self.ending() || amount <= zero {
+            return;
+        }
+        let Some(at) = self.at(creature) else { return };
+        let held = &mut self.live.creatures[at];
+        if !held.alive {
+            return;
+        }
+        let block = held.block;
+        held.block = (block - amount).max(zero);
+        if block > zero && held.block <= zero {
+            let asked = super::listen::notify::<V>(
+                self.live,
+                self.relics,
+                sts2_core::EventHook::BlockBroken { creature },
+            );
+            self.after_hit(asked);
+        }
+    }
+
+    fn card_number(&self, card: CardAt<V>, key: V::CardVar) -> V::Number {
+        let at = self.standing(card);
+        let held = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found");
+        var::<V>(&held, key, self.live, None)
+    }
+
+    fn card_damage(&self, card: CardAt<V>, damage: V::Number) -> V::Number {
+        let at = self.standing(card);
+        let held = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found");
+        let player = self.live.player().id;
+        let exactly =
+            modified_exactly::<V>(self.walk(), Some(player), None, Some(&held), damage, true);
+        if exactly.fract() != 0.0 {
+            unimplemented!("a card's damage worked out to the fraction {exactly}");
+        }
+        num_traits::cast(exactly).expect("a modified number is a game number")
+    }
+
+    fn auto_play_card(&mut self, card: CardAt<V>) {
+        if self.ended.is_some() || self.ending() || !self.live.player().alive {
+            return;
+        }
+        self.standing(card);
+        self.ended = super::play::auto_play::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            card.id(),
+            card.pile(),
+        );
+    }
+
+    fn stable_shuffle_cards(&mut self, cards: &mut [CardAt<V>], stream: V::RunRngType) {
+        use sts2_core::rng::GameRng as _;
+
+        let rng = match stream {
+            stream if stream == V::RunRngType::SHUFFLE => &mut self.rngs.shuffle,
+            stream => unimplemented!("cards in the fight shuffled off {stream:?}"),
+        };
+        let cards_held = &self.live.cards;
+        // `CardModel.CompareTo`: its `ModelId`, then its upgrade.
+        rng.stable_shuffle_by_key(cards, |&card| {
+            let at: usize =
+                num_traits::NumCast::from(card.index()).expect("a pile index fits this machine");
+            let held = cards_held
+                .get(card.pile(), at)
+                .expect("a card stands where it was found");
+            (held.face.ident.card.order(), held.face.ident.upgrade)
+        });
+    }
+
     fn next_energy_cost(&mut self, below: u8) -> V::Number {
         use sts2_core::rng::GameRng as _;
 
@@ -3098,15 +3201,17 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         if cards.is_empty() {
             return None;
         }
-        if stream != V::RunRngType::COMBAT_CARD_GENERATION {
-            unimplemented!("a combat card selected from {stream:?}")
-        }
+        let rng = match stream {
+            stream if stream == V::RunRngType::COMBAT_CARD_GENERATION => &mut self.rngs.generation,
+            stream if stream == V::RunRngType::COMBAT_CARD_SELECTION => &mut self.rngs.selection,
+            stream => unimplemented!("a combat card selected from {stream:?}"),
+        };
         let bound = sts2_core::rng::Bound::try_new(
             num_traits::NumCast::from(cards.len())
                 .expect("a combat pile's length fits the game's RNG integer"),
         )
         .expect("a nonempty candidate list has a nonzero bound");
-        let at: usize = num_traits::NumCast::from(self.rngs.generation.next_int(bound))
+        let at: usize = num_traits::NumCast::from(rng.next_int(bound))
             .expect("a bounded draw is a candidate index");
         Some(cards[at])
     }

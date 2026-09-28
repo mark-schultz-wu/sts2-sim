@@ -662,6 +662,7 @@ impl<V: Rules> Face<V> {
             k if k == <V::CardKeyword as KeywordKinds<V>>::SLY => card.sly(),
             k if k == <V::CardKeyword as KeywordKinds<V>>::ETHEREAL => card.ethereal(),
             k if k == <V::CardKeyword as KeywordKinds<V>>::EXHAUST => card.exhausts(),
+            k if k == <V::CardKeyword as KeywordKinds<V>>::UNPLAYABLE => card.unplayable(),
             keyword => unimplemented!("whether {card:?} prints {keyword:?}"),
         };
         self.keyword(printed, keyword)
