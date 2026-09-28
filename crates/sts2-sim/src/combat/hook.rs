@@ -26,6 +26,8 @@ pub(crate) fn apply<V: Rules, F: Fight<V>>(
             }
             HookEffect::LoseEnergy(amount) => fight.modify_energy(-amount),
             HookEffect::Draw(amount) => fight.draw(amount),
+            // `CreatureCmd.Heal` on the listener's owner, the actor.
+            HookEffect::Heal(amount) => fight.heal(fight.actor(), amount),
             HookEffect::GainStars(amount) => fight.gain_stars(amount),
             HookEffect::GainBlock(amount) => {
                 let block = fight.resolve(sts2_core::Effect::GainBlock {

@@ -1755,14 +1755,34 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `DoomPower.DoomKill`: each creature in `doomed` loses what hit points
     /// it has and dies, in order, then `AfterDiedToDoom`.
     ///
+    /// Whether each death triggers Fatal is read before the first. The
+    /// powers that answer it outlive their owner, so the answer is the same.
+    ///
     /// # Panics
     ///
-    /// A listener to `AfterDiedToDoom`.
+    /// A listener other than a relic to `AfterDiedToDoom`.
     pub(super) fn doom_kill(&mut self, doomed: &[CombatId]) {
+        let player = self.live.player().id;
+        let fatal = doomed
+            .iter()
+            .filter(|&&creature| {
+                creature != player && sts2_core::Fight::death_triggers_fatal(self, creature)
+            })
+            .count();
         for &creature in doomed {
             self.kill_outright(creature);
         }
-        self.unheard(sts2_core::ModelHook::AfterDiedToDoom);
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::DiedToDoom { fatal },
+        );
+        for (listener, effect) in asked {
+            match listener {
+                Listener::Relic { .. } => super::hook::apply::<V, _>(self, [effect]),
+                listener => unimplemented!("{listener:?} asking for {effect:?} after Doom kills"),
+            }
+        }
     }
 
     /// `CreatureCmd.Kill`: the creature loses what hit points it has, and
@@ -3014,6 +3034,29 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
 
     fn energy(&self) -> V::Number {
         num_traits::cast(self.live.energy).expect("energy fits a game number")
+    }
+
+    fn death_triggers_fatal(&self, creature: CombatId) -> bool {
+        let Some(at) = self.at(creature) else {
+            return true;
+        };
+        let carrier = self.live.creatures[at].carrier();
+        self.live.powers.of(creature).all(|subject| {
+            !<V as sts2_core::Hooks>::decide_hook(
+                subject.listener(
+                    carrier,
+                    self.live.history(),
+                    &super::live::Onlookers {
+                        creatures: &self.live.creatures,
+                        powers: &self.live.powers,
+                        kept: &self.live.kept,
+                        relics: Some(&*self.relics),
+                    },
+                ),
+                sts2_core::DecisionHook::ShouldOwnerDeathTriggerFatal,
+            )
+            .is_decision_and(|fatal| !fatal)
+        })
     }
 
     fn gain_max_hp(&mut self, creature: CombatId, amount: V::Number) {

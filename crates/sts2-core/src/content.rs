@@ -2198,6 +2198,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("the player's energy")
     }
 
+    /// `creature.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`.
+    fn death_triggers_fatal(&self, _creature: crate::CombatId) -> bool {
+        unimplemented!("whether a death triggers Fatal")
+    }
+
     /// `CreatureCmd.GainMaxHp`: the maximum grows by `amount`, then a heal
     /// for as much.
     fn gain_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
@@ -2988,6 +2993,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `PowerModel.ShouldPowerBeRemovedAfterOwnerDeath`, asked of a power
     /// about itself as its owner dies.
     ShouldRemoveSelfAfterOwnerDeath,
+    /// `PowerModel.ShouldOwnerDeathTriggerFatal`, asked of a power about its
+    /// owner's death.
+    ShouldOwnerDeathTriggerFatal,
     /// `Hook.ShouldPowerBeRemovedOnDeath`, asked of everything on a dying
     /// creature about one of the powers on it.
     ///
@@ -3044,7 +3052,8 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
             DecisionHook::ShouldCountForCombatEnd
-            | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
+            | DecisionHook::ShouldRemoveSelfAfterOwnerDeath
+            | DecisionHook::ShouldOwnerDeathTriggerFatal => return None,
         })
     }
 }
@@ -3433,6 +3442,11 @@ pub enum EventHook<V: ContentVersion> {
     Flushed,
     /// `AfterOrbChanneled`, once an orb is in the player's queue.
     OrbChanneled,
+    /// `AfterDiedToDoom`, once Doom killed its creatures. `fatal` counts those
+    /// besides the player whose powers all let the death trigger Fatal.
+    DiedToDoom {
+        fatal: usize,
+    },
     /// `TryModifyRestSiteOptions`, as a rest site opens. A listener answers
     /// with each option it adds.
     RestSiteOptions,
@@ -3587,6 +3601,7 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
             EventHook::Flushed => ModelHook::AfterFlush,
             EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::DiedToDoom { .. } => ModelHook::AfterDiedToDoom,
             EventHook::CardRewardOptions { .. } => ModelHook::TryModifyCardRewardOptions,
             EventHook::CombatVictoryEarly { .. } => ModelHook::AfterCombatVictoryEarly,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,

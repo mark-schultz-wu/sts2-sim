@@ -1685,6 +1685,11 @@ pub(crate) fn decide_hook(
         (Power::MinionPower, DecisionHook::ShouldCountForCombatEnd) => {
             HookResponse::Decision(false)
         }
+        // `ShouldOwnerDeathTriggerFatal`: a Minion's death, and one Reattach
+        // brings back, are not a kill that pays out.
+        (Power::MinionPower | Power::ReattachPower, DecisionHook::ShouldOwnerDeathTriggerFatal) => {
+            HookResponse::Decision(false)
+        }
         // `ShouldPowerBeRemovedAfterOwnerDeath`. A power that keeps its owner
         // in the fight keeps itself, or the creature would come back without
         // whatever brought it back.

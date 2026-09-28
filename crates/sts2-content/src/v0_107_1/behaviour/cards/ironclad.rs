@@ -68,17 +68,11 @@ pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<
     match card {
         IroncladCard::Thrash => thrash(fight),
         // `Feed`: its damage to the target, then its `MaxHp` onto its owner's
-        // maximum where the hit killed a target no Minion or Reattach kept
-        // from being Fatal.
+        // maximum where the hit killed a target whose death, read before the
+        // hit, triggers Fatal.
         IroncladCard::Feed => {
             let target = fight.target();
-            let fatal = fight
-                .creatures()
-                .find(|creature| creature.id() == target)
-                .is_some_and(|creature| {
-                    creature.power(Power::MinionPower).is_none()
-                        && creature.power(Power::ReattachPower).is_none()
-                });
+            let fatal = fight.death_triggers_fatal(target);
             fight.attack(Scaling::Dynamic, |fight| {
                 let attack = fight.resolve(Effect::Attack {
                     dealer: fight.actor(),

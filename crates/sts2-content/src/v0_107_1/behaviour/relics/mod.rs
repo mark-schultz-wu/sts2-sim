@@ -34,6 +34,7 @@ mod blood_vial;
 mod bone_flute;
 mod bone_tea;
 mod book_of_five_rings;
+mod book_repair_knife;
 mod bookmark;
 mod booming_conch;
 mod bound_phylactery;
@@ -450,6 +451,7 @@ pub enum State {
     Bookmark,
     ParryingShield,
     Metronome(metronome::State),
+    BookRepairKnife,
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -693,6 +695,7 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::BookRepairKnife => book_repair_knife::event_hook(hook, asked),
         State::Metronome(state) => metronome::event_hook(state, hook, asked),
         State::ParryingShield => parrying_shield::event_hook(hook, asked),
         State::Bookmark => bookmark::event_hook(hook, asked),
@@ -981,7 +984,8 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::IvoryTile
         | State::Bookmark
         | State::ParryingShield
-        | State::Metronome(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::Metronome(_)
+        | State::BookRepairKnife => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1160,6 +1164,7 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::BookRepairKnife => State::BookRepairKnife,
             Relic::Metronome => State::Metronome(metronome::State::default()),
             Relic::ParryingShield => State::ParryingShield,
             Relic::Bookmark => State::Bookmark,
