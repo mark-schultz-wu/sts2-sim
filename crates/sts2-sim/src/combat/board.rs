@@ -3308,12 +3308,34 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
         // A negative count draws nothing: the game's own loop runs no times.
         let count = num_traits::NumCast::from(count).unwrap_or(0usize);
-        self.ended = draw(
+        if !self.pausable {
+            self.ended = draw(
+                self.live,
+                self.rngs.reborrow(),
+                self.relics,
+                self.ascension,
+                count,
+                false,
+            );
+            return;
+        }
+        // A question a card this effect auto-played asked stands the draw
+        // still, before it starts.
+        if self.live.asking.is_some() {
+            self.live.defer(super::live::Deferred::Draw {
+                count,
+                hand_draw: false,
+                resumed: false,
+            });
+            return;
+        }
+        self.ended = draw_in_effect(
             self.live,
             self.rngs.reborrow(),
             self.relics,
             self.ascension,
             count,
+            false,
             false,
         );
     }
@@ -4389,6 +4411,56 @@ pub(super) fn draw<V: Rules>(
         Drawn::Done(ended) => ended,
         Drawn::Paused { asks, .. } => {
             unimplemented!("a shuffle asking for {asks:?} inside a draw that cannot pause")
+        }
+    }
+}
+
+/// [`draw`] inside a card's or a potion's effect, which a shuffle's question
+/// can stand still. The question parks, and the rest of the draw waits in
+/// [`Live::deferred`] with the effect behind it.
+pub(super) fn draw_in_effect<V: Rules>(
+    live: &mut Live<V>,
+    mut rngs: CombatRngs<'_>,
+    relics: &mut Belt<V>,
+    ascension: V::AscensionLevel,
+    count: usize,
+    hand_draw: bool,
+    resumed: bool,
+) -> Option<super::Ended> {
+    let (mut count, mut resumed) = (count, resumed);
+    loop {
+        match draw_pausing::<V>(
+            live,
+            rngs.reborrow(),
+            relics,
+            ascension,
+            count,
+            hand_draw,
+            resumed,
+        ) {
+            Drawn::Done(ended) => return ended,
+            Drawn::Paused {
+                left,
+                asks: (pile, picks, act),
+            } => {
+                match super::turn::select::<V>(live, rngs.reborrow(), relics, pile, picks, act) {
+                    Ok(Some(ended)) => return Some(ended),
+                    Ok(None) => {}
+                    Err(question) => {
+                        live.asking = Some(super::live::Asking {
+                            then: super::live::Then::Pick { act },
+                            question,
+                        });
+                        live.defer(super::live::Deferred::Draw {
+                            count: left,
+                            hand_draw,
+                            resumed: true,
+                        });
+                        return None;
+                    }
+                }
+                (count, resumed) = (left, true);
+            }
         }
     }
 }

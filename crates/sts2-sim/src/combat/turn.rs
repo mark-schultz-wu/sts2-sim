@@ -1391,7 +1391,7 @@ fn generate_from_pool<V: Rules>(
 ///
 /// A discard that took Sly cards plays them, and whatever that ended comes
 /// back.
-fn select<V: Rules>(
+pub(super) fn select<V: Rules>(
     live: &mut Live<V>,
     rngs: CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,

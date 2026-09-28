@@ -155,6 +155,10 @@ pub(super) enum Then<V: Rules> {
     },
     /// The enemy turn, which a monster's move parked on a choice.
     EnemyTurn(EnemyTurn<V>),
+    /// A selection a shuffle asked for inside an effect's draw. `act` is
+    /// what happens to the cards picked, and the rest of the draw waits in
+    /// [`Live::deferred`].
+    Pick { act: sts2_core::PileAct },
 }
 
 /// What waits behind a question that a card, auto-played inside another
@@ -182,6 +186,13 @@ pub(super) enum Deferred<V: Rules> {
     AutoPlay {
         id: CardId<V>,
         named: Option<CombatId>,
+    },
+    /// `CardPileCmd.Draw` of `count` cards. `resumed` for the rest of a draw
+    /// a shuffle's question stopped, which asked `ShouldDraw` already.
+    Draw {
+        count: usize,
+        hand_draw: bool,
+        resumed: bool,
     },
 }
 

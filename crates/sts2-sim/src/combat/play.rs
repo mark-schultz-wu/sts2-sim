@@ -819,6 +819,27 @@ pub(crate) fn answer<V: Rules>(
                 stage,
             );
         }
+        // A shuffle's pick inside an effect's draw: the cards picked, then
+        // the rest of the draw and the effect behind it.
+        Then::Pick { act } => {
+            let sts2_core::Taken::Selected(picked) = taken else {
+                unreachable!("a shuffle asks for cards of a pile")
+            };
+            let ascension = live.ascension;
+            let (sly, ended) =
+                super::turn::act_on::<V>(live, streams.combat(), relics, act, picked.as_slice());
+            let ended = ended
+                .or_else(|| super::turn::play_sly::<V>(live, streams.combat(), relics, sly, true));
+            return run_deferred(
+                Fighting {
+                    live,
+                    streams,
+                    relics,
+                },
+                ascension,
+                ended,
+            );
+        }
         Then::EnemyTurn(parked) => {
             return super::turn::resume_enemy_turn::<V>(
                 Fighting {
@@ -932,6 +953,22 @@ fn run_deferred<V: Rules>(
                 effect.ended = effect.ended.or(ended);
                 finish_effect(fighting, ascension, effect, outermost)?
             }
+            super::live::Deferred::Draw {
+                count,
+                hand_draw,
+                resumed,
+            } => match ended {
+                None => super::board::draw_in_effect::<V>(
+                    fighting.live,
+                    fighting.streams.combat(),
+                    fighting.relics,
+                    ascension,
+                    count,
+                    hand_draw,
+                    resumed,
+                ),
+                ended => ended,
+            },
         };
     }
     Ok(ended)
