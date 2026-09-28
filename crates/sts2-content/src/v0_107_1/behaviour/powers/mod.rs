@@ -794,6 +794,18 @@ pub(crate) fn modify_hook(
             unimplemented!("an endless Tracking")
         }
         (Power::TrackingPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
+        // `SoarPower.ModifyDamageMultiplicative`: its `DamageDecrease`, half, of
+        // a powered hit on its holder.
+        (
+            Power::SoarPower,
+            _,
+            ModifyHook::DamageMultiplicative {
+                target,
+                powered: true,
+                ..
+            },
+        ) if target == Some(holder) => Modify::Scaled(0.5),
+        (Power::SoarPower, _, ModifyHook::DamageMultiplicative { .. }) => Modify::Nothing,
         // `DiamondDiademPower.ModifyDamageMultiplicative`: half of a powered
         // hit on its holder.
         (

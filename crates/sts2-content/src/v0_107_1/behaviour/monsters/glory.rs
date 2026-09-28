@@ -150,6 +150,19 @@ pub(super) fn perform<F: Fight<V>>(
             fight.apply_to_actor(Power::DexterityPower, PowerAmount::Counted(STOLEN));
         }
         (Monster::TheForgotten, MoveId::Dread) => fight.attack_opponents(),
+        // `JudicialFlightMove`: Soar on itself. `IsFlying` picks its sounds
+        // alone.
+        (Monster::OwlMagistrate, MoveId::JudicialFlight) => {
+            fight.apply_to_actor(Power::SoarPower, PowerAmount::Counted(1));
+        }
+        // `VerdictMove`: its hit, four Vulnerable on each target, then Soar
+        // comes off.
+        (Monster::OwlMagistrate, MoveId::Verdict) => {
+            fight.attack_opponents();
+            fight.apply_to_opponents(Power::VulnerablePower, PowerAmount::Counted(4));
+            let actor = fight.actor();
+            fight.remove_power(actor, Power::SoarPower);
+        }
         // `LeechingHugMove`: three Weak on each target from nobody, then
         // three Strength onto itself.
         (Monster::SlimedBerserker, MoveId::LeechingHugMove) => {
