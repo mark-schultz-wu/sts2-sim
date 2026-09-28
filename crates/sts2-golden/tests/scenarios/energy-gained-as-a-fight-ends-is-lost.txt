@@ -1,0 +1,9 @@
+# Ivory Tile gives nothing for a card that ends the fight, since energy
+# gained once the fight is ending is not gained. Bludgeon kills the Nibbit.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"grant","relic":"IVORY_TILE"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"play_card","index":1,"target":1}
+{"cmd":"end_turn"}
+{"cmd":"grant","card":"BLUDGEON"}
+{"cmd":"play_card","index":5,"target":1}

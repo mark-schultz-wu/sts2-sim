@@ -245,6 +245,43 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * started
         }
+        // `BeatIntoShape`: a base, and more for each powered hit its owner
+        // landed on its target this turn.
+        (Cards::Regent(RegentCard::BeatIntoShape), CardVar::CalculatedForge) => {
+            let hits = owner
+                .history
+                .damage_received_this_turn()
+                .filter(|received| {
+                    Some(received.receiver) == owner.targeted
+                        && received.dealer == Some(owner.player)
+                        && received.powered
+                })
+                .count();
+            let hits = Number::try_from(hits).expect("a turn's hits fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+        }
+        // `KnifeTrap`: a base, and more for each Shiv in its owner's exhaust
+        // pile.
+        (Cards::Silent(SilentCard::KnifeTrap), CardVar::CalculatedShivs) => {
+            let shivs = owner
+                .exhaust
+                .iter()
+                .filter(|&&card| sts2_core::CardTable::tagged(card, sts2_core::CardTagKinds::SHIV))
+                .count();
+            let shivs = Number::try_from(shivs).expect("an exhaust pile fits the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * shivs
+        }
+        // `TearAsunder`: a base, and more for each of one and the hits this
+        // fight that took hit points from its owner.
+        (Cards::Ironclad(IroncladCard::TearAsunder), CardVar::CalculatedHits) => {
+            let hurt = owner
+                .history
+                .damage_received_this_fight()
+                .filter(|received| received.receiver == owner.player && received.unblocked > 0)
+                .count();
+            let hits = Number::try_from(1 + hurt).expect("a fight's hits fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::CalculationExtra) * hits
+        }
         // `BodySlam`: a base, and more for each point of its owner's block.
         (Cards::Ironclad(IroncladCard::BodySlam), CardVar::CalculatedDamage) => {
             printed.face(CardVar::CalculationBase)
@@ -406,6 +443,13 @@ pub(crate) fn calculated<P: sts2_core::Printed<V> + ?Sized>(
             let skills = Number::try_from(skills).expect("a hand fits the game's numbers");
             printed.face(CardVar::CalculationBase)
                 + printed.face(CardVar::CalculationExtra) * skills
+        }
+        // `Squeeze`: a base, and more for each of its owner's other cards in
+        // the fight tagged as Osty's attack.
+        (Cards::Necrobinder(NecrobinderCard::Squeeze), CardVar::CalculatedDamage) => {
+            let attacks = Number::try_from(owner.osty_attacks_besides)
+                .expect("a fight's cards fit the game's numbers");
+            printed.face(CardVar::CalculationBase) + printed.face(CardVar::ExtraDamage) * attacks
         }
         // `TimesUp`: a base, and more for each Doom on its target.
         (Cards::Necrobinder(NecrobinderCard::TimesUp), CardVar::CalculatedDamage) => {
@@ -609,6 +653,19 @@ pub(crate) fn resume_play<F: Fight<V>>(
         Resume::Necrobinder(at) => necrobinder::resume_play(fight, at, chosen),
         Resume::Regent(at) => regent::resume_play(fight, at, chosen),
         Resume::Silent(at) => silent::resume_play(fight, at, chosen),
+    }
+}
+
+/// The rest of a play that stopped on a choose-a-card screen, once the
+/// player took one or skipped it.
+pub(crate) fn resume_chosen<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: Option<sts2_core::CardIdent<V>>,
+) -> Played<V> {
+    match at {
+        Resume::Regent(at) => regent::resume_chosen(fight, at, chosen),
+        at => unimplemented!("{at:?} resumed with a chosen card"),
     }
 }
 

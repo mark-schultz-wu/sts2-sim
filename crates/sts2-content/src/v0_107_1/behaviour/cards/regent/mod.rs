@@ -1,9 +1,9 @@
 //! The Regent's cards the generator leaves to a hand port, filed by rarity.
 
-use sts2_core::{Fight, Played};
+use sts2_core::{CardIdent, Fight, Pile, Played};
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardVar, RegentCard};
+use super::super::super::generated::cards::{CardVar, Cards, RegentCard, TokenCard};
 use super::V;
 
 mod common;
@@ -14,18 +14,74 @@ mod uncommon;
 pub enum Resume {
     /// `Begone`, after it selected the card to turn into a Minion Strike.
     BegoneTransform,
+    /// `Guards`, after its owner picked the cards to turn into Minion
+    /// Sacrifices.
+    GuardsTransform,
+    /// `Quasar`, after its owner chose a colorless card or none.
+    QuasarChoice,
+    /// `HeirloomHammer`, after its owner picked the colorless card to copy.
+    HeirloomHammerCopy,
     /// `Glimmer`, after its owner picked the cards to put back.
     GlimmerPutBack,
     /// `PhotonCut`, after its owner picked the cards to put back.
     PhotonCutPutBack,
     /// `CosmicIndifference`, after its owner picked the card to put back.
     CosmicIndifferencePutBack,
+    /// `Charge`, after its owner picked the cards to turn into Minion Dive
+    /// Bombs.
+    ChargeTransform,
+}
+
+/// `BeatIntoShape`: its damage to the target, then a Forge of its calculated
+/// number, less its extra for each hit of its own attack.
+fn beat_into_shape<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{Amount, Effect, Scaling};
+
+    let target = fight.target();
+    let results = fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    let count = |n: usize| super::Number::try_from(n).expect("an attack's hits fit a number");
+    let amount = fight.var(CardVar::CalculatedForge)
+        - count(results.len()) * fight.var(CardVar::CalculationExtra);
+    fight.forge(
+        Cards::Token(TokenCard::SovereignBlade),
+        CardVar::Damage,
+        amount,
+    );
+    Played::Done
 }
 
 pub(super) fn on_play<F: Fight<V>>(card: RegentCard, fight: &mut F) -> Played<V> {
     match card {
         RegentCard::Glitterstream => common::glitterstream(fight),
+        RegentCard::BeatIntoShape => beat_into_shape(fight),
+        RegentCard::Quasar => quasar(fight),
+        RegentCard::HeirloomHammer => heirloom_hammer(fight),
+        // `Guards`: any number of the hand's cards picked, each transformed.
+        RegentCard::Guards => Played::Asking {
+            pile: Pile::Hand,
+            selection: sts2_core::Selection::UpTo(
+                nonmax::NonMaxUsize::new(999_999_999).expect("a count below the maximum"),
+            ),
+            at: super::super::Resume::Card(super::Resume::Regent(Resume::GuardsTransform)),
+        },
         RegentCard::Begone => common::begone(),
+        // `Charge`: its `Cards` of the draw pile picked, each transformed.
+        RegentCard::Charge => Played::Asking {
+            pile: Pile::Draw,
+            selection: sts2_core::Selection::Exactly(
+                nonmax::NonMaxUsize::new(num_traits::cast(fight.var(CardVar::Cards)).unwrap_or(0))
+                    .unwrap_or(nonmax::NonMaxUsize::ONE),
+            ),
+            at: super::super::Resume::Card(super::Resume::Regent(Resume::ChargeTransform)),
+        },
         RegentCard::CollisionCourse => common::collision_course(fight),
         RegentCard::Radiate => uncommon::radiate(fight),
         RegentCard::LunarBlast => uncommon::lunar_blast(fight),
@@ -300,6 +356,75 @@ pub(super) fn event_hook<P: sts2_core::Printed<V> + ?Sized>(
     }
 }
 
+/// `HeirloomHammer`: its damage to the target, then one card of the hand
+/// that shows as colorless picked, to be copied.
+fn heirloom_hammer<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::{Amount, CardTable as _, Effect, Scaling};
+
+    let target = fight.target();
+    fight.attack(Scaling::Dynamic, |fight| {
+        let attack = fight.resolve(Effect::Attack {
+            dealer: fight.actor(),
+            target,
+            damage: Amount::Var(CardVar::Damage),
+            scaling: Scaling::Dynamic,
+        });
+        fight.apply(attack);
+    });
+    let cards = fight
+        .cards_in(Pile::Hand)
+        .into_iter()
+        .filter(|&card| fight.card_ident(card).card.visually_colorless())
+        .collect();
+    Played::AskingAmong {
+        cards,
+        selection: sts2_core::Selection::Exactly(nonmax::NonMaxUsize::ONE),
+        at: super::super::Resume::Card(super::Resume::Regent(Resume::HeirloomHammerCopy)),
+    }
+}
+
+/// `Quasar`: three distinct colorless cards off `CombatCardGeneration`, each
+/// upgraded where Quasar is, of which its owner takes one into hand or none.
+fn quasar<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::CardTable as _;
+
+    let mut pool = <V as sts2_core::Rules>::combat_colorless_cards().to_vec();
+    let stream = <<V as sts2_core::ContentVersion>::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_GENERATION;
+    let mut offered: [CardIdent<V>; sts2_core::CHOICES] = fight
+        .generate_cards(&mut pool, stream)
+        .unwrap_or_else(|_| unimplemented!("a colorless pool offering fewer than three"));
+    if fight.upgraded() {
+        for card in &mut offered {
+            if card.upgrade < card.card.max_upgrade() {
+                card.upgrade += 1;
+            }
+        }
+    }
+    Played::Choosing {
+        offered: offered.into_iter().collect(),
+        skippable: true,
+        at: super::super::Resume::Card(super::Resume::Regent(Resume::QuasarChoice)),
+    }
+}
+
+/// The rest of a play that stopped on a choice, once the player chose.
+pub(super) fn resume_chosen<F: Fight<V>>(
+    fight: &mut F,
+    at: Resume,
+    chosen: Option<CardIdent<V>>,
+) -> Played<V> {
+    match at {
+        // `CardPileCmd.AddGeneratedCardToCombat` of the one taken, into hand.
+        Resume::QuasarChoice => {
+            if let Some(card) = chosen {
+                fight.add_generated_cards(card, Pile::Hand, 1);
+            }
+            Played::Done
+        }
+        at => unreachable!("{at:?} stops on a pick of a pile"),
+    }
+}
+
 /// The rest of a play that stopped, once the fight has its answer.
 pub(super) fn resume_play<F: Fight<V>>(
     fight: &mut F,
@@ -308,9 +433,33 @@ pub(super) fn resume_play<F: Fight<V>>(
 ) -> Played<V> {
     match at {
         Resume::BegoneTransform => common::begone_transform(fight, chosen),
+        // `CardCmd.Transform` of each into a `MinionDiveBomb` for Charge,
+        // or a `MinionSacrifice` for Guards, upgraded where the card is.
+        Resume::ChargeTransform | Resume::GuardsTransform => {
+            let token = match at {
+                Resume::ChargeTransform => TokenCard::MinionDiveBomb,
+                _ => TokenCard::MinionSacrifice,
+            };
+            for &card in chosen.as_slice() {
+                let mut into = CardIdent::new(Cards::Token(token));
+                into.upgrade = u8::from(fight.upgraded());
+                fight.transform(card, into);
+            }
+            Played::Done
+        }
         // `CardPileCmd.Add` onto the top of the draw pile.
         Resume::GlimmerPutBack | Resume::PhotonCutPutBack | Resume::CosmicIndifferencePutBack => {
             fight.act_on(sts2_core::PileAct::OntoDrawTop, chosen.as_slice());
+            Played::Done
+        }
+        Resume::QuasarChoice => unreachable!("Quasar stops on a choice, not a pick"),
+        // Its `Repeat` of clones of the one picked, each into hand.
+        Resume::HeirloomHammerCopy => {
+            if let Some(card) = chosen.one_or_none() {
+                for _ in 0..fight.var(CardVar::Repeat) {
+                    fight.clone_card(card, Pile::Hand);
+                }
+            }
             Played::Done
         }
     }

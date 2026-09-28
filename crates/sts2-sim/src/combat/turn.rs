@@ -62,7 +62,7 @@ pub(crate) fn end<V: Rules>(
         }
         return Ok(Some(ended));
     }
-    flush_hand(next, relics);
+    flush_hand(next, streams.combat(), relics, ascension);
     end_of_turn_cleanup(next);
     // `AfterTurnEnd` for the side that just ended.
     if let Some(ended) = after_turn_end::<V>(
@@ -555,7 +555,8 @@ pub(super) fn before_side_turn_start<V: Rules>(
 
 /// `AggressionPower.BeforeSideTurnStart`: the discard pile's attacks, in an
 /// unstable shuffle off `CombatCardSelection`, and the first `count` of them
-/// into hand. Each is upgraded where an upgrade can still raise it.
+/// into hand. Once the hand is full, each goes back onto the discard pile.
+/// Each is upgraded where an upgrade can still raise it.
 fn attacks_from_discard<V: Rules>(live: &mut Live<V>, rngs: CombatRngs<'_>, count: V::Number) {
     use sts2_core::rng::GameRng as _;
 
@@ -569,16 +570,19 @@ fn attacks_from_discard<V: Rules>(live: &mut Live<V>, rngs: CombatRngs<'_>, coun
         .collect();
     rngs.selection.unstable_shuffle(&mut attacks);
     for id in attacks.into_iter().take(count) {
-        if live.cards.len(Pile::Hand) >= MAX_CARDS_IN_HAND {
-            unimplemented!("an attack from the discard pile into a full hand");
-        }
+        // A full hand sends the card to the discard pile instead, onto its
+        // end, and it is upgraded there all the same.
+        let to = match live.cards.len(Pile::Hand) >= MAX_CARDS_IN_HAND {
+            true => Pile::Discard,
+            false => Pile::Hand,
+        };
         let at = live
             .cards
             .find(Pile::Discard, id)
             .expect("a shuffled attack is still in the discard pile");
-        live.cards.move_to(Pile::Discard, at, Pile::Hand);
-        let at = live.cards.len(Pile::Hand) - 1;
-        live.cards.write(Pile::Hand, at, |held| {
+        live.cards.move_to(Pile::Discard, at, to);
+        let at = live.cards.len(to) - 1;
+        live.cards.write(to, at, |held| {
             held.modify(sts2_core::Change::Upgrade, sts2_core::Lasting::ThisFight);
             true
         });
@@ -1144,6 +1148,34 @@ pub(super) fn carry_setup<V: Rules>(
                                 keep_orb(live, 0, first);
                             }
                         }
+                        // `OrbCmd.Passive` on each orb of `OrbQueue.Orbs`, in
+                        // queue order, which returns once the fight is ending.
+                        sts2_core::HookEffect::EachOrbPassive => {
+                            let held = live.orbs.as_ref().map_or(0, |orbs| orbs.queue.len());
+                            for place in 0..held {
+                                let Some(mut orb) = live
+                                    .orbs
+                                    .as_ref()
+                                    .and_then(|orbs| orbs.queue.get(place).cloned())
+                                else {
+                                    break;
+                                };
+                                if ended.is_some() {
+                                    break;
+                                }
+                                let mut board = Board::for_card(
+                                    live,
+                                    rngs.reborrow(),
+                                    relics,
+                                    ascension,
+                                    None,
+                                    None,
+                                );
+                                V::orb_passive(&mut orb, &mut board);
+                                ended = ended.or(board.ended);
+                                keep_orb(live, place, orb);
+                            }
+                        }
                         // `CardPileCmd.Draw` for the player, which a shuffle's
                         // question can pause. A fight that is over draws
                         // nothing, and a negative count draws nothing.
@@ -1153,12 +1185,21 @@ pub(super) fn carry_setup<V: Rules>(
                                 break;
                             }
                         }
-                        // `CreatureCmd.Damage` on the relic's owner, the player.
+                        // `CreatureCmd.Damage` on the listener's owner: the
+                        // player for a relic, the holder for a power.
                         sts2_core::HookEffect::DamageOwnerInFight {
                             amount,
                             unblockable,
                             self_dealt,
-                        } if matches!(listener, Listener::Relic { .. }) => {
+                        } if matches!(
+                            listener,
+                            Listener::Relic { .. } | Listener::Power { .. }
+                        ) =>
+                        {
+                            let owner = match listener {
+                                Listener::Power { owner, .. } => owner,
+                                _ => player,
+                            };
                             let mut board = Board::for_card(
                                 live,
                                 rngs.reborrow(),
@@ -1168,8 +1209,8 @@ pub(super) fn carry_setup<V: Rules>(
                                 None,
                             );
                             board.hit_unpowered(
-                                self_dealt.then_some(player),
-                                player,
+                                self_dealt.then_some(owner),
+                                owner,
                                 amount,
                                 unblockable,
                             );
@@ -1479,7 +1520,7 @@ pub(super) fn play_sly<V: Rules>(
         else {
             unimplemented!("a Sly card that left every pile before it played");
         };
-        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from);
+        let ended = super::play::auto_play::<V>(live, rngs.reborrow(), relics, id, from, None);
         if ended.is_some() {
             return ended;
         }
@@ -1512,6 +1553,8 @@ pub(super) fn exhausted<V: Rules>(
     card: &super::live::CardInstance<V>,
     ethereal: bool,
 ) -> Option<super::Ended> {
+    // `History.CardExhausted`, before the hook.
+    live.history.exhausted(card.face.ident.card);
     let hook = sts2_core::EventHook::CardExhausted {
         card: card.face.ident.card,
         id: card.id,
@@ -1788,17 +1831,55 @@ pub(super) fn side_turn_started<V: Rules>(
 /// A card that retains stays where it is, whether it prints the keyword or
 /// something in the fight wrote it on.
 #[tracing::instrument(level = "trace", skip_all)]
-fn flush_hand<V: Rules>(live: &mut Live<V>, relics: &crate::run::Belt<V>) {
+fn flush_hand<V: Rules>(
+    live: &mut Live<V>,
+    rngs: CombatRngs<'_>,
+    relics: &mut crate::run::Belt<V>,
+    ascension: V::AscensionLevel,
+) {
     let player = live.player().id;
     let fight = listen::Walk { live, relics };
-    if listen::any_decides::<V>(
+    if !listen::any_decides::<V>(
         fight,
         sts2_core::DecisionHook::ShouldFlush { player },
         false,
     ) {
+        live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
+    }
+    // `Hook.AfterFlush`, with what stayed in hand retained.
+    let asked = listen::notify::<V>(live, relics, sts2_core::EventHook::Flushed);
+    if asked.is_empty() {
         return;
     }
-    live.cards.sift(Pile::Hand, Pile::Discard, Face::retains);
+    let mut board = Board::for_card(live, rngs, relics, ascension, None, None);
+    for (listener, effect) in asked {
+        match effect {
+            sts2_core::HookEffect::LowerRetainedCost => {
+                let costly: Vec<_> = sts2_core::Fight::cards_in(&board, Pile::Hand)
+                    .into_iter()
+                    .filter(|&at| {
+                        matches!(
+                            sts2_core::Fight::card_costs(&board, at, false).0,
+                            sts2_core::Cost::Fixed(cost) if cost.get() > 0
+                        )
+                    })
+                    .collect();
+                let stream = <V::RunRngType as sts2_core::RunStreamKinds>::COMBAT_CARD_SELECTION;
+                if let Some(at) = sts2_core::Fight::random_card(&mut board, &costly, stream) {
+                    sts2_core::Fight::modify_card(
+                        &mut board,
+                        at,
+                        sts2_core::Change::ChangeCost(
+                            sts2_core::CostPool::Energy,
+                            -num_traits::one::<V::Number>(),
+                        ),
+                        sts2_core::Lasting::UntilPlayed,
+                    );
+                }
+            }
+            effect => unimplemented!("{listener:?} asking for {effect:?} after a flush"),
+        }
+    }
 }
 
 /// `Hook.AfterEnergyReset`, raised on every listener, and how the fight
@@ -1988,6 +2069,28 @@ fn clear_block<V: Rules>(
                     live.gain_unpowered_block(owner, amount);
                     live.remove_power(owner, power);
                 }
+                // `CreatureCmd.GainBlock` of a power's unpowered block on its
+                // owner, which runs `Hook.ModifyBlock`.
+                (Listener::Power { owner, .. }, sts2_core::HookEffect::GainBlock(amount)) => {
+                    use sts2_core::Fight as _;
+
+                    let ascension = live.ascension;
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    let block = board.resolve(sts2_core::Effect::GainBlock {
+                        recipient: owner,
+                        amount: sts2_core::Amount::Number(amount),
+                        scaling: sts2_core::Scaling::Static,
+                    });
+                    board.apply(block);
+                }
+                // `PowerCmd.Decrement(this)`.
+                (Listener::Power { owner, power, .. }, sts2_core::HookEffect::Decrement) => {
+                    let ascension = live.ascension;
+                    let mut board =
+                        Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
+                    board.modify_amount(owner, power, -num_traits::one::<V::Number>());
+                }
                 (_, effect) => {
                     unimplemented!("a listener asking for {effect:?} as block clears")
                 }
@@ -2016,9 +2119,9 @@ fn tick_powers<V: Rules>(
     let mut ticking: SmallVec<[(CombatId, V::Power); 8]> = SmallVec::new();
     let mut leaving: SmallVec<[(CombatId, V::Power); 4]> = SmallVec::new();
     for (listener, effect) in listen::notify::<V>(live, relics, hook) {
-        // `CardPileCmd.Draw` for the player who carries the relic.
-        if let (Listener::Relic { .. }, sts2_core::HookEffect::Draw(amount)) = (listener, effect) {
-            applying.push(TurnEndAsk::Draw(amount));
+        // What a relic asks for, on the player who carries it.
+        if let Listener::Relic { .. } = listener {
+            applying.push(TurnEndAsk::Relic(effect));
             continue;
         }
         let Listener::Power { owner, power, .. } = listener else {
@@ -2116,7 +2219,10 @@ fn after_turn_end<V: Rules>(
     side: V::CombatSide,
 ) -> Option<super::Ended> {
     let hooks = [
-        sts2_core::EventHook::SideTurnEnd { side },
+        sts2_core::EventHook::SideTurnEnd {
+            side,
+            block: live.player().block,
+        },
         sts2_core::EventHook::SideTurnEndLate { side },
     ];
     for hook in hooks {
@@ -2153,6 +2259,8 @@ enum TurnEndAsk<V: Rules> {
     Escape(CombatId),
     /// `OrbCmd.EvokeLast`, this many times.
     EvokeLast(V::Number),
+    /// What a relic asked for, carried out for the player.
+    Relic(sts2_core::HookEffect<V>),
 }
 
 /// What the powers that just ticked asked for, and whatever that ended.
@@ -2181,6 +2289,7 @@ fn applied<V: Rules>(
                 dealer,
             } => board.hit_unpowered(dealer, owner, amount, unblockable),
             TurnEndAsk::Draw(amount) => sts2_core::Fight::draw(&mut board, amount),
+            TurnEndAsk::Relic(effect) => super::hook::apply::<V, _>(&mut board, [effect]),
             TurnEndAsk::Heal(at, amount) => sts2_core::Fight::heal(&mut board, at, amount),
             TurnEndAsk::Decrement(at, power) => {
                 board.modify_amount(at, power, -num_traits::one::<V::Number>())

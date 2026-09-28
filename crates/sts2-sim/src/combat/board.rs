@@ -101,6 +101,10 @@ enum Resolved<V: Rules> {
         powered: bool,
         /// The play that gives it.
         play: Option<sts2_core::PlayAt>,
+        /// `cardSource`: which copy gives it.
+        source: Option<CardId<V>>,
+        /// The relics whose block hooks changed it.
+        modifying: SmallVec<[V::Relic; 1]>,
     },
 }
 
@@ -340,13 +344,37 @@ impl<'a, V: Rules> Board<'a, V> {
         if !super::listen::heard_any::<V>(self.live, self.relics, AROUND) {
             return (amount, Received::<V>::new());
         }
-        self.unheard(sts2_core::ModelHook::BeforePowerAmountChanged);
+        // `Hook.BeforePowerAmountChanged`, which no listener here answers with
+        // a command.
+        let source = self.playing;
+        if super::listen::heard::<V>(self.live, self.relics, ModelHook::BeforePowerAmountChanged) {
+            let target_side = self
+                .live
+                .creatures
+                .iter()
+                .find(|creature| creature.id == target)
+                .expect("a power lands on a creature in the fight")
+                .side;
+            let hook = sts2_core::EventHook::PowerAmountChanging {
+                power,
+                amount,
+                target,
+                target_side,
+                applier,
+                player: self.live.player().id,
+                source,
+            };
+            let asked = super::listen::notify::<V>(self.live, self.relics, hook);
+            if let Some((listener, effect)) = asked.into_iter().next() {
+                unimplemented!("{listener:?} asking for {effect:?} before {power:?} changes");
+            }
+        }
         // `ModifyPowerAmountGiven`, asked when the applier is in the fight.
         let mut amount = amount;
         if let Some(giver) = applier.filter(|&applier| self.at(applier).is_some()) {
-            self.unheard(sts2_core::ModelHook::ModifyPowerAmountGivenMultiplicative);
             let modifying;
-            (amount, modifying) = given_by::<V>(self.walk(), giver, Some(target), power, amount);
+            (amount, modifying) =
+                given_by::<V>(self.walk(), giver, Some(target), power, amount, source);
             // `AfterModifyingPowerAmountGiven`, asked of each relic that
             // changed it. The game asks once the power has landed, and asking
             // here instead is the same while none of them asks for anything.
@@ -643,6 +671,14 @@ impl<'a, V: Rules> Board<'a, V> {
                 (Listener::Power { owner, .. }, HookEffect::ApplyToOwner(lent, amount)) => {
                     self.land(owner, lent, amount, applier)
                 }
+                // `CardPileCmd.Draw` for the player.
+                (Listener::Power { .. }, HookEffect::Draw(count)) => {
+                    sts2_core::Fight::draw(self, count)
+                }
+                // `CreatureCmd.Damage`, unpowered, from the power's owner.
+                (Listener::Power { owner, .. }, HookEffect::Damage { target, amount }) => {
+                    self.hit_unpowered(Some(owner), target, amount, false)
+                }
                 (_, effect) => cards.push(effect),
             }
         }
@@ -825,6 +861,9 @@ impl<'a, V: Rules> Board<'a, V> {
                             powered,
                             card: card.and(self.playing),
                             player: self.live.player().id,
+                            side: self.live.side,
+                            fully_blocked: aimed && fully_blocked,
+                            turn: self.live.turn,
                         },
                     );
                     self.after_hit(asked);
@@ -1751,14 +1790,34 @@ impl<'a, V: Rules> Board<'a, V> {
     /// `DoomPower.DoomKill`: each creature in `doomed` loses what hit points
     /// it has and dies, in order, then `AfterDiedToDoom`.
     ///
+    /// Whether each death triggers Fatal is read before the first. The
+    /// powers that answer it outlive their owner, so the answer is the same.
+    ///
     /// # Panics
     ///
-    /// A listener to `AfterDiedToDoom`.
+    /// A listener other than a relic to `AfterDiedToDoom`.
     pub(super) fn doom_kill(&mut self, doomed: &[CombatId]) {
+        let player = self.live.player().id;
+        let fatal = doomed
+            .iter()
+            .filter(|&&creature| {
+                creature != player && sts2_core::Fight::death_triggers_fatal(self, creature)
+            })
+            .count();
         for &creature in doomed {
             self.kill_outright(creature);
         }
-        self.unheard(sts2_core::ModelHook::AfterDiedToDoom);
+        let asked = super::listen::notify::<V>(
+            self.live,
+            self.relics,
+            sts2_core::EventHook::DiedToDoom { fatal },
+        );
+        for (listener, effect) in asked {
+            match listener {
+                Listener::Relic { .. } => super::hook::apply::<V, _>(self, [effect]),
+                listener => unimplemented!("{listener:?} asking for {effect:?} after Doom kills"),
+            }
+        }
     }
 
     /// `CreatureCmd.Kill`: the creature loses what hit points it has, and
@@ -1847,6 +1906,12 @@ impl<'a, V: Rules> Board<'a, V> {
                 HookEffect::DamageOpponentsUnblockable(amount) => {
                     for target in self.hittable_opponents_of(owner) {
                         self.hit_unpowered(Some(owner), target, amount, true);
+                    }
+                }
+                // The same, and blockable.
+                HookEffect::DamageOpponents(amount) => {
+                    for target in self.hittable_opponents_of(owner) {
+                        self.hit_unpowered(Some(owner), target, amount, false);
                     }
                 }
                 HookEffect::ApplyPower {
@@ -2136,7 +2201,8 @@ pub(super) fn blocked<V: Rules>(
     powered: bool,
     card: Option<V::Card>,
     play: Option<sts2_core::PlayAt>,
-) -> V::Number {
+    source: Option<CardId<V>>,
+) -> (V::Number, SmallVec<[V::Relic; 1]>) {
     let phases = [
         ModifyHook::BlockAdditive {
             target: recipient,
@@ -2148,9 +2214,39 @@ pub(super) fn blocked<V: Rules>(
             powered,
             card,
             play,
+            source,
         },
     ];
-    modified_by::<V>(fight, amount, &phases)
+    let amount = modified_by::<V>(fight, amount, &phases);
+    // The `modifiers` `Hook.ModifyBlock` hands `AfterModifyingBlockAmount`:
+    // the listeners whose answer moved the number. Only a relic acts on it.
+    let mut modifying = SmallVec::new();
+    let after = sts2_core::ModelHook::AfterModifyingBlockAmount;
+    if super::listen::heard::<V>(fight.live, fight.relics, after) {
+        for phase in phases {
+            let hook = sts2_core::Overrides::of(phase.model_hook());
+            super::listen::each::<V>(fight, hook, |listener, _| {
+                let sts2_core::Listener::Relic(state) = listener else {
+                    return;
+                };
+                let moved = match <V as sts2_core::Hooks>::modify_hook(listener, phase) {
+                    Modify::Nothing => false,
+                    Modify::Added(added) => added != V::Number::zero(),
+                    Modify::Scaled(share) => share != 1.0,
+                    answer => unimplemented!("a relic answering {answer:?} for block"),
+                };
+                let held = fight
+                    .relics
+                    .iter()
+                    .find(|held| std::ptr::eq(&held.state, state))
+                    .expect("a relic asked is on the belt");
+                if moved && !modifying.contains(&held.relic) {
+                    modifying.push(held.relic);
+                }
+            });
+        }
+    }
+    (amount, modifying)
 }
 
 /// `CardCmd.Afflict` on one copy, once `AfflictionModel.CanAfflict` lets it.
@@ -2194,9 +2290,10 @@ pub(super) enum Receiver<V: Rules> {
 /// The listeners whose `TryModifyPowerAmountReceived` changed an amount.
 pub(super) type Received<V> = SmallVec<[Receiver<V>; 1]>;
 
-/// `ModifyPowerAmountGivenAdditive`, over the listeners in the fight: what
+/// `Hook.ModifyPowerAmountGiven`, over the listeners in the fight: what
 /// `amount` of `power` from `giver` to `target` becomes, and the relics that
-/// changed it.
+/// changed it. Every addition lands, then every share multiplies what they
+/// left. `source` is the card giving it.
 ///
 /// # Panics
 ///
@@ -2207,27 +2304,42 @@ pub(super) fn given_by<V: Rules>(
     target: Option<CombatId>,
     power: V::Power,
     amount: V::Number,
+    source: Option<CardId<V>>,
 ) -> (V::Number, SmallVec<[V::Relic; 2]>) {
+    use sts2_core::ModelHook;
+
     let mut modifying = SmallVec::new();
-    let hook = sts2_core::ModelHook::ModifyPowerAmountGivenAdditive;
-    if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
-        return (amount, modifying);
-    }
-    let asked = ModifyHook::PowerAmountGivenAdditive {
-        power,
-        giver,
-        target,
-        player: fight.live.player().id,
-    };
+    let player = fight.live.player().id;
     let mut amount = amount;
-    super::listen::each::<V>(fight, sts2_core::Overrides::of(hook), |listener, _| match (
-        <V as sts2_core::Hooks>::modify_hook(listener, asked),
-        listener,
-    ) {
-        (Modify::Nothing, _) => {}
-        (Modify::Added(added), sts2_core::Listener::Relic(state)) => {
-            amount = amount + added;
-            if added != V::Number::zero() {
+    let mut modified = |hook: ModelHook, asked: ModifyHook<V>, amount: &mut V::Number| {
+        if !super::listen::heard::<V>(fight.live, fight.relics, hook) {
+            return;
+        }
+        super::listen::each::<V>(fight, sts2_core::Overrides::of(hook), |listener, _| {
+            let moved = match (
+                <V as sts2_core::Hooks>::modify_hook(listener, asked),
+                listener,
+            ) {
+                (Modify::Nothing, _) => false,
+                (Modify::Added(added), sts2_core::Listener::Relic(_)) => {
+                    *amount = *amount + added;
+                    added != V::Number::zero()
+                }
+                (Modify::Scaled(share), sts2_core::Listener::Relic(_)) => {
+                    let scaled = num_traits::ToPrimitive::to_f64(amount)
+                        .expect("a power's amount is a finite number")
+                        * share;
+                    *amount = num_traits::cast(scaled)
+                        .unwrap_or_else(|| unimplemented!("{power:?} given as {scaled}"));
+                    share != 1.0
+                }
+                (answer, _) => {
+                    unimplemented!(
+                        "a listener answering {answer:?} for what {power:?} is given with"
+                    )
+                }
+            };
+            if moved && let sts2_core::Listener::Relic(state) = listener {
                 let held = fight
                     .relics
                     .iter()
@@ -2235,11 +2347,32 @@ pub(super) fn given_by<V: Rules>(
                     .expect("a relic asked is on the belt");
                 modifying.push(held.relic);
             }
-        }
-        (answer, _) => {
-            unimplemented!("a listener answering {answer:?} for what {power:?} is given with")
-        }
-    });
+        });
+    };
+    let additive = ModifyHook::PowerAmountGivenAdditive {
+        power,
+        giver,
+        target,
+        player,
+    };
+    modified(
+        ModelHook::ModifyPowerAmountGivenAdditive,
+        additive,
+        &mut amount,
+    );
+    let multiplicative = ModifyHook::PowerAmountGivenMultiplicative {
+        power,
+        giver,
+        target,
+        player,
+        amount,
+        source,
+    };
+    modified(
+        ModelHook::ModifyPowerAmountGivenMultiplicative,
+        multiplicative,
+        &mut amount,
+    );
     (amount, modifying)
 }
 
@@ -2342,20 +2475,25 @@ pub(crate) fn resolve<V: Rules>(
             };
             let powered = scaling == Scaling::Dynamic;
             let play = playing.and_then(|held| fight.live.history.play_at(held.id));
+            let source = playing.map(|held| held.id);
+            // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A card's
+            // block and a monster move's are the powered ones.
+            let (amount, modifying) = blocked::<V>(
+                fight,
+                recipient,
+                amount,
+                powered,
+                playing.map(|held| held.face.ident.card),
+                play,
+                source,
+            );
             Resolved::GainBlock {
                 recipient,
-                // `CreatureCmd.GainBlock` always runs `Hook.ModifyBlock`. A
-                // card's block and a monster move's are the powered ones.
-                amount: blocked::<V>(
-                    fight,
-                    recipient,
-                    amount,
-                    powered,
-                    playing.map(|held| held.face.ident.card),
-                    play,
-                ),
+                amount,
                 powered,
                 play,
+                source,
+                modifying,
             }
         }
     };
@@ -2434,6 +2572,8 @@ pub(crate) fn var<V: Rules>(
                         <<V::Card as sts2_core::CardTable>::Tag as sts2_core::CardTagKinds>::STRIKE,
                     )
                 }),
+                player: live.player().id,
+                targeted: target,
                 target: targeted.as_deref(),
                 history: live.history(),
                 block: live
@@ -2446,6 +2586,16 @@ pub(crate) fn var<V: Rules>(
                 star_cards: live.cards.count_all(|face| {
                     sts2_core::CardTable::star_cost(face.ident.card) != sts2_core::Cost::None
                 }),
+                osty_attacks_besides: {
+                    let osty_attack = |card| {
+                        sts2_core::CardTable::tagged(
+                            card,
+                            <<V::Card as sts2_core::CardTable>::Tag as sts2_core::CardTagKinds>::OSTY_ATTACK,
+                        )
+                    };
+                    live.cards.count_all(|face| osty_attack(face.ident.card))
+                        - usize::from(osty_attack(held.face.ident.card))
+                },
             };
             V::calculated_card_var(held.face.ident.card, key, held, owner)
         }
@@ -2552,7 +2702,11 @@ pub(super) fn player<V: Rules>(creatures: &[Fighter<V>]) -> CombatId {
 impl<V: Rules> Board<'_, V> {
     /// `CreateClone` of the card `id` into `pile`, as
     /// `AddGeneratedCardToCombat` puts it there.
-    fn clone_named(&mut self, id: sts2_core::CardId<V>, pile: Pile) -> Option<CardAt<V>> {
+    pub(super) fn clone_named(
+        &mut self,
+        id: sts2_core::CardId<V>,
+        pile: Pile,
+    ) -> Option<CardAt<V>> {
         let face = self
             .live
             .cards
@@ -2858,7 +3012,18 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 amount,
                 powered,
                 play,
+                source,
+                modifying,
             } => {
+                // `Hook.AfterModifyingBlockAmount`, asked of each relic that
+                // changed the gain, before it lands.
+                for relic in modifying {
+                    let hook = sts2_core::EventHook::BlockAmountModified { amount, source };
+                    if let Some(effect) = super::listen::ask_relic(self.relics, relic, hook).first()
+                    {
+                        unimplemented!("{relic:?} asking for {effect:?} once it changed block")
+                    }
+                }
                 let Some(at) = self.at(recipient) else { return };
                 if amount > V::Number::zero() {
                     self.live.creatures[at].block = self.live.creatures[at].block + amount;
@@ -3000,6 +3165,60 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         num_traits::cast(self.live.energy).expect("energy fits a game number")
     }
 
+    fn death_triggers_fatal(&self, creature: CombatId) -> bool {
+        let Some(at) = self.at(creature) else {
+            return true;
+        };
+        let carrier = self.live.creatures[at].carrier();
+        self.live.powers.of(creature).all(|subject| {
+            !<V as sts2_core::Hooks>::decide_hook(
+                subject.listener(
+                    carrier,
+                    self.live.history(),
+                    &super::live::Onlookers {
+                        creatures: &self.live.creatures,
+                        powers: &self.live.powers,
+                        kept: &self.live.kept,
+                        relics: Some(&*self.relics),
+                    },
+                ),
+                sts2_core::DecisionHook::ShouldOwnerDeathTriggerFatal,
+            )
+            .is_decision_and(|fatal| !fatal)
+        })
+    }
+
+    fn note_on_power(&mut self, creature: CombatId, power: V::Power, note: V::Number) {
+        if let Some(held) = self
+            .live
+            .powers
+            .of_mut(creature)
+            .find(|held| held.power() == power)
+        {
+            <V as sts2_core::Hooks>::power_noted(&mut held.state, note);
+        }
+    }
+
+    fn procure_random_potion(&mut self, stream: V::RunRngType) {
+        self.live
+            .for_run
+            .push(sts2_core::HookEffect::ProcureRandomPotions {
+                count: 1,
+                stream,
+                in_combat: true,
+                into_gained: false,
+            });
+    }
+
+    fn gain_max_hp(&mut self, creature: CombatId, amount: V::Number) {
+        let Some(at) = self.at(creature) else { return };
+        let gained: V::Health =
+            num_traits::cast(amount).expect("a maximum health gain fits the build's health");
+        let held = &mut self.live.creatures[at];
+        held.max_hp = held.max_hp + gained;
+        self.heal(creature, amount);
+    }
+
     fn lose_max_hp(&mut self, creature: CombatId, amount: V::Number) {
         let Some(at) = self.at(creature) else { return };
         let held = &self.live.creatures[at];
@@ -3032,8 +3251,10 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 .unwrap_or_else(|| unimplemented!("an energy change of {amount:?}"))
         };
         // `PlayerCombatState` holds the pool as a count and clamps it at zero.
+        // `PlayerCmd.GainEnergy` gains nothing once the fight is ending.
         match amount < V::Number::zero() {
             true => self.live.energy = self.live.energy.saturating_sub(size(-amount)),
+            false if self.ended.is_some() || self.ending() => {}
             false => self.live.energy = self.live.energy + size(amount),
         }
     }
@@ -3119,6 +3340,13 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             .unwrap_or_else(|| unimplemented!("naming the card being played with none played"))
     }
 
+    fn playing_ident(&self) -> CardIdent<V> {
+        self.acting()
+            .unwrap_or_else(|| unimplemented!("reading the card being played with none played"))
+            .face
+            .ident
+    }
+
     fn upgraded(&self) -> bool {
         self.acting()
             .unwrap_or_else(|| unimplemented!("the upgrade of no card being played"))
@@ -3201,7 +3429,8 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
     ///
     /// # Panics
     ///
-    /// A listener to `AfterOrbChanneled`.
+    /// A listener to `AfterOrbChanneled` asking for anything but damage on
+    /// every enemy.
     fn channel(&mut self, orb: V::Orb) {
         if self.ended.is_some() || self.ending() {
             return;
@@ -3231,12 +3460,22 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             return;
         };
         orbs.queue.push(V::channelled(orb));
-        if super::listen::heard::<V>(
-            self.live,
-            self.relics,
-            sts2_core::ModelHook::AfterOrbChanneled,
-        ) {
-            unimplemented!("a listener to an orb channelled");
+        let asked =
+            super::listen::notify::<V>(self.live, self.relics, sts2_core::EventHook::OrbChanneled);
+        let player = self.live.player().id;
+        for (listener, effect) in asked {
+            match (listener, effect) {
+                // `CreatureCmd.Damage` over `HittableEnemies`, unpowered and
+                // from the relic's owner.
+                (Listener::Relic { .. }, HookEffect::DamageOpponents(amount)) => {
+                    for target in self.hittable_opponents_of(player) {
+                        self.hit_unpowered(Some(player), target, amount, false);
+                    }
+                }
+                (listener, effect) => {
+                    unimplemented!("{listener:?} asking for {effect:?} as an orb is channelled")
+                }
+            }
         }
     }
 
@@ -3377,6 +3616,16 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
         }
     }
 
+    fn printed_costs(&self, card: CardAt<V>) -> (sts2_core::Cost, sts2_core::Cost) {
+        let at = self.standing(card);
+        let held = self
+            .live
+            .cards
+            .get(card.pile(), at)
+            .expect("a card stands where it was found");
+        (held.face.cost, held.face.star_cost)
+    }
+
     fn card_keyword(&self, card: CardAt<V>, keyword: V::CardKeyword) -> bool {
         let at = self.standing(card);
         self.live
@@ -3435,6 +3684,7 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
                 self.rngs.reborrow(),
                 self.relics,
                 card,
+                None,
             );
             if ended.is_some() {
                 self.ended = ended;
@@ -3536,6 +3786,22 @@ impl<V: Rules> Fight<V> for Board<'_, V> {
             self.relics,
             card.id(),
             card.pile(),
+            None,
+        );
+    }
+
+    fn auto_play_card_at(&mut self, card: CardAt<V>, target: CombatId) {
+        if self.ended.is_some() || self.ending() || !self.live.player().alive {
+            return;
+        }
+        self.standing(card);
+        self.ended = super::play::auto_play::<V>(
+            self.live,
+            self.rngs.reborrow(),
+            self.relics,
+            card.id(),
+            card.pile(),
+            Some(target),
         );
     }
 
@@ -4184,6 +4450,7 @@ pub(super) fn draw_pausing<V: Rules>(
                             relics,
                             card,
                             Pile::Hand,
+                            None,
                         );
                     }
                 }

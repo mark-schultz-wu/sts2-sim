@@ -1,0 +1,11 @@
+# Heirloom Hammer hits, then copies a picked card of the hand that shows as
+# colorless into hand. A Shiv and Mind Blast are offered, and Caltrops, an
+# event card in the Silent's frame, is not.
+{"cmd":"start","seed":"0RACLE1","character":"REGENT","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SHIV"}
+{"cmd":"grant","card":"CALTROPS"}
+{"cmd":"grant","card":"MIND_BLAST"}
+{"cmd":"grant","card":"HEIRLOOM_HAMMER"}
+{"cmd":"play_card","index":8,"target":1}
+{"cmd":"answer","cards":[1]}

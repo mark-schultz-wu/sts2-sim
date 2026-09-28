@@ -48,6 +48,7 @@ pub(super) static ROWS: [CardData; 3] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Quest),
@@ -60,6 +61,7 @@ pub(super) static ROWS: [CardData; 3] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Quest),
@@ -77,5 +79,6 @@ pub(super) static ROWS: [CardData; 3] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
 ];

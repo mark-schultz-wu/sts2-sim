@@ -1,0 +1,7 @@
+# Feed kills a Nibbit its owner's Strength made it strong enough for, and
+# its owner's maximum health grows by three and heals as much.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":50,"target":0}
+{"cmd":"grant","card":"FEED"}
+{"cmd":"play_card","index":5,"target":1}

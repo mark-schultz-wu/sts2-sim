@@ -47,7 +47,7 @@ pub(super) type CardVarList = Option<[NonMaxI16; VARS]>;
 pub(crate) type PowerList<V> = Bounded<HeldPower<V>, POWERS>;
 
 /// How many powers one creature holds.
-const POWERS: usize = 16;
+const POWERS: usize = 24;
 
 /// How many creatures a fight holds, summons included.
 ///
@@ -416,6 +416,9 @@ pub(crate) struct Face<V: Rules> {
     /// Keywords `RemoveKeyword` took off, whether the table prints them or
     /// they were written on.
     removed_keywords: V::CardKeywordSet,
+    /// `HasSingleTurnSly`: words the copy carries until the turn ends,
+    /// whatever `RemoveKeyword` took off.
+    turn_keywords: V::CardKeywordSet,
     /// `CardModel.BaseReplayCount`, the extra times this copy's play runs.
     ///
     /// Zero for every card the table prints. Only a power hands these out, and
@@ -552,6 +555,7 @@ impl<V: Rules> Face<V> {
             modifiers: 0,
             added_keywords: sts2_core::FlagSet::from_members(&[]),
             removed_keywords: sts2_core::FlagSet::from_members(&[]),
+            turn_keywords: sts2_core::FlagSet::from_members(&[]),
             replays: 0,
             enchantment_status: sts2_core::EnchantmentStatus::Normal,
         };
@@ -646,7 +650,14 @@ impl<V: Rules> Face<V> {
             }
             // `Keywords` is one set the copy owns, which both of these write.
             // A word already on the copy is not added twice.
+            sts2_core::Change::AddKeyword(keyword) if lasting == sts2_core::Lasting::ThisTurn => {
+                self.turn_keywords = sts2_core::FlagSet::with(self.turn_keywords, keyword);
+            }
             sts2_core::Change::AddKeyword(keyword) => {
+                assert!(
+                    lasting == sts2_core::Lasting::ThisFight,
+                    "a keyword written until played"
+                );
                 self.added_keywords = sts2_core::FlagSet::with(self.added_keywords, keyword);
                 self.removed_keywords = sts2_core::FlagSet::without(self.removed_keywords, keyword);
             }
@@ -664,6 +675,7 @@ impl<V: Rules> Face<V> {
     fn keyword(&self, printed: bool, keyword: V::CardKeyword) -> bool {
         (printed || sts2_core::FlagSet::contains(self.added_keywords, keyword))
             && !sts2_core::FlagSet::contains(self.removed_keywords, keyword)
+            || sts2_core::FlagSet::contains(self.turn_keywords, keyword)
             || self
                 .ident
                 .affliction
@@ -729,7 +741,7 @@ impl<V: Rules> Face<V> {
     }
 
     /// `IsSlyThisTurn` for this copy, the keyword the way [`Face::innate`]
-    /// reads Innate. Nothing ported makes a card Sly for one turn.
+    /// reads Innate, or Sly written on for the turn.
     pub(super) fn sly(&self) -> bool {
         use sts2_core::{CardTable as _, KeywordKinds};
 
@@ -818,16 +830,19 @@ impl<V: Rules> Face<V> {
         self.modifiers += 1;
     }
 
-    /// Drop the cost modifiers that do not outlive this turn.
+    /// Drop the cost modifiers and keywords that do not outlive this turn.
     pub(super) fn turn_ended(&mut self) {
         self.kept(CostModifier::clears_when_turn_ends);
+        self.turn_keywords = sts2_core::FlagSet::from_members(&[]);
     }
 
-    /// Whether this copy holds a cost modifier that ends with the turn.
+    /// Whether this copy holds a cost modifier or a keyword that ends with
+    /// the turn.
     pub(super) fn lasts_the_turn(&self) -> bool {
-        self.cost_modifiers[..usize::from(self.modifiers)]
-            .iter()
-            .any(|held| held.clears_when_turn_ends())
+        self.turn_keywords != sts2_core::FlagSet::from_members(&[])
+            || self.cost_modifiers[..usize::from(self.modifiers)]
+                .iter()
+                .any(|held| held.clears_when_turn_ends())
     }
 
     /// `GetEnchantedReplayCount` and one: the replays this copy holds, through
@@ -1695,6 +1710,9 @@ pub(crate) struct Live<V: Rules> {
     /// What `AfterCombatEnd` asked of the run, which carries it out as it
     /// takes the fight's rewards.
     pub(super) leaving: Vec<sts2_core::HookEffect<V>>,
+    /// What the fight asked of the run in the middle of a decision, which the
+    /// run carries out as the decision settles.
+    pub(super) for_run: Vec<sts2_core::HookEffect<V>>,
     /// What `AfterShuffle` listeners asked for behind one that asked the
     /// player to pick, which waits for the pick.
     pub(super) after_pick: Vec<sts2_core::HookEffect<V>>,
@@ -1790,6 +1808,12 @@ impl<V: Rules> CombatHistory<V> {
             .push(sts2_core::HistoryEntry::Discarded(card));
     }
 
+    /// `History.CardExhausted`, in the turn the fight stands in.
+    pub(super) fn exhausted(&mut self, card: V::Card) {
+        self.this_turn
+            .push(sts2_core::HistoryEntry::Exhausted(card));
+    }
+
     /// `History.CardGenerated`, in the turn the fight stands in, by whether
     /// the player made it.
     pub(super) fn generated(&mut self, by_player: bool) {
@@ -1883,6 +1907,7 @@ impl<V: Rules> Clone for Live<V> {
             history: self.history.clone(),
             kept: self.kept.clone(),
             leaving: self.leaving.clone(),
+            for_run: self.for_run.clone(),
             after_pick: self.after_pick.clone(),
             powers: self.powers.clone(),
             orbs: self.orbs.clone(),
@@ -1914,6 +1939,7 @@ impl<V: Rules> Clone for Live<V> {
             extra_cards,
             exhaust_next,
             leaving,
+            for_run,
             after_pick,
             creatures,
             powers,
@@ -1942,6 +1968,7 @@ impl<V: Rules> Clone for Live<V> {
         extra_cards.clone_from(&source.extra_cards);
         exhaust_next.clone_from(&source.exhaust_next);
         leaving.clone_from(&source.leaving);
+        for_run.clone_from(&source.for_run);
         after_pick.clone_from(&source.after_pick);
         creatures.copy_from(&source.creatures);
         powers.clone_from(&source.powers);
@@ -2071,6 +2098,17 @@ impl<V: Rules> Live<V> {
     /// What the fight's end asked of the run, in the order it asked.
     pub(crate) fn leaving(&self) -> &[sts2_core::HookEffect<V>] {
         &self.leaving
+    }
+
+    /// Whether the fight asked anything of the run since the last decision
+    /// settled.
+    pub(crate) fn asked_for_run(&self) -> bool {
+        !self.for_run.is_empty()
+    }
+
+    /// What the fight asked of the run since the last decision settled.
+    pub(crate) fn take_for_run(&mut self) -> Vec<sts2_core::HookEffect<V>> {
+        std::mem::take(&mut self.for_run)
     }
 
     /// Where each card a selection from `pile` offers stands in it, in the
@@ -2667,6 +2705,7 @@ impl Live<sts2_content::v0_107_1::V0_107_1> {
             extra_cards: Vec::new(),
             exhaust_next: smallvec::SmallVec::new(),
             leaving: Vec::new(),
+            for_run: Vec::new(),
             after_pick: Vec::new(),
             creatures: creatures.into_iter().collect(),
             powers: PowerStore::new(),

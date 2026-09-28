@@ -322,6 +322,10 @@ pub trait CardTable: Table {
     /// `GainsBlock`, which a card that gives block overrides.
     fn gains_block(self) -> bool;
 
+    /// `VisualCardPool.IsColorless`: whether the card shows as colorless.
+    /// Most cards show their own pool, and a few event cards a character's.
+    fn visually_colorless(self) -> bool;
+
     /// Whether it carries the keyword that exhausts it from hand at the end
     /// of a turn.
     fn ethereal(self) -> bool;
@@ -676,10 +680,12 @@ pub enum ModelHook {
     BeforeCombatStartLate,
     TryModifyRestSiteOptions,
     ShouldForcePotionReward,
+    AfterFlush,
+    AfterModifyingBlockAmount,
 }
 
 impl ModelHook {
-    pub const ALL: [ModelHook; 115] = [
+    pub const ALL: [ModelHook; 117] = [
         ModelHook::AfterRoomEntered,
         ModelHook::BeforeCombatStart,
         ModelHook::AfterCombatEnd,
@@ -795,6 +801,8 @@ impl ModelHook {
         ModelHook::BeforeCombatStartLate,
         ModelHook::TryModifyRestSiteOptions,
         ModelHook::ShouldForcePotionReward,
+        ModelHook::AfterFlush,
+        ModelHook::AfterModifyingBlockAmount,
     ];
 
     /// The hook's name on `AbstractModel`, which is the dump's.
@@ -927,6 +935,8 @@ impl ModelHook {
             ModelHook::BeforeCombatStartLate => "BeforeCombatStartLate",
             ModelHook::TryModifyRestSiteOptions => "TryModifyRestSiteOptions",
             ModelHook::ShouldForcePotionReward => "ShouldForcePotionReward",
+            ModelHook::AfterFlush => "AfterFlush",
+            ModelHook::AfterModifyingBlockAmount => "AfterModifyingBlockAmount",
         }
     }
 }
@@ -1114,6 +1124,10 @@ pub trait PotionTable: Table {
     /// for the one potion that answers it from live state, which
     /// [`Rules::computed_potion_check`] answers.
     fn passes_own_check(self) -> Option<bool>;
+
+    /// `PotionModel.CanBeGeneratedInCombat`, which a potion made mid-fight
+    /// is drawn among.
+    fn generated_in_combat(self) -> bool;
 }
 
 /// When a potion can be drunk, reduced to what a rule asks.
@@ -1834,6 +1848,13 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("reading a card's costs")
     }
 
+    /// One card's energy and star costs with no modifier at all, which is
+    /// `GetWithModifiers(CostModifiers.None)` and `BaseStarCost`: what it
+    /// prints, upgrades included.
+    fn printed_costs(&self, _card: crate::CardAt<V>) -> (Cost, Cost) {
+        unimplemented!("reading a card's printed costs")
+    }
+
     /// `Keywords.Contains(keyword)` for one card: what its table prints and
     /// what the fight wrote on it, less what the fight took off.
     fn card_keyword(&self, _card: crate::CardAt<V>, _keyword: V::CardKeyword) -> bool {
@@ -2034,6 +2055,11 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("naming the card being played")
     }
 
+    /// What the copy whose play is running is, as it stands.
+    fn playing_ident(&self) -> crate::CardIdent<V> {
+        unimplemented!("reading the card being played")
+    }
+
     /// `CardCmd.Transform(original, replacement)`.
     ///
     /// The replacement takes the original's place: the same pile, at the same
@@ -2188,6 +2214,33 @@ pub trait Fight<V: ContentVersion> {
         unimplemented!("the player's energy")
     }
 
+    /// `creature.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`.
+    fn death_triggers_fatal(&self, _creature: crate::CombatId) -> bool {
+        unimplemented!("whether a death triggers Fatal")
+    }
+
+    /// `PotionCmd.TryToProcure` of `CreateRandomPotionInCombat` off
+    /// `stream`, which the run carries out once the decision settles. The
+    /// stream is the run's own, so no draw in the fight moves it.
+    fn procure_random_potion(&mut self, _stream: V::RunRngType) {
+        unimplemented!("a potion made mid-fight")
+    }
+
+    /// A number a card writes on the instance of `power` that `creature`
+    /// carries, once `PowerCmd.Apply` hands that instance back, as
+    /// `SetBlock` does. `Hooks::power_noted` says what it does there. Nothing
+    /// where the creature carries none, which is `?.` on a power that did not
+    /// land.
+    fn note_on_power(&mut self, _creature: crate::CombatId, _power: V::Power, _note: V::Number) {
+        unimplemented!("a card writing on a power it applied")
+    }
+
+    /// `CreatureCmd.GainMaxHp`: the maximum grows by `amount`, then a heal
+    /// for as much.
+    fn gain_max_hp(&mut self, _creature: crate::CombatId, _amount: V::Number) {
+        unimplemented!("gaining maximum health in a fight")
+    }
+
     /// `CreatureCmd.LoseMaxHp`: unblockable, unpowered damage from nobody for
     /// what the new maximum leaves above the current, then that maximum, at
     /// one or more.
@@ -2304,6 +2357,12 @@ pub trait Fight<V: ContentVersion> {
     /// pile is empty, then each auto-played in turn.
     fn auto_play_from_draw(&mut self, _count: usize, _force_exhaust: bool) {
         unimplemented!("auto-playing from the draw pile")
+    }
+
+    /// [`Fight::auto_play_card`] with `target` named, which a card aimed at
+    /// one enemy plays at rather than drawing one.
+    fn auto_play_card_at(&mut self, _card: crate::CardAt<V>, _target: crate::CombatId) {
+        unimplemented!("auto-playing a card at a named target")
     }
 
     /// `CardCmd.AutoPlay` of the card at one place, with no target named.
@@ -2463,7 +2522,8 @@ pub enum Change<V: ContentVersion> {
     /// cost set to this where that lowers it, and left where it does not.
     LowerCost(CostPool, V::Number),
     /// `CardModel.AddKeyword`: the copy carries a word its table does not.
-    /// The word is on the copy for as long as the copy lasts.
+    /// The word is on the copy for as long as the copy lasts. Written to last
+    /// the turn, it is `GiveSingleTurnSly`, which the turn's end clears.
     AddKeyword(V::CardKeyword),
     /// `CardModel.RemoveKeyword`: the copy no longer carries a word, whether
     /// its table prints it or something wrote it on.
@@ -2788,6 +2848,8 @@ pub enum ModifyHook<V: ContentVersion> {
         card: Option<V::Card>,
         /// `cardPlay`, as the play's [`PlayAt`].
         play: Option<PlayAt>,
+        /// `cardSource`: which copy gives the block.
+        source: Option<crate::CardId<V>>,
     },
     /// `ModifyHpLostBeforeOsty`, over what the block did not take.
     HpLostBeforeOsty {
@@ -2815,6 +2877,17 @@ pub enum ModifyHook<V: ContentVersion> {
         giver: crate::CombatId,
         target: Option<crate::CombatId>,
         player: crate::CombatId,
+    },
+    /// `ModifyPowerAmountGivenMultiplicative`, over what the additions left,
+    /// which is `amount`.
+    PowerAmountGivenMultiplicative {
+        power: V::Power,
+        giver: crate::CombatId,
+        target: Option<crate::CombatId>,
+        player: crate::CombatId,
+        amount: V::Number,
+        /// `cardSource`: which copy gives the power.
+        source: Option<crate::CardId<V>>,
     },
     /// `TryModifyPowerAmountReceived`: what `amount` of `power` lands on
     /// `target`, as an application or a change to one it carries. `player`
@@ -2894,6 +2967,9 @@ impl<V: ContentVersion> ModifyHook<V> {
             ModifyHook::PowerAmountGivenAdditive { .. } => {
                 ModelHook::ModifyPowerAmountGivenAdditive
             }
+            ModifyHook::PowerAmountGivenMultiplicative { .. } => {
+                ModelHook::ModifyPowerAmountGivenMultiplicative
+            }
             ModifyHook::PowerAmountReceived { .. } => ModelHook::TryModifyPowerAmountReceived,
             ModifyHook::HandDrawLate { .. } => ModelHook::ModifyHandDrawLate,
             ModifyHook::GoldGained => ModelHook::ModifyGoldGained,
@@ -2971,6 +3047,9 @@ pub enum DecisionHook<V: ContentVersion> {
     /// `PowerModel.ShouldPowerBeRemovedAfterOwnerDeath`, asked of a power
     /// about itself as its owner dies.
     ShouldRemoveSelfAfterOwnerDeath,
+    /// `PowerModel.ShouldOwnerDeathTriggerFatal`, asked of a power about its
+    /// owner's death.
+    ShouldOwnerDeathTriggerFatal,
     /// `Hook.ShouldPowerBeRemovedOnDeath`, asked of everything on a dying
     /// creature about one of the powers on it.
     ///
@@ -3027,7 +3106,8 @@ impl<V: ContentVersion> DecisionHook<V> {
             DecisionHook::ShouldPlayerResetEnergy { .. } => ModelHook::ShouldPlayerResetEnergy,
             DecisionHook::ShouldForcePotionReward { .. } => ModelHook::ShouldForcePotionReward,
             DecisionHook::ShouldCountForCombatEnd
-            | DecisionHook::ShouldRemoveSelfAfterOwnerDeath => return None,
+            | DecisionHook::ShouldRemoveSelfAfterOwnerDeath
+            | DecisionHook::ShouldOwnerDeathTriggerFatal => return None,
         })
     }
 }
@@ -3237,6 +3317,8 @@ pub enum EventHook<V: ContentVersion> {
         affliction: Option<V::Affliction>,
         /// `Keywords.Contains(Ethereal)` for the copy.
         ethereal: bool,
+        /// `CardPlay.Resources.EnergyValue`: the energy this play spent.
+        spent: V::Count,
     },
     /// `BeforeDamageReceived`, once the damage hooks worked the hit out and
     /// before it meets block.
@@ -3281,6 +3363,14 @@ pub enum EventHook<V: ContentVersion> {
         card: Option<crate::CardId<V>>,
         /// The fight's player, which a relic's owner is.
         player: crate::CombatId,
+        /// `CombatState.CurrentSide`: whose turn the hit lands in.
+        side: V::CombatSide,
+        /// `DamageResult.WasFullyBlocked`, which only the creature the hit was
+        /// aimed at can be.
+        fully_blocked: bool,
+        /// The player's `TurnNumber` as the hit lands, which its history entry
+        /// keeps.
+        turn: V::Count,
     },
     /// `AfterDamageGiven`, carrying the creature that dealt the hit.
     DamageGiven {
@@ -3380,6 +3470,8 @@ pub enum EventHook<V: ContentVersion> {
     },
     SideTurnEnd {
         side: V::CombatSide,
+        /// The player's `Creature.Block`, which a listener reads.
+        block: V::Number,
     },
     /// `AfterSideTurnEndLate`, once every `AfterSideTurnEnd` has run.
     SideTurnEndLate {
@@ -3406,6 +3498,37 @@ pub enum EventHook<V: ContentVersion> {
     /// `ShouldClearBlock` kept its owner's block, with the block kept.
     BlockClearPrevented {
         block: V::Number,
+    },
+    /// `AfterFlush`, once the player's hand is flushed. The cards left in
+    /// hand are the ones it retained.
+    Flushed,
+    /// `AfterOrbChanneled`, once an orb is in the player's queue.
+    OrbChanneled,
+    /// `BeforePowerAmountChanged`, as `amount` of `power` is about to land on
+    /// `target`, or to change what it carries.
+    PowerAmountChanging {
+        power: V::Power,
+        amount: V::Number,
+        target: crate::CombatId,
+        /// The side `target` fights on.
+        target_side: V::CombatSide,
+        applier: Option<crate::CombatId>,
+        /// The player's creature, which a relic reads its owner as.
+        player: crate::CombatId,
+        /// `cardSource`: which copy gives the power.
+        source: Option<crate::CardId<V>>,
+    },
+    /// `AfterModifyingBlockAmount`, asked of each relic whose block hook
+    /// changed a gain, with what the gain came to.
+    BlockAmountModified {
+        amount: V::Number,
+        /// `cardSource`: which copy gives the block.
+        source: Option<crate::CardId<V>>,
+    },
+    /// `AfterDiedToDoom`, once Doom killed its creatures. `fatal` counts those
+    /// besides the player whose powers all let the death trigger Fatal.
+    DiedToDoom {
+        fatal: usize,
     },
     /// `TryModifyRestSiteOptions`, as a rest site opens. A listener answers
     /// with each option it adds.
@@ -3559,6 +3682,11 @@ impl<V: ContentVersion> EventHook<V> {
             EventHook::CombatStarting { .. } => ModelHook::BeforeCombatStart,
             EventHook::CombatStartingLate { .. } => ModelHook::BeforeCombatStartLate,
             EventHook::RestSiteOptions => ModelHook::TryModifyRestSiteOptions,
+            EventHook::Flushed => ModelHook::AfterFlush,
+            EventHook::OrbChanneled => ModelHook::AfterOrbChanneled,
+            EventHook::PowerAmountChanging { .. } => ModelHook::BeforePowerAmountChanged,
+            EventHook::BlockAmountModified { .. } => ModelHook::AfterModifyingBlockAmount,
+            EventHook::DiedToDoom { .. } => ModelHook::AfterDiedToDoom,
             EventHook::CardRewardOptions { .. } => ModelHook::TryModifyCardRewardOptions,
             EventHook::CombatVictoryEarly { .. } => ModelHook::AfterCombatVictoryEarly,
             EventHook::CombatEnd { .. } => ModelHook::AfterCombatEnd,
@@ -3730,6 +3858,8 @@ pub enum HistoryEntry<V: ContentVersion> {
     Afflicted(V::Affliction),
     /// A `CardDiscardedEntry`, by the card discarded, which is the player's.
     Discarded(V::Card),
+    /// A `CardExhaustedEntry`, by the card exhausted, which is the player's.
+    Exhausted(V::Card),
     /// A `CardGeneratedEntry`, by whether its `Creator` is the player.
     Generated {
         by_player: bool,
@@ -3850,6 +3980,15 @@ impl<V: ContentVersion> History<'_, V> {
         })
     }
 
+    /// The latest `CardPlayStartedEntry` this turn of the copy `id`, found
+    /// from the turn's end, where a play still running stands.
+    pub fn last_started(&self, id: crate::CardId<V>) -> Option<PlayStarted<V>> {
+        self.this_turn.iter().rev().find_map(|entry| match entry {
+            HistoryEntry::Started(started) if started.id == id => Some(*started),
+            _ => None,
+        })
+    }
+
     /// `CardPlaysStarted` where `HappenedThisTurn`.
     pub fn started_this_turn(&self) -> impl Iterator<Item = PlayStarted<V>> + '_ {
         self.this_turn.iter().filter_map(|entry| match entry {
@@ -3908,6 +4047,13 @@ impl<V: ContentVersion> History<'_, V> {
             .count()
     }
 
+    /// Whether any `CardExhaustedEntry` is where `HappenedThisTurn`.
+    pub fn exhausted_this_turn(&self) -> bool {
+        self.this_turn
+            .iter()
+            .any(|entry| matches!(entry, HistoryEntry::Exhausted(_)))
+    }
+
     /// How many `CardGeneratedEntry` of the fight name the player as their
     /// `Creator`.
     pub fn generated_by_player(&self) -> usize {
@@ -3918,6 +4064,20 @@ impl<V: ContentVersion> History<'_, V> {
             .chain(before)
             .filter(|entry| matches!(entry, HistoryEntry::Generated { by_player: true }))
             .count()
+    }
+
+    /// Every `DamageReceivedEntry` of the fight, the turn it stands in first
+    /// and then the turns before it, latest first.
+    pub fn damage_received_this_fight(&self) -> impl Iterator<Item = DamageReceived<V>> + '_ {
+        let before = std::iter::successors(self.before, |before| before.before.as_deref())
+            .flat_map(|before| before.entries.iter());
+        self.this_turn
+            .iter()
+            .chain(before)
+            .filter_map(|entry| match entry {
+                HistoryEntry::DamageReceived(received) => Some(*received),
+                _ => None,
+            })
     }
 
     /// Each `DamageReceivedEntry` where `HappenedThisTurn`.
@@ -4313,6 +4473,9 @@ pub enum HookEffect<V: ContentVersion> {
     ProcureRandomPotions {
         count: usize,
         stream: V::RunRngType,
+        /// `CreateRandomPotionInCombat`, which draws among the potions
+        /// `CanBeGeneratedInCombat` alone.
+        in_combat: bool,
         /// Each into the slot at `originalSlotCount + i`: the last `count`
         /// slots, which a `GainMaxPotionCount` just before opened. Otherwise
         /// each into the first open slot.
@@ -4347,6 +4510,12 @@ pub enum HookEffect<V: ContentVersion> {
     },
     /// `OstyCmd.Summon` for the listener's owner.
     Summon(V::Number),
+    /// `CardPileCmd.AddGeneratedCardToCombat` of `count` clones of the copy
+    /// `card`, each into hand.
+    CloneIntoHand {
+        card: crate::CardId<V>,
+        count: V::Number,
+    },
     /// `CreatureCmd.Damage` on every enemy that can be hit, from the
     /// listener's owner, for a number no power scales.
     DamageOpponents(V::Number),
@@ -4444,6 +4613,8 @@ pub enum HookEffect<V: ContentVersion> {
     /// `OrbCmd.Passive` on the first orb the owner holds, `count` times, and
     /// nothing with no orb.
     FirstOrbPassive(V::Number),
+    /// `OrbCmd.Passive` on each orb the owner holds, front first.
+    EachOrbPassive,
     /// `count` times, one card of the character's combat pool that `filter`
     /// keeps, drawn by `CardFactory.GetDistinctForCombat` off
     /// `CombatCardGeneration`. Each takes `writes`, and they go into hand.
@@ -4581,6 +4752,15 @@ pub enum HookEffect<V: ContentVersion> {
     FreeRandomFromDraw {
         kind: CardKind,
     },
+    /// `MummifiedHand.AfterCardPlayed`'s pick, off `CombatCardSelection`, and
+    /// `SetToFreeThisTurn` on it. `NextItem` over the hand's cards that print
+    /// a cost and cost something now. Failing that, over the hand's cards
+    /// that cost something now, then those that print a cost, then the hand.
+    FreeCostlyInHand,
+    /// `Bookmark.AfterFlush`'s pick: `NextItem` off `CombatCardSelection`
+    /// over the retained cards that cost more than nothing and not X, their
+    /// own modifiers counted. The pick then costs one less until played.
+    LowerRetainedCost,
     /// `CardCmd.Upgrade` on a new card, then `CardPileCmd.Add` to the deck.
     AddUpgradedToDeck(V::Card),
     /// `CardFactory.CreateForReward` of one card from the character's pool,
@@ -4867,6 +5047,10 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// How many of the owner's cards in the fight, every pile included, are
     /// tagged Strike. `PlayerCombatState.AllCards`.
     pub strikes: usize,
+    /// The owner's creature.
+    pub player: crate::CombatId,
+    /// The creature the card is pointed at, where it is pointed at one.
+    pub targeted: Option<crate::CombatId>,
     /// The powers of the creature the card is pointed at, where it is pointed
     /// at one.
     pub target: Option<&'a [crate::Stack<V>]>,
@@ -4881,6 +5065,9 @@ pub struct CardOwner<'a, V: ContentVersion> {
     /// How many of the owner's cards in the fight, every pile included,
     /// print a star cost, which is `CanonicalStarCost >= 0 || HasStarCostX`.
     pub star_cards: usize,
+    /// How many of the owner's cards in the fight, every pile included, are
+    /// tagged `OstyAttack`, this one left out.
+    pub osty_attacks_besides: usize,
 }
 
 /// What one copy of a card prints, as a rule reads it.
@@ -5004,6 +5191,10 @@ pub trait Hooks: ContentVersion {
     /// What one deck card's own model saves, its `[SavedProperty]` fields,
     /// which the run carries for it between fights.
     type CardState: CardModel<Self>;
+
+    /// What a card's note does to the model of a power it just applied,
+    /// which [`Fight::note_on_power`] hands it.
+    fn power_noted(state: &mut Self::PowerState, note: Self::Number);
 
     fn modify_hook<P: Printed<Self> + ?Sized>(
         listener: Listener<'_, Self, P>,

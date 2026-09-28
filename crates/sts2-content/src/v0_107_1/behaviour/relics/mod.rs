@@ -34,6 +34,8 @@ mod blood_vial;
 mod bone_flute;
 mod bone_tea;
 mod book_of_five_rings;
+mod book_repair_knife;
+mod bookmark;
 mod booming_conch;
 mod bound_phylactery;
 mod bowler_hat;
@@ -59,6 +61,7 @@ mod distinguished_cape;
 mod divine_destiny;
 mod divine_right;
 mod dollys_mirror;
+mod emotion_chip;
 mod empty_cage;
 mod eternal_feather;
 mod fake_anchor;
@@ -90,6 +93,7 @@ mod ice_cream;
 mod infused_core;
 mod intimidating_helmet;
 mod iron_club;
+mod ivory_tile;
 mod jeweled_mask;
 mod jewelry_box;
 mod joss_paper;
@@ -111,9 +115,11 @@ mod mango;
 mod meal_ticket;
 mod meat_on_the_bone;
 mod mercury_hourglass;
+mod metronome;
 mod miniature_cannon;
 mod molten_egg;
 mod mr_struggles;
+mod mummified_hand;
 mod neows_talisman;
 mod neows_torment;
 mod new_leaf;
@@ -131,6 +137,7 @@ mod paels_tears;
 mod pandoras_box;
 mod pantograph;
 mod paper_phrog;
+mod parrying_shield;
 mod pear;
 mod pen_nib;
 mod pendulum;
@@ -191,7 +198,9 @@ mod tri_boomerang;
 mod tungsten_rod;
 mod tuning_fork;
 mod twisted_funnel;
+mod unsettling_lamp;
 mod vajra;
+mod vambrace;
 mod venerable_tea_set;
 mod very_hot_cocoa;
 mod vexing_puzzlebox;
@@ -440,6 +449,15 @@ pub enum State {
     Regalite,
     Bellows,
     JossPaper(joss_paper::State),
+    MummifiedHand,
+    IvoryTile,
+    Bookmark,
+    ParryingShield,
+    Metronome(metronome::State),
+    BookRepairKnife,
+    Vambrace(vambrace::State),
+    UnsettlingLamp(unsettling_lamp::State),
+    EmotionChip(emotion_chip::State),
 }
 
 /// `RelicModel.IsTradable`: not used up, nothing on pickup, not melted, no
@@ -683,6 +701,15 @@ pub(crate) fn event_hook(
         State::PreservedFog => preserved_fog::event_hook(hook, asked),
         State::SereTalon => sere_talon::event_hook(hook, asked),
         State::RoyalPoison => royal_poison::event_hook(hook, asked),
+        State::EmotionChip(state) => emotion_chip::event_hook(state, hook, asked),
+        State::UnsettlingLamp(state) => unsettling_lamp::event_hook(state, hook),
+        State::Vambrace(state) => vambrace::event_hook(state, hook),
+        State::BookRepairKnife => book_repair_knife::event_hook(hook, asked),
+        State::Metronome(state) => metronome::event_hook(state, hook, asked),
+        State::ParryingShield => parrying_shield::event_hook(hook, asked),
+        State::Bookmark => bookmark::event_hook(hook, asked),
+        State::IvoryTile => ivory_tile::event_hook(hook, asked),
+        State::MummifiedHand => mummified_hand::event_hook(hook, asked),
         State::JossPaper(state) => joss_paper::event_hook(state, hook, asked),
         State::Bellows => bellows::event_hook(hook, asked),
         State::Regalite => regalite::event_hook(hook, asked),
@@ -766,6 +793,8 @@ pub(crate) fn decide_hook(
 pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> {
     match state {
         State::Pocketwatch(state) => pocketwatch::modify_hook(state, hook),
+        State::Vambrace(state) => vambrace::modify_hook(state, hook),
+        State::UnsettlingLamp(state) => unsettling_lamp::modify_hook(state, hook),
         State::PollinousCore(state) => pollinous_core::modify_hook(state, hook),
         State::RingOfTheSnake => ring_of_the_snake::modify_hook(hook),
         State::BoomingConch => booming_conch::modify_hook(hook),
@@ -961,7 +990,14 @@ pub(crate) fn modify_hook(state: &State, hook: ModifyHook<V>) -> Modify<Number> 
         | State::GamePiece
         | State::Regalite
         | State::Bellows
-        | State::JossPaper(_) => unimplemented!("what {state:?} does for {hook:?}"),
+        | State::JossPaper(_)
+        | State::MummifiedHand
+        | State::IvoryTile
+        | State::Bookmark
+        | State::ParryingShield
+        | State::Metronome(_)
+        | State::BookRepairKnife
+        | State::EmotionChip(_) => unimplemented!("what {state:?} does for {hook:?}"),
     }
 }
 
@@ -1140,6 +1176,15 @@ impl sts2_core::RelicModel<V> for State {
             Relic::PreservedFog => State::PreservedFog,
             Relic::SereTalon => State::SereTalon,
             Relic::RoyalPoison => State::RoyalPoison,
+            Relic::EmotionChip => State::EmotionChip(emotion_chip::State::default()),
+            Relic::UnsettlingLamp => State::UnsettlingLamp(unsettling_lamp::State::default()),
+            Relic::Vambrace => State::Vambrace(vambrace::State::default()),
+            Relic::BookRepairKnife => State::BookRepairKnife,
+            Relic::Metronome => State::Metronome(metronome::State::default()),
+            Relic::ParryingShield => State::ParryingShield,
+            Relic::Bookmark => State::Bookmark,
+            Relic::IvoryTile => State::IvoryTile,
+            Relic::MummifiedHand => State::MummifiedHand,
             Relic::JossPaper => State::JossPaper(joss_paper::State::default()),
             Relic::Bellows => State::Bellows,
             Relic::Regalite => State::Regalite,
@@ -1218,6 +1263,7 @@ impl sts2_core::RelicModel<V> for State {
                 State::Kusarigama(state) => kusarigama::display_amount(state),
                 State::HappyFlower(state) => happy_flower::display_amount(state),
                 State::Kunai(state) => kunai::display_amount(state),
+                State::Metronome(state) => metronome::display_amount(state),
                 State::JossPaper(state) => joss_paper::display_amount(state),
                 State::LastingCandy(state) => lasting_candy::display_amount(state),
                 State::Girya(state) => girya::display_amount(state),

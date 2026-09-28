@@ -1596,7 +1596,9 @@ static OVERRIDES: [sts2_core::Overrides; 273] = [
     // FAN_OF_KNIVES_POWER
     sts2_core::Overrides::from_bits(0),
     // FASTEN_POWER
-    sts2_core::Overrides::from_bits(0).with(sts2_core::ModelHook::ModifyBlockAdditive),
+    sts2_core::Overrides::from_bits(0)
+        .with(sts2_core::ModelHook::AfterModifyingBlockAmount)
+        .with(sts2_core::ModelHook::ModifyBlockAdditive),
     // FEEDING_FRENZY_POWER
     sts2_core::Overrides::from_bits(0)
         .with(sts2_core::ModelHook::AfterPowerAmountChanged)

@@ -1,0 +1,10 @@
+# Eidolon exhausts every card of the hand, and gives one Intangible where
+# that came to nine or more. The hand holds nine besides Eidolon.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"grant","card":"SOUL"}
+{"cmd":"grant","card":"EIDOLON"}
+{"cmd":"play_card","index":9}

@@ -1,0 +1,7 @@
+# Unsettling Lamp takes Piercing Wail, whose Strength loss it doubles. The
+# Strength that power lends it does not double again.
+{"cmd":"start","seed":"0RACLE1","character":"SILENT","ascension":"None"}
+{"cmd":"grant","relic":"UNSETTLING_LAMP"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"PIERCING_WAIL"}
+{"cmd":"play_card","index":7}

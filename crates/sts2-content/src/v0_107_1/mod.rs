@@ -108,6 +108,10 @@ impl sts2_core::Hooks for V0_107_1 {
     type MonsterState = behaviour::monsters::Model;
     type CardState = behaviour::cards::State;
 
+    fn power_noted(state: &mut Self::PowerState, note: Self::Number) {
+        behaviour::powers::noted(state, note);
+    }
+
     fn modify_hook<P: sts2_core::Printed<Self> + ?Sized>(
         listener: sts2_core::Listener<'_, Self, P>,
         hook: sts2_core::ModifyHook<Self>,
@@ -988,8 +992,11 @@ fn roll_monster_move<
         return intents(
             held,
             ascension,
-            || unimplemented!("a built state whose damage the fight decides"),
-            || unimplemented!("a built state whose hits the fight decides"),
+            || {
+                read.extend(powers.take().into_iter().flatten());
+                behaviour::monsters::computed_damage(monster, held.id, ascension, &read)
+            },
+            || behaviour::monsters::computed_repeats(monster, held.id, model),
         )
         .map(Some);
     }

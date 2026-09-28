@@ -145,7 +145,7 @@ fn every_card_is_present_and_well_formed() {
     assert_eq!(cards.len(), 578, "the build has 578 cards");
 
     for row in &cards {
-        assert_eq!(row.len(), 14, "a card row has fourteen fields: {row:?}");
+        assert_eq!(row.len(), 15, "a card row has fifteen fields: {row:?}");
         assert_eq!(row[0], "card");
     }
 }
@@ -354,4 +354,24 @@ fn only_the_regent_is_priced_in_stars() {
             .expect("an X-star card is generated");
         assert_eq!(card.star_cost(), Cost::X, "{id}: star cost");
     }
+}
+
+/// Ten event cards show a character's frame, which is what Heirloom Hammer
+/// reads as not colorless. Every other card in a colorless pool shows as
+/// colorless.
+#[test]
+fn ten_event_cards_show_a_characters_frame() {
+    const COLORLESS: [&str; 4] = [
+        "COLORLESS_CARD_POOL",
+        "DEPRECATED_CARD_POOL",
+        "EVENT_CARD_POOL",
+        "TOKEN_CARD_POOL",
+    ];
+    let framed = rows(CARDS, "card")
+        .filter(|row| COLORLESS.contains(&row[2]) && row[14] == "0")
+        .count();
+    assert_eq!(
+        framed, 10,
+        "the cards in a colorless pool that show a frame"
+    );
 }

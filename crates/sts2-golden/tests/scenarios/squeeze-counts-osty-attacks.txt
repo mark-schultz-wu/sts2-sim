@@ -1,0 +1,7 @@
+# Squeeze has Osty hit for a base and more for each other card tagged as
+# Osty's attack in the fight.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"POKE"}
+{"cmd":"grant","card":"SQUEEZE"}
+{"cmd":"play_card","index":6,"target":1}

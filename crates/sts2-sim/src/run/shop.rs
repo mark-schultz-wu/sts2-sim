@@ -265,7 +265,7 @@ impl<V: Rules> Merchant<'_, V> {
     /// number and no draw pays for it here.
     fn potion_shelves(&mut self) -> Vec<(V::Potion, i32)> {
         let character = self.character;
-        crate::reward::potion::distinct::<V, MegaRng>(self.shops(), character, 3)
+        crate::reward::potion::distinct::<V, MegaRng>(self.shops(), character, 3, false)
             .into_iter()
             .map(|potion| (potion, potion_cost::<V>(character, potion)))
             .collect()

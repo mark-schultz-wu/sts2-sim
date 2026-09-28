@@ -5,12 +5,123 @@ use sts2_core::{
 };
 
 use super::super::super::generated::card_plays;
-use super::super::super::generated::cards::{CardRarity, CardVar, ColorlessCard};
+use super::super::super::generated::cards::{CardKeyword, CardRarity, CardVar, ColorlessCard};
 use super::V;
+
+/// `Catastrophe`: its `Cards` times, a card of the draw pile auto-played.
+/// Each is the first of the playable ones `StableShuffle`d off the shuffle
+/// stream, or of the whole pile where none is playable.
+fn catastrophe<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    use sts2_core::RunStreamKinds as _;
+
+    let stream = <V as sts2_core::ContentVersion>::RunRngType::SHUFFLE;
+    for _ in 0..fight.var(CardVar::Cards) {
+        let mut playable: Vec<_> = fight
+            .cards_in(Pile::Draw)
+            .into_iter()
+            .filter(|&at| !fight.card_keyword(at, CardKeyword::Unplayable))
+            .collect();
+        fight.stable_shuffle_cards(&mut playable, stream);
+        let chosen = match playable.first() {
+            Some(&card) => Some(card),
+            None => {
+                let mut every = fight.cards_in(Pile::Draw);
+                fight.stable_shuffle_cards(&mut every, stream);
+                every.first().copied()
+            }
+        };
+        if let Some(card) = chosen {
+            fight.auto_play_card(card);
+        }
+    }
+    Played::Done
+}
 
 pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played<V> {
     match card {
         ColorlessCard::Volley => volley(fight),
+        ColorlessCard::Catastrophe => catastrophe(fight),
+        // `Fisticuffs`: its damage to the target, then as much block as the
+        // hit dealt, overkill included.
+        ColorlessCard::Fisticuffs => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let target = fight.target();
+            let results = fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            let dealt = results
+                .iter()
+                .map(|result| result.total + result.overkill)
+                .sum();
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(dealt),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
+        // `SecretTechnique`: one skill of the draw pile picked, into hand.
+        ColorlessCard::SecretTechnique => {
+            let skills = fight
+                .cards_in(Pile::Draw)
+                .into_iter()
+                .filter(|&at| V::card_kind(fight.card_ident(at).card) == Some(CardKind::Skill))
+                .collect();
+            Played::AskingAmong {
+                cards: skills,
+                selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+                at: super::super::Resume::Card(super::Resume::Colorless(
+                    Resume::SecretTechniqueTakes,
+                )),
+            }
+        }
+        // `Shockwave`: its `Power` of Weak, then of Vulnerable, on each enemy
+        // that can be hit, one enemy at a time.
+        ColorlessCard::Shockwave => {
+            use super::super::super::generated::powers::Power;
+
+            let amount = sts2_core::PowerAmount::Counted(fight.var(CardVar::Power));
+            for target in fight.hittable_opponents() {
+                fight.apply_power(target, Power::WeakPower, amount);
+                fight.apply_power(target, Power::VulnerablePower, amount);
+            }
+            Played::Done
+        }
+        // `Alchemize`: a potion made off `CombatPotionGeneration` among those
+        // a fight can make, procured.
+        ColorlessCard::Alchemize => {
+            use sts2_core::RunStreamKinds as _;
+
+            fight.procure_random_potion(
+                <V as sts2_core::ContentVersion>::RunRngType::COMBAT_POTION_GENERATION,
+            );
+            Played::Done
+        }
+        // `Prolong`: as much Block Next Turn on its owner as the block it
+        // holds.
+        ColorlessCard::Prolong => {
+            use super::super::super::generated::powers::Power;
+            use sts2_core::CreatureView as _;
+
+            let owner = fight.actor();
+            let block = fight
+                .creatures()
+                .find(|creature| creature.id() == owner)
+                .map_or(0, |creature| creature.block());
+            fight.apply_to_actor(
+                Power::BlockNextTurnPower,
+                sts2_core::PowerAmount::Counted(block),
+            );
+            Played::Done
+        }
         ColorlessCard::Restlessness => restlessness(fight),
         ColorlessCard::Impatience => impatience(fight),
         ColorlessCard::Anointed => anointed(fight),
@@ -109,6 +220,8 @@ pub enum Resume {
     PurityExhausts,
     /// `ThinkingAhead`, after the card picked from hand to put back.
     ThinkingAheadPutBack,
+    /// `SecretTechnique`, after the skill picked from the draw pile.
+    SecretTechniqueTakes,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -119,6 +232,11 @@ pub(super) fn resume_play<F: Fight<V>>(
     match at {
         Resume::PurityExhausts => {
             fight.act_on(PileAct::Exhaust, chosen.as_slice());
+            Played::Done
+        }
+        // `CardPileCmd.Add` of the one taken, into hand.
+        Resume::SecretTechniqueTakes => {
+            fight.act_on(PileAct::IntoHand, chosen.as_slice());
             Played::Done
         }
         // `CardPileCmd.Add` onto the top of the draw pile.

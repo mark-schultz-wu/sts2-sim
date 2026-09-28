@@ -85,6 +85,7 @@ pub(super) static ROWS: [CardData; 18] = [
         ]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -102,6 +103,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -114,6 +116,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Ethereal, CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -126,6 +129,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -143,6 +147,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -160,6 +165,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -177,6 +183,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -189,6 +196,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Eternal]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -206,6 +214,7 @@ pub(super) static ROWS: [CardData; 18] = [
         ]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -218,6 +227,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Eternal, CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -235,6 +245,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -247,6 +258,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -278,6 +290,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -290,6 +303,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Retain, CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -302,6 +316,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -319,6 +334,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -331,6 +347,7 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Exhaust]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
     CardData {
         kind: Field::Constant(CardType::Curse),
@@ -343,5 +360,6 @@ pub(super) static ROWS: [CardData; 18] = [
         keywords: KeywordSet::new(&[CardKeyword::Innate, CardKeyword::Unplayable]),
         tags: TagSet::new(&[]),
         gains_block: false,
+        visually_colorless: false,
     },
 ];

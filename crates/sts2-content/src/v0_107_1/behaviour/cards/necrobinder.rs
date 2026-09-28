@@ -396,6 +396,19 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Graveblast => graveblast(fight),
         NecrobinderCard::SculptingStrike => sculpting_strike(fight),
         NecrobinderCard::Snap => snap(fight),
+        // `Transfigure`: one card of the hand picked, to cost one more and
+        // play once more.
+        NecrobinderCard::Transfigure => Played::Asking {
+            pile: Pile::Hand,
+            selection: Selection::Exactly(nonmax::NonMaxUsize::ONE),
+            at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::TransfigureReplay)),
+        },
+        // `Squeeze`: its calculated damage from Osty to the target, where
+        // Osty stands.
+        NecrobinderCard::Squeeze => {
+            osty_hit(fight, CardVar::CalculatedDamage);
+            Played::Done
+        }
         // `SicEm`: Osty's damage to the target, where Osty stands, then its
         // power on the target.
         NecrobinderCard::SicEm => {
@@ -498,6 +511,41 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
         NecrobinderCard::Severance => severance(fight),
         // `Friendship`: its Strength off its owner, then its Energy as
         // Friendship.
+        NecrobinderCard::Dredge => dredge(fight),
+        // `Eidolon`: every card of the hand exhausted, one at a time, then one
+        // Intangible where that came to nine or more.
+        NecrobinderCard::Eidolon => {
+            use super::super::super::generated::powers::Power;
+
+            let hand = fight.cards_in(Pile::Hand);
+            fight.act_on(PileAct::Exhaust, &hand);
+            if hand.len() >= EIDOLON_CARDS {
+                fight.apply_to_actor(Power::IntangiblePower, sts2_core::PowerAmount::Counted(1));
+            }
+            Played::Done
+        }
+        // `CaptureSpirit`: its damage to the target, unblockable and
+        // unpowered, then its `Cards` of Souls into the draw pile at random.
+        NecrobinderCard::CaptureSpirit => {
+            use super::super::super::generated::cards::{Cards, TokenCard};
+
+            let damage = fight.resolve(Effect::Attack {
+                dealer: fight.actor(),
+                target: fight.target(),
+                damage: Amount::Var(CardVar::Damage),
+                scaling: Scaling::Static,
+            });
+            fight.apply(damage);
+            for _ in 0..fight.var(CardVar::Cards) {
+                if fight
+                    .add_at_random(Cards::Token(TokenCard::Soul), Pile::Draw)
+                    .is_none()
+                {
+                    break;
+                }
+            }
+            Played::Done
+        }
         NecrobinderCard::Friendship => {
             use super::super::super::generated::powers::Power;
 
@@ -520,12 +568,16 @@ pub(super) fn on_play<F: Fight<V>>(card: NecrobinderCard, fight: &mut F) -> Play
 /// Where a Necrobinder card stopped inside its own play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resume {
+    /// `Dredge`, after its owner picked the cards to take back.
+    DredgeTakeBack,
     /// `Graveblast`, after its owner picked the card to take back.
     GraveblastTakeBack,
     /// `SculptingStrike`, after its owner picked the card to make Ethereal.
     SculptingStrikeEthereal,
     /// `Snap`, after its owner picked the card to Retain.
     SnapRetain,
+    /// `Transfigure`, after its owner picked the card to replay.
+    TransfigureReplay,
 }
 
 pub(super) fn resume_play<F: Fight<V>>(
@@ -534,9 +586,26 @@ pub(super) fn resume_play<F: Fight<V>>(
     chosen: sts2_core::SelectedCards<V>,
 ) -> Played<V> {
     match at {
-        // `CardPileCmd.Add` of the one taken, into hand.
-        Resume::GraveblastTakeBack => {
+        // `CardPileCmd.Add` of those taken, into hand.
+        Resume::GraveblastTakeBack | Resume::DredgeTakeBack => {
             fight.act_on(PileAct::IntoHand, chosen.as_slice());
+            Played::Done
+        }
+        // One more energy on its cost for the fight, where it has a cost that
+        // is not X, and one more replay.
+        Resume::TransfigureReplay => {
+            for &card in chosen.as_slice() {
+                if let sts2_core::Cost::Fixed(_) =
+                    sts2_core::CardTable::cost(fight.card_ident(card).card)
+                {
+                    fight.modify_card(
+                        card,
+                        Change::ChangeCost(sts2_core::CostPool::Energy, 1),
+                        Lasting::ThisFight,
+                    );
+                }
+                fight.add_replays(sts2_core::Writing::One(card), 1);
+            }
             Played::Done
         }
         // `CardCmd.ApplyKeyword(cardModel, CardKeyword.Retain)`.
@@ -555,6 +624,25 @@ pub(super) fn resume_play<F: Fight<V>>(
             }
             Played::Done
         }
+    }
+}
+
+/// `Eidolon`'s `_intangibleThreshold`.
+const EIDOLON_CARDS: usize = 9;
+
+/// `Dredge`: its `Cards` from the discard pile picked into hand, as many as
+/// the hand has room for.
+fn dredge<F: Fight<V>>(fight: &mut F) -> Played<V> {
+    let cards: usize =
+        num_traits::cast(fight.var(CardVar::Cards)).expect("a count of cards is not negative");
+    let room = sts2_core::MAX_CARDS_IN_HAND.saturating_sub(fight.cards_in(Pile::Hand).len());
+    match nonmax::NonMaxUsize::new(cards.min(room)) {
+        Some(count) if count.get() > 0 => Played::Asking {
+            pile: Pile::Discard,
+            selection: Selection::Exactly(count),
+            at: super::super::Resume::Card(super::Resume::Necrobinder(Resume::DredgeTakeBack)),
+        },
+        _ => Played::Done,
     }
 }
 

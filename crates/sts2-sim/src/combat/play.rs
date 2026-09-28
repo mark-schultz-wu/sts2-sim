@@ -300,21 +300,25 @@ pub(super) fn auto_play<V: Rules>(
     relics: &mut crate::run::Belt<V>,
     id: sts2_core::CardId<V>,
     from: sts2_core::Pile,
+    named: Option<CombatId>,
 ) -> Option<super::Ended> {
     let Some(at) = live.cards.find(from, id) else {
         unimplemented!("auto-playing {id:?}, which left the {from:?} pile");
     };
     // `CardPileCmd.Add` to the play pile, where it stands while it runs.
     let card = live.cards.play(from, at);
-    auto_play_in_play::<V>(live, rngs, relics, card)
+    auto_play_in_play::<V>(live, rngs, relics, card, named)
 }
 
-/// `CardCmd.AutoPlay` for a card already in the play pile.
+/// `CardCmd.AutoPlay` for a card already in the play pile. `named` is the
+/// target the caller names, which an enemy-targeting card plays at in place of
+/// one drawn off `CombatTargets`.
 pub(super) fn auto_play_in_play<V: Rules>(
     live: &mut Live<V>,
     mut rngs: crate::stream::CombatRngs<'_>,
     relics: &mut crate::run::Belt<V>,
     card: super::live::CardInstance<V>,
+    named: Option<CombatId>,
 ) -> Option<super::Ended> {
     use sts2_core::{CardTable as _, TargetKinds as _};
 
@@ -342,6 +346,7 @@ pub(super) fn auto_play_in_play<V: Rules>(
     }
     let ascension = live.ascension;
     let target = match super::legal::target_type::<V>(ident, live) {
+        kind if kind == V::TargetType::ANY_ENEMY && named.is_some() => named,
         kind if kind == V::TargetType::ANY_ENEMY => {
             let mut board = Board::for_card(live, rngs.reborrow(), relics, ascension, None, None);
             let Some(target) = sts2_core::Fight::random_opponent(&mut board) else {
@@ -1079,6 +1084,13 @@ fn finished<V: Rules, S: LendsCombat>(
         .cards
         .named(id)
         .and_then(|held| held.face.ident.affliction);
+    // What the play's started entry spent, which both `AfterCardPlayed` and
+    // its late pass read.
+    let spent = next
+        .history()
+        .last_started(id)
+        .expect("a play that finished started this turn")
+        .energy;
     let asked = super::listen::notify::<V>(
         next,
         relics,
@@ -1087,6 +1099,7 @@ fn finished<V: Rules, S: LendsCombat>(
             id,
             affliction,
             ethereal,
+            spent,
         },
     );
     if !asked.is_empty() {
@@ -1158,6 +1171,21 @@ fn finished<V: Rules, S: LendsCombat>(
                     board.land(owner, power, amount, Some(owner));
                     ended = ended.or(board.ended);
                 }
+                // Clones of the card just played, which is still in the
+                // play pile, into hand.
+                (
+                    super::listen::Listener::Power { .. },
+                    sts2_core::HookEffect::CloneIntoHand { card, count },
+                ) => {
+                    let count: usize = num_traits::cast(count)
+                        .unwrap_or_else(|| unimplemented!("{count:?} clones"));
+                    let mut board =
+                        Board::for_card(next, streams.combat(), relics, ascension, None, None);
+                    for _ in 0..count {
+                        board.clone_named(card, sts2_core::Pile::Hand);
+                    }
+                    ended = ended.or(board.ended);
+                }
                 // `PowerCmd.Apply` from nobody.
                 (
                     super::listen::Listener::Power { .. },
@@ -1183,14 +1211,11 @@ fn finished<V: Rules, S: LendsCombat>(
     }
     // `AfterCardPlayedLate`, with the energy the play's started entry spent.
     if ended.is_none() {
-        let energy = next
-            .history()
-            .started_this_turn()
-            .filter(|started| started.id == id)
-            .last()
-            .expect("a play that finished started this turn")
-            .energy;
-        let late = sts2_core::EventHook::CardPlayedLate { card, id, energy };
+        let late = sts2_core::EventHook::CardPlayedLate {
+            card,
+            id,
+            energy: spent,
+        };
         for (listener, effect) in super::listen::notify::<V>(next, relics, late) {
             match (listener, effect) {
                 // `CardPileCmd.Add(this, PileType.Hand)`, which a full hand

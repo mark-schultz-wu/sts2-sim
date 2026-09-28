@@ -177,6 +177,9 @@ public static class CardDump
                 // `GainsBlock`, which a card overrides to say so. Nimble
                 // enchants no card without it.
                 card.GainsBlock ? "1" : "0",
+                // `VisualCardPool.IsColorless`. A few event cards show a
+                // character's frame, and Heirloom Hammer reads that.
+                card.VisualCardPool.IsColorless ? "1" : "0",
             }));
             output.Append('\n');
 

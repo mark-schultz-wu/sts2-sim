@@ -44,6 +44,7 @@ pub(super) fn event_hook(
         }
         EventHook::SideTurnEnd {
             side: CombatSide::Player,
+            ..
         } => {
             state.cards_exhausted += state.ethereal;
             state.ethereal = 0;

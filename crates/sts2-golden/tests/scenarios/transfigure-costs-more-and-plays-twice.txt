@@ -1,0 +1,8 @@
+# Transfigure makes the card its owner picks cost one more for the fight
+# and play once more. The Strike it picks hits twice for two energy.
+{"cmd":"start","seed":"0RACLE1","character":"NECROBINDER","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"TRANSFIGURE"}
+{"cmd":"play_card","index":5}
+{"cmd":"answer","cards":[0]}
+{"cmd":"play_card","index":0,"target":1}

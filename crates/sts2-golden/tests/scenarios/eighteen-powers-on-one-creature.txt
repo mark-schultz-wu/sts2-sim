@@ -1,0 +1,23 @@
+# A creature can carry more powers than sixteen. The Ironclad takes eighteen
+# kinds, and the turn goes on under all of them.
+{"cmd":"start","seed":"0RACLE1","character":"IRONCLAD","ascension":"None"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"power","power":"STRENGTH_POWER","amount":1,"target":0}
+{"cmd":"power","power":"DEXTERITY_POWER","amount":1,"target":0}
+{"cmd":"power","power":"PLATING_POWER","amount":1,"target":0}
+{"cmd":"power","power":"VIGOR_POWER","amount":1,"target":0}
+{"cmd":"power","power":"FOCUS_POWER","amount":1,"target":0}
+{"cmd":"power","power":"BUFFER_POWER","amount":1,"target":0}
+{"cmd":"power","power":"FREE_ATTACK_POWER","amount":1,"target":0}
+{"cmd":"power","power":"DRAW_CARDS_NEXT_TURN_POWER","amount":1,"target":0}
+{"cmd":"power","power":"RETAIN_HAND_POWER","amount":1,"target":0}
+{"cmd":"power","power":"TYRANNY_POWER","amount":1,"target":0}
+{"cmd":"power","power":"GENESIS_POWER","amount":1,"target":0}
+{"cmd":"power","power":"LIGHTNING_ROD_POWER","amount":1,"target":0}
+{"cmd":"power","power":"THUNDER_POWER","amount":1,"target":0}
+{"cmd":"power","power":"VICIOUS_POWER","amount":1,"target":0}
+{"cmd":"power","power":"VEILPIERCER_POWER","amount":1,"target":0}
+{"cmd":"power","power":"UNMOVABLE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"TOOLS_OF_THE_TRADE_POWER","amount":1,"target":0}
+{"cmd":"power","power":"AGGRESSION_POWER","amount":1,"target":0}
+{"cmd":"end_turn"}

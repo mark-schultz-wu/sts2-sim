@@ -67,6 +67,81 @@ pub(super) fn resume_play<F: Fight<V>>(
 pub(super) fn on_play<F: Fight<V>>(card: IroncladCard, fight: &mut F) -> Played<V> {
     match card {
         IroncladCard::Thrash => thrash(fight),
+        // `TearAsunder`: its damage to the target, as many times as its
+        // calculated hits, counted before the first, as one attack.
+        IroncladCard::TearAsunder => {
+            let target = fight.target();
+            let hits = fight.var(CardVar::CalculatedHits);
+            fight.attack(Scaling::Dynamic, |fight| {
+                for _ in 0..hits {
+                    let hit = fight.resolve(Effect::Attack {
+                        dealer: fight.actor(),
+                        target,
+                        damage: Amount::Var(CardVar::Damage),
+                        scaling: Scaling::Dynamic,
+                    });
+                    fight.apply(hit);
+                }
+            });
+            Played::Done
+        }
+        // `Inferno`: its Inferno on its owner, then one more self damage on
+        // the power it landed or stacked into.
+        IroncladCard::Inferno => {
+            let inferno = PowerAmount::Counted(fight.var(CardVar::InfernoPower));
+            fight.apply_to_actor(Power::InfernoPower, inferno);
+            fight.note_on_power(fight.actor(), Power::InfernoPower, 1);
+            Played::Done
+        }
+        // `Dominate`: its Vulnerable on the target, then as much Strength on
+        // its owner as the target then carries Vulnerable.
+        IroncladCard::Dominate => {
+            let target = fight.target();
+            let vulnerable = PowerAmount::Counted(fight.var(CardVar::VulnerablePower));
+            fight.apply_power(target, Power::VulnerablePower, vulnerable);
+            let carried = fight
+                .creatures()
+                .find(|creature| creature.id() == target)
+                .and_then(|creature| creature.power(Power::VulnerablePower));
+            let strength = match carried {
+                Some(PowerAmount::Counted(amount)) => amount,
+                Some(PowerAmount::Endless) => unimplemented!("an endless Vulnerable"),
+                None => 0,
+            };
+            fight.apply_to_actor(Power::StrengthPower, PowerAmount::Counted(strength));
+            Played::Done
+        }
+        // `Feed`: its damage to the target, then its `MaxHp` onto its owner's
+        // maximum where the hit killed a target whose death, read before the
+        // hit, triggers Fatal.
+        IroncladCard::Feed => {
+            let target = fight.target();
+            let fatal = fight.death_triggers_fatal(target);
+            fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            let standing = fight
+                .creatures()
+                .any(|creature| creature.id() == target && creature.alive());
+            if fatal && !standing {
+                fight.gain_max_hp(fight.actor(), fight.var(CardVar::MaxHp));
+            }
+            Played::Done
+        }
+        // `ForgottenRitual`: its energy, where its owner exhausted a card this
+        // turn.
+        IroncladCard::ForgottenRitual => {
+            if fight.history().exhausted_this_turn() {
+                fight.modify_energy(fight.var(CardVar::Energy));
+            }
+            Played::Done
+        }
         // `Spite`: its damage to the target, once, or its `Repeat` times
         // where its owner lost health this turn.
         IroncladCard::Spite => {

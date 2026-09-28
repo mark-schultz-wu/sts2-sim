@@ -42,6 +42,7 @@ pub(super) fn event_hook(
         EventHook::CombatStarting { .. }
         | EventHook::SideTurnEnd {
             side: CombatSide::Player,
+            ..
         } => state.attacks_played_this_turn = 0,
         _ => {}
     }

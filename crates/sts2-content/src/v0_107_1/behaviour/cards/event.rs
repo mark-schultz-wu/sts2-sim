@@ -32,6 +32,24 @@ pub(super) fn on_play<F: Fight<V>>(card: EventCard, fight: &mut F) -> Played<V> 
             }
             Played::Done
         }
+        // `ToricToughness`: its block, then its `Turns` of Toric Toughness on
+        // its owner, set to give the block it gained.
+        EventCard::ToricToughness => {
+            use super::super::super::generated::powers::Power;
+            use sts2_core::EffectResolution as _;
+
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Var(CardVar::Block),
+                scaling: Scaling::Dynamic,
+            });
+            let gained = block.amount();
+            fight.apply(block);
+            let turns = sts2_core::PowerAmount::Counted(fight.var(CardVar::Turns));
+            fight.apply_to_actor(Power::ToricToughnessPower, turns);
+            fight.note_on_power(fight.actor(), Power::ToricToughnessPower, gained);
+            Played::Done
+        }
         EventCard::Metamorphosis => metamorphosis(fight),
         EventCard::Whistle => whistle(fight),
         EventCard::Apotheosis => apotheosis(fight),

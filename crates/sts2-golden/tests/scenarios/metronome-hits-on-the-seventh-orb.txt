@@ -1,0 +1,18 @@
+# Metronome hits every enemy for thirty on the seventh orb its owner
+# channels in a fight. Cracked Core channels the first, and six Chills the
+# rest, one Frost each for the one Nibbit.
+{"cmd":"start","seed":"0RACLE1","character":"DEFECT","ascension":"None"}
+{"cmd":"grant","relic":"METRONOME"}
+{"cmd":"fight","encounter":"NIBBITS_WEAK"}
+{"cmd":"grant","card":"CHILL"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"CHILL"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"CHILL"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"CHILL"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"CHILL"}
+{"cmd":"play_card","index":5}
+{"cmd":"grant","card":"CHILL"}
+{"cmd":"play_card","index":5}
