@@ -41,6 +41,33 @@ pub(super) fn on_play<F: Fight<V>>(card: ColorlessCard, fight: &mut F) -> Played
     match card {
         ColorlessCard::Volley => volley(fight),
         ColorlessCard::Catastrophe => catastrophe(fight),
+        // `Fisticuffs`: its damage to the target, then as much block as the
+        // hit dealt, overkill included.
+        ColorlessCard::Fisticuffs => {
+            use sts2_core::{Amount, Effect, Scaling};
+
+            let target = fight.target();
+            let results = fight.attack(Scaling::Dynamic, |fight| {
+                let attack = fight.resolve(Effect::Attack {
+                    dealer: fight.actor(),
+                    target,
+                    damage: Amount::Var(CardVar::Damage),
+                    scaling: Scaling::Dynamic,
+                });
+                fight.apply(attack);
+            });
+            let dealt = results
+                .iter()
+                .map(|result| result.total + result.overkill)
+                .sum();
+            let block = fight.resolve(Effect::GainBlock {
+                recipient: fight.actor(),
+                amount: Amount::Number(dealt),
+                scaling: Scaling::Dynamic,
+            });
+            fight.apply(block);
+            Played::Done
+        }
         // `SecretTechnique`: one skill of the draw pile picked, into hand.
         ColorlessCard::SecretTechnique => {
             let skills = fight
